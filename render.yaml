@@ -1,0 +1,41 @@
+# Render blueprint (CLAUDE.md §8). Push to main -> Render builds the Dockerfile -> publishes.
+# Never hand-deploy.
+#
+# Caveats this config is written around, both from §8:
+#   - a free web service spins down after ~15 min idle, so the first request after a quiet spell
+#     pays a cold start;
+#   - free Postgres is time-limited — move to a paid instance before relying on persistence.
+
+services:
+  - type: web
+    name: wyr-server
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: free
+    region: frankfurt
+    branch: main
+    autoDeploy: true
+    healthCheckPath: /health
+    envVars:
+      # Internal connection string, not the external one — same region, no public egress.
+      - key: DATABASE_URL
+        fromDatabase:
+          name: wyr-postgres
+          property: connectionString
+      # Generated once by Render and then held; rotating it invalidates every issued session.
+      - key: JWT_SECRET
+        generateValue: true
+      - key: JWT_ISSUER
+        value: wyr
+      - key: JWT_AUDIENCE
+        value: wyr-client
+      # Browser clients are cross-origin against this service, so every web origin that should
+      # reach the API has to be named here or CORS preflight rejects it.
+      - key: ALLOWED_WEB_ORIGINS
+        sync: false
+
+databases:
+  - name: wyr-postgres
+    plan: free
+    # Must match the web service's region so the internal URL resolves.
+    region: frankfurt

@@ -1,0 +1,53 @@
+# CI gate in front of deploy (CLAUDE.md §8): ktlint + tests must pass before main is deployable.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: zulu
+          java-version: '21'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      # ktlint must fail the build, not warn (CLAUDE.md §5).
+      - name: Lint
+        run: ./gradlew ktlintCheck --no-daemon
+
+      # JVM-hosted tests: the whole server suite plus the shared client tests. iOS and Android
+      # instrumented tests need a mac runner and an emulator respectively, so they are not here.
+      - name: Test
+        run: ./gradlew :server:test :core:domain:jvmTest :core:data:jvmTest :app:shared:jvmTest --no-daemon
+
+      # Proves every in-scope client target still compiles, including both web targets.
+      - name: Compile all client targets
+        run: |
+          ./gradlew --no-daemon \
+            :app:shared:compileKotlinJvm \
+            :app:shared:compileKotlinJs \
+            :app:shared:compileKotlinWasmJs \
+            :app:androidApp:assembleDebug
+
+      - name: Upload test reports
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-reports
+          path: '**/build/reports/tests/**'
+          retention-days: 7
