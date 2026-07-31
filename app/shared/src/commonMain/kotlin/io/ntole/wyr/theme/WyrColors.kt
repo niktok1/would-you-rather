@@ -1,0 +1,66 @@
+package io.ntole.wyr.theme
+
+import androidx.compose.ui.graphics.Color
+
+/**
+ * Every colour in the app, in one place (CLAUDE.md §5b).
+ *
+ * Screens read these through [LocalWyrColors]; no composable outside this package may write a
+ * hex literal. Adding a third theme means adding another [WyrColors] value here and nothing else.
+ */
+data class WyrColors(
+    val pageBackground: Color,
+    val surface: Color,
+    val primaryText: Color,
+    val headingAccent: Color,
+    val muted: Color,
+    val orPillText: Color,
+    val orPillBackground: Color,
+    val optionA: Color,
+    val onOptionA: Color,
+    val optionB: Color,
+    val onOptionB: Color,
+    val isDark: Boolean,
+)
+
+/**
+ * The two answer colours are the brand and stay constant in light and dark — they are how the
+ * game is recognised. Everything else shifts with the mode.
+ */
+private val OptionA = Color(0xFFD4537E)
+private val OnOptionA = Color(0xFFFFFFFF)
+private val OptionB = Color(0xFFEF9F27)
+private val OnOptionB = Color(0xFF412402)
+private val Muted = Color(0xFF888780)
+
+val WyrLightColors: WyrColors =
+    WyrColors(
+        pageBackground = Color(0xFFFFF7FA),
+        surface = Color(0xFFFFFFFF),
+        primaryText = Color(0xFF412402),
+        headingAccent = Color(0xFF993556),
+        muted = Muted,
+        orPillText = Color(0xFF993556),
+        orPillBackground = Color(0xFFFBEAF0),
+        optionA = OptionA,
+        onOptionA = OnOptionA,
+        optionB = OptionB,
+        onOptionB = OnOptionB,
+        isDark = false,
+    )
+
+val WyrDarkColors: WyrColors =
+    WyrColors(
+        pageBackground = Color(0xFF161417),
+        surface = Color(0xFF221F23),
+        primaryText = Color(0xFFF3EDEF),
+        headingAccent = Color(0xFFED93B1),
+        muted = Muted,
+        orPillText = Color(0xFFF4C0D1),
+        orPillBackground = Color(0xFF3A2330),
+        optionA = OptionA,
+        onOptionA = OnOptionA,
+        optionB = OptionB,
+        onOptionB = OnOptionB,
+        isDark = true,
+    )
