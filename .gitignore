@@ -1,0 +1,36 @@
+### Secrets — never commit (CLAUDE.md §6)
+local.properties
+.env
+.env.*
+*.env
+*.keystore
+*.jks
+secrets.properties
+
+### Gradle / build
+*.iml
+.kotlin
+.gradle
+**/build/
+!src/**/build/
+captures
+.externalNativeBuild
+.cxx
+
+### IDE
+.idea
+
+### Xcode / iOS
+xcuserdata
+*.xcodeproj/*
+!*.xcodeproj/project.pbxproj
+!*.xcodeproj/xcshareddata/
+!*.xcodeproj/project.xcworkspace/
+!*.xcworkspace/contents.xcworkspacedata
+**/xcshareddata/WorkspaceSettings.xcsettings
+
+### Web
+node_modules/
+
+### OS
+.DS_Store
