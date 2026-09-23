@@ -137,6 +137,9 @@ follow, and code that breaks one loses updates silently rather than failing:
   `PlayerStore.startNextCycle`).
   Or the read takes the row lock (`SELECT ... FOR UPDATE`), so a concurrent writer waits and then
   reads the row as committed (`VoteStore.cast`, which branches on more than one outcome).
+  The one exception is a value copied from another row, which may be a plain read where a stale
+  copy is provably harmless, with the proof at the read (`VoteStore.currentCycle`: the feed moves
+  the cycle on only once the answer's question is already answered in the one read).
 - Uniqueness is a constraint (the `Votes` primary key), never a prior `SELECT`. A violation is
   never caught and carried on from: PostgreSQL aborts a transaction at its first error. It
   propagates, and Exposed rolls back and reruns the whole transaction, which then sees the
