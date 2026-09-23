@@ -2,10 +2,13 @@ package io.ntole.wyr.core.data.di
 
 import io.ktor.client.HttpClient
 import io.ntole.wyr.core.data.cache.InMemoryQuestionCache
+import io.ntole.wyr.core.data.player.DefaultPlayerRepository
 import io.ntole.wyr.core.data.question.DefaultQuestionRepository
 import io.ntole.wyr.core.data.session.DefaultSessionDiagnostics
 import io.ntole.wyr.core.data.session.DefaultSessionRepository
 import io.ntole.wyr.core.data.vote.DefaultVoteRepository
+import io.ntole.wyr.core.domain.player.GetPlayerStats
+import io.ntole.wyr.core.domain.player.PlayerRepository
 import io.ntole.wyr.core.domain.question.GetNextQuestion
 import io.ntole.wyr.core.domain.question.QuestionCache
 import io.ntole.wyr.core.domain.question.QuestionRepository
@@ -17,6 +20,7 @@ import io.ntole.wyr.core.network.SessionStore
 import io.ntole.wyr.core.network.TokenStorage
 import io.ntole.wyr.core.network.WyrHttpClient
 import io.ntole.wyr.core.network.api.AuthApi
+import io.ntole.wyr.core.network.api.PlayerApi
 import io.ntole.wyr.core.network.api.QuestionApi
 import io.ntole.wyr.core.network.api.VoteApi
 import io.ntole.wyr.core.network.trace.HttpTrace
@@ -40,6 +44,7 @@ public fun dataModule(baseUrl: String): Module =
         single { AuthApi(get()) }
         single { QuestionApi(get()) }
         single { VoteApi(get()) }
+        single { PlayerApi(get()) }
 
         single<QuestionCache> { InMemoryQuestionCache() }
 
@@ -52,7 +57,9 @@ public fun dataModule(baseUrl: String): Module =
 
         single<QuestionRepository> { DefaultQuestionRepository(api = get(), session = get(), cache = get()) }
         single<VoteRepository> { DefaultVoteRepository(api = get(), session = get()) }
+        single<PlayerRepository> { DefaultPlayerRepository(api = get(), session = get()) }
 
         factory { GetNextQuestion(questions = get(), session = get()) }
         factory { CastVote(votes = get(), session = get()) }
+        factory { GetPlayerStats(players = get(), session = get()) }
     }

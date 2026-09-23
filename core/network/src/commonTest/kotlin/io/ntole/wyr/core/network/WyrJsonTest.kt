@@ -2,6 +2,7 @@ package io.ntole.wyr.core.network
 
 import io.ntole.wyr.core.error.ErrorCode
 import io.ntole.wyr.core.error.ErrorDto
+import io.ntole.wyr.core.player.PlayerStatsDto
 import io.ntole.wyr.core.question.QuestionCategory
 import io.ntole.wyr.core.question.QuestionDto
 import kotlin.test.Test
@@ -31,6 +32,23 @@ class WyrJsonTest {
 
         assertEquals(ErrorCode.UNKNOWN, error.code)
         assertEquals("m", error.message)
+    }
+
+    @Test
+    fun `a stat the server does not send decodes as its default`() {
+        val stats = WyrJson.decodeFromString<PlayerStatsDto>("""{"playerId":"p1","totalPoints":3}""")
+
+        assertEquals(
+            PlayerStatsDto(
+                playerId = "p1",
+                totalPoints = 3,
+                answersGiven = 0,
+                questionsAnswered = 0,
+                cycle = 1,
+                dueThisCycle = 0,
+            ),
+            stats,
+        )
     }
 
     @Test

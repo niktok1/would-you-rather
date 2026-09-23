@@ -12,6 +12,7 @@ import io.ntole.wyr.core.auth.RefreshRequest
 import io.ntole.wyr.core.auth.SessionDto
 import io.ntole.wyr.core.error.ErrorCode
 import io.ntole.wyr.core.network.WyrJson
+import io.ntole.wyr.core.player.PlayerStatsDto
 import io.ntole.wyr.core.question.QuestionCategory
 import io.ntole.wyr.core.question.QuestionDto
 import io.ntole.wyr.core.question.QuestionPageDto
@@ -21,8 +22,9 @@ import kotlinx.coroutines.sync.withLock
 
 /**
  * Just enough of the server, behind a [MockEngine], to put session recovery through the real
- * client: it mints guests, rotates refresh tokens, and rejects a feed request or a vote from a
- * player it does not know — the state after a dev server restarts with an empty database.
+ * client: it mints guests, rotates refresh tokens, and rejects a feed request, a vote or a stats
+ * read from a player it does not know — the state after a dev server restarts with an empty
+ * database.
  */
 internal class FakeServer {
     private val lock = Mutex()
@@ -44,6 +46,9 @@ internal class FakeServer {
 
     /** The `Authorization` header of every feed request, in arrival order. */
     val feedsSentAs = mutableListOf<String?>()
+
+    /** The `Authorization` header of every stats read, in arrival order. */
+    val statsSentAs = mutableListOf<String?>()
 
     val engine = MockEngine { request -> lock.withLock { handle(request) } }
 
@@ -89,6 +94,17 @@ internal class FakeServer {
                 }
             }
 
+            WyrApi.Paths.ME -> {
+                val authorization = request.headers[HttpHeaders.Authorization]
+                statsSentAs += authorization
+                val player = authorization?.removePrefix("Bearer access-")
+                if (player != null && player in players) {
+                    respondJson(WyrJson.encodeToString(STATS.copy(playerId = player)))
+                } else {
+                    respondErrorDto(HttpStatusCode.Unauthorized, ErrorCode.UNAUTHORIZED)
+                }
+            }
+
             else -> {
                 error("FakeServer has no route for ${request.url}")
             }
@@ -116,6 +132,17 @@ internal class FakeServer {
                     listOf(
                         QuestionDto(id = "q1", optionA = "q1-a", optionB = "q1-b", category = QuestionCategory.FOOD),
                     ),
+            )
+
+        /** What a stats read answers every known player, with that player's id in it. */
+        val STATS =
+            PlayerStatsDto(
+                playerId = "",
+                totalPoints = 7,
+                answersGiven = 9,
+                questionsAnswered = 5,
+                cycle = 2,
+                dueThisCycle = 11,
             )
     }
 }
