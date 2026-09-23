@@ -38,6 +38,9 @@ internal fun connectH2(
  * first. H2 names the blocker of a session waiting on a row lock, but not of one inserting a key
  * the first holds uncommitted ([INSERTING_INTO_VOTES]); that one shows only by what it executes.
  *
+ * [whileQueued] runs once they all are, before the first is let go, so whatever it commits lands
+ * after the first's work and before the rest of theirs.
+ *
  * Each block runs through Exposed's `transaction`, retries included, exactly as `Db.query` runs a
  * request's work.
  */
@@ -46,6 +49,7 @@ internal fun <T> raceBehindFirst(
     database: Database,
     vararg blocks: () -> T,
     queued: String = WAITING_ON_A_ROW_LOCK,
+    whileQueued: () -> Unit = {},
 ): List<T> {
     val firstHasWritten = CountDownLatch(1)
     val releaseFirst = CountDownLatch(1)
@@ -66,6 +70,7 @@ internal fun <T> raceBehindFirst(
 
         val rest = blocks.drop(1).map { block -> pool.submit(Callable { transaction(database) { block() } }) }
         awaitQueuedSessions(url, count = rest.size, queued)
+        whileQueued()
         releaseFirst.countDown()
 
         return (listOf(first) + rest).map { result -> result.get(TIMEOUT_SECONDS, TimeUnit.SECONDS) }

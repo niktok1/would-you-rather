@@ -4,6 +4,7 @@ import io.ntole.wyr.core.vote.OptionSide
 import io.ntole.wyr.core.vote.VoteResultDto
 import io.ntole.wyr.core.vote.VoteTallyDto
 import io.ntole.wyr.server.db.INSERTING_INTO_VOTES
+import io.ntole.wyr.server.db.Questions
 import io.ntole.wyr.server.db.Seed
 import io.ntole.wyr.server.db.Votes
 import io.ntole.wyr.server.db.appTables
@@ -11,13 +12,16 @@ import io.ntole.wyr.server.db.connectH2
 import io.ntole.wyr.server.db.h2Url
 import io.ntole.wyr.server.db.raceBehindFirst
 import io.ntole.wyr.server.player.PlayerStore
+import io.ntole.wyr.server.question.QuestionStore
 import org.jetbrains.exposed.v1.core.ResultRow
 import org.jetbrains.exposed.v1.core.Transaction
+import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.core.statements.StatementContext
 import org.jetbrains.exposed.v1.core.statements.StatementInterceptor
 import org.jetbrains.exposed.v1.core.statements.api.PreparedStatementApi
 import org.jetbrains.exposed.v1.jdbc.SchemaUtils
+import org.jetbrains.exposed.v1.jdbc.select
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import java.sql.Connection
@@ -27,6 +31,7 @@ import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 
 /**
  * The vote store at the server's READ COMMITTED, set by hand as in PlayerStoreTest, so the races
@@ -137,6 +142,27 @@ class VoteStoreTest {
     }
 
     @Test
+    fun `an answer that waited for the vote counts for the cycle that started meanwhile`() {
+        val player = newPlayer()
+        val pool = transaction(database) { Questions.select(Questions.id).map { it[Questions.id] } }
+        pool.forEach { id -> transaction(database) { VoteStore.cast(player, id, OptionSide.A, attemptId = "cycle-1") } }
+
+        // The first holds the vote's lock, as an answer to the same question still in flight would,
+        // and the answer queues on it. Meanwhile the feed finds nothing due and starts cycle 2.
+        raceBehindFirst(
+            url,
+            database,
+            { lockVote(player) },
+            { VoteStore.cast(player, QUESTION, OptionSide.B, attemptId = "late") },
+            whileQueued = { transaction(database) { QuestionStore.feed(player, limit = 1, category = null) } },
+        )
+
+        val cycle2 = transaction(database) { QuestionStore.feed(player, pool.size, category = null).questions }
+        assertEquals(pool.size - 1, cycle2.size, "the answer landed in cycle 2, so its question is not due in it")
+        assertFalse(cycle2.any { it.id == QUESTION })
+    }
+
+    @Test
     fun `another player switching sides while the tally is counted is counted once`() {
         val switcher = newPlayer()
         val caster = newPlayer()
@@ -178,6 +204,14 @@ class VoteStoreTest {
 
     private fun storedVotes(): List<ResultRow> =
         transaction(database) { Votes.selectAll().where { Votes.questionId eq QUESTION }.toList() }
+
+    /** Takes the player's vote on [QUESTION] as `VoteStore.cast` does, to hold it until the transaction ends. */
+    private fun lockVote(player: String): ResultRow =
+        Votes
+            .selectAll()
+            .where { (Votes.playerId eq player) and (Votes.questionId eq QUESTION) }
+            .forUpdate()
+            .single()
 
     /** Runs [action] once, after the first statement of the transaction that counts anything. */
     private fun afterFirstCount(action: () -> Unit): StatementInterceptor =

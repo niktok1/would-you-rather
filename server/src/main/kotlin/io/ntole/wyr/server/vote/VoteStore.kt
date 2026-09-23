@@ -52,16 +52,18 @@ object VoteStore {
     ): VoteResultDto {
         if (!QuestionStore.exists(questionId)) throw ApiFailure.questionNotFound(questionId)
 
-        val player = PlayerStore.find(playerId) ?: throw ApiFailure.unauthorized("unknown player")
+        if (PlayerStore.find(playerId) == null) throw ApiFailure.unauthorized("unknown player")
 
         val stored = lockVote(playerId, questionId)
 
         if (stored != null && stored[Votes.attemptId] == attemptId) return replay(playerId, questionId, stored)
 
+        val cycle = currentCycle(playerId)
+
         if (stored == null) {
-            insertVote(playerId, questionId, choice, attemptId, player.cycle, now)
+            insertVote(playerId, questionId, choice, attemptId, cycle, now)
         } else {
-            moveVote(playerId, questionId, choice, attemptId, player.cycle, now)
+            moveVote(playerId, questionId, choice, attemptId, cycle, now)
         }
 
         val tally = tally(questionId)
@@ -98,6 +100,21 @@ object VoteStore {
             .where { (Votes.playerId eq playerId) and (Votes.questionId eq questionId) }
             .forUpdate()
             .singleOrNull()
+
+    /**
+     * The cycle this answer counts for (CLAUDE.md §8d). Read after [lockVote], not taken from the
+     * check in [cast], for the reason [replay] reads the total then. An answer that waited on the
+     * lock for another answer to the same question may find that the feed started the next cycle
+     * meanwhile, and it lands in that one. Taken from before the wait, it would count for the cycle
+     * before, and its question would come round again in the cycle it was just answered in.
+     *
+     * The feed can still start a cycle between this read and the commit, and that is harmless. It
+     * starts one only when nothing is due, and this answer is not committed yet, so its question
+     * was already answered in the cycle read here: counting this answer there too is what answering
+     * just before the new cycle would have done.
+     */
+    private fun currentCycle(playerId: String): Int =
+        checkNotNull(PlayerStore.find(playerId)) { "player $playerId vanished mid-transaction" }.cycle
 
     private fun replay(
         playerId: String,
