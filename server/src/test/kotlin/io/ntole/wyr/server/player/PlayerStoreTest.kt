@@ -2,8 +2,10 @@ package io.ntole.wyr.server.player
 
 import io.ntole.wyr.server.db.Players
 import org.jetbrains.exposed.v1.core.DatabaseConfig
+import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.SchemaUtils
+import org.jetbrains.exposed.v1.jdbc.select
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import java.sql.Connection
 import java.sql.DriverManager
@@ -13,6 +15,7 @@ import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlin.test.fail
 
@@ -31,6 +34,49 @@ class PlayerStoreTest {
         raceTwoAwards("wyr-player-store-rr", Connection.TRANSACTION_REPEATABLE_READ)
     }
 
+    @Test
+    fun `two refreshes racing with the same token let exactly one through`() {
+        // READ COMMITTED for the same reason as the awards: a rotation by id alone lets both through
+        // only here. Under REPEATABLE_READ the second is refused and its retry no longer finds the token.
+        val url = h2Url("wyr-player-store-refresh")
+        val database = connect(url, Connection.TRANSACTION_READ_COMMITTED)
+        val player =
+            transaction(database) {
+                SchemaUtils.create(Players)
+                PlayerStore.createGuest(refreshTokenHash = "spent", refreshExpiresAt = Long.MAX_VALUE)
+            }
+
+        val (first, second) =
+            race(
+                url,
+                database,
+                first = { PlayerStore.rotateRefreshToken("spent", newHash = "first", expiresAt = Long.MAX_VALUE) },
+                second = { PlayerStore.rotateRefreshToken("spent", newHash = "second", expiresAt = Long.MAX_VALUE) },
+            )
+
+        assertEquals(player.id, first?.id)
+        assertNull(second, "the token was already spent by the first refresh")
+        assertEquals("first", storedRefreshHash(database, player.id), "the first refresh's session must stay live")
+    }
+
+    @Test
+    fun `an expired refresh token does not rotate`() {
+        val database = connect(h2Url("wyr-player-store-expired"), Connection.TRANSACTION_READ_COMMITTED)
+        val player =
+            transaction(database) {
+                SchemaUtils.create(Players)
+                PlayerStore.createGuest(refreshTokenHash = "stale", refreshExpiresAt = 1_000L)
+            }
+
+        val rotated =
+            transaction(database) {
+                PlayerStore.rotateRefreshToken("stale", newHash = "fresh", expiresAt = Long.MAX_VALUE, now = 1_000L)
+            }
+
+        assertNull(rotated)
+        assertEquals("stale", storedRefreshHash(database, player.id))
+    }
+
     /**
      * Holds the first award's transaction open while the second one starts, so the second cannot
      * see the first's point until it commits. A read-then-write would start from the stale total
@@ -40,57 +86,70 @@ class PlayerStoreTest {
         databaseName: String,
         isolationLevel: Int,
     ) {
-        val url = "jdbc:h2:mem:$databaseName;DB_CLOSE_DELAY=-1"
-        val database =
-            Database.connect(
-                url = url,
-                driver = "org.h2.Driver",
-                databaseConfig = DatabaseConfig { defaultIsolationLevel = isolationLevel },
-            )
+        val url = h2Url(databaseName)
+        val database = connect(url, isolationLevel)
         val player =
             transaction(database) {
                 SchemaUtils.create(Players)
                 PlayerStore.createGuest(refreshTokenHash = databaseName, refreshExpiresAt = Long.MAX_VALUE)
             }
 
-        val firstHasAwarded = CountDownLatch(1)
+        val (first, second) =
+            race(
+                url,
+                database,
+                first = { PlayerStore.addPoints(player.id, points = 1) },
+                second = { PlayerStore.addPoints(player.id, points = 1) },
+            )
+
+        assertEquals(1, first)
+        assertEquals(2, second, "the second award must build on the first")
+        assertEquals(2, transaction(database) { PlayerStore.find(player.id)?.totalPoints })
+    }
+
+    /**
+     * Runs [first] and [second] in transactions of their own, with [first] held open until
+     * [second] is queued behind its row lock, and returns both results.
+     */
+    private fun <T> race(
+        url: String,
+        database: Database,
+        first: () -> T,
+        second: () -> T,
+    ): Pair<T, T> {
+        val firstHasWritten = CountDownLatch(1)
         val releaseFirst = CountDownLatch(1)
         val pool = Executors.newFixedThreadPool(2)
         try {
-            val first =
+            val firstResult =
                 pool.submit(
                     Callable {
                         transaction(database) {
-                            PlayerStore.addPoints(player.id, points = 1).also {
-                                firstHasAwarded.countDown()
+                            first().also {
+                                firstHasWritten.countDown()
                                 releaseFirst.await()
                             }
                         }
                     },
                 )
-            assertTrue(firstHasAwarded.await(TIMEOUT_SECONDS, TimeUnit.SECONDS), "the first award never ran")
+            assertTrue(firstHasWritten.await(TIMEOUT_SECONDS, TimeUnit.SECONDS), "the first transaction never ran")
 
-            val second =
-                pool.submit(
-                    Callable { transaction(database) { PlayerStore.addPoints(player.id, points = 1) } },
-                )
+            val secondResult = pool.submit(Callable { transaction(database) { second() } })
             awaitSessionWaitingOnALock(url)
             releaseFirst.countDown()
 
-            assertEquals(1, first.get(TIMEOUT_SECONDS, TimeUnit.SECONDS))
-            assertEquals(2, second.get(TIMEOUT_SECONDS, TimeUnit.SECONDS), "the second award must build on the first")
+            return firstResult.get(TIMEOUT_SECONDS, TimeUnit.SECONDS) to
+                secondResult.get(TIMEOUT_SECONDS, TimeUnit.SECONDS)
         } finally {
             releaseFirst.countDown()
             pool.shutdownNow()
         }
-
-        assertEquals(2, transaction(database) { PlayerStore.find(player.id)?.totalPoints })
     }
 
     /**
-     * Returns once some session is queued behind another's row lock: the second award waiting on
-     * the first. Releasing the first any sooner could let the second start after the first had
-     * committed, and then the race this test is for would never happen.
+     * Returns once some session is queued behind another's row lock: the second transaction
+     * waiting on the first. Releasing the first any sooner could let the second start after the
+     * first had committed, and then the race the test is for would never happen.
      */
     private fun awaitSessionWaitingOnALock(url: String) {
         DriverManager.getConnection(url).use { connection ->
@@ -105,8 +164,31 @@ class PlayerStoreTest {
                 Thread.sleep(POLL_MILLIS)
             }
         }
-        fail("the second award never waited on the first, so the race did not happen")
+        fail("the second transaction never waited on the first, so the race did not happen")
     }
+
+    private fun h2Url(databaseName: String) = "jdbc:h2:mem:$databaseName;DB_CLOSE_DELAY=-1"
+
+    private fun connect(
+        url: String,
+        isolationLevel: Int,
+    ): Database =
+        Database.connect(
+            url = url,
+            driver = "org.h2.Driver",
+            databaseConfig = DatabaseConfig { defaultIsolationLevel = isolationLevel },
+        )
+
+    private fun storedRefreshHash(
+        database: Database,
+        playerId: String,
+    ): String? =
+        transaction(database) {
+            Players
+                .select(Players.refreshTokenHash)
+                .where { Players.id eq playerId }
+                .single()[Players.refreshTokenHash]
+        }
 
     private companion object {
         const val TIMEOUT_SECONDS = 10L

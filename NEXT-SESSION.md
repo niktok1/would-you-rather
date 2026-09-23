@@ -11,9 +11,10 @@ Repo initialized on `main` with the personal identity and `user.useConfigOnly = 
 
 ### Verified working
 
-- `:server` on H2: 34 tests green, including 14 end-to-end flow tests in `ApiFlowTest`. Flat
+- `:server` on H2: 36 tests green, including 14 end-to-end flow tests in `ApiFlowTest`. Flat
   scoring is covered there (every vote pays 1, majority and minority alike, and the total
-  accumulates) and by `PlayerStoreTest`, which races two awards for one player.
+  accumulates) and by `PlayerStoreTest`, which races awards for one player and refreshes of one
+  token.
 - Live curl run against `./gradlew :server:run` confirmed guest auth, paging, voting,
   refresh-token rotation, replay rejection, and the `ErrorDto` envelope on 400/401/404/409. That
   run predates flat scoring, so the scoring it checked was the old streak rule.

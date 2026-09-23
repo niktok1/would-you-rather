@@ -1,7 +1,9 @@
 package io.ntole.wyr.server.player
 
 import io.ntole.wyr.server.db.Players
+import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
+import org.jetbrains.exposed.v1.core.greater
 import org.jetbrains.exposed.v1.core.plus
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.select
@@ -46,14 +48,42 @@ object PlayerStore {
             }
 
     /**
-     * Looks up a player by refresh token hash, rejecting expired ones.
+     * Swaps the refresh token whose hash is [oldHash] for [newHash] and returns its player. Must
+     * run inside a transaction.
      *
-     * Returns `null` for both "no such token" and "expired token" — the caller must not be able
-     * to tell them apart, and neither should an attacker probing the endpoint.
+     * Returns `null` alike for an unknown, an expired, and an already rotated token — the caller
+     * must not be able to tell them apart, and neither should an attacker probing the endpoint.
+     *
+     * The write is a compare-and-set on [oldHash], not an update by id, so the token stays
+     * single-use when two refreshes present it at once. At READ COMMITTED both find the player,
+     * and the second then waits on the first's row lock and re-checks its `WHERE` against the row
+     * the first committed. By id alone that still matches, and both succeed: two live sessions from
+     * one token. With the old hash in it, nothing matches and the second is refused.
      */
-    fun findByRefreshHash(
-        hash: String,
+    fun rotateRefreshToken(
+        oldHash: String,
+        newHash: String,
+        expiresAt: Long,
         now: Long = System.currentTimeMillis(),
+    ): Player? {
+        val player = findByRefreshHash(oldHash, now) ?: return null
+
+        val swapped =
+            Players.update({
+                (Players.id eq player.id) and
+                    (Players.refreshTokenHash eq oldHash) and
+                    (Players.refreshTokenExpiresAt greater now)
+            }) { row ->
+                row[refreshTokenHash] = newHash
+                row[refreshTokenExpiresAt] = expiresAt
+            }
+
+        return player.takeIf { swapped == 1 }
+    }
+
+    private fun findByRefreshHash(
+        hash: String,
+        now: Long,
     ): Player? =
         Players
             .selectAll()
@@ -67,17 +97,6 @@ object PlayerStore {
                     totalPoints = row[Players.totalPoints],
                 )
             }
-
-    fun rotateRefreshToken(
-        playerId: String,
-        newHash: String,
-        expiresAt: Long,
-    ) {
-        Players.update({ Players.id eq playerId }) { row ->
-            row[refreshTokenHash] = newHash
-            row[refreshTokenExpiresAt] = expiresAt
-        }
-    }
 
     /**
      * Adds [points] to the player's total and returns the new total. Must run inside a transaction.

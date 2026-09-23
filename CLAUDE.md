@@ -267,7 +267,8 @@ auth SDK, satisfying §2.
 - The access token travels in `Authorization: Bearer`, never in a request body, so `VoteRequest`
   does not change when auth evolves.
 - Only a SHA-256 hash of the refresh token is stored. Refresh tokens **rotate on every use**, so
-  a replayed token is dead on arrival.
+  a replayed token is dead on arrival. The rotation is a compare-and-set on the old hash
+  (`PlayerStore.rotateRefreshToken`), so two refreshes racing with one token let exactly one through.
 - `POST /v1/auth/link` does not exist yet. It is the intended next step and is what will make an
   account survive reinstall and sync across devices.
 - On the client, `SessionStore` is the only copy of the credentials: Ktor's bearer cache is off

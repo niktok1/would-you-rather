@@ -50,19 +50,15 @@ fun Route.authRoutes(
         val rotated = tokens.issueRefreshToken()
         val expiresAt = System.currentTimeMillis() + config.refreshTokenTtlSeconds * 1_000L
 
+        // Rotate on every use, so a replayed token is dead on arrival — even one replayed while
+        // the first use is still in flight, which the rotation refuses as already rotated.
         val player =
             db.query {
-                val found =
-                    PlayerStore.findByRefreshHash(tokens.hash(body.refreshToken))
-                        ?: throw ApiFailure.invalidRefreshToken()
-
-                // Rotate on every use, so a replayed token is dead on arrival.
                 PlayerStore.rotateRefreshToken(
-                    playerId = found.id,
+                    oldHash = tokens.hash(body.refreshToken),
                     newHash = rotated.hash,
                     expiresAt = expiresAt,
-                )
-                found
+                ) ?: throw ApiFailure.invalidRefreshToken()
             }
 
         call.respond(
