@@ -6,6 +6,7 @@ import io.ntole.wyr.core.question.QuestionPageDto
 import io.ntole.wyr.server.db.Questions
 import io.ntole.wyr.server.db.Votes
 import io.ntole.wyr.server.player.PlayerStore
+import org.jetbrains.exposed.v1.core.Expression
 import org.jetbrains.exposed.v1.core.JoinType
 import org.jetbrains.exposed.v1.core.Op
 import org.jetbrains.exposed.v1.core.Random
@@ -13,6 +14,7 @@ import org.jetbrains.exposed.v1.core.ResultRow
 import org.jetbrains.exposed.v1.core.SortOrder
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
+import org.jetbrains.exposed.v1.core.intParam
 import org.jetbrains.exposed.v1.core.isNull
 import org.jetbrains.exposed.v1.core.less
 import org.jetbrains.exposed.v1.core.or
@@ -58,14 +60,15 @@ object QuestionStore {
         category: QuestionCategory?,
     ): QuestionPageDto {
         val cycle = checkNotNull(PlayerStore.find(playerId)) { "player $playerId vanished mid-transaction" }.cycle
+        val current = intParam(cycle)
 
-        val due = candidates(playerId, category, dueIn = cycle).randomBatch(limit)
+        val due = candidates(playerId, category, dueIn = current).randomBatch(limit)
         if (due.isNotEmpty()) return QuestionPageDto(questions = due)
 
         // Nothing in the category is due, so every question in it, if it has any, was answered in
         // this cycle.
         val again = candidates(playerId, category, dueIn = null).randomBatch(limit)
-        val cycleFinished = category == null || candidates(playerId, category = null, dueIn = cycle).empty()
+        val cycleFinished = category == null || candidates(playerId, category = null, dueIn = current).empty()
         if (again.isNotEmpty() && cycleFinished) PlayerStore.startNextCycle(playerId, from = cycle)
 
         return QuestionPageDto(questions = again)
@@ -84,7 +87,7 @@ object QuestionStore {
     private fun candidates(
         playerId: String,
         category: QuestionCategory?,
-        dueIn: Int?,
+        dueIn: Expression<Int>?,
     ): Query =
         Questions
             .join(Votes, JoinType.LEFT, Questions.id, Votes.questionId) { Votes.playerId eq playerId }
@@ -99,8 +102,14 @@ object QuestionStore {
     private fun inCategory(category: QuestionCategory?): Op<Boolean> =
         category?.let { wanted -> Questions.category eq wanted.name } ?: Op.TRUE
 
-    /** Not yet answered in [cycle]: no vote, or one from an earlier cycle. A null [cycle] lets all through. */
-    private fun isDue(cycle: Int?): Op<Boolean> =
+    /**
+     * Not yet answered in [cycle]: no vote, or one from an earlier cycle. A null [cycle] lets all through.
+     *
+     * An expression rather than a number, so the cycle can be a column as well as a value, and a
+     * statement that reads the player's row can count what is due in that same statement. The feed
+     * passes its cycle as a parameter.
+     */
+    private fun isDue(cycle: Expression<Int>?): Op<Boolean> =
         cycle?.let { current -> Votes.answeredInCycle.isNull() or (Votes.answeredInCycle less current) } ?: Op.TRUE
 
     fun exists(id: String): Boolean =
