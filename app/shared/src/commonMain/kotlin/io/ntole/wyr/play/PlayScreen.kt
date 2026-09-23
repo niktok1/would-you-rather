@@ -121,11 +121,18 @@ private fun Header(state: PlayUiState) {
             Spacer(Modifier.size(dimens.spaceSm))
             Row(horizontalArrangement = Arrangement.spacedBy(dimens.spaceMd)) {
                 Stat(label = "points", value = outcome.totalPoints.toString())
-                Stat(label = "this vote", value = "+${outcome.pointsAwarded}")
+                pointsThisVote(outcome)?.let { points -> Stat(label = "this vote", value = points) }
             }
         }
     }
 }
+
+/**
+ * What the vote earned, as the header shows it, or null for a replay (CLAUDE.md §8d, retry safety).
+ * A replay pays 0 because the attempt it repeats was paid when it landed, so "+0" would tell the
+ * player their answer earned nothing. The client never recomputes points (§8c), so it shows none.
+ */
+internal fun pointsThisVote(outcome: VoteOutcome): String? = if (outcome.replayed) null else "+${outcome.pointsAwarded}"
 
 @Composable
 private fun Stat(
