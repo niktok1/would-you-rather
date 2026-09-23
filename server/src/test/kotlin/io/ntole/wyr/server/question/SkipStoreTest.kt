@@ -162,6 +162,7 @@ class SkipStoreTest {
 
     @Test
     fun `a category with nothing due but a skip is served again while the rest of the cycle is not done`() {
+        // Provisional (CLAUDE.md §8b): the Categories rule as written, pending the user's decision.
         val player = newPlayer()
         val skipped = food.first()
         food.drop(1).forEach { id -> answer(player, id) }

@@ -319,6 +319,14 @@ accounts exist.
   after a restart.
 - **Question submission + moderation** — the game rules are settled in §8d; the contract
   (`QuestionStatus`, author field) and the moderator model are not.
+- **Skips under a category filter** — *provisional — user decision.* A request filtered to a
+  category with nothing due in it, while other questions still are, serves that category again
+  (§8d, *Categories*), and that includes questions skipped this cycle, which §8d, *Skipping*, says
+  come back only in the next one. Built that way because it is the Categories rule as written,
+  which predates recorded skips, and it changes neither rule. The options: keep it; serve again
+  only the category's answered questions, and its skipped ones only when it has nothing else; or
+  answer an empty batch, which the client reads as out of questions. No client sends a category
+  yet, so nothing reaches this today. `SkipStoreTest` pins what is built.
 - **Rate limiting** — `ErrorCode.RATE_LIMITED` exists on the wire and nothing emits it yet.
   Until something limits votes, points can be farmed: the server pays a new attempt on an answered
   question at once, without checking that it is due again (§8d, re-answering), so a script
@@ -393,7 +401,8 @@ and every request shows in its HTTP trace (`HttpTrace` in `:core:network`, never
     again, in random order and `answeredBefore` on those answered, and leaves the cycle alone:
     starting the next one would cut short the player's pass over the rest. The cycle starts only
     once nothing at all is due, whichever category is asked for, and a request that finds no
-    questions starts nothing.
+    questions starts nothing. Questions skipped this cycle are served again this way too, so a skip
+    does not hold through a category filter: *provisional — user decision* (§8b).
   - `answeredBefore` means the player has a vote on the question, from any cycle.
 - **Re-answering** *(built)*: a question can be answered again, whether or not the feed has
   served it again. It earns the point again **every time**, inside its cycle or not (farming is
@@ -418,7 +427,8 @@ and every request shows in its HTTP trace (`HttpTrace` in `:core:network`, never
   cycle with nothing due.
 - **Skipping** *(built; decided 2026-09-23)*: allowed, earns nothing, and never touches the
   tally. The server **records the skip for the player's current cycle only**, so the question is
-  no longer due in that cycle and comes back in the **next** one. A player is therefore never
+  no longer due in that cycle and comes back in the **next** one, except through a category filter
+  with nothing due in it (*Categories* above; provisional, §8b). A player is therefore never
   stuck at the end of a cycle on a question they keep skipping. Built as `POST /v1/skips` in
   `SkipStore.skip`, on `skips.skipped_in_cycle`, which the feed's due predicate compares with the
   cycle as it does the vote's. The console's Skip sends it through `SkipQuestion`, then loads the

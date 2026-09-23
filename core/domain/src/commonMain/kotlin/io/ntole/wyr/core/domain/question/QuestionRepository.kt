@@ -23,8 +23,9 @@ public interface QuestionRepository {
 
     /**
      * Skips the question [questionId] for the rest of the player's current cycle (CLAUDE.md §8d).
-     * It pays nothing, and the feed serves it again in the next cycle. Skipping it again in the same
-     * cycle changes nothing. It is not a fetch: [next] still hands out whatever comes next.
+     * It pays nothing, and the feed serves it again in the next cycle; only a feed filtered by
+     * category can serve it sooner, and [next] never filters. Skipping it again in the same cycle
+     * changes nothing. It is not a fetch: [next] still hands out whatever comes next.
      *
      * @throws io.ntole.wyr.core.domain.error.WyrException on any failure, with
      *   [io.ntole.wyr.core.domain.error.DomainError.QUESTION_NOT_FOUND] for a question the server

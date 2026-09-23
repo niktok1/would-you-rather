@@ -244,10 +244,11 @@ known `PlayViewModel` issues (the Play tab is frozen).
   does not make a question `answeredBefore`. Only a skip the server never recorded leaves its
   question due: once that is the last one, the feed serves it again and nothing else until it is
   answered or skipped. A cycle is per player, so a category with nothing due is served again
-  rather than starting the next cycle while other categories are still due. Three server rules to
-  keep: starting a cycle is a compare-and-set on the cycle read (`PlayerStore.startNextCycle`), and
-  an answer and a skip each read their cycle after their row's lock (`VoteStore.cast`,
-  `SkipStore.skip`). All three have races in the store tests.
+  rather than starting the next cycle while other categories are still due, skipped questions
+  included; that last part is provisional (CLAUDE.md §8b). Three server rules to keep: starting a
+  cycle is a compare-and-set on the cycle read (`PlayerStore.startNextCycle`), and an answer and a
+  skip each read their cycle after their row's lock (`VoteStore.cast`, `SkipStore.skip`). All three
+  have races in the store tests.
 - **An attempt id is made once per tap and reused only to retry that tap.** `AttemptId.random()`
   is the only way to make one. Making a new one for a retry pays twice; reusing one for a new tap
   turns that answer into a replay that pays nothing. The server stores only the latest attempt per

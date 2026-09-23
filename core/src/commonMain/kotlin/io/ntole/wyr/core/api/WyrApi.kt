@@ -21,9 +21,10 @@ public object WyrApi {
          * because the feed is per player (CLAUDE.md §8d): it runs in cycles, serving each question
          * once per cycle in a new random order, and a batch holds only what the player has neither
          * answered nor skipped ([SKIPS]) in the current one. The exception is a [Query.CATEGORY] with
-         * nothing in it left to answer this cycle while something outside it is: that category is
-         * served again within the same cycle, `answeredBefore` on what the player has answered. There
-         * is no cursor; asking again is how to get the next batch.
+         * nothing in it due this cycle while something outside it is: that category is served again
+         * within the same cycle, `answeredBefore` on what the player has answered. That includes what
+         * the player skipped in it, which is provisional (CLAUDE.md §8b). There is no cursor; asking
+         * again is how to get the next batch.
          */
         public const val QUESTIONS: String = "/$VERSION/questions"
         public const val VOTES: String = "/$VERSION/votes"
@@ -31,8 +32,9 @@ public object WyrApi {
         /**
          * Skips a question for the rest of the session player's current cycle (CLAUDE.md §8d), with a
          * [io.ntole.wyr.core.question.SkipRequest]. Requires a session. The question comes back in the
-         * next cycle. A skip pays nothing and leaves the tally alone, and skipping again in the same
-         * cycle changes nothing. Answered with 204 and no body.
+         * next cycle, or sooner only to a [QUESTIONS] request filtered to a category with nothing due
+         * in it (see there). A skip pays nothing and leaves the tally alone, and skipping again in the
+         * same cycle changes nothing. Answered with 204 and no body.
          */
         public const val SKIPS: String = "/$VERSION/skips"
 

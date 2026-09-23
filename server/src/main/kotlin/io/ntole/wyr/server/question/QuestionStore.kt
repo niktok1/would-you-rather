@@ -52,7 +52,8 @@ object QuestionStore {
      * outside it still is, the player has not finished the cycle, and starting the next one would
      * cut short their pass over the rest. So the category's questions are served again instead, in
      * random order, and the cycle stays. Answering one again still pays (§8d, re-answering) and
-     * counts for the same cycle.
+     * counts for the same cycle. Those skipped this cycle are served again with the rest, so a skip
+     * does not hold through a category filter; that is provisional (CLAUDE.md §8b).
      *
      * [QuestionDto.answeredBefore] means the player has a vote on the question, from any cycle. A
      * skip is no vote, so a question skipped but never answered is not answered before.
