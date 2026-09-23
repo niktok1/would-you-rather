@@ -29,7 +29,10 @@ class ApiFailure(
             cause,
         )
 
-        fun validation(message: String) = ApiFailure(HttpStatusCode.BadRequest, ErrorCode.VALIDATION_FAILED, message)
+        fun validation(
+            message: String,
+            cause: Throwable? = null,
+        ) = ApiFailure(HttpStatusCode.BadRequest, ErrorCode.VALIDATION_FAILED, message, cause)
 
         fun unauthorized(message: String = "missing or invalid credentials") =
             ApiFailure(HttpStatusCode.Unauthorized, ErrorCode.UNAUTHORIZED, message)

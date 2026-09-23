@@ -3,7 +3,6 @@ package io.ntole.wyr.server.vote
 import io.ktor.server.auth.authenticate
 import io.ktor.server.auth.jwt.JWTPrincipal
 import io.ktor.server.auth.principal
-import io.ktor.server.request.receive
 import io.ktor.server.response.respond
 import io.ktor.server.routing.Route
 import io.ktor.server.routing.post
@@ -13,6 +12,7 @@ import io.ntole.wyr.server.auth.JWT_AUTH
 import io.ntole.wyr.server.auth.TokenService
 import io.ntole.wyr.server.db.Db
 import io.ntole.wyr.server.plugins.ApiFailure
+import io.ntole.wyr.server.plugins.receiveOrReject
 
 fun Route.voteRoutes(db: Db) {
     authenticate(JWT_AUTH) {
@@ -25,9 +25,7 @@ fun Route.voteRoutes(db: Db) {
                     ?.asString()
                     ?: throw ApiFailure.unauthorized("token carries no player id")
 
-            val body =
-                runCatching { call.receive<VoteRequest>() }.getOrNull()
-                    ?: throw ApiFailure.validation("malformed vote request")
+            val body = call.receiveOrReject<VoteRequest>("vote request")
 
             if (body.questionId.isBlank()) throw ApiFailure.validation("questionId is blank")
 

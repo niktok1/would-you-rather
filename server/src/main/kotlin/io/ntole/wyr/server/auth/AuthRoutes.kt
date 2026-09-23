@@ -1,6 +1,5 @@
 package io.ntole.wyr.server.auth
 
-import io.ktor.server.request.receive
 import io.ktor.server.response.respond
 import io.ktor.server.routing.Route
 import io.ktor.server.routing.post
@@ -11,6 +10,7 @@ import io.ntole.wyr.server.config.ServerConfig
 import io.ntole.wyr.server.db.Db
 import io.ntole.wyr.server.player.PlayerStore
 import io.ntole.wyr.server.plugins.ApiFailure
+import io.ntole.wyr.server.plugins.receiveOrReject
 
 /**
  * Session endpoints. Both are public: [WyrApi.Paths.AUTH_GUEST] has no credential to present
@@ -43,9 +43,7 @@ fun Route.authRoutes(
     }
 
     post(WyrApi.Paths.AUTH_REFRESH) {
-        val body =
-            runCatching { call.receive<RefreshRequest>() }.getOrNull()
-                ?: throw ApiFailure.validation("malformed refresh request")
+        val body = call.receiveOrReject<RefreshRequest>("refresh request")
 
         if (body.refreshToken.isBlank()) throw ApiFailure.validation("refreshToken is blank")
 

@@ -25,9 +25,11 @@ fun Route.questionRoutes(db: Db) {
                 raw.toLongOrNull() ?: throw ApiFailure.validation("malformed cursor: $raw")
             }
 
+        // UNKNOWN is the client's decoding fallback and is never stored, so filtering by it would
+        // answer an empty page with no cursor — indistinguishable from the end of the catalogue.
         val category =
             params[WyrApi.Query.CATEGORY]?.let { raw ->
-                runCatching { QuestionCategory.valueOf(raw) }.getOrNull()
+                QuestionCategory.entries.firstOrNull { it.name == raw && it != QuestionCategory.UNKNOWN }
                     ?: throw ApiFailure.validation("unknown category: $raw")
             }
 

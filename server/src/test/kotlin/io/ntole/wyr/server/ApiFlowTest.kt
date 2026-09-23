@@ -17,6 +17,7 @@ import io.ntole.wyr.core.auth.RefreshRequest
 import io.ntole.wyr.core.auth.SessionDto
 import io.ntole.wyr.core.error.ErrorCode
 import io.ntole.wyr.core.error.ErrorDto
+import io.ntole.wyr.core.question.QuestionCategory
 import io.ntole.wyr.core.question.QuestionPageDto
 import io.ntole.wyr.core.vote.OptionSide
 import io.ntole.wyr.core.vote.VoteRequest
@@ -28,6 +29,7 @@ import kotlinx.serialization.json.Json
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotEquals
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
@@ -230,6 +232,56 @@ class ApiFlowTest {
         }
 
     @Test
+    fun `a vote body the server cannot use is a validation error rather than a 500`() =
+        runServer("malformed-vote") { client ->
+            val session: SessionDto = client.post(WyrApi.Paths.AUTH_GUEST).body()
+
+            suspend fun assertRejected(
+                case: String,
+                body: String,
+                type: ContentType = ContentType.Application.Json,
+            ) {
+                val response =
+                    client.post(WyrApi.Paths.VOTES) {
+                        bearerAuth(session.accessToken)
+                        contentType(type)
+                        setBody(body)
+                    }
+
+                assertEquals(HttpStatusCode.BadRequest, response.status, case)
+                assertEquals(ErrorCode.VALIDATION_FAILED, response.body<ErrorDto>().code, case)
+            }
+
+            assertRejected("malformed json", "{not json")
+            assertRejected("unknown side", """{"questionId":"seed-1","choice":"C"}""")
+            assertRejected("blank questionId", """{"questionId":"  ","choice":"A"}""")
+            assertRejected("not sent as json", """{"questionId":"seed-1","choice":"A"}""", ContentType.Text.Plain)
+        }
+
+    @Test
+    fun `a refresh body that does not parse is a validation error rather than a 500`() =
+        runServer("malformed-refresh") { client ->
+            val response =
+                client.post(WyrApi.Paths.AUTH_REFRESH) {
+                    contentType(ContentType.Application.Json)
+                    setBody("{not json")
+                }
+
+            assertEquals(HttpStatusCode.BadRequest, response.status)
+            assertEquals(ErrorCode.VALIDATION_FAILED, response.body<ErrorDto>().code)
+        }
+
+    @Test
+    fun `the UNKNOWN category is rejected rather than served as an empty catalogue`() =
+        runServer("unknown-category") { client ->
+            val response =
+                client.get("${WyrApi.Paths.QUESTIONS}?${WyrApi.Query.CATEGORY}=${QuestionCategory.UNKNOWN.name}")
+
+            assertEquals(HttpStatusCode.BadRequest, response.status)
+            assertEquals(ErrorCode.VALIDATION_FAILED, response.body<ErrorDto>().code)
+        }
+
+    @Test
     fun `paging walks the catalogue and stops`() =
         runServer("paging") { client ->
             val first: QuestionPageDto =
@@ -249,6 +301,18 @@ class ApiFlowTest {
                 second.questions.none { it.id in firstIds },
                 "cursor paging must not repeat rows",
             )
+
+            // Follow the cursor to the end, within a bound: the walk has to finish on a page that
+            // offers no cursor rather than hand out cursors forever.
+            var last = second
+            repeat(times = 20) {
+                val cursor = last.nextCursor ?: return@repeat
+                last =
+                    client
+                        .get("${WyrApi.Paths.QUESTIONS}?${WyrApi.Query.LIMIT}=5&${WyrApi.Query.CURSOR}=$cursor")
+                        .body()
+            }
+            assertNull(last.nextCursor, "the final page must offer no cursor")
         }
 
     private fun runServer(
