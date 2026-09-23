@@ -19,6 +19,7 @@ import io.ntole.wyr.core.network.WyrHttpClient
 import io.ntole.wyr.core.network.api.AuthApi
 import io.ntole.wyr.core.network.api.QuestionApi
 import io.ntole.wyr.core.network.api.VoteApi
+import io.ntole.wyr.core.network.trace.HttpTrace
 import org.koin.core.module.Module
 import org.koin.dsl.module
 
@@ -33,7 +34,8 @@ import org.koin.dsl.module
 public fun dataModule(baseUrl: String): Module =
     module {
         single { SessionStore(get<TokenStorage>()) }
-        single<HttpClient> { WyrHttpClient.create(baseUrl = baseUrl, sessionStore = get()) }
+        single { HttpTrace() }
+        single<HttpClient> { WyrHttpClient.create(baseUrl = baseUrl, sessionStore = get(), trace = get()) }
 
         single { AuthApi(get()) }
         single { QuestionApi(get()) }
