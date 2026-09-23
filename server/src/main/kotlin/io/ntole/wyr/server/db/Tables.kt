@@ -52,3 +52,10 @@ object Votes : Table("votes") {
      */
     override val primaryKey = PrimaryKey(playerId, questionId)
 }
+
+/**
+ * Every table the server owns. Schema creation and the test harness's clean-slate drop both read
+ * this one list, so a new table belongs here rather than in a `SchemaUtils` call — otherwise it
+ * is created in production but survives between tests on a shared database.
+ */
+val appTables: Array<Table> = arrayOf(Players, Questions, Votes)

@@ -2,6 +2,8 @@ package io.ntole.wyr.server.db
 
 import com.zaxxer.hikari.HikariConfig
 import com.zaxxer.hikari.HikariDataSource
+import io.ktor.events.Events
+import io.ktor.server.application.ApplicationStopped
 import io.ntole.wyr.server.config.ServerConfig
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.SchemaUtils
@@ -18,8 +20,15 @@ object DatabaseFactory {
      *
      * The moment a column has to change type, be renamed, or be dropped, this needs a real
      * migration tool (`exposed-migration-jdbc` plus Flyway). Nothing here will do it for you.
+     *
+     * The pool is closed when [monitor] reports the application stopped. Tests start and stop a
+     * whole server per case, and against a real Postgres each abandoned pool would keep holding
+     * its connections until the server's connection limit ran out.
      */
-    fun init(config: ServerConfig): Database {
+    fun init(
+        config: ServerConfig,
+        monitor: Events,
+    ): Database {
         val dataSource =
             HikariDataSource(
                 HikariConfig().apply {
@@ -32,11 +41,12 @@ object DatabaseFactory {
                     validate()
                 },
             )
+        monitor.subscribe(ApplicationStopped) { dataSource.close() }
 
         val database = Database.connect(dataSource)
 
         transaction(database) {
-            SchemaUtils.create(Players, Questions, Votes)
+            SchemaUtils.create(*appTables)
             Seed.questionsIfEmpty()
         }
 

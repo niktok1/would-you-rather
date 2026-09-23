@@ -37,7 +37,7 @@ fun main() {
 fun Application.wyrModule(config: ServerConfig) {
     warnAboutInsecureDefaults(config)
 
-    val database = DatabaseFactory.init(config)
+    val database = DatabaseFactory.init(config, monitor)
     val db = Db(database)
     val tokens = TokenService(config)
 
