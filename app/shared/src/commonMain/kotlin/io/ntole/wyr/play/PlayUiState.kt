@@ -2,6 +2,8 @@ package io.ntole.wyr.play
 
 import io.ntole.wyr.core.domain.error.DomainError
 import io.ntole.wyr.core.domain.question.Question
+import io.ntole.wyr.core.domain.vote.AttemptId
+import io.ntole.wyr.core.domain.vote.Side
 import io.ntole.wyr.core.domain.vote.VoteOutcome
 
 /**
@@ -23,7 +25,19 @@ sealed interface PlayUiState {
         val outcome: VoteOutcome,
     ) : PlayUiState
 
+    /**
+     * [lostVote] is the vote that failed when it is unknown whether it landed. Try again sends it
+     * again as the same attempt instead of moving on.
+     */
     data class Failed(
         val error: DomainError,
+        val lostVote: PendingVote? = null,
     ) : PlayUiState
 }
+
+/** One tap on a side, with the attempt made for it (CLAUDE.md §8d). */
+data class PendingVote(
+    val question: Question,
+    val side: Side,
+    val attempt: AttemptId,
+)

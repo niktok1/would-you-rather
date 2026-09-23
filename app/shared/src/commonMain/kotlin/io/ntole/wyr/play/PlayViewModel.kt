@@ -48,16 +48,30 @@ class PlayViewModel(
 
         // Guard against a double tap turning into two answers.
         if (asking.isSubmitting) return
-        _state.value = asking.copy(isSubmitting = true)
-        // One attempt per tap (CLAUDE.md §8d).
-        val attempt = AttemptId.random()
+        // One attempt per tap (CLAUDE.md §8d), kept for any retry of this vote.
+        submit(PendingVote(asking.question, side, AttemptId.random()))
+    }
+
+    /**
+     * Sends a lost vote again as the same attempt, so that if the first one did land the server
+     * replays it rather than paying for it twice. After any other failure, moves on.
+     */
+    fun retry() {
+        // Only from a failure: a second tap on Try again finds the retry already under way.
+        val failed = _state.value as? PlayUiState.Failed ?: return
+        val lostVote = failed.lostVote
+        if (lostVote == null) next() else submit(lostVote)
+    }
+
+    private fun submit(vote: PendingVote) {
+        _state.value = PlayUiState.Asking(vote.question, isSubmitting = true)
 
         viewModelScope.launch {
             _state.value =
                 try {
                     PlayUiState.Revealed(
-                        question = asking.question,
-                        outcome = castVote(asking.question.id, side, attempt),
+                        question = vote.question,
+                        outcome = castVote(vote.question.id, vote.side, vote.attempt),
                     )
                 } catch (failure: WyrException) {
                     // Already voted is not really a failure to show: the question is spent, so move
@@ -66,10 +80,11 @@ class PlayViewModel(
                         next()
                         return@launch
                     }
-                    PlayUiState.Failed(failure.error)
+                    // NETWORK is what retry safety is for: the vote may have landed, and only its
+                    // response been lost. Anything else came back as an answer, and resending a vote
+                    // the server refused would fail the same way every time, so Try again moves on.
+                    PlayUiState.Failed(failure.error, lostVote = vote.takeIf { failure.error == DomainError.NETWORK })
                 }
         }
     }
-
-    fun retry() = next()
 }

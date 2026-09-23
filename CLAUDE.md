@@ -367,9 +367,10 @@ and every request shows in its HTTP trace (`HttpTrace` in `:core:network`, never
 - **Re-answering** *(built)*: a looped question can be answered again. It earns the point
   again and the player may change their pick. The tally always holds **one vote per player per
   question**, their latest. Built in `VoteStore.cast`, which moves the player's vote.
-- **Retry safety** *(not built)*: every vote carries a client-generated idempotency key. A repeat
+- **Retry safety** *(built)*: every vote carries a client-generated idempotency key. A repeat
   of the same key returns the stored result and pays nothing. A new key on an answered question
-  is a fresh answer.
+  is a fresh answer. Built in `VoteStore.cast` and in `AttemptId`, made once per tap: the Play tab
+  resends a vote lost to `NETWORK` as the same attempt, as `withSessionRecovery` does its retry.
 - **Skipping** *(built)*: allowed. It earns nothing and is not recorded, so the question
   stays unanswered and comes back later. Nothing is sent: the console's Skip takes the next
   question, and the feed serves the skipped one again in a later batch.

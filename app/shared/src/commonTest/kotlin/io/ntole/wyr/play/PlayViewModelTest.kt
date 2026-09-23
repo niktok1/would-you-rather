@@ -101,6 +101,59 @@ class PlayViewModelTest {
         }
 
     @Test
+    fun `retrying a vote lost to the network sends it again as the same attempt`() =
+        runTest(dispatcher) {
+            // If the first one landed and only its response was lost, the server replays it.
+            val votes = RecordingVoteRepository(DomainError.NETWORK)
+            val viewModel = viewModel(votes = votes)
+            testScheduler.advanceUntilIdle()
+            viewModel.choose(Side.B)
+            testScheduler.advanceUntilIdle()
+            assertIs<PlayUiState.Failed>(viewModel.state.value)
+
+            viewModel.retry()
+            testScheduler.advanceUntilIdle()
+
+            assertIs<PlayUiState.Revealed>(viewModel.state.value)
+            assertEquals(listOf(Side.B, Side.B), votes.sides)
+            assertEquals(1, votes.attempts.toSet().size)
+        }
+
+    @Test
+    fun `a second tap on Try again does not also move on`() =
+        runTest(dispatcher) {
+            val votes = RecordingVoteRepository(DomainError.NETWORK)
+            val viewModel = viewModel(votes = votes)
+            testScheduler.advanceUntilIdle()
+            viewModel.choose(Side.A)
+            testScheduler.advanceUntilIdle()
+
+            viewModel.retry()
+            viewModel.retry()
+            testScheduler.advanceUntilIdle()
+
+            assertIs<PlayUiState.Revealed>(viewModel.state.value)
+            assertEquals(2, votes.callCount)
+        }
+
+    @Test
+    fun `a vote the server refused is not sent again and Try again moves on`() =
+        runTest(dispatcher) {
+            // Sending it again would fail the same way, stranding the player on the error.
+            val votes = RecordingVoteRepository(DomainError.QUESTION_NOT_FOUND)
+            val viewModel = viewModel(votes = votes)
+            testScheduler.advanceUntilIdle()
+            viewModel.choose(Side.A)
+            testScheduler.advanceUntilIdle()
+
+            viewModel.retry()
+            testScheduler.advanceUntilIdle()
+
+            assertEquals(PlayUiState.Asking(QUESTION), viewModel.state.value)
+            assertEquals(1, votes.callCount)
+        }
+
+    @Test
     fun `a network failure surfaces as a retryable failed state`() =
         runTest(dispatcher) {
             val viewModel =
@@ -185,8 +238,15 @@ class PlayViewModelTest {
         ): VoteOutcome = OUTCOME.copy(yourSide = side)
     }
 
-    private class RecordingVoteRepository : VoteRepository {
+    /** Records every vote, and refuses the first ones with [failures], in order. */
+    private class RecordingVoteRepository(
+        vararg failures: DomainError,
+    ) : VoteRepository {
+        private val failures = failures.toMutableList()
+
         val attempts = mutableListOf<AttemptId>()
+
+        val sides = mutableListOf<Side>()
 
         val callCount: Int get() = attempts.size
 
@@ -196,6 +256,8 @@ class PlayViewModelTest {
             attempt: AttemptId,
         ): VoteOutcome {
             attempts += attempt
+            sides += side
+            failures.removeFirstOrNull()?.let { throw WyrException(it) }
             return OUTCOME.copy(yourSide = side)
         }
     }
