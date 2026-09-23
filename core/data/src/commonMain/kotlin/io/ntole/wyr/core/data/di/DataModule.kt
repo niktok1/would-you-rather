@@ -3,11 +3,13 @@ package io.ntole.wyr.core.data.di
 import io.ktor.client.HttpClient
 import io.ntole.wyr.core.data.cache.InMemoryQuestionCache
 import io.ntole.wyr.core.data.question.DefaultQuestionRepository
+import io.ntole.wyr.core.data.session.DefaultSessionDiagnostics
 import io.ntole.wyr.core.data.session.DefaultSessionRepository
 import io.ntole.wyr.core.data.vote.DefaultVoteRepository
 import io.ntole.wyr.core.domain.question.GetNextQuestion
 import io.ntole.wyr.core.domain.question.QuestionCache
 import io.ntole.wyr.core.domain.question.QuestionRepository
+import io.ntole.wyr.core.domain.session.SessionDiagnostics
 import io.ntole.wyr.core.domain.session.SessionRepository
 import io.ntole.wyr.core.domain.vote.CastVote
 import io.ntole.wyr.core.domain.vote.VoteRepository
@@ -44,6 +46,7 @@ public fun dataModule(baseUrl: String): Module =
         // interface.
         single { DefaultSessionRepository(authApi = get(), sessionStore = get()) }
         single<SessionRepository> { get<DefaultSessionRepository>() }
+        single<SessionDiagnostics> { DefaultSessionDiagnostics(sessionStore = get()) }
 
         single<QuestionRepository> { DefaultQuestionRepository(api = get(), cache = get()) }
         single<VoteRepository> { DefaultVoteRepository(api = get(), session = get()) }
