@@ -1,16 +1,33 @@
 package io.ntole.wyr.di
 
 import io.ntole.wyr.core.data.di.dataModule
+import io.ntole.wyr.dev.DevConsoleViewModel
 import io.ntole.wyr.play.PlayViewModel
 import org.koin.core.context.startKoin
+import org.koin.core.module.dsl.viewModel
 import org.koin.core.module.dsl.viewModelOf
 import org.koin.core.qualifier.named
 import org.koin.dsl.KoinAppDeclaration
 import org.koin.dsl.module
 
-private val uiModule =
+// Internal, not private, so a test can resolve every ViewModel from the real graph.
+internal val uiModule =
     module {
         viewModelOf(::PlayViewModel)
+
+        // Not viewModelOf: the base URL is a plain String, found only by its qualifier.
+        viewModel {
+            DevConsoleViewModel(
+                apiBaseUrl = get(named(API_BASE_URL)),
+                sessions = get(),
+                diagnostics = get(),
+                questions = get(),
+                queue = get(),
+                getNextQuestion = get(),
+                castVote = get(),
+                httpTrace = get(),
+            )
+        }
     }
 
 /**
