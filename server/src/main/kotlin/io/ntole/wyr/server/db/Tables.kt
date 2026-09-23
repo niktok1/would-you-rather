@@ -50,7 +50,14 @@ object Votes : Table("votes") {
     /** When the player first answered. */
     val createdAt = long("created_at")
 
-    /** When the player last answered. The feed loops answered questions back oldest first by this. */
+    /**
+     * When the player last answered. The feed loops answered questions back oldest first by this.
+     *
+     * Not indexed. The feed sorts its join's output with the unanswered (null here) first, which no
+     * index on votes can supply, and the key already finds the player's votes. An index would only
+     * cost: every re-answer rewrites this column, and PostgreSQL skips writing index entries for an
+     * update (a HOT update) only when no indexed column changes.
+     */
     val answeredAt = long("answered_at")
 
     /**
@@ -66,11 +73,6 @@ object Votes : Table("votes") {
      * first answers from the same player.
      */
     override val primaryKey = PrimaryKey(playerId, questionId)
-
-    init {
-        // One player's answers in the order the feed loops them back.
-        index(isUnique = false, playerId, answeredAt)
-    }
 }
 
 /**
