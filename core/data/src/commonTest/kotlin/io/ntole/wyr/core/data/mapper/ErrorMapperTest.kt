@@ -90,7 +90,7 @@ class ErrorMapperTest {
         }
 
     @Test
-    fun `cancellation is rethrown, never mapped`() =
+    fun `cancellation is rethrown and never mapped`() =
         runTest {
             val cancellation = CancellationException("caller went away")
 

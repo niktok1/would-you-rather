@@ -48,7 +48,7 @@ class BearerSessionTest {
         }
 
     @Test
-    fun `an expired access token is refreshed, stored, and the call retried with it`() =
+    fun `an expired access token is refreshed and the call retried with the new one`() =
         runTest {
             val store = storeHolding(session("a"))
             val engine =

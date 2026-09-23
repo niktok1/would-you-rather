@@ -42,7 +42,7 @@ class DefaultVoteRepositoryTest {
         }
 
     @Test
-    fun `recovery is attempted once, not until it works`() =
+    fun `recovery is attempted only once`() =
         runTest {
             server.refuseVotesWith = HttpStatusCode.Unauthorized to ErrorCode.UNAUTHORIZED
 
