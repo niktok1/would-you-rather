@@ -11,13 +11,15 @@ Repo initialized on `main` with the personal identity and `user.useConfigOnly = 
 
 ### Verified working
 
-- `:server` on H2: 59 tests green, including 22 end-to-end flow tests in `ApiFlowTest`. Flat
+- `:server` on H2: 70 tests green, including 27 end-to-end flow tests in `ApiFlowTest`. Flat
   scoring is covered there (every vote pays 1, majority and minority alike, and the total
   accumulates) and by `PlayerStoreTest`, which races awards for one player and refreshes of one
   token. The endless feed, re-answering and attempt replay are covered there too, and by
   `QuestionStoreTest` and `VoteStoreTest`. Feed cycles are pinned in `QuestionStoreTest`,
   including two requests racing to start the next cycle, and in `VoteStoreTest`, an answer that
-  waited on its vote's lock while a cycle started.
+  waited on its vote's lock while a cycle started. `GET /v1/me` is covered in `ApiFlowTest` (a
+  fresh guest, a re-answer and a replay, the lazy start of a cycle) and by `StatsStoreTest`, which
+  commits an answer in the middle of a stats read to show it counts in every number or in none.
 - Live curl run against `./gradlew :server:run` confirmed guest auth, paging, voting,
   refresh-token rotation, replay rejection, and the `ErrorDto` envelope on 400/401/404/409. That
   run predates flat scoring, `fix/read-committed` and the endless feed, so the scoring it checked
@@ -32,7 +34,7 @@ Repo initialized on `main` with the personal identity and `user.useConfigOnly = 
   and the stored side although the request asked for the other. A skipped question came back in
   the next batch. That run predates feed cycles (`feat/feed-cycles`): the least-recently-answered
   loop it saw is gone, and cycles have run only in the server tests.
-- Client tests: `:core:domain` 10, `:core:data` 49, `:core:network` 21, `:app:shared` 36 (the
+- Client tests: `:core:domain` 11, `:core:data` 52, `:core:network` 22, `:app:shared` 47 (the
   ViewModels and the Koin graph). `:app:shared` compiles for JVM, JS, wasmJs and the iOS
   simulator.
 - `:app:androidApp:assembleDebug` produces a real APK.
@@ -47,7 +49,9 @@ Repo initialized on `main` with the personal identity and `user.useConfigOnly = 
   that starts a cycle, a first answer racing another (the 23505 aborts the transaction and Exposed
   reruns it), and the `SELECT ... FOR UPDATE` that makes a retry wait and replay have only run on
   H2. The store races in `QuestionStoreTest` and `VoteStoreTest` poll H2's `SESSIONS`, like
-  `PlayerStoreTest`.
+  `PlayerStoreTest`. The stats read has run only on H2 too: one statement with a correlated
+  subquery on `players.current_cycle`. That one statement sees one committed state at READ
+  COMMITTED is documented PostgreSQL behaviour, not something a test here has seen.
 - **READ COMMITTED and the refresh compare-and-set on Postgres.** Every race and burst in
   `PlayerStoreTest` runs on H2, even in the `server-postgres` job: it hardcodes `jdbc:h2:mem:`,
   because its wait-for-the-lock polling reads H2's `INFORMATION_SCHEMA.SESSIONS`. So the ci.yml
@@ -109,13 +113,14 @@ ALLOWED_WEB_ORIGINS=localhost:8081 ./gradlew :server:run
 The app opens on the **Console** tab (`io.ntole.wyr.dev`). **Play** is the frozen game screen.
 
 - **Session.** *Ensure session* mints a guest, or reuses the stored one. The header then shows the
-  player id and when its access token expires. *New guest* drops the session and the question
+  player id and when its access token expires. Opening the console reads the stats, which ensures a
+  session too, so the first open mints a guest. *New guest* drops the session and the question
   queue, then mints a fresh player and loads a question for it.
 - **Play.** *Skip* loads the next question and sends nothing, so the feed serves the skipped one
   again in a later batch. *A* / *B* answer it, each tap as a new attempt, and the raw
   `VoteOutcome` appears below, `replayed` included. A question the feed looped back to shows
   `answeredBefore: true` and logs as `question=<id> looped`. The header's total points is the last
-  outcome's `totalPoints`; there is no stats endpoint yet.
+  outcome's `totalPoints`; the Stats section has the server's own count.
 - **Retry last vote (same attempt)**, under Play. Sends the last vote again unchanged, attempt id
   included, whether or not it got an answer. While it is still that question's latest answer the server
   replays it, logged as `+0 total=<n> replayed`. A vote that never landed is paid as an answer.
@@ -126,6 +131,17 @@ The app opens on the **Console** tab (`io.ntole.wyr.dev`). **Play** is the froze
   seeds 24 questions, so press *New guest*, then *Answer N* with 25. The first 24 are the seeds in
   random order and the 25th logs `looped`: it is the first question of cycle 2, which serves all
   24 again in a new random order.
+- **Stats.** Every number `GET /v1/me` returns: total points, answers given (re-answers count,
+  replays do not), distinct questions answered, the cycle, and how many questions are still due in
+  it. Read when the console opens, after every vote, *Answer N* and *New guest*, and on *Read
+  stats*. A read that works is not logged. One that fails logs `refreshStats` and keeps what was
+  shown, which after a vote is nothing: a vote's outcome drops the stats it outdated. A red `MISMATCH totalPoints` line means the stats and the last outcome disagree:
+  a vote landed whose answer was lost (*Retry last vote* replays it, and the flag goes), a vote
+  from the Play tab, or a bug. **To see the lazy cycle start:** once the last due question is
+  answered, Stats shows the finished cycle with `dueThisCycle: 0`. The next cycle starts only when
+  the feed is next asked for questions, which the console does when its queue is empty (*Next
+  question*, *Skip*, or the next answer of *Answer N*). *Read stats* then shows it, with the whole
+  pool due.
 - **Questions.** Fetch the next question, or empty the local queue, and see its size.
 - **Vote by id.** Sends a vote for whatever id is typed, as a new attempt. An unknown id provokes
   `QUESTION_NOT_FOUND` (404). A known one is simply answered again and pays 1: there is no
@@ -177,8 +193,9 @@ known `PlayViewModel` issues (the Play tab is frozen).
 - **The wire enum rule (§5) is load-bearing and easy to break silently.** It only works because
   `WyrJson` sets `coerceInputValues = true` *and* `ServerJson` sets `encodeDefaults = true`.
   Remove either and the `UNKNOWN` defaults become decorative. `WyrJsonTest` in `:core:network`
-  pins the client half, but nothing pins the server's `encodeDefaults` yet, and a server-side
-  slip only breaks client builds older than the server.
+  pins the client half. The server's `encodeDefaults` is pinned only by `ApiFlowTest`'s fresh-guest
+  stats test, which checks every stats field is sent at its default, and a server-side slip only
+  breaks client builds older than the server.
 - **Exposed 1.x renamed everything.** Packages are `org.jetbrains.exposed.v1.*`, and
   `SqlExpressionBuilder.eq` is deprecated *as an error* — import the top-level `eq` instead.
   Expect to hit this again the first time you write a new query.
