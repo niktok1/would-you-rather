@@ -17,6 +17,7 @@ internal fun QuestionDto.toDomain(): Question =
         optionA = optionA,
         optionB = optionB,
         category = category.toDomain(),
+        answeredBefore = answeredBefore,
     )
 
 internal fun QuestionCategory.toDomain(): Category =

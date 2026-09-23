@@ -5,12 +5,17 @@ package io.ntole.wyr.core.domain.question
  *
  * Deliberately not the same type as `QuestionDto`: domain code must never see a DTO, and the
  * mapping between the two lives in `:core:data` (CLAUDE.md §3).
+ *
+ * [answeredBefore] is true when the player has answered this question already and the feed has
+ * looped back to it (CLAUDE.md §8d). It is for diagnostics such as the dev console: the
+ * player-facing reveal does not show a previous pick.
  */
 public data class Question(
     public val id: String,
     public val optionA: String,
     public val optionB: String,
     public val category: Category,
+    public val answeredBefore: Boolean = false,
 )
 
 /**
