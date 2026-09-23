@@ -21,6 +21,7 @@ import io.ntole.wyr.core.question.QuestionPageDto
 import io.ntole.wyr.core.vote.OptionSide
 import io.ntole.wyr.core.vote.VoteRequest
 import io.ntole.wyr.core.vote.VoteResultDto
+import io.ntole.wyr.server.auth.TokenService
 import io.ntole.wyr.server.config.ServerConfig
 import io.ntole.wyr.server.vote.Scoring
 import kotlinx.serialization.json.Json
@@ -179,6 +180,56 @@ class ApiFlowTest {
         }
 
     @Test
+    fun `a validly signed token for a player that does not exist is unauthorized, not a duplicate vote`() =
+        runServer("ghost-player") { client ->
+            val question =
+                client
+                    .get(WyrApi.Paths.QUESTIONS)
+                    .body<QuestionPageDto>()
+                    .questions
+                    .first()
+
+            // The helper must sign exactly as the server does, or the 401 below would only prove
+            // a bad signature. A real player's token from it has to be accepted first.
+            val real: SessionDto = client.post(WyrApi.Paths.AUTH_GUEST).body()
+            val accepted =
+                client.post(WyrApi.Paths.VOTES) {
+                    bearerAuth(signAccessToken(real.playerId))
+                    contentType(ContentType.Application.Json)
+                    setBody(VoteRequest(question.id, OptionSide.A))
+                }
+            assertEquals(HttpStatusCode.OK, accepted.status)
+
+            // What a client holds after an H2 dev server restarts: a token that still verifies
+            // against the constant dev secret, for a player the fresh database never had.
+            val response =
+                client.post(WyrApi.Paths.VOTES) {
+                    bearerAuth(signAccessToken("no-such-player"))
+                    contentType(ContentType.Application.Json)
+                    setBody(VoteRequest(question.id, OptionSide.A))
+                }
+
+            assertEquals(HttpStatusCode.Unauthorized, response.status)
+            assertEquals(ErrorCode.UNAUTHORIZED, response.body<ErrorDto>().code)
+        }
+
+    @Test
+    fun `a token signed with another secret is unauthorized`() =
+        runServer("wrong-secret") { client ->
+            val session: SessionDto = client.post(WyrApi.Paths.AUTH_GUEST).body()
+
+            val response =
+                client.post(WyrApi.Paths.VOTES) {
+                    bearerAuth(signAccessToken(session.playerId, secret = "not-the-server-secret"))
+                    contentType(ContentType.Application.Json)
+                    setBody(VoteRequest("seed-1", OptionSide.A))
+                }
+
+            assertEquals(HttpStatusCode.Unauthorized, response.status)
+            assertEquals(ErrorCode.UNAUTHORIZED, response.body<ErrorDto>().code)
+        }
+
+    @Test
     fun `paging walks the catalogue and stops`() =
         runServer("paging") { client ->
             val first: QuestionPageDto =
@@ -231,5 +282,23 @@ class ApiFlowTest {
             }
 
         block(client)
+    }
+
+    /**
+     * Signs an access token the way the server under [runServer] does, for a player id the server
+     * never issued one to. The issuer, audience, and default [secret] must match [runServer]'s
+     * config; the ghost-player test checks that they still do.
+     */
+    private fun signAccessToken(
+        playerId: String,
+        secret: String = "test-secret",
+    ): String {
+        val env =
+            mapOf(
+                "JWT_SECRET" to secret,
+                "JWT_ISSUER" to "wyr-test",
+                "JWT_AUDIENCE" to "wyr-test-client",
+            )
+        return TokenService(ServerConfig.fromEnvironment(env::get)).issueAccessToken(playerId)
     }
 }
