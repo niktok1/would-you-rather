@@ -369,9 +369,14 @@ and every request shows in its HTTP trace (`HttpTrace` in `:core:network`, never
   again and the player may change their pick. The tally always holds **one vote per player per
   question**, their latest. Built in `VoteStore.cast`, which moves the player's vote.
 - **Retry safety** *(built)*: every vote carries a client-generated idempotency key. A repeat
-  of the same key returns the stored result and pays nothing. A new key on an answered question
-  is a fresh answer. Built in `VoteStore.cast` and in `AttemptId`, made once per tap: the Play tab
-  resends a vote lost to `NETWORK` as the same attempt, as `withSessionRecovery` does its retry.
+  of the key last recorded for that question is replayed: nothing is written, it pays nothing, and
+  it reports the stored side with the current tally and total, not the result first returned. Any
+  other key is a fresh answer. Only the latest key per question is kept, so an older key arriving
+  after a newer answer is a fresh answer too: it pays again and moves the vote back to its side.
+  The app never resends an older attempt after a newer one, so only a duplicate from the network
+  or a modified client can do that. Built in `VoteStore.cast` and in `AttemptId`, made once per
+  tap: the Play tab resends a vote lost to `NETWORK` as the same attempt, as `withSessionRecovery`
+  does its retry.
 - **Skipping** *(built)*: allowed. It earns nothing and is not recorded, so the question
   stays unanswered and comes back later. Nothing is sent: the console's Skip takes the next
   question, and the feed serves the skipped one again in a later batch.
