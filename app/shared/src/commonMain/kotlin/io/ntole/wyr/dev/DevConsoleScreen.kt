@@ -183,7 +183,10 @@ private fun Header(state: DevConsoleState) {
     }
 }
 
-/** The stats as the server counted them, and whether they disagree with the last outcome. */
+/**
+ * The stats as the server counted them, and whether they disagree with the last outcome, or are
+ * another player's and so say nothing about it.
+ */
 @Composable
 private fun Stats(state: DevConsoleState) {
     val stats = state.stats
@@ -196,6 +199,9 @@ private fun Stats(state: DevConsoleState) {
         Value("questionsAnswered", stats.questionsAnswered.toString())
         Value("cycle", stats.cycle.toString())
         Value("dueThisCycle", stats.dueThisCycle.toString())
+    }
+    if (state.statsForAnotherPlayer) {
+        Value("lastOutcome", "paid to ${state.lastOutcomePlayerId}, not compared")
     }
     if (state.pointsMismatch) {
         val outcomeTotal = state.lastOutcome?.totalPoints

@@ -598,6 +598,45 @@ class DevConsoleViewModelTest {
         }
 
     @Test
+    fun `stats read as a fresh guest are not compared with the outcome paid to the player before`() =
+        runTest(dispatcher) {
+            val viewModel = openConsole()
+            viewModel.voteById("q1", Side.A)
+            testScheduler.advanceUntilIdle()
+            // What a restarted dev server does to the next read: the session is refused and
+            // recovered, and the stats that come back are a fresh guest's, with nothing paid yet.
+            players.stats = {
+                sessions.recover("p2")
+                statsOf("p2").copy(totalPoints = 0)
+            }
+
+            viewModel.readStats()
+            testScheduler.advanceUntilIdle()
+
+            val state = viewModel.state.value
+            assertEquals("p2", state.stats?.playerId)
+            assertTrue(state.statsForAnotherPlayer)
+            assertFalse(state.pointsMismatch, "a fresh guest's total says nothing about p1's outcome")
+        }
+
+    @Test
+    fun `a vote sent again as a fresh guest is compared with that guest's stats`() =
+        runTest(dispatcher) {
+            val viewModel = openConsole()
+            votes.answer = { questionId, side ->
+                sessions.recover("p2")
+                OUTCOME.copy(questionId = questionId, yourSide = side)
+            }
+
+            viewModel.voteById("q1", Side.A)
+            testScheduler.advanceUntilIdle()
+
+            val state = viewModel.state.value
+            assertEquals("p2", state.lastOutcomePlayerId, "the player it was paid to, not the one it was sent for")
+            assertFalse(state.statsForAnotherPlayer)
+        }
+
+    @Test
     fun `a vote drops the stats it outdated when they cannot be read again`() =
         runTest(dispatcher) {
             val viewModel = openConsole()
@@ -718,7 +757,10 @@ class DevConsoleViewModelTest {
         var playerId = "p1"
         var ensure: suspend () -> String = { playerId }
 
-        /** The player the last [ensure] minted, until [clear] drops it. What the header reports. */
+        /**
+         * The player the last [ensure] minted, or [recover] put in its place, until [clear] drops
+         * it. What the header and [currentPlayerId] report.
+         */
         var stored: String? = null
             private set
 
@@ -727,11 +769,20 @@ class DevConsoleViewModelTest {
             return ensure.invoke().also { stored = it }
         }
 
-        override suspend fun currentPlayerId(): String = playerId
+        override suspend fun currentPlayerId(): String? = stored
 
         override suspend fun clear() {
             calls += "clear"
             stored = null
+        }
+
+        /**
+         * What session recovery does to a session the server has stopped accepting: a fresh guest
+         * in its place, stored as if [ensure] had minted it.
+         */
+        fun recover(playerId: String) {
+            this.playerId = playerId
+            stored = playerId
         }
     }
 

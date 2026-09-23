@@ -27,6 +27,12 @@ data class DevConsoleState(
     val queueSize: Int? = null,
     val question: Question? = null,
     val lastOutcome: VoteOutcome? = null,
+    /**
+     * The player [lastOutcome] was paid to, as the session stood once it landed. Not always the one
+     * it was sent for: a vote refused as a session the server has stopped accepting goes out again
+     * as a fresh guest.
+     */
+    val lastOutcomePlayerId: String? = null,
     val stats: PlayerStats? = null,
     /** The last vote sent, whether or not it got an answer, for Retry last vote to send again. */
     val lastVote: SentVote? = null,
@@ -38,16 +44,28 @@ data class DevConsoleState(
     val isBusy: Boolean get() = running != null
 
     /**
+     * True when [stats] are another player's than [lastOutcome], so the two are not compared. A
+     * stats read refused as a session the server has stopped accepting reads a fresh guest's, which
+     * say nothing about what the player before was paid.
+     */
+    val statsForAnotherPlayer: Boolean
+        get() {
+            val stats = stats ?: return false
+            return lastOutcome != null && stats.playerId != lastOutcomePlayerId
+        }
+
+    /**
      * True when [stats] and [lastOutcome] disagree on the player's total points. Both are the
      * server's word, and the stats were read after the outcome, so they should agree. When they do
      * not, the server paid for something the console has no outcome for: a vote whose answer was
      * lost, which Retry last vote then replays, or one cast from the Play tab. Otherwise it is a bug.
+     * Never true while [statsForAnotherPlayer] is.
      */
     val pointsMismatch: Boolean
         get() {
             val stats = stats ?: return false
             val outcome = lastOutcome ?: return false
-            return stats.totalPoints != outcome.totalPoints
+            return !statsForAnotherPlayer && stats.totalPoints != outcome.totalPoints
         }
 }
 

@@ -69,7 +69,9 @@ class DevConsoleViewModel(
     fun newGuest() =
         perform("newGuest", readsStats = true) {
             sessions.clear()
-            _state.update { it.copy(question = null, lastOutcome = null, lastVote = null, stats = null) }
+            _state.update {
+                it.copy(question = null, lastOutcome = null, lastOutcomePlayerId = null, lastVote = null, stats = null)
+            }
             questions.reset()
             val playerId = sessions.ensure()
             "playerId=$playerId ${loadQuestion().summary()}"
@@ -150,9 +152,12 @@ class DevConsoleViewModel(
         // Before it goes out, so a vote whose response is lost can still be retried.
         _state.update { it.copy(lastVote = vote) }
         val outcome = castVote(vote.questionId, vote.side, vote.attempt)
+        // After the vote, not before: a vote refused for a session the server has stopped accepting
+        // went out again as a fresh guest, and was paid to them.
+        val paidTo = sessions.currentPlayerId()
         // The stats read before this outcome no longer describe the server, so they go rather than
         // be compared with it, until the read that follows every vote brings them back.
-        _state.update { it.copy(lastOutcome = outcome, stats = null) }
+        _state.update { it.copy(lastOutcome = outcome, lastOutcomePlayerId = paidTo, stats = null) }
         return outcome
     }
 

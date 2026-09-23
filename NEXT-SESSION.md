@@ -34,7 +34,7 @@ Repo initialized on `main` with the personal identity and `user.useConfigOnly = 
   and the stored side although the request asked for the other. A skipped question came back in
   the next batch. That run predates feed cycles (`feat/feed-cycles`): the least-recently-answered
   loop it saw is gone, and cycles have run only in the server tests.
-- Client tests: `:core:domain` 11, `:core:data` 52, `:core:network` 22, `:app:shared` 47 (the
+- Client tests: `:core:domain` 11, `:core:data` 52, `:core:network` 22, `:app:shared` 49 (the
   ViewModels and the Koin graph). `:app:shared` compiles for JVM, JS, wasmJs and the iOS
   simulator.
 - `:app:androidApp:assembleDebug` produces a real APK.
@@ -139,10 +139,13 @@ The app opens on the **Console** tab (`io.ntole.wyr.dev`). **Play** is the froze
   was shown, which after a vote is nothing: a vote's outcome drops the stats it outdated. A red
   `MISMATCH totalPoints` line means the stats and the last outcome disagree: a vote landed whose
   answer was lost (*Retry last vote* replays it, and the flag goes), a vote from the Play tab, or
-  a bug. **To see the lazy cycle start:** once the last due question is answered, Stats shows the
-  finished cycle with `dueThisCycle: 0`. The next cycle starts only when the feed is next asked
-  for questions, which the console does when its queue is empty (*Next question*, *Skip*, or the
-  next answer of *Answer N*). *Read stats* then shows it, with the whole pool due.
+  a bug. The two are compared only for one player. A read the server refused as a dead session (a
+  restarted `:server:run` does that) recovers it, and the stats are then a fresh guest's: instead
+  of the flag, Stats shows `lastOutcome: paid to <id>, not compared`. **To see the lazy cycle
+  start:** once the last due question is answered, Stats shows the finished cycle with
+  `dueThisCycle: 0`. The next cycle starts only when the feed is next asked for questions, which
+  the console does when its queue is empty (*Next question*, *Skip*, or the next answer of *Answer
+  N*). *Read stats* then shows it, with the whole pool due.
 - **Questions.** Fetch the next question, or empty the local queue, and see its size.
 - **Vote by id.** Sends a vote for whatever id is typed, as a new attempt. An unknown id provokes
   `QUESTION_NOT_FOUND` (404). A known one is simply answered again and pays 1: there is no
