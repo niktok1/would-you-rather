@@ -6,8 +6,9 @@ import kotlinx.serialization.Serializable
  * The requesting player's stats, as the server counts them (CLAUDE.md §8d).
  *
  * [totalPoints] is the same running total a [io.ntole.wyr.core.vote.VoteResultDto] reports.
- * [answersGiven] counts every paid answer, re-answers included and replays not, and
- * [questionsAnswered] the distinct questions the player has a vote on, so it never exceeds it.
+ * [answersGiven] counts every paid answer, re-answers included and replays not.
+ * [questionsAnswered] counts the distinct questions the player has a vote on, so it is never more
+ * than [answersGiven].
  *
  * [cycle] is the player's current pass over the questions, counted from 1, and [dueThisCycle] how
  * many are still due in it, over every category. A cycle ends when nothing is due, but the next one
