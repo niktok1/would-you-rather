@@ -69,11 +69,7 @@ public object WyrHttpClient {
                     // refresh token and the next 401 would cost the player their guest account.
                     nonCancellableRefresh = true
 
-                    loadTokens {
-                        sessionStore.read()?.let { session ->
-                            BearerTokens(session.accessToken, session.refreshToken)
-                        }
-                    }
+                    loadTokens { sessionStore.read()?.toBearerTokens() }
 
                     // Ktor calls this on a 401. Swapping the refresh token here means callers never
                     // see a transient expiry — but a failed refresh must surface, so the data layer
@@ -86,8 +82,17 @@ public object WyrHttpClient {
                                     markAsRefreshTokenRequest()
                                     setBody(RefreshRequest(current.refreshToken))
                                 }.body()
+
+                        // The data layer may have replaced or cleared the session while this was in
+                        // flight. Writing now would put the old player back over the new one, so
+                        // the result is dropped and the call retried as whoever is stored now.
+                        // Remaining edge: a write landing between this check and the next line
+                        // still loses; closing it would need a lock shared with the data layer.
+                        val stored = sessionStore.read()
+                        if (stored != current) return@refreshTokens stored?.toBearerTokens()
+
                         sessionStore.write(refreshed)
-                        BearerTokens(refreshed.accessToken, refreshed.refreshToken)
+                        refreshed.toBearerTokens()
                     }
                 }
             }
@@ -109,6 +114,8 @@ public object WyrHttpClient {
         return if (engine == null) HttpClient(config) else HttpClient(engine, config)
     }
 }
+
+private fun SessionDto.toBearerTokens(): BearerTokens = BearerTokens(accessToken, refreshToken)
 
 private suspend fun ResponseException.toApiException(): ApiException {
     val error = response.errorOrNull()

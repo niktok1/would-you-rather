@@ -136,6 +136,43 @@ class BearerSessionTest {
             assertEquals(session("a2"), store.read())
         }
 
+    @Test
+    fun `a session replaced during a refresh is not overwritten by it`() =
+        runTest {
+            val store = storeHolding(session("a"))
+            val refreshArrived = CompletableDeferred<Unit>()
+            val answerRefresh = CompletableDeferred<Unit>()
+            val engine =
+                MockEngine { request ->
+                    when {
+                        request.url.encodedPath == WyrApi.Paths.AUTH_REFRESH -> {
+                            refreshArrived.complete(Unit)
+                            answerRefresh.await()
+                            respondSession(session("a2"))
+                        }
+
+                        request.headers[HttpHeaders.Authorization] == "Bearer access-b" -> {
+                            respondEmptyPage()
+                        }
+
+                        else -> {
+                            respondErrorDto(HttpStatusCode.Unauthorized, ErrorCode.UNAUTHORIZED)
+                        }
+                    }
+                }
+            val api = QuestionApi(WyrHttpClient.create(BASE_URL, store, engine))
+
+            val call = async { api.page() }
+            refreshArrived.await()
+            // A deliberate session change lands while the refresh for "a" is still in flight.
+            store.write(session("b"))
+            answerRefresh.complete(Unit)
+            call.await()
+
+            assertEquals(session("b"), store.read())
+            assertEquals(listOf("Bearer access-a", null, "Bearer access-b"), engine.authorizationHeaders())
+        }
+
     private fun MockEngine.authorizationHeaders(): List<String?> =
         requestHistory.map { it.headers[HttpHeaders.Authorization] }
 }
