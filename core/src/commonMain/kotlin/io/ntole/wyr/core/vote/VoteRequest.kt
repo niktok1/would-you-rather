@@ -13,7 +13,7 @@ import kotlinx.serialization.Serializable
  * the player gives, sent again unchanged when that answer is retried. A repeat of the attempt the
  * server last recorded for this question is replayed and pays nothing; a new one is a fresh
  * answer. Non-blank and at most [io.ntole.wyr.core.api.WyrApi.Limits.MAX_ATTEMPT_ID_LENGTH]
- * characters.
+ * characters. Neither id may hold a control character.
  */
 @Serializable
 public data class VoteRequest(

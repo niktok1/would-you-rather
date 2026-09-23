@@ -167,6 +167,23 @@ class ApiFlowTest {
         }
 
     @Test
+    fun `an id with a control character in it is a validation error, not a database failure`() =
+        runServer("control-character") { client ->
+            val player = client.guest()
+
+            listOf(
+                // PostgreSQL refuses a NUL in text, which H2 stores, so only this check can catch it.
+                "NUL in questionId" to VoteRequest("seed-1\u0000", OptionSide.A, "attempt-1"),
+                "NUL in attemptId" to VoteRequest("seed-1", OptionSide.A, "attempt\u00001"),
+                "newline in attemptId" to VoteRequest("seed-1", OptionSide.A, "attempt\n1"),
+            ).forEach { (case, request) ->
+                val response = client.castVote(player, request)
+                assertEquals(HttpStatusCode.BadRequest, response.status, case)
+                assertEquals(ErrorCode.VALIDATION_FAILED, response.body<ErrorDto>().code, case)
+            }
+        }
+
+    @Test
     fun `voting without a token is unauthorized and reports why`() =
         runServer("no-token") { client ->
             val question = client.batch(client.guest()).first()
