@@ -101,15 +101,39 @@ class DevConsoleViewModel(
         send("retryLastVote", vote)
     }
 
+    /**
+     * Answers [count] questions in a row, alternating A and B, each as an answer of its own. The
+     * quick way to the loop: past the size of the pool, the feed serves answered questions again
+     * (CLAUDE.md §8d). Each answer is logged as it lands, and a failure ends the run as its result.
+     */
+    fun answerMany(count: Int) =
+        perform("answerMany", args = "n=$count") {
+            require(count in 1..MAX_ANSWER_MANY) { "n must be in 1..$MAX_ANSWER_MANY, was $count" }
+            var looped = 0
+            repeat(count) { index ->
+                val started = timeSource.markNow()
+                val question = loadQuestion()
+                if (question.answeredBefore) looped++
+                val vote = SentVote(question.id, if (index % 2 == 0) Side.A else Side.B, AttemptId.random())
+                val outcome = cast(vote)
+                val elapsed = started.elapsedNow().inWholeMilliseconds
+                val step = LogResult.Ok("${question.summary()} ${outcome.summary()}")
+                log(LogEntry("answer", "${index + 1}/$count ${vote.args()}", elapsed, step))
+            }
+            "answered=$count looped=$looped total=${_state.value.lastOutcome?.totalPoints}"
+        }
+
     private fun send(
         action: String,
         vote: SentVote,
-    ) = perform(action, args = "questionId=${vote.questionId} side=${vote.side} attempt=${vote.attempt.value}") {
+    ) = perform(action, args = vote.args()) { cast(vote).summary() }
+
+    private suspend fun cast(vote: SentVote): VoteOutcome {
         // Before it goes out, so a vote whose response is lost can still be retried.
         _state.update { it.copy(lastVote = vote) }
         val outcome = castVote(vote.questionId, vote.side, vote.attempt)
         _state.update { it.copy(lastOutcome = outcome) }
-        outcome.summary()
+        return outcome
     }
 
     private suspend fun loadQuestion(): Question {
@@ -178,6 +202,8 @@ class DevConsoleViewModel(
     /** A question the feed looped back to says so, which is how the loop shows in the log. */
     private fun Question.summary(): String = "question=$id" + if (answeredBefore) " looped" else ""
 
+    private fun SentVote.args(): String = "questionId=$questionId side=$side attempt=${attempt.value}"
+
     private fun VoteOutcome.summary(): String = "+$pointsAwarded total=$totalPoints" + if (replayed) " replayed" else ""
 
     private fun log(entry: LogEntry) {
@@ -186,5 +212,8 @@ class DevConsoleViewModel(
 
     companion object {
         const val LOG_CAPACITY: Int = 100
+
+        /** Half the log, so one run never pushes everything before it out. */
+        const val MAX_ANSWER_MANY: Int = LOG_CAPACITY / 2
     }
 }

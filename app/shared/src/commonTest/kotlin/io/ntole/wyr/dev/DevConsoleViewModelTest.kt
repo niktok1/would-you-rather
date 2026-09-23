@@ -31,6 +31,7 @@ import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -358,6 +359,74 @@ class DevConsoleViewModelTest {
 
             assertEquals(null, viewModel.state.value.lastVote)
             assertEquals(1, votes.attempts.size)
+        }
+
+    @Test
+    fun `Answer N answers N questions in a row with alternating sides`() =
+        runTest(dispatcher) {
+            val served =
+                ArrayDeque(listOf(QUESTION, QUESTION.copy(id = "q2"), QUESTION.copy(id = "q3", answeredBefore = true)))
+            questions.next = { served.removeFirst() }
+            val viewModel = viewModel()
+
+            viewModel.answerMany(3)
+            testScheduler.advanceUntilIdle()
+
+            assertEquals(listOf("q1" to Side.A, "q2" to Side.B, "q3" to Side.A), votes.sent)
+            assertEquals(3, votes.attempts.toSet().size)
+            val (a1, a2, a3) = votes.attempts.map { it.value }
+            assertEquals(
+                listOf(
+                    Triple("answerMany", "n=3", LogResult.Ok("answered=3 looped=1 total=42")),
+                    Triple(
+                        "answer",
+                        "3/3 questionId=q3 side=A attempt=$a3",
+                        LogResult.Ok("question=q3 looped +1 total=42"),
+                    ),
+                    Triple("answer", "2/3 questionId=q2 side=B attempt=$a2", LogResult.Ok("question=q2 +1 total=42")),
+                    Triple("answer", "1/3 questionId=q1 side=A attempt=$a1", LogResult.Ok("question=q1 +1 total=42")),
+                ),
+                viewModel.log.map { Triple(it.action, it.args, it.result) },
+            )
+            assertFalse(viewModel.state.value.isBusy)
+        }
+
+    @Test
+    fun `Answer N stops at the first failure and leaves it to retry`() =
+        runTest(dispatcher) {
+            var answered = 0
+            votes.answer = { questionId, side ->
+                if (answered++ == 1) throw WyrException(DomainError.NETWORK, "read timed out")
+                OUTCOME.copy(questionId = questionId, yourSide = side)
+            }
+            val viewModel = viewModel()
+
+            viewModel.answerMany(3)
+            testScheduler.advanceUntilIdle()
+
+            assertEquals(2, votes.sent.size)
+            assertEquals(
+                listOf(
+                    "answerMany" to LogResult.Err(DomainError.NETWORK, "read timed out"),
+                    "answer" to LogResult.Ok("question=q1 +1 total=42"),
+                ),
+                viewModel.log.map { it.action to it.result },
+            )
+            // The lost one, so Retry last vote can send it again as the same attempt.
+            assertEquals(SentVote("q1", Side.B, votes.attempts.last()), viewModel.state.value.lastVote)
+        }
+
+    @Test
+    fun `Answer N out of range is logged as a crash and sends nothing`() =
+        runTest(dispatcher) {
+            // The screen only offers 1 to MAX_ANSWER_MANY, so anything else reaching here is a bug.
+            val viewModel = viewModel()
+
+            viewModel.answerMany(0)
+            testScheduler.advanceUntilIdle()
+
+            assertEquals("IllegalArgumentException", assertIs<LogResult.Crash>(viewModel.onlyResult()).type)
+            assertEquals(emptyList(), calls)
         }
 
     @Test

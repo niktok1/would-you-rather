@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.HorizontalDivider
@@ -24,6 +25,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.input.KeyboardType
 import io.ntole.wyr.core.domain.session.SessionInfo
 import io.ntole.wyr.core.domain.vote.Side
 import io.ntole.wyr.core.domain.vote.VoteOutcome
@@ -50,6 +52,7 @@ fun DevConsoleScreen(
     onSkip: () -> Unit,
     onVoteById: (questionId: String, side: Side) -> Unit,
     onRetryLastVote: () -> Unit,
+    onAnswerMany: (count: Int) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val dimens = WyrThemeAccessors.dimens
@@ -93,6 +96,24 @@ fun DevConsoleScreen(
                     }
                 }
                 state.lastOutcome?.let { Outcome(it) }
+            }
+
+            Section("Answer many") {
+                var countText by rememberSaveable { mutableStateOf(ANSWER_MANY_DEFAULT) }
+                val count = countText.trim().toIntOrNull()?.takeIf { it in 1..DevConsoleViewModel.MAX_ANSWER_MANY }
+                OutlinedTextField(
+                    value = countText,
+                    onValueChange = { countText = it },
+                    label = { Text("N, 1 to ${DevConsoleViewModel.MAX_ANSWER_MANY}") },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Buttons {
+                    Button(onClick = { count?.let(onAnswerMany) }, enabled = idle && count != null) {
+                        Text("Answer N")
+                    }
+                }
             }
 
             Section("Session") {
@@ -237,3 +258,5 @@ private fun tokenExpiry(session: SessionInfo?): String {
 }
 
 private const val HTTP_ERROR_FROM = 400
+
+private const val ANSWER_MANY_DEFAULT = "5"
