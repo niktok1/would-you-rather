@@ -68,12 +68,14 @@ fun PlayScreen(
                     FailureBody(state.error, onRetry)
                 }
 
+                // Weighted, not filling: the Next button below needs the height that is left.
                 is PlayUiState.Asking -> {
                     QuestionBody(
                         question = state.question,
                         outcome = null,
                         enabled = !state.isSubmitting,
                         onChoose = onChoose,
+                        modifier = Modifier.weight(1f),
                     )
                 }
 
@@ -83,6 +85,7 @@ fun PlayScreen(
                         outcome = state.outcome,
                         enabled = false,
                         onChoose = onChoose,
+                        modifier = Modifier.weight(1f),
                     )
                 }
             }
@@ -143,11 +146,12 @@ private fun QuestionBody(
     outcome: VoteOutcome?,
     enabled: Boolean,
     onChoose: (Side) -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val colors = WyrThemeAccessors.colors
     val dimens = WyrThemeAccessors.dimens
 
-    Column(modifier = Modifier.fillMaxSize()) {
+    Column(modifier = modifier.fillMaxWidth()) {
         OptionCard(
             text = question.optionA,
             background = colors.optionA,
