@@ -143,6 +143,8 @@ class PlayViewModelTest {
         override suspend fun next(): Question = QUESTION
 
         override suspend fun prefetch() = Unit
+
+        override suspend fun reset() = Unit
     }
 
     private class FailingQuestionRepository(
@@ -151,6 +153,8 @@ class PlayViewModelTest {
         override suspend fun next(): Question = throw WyrException(error)
 
         override suspend fun prefetch() = Unit
+
+        override suspend fun reset() = Unit
     }
 
     private class FakeVoteRepository : VoteRepository {

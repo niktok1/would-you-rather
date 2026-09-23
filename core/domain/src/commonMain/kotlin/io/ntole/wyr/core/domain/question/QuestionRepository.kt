@@ -17,6 +17,15 @@ public interface QuestionRepository {
 
     /** Top the local supply back up ahead of time. Safe to call redundantly. */
     public suspend fun prefetch()
+
+    /**
+     * Drop every queued question and forget how far paging got, so the next [next] starts from
+     * the first page.
+     *
+     * For when the player changes: the queue and cursor were built for the old one. A refill
+     * already in flight lands before the reset does, so it cannot put old questions back after it.
+     */
+    public suspend fun reset()
 }
 
 /**

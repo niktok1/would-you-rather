@@ -41,6 +41,16 @@ public class DefaultQuestionRepository(
         refill()
     }
 
+    // Under the refill lock, so a refill that fetched before the reset has put its page before the
+    // cache is cleared, rather than after it.
+    override suspend fun reset() {
+        refillMutex.withLock {
+            cache.clear()
+            nextCursor = null
+            reachedEnd = false
+        }
+    }
+
     private suspend fun refill() {
         refillMutex.withLock {
             // Another caller may have refilled while we waited for the lock.
