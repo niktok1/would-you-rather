@@ -12,6 +12,7 @@ import io.ntole.wyr.core.domain.session.SessionRepository
 import io.ntole.wyr.core.domain.vote.AttemptId
 import io.ntole.wyr.core.domain.vote.CastVote
 import io.ntole.wyr.core.domain.vote.Side
+import io.ntole.wyr.core.domain.vote.VoteOutcome
 import io.ntole.wyr.core.network.trace.HttpExchange
 import io.ntole.wyr.core.network.trace.HttpTrace
 import kotlinx.coroutines.CancellationException
@@ -61,15 +62,15 @@ class DevConsoleViewModel(
             _state.update { it.copy(question = null, lastOutcome = null) }
             questions.reset()
             val playerId = sessions.ensure()
-            "playerId=$playerId question=${loadQuestion().id}"
+            "playerId=$playerId ${loadQuestion().summary()}"
         }
 
-    fun nextQuestion() = perform("nextQuestion") { "question=${loadQuestion().id}" }
+    fun nextQuestion() = perform("nextQuestion") { loadQuestion().summary() }
 
     /** Skipping sends nothing (CLAUDE.md §8d), so it is only a fetch of the next question. */
     fun skip() =
         perform("skip", args = "questionId=${_state.value.question?.id}") {
-            "question=${loadQuestion().id}"
+            loadQuestion().summary()
         }
 
     fun resetQueue() =
@@ -97,7 +98,7 @@ class DevConsoleViewModel(
         // Every tap is an answer of its own (CLAUDE.md §8d).
         val outcome = castVote(questionId, side, AttemptId.random())
         _state.update { it.copy(lastOutcome = outcome) }
-        "+${outcome.pointsAwarded} total=${outcome.totalPoints}"
+        outcome.summary()
     }
 
     private suspend fun loadQuestion(): Question {
@@ -162,6 +163,11 @@ class DevConsoleViewModel(
             log(LogEntry("refreshHeader", "", started.elapsedNow().inWholeMilliseconds, result))
         }
     }
+
+    /** A question the feed looped back to says so, which is how the loop shows in the log. */
+    private fun Question.summary(): String = "question=$id" + if (answeredBefore) " looped" else ""
+
+    private fun VoteOutcome.summary(): String = "+$pointsAwarded total=$totalPoints" + if (replayed) " replayed" else ""
 
     private fun log(entry: LogEntry) {
         _state.update { it.copy(log = (listOf(entry) + it.log).take(LOG_CAPACITY)) }

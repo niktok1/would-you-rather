@@ -218,6 +218,44 @@ class DevConsoleViewModelTest {
         }
 
     @Test
+    fun `a question the feed looped back to is labelled in the log`() =
+        runTest(dispatcher) {
+            val viewModel = viewModel()
+            viewModel.nextQuestion()
+            testScheduler.advanceUntilIdle()
+            questions.next = { QUESTION.copy(answeredBefore = true) }
+
+            viewModel.nextQuestion()
+            testScheduler.advanceUntilIdle()
+
+            assertEquals(
+                listOf(LogResult.Ok("question=q1 looped"), LogResult.Ok("question=q1")),
+                viewModel.log.map { it.result },
+            )
+        }
+
+    @Test
+    fun `a replayed vote says so in the log`() =
+        runTest(dispatcher) {
+            votes.answer = { questionId, side ->
+                OUTCOME.copy(questionId = questionId, yourSide = side, pointsAwarded = 0, replayed = true)
+            }
+            val viewModel = viewModel()
+            viewModel.nextQuestion()
+            testScheduler.advanceUntilIdle()
+
+            viewModel.vote(Side.A)
+            testScheduler.advanceUntilIdle()
+
+            assertEquals(LogResult.Ok("+0 total=42 replayed"), viewModel.log.first().result)
+            assertEquals(
+                true,
+                viewModel.state.value.lastOutcome
+                    ?.replayed,
+            )
+        }
+
+    @Test
     fun `every vote is an answer with an attempt of its own`() =
         runTest(dispatcher) {
             val viewModel = viewModel()

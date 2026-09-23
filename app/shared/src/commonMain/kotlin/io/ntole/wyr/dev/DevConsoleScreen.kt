@@ -72,6 +72,7 @@ fun DevConsoleScreen(
                 } else {
                     Value("id", question.id)
                     Value("category", question.category.name)
+                    Value("answeredBefore", question.answeredBefore.toString())
                     Value("A", question.optionA)
                     Value("B", question.optionB)
                 }
@@ -154,6 +155,7 @@ private fun Outcome(outcome: VoteOutcome) {
     Value("agreedWithMajority", outcome.agreedWithMajority.toString())
     Value("pointsAwarded", outcome.pointsAwarded.toString())
     Value("totalPoints", outcome.totalPoints.toString())
+    Value("replayed", outcome.replayed.toString())
 }
 
 @Composable
