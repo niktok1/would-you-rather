@@ -39,8 +39,9 @@ public fun dataModule(baseUrl: String): Module =
 
         single<QuestionCache> { InMemoryQuestionCache() }
 
-        // Bound as the concrete type as well: DefaultVoteRepository needs reset(), which is
-        // recovery machinery and deliberately not on the domain interface.
+        // Bound as the concrete type as well: repositories recover a dead session through
+        // withSessionRecovery, which is recovery machinery and deliberately not on the domain
+        // interface.
         single { DefaultSessionRepository(authApi = get(), sessionStore = get()) }
         single<SessionRepository> { get<DefaultSessionRepository>() }
 
