@@ -232,7 +232,7 @@ class ApiFlowTest {
         }
 
     @Test
-    fun `a vote body the server cannot use is a validation error rather than a 500`() =
+    fun `a vote body the server cannot use is a validation error`() =
         runServer("malformed-vote") { client ->
             val session: SessionDto = client.post(WyrApi.Paths.AUTH_GUEST).body()
 
@@ -259,7 +259,7 @@ class ApiFlowTest {
         }
 
     @Test
-    fun `a refresh body that does not parse is a validation error rather than a 500`() =
+    fun `a refresh body that does not parse is a validation error`() =
         runServer("malformed-refresh") { client ->
             val response =
                 client.post(WyrApi.Paths.AUTH_REFRESH) {
