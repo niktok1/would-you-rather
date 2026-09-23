@@ -1,11 +1,13 @@
 package io.ntole.wyr.server
 
+import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.client.request.bearerAuth
 import io.ktor.client.request.get
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
+import io.ktor.client.statement.HttpResponse
 import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.contentType
@@ -18,6 +20,7 @@ import io.ntole.wyr.core.auth.SessionDto
 import io.ntole.wyr.core.error.ErrorCode
 import io.ntole.wyr.core.error.ErrorDto
 import io.ntole.wyr.core.question.QuestionCategory
+import io.ntole.wyr.core.question.QuestionDto
 import io.ntole.wyr.core.question.QuestionPageDto
 import io.ntole.wyr.core.vote.OptionSide
 import io.ntole.wyr.core.vote.VoteRequest
@@ -29,12 +32,12 @@ import io.ntole.wyr.server.vote.Scoring
 import kotlinx.serialization.json.Json
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNotEquals
-import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
- * End-to-end coverage of the vertical slice: zero-click session, question fetch, vote, reveal.
+ * End-to-end coverage of the vertical slice: zero-click session, the question feed, vote, reveal.
  *
  * Each test gets its own in-memory database, keyed by name, so vote counts from one test cannot
  * bleed into another's tally assertions.
@@ -48,10 +51,10 @@ class ApiFlowTest {
             assertTrue(session.accessToken.isNotBlank())
             assertTrue(session.refreshToken.isNotBlank())
 
-            val page: QuestionPageDto = client.get(WyrApi.Paths.QUESTIONS).body()
-            assertTrue(page.questions.isNotEmpty(), "seed questions should be served")
+            val batch = client.batch(session)
+            assertTrue(batch.isNotEmpty(), "seed questions should be served")
 
-            val question = page.questions.first()
+            val question = batch.first()
             val result: VoteResultDto =
                 client
                     .post(WyrApi.Paths.VOTES) {
@@ -73,8 +76,8 @@ class ApiFlowTest {
     @Test
     fun `every answer pays one point whichever side it picks, and the total accumulates`() =
         runServer("flat-scoring") { client ->
-            val (opened, contested) = client.get(WyrApi.Paths.QUESTIONS).body<QuestionPageDto>().questions
-            val player: SessionDto = client.post(WyrApi.Paths.AUTH_GUEST).body()
+            val player = client.guest()
+            val (opened, contested) = client.batch(player)
 
             // A tally holds one vote per player, so a real minority takes two other players on
             // the majority side first. Their majority picks pay the same flat point.
@@ -96,13 +99,8 @@ class ApiFlowTest {
     @Test
     fun `voting twice on the same question is rejected`() =
         runServer("double-vote") { client ->
-            val session: SessionDto = client.post(WyrApi.Paths.AUTH_GUEST).body()
-            val question =
-                client
-                    .get(WyrApi.Paths.QUESTIONS)
-                    .body<QuestionPageDto>()
-                    .questions
-                    .first()
+            val session = client.guest()
+            val question = client.batch(session).first()
 
             client.post(WyrApi.Paths.VOTES) {
                 bearerAuth(session.accessToken)
@@ -124,12 +122,7 @@ class ApiFlowTest {
     @Test
     fun `voting without a token is unauthorized and reports why`() =
         runServer("no-token") { client ->
-            val question =
-                client
-                    .get(WyrApi.Paths.QUESTIONS)
-                    .body<QuestionPageDto>()
-                    .questions
-                    .first()
+            val question = client.batch(client.guest()).first()
 
             val response =
                 client.post(WyrApi.Paths.VOTES) {
@@ -196,27 +189,13 @@ class ApiFlowTest {
         }
 
     @Test
-    fun `a malformed cursor is a validation error rather than a 500`() =
-        runServer("bad-cursor") { client ->
-            val response = client.get("${WyrApi.Paths.QUESTIONS}?${WyrApi.Query.CURSOR}=abc")
-
-            assertEquals(HttpStatusCode.BadRequest, response.status)
-            assertEquals(ErrorCode.VALIDATION_FAILED, response.body<ErrorDto>().code)
-        }
-
-    @Test
     fun `a validly signed token for a player that does not exist is unauthorized, not a duplicate vote`() =
         runServer("ghost-player") { client ->
-            val question =
-                client
-                    .get(WyrApi.Paths.QUESTIONS)
-                    .body<QuestionPageDto>()
-                    .questions
-                    .first()
+            val real = client.guest()
+            val question = client.batch(real).first()
 
             // The helper must sign exactly as the server does, or the 401 below would only prove
             // a bad signature. A real player's token from it has to be accepted first.
-            val real: SessionDto = client.post(WyrApi.Paths.AUTH_GUEST).body()
             val accepted =
                 client.post(WyrApi.Paths.VOTES) {
                     bearerAuth(signAccessToken(real.playerId))
@@ -295,52 +274,131 @@ class ApiFlowTest {
         }
 
     @Test
-    fun `the UNKNOWN category is rejected rather than served as an empty catalogue`() =
+    fun `the UNKNOWN category is rejected rather than served as an empty batch`() =
         runServer("unknown-category") { client ->
-            val response =
-                client.get("${WyrApi.Paths.QUESTIONS}?${WyrApi.Query.CATEGORY}=${QuestionCategory.UNKNOWN.name}")
+            val response = client.feed(client.guest(), "?${WyrApi.Query.CATEGORY}=${QuestionCategory.UNKNOWN.name}")
 
             assertEquals(HttpStatusCode.BadRequest, response.status)
             assertEquals(ErrorCode.VALIDATION_FAILED, response.body<ErrorDto>().code)
         }
 
     @Test
-    fun `paging walks the catalogue and stops`() =
-        runServer("paging") { client ->
-            val first: QuestionPageDto =
-                client.get("${WyrApi.Paths.QUESTIONS}?${WyrApi.Query.LIMIT}=5").body()
-            assertEquals(5, first.questions.size)
-            assertTrue(first.nextCursor != null, "a full page should offer a cursor")
+    fun `the question feed needs a session`() =
+        runServer("feed-no-token") { client ->
+            val response = client.get(WyrApi.Paths.QUESTIONS)
 
-            val second: QuestionPageDto =
-                client
-                    .get(
-                        "${WyrApi.Paths.QUESTIONS}?${WyrApi.Query.LIMIT}=5" +
-                            "&${WyrApi.Query.CURSOR}=${first.nextCursor}",
-                    ).body()
+            assertEquals(HttpStatusCode.Unauthorized, response.status)
+            assertEquals(ErrorCode.UNAUTHORIZED, response.body<ErrorDto>().code)
+        }
 
-            val firstIds = first.questions.map { it.id }.toSet()
-            assertTrue(
-                second.questions.none { it.id in firstIds },
-                "cursor paging must not repeat rows",
-            )
+    @Test
+    fun `a validly signed token for a player that does not exist gets no feed`() =
+        runServer("feed-ghost-player") { client ->
+            // As for the ghost-player vote, the helper's token for a real player has to pass first.
+            val real = client.guest()
+            val accepted = client.get(WyrApi.Paths.QUESTIONS) { bearerAuth(signAccessToken(real.playerId)) }
+            assertEquals(HttpStatusCode.OK, accepted.status)
 
-            // Follow the cursor to the end, within a bound: the walk has to finish on a page that
-            // offers no cursor rather than hand out cursors forever.
-            var last = second
-            repeat(times = 20) {
-                val cursor = last.nextCursor ?: return@repeat
-                last =
-                    client
-                        .get("${WyrApi.Paths.QUESTIONS}?${WyrApi.Query.LIMIT}=5&${WyrApi.Query.CURSOR}=$cursor")
-                        .body()
-            }
-            assertNull(last.nextCursor, "the final page must offer no cursor")
+            val response = client.get(WyrApi.Paths.QUESTIONS) { bearerAuth(signAccessToken("no-such-player")) }
+
+            assertEquals(HttpStatusCode.Unauthorized, response.status)
+            assertEquals(ErrorCode.UNAUTHORIZED, response.body<ErrorDto>().code)
+        }
+
+    @Test
+    fun `a fresh player is served every question once in an order of its own`() =
+        runServer("feed-fresh") { client ->
+            val first = client.guest()
+            val second = client.guest()
+
+            val pool = client.wholePool(first)
+            assertEquals(pool.size, pool.ids().toSet().size, "a batch must not repeat a question")
+            assertTrue(pool.none { it.answeredBefore }, "nothing is answered yet")
+
+            val other = client.wholePool(second)
+            assertEquals(pool.ids().toSet(), other.ids().toSet())
+            // The order is random per request, so this can fail by pure chance: two random orders
+            // of n questions agree with probability 1/n!, which for the 24 seeds is about 1.6e-24.
+            assertTrue(pool.size >= 12, "too few seeds for the odds above to stay negligible")
+            assertNotEquals(pool.ids(), other.ids(), "two players were served the same order")
+        }
+
+    @Test
+    fun `once everything is answered the feed loops back over the answered questions`() =
+        runServer("feed-loop") { client ->
+            val player = client.guest()
+            val pool = client.wholePool(player)
+            pool.forEach { question -> client.vote(player, question.id, OptionSide.A) }
+
+            val looped = client.wholePool(player)
+
+            // Never empty while there are questions. Least recently answered first is pinned by
+            // QuestionStoreTest, which picks the answer times: here answers can share a
+            // millisecond, and the order among those is random.
+            assertEquals(pool.ids().toSet(), looped.ids().toSet())
+            assertEquals(looped.size, looped.ids().toSet().size, "a looped batch must not repeat a question")
+            assertTrue(looped.all { it.answeredBefore }, "every question in the loop was answered before")
+            assertEquals(1, client.batch(player, "?${WyrApi.Query.LIMIT}=1").size)
+        }
+
+    @Test
+    fun `the last few unanswered questions come first and then the batch loops`() =
+        runServer("feed-top-up") { client ->
+            val player = client.guest()
+            val pool = client.wholePool(player)
+            val left = pool.take(3)
+            val answered = pool.drop(3).ids()
+            answered.forEach { id -> client.vote(player, id, OptionSide.B) }
+
+            val batch = client.batch(player, "?${WyrApi.Query.LIMIT}=5")
+
+            assertEquals(5, batch.size)
+            assertEquals(left.ids().toSet(), batch.take(3).ids().toSet(), "the unanswered questions come first")
+            assertTrue(batch.take(3).none { it.answeredBefore })
+            assertTrue(batch.drop(3).all { it.answeredBefore && it.id in answered }, "then it loops")
+        }
+
+    @Test
+    fun `a category filter applies to unanswered and looped questions alike`() =
+        runServer("feed-category") { client ->
+            val player = client.guest()
+            val food = "&${WyrApi.Query.CATEGORY}=${QuestionCategory.FOOD.name}"
+            val pool = client.wholePool(player)
+            val foodPool = client.wholePool(player, food)
+            assertTrue(foodPool.size >= 2 && foodPool.all { it.category == QuestionCategory.FOOD })
+
+            val unanswered = foodPool.first()
+            foodPool.drop(1).forEach { question -> client.vote(player, question.id, OptionSide.A) }
+            val batch = client.wholePool(player, food)
+
+            assertEquals(foodPool.ids().toSet(), batch.ids().toSet(), "only food, answered or not")
+            assertEquals(unanswered.id, batch.first().id, "the one unanswered food question comes first")
+            assertFalse(batch.first().answeredBefore)
+            assertTrue(batch.drop(1).all { it.answeredBefore })
+            // Unfiltered, only those food questions count as answered.
+            assertEquals(pool.size - (foodPool.size - 1), client.wholePool(player).count { !it.answeredBefore })
+        }
+
+    @Test
+    fun `a batch holds as many questions as asked for within bounds`() =
+        runServer("feed-limit") { client ->
+            val player = client.guest()
+            val pool = client.wholePool(player)
+            assertTrue(pool.size > WyrApi.Limits.DEFAULT_PAGE_SIZE, "too few seeds to tell the default apart")
+
+            assertEquals(WyrApi.Limits.DEFAULT_PAGE_SIZE, client.batch(player).size)
+            assertEquals(3, client.batch(player, "?${WyrApi.Query.LIMIT}=3").size)
+            assertEquals(1, client.batch(player, "?${WyrApi.Query.LIMIT}=0").size, "a limit below 1 is raised to 1")
+            assertEquals(pool.size, client.batch(player, "?${WyrApi.Query.LIMIT}=100000").size)
+
+            val malformed = client.feed(player, "?${WyrApi.Query.LIMIT}=abc")
+            assertEquals(HttpStatusCode.BadRequest, malformed.status)
+            assertEquals(ErrorCode.VALIDATION_FAILED, malformed.body<ErrorDto>().code)
         }
 
     private fun runServer(
         databaseName: String,
-        block: suspend ApplicationTestBuilder.(io.ktor.client.HttpClient) -> Unit,
+        block: suspend ApplicationTestBuilder.(HttpClient) -> Unit,
     ) = testApplication {
         val database = testDatabaseFor(databaseName)
 
@@ -371,7 +429,34 @@ class ApiFlowTest {
         block(client)
     }
 
-    private suspend fun io.ktor.client.HttpClient.vote(
+    private suspend fun HttpClient.guest(): SessionDto = post(WyrApi.Paths.AUTH_GUEST).body()
+
+    private suspend fun HttpClient.feed(
+        session: SessionDto,
+        query: String = "",
+    ): HttpResponse = get(WyrApi.Paths.QUESTIONS + query) { bearerAuth(session.accessToken) }
+
+    private suspend fun HttpClient.batch(
+        session: SessionDto,
+        query: String = "",
+    ): List<QuestionDto> = feed(session, query).body<QuestionPageDto>().questions
+
+    /**
+     * One batch at the maximum size: every question in the pool, or in the category [extraQuery]
+     * names, for as long as the pool is smaller than that, as the seeds are.
+     */
+    private suspend fun HttpClient.wholePool(
+        session: SessionDto,
+        extraQuery: String = "",
+    ): List<QuestionDto> {
+        val batch = batch(session, "?${WyrApi.Query.LIMIT}=${WyrApi.Limits.MAX_PAGE_SIZE}$extraQuery")
+        assertTrue(batch.size < WyrApi.Limits.MAX_PAGE_SIZE, "the pool no longer fits in one batch")
+        return batch
+    }
+
+    private fun List<QuestionDto>.ids(): List<String> = map { it.id }
+
+    private suspend fun HttpClient.vote(
         session: SessionDto,
         questionId: String,
         choice: OptionSide,

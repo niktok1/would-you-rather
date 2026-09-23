@@ -50,7 +50,7 @@ public fun dataModule(baseUrl: String): Module =
         single<SessionRepository> { get<DefaultSessionRepository>() }
         single<SessionDiagnostics> { DefaultSessionDiagnostics(sessionStore = get()) }
 
-        single<QuestionRepository> { DefaultQuestionRepository(api = get(), cache = get()) }
+        single<QuestionRepository> { DefaultQuestionRepository(api = get(), session = get(), cache = get()) }
         single<VoteRepository> { DefaultVoteRepository(api = get(), session = get()) }
 
         factory { GetNextQuestion(questions = get()) }

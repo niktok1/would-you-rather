@@ -11,6 +11,10 @@ import kotlinx.serialization.Serializable
  * [id] is a [String] to leave room for UUIDs.
  *
  * [category] must keep its default for unknown-value coercion to work — see [QuestionCategory].
+ *
+ * [answeredBefore] is true when the requesting player has answered this question already and the
+ * feed has looped back to it. It exists so the dev console can label a looped question; the
+ * player-facing reveal does not show a previous pick (CLAUDE.md §8d).
  */
 @Serializable
 public data class QuestionDto(
@@ -18,4 +22,5 @@ public data class QuestionDto(
     public val optionA: String,
     public val optionB: String,
     public val category: QuestionCategory = QuestionCategory.UNKNOWN,
+    public val answeredBefore: Boolean = false,
 )

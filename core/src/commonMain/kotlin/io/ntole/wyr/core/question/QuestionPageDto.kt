@@ -3,13 +3,14 @@ package io.ntole.wyr.core.question
 import kotlinx.serialization.Serializable
 
 /**
- * One page of questions, for batch prefetch into the local cache.
+ * The next batch of questions for the requesting player, for prefetch into the local cache.
  *
- * [nextCursor] is opaque to the client: pass it back verbatim to fetch the following page.
- * `null` means there is nothing more to fetch.
+ * It carries no cursor: the server knows what the player has answered, so the next request simply
+ * gets the next batch. A batch never lists a question twice, and it is never empty while the pool
+ * (in the requested category, if any) is not — the feed loops back to answered questions rather
+ * than run out (CLAUDE.md §8d).
  */
 @Serializable
 public data class QuestionPageDto(
     public val questions: List<QuestionDto>,
-    public val nextCursor: String? = null,
 )

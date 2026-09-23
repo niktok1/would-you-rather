@@ -1,15 +1,18 @@
 package io.ntole.wyr.core.data.question
 
+import io.ktor.client.engine.HttpClientEngine
 import io.ktor.client.engine.mock.MockEngine
-import io.ktor.client.request.HttpRequestData
-import io.ntole.wyr.core.api.WyrApi
 import io.ntole.wyr.core.data.BASE_URL
+import io.ntole.wyr.core.data.FakeServer
 import io.ntole.wyr.core.data.cache.InMemoryQuestionCache
 import io.ntole.wyr.core.data.respondJson
 import io.ntole.wyr.core.data.session
+import io.ntole.wyr.core.data.session.DefaultSessionRepository
 import io.ntole.wyr.core.data.storeHolding
+import io.ntole.wyr.core.network.SessionStore
 import io.ntole.wyr.core.network.WyrHttpClient
 import io.ntole.wyr.core.network.WyrJson
+import io.ntole.wyr.core.network.api.AuthApi
 import io.ntole.wyr.core.network.api.QuestionApi
 import io.ntole.wyr.core.question.QuestionCategory
 import io.ntole.wyr.core.question.QuestionDto
@@ -21,71 +24,77 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertNull
 
 class DefaultQuestionRepositoryTest {
     private val cache = InMemoryQuestionCache()
 
     @Test
-    fun `a reset drops the queue and starts again from the first page`() =
+    fun `a reset drops the queue so the next question comes from a fresh batch`() =
         runTest {
-            val engine =
-                MockEngine { request ->
-                    val page = if (request.cursor() == null) FIRST_PAGE else SECOND_PAGE
-                    respondJson(WyrJson.encodeToString(page))
-                }
+            val engine = MockEngine { respondJson(WyrJson.encodeToString(BATCH)) }
             val repository = repositoryOver(engine)
             assertEquals("q1", repository.next().id)
 
             repository.reset()
 
             assertEquals(0, cache.count())
-            // Without the reset this is q2 from the queue, or q4 from the cursor's page.
+            // Without the reset this is q2, still queued from the first batch.
             assertEquals("q1", repository.next().id)
-            assertEquals(listOf<String?>(null, null), engine.requestHistory.map { it.cursor() })
+            assertEquals(2, engine.requestHistory.size)
         }
 
     @Test
     fun `a refill in flight when the reset lands cannot put old questions back`() =
         runTest {
-            val pageRequested = CompletableDeferred<Unit>()
-            val answerPage = CompletableDeferred<Unit>()
+            val batchRequested = CompletableDeferred<Unit>()
+            val answerBatch = CompletableDeferred<Unit>()
             val engine =
                 MockEngine {
-                    pageRequested.complete(Unit)
-                    answerPage.await()
-                    respondJson(WyrJson.encodeToString(FIRST_PAGE))
+                    batchRequested.complete(Unit)
+                    answerBatch.await()
+                    respondJson(WyrJson.encodeToString(BATCH))
                 }
             val repository = repositoryOver(engine)
 
             val refill = async { repository.prefetch() }
-            pageRequested.await()
-            // Runs until it has to wait: the refill holds the lock while its page is in flight.
+            batchRequested.await()
+            // Runs until it has to wait: the refill holds the lock while its batch is in flight.
             val reset = launch(start = CoroutineStart.UNDISPATCHED) { repository.reset() }
-            answerPage.complete(Unit)
+            answerBatch.complete(Unit)
             refill.await()
             reset.join()
 
             assertEquals(0, cache.count())
-            repository.next()
-            assertNull(engine.requestHistory.last().cursor(), "the old page's cursor survived the reset")
         }
 
-    private fun repositoryOver(engine: MockEngine): DefaultQuestionRepository =
-        DefaultQuestionRepository(
-            QuestionApi(WyrHttpClient.create(BASE_URL, storeHolding(session("a")), engine)),
-            cache,
-        )
+    @Test
+    fun `a fetch with no session stored mints a guest and is retried as it`() =
+        runTest {
+            // The feed is per player, so a first launch's first question needs a session too.
+            val server = FakeServer()
+            val repository = repositoryOver(server.engine, store = storeHolding(null))
 
-    private fun HttpRequestData.cursor(): String? = url.parameters[WyrApi.Query.CURSOR]
+            assertEquals("q1", repository.next().id)
+
+            assertEquals(1, server.guestsMinted)
+            assertEquals(listOf(null, "Bearer access-guest1"), server.feedsSentAs)
+        }
+
+    private fun repositoryOver(
+        engine: HttpClientEngine,
+        store: SessionStore = storeHolding(session("a")),
+    ): DefaultQuestionRepository {
+        val client = WyrHttpClient.create(BASE_URL, store, engine)
+        return DefaultQuestionRepository(QuestionApi(client), DefaultSessionRepository(AuthApi(client), store), cache)
+    }
 
     private companion object {
-        val FIRST_PAGE = QuestionPageDto(questions = questions("q1", "q2", "q3"), nextCursor = "page2")
-        val SECOND_PAGE = QuestionPageDto(questions = questions("q4", "q5", "q6"))
-
-        fun questions(vararg ids: String): List<QuestionDto> =
-            ids.map { id ->
-                QuestionDto(id = id, optionA = "$id-a", optionB = "$id-b", category = QuestionCategory.FOOD)
-            }
+        val BATCH =
+            QuestionPageDto(
+                questions =
+                    listOf("q1", "q2", "q3").map { id ->
+                        QuestionDto(id = id, optionA = "$id-a", optionB = "$id-b", category = QuestionCategory.FOOD)
+                    },
+            )
     }
 }

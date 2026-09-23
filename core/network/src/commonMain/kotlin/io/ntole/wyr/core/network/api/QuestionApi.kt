@@ -11,15 +11,17 @@ import io.ntole.wyr.core.question.QuestionPageDto
 public class QuestionApi(
     private val client: HttpClient,
 ) {
+    /**
+     * The next batch of the session player's feed. Requires a session: the Auth plugin attaches
+     * the bearer token, and the server answers who the batch is for from that alone.
+     */
     public suspend fun page(
-        cursor: String? = null,
         limit: Int = WyrApi.Limits.DEFAULT_PAGE_SIZE,
         category: QuestionCategory? = null,
     ): QuestionPageDto =
         client
             .get(WyrApi.Paths.QUESTIONS) {
                 parameter(WyrApi.Query.LIMIT, limit)
-                cursor?.let { parameter(WyrApi.Query.CURSOR, it) }
                 // UNKNOWN is a client-side sentinel, never a real filter the server knows.
                 category?.takeIf { it != QuestionCategory.UNKNOWN }?.let {
                     parameter(WyrApi.Query.CATEGORY, it.name)

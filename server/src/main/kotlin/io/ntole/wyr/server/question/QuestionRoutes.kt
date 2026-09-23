@@ -1,38 +1,48 @@
 package io.ntole.wyr.server.question
 
+import io.ktor.server.auth.authenticate
 import io.ktor.server.response.respond
 import io.ktor.server.routing.Route
 import io.ktor.server.routing.get
 import io.ntole.wyr.core.api.WyrApi
 import io.ntole.wyr.core.question.QuestionCategory
+import io.ntole.wyr.server.auth.JWT_AUTH
+import io.ntole.wyr.server.auth.authenticatedPlayerId
 import io.ntole.wyr.server.db.Db
+import io.ntole.wyr.server.player.PlayerStore
 import io.ntole.wyr.server.plugins.ApiFailure
 
-/** Reading questions needs no session — only voting does. */
+/** The feed is per player (CLAUDE.md §8d), so reading questions needs a session, as voting does. */
 fun Route.questionRoutes(db: Db) {
-    get(WyrApi.Paths.QUESTIONS) {
-        val params = call.request.queryParameters
+    authenticate(JWT_AUTH) {
+        get(WyrApi.Paths.QUESTIONS) {
+            val playerId = call.authenticatedPlayerId()
+            val params = call.request.queryParameters
 
-        val limit =
-            params[WyrApi.Query.LIMIT]
-                ?.let { raw ->
-                    raw.toIntOrNull() ?: throw ApiFailure.validation("limit must be a number: $raw")
-                }?.coerceIn(1, WyrApi.Limits.MAX_PAGE_SIZE)
-                ?: WyrApi.Limits.DEFAULT_PAGE_SIZE
+            val limit =
+                params[WyrApi.Query.LIMIT]
+                    ?.let { raw ->
+                        raw.toIntOrNull() ?: throw ApiFailure.validation("limit must be a number: $raw")
+                    }?.coerceIn(1, WyrApi.Limits.MAX_PAGE_SIZE)
+                    ?: WyrApi.Limits.DEFAULT_PAGE_SIZE
 
-        val cursor =
-            params[WyrApi.Query.CURSOR]?.let { raw ->
-                raw.toLongOrNull() ?: throw ApiFailure.validation("malformed cursor: $raw")
-            }
+            // UNKNOWN is the client's decoding fallback and is never stored, so filtering by it would
+            // always answer an empty batch, which the feed otherwise never does while it has questions.
+            val category =
+                params[WyrApi.Query.CATEGORY]?.let { raw ->
+                    QuestionCategory.entries.firstOrNull { it.name == raw && it != QuestionCategory.UNKNOWN }
+                        ?: throw ApiFailure.validation("unknown category: $raw")
+                }
 
-        // UNKNOWN is the client's decoding fallback and is never stored, so filtering by it would
-        // answer an empty page with no cursor — indistinguishable from the end of the catalogue.
-        val category =
-            params[WyrApi.Query.CATEGORY]?.let { raw ->
-                QuestionCategory.entries.firstOrNull { it.name == raw && it != QuestionCategory.UNKNOWN }
-                    ?: throw ApiFailure.validation("unknown category: $raw")
-            }
+            val batch =
+                db.query {
+                    // As for a vote: a validly signed token can outlive its player. Serving it the feed
+                    // of a player with no answers would only put the 401 off until its first vote.
+                    if (PlayerStore.find(playerId) == null) throw ApiFailure.unauthorized("unknown player")
+                    QuestionStore.feed(playerId, limit, category)
+                }
 
-        call.respond(db.query { QuestionStore.page(cursor, limit, category) })
+            call.respond(batch)
+        }
     }
 }

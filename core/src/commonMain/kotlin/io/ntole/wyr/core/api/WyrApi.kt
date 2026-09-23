@@ -16,15 +16,18 @@ public object WyrApi {
         public const val AUTH_GUEST: String = "/$VERSION/auth/guest"
         public const val AUTH_REFRESH: String = "/$VERSION/auth/refresh"
 
+        /**
+         * The next batch of questions for the player the bearer token names. Requires a session,
+         * because the feed is per player (CLAUDE.md §8d): questions they have not answered come
+         * first, in random order, and once none remain, answered ones loop back, least recently
+         * answered first. There is no cursor; asking again is how to get the next batch.
+         */
         public const val QUESTIONS: String = "/$VERSION/questions"
         public const val VOTES: String = "/$VERSION/votes"
     }
 
     public object Query {
-        /** Opaque page cursor; omit for the first page. */
-        public const val CURSOR: String = "cursor"
-
-        /** Max questions to return in one page. */
+        /** Max questions to return in one batch. */
         public const val LIMIT: String = "limit"
 
         /** Optional [io.ntole.wyr.core.question.QuestionCategory] name filter. */

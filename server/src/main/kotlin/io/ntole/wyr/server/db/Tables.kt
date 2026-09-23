@@ -26,7 +26,7 @@ object Players : Table("players") {
 object Questions : Table("questions") {
     val id = varchar("id", 36)
 
-    /** Monotonic ordering key. Doubles as the pagination cursor. */
+    /** Monotonic insertion order. */
     val seq = long("seq").uniqueIndex()
 
     val optionA = varchar("option_a", MAX_OPTION_LENGTH)
@@ -45,11 +45,19 @@ object Votes : Table("votes") {
     val side = varchar("side", 1)
     val createdAt = long("created_at")
 
+    /** When the player answered. The feed loops answered questions back oldest first by this. */
+    val answeredAt = long("answered_at")
+
     /**
      * The composite key is the actual defence against double voting — an application-level check
      * would still lose a race between two concurrent requests from the same player.
      */
     override val primaryKey = PrimaryKey(playerId, questionId)
+
+    init {
+        // One player's answers in the order the feed loops them back.
+        index(isUnique = false, playerId, answeredAt)
+    }
 }
 
 /**

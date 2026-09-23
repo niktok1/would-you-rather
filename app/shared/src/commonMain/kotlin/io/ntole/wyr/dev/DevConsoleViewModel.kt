@@ -52,7 +52,7 @@ class DevConsoleViewModel(
 
     /**
      * A fresh player from nothing. The queue is reset between dropping the session and minting
-     * the next one, so the new player never resumes the old one's questions or cursor.
+     * the next one, so the new player never resumes the old one's queue.
      */
     fun newGuest() =
         perform("newGuest") {

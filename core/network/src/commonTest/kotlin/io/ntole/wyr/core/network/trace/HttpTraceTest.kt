@@ -17,6 +17,7 @@ import io.ntole.wyr.core.network.session
 import io.ntole.wyr.core.network.storeHolding
 import io.ntole.wyr.core.network.trace.HttpExchange.Outcome.Answered
 import io.ntole.wyr.core.network.trace.HttpExchange.Outcome.Failed
+import io.ntole.wyr.core.question.QuestionCategory
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -30,11 +31,11 @@ class HttpTraceTest {
     @Test
     fun `an answered request is recorded with its method path and status`() =
         runTest {
-            questionApi(MockEngine { respondEmptyPage() }).page(cursor = "c1")
+            questionApi(MockEngine { respondEmptyPage() }).page(category = QuestionCategory.FOOD)
 
             val exchange = trace.exchanges.value.single()
             assertEquals("GET", exchange.method)
-            assertEquals("${WyrApi.Paths.QUESTIONS}?limit=20&cursor=c1", exchange.pathAndQuery)
+            assertEquals("${WyrApi.Paths.QUESTIONS}?limit=20&category=FOOD", exchange.pathAndQuery)
             assertEquals(Answered(200), exchange.outcome)
             assertTrue(exchange.elapsedMillis >= 0)
         }
@@ -96,11 +97,11 @@ class HttpTraceTest {
             val api =
                 QuestionApi(WyrHttpClient.create(BASE_URL, storeHolding(session("a")), okEngine(), small))
 
-            listOf("c1", "c2", "c3").forEach { cursor -> api.page(cursor = cursor) }
+            listOf(1, 2, 3).forEach { limit -> api.page(limit = limit) }
 
             assertEquals(
-                listOf("c3", "c2"),
-                small.exchanges.value.map { it.pathAndQuery.substringAfter("cursor=") },
+                listOf("3", "2"),
+                small.exchanges.value.map { it.pathAndQuery.substringAfter("limit=") },
             )
         }
 

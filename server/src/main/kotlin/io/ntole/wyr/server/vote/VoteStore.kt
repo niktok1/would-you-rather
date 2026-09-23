@@ -40,12 +40,13 @@ object VoteStore {
         playerId: String,
         questionId: String,
         choice: OptionSide,
+        now: Long = System.currentTimeMillis(),
     ): VoteResultDto {
         if (!QuestionStore.exists(questionId)) throw ApiFailure.questionNotFound(questionId)
 
         if (PlayerStore.find(playerId) == null) throw ApiFailure.unauthorized("unknown player")
 
-        insertVote(playerId, questionId, choice)
+        insertVote(playerId, questionId, choice, now)
 
         val votesA = countVotes(questionId, OptionSide.A)
         val votesB = countVotes(questionId, OptionSide.B)
@@ -65,13 +66,15 @@ object VoteStore {
         playerId: String,
         questionId: String,
         choice: OptionSide,
+        now: Long = System.currentTimeMillis(),
     ) {
         try {
             Votes.insert { row ->
                 row[Votes.playerId] = playerId
                 row[Votes.questionId] = questionId
                 row[Votes.side] = choice.name
-                row[Votes.createdAt] = System.currentTimeMillis()
+                row[Votes.createdAt] = now
+                row[Votes.answeredAt] = now
             }
         } catch (failure: ExposedSQLException) {
             // Anything but a duplicate (a foreign key, a lost connection) is a real fault, not a

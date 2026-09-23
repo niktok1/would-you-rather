@@ -19,11 +19,10 @@ public interface QuestionRepository {
     public suspend fun prefetch()
 
     /**
-     * Drop every queued question and forget how far paging got, so the next [next] starts from
-     * the first page.
+     * Drop every queued question, so the next [next] fetches a fresh batch.
      *
-     * For when the player changes: the queue and cursor were built for the old one. A refill
-     * already in flight lands before the reset does, so it cannot put old questions back after it.
+     * For when the player changes: the queue was filled from the old one's feed. A refill already
+     * in flight lands before the reset does, so it cannot put old questions back after it.
      */
     public suspend fun reset()
 }
