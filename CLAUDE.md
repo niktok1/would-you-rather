@@ -373,7 +373,10 @@ and every request shows in its HTTP trace (`HttpTrace` in `:core:network`, never
   while the pool is not. `GET /v1/questions` requires a bearer token and is per-player.
   Built in `QuestionStore.feed` (each batch one statement), on `players.current_cycle` and
   `votes.answered_in_cycle`. Starting a cycle is a compare-and-set on the cycle read
-  (`PlayerStore.startNextCycle`), so two requests that both find it finished start it once.
+  (`PlayerStore.startNextCycle`), so two requests that both find it finished start it once. The
+  second can still serve again a question answered in the new cycle meanwhile (the feed's KDoc
+  has the case), but only two overlapping requests from one player get there, and the client
+  sends one at a time.
   `DefaultQuestionRepository` keeps no record of what it served beyond one refill: it drops only
   questions still queued and those handed out since the refill went out, the one then on screen
   included.

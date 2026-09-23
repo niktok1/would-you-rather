@@ -35,7 +35,10 @@ object QuestionStore {
      * serves the whole pool again, all of it due now, in a fresh random order, so a batch is empty
      * only when nothing in [category] is [servableTo] the player at all. Two requests can both find
      * the cycle finished. [PlayerStore.startNextCycle] lets only the first start the next one, and
-     * the second serves the pool it read, which is due in the cycle the first started.
+     * the second serves the pool it read, which is due in the cycle the first started. The one
+     * exception is a question answered in that new cycle before the second read the pool: the
+     * second serves it again in the cycle it was just answered in. That takes two overlapping
+     * requests from one player, and the client sends one at a time (`DefaultQuestionRepository`).
      *
      * A cycle is per player, not per category. When nothing in [category] is due but something
      * outside it still is, the player has not finished the cycle, and starting the next one would
