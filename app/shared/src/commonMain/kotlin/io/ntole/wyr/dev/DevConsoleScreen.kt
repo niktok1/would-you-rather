@@ -49,6 +49,7 @@ fun DevConsoleScreen(
     onVote: (Side) -> Unit,
     onSkip: () -> Unit,
     onVoteById: (questionId: String, side: Side) -> Unit,
+    onRetryLastVote: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val dimens = WyrThemeAccessors.dimens
@@ -80,6 +81,16 @@ fun DevConsoleScreen(
                     Button(onClick = { onVote(Side.A) }, enabled = idle && question != null) { Text("A") }
                     Button(onClick = { onVote(Side.B) }, enabled = idle && question != null) { Text("B") }
                     OutlinedButton(onClick = onSkip, enabled = idle) { Text("Skip") }
+                }
+                val lastVote = state.lastVote
+                Value(
+                    "last vote",
+                    lastVote?.let { "${it.questionId} ${it.side} attempt=${it.attempt.value}" } ?: "none",
+                )
+                Buttons {
+                    OutlinedButton(onClick = onRetryLastVote, enabled = idle && lastVote != null) {
+                        Text("Retry last vote (same attempt)")
+                    }
                 }
                 state.lastOutcome?.let { Outcome(it) }
             }

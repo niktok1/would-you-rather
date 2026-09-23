@@ -59,7 +59,7 @@ class DevConsoleViewModel(
     fun newGuest() =
         perform("newGuest") {
             sessions.clear()
-            _state.update { it.copy(question = null, lastOutcome = null) }
+            _state.update { it.copy(question = null, lastOutcome = null, lastVote = null) }
             questions.reset()
             val playerId = sessions.ensure()
             "playerId=$playerId ${loadQuestion().summary()}"
@@ -79,24 +79,35 @@ class DevConsoleViewModel(
             "queue emptied"
         }
 
+    /** A new attempt, because every tap is an answer of its own (CLAUDE.md §8d). */
     fun vote(side: Side) {
         val question = _state.value.question ?: return
-        castAndShow("vote", question.id, side)
+        send("vote", SentVote(question.id, side, AttemptId.random()))
     }
 
-    /** Any id at all, so the 404 and 409 paths can be provoked on purpose. */
+    /** Any id at all, so the 404 path, and answering any question again, can be provoked on purpose. */
     fun voteById(
         questionId: String,
         side: Side,
-    ) = castAndShow("voteById", questionId.trim(), side)
+    ) = send("voteById", SentVote(questionId.trim(), side, AttemptId.random()))
 
-    private fun castAndShow(
+    /**
+     * The last vote sent, again and as the same attempt, whatever became of it. The server replays
+     * it if it is still the latest answer to that question, and takes it as an answer if the first
+     * never landed (CLAUDE.md §8d).
+     */
+    fun retryLastVote() {
+        val vote = _state.value.lastVote ?: return
+        send("retryLastVote", vote)
+    }
+
+    private fun send(
         action: String,
-        questionId: String,
-        side: Side,
-    ) = perform(action, args = "questionId=$questionId side=$side") {
-        // Every tap is an answer of its own (CLAUDE.md §8d).
-        val outcome = castVote(questionId, side, AttemptId.random())
+        vote: SentVote,
+    ) = perform(action, args = "questionId=${vote.questionId} side=${vote.side} attempt=${vote.attempt.value}") {
+        // Before it goes out, so a vote whose response is lost can still be retried.
+        _state.update { it.copy(lastVote = vote) }
+        val outcome = castVote(vote.questionId, vote.side, vote.attempt)
         _state.update { it.copy(lastOutcome = outcome) }
         outcome.summary()
     }

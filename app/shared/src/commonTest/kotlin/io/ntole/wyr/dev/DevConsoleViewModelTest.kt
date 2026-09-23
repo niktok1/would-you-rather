@@ -214,7 +214,7 @@ class DevConsoleViewModelTest {
             testScheduler.advanceUntilIdle()
 
             assertEquals(OUTCOME.copy(yourSide = Side.B), viewModel.state.value.lastOutcome)
-            assertEquals("questionId=q1 side=B", viewModel.log.first().args)
+            assertEquals("questionId=q1 side=B attempt=${votes.attempts.single().value}", viewModel.log.first().args)
         }
 
     @Test
@@ -273,28 +273,91 @@ class DevConsoleViewModelTest {
         }
 
     @Test
-    fun `a vote by id surfaces QUESTION_NOT_FOUND and ALREADY_VOTED as Err entries`() =
+    fun `a vote by id on an unknown question surfaces QUESTION_NOT_FOUND as an Err entry`() =
         runTest(dispatcher) {
-            votes.answer = { questionId, _ ->
-                when (questionId) {
-                    "missing" -> throw WyrException(DomainError.QUESTION_NOT_FOUND, "no such question")
-                    else -> throw WyrException(DomainError.ALREADY_VOTED, "already answered")
-                }
-            }
+            votes.answer = { _, _ -> throw WyrException(DomainError.QUESTION_NOT_FOUND, "no such question") }
             val viewModel = viewModel()
 
             viewModel.voteById(" missing ", Side.A)
             testScheduler.advanceUntilIdle()
+
+            val entry = viewModel.log.single()
+            assertEquals("questionId=missing side=A attempt=${votes.attempts.single().value}", entry.args)
+            assertEquals(LogResult.Err(DomainError.QUESTION_NOT_FOUND, "no such question"), entry.result)
+        }
+
+    @Test
+    fun `Retry last vote sends the same vote again as the same attempt`() =
+        runTest(dispatcher) {
+            val viewModel = viewModel()
+            viewModel.nextQuestion()
+            testScheduler.advanceUntilIdle()
+            viewModel.vote(Side.B)
+            testScheduler.advanceUntilIdle()
+
+            viewModel.retryLastVote()
+            testScheduler.advanceUntilIdle()
+
+            val attempt = votes.attempts.first()
+            assertEquals(listOf(attempt, attempt), votes.attempts)
+            assertEquals(listOf("q1" to Side.B, "q1" to Side.B), votes.sent)
+            assertEquals(
+                listOf("retryLastVote", "vote").map { it to "questionId=q1 side=B attempt=${attempt.value}" },
+                viewModel.log.take(2).map { it.action to it.args },
+            )
+        }
+
+    @Test
+    fun `a vote whose answer was lost can still be retried as the same attempt`() =
+        runTest(dispatcher) {
+            var lose = true
+            votes.answer = { questionId, side ->
+                if (lose) {
+                    lose = false
+                    throw WyrException(DomainError.NETWORK, "read timed out")
+                }
+                OUTCOME.copy(questionId = questionId, yourSide = side)
+            }
+            val viewModel = viewModel()
+            viewModel.voteById("q7", Side.A)
+            testScheduler.advanceUntilIdle()
+
+            viewModel.retryLastVote()
+            testScheduler.advanceUntilIdle()
+
+            assertEquals(1, votes.attempts.toSet().size)
+            assertEquals(2, votes.attempts.size)
+            assertEquals(LogResult.Ok("+1 total=42"), viewModel.log.first().result)
+        }
+
+    @Test
+    fun `Retry last vote with no vote sent does nothing`() =
+        runTest(dispatcher) {
+            val viewModel = viewModel()
+            testScheduler.advanceUntilIdle()
+
+            viewModel.retryLastVote()
+            testScheduler.advanceUntilIdle()
+
+            assertEquals(emptyList(), votes.attempts)
+            assertEquals(emptyList(), viewModel.log)
+        }
+
+    @Test
+    fun `New guest forgets the last vote`() =
+        runTest(dispatcher) {
+            // Retrying it would be the new player's answer, not a retry of anything they did.
+            val viewModel = viewModel()
             viewModel.voteById("q1", Side.A)
             testScheduler.advanceUntilIdle()
 
-            assertEquals(
-                listOf(
-                    "questionId=q1 side=A" to LogResult.Err(DomainError.ALREADY_VOTED, "already answered"),
-                    "questionId=missing side=A" to LogResult.Err(DomainError.QUESTION_NOT_FOUND, "no such question"),
-                ),
-                viewModel.log.map { it.args to it.result },
-            )
+            viewModel.newGuest()
+            testScheduler.advanceUntilIdle()
+            viewModel.retryLastVote()
+            testScheduler.advanceUntilIdle()
+
+            assertEquals(null, viewModel.state.value.lastVote)
+            assertEquals(1, votes.attempts.size)
         }
 
     @Test
@@ -425,6 +488,9 @@ class DevConsoleViewModelTest {
         /** Every attempt cast, in order. */
         val attempts = mutableListOf<AttemptId>()
 
+        /** The question and side of every vote cast, in order. */
+        val sent = mutableListOf<Pair<String, Side>>()
+
         override suspend fun cast(
             questionId: String,
             side: Side,
@@ -432,6 +498,7 @@ class DevConsoleViewModelTest {
         ): VoteOutcome {
             calls += "cast"
             attempts += attempt
+            sent += questionId to side
             return answer(questionId, side)
         }
     }

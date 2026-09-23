@@ -85,6 +85,7 @@ private fun DevConsole() {
         onVote = viewModel::vote,
         onSkip = viewModel::skip,
         onVoteById = viewModel::voteById,
+        onRetryLastVote = viewModel::retryLastVote,
     )
 }
 

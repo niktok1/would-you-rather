@@ -3,6 +3,8 @@ package io.ntole.wyr.dev
 import io.ntole.wyr.core.domain.error.DomainError
 import io.ntole.wyr.core.domain.question.Question
 import io.ntole.wyr.core.domain.session.SessionInfo
+import io.ntole.wyr.core.domain.vote.AttemptId
+import io.ntole.wyr.core.domain.vote.Side
 import io.ntole.wyr.core.domain.vote.VoteOutcome
 
 /**
@@ -18,6 +20,8 @@ data class DevConsoleState(
     val queueSize: Int? = null,
     val question: Question? = null,
     val lastOutcome: VoteOutcome? = null,
+    /** The last vote sent, whether or not it got an answer, for Retry last vote to send again. */
+    val lastVote: SentVote? = null,
     /** The action in flight, or `null` when idle. Only one runs at a time. */
     val running: String? = null,
     /** Newest first, at most [DevConsoleViewModel.LOG_CAPACITY] entries. */
@@ -25,6 +29,13 @@ data class DevConsoleState(
 ) {
     val isBusy: Boolean get() = running != null
 }
+
+/** A vote as sent, with the attempt it went out as. */
+data class SentVote(
+    val questionId: String,
+    val side: Side,
+    val attempt: AttemptId,
+)
 
 data class LogEntry(
     val action: String,
