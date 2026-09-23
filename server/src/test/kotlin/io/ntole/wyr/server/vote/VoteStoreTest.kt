@@ -4,6 +4,7 @@ import io.ntole.wyr.core.vote.OptionSide
 import io.ntole.wyr.core.vote.VoteResultDto
 import io.ntole.wyr.core.vote.VoteTallyDto
 import io.ntole.wyr.server.db.INSERTING_INTO_VOTES
+import io.ntole.wyr.server.db.Players
 import io.ntole.wyr.server.db.Questions
 import io.ntole.wyr.server.db.Seed
 import io.ntole.wyr.server.db.Votes
@@ -76,6 +77,18 @@ class VoteStoreTest {
         val vote = storedVotes().single()
         assertEquals(OptionSide.A.name, vote[Votes.side])
         assertEquals(1_000L, vote[Votes.answeredAt], "a replay is not an answer")
+    }
+
+    @Test
+    fun `every paid answer is counted as given and a replay is not`() {
+        val player = newPlayer()
+        cast(player, OptionSide.A, attempt = "first")
+
+        cast(player, OptionSide.B, attempt = "second")
+        val replay = cast(player, OptionSide.B, attempt = "second")
+
+        assertEquals(true, replay.replayed)
+        assertEquals(2, answersGivenBy(player), "the first answer and the re-answer, not the replay")
     }
 
     @Test
@@ -204,6 +217,11 @@ class VoteStoreTest {
 
     private fun storedVotes(): List<ResultRow> =
         transaction(database) { Votes.selectAll().where { Votes.questionId eq QUESTION }.toList() }
+
+    private fun answersGivenBy(player: String): Int =
+        transaction(database) {
+            Players.select(Players.answersGiven).where { Players.id eq player }.single()[Players.answersGiven]
+        }
 
     /** Takes the player's vote on [QUESTION] as `VoteStore.cast` does, to hold it until the transaction ends. */
     private fun lockVote(player: String): ResultRow =

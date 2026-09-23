@@ -29,6 +29,7 @@ object PlayerStore {
             row[Players.id] = id
             row[Players.createdAt] = System.currentTimeMillis()
             row[Players.totalPoints] = 0
+            row[Players.answersGiven] = 0
             row[Players.refreshTokenHash] = refreshTokenHash
             row[Players.refreshTokenExpiresAt] = refreshExpiresAt
             row[Players.currentCycle] = Players.FIRST_CYCLE
@@ -121,6 +122,17 @@ object PlayerStore {
         Players.update({ (Players.id eq playerId) and (Players.currentCycle eq from) }) { row ->
             row[currentCycle] = currentCycle + 1
         }
+    }
+
+    /**
+     * Counts one more answer given by the player. Must run inside a transaction.
+     *
+     * An increment in SQL (`answers_given = answers_given + 1`), for the reason [addPoints] is one:
+     * two answers by one player landing together must both count.
+     */
+    fun countAnswer(playerId: String) {
+        val updated = Players.update({ Players.id eq playerId }) { row -> row[answersGiven] = answersGiven + 1 }
+        check(updated == 1) { "player $playerId vanished mid-transaction" }
     }
 
     /**

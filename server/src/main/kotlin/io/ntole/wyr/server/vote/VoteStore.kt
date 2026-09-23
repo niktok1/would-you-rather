@@ -17,17 +17,19 @@ import org.jetbrains.exposed.v1.jdbc.update
 
 object VoteStore {
     /**
-     * Records an answer and scores it. Must run inside a transaction.
+     * Records an answer, counts it, and scores it. Must run inside a transaction.
      *
      * A player holds one vote per question, their latest (CLAUDE.md §8d). A first answer inserts
      * it; answering again moves it to the new side and pays again, even within the cycle it was
-     * last answered in (§8b leaves that to rate limiting). Either way the vote records the player's
-     * current cycle, so the feed does not serve the question again until the next one. `created_at`
-     * keeps when the player first answered and `answered_at` when they last did.
+     * last answered in (§8b leaves that to rate limiting), and counts as another answer given.
+     * Either way the vote records the player's current cycle, so the feed does not serve the
+     * question again until the next one. `created_at` keeps when the player first answered and
+     * `answered_at` when they last did.
      *
      * Every answer carries the client's [attemptId], and the vote keeps the latest. A request that
      * repeats it is a retry of an answer already recorded, and is replayed: nothing is written, it
-     * pays nothing, and it reports the stored side with the current tally and total.
+     * pays nothing, counts as no answer, and it reports the stored side with the current tally and
+     * total.
      *
      * Ordering matters twice. The player is resolved *before* any write: a validly signed token
      * can outlive its player (an H2 dev server restarted with the constant dev secret still
@@ -68,6 +70,7 @@ object VoteStore {
 
         val tally = tally(questionId)
 
+        PlayerStore.countAnswer(playerId)
         val totalPoints = PlayerStore.addPoints(playerId = playerId, points = Scoring.POINTS_PER_ANSWER)
 
         return VoteResultDto(

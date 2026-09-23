@@ -46,6 +46,18 @@ class PlayerStoreTest {
     }
 
     @Test
+    fun `two answers counted at once for the same player both count`() {
+        // READ COMMITTED by hand, for the same reason as the awards above.
+        val url = h2Url("wyr-player-store-answers")
+        val database = connectH2(url, Connection.TRANSACTION_READ_COMMITTED)
+        val player = transaction(database) { createPlayer() }
+
+        raceBehindFirst(url, database, { PlayerStore.countAnswer(player.id) }, { PlayerStore.countAnswer(player.id) })
+
+        assertEquals(2, storedAnswersGiven(database, player.id), "the second answer must build on the first")
+    }
+
+    @Test
     fun `a burst of awards for one player all count at the server's isolation level`() {
         // DatabaseFactory's own pool settings, so this pins the level production runs at. Under
         // REPEATABLE_READ every queued award is refused, and Exposed's 3 attempts run out for most.
@@ -122,6 +134,17 @@ class PlayerStoreTest {
                 .select(Players.refreshTokenHash)
                 .where { Players.id eq playerId }
                 .single()[Players.refreshTokenHash]
+        }
+
+    private fun storedAnswersGiven(
+        database: Database,
+        playerId: String,
+    ): Int =
+        transaction(database) {
+            Players
+                .select(Players.answersGiven)
+                .where { Players.id eq playerId }
+                .single()[Players.answersGiven]
         }
 
     private companion object {

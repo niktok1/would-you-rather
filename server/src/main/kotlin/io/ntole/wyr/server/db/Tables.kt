@@ -13,6 +13,13 @@ object Players : Table("players") {
     val createdAt = long("created_at")
     val totalPoints = integer("total_points").default(0)
 
+    /**
+     * Every paid answer the player has given, re-answers included and replays not (CLAUDE.md §8d).
+     * Kept apart from [totalPoints], which likes are to pay into as well. Only ever moves through
+     * `PlayerStore.countAnswer`.
+     */
+    val answersGiven = integer("answers_given").default(0)
+
     /** SHA-256 of the current refresh token. The token itself is never stored. */
     val refreshTokenHash = varchar("refresh_token_hash", 64).nullable()
     val refreshTokenExpiresAt = long("refresh_token_expires_at").nullable()
