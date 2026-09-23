@@ -244,15 +244,17 @@ class ApiFlowTest {
         runServer("missing-question") { client ->
             val session: SessionDto = client.post(WyrApi.Paths.AUTH_GUEST).body()
 
-            val response =
-                client.post(WyrApi.Paths.VOTES) {
-                    bearerAuth(session.accessToken)
-                    contentType(ContentType.Application.Json)
-                    setBody(VoteRequest("no-such-question", OptionSide.A, attemptId = "attempt-1"))
-                }
+            listOf("no-such-question", LONGER_THAN_ANY_ID).forEach { questionId ->
+                val response =
+                    client.post(WyrApi.Paths.VOTES) {
+                        bearerAuth(session.accessToken)
+                        contentType(ContentType.Application.Json)
+                        setBody(VoteRequest(questionId, OptionSide.A, attemptId = "attempt-1"))
+                    }
 
-            assertEquals(HttpStatusCode.NotFound, response.status)
-            assertEquals(ErrorCode.QUESTION_NOT_FOUND, response.body<ErrorDto>().code)
+                assertEquals(HttpStatusCode.NotFound, response.status, questionId)
+                assertEquals(ErrorCode.QUESTION_NOT_FOUND, response.body<ErrorDto>().code, questionId)
+            }
         }
 
     @Test
@@ -522,10 +524,14 @@ class ApiFlowTest {
     @Test
     fun `skipping a question that does not exist is a not-found`() =
         runServer("skip-missing-question") { client ->
-            val response = client.skip(client.guest(), "no-such-question")
+            val session = client.guest()
 
-            assertEquals(HttpStatusCode.NotFound, response.status)
-            assertEquals(ErrorCode.QUESTION_NOT_FOUND, response.body<ErrorDto>().code)
+            listOf("no-such-question", LONGER_THAN_ANY_ID).forEach { questionId ->
+                val response = client.skip(session, questionId)
+
+                assertEquals(HttpStatusCode.NotFound, response.status, questionId)
+                assertEquals(ErrorCode.QUESTION_NOT_FOUND, response.body<ErrorDto>().code, questionId)
+            }
         }
 
     @Test
@@ -797,5 +803,13 @@ class ApiFlowTest {
                 "JWT_AUDIENCE" to "wyr-test-client",
             )
         return TokenService(ServerConfig.fromEnvironment(env::get)).issueAccessToken(playerId)
+    }
+
+    private companion object {
+        /**
+         * Longer than the 36 characters of every id column, so no question has it. Nothing on the
+         * wire bounds a questionId, so it reaches the lookup and is simply not found.
+         */
+        const val LONGER_THAN_ANY_ID = "seed-1-and-then-far-more-characters-than-any-question-id-can-hold"
     }
 }
