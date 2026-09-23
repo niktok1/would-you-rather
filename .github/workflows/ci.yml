@@ -51,3 +51,145 @@ jobs:
           name: test-reports
           path: '**/build/reports/tests/**'
           retention-days: 7
+
+  # The same server suite against the engine production runs on. H2 only approximates Postgres,
+  # so dialect differences (types, constraint errors, isolation) surface here and nowhere else.
+  # ApiFlowTest switches to WYR_TEST_JDBC_URL when it is set and wipes the app tables per test.
+  server-postgres:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        # Throwaway credentials for a container that lives only as long as this job.
+        env:
+          POSTGRES_USER: wyr
+          POSTGRES_PASSWORD: wyr
+          POSTGRES_DB: wyr_test
+        ports:
+          - 5432:5432
+        # Without a health check the steps start as soon as the container exists, before
+        # Postgres accepts connections.
+        options: >-
+          --health-cmd "pg_isready -U wyr -d wyr_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      # Only :server is under test, so skip configuring the app modules (CLAUDE.md §8).
+      WYR_SERVER_ONLY: '1'
+      WYR_TEST_JDBC_URL: jdbc:postgresql://localhost:5432/wyr_test
+      WYR_TEST_DB_USER: wyr
+      WYR_TEST_DB_PASSWORD: wyr
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: zulu
+          java-version: '21'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Test against Postgres
+        run: ./gradlew :server:test --no-daemon
+
+      - name: Upload test reports
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-reports-postgres
+          path: '**/build/reports/tests/**'
+          retention-days: 7
+
+  # Builds the image Render would build and proves it boots. A fat jar that compiles can still
+  # die at startup — this one did, when the jar merge dropped the H2 driver registration — and
+  # nothing else runs the Dockerfile at all.
+  docker-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build image
+        run: docker build --tag wyr-server:ci .
+
+      # No DATABASE_URL, so the server falls back to in-memory H2. PORT is set to Render's default
+      # of 10000 instead of relying on the 8080 fallback, so the PORT wiring is exercised too.
+      - name: Start container
+        run: docker run --detach --name wyr-server --env PORT=10000 --publish 8080:10000 wyr-server:ci
+
+      # First boot pays JVM start-up plus schema creation and seeding; ~90s is generous without
+      # letting a hung server hold the runner. A container that has already exited fails at once.
+      - name: Wait for /health
+        run: |
+          for attempt in $(seq 1 45); do
+            if curl --fail --silent http://localhost:8080/health; then
+              echo
+              echo "Healthy after ~$((attempt * 2))s"
+              exit 0
+            fi
+            if [ "$(docker inspect --format '{{.State.Running}}' wyr-server)" != "true" ]; then
+              echo "Container exited before becoming healthy" >&2
+              exit 1
+            fi
+            sleep 2
+          done
+          echo "Server did not become healthy within 90s" >&2
+          exit 1
+
+      - name: Container logs
+        if: failure()
+        run: docker logs wyr-server
+
+  # The only place iOS is compiled at all: the development machine has no Xcode (CLAUDE.md §9).
+  ios:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: zulu
+          java-version: '21'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      # Kotlin/Native downloads its compiler and platform dependencies into ~/.konan on first use,
+      # which is slow. They change only with the Kotlin version, which lives in the catalog.
+      - name: Cache Kotlin/Native toolchain
+        uses: actions/cache@v4
+        with:
+          path: ~/.konan
+          key: konan-${{ runner.os }}-${{ hashFiles('gradle/libs.versions.toml') }}
+          restore-keys: |
+            konan-${{ runner.os }}-
+
+      - name: Link framework and run simulator tests
+        run: |
+          ./gradlew --no-daemon \
+            :app:shared:linkDebugFrameworkIosSimulatorArm64 \
+            :app:shared:iosSimulatorArm64Test
+
+      # The Swift app on top of the framework, built through the project's own "Compile Kotlin
+      # Framework" phase (embedAndSignAppleFrameworkForXcode). -target rather than -scheme because
+      # no shared scheme is committed; the target already pins ARCHS to arm64. The runner has no
+      # signing identity and a simulator build does not need one.
+      - name: Build iOS app for the simulator
+        run: |
+          xcodebuild build \
+            -project app/iosApp/iosApp.xcodeproj \
+            -target iosApp \
+            -configuration Debug \
+            -sdk iphonesimulator \
+            CODE_SIGNING_ALLOWED=NO
+
+      - name: Upload test reports
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-reports-ios
+          path: '**/build/reports/tests/**'
+          retention-days: 7

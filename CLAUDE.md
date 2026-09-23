@@ -231,8 +231,10 @@ This project must never be attributed to any employer identity.
 
 - **Host: Render.** Chosen for flat, predictable per-service pricing (not usage-metered) and
   push-to-deploy from GitHub. Declared in `render.yaml`.
-- `:server` deploys as a Render **web service**, built from the root `Dockerfile`, auto-deployed
-  on push to `main`. Health check path is `/health`.
+- `:server` deploys as a Render **web service**, built from the root `Dockerfile`. Health check
+  path is `/health`. **Auto-deploy is off** (`autoDeploy: false` in `render.yaml`) until the first
+  deploy, per the interim schema-migration policy in §8b; the first-deploy milestone turns it back
+  on so a push to `main` deploys.
 - PostgreSQL is a **Render managed Postgres** instance in the **same region** as the web
   service (use the internal connection URL, never the external one).
 - Connection string and all secrets come from Render **environment variables** — never
@@ -244,8 +246,8 @@ This project must never be attributed to any employer identity.
 - Free tier caveats to design around: free web services spin down after ~15 min idle (cold
   start on next request), and free Postgres is time-limited — migrate to a paid instance before
   relying on persistence.
-- Do not hand-deploy. The path is: push to `main` → CI (ktlint + tests) → Render builds →
-  publishes.
+- Do not hand-deploy. Once auto-deploy is on, the path is: push to `main` → CI (ktlint +
+  tests) → Render builds → publishes.
 
 ## 8a. Authentication — resolved
 
@@ -351,6 +353,11 @@ console, which is the default root screen. `PlayScreen` stays as a frozen second
   surface the decision rather than assuming.
 - When a decision is made, encode it here and in config — not just in conversation.
 - Verify with `./gradlew ktlintCheck` plus the test and compile tasks listed in
-  `.github/workflows/ci.yml`. That workflow is the definition of "green".
+  `.github/workflows/ci.yml`. That workflow is the definition of "green". Besides `verify` it runs
+  `server-postgres` (the server suite against a Postgres service container), `docker-smoke` (builds
+  the image and polls `/health`), and `ios` (framework link, simulator tests, and an `xcodebuild`
+  simulator build on macOS). None of those three can run on this machine. `:server:test` uses H2
+  unless `WYR_TEST_JDBC_URL` (plus `WYR_TEST_DB_USER` / `WYR_TEST_DB_PASSWORD`) names another
+  database; the suite then drops every app table (`appTables`) before each test.
 - **iOS cannot be built or verified on a machine without Xcode** (Command Line Tools alone are
   not enough). Anything iOS-specific is unverified until built on a machine with full Xcode.

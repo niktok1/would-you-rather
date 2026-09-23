@@ -24,10 +24,15 @@ Repo initialized on `main` with the personal identity and `user.useConfigOnly = 
 - **iOS.** This machine has Command Line Tools but no Xcode, so `iosArm64` /
   `iosSimulatorArm64` were never compiled and the Xcode project was never opened. The iOS
   source (`IosTokenStorage`, `PlatformModule.ios.kt`, `MainViewController`) is written but
-  unproven. **Build this first on a machine with Xcode.**
+  unproven. **Build this first on a machine with Xcode**, or let the `ios` CI job do it.
 - **`Dockerfile` and `render.yaml`.** Docker is not installed here, so the image has never been
-  built and nothing has been deployed. The `WYR_SERVER_ONLY` switch it depends on works (it is
-  just a `settings.gradle.kts` conditional), but the build itself is unproven.
+  built and nothing has been deployed. What the image runs *is* verified: the fat jar, built with
+  `WYR_SERVER_ONLY=1 ./gradlew :server:buildFatJar`, now registers both JDBC drivers, boots on H2
+  with no `DATABASE_URL`, and answers `/health`. The image build around it is still unproven.
+- **The three new CI jobs** — `server-postgres`, `docker-smoke`, `ios` — are written but have
+  never run, and cannot until a GitHub remote exists. The Postgres harness was exercised locally
+  by pointing `WYR_TEST_JDBC_URL` at a shared H2 database, which proves the per-test drop but
+  not the Postgres dialect.
 - **The UI has never been looked at.** It compiles and its ViewModel is tested, but no
   screenshot of the play screen or the reveal state has been taken on any platform. Treat the
   layout and the §5b palette in practice as unreviewed.

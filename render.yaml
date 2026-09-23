@@ -1,5 +1,5 @@
-# Render blueprint (CLAUDE.md §8). Push to main -> Render builds the Dockerfile -> publishes.
-# Never hand-deploy.
+# Render blueprint (CLAUDE.md §8). Once auto-deploy is on: push to main -> Render builds the
+# Dockerfile -> publishes. Never hand-deploy.
 #
 # Caveats this config is written around, both from §8:
 #   - a free web service spins down after ~15 min idle, so the first request after a quiet spell
@@ -14,7 +14,10 @@ services:
     plan: free
     region: frankfurt
     branch: main
-    autoDeploy: true
+    # Off until the first deploy, per the interim schema-migration policy (CLAUDE.md §8b): until
+    # then a schema change ships as a fresh database, so connecting this blueprint must not be able
+    # to deploy early. Flip back to true at the first-deploy milestone.
+    autoDeploy: false
     healthCheckPath: /health
     envVars:
       # Internal connection string, not the external one — same region, no public egress.
