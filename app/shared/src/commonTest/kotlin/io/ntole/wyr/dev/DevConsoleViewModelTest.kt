@@ -106,6 +106,26 @@ class DevConsoleViewModelTest {
         }
 
     @Test
+    fun `a header that cannot be read keeps the action entry and is logged on its own`() =
+        runTest(dispatcher) {
+            // What a browser with site data blocked does: localStorage throws on every read.
+            diagnostics.info = { error("storage blocked") }
+            val viewModel = viewModel()
+
+            viewModel.ensureSession()
+            testScheduler.advanceUntilIdle()
+
+            val headerFailure = LogResult.Crash("IllegalStateException", "storage blocked")
+            assertEquals(
+                listOf("refreshHeader" to headerFailure, "ensureSession" to LogResult.Ok("playerId=p1")),
+                viewModel.log.map { it.action to it.result }.take(2),
+            )
+            // The one from the refresh when the console opened.
+            assertEquals("refreshHeader" to headerFailure, viewModel.log.last().let { it.action to it.result })
+            assertFalse(viewModel.state.value.isBusy)
+        }
+
+    @Test
     fun `cancellation is not logged as a failure`() =
         runTest(dispatcher) {
             sessions.ensure = { throw CancellationException("caller went away") }
@@ -358,7 +378,9 @@ class DevConsoleViewModelTest {
     private class FakeDiagnostics(
         private val sessions: FakeSessions,
     ) : SessionDiagnostics {
-        override suspend fun info(): SessionInfo? = sessions.stored?.let(::sessionOf)
+        var info: suspend () -> SessionInfo? = { sessions.stored?.let(::sessionOf) }
+
+        override suspend fun info(): SessionInfo? = info.invoke()
     }
 
     private class FakeQueue : QuestionCache {

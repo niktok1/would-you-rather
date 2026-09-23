@@ -120,10 +120,9 @@ class DevConsoleViewModel(
             try {
                 val started = timeSource.markNow()
                 val result = resultOf(block)
-                val entry = LogEntry(action, args, started.elapsedNow().inWholeMilliseconds, result)
+                log(LogEntry(action, args, started.elapsedNow().inWholeMilliseconds, result))
                 // Whatever the action did, or failed halfway through doing, shows in the header.
                 refreshSnapshot()
-                _state.update { it.copy(log = (listOf(entry) + it.log).take(LOG_CAPACITY)) }
             } finally {
                 _state.update { it.copy(running = null) }
             }
@@ -143,10 +142,27 @@ class DevConsoleViewModel(
             LogResult.Crash(crash::class.simpleName ?: "Throwable", crash.message)
         }
 
+    /**
+     * Best effort. Reading the header touches storage, which can throw (a browser with site data
+     * blocked throws on every localStorage read), so a failure keeps the previous header and is
+     * logged as an entry of its own instead of escaping viewModelScope.
+     */
     private suspend fun refreshSnapshot() {
-        val session = diagnostics.info()
-        val queueSize = queue.count()
-        _state.update { it.copy(session = session, queueSize = queueSize) }
+        val started = timeSource.markNow()
+        val result =
+            resultOf {
+                val session = diagnostics.info()
+                val queueSize = queue.count()
+                _state.update { it.copy(session = session, queueSize = queueSize) }
+                "refreshed"
+            }
+        if (result !is LogResult.Ok) {
+            log(LogEntry("refreshHeader", "", started.elapsedNow().inWholeMilliseconds, result))
+        }
+    }
+
+    private fun log(entry: LogEntry) {
+        _state.update { it.copy(log = (listOf(entry) + it.log).take(LOG_CAPACITY)) }
     }
 
     companion object {

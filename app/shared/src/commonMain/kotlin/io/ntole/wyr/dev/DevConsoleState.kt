@@ -10,6 +10,7 @@ import io.ntole.wyr.core.domain.vote.VoteOutcome
  * as it is.
  *
  * [session] and [queueSize] are snapshots, taken when the console opens and after every action.
+ * A snapshot that cannot be taken leaves them as they were and adds a `refreshHeader` log entry.
  */
 data class DevConsoleState(
     val apiBaseUrl: String,
