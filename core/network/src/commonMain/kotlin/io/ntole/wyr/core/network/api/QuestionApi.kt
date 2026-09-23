@@ -4,9 +4,12 @@ import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.request.get
 import io.ktor.client.request.parameter
+import io.ktor.client.request.post
+import io.ktor.client.request.setBody
 import io.ntole.wyr.core.api.WyrApi
 import io.ntole.wyr.core.question.QuestionCategory
 import io.ntole.wyr.core.question.QuestionPageDto
+import io.ntole.wyr.core.question.SkipRequest
 
 public class QuestionApi(
     private val client: HttpClient,
@@ -27,4 +30,15 @@ public class QuestionApi(
                     parameter(WyrApi.Query.CATEGORY, it.name)
                 }
             }.body()
+
+    /**
+     * Skips a question for the rest of the session player's current cycle. Requires a session, as
+     * [page] does. The server answers 204 with no body, so there is nothing to read back; a refusal
+     * still throws, since the client fails every non-2xx response.
+     */
+    public suspend fun skip(request: SkipRequest) {
+        client.post(WyrApi.Paths.SKIPS) {
+            setBody(request)
+        }
+    }
 }

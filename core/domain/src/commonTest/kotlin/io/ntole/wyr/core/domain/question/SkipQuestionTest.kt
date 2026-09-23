@@ -5,29 +5,29 @@ import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
-class GetNextQuestionTest {
+class SkipQuestionTest {
     private val calls = mutableListOf<String>()
 
     @Test
-    fun `the session is ensured before a question is asked for`() =
+    fun `the session is ensured before the question is skipped`() =
         runTest {
-            val getNextQuestion = GetNextQuestion(RecordingQuestions(calls), RecordingSessions(calls))
+            val skipQuestion = SkipQuestion(RecordingQuestions(calls), RecordingSessions(calls))
 
-            assertEquals(QUESTION, getNextQuestion())
-            assertEquals(listOf("ensure", "next"), calls)
+            skipQuestion("q1")
+
+            assertEquals(listOf("ensure", "skip q1"), calls)
         }
 
     private class RecordingQuestions(
         private val calls: MutableList<String>,
     ) : QuestionRepository {
-        override suspend fun next(): Question {
-            calls += "next"
-            return QUESTION
-        }
+        override suspend fun next(): Question = error("a skip fetches nothing")
 
         override suspend fun prefetch() = Unit
 
-        override suspend fun skip(questionId: String) = Unit
+        override suspend fun skip(questionId: String) {
+            calls += "skip $questionId"
+        }
 
         override suspend fun reset() = Unit
     }
@@ -43,9 +43,5 @@ class GetNextQuestionTest {
         override suspend fun currentPlayerId(): String = "p1"
 
         override suspend fun clear() = Unit
-    }
-
-    private companion object {
-        val QUESTION = Question(id = "q1", optionA = "Fly", optionB = "Turn invisible", category = Category.SUPERPOWERS)
     }
 }

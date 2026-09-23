@@ -217,6 +217,8 @@ class PlayViewModelTest {
 
         override suspend fun prefetch() = Unit
 
+        override suspend fun skip(questionId: String) = Unit
+
         override suspend fun reset() = Unit
     }
 
@@ -226,6 +228,8 @@ class PlayViewModelTest {
         override suspend fun next(): Question = throw WyrException(error)
 
         override suspend fun prefetch() = Unit
+
+        override suspend fun skip(questionId: String) = Unit
 
         override suspend fun reset() = Unit
     }

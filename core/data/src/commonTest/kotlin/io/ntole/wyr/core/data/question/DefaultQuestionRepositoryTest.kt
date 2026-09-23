@@ -2,6 +2,9 @@ package io.ntole.wyr.core.data.question
 
 import io.ktor.client.engine.HttpClientEngine
 import io.ktor.client.engine.mock.MockEngine
+import io.ktor.client.engine.mock.respond
+import io.ktor.http.HttpStatusCode
+import io.ntole.wyr.core.api.WyrApi
 import io.ntole.wyr.core.data.BASE_URL
 import io.ntole.wyr.core.data.FakeServer
 import io.ntole.wyr.core.data.cache.InMemoryQuestionCache
@@ -12,6 +15,8 @@ import io.ntole.wyr.core.data.storeHolding
 import io.ntole.wyr.core.domain.error.DomainError
 import io.ntole.wyr.core.domain.error.WyrException
 import io.ntole.wyr.core.domain.question.GetNextQuestion
+import io.ntole.wyr.core.domain.question.SkipQuestion
+import io.ntole.wyr.core.error.ErrorCode
 import io.ntole.wyr.core.network.SessionStore
 import io.ntole.wyr.core.network.WyrHttpClient
 import io.ntole.wyr.core.network.WyrJson
@@ -98,7 +103,8 @@ class DefaultQuestionRepositoryTest {
     @Test
     fun `a question kept out of a refill is queued by the next batch that serves it`() =
         runTest {
-            // The player skips q1 and q2, so the third batch still serves them as unanswered.
+            // The player moves past q1 and q2 without answering or skipping them, so the third batch
+            // still serves them as due.
             val feed =
                 HeldRefill(batchOf("q1", "q2"), batchOf("q1", "q2", "q3"), batchOf("q1", "q2", "q3"))
             val repository = repositoryOver(feed.engine)
@@ -233,6 +239,72 @@ class DefaultQuestionRepositoryTest {
 
             // Not refused and then recovered: the session was ensured before the feed was asked.
             assertEquals(listOf<String?>("Bearer access-guest1"), server.feedsSentAs)
+        }
+
+    @Test
+    fun `a first launch's skip is sent once with the session just minted`() =
+        runTest {
+            val server = FakeServer()
+            val store = storeHolding(null)
+            val client = WyrHttpClient.create(BASE_URL, store, server.engine)
+            val sessions = DefaultSessionRepository(AuthApi(client), store)
+            val skipQuestion = SkipQuestion(DefaultQuestionRepository(QuestionApi(client), sessions, cache), sessions)
+
+            skipQuestion("q1")
+
+            // Not refused and then recovered: the session was ensured before the skip went out.
+            assertEquals(listOf<Pair<String?, String>>("Bearer access-guest1" to "q1"), server.skipsSentAs)
+        }
+
+    @Test
+    fun `a skip on a session the server no longer knows is sent again as a fresh guest`() =
+        runTest {
+            // The server has never heard of "a": the state after a dev server restarts.
+            val server = FakeServer()
+            val store = storeHolding(session("a"))
+
+            repositoryOver(server.engine, store).skip("q1")
+
+            assertEquals(1, server.guestsMinted)
+            assertEquals("guest1", store.read()?.playerId)
+            assertEquals(
+                listOf<Pair<String?, String>>("Bearer access-a" to "q1", "Bearer access-guest1" to "q1"),
+                server.skipsSentAs,
+            )
+        }
+
+    @Test
+    fun `a refused skip is a domain error and leaves the session alone`() =
+        runTest {
+            val server = FakeServer()
+            server.refuseSkipsWith = HttpStatusCode.NotFound to ErrorCode.QUESTION_NOT_FOUND
+            val store = storeHolding(session("a"))
+
+            val failure = assertFailsWith<WyrException> { repositoryOver(server.engine, store).skip("gone") }
+
+            assertEquals(DomainError.QUESTION_NOT_FOUND, failure.error)
+            assertEquals(0, server.guestsMinted)
+            assertEquals(session("a"), store.read())
+        }
+
+    @Test
+    fun `a skip leaves the queue as it is`() =
+        runTest {
+            val engine =
+                MockEngine { request ->
+                    if (request.url.encodedPath == WyrApi.Paths.SKIPS) {
+                        respond("", HttpStatusCode.NoContent)
+                    } else {
+                        respondJson(WyrJson.encodeToString(batchOf("q1", "q2", "q3")))
+                    }
+                }
+            val repository = repositoryOver(engine)
+            assertEquals("q1", repository.next().id)
+
+            repository.skip("q1")
+
+            assertEquals(listOf("q2", "q3"), List(cache.count()) { repository.next().id })
+            assertEquals(1, engine.requestHistory.count { it.url.encodedPath == WyrApi.Paths.QUESTIONS }, "not a fetch")
         }
 
     private fun repositoryOver(

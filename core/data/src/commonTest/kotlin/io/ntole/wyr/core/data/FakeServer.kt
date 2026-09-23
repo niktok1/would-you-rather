@@ -2,6 +2,7 @@ package io.ntole.wyr.core.data
 
 import io.ktor.client.engine.mock.MockEngine
 import io.ktor.client.engine.mock.MockRequestHandleScope
+import io.ktor.client.engine.mock.respond
 import io.ktor.client.engine.mock.toByteArray
 import io.ktor.client.request.HttpRequestData
 import io.ktor.client.request.HttpResponseData
@@ -16,14 +17,15 @@ import io.ntole.wyr.core.player.PlayerStatsDto
 import io.ntole.wyr.core.question.QuestionCategory
 import io.ntole.wyr.core.question.QuestionDto
 import io.ntole.wyr.core.question.QuestionPageDto
+import io.ntole.wyr.core.question.SkipRequest
 import io.ntole.wyr.core.vote.VoteRequest
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
 /**
  * Just enough of the server, behind a [MockEngine], to put session recovery through the real
- * client: it mints guests, rotates refresh tokens, and rejects a feed request, a vote or a stats
- * read from a player it does not know — the state after a dev server restarts with an empty
+ * client: it mints guests, rotates refresh tokens, and rejects a feed request, a vote, a skip or a
+ * stats read from a player it does not know — the state after a dev server restarts with an empty
  * database.
  */
 internal class FakeServer {
@@ -49,6 +51,12 @@ internal class FakeServer {
 
     /** The `Authorization` header of every stats read, in arrival order. */
     val statsSentAs = mutableListOf<String?>()
+
+    /** When set, every skip is refused with this status and code, whoever sends it. */
+    var refuseSkipsWith: Pair<HttpStatusCode, ErrorCode>? = null
+
+    /** The `Authorization` header and question id of every skip, in arrival order. */
+    val skipsSentAs = mutableListOf<Pair<String?, String>>()
 
     val engine = MockEngine { request -> lock.withLock { handle(request) } }
 
@@ -91,6 +99,19 @@ internal class FakeServer {
                     refusal != null -> respondErrorDto(refusal.first, refusal.second)
                     player !in players -> respondErrorDto(HttpStatusCode.Unauthorized, ErrorCode.UNAUTHORIZED)
                     else -> respondJson(VOTE_RESULT_JSON)
+                }
+            }
+
+            WyrApi.Paths.SKIPS -> {
+                val authorization = request.headers[HttpHeaders.Authorization]
+                val skip = WyrJson.decodeFromString<SkipRequest>(request.body.toByteArray().decodeToString())
+                skipsSentAs += authorization to skip.questionId
+                val player = authorization?.removePrefix("Bearer access-")
+                val refusal = refuseSkipsWith
+                when {
+                    refusal != null -> respondErrorDto(refusal.first, refusal.second)
+                    player !in players -> respondErrorDto(HttpStatusCode.Unauthorized, ErrorCode.UNAUTHORIZED)
+                    else -> respond("", HttpStatusCode.NoContent)
                 }
             }
 

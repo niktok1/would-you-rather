@@ -799,6 +799,8 @@ class DevConsoleViewModelTest {
 
         override suspend fun prefetch() = Unit
 
+        override suspend fun skip(questionId: String) = Unit
+
         override suspend fun reset() {
             calls += "reset"
             queue.clear()

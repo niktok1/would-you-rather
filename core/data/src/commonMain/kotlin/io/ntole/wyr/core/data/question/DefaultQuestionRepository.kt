@@ -10,6 +10,7 @@ import io.ntole.wyr.core.domain.question.Question
 import io.ntole.wyr.core.domain.question.QuestionCache
 import io.ntole.wyr.core.domain.question.QuestionRepository
 import io.ntole.wyr.core.network.api.QuestionApi
+import io.ntole.wyr.core.question.SkipRequest
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
@@ -63,8 +64,9 @@ public class DefaultQuestionRepository(
 
             val batch = fetchAndQueue()
             // Nothing queued but a batch that was not empty: it held only the question on screen,
-            // as a pool of one question does, or a cycle whose last due question was skipped. The
-            // feed is endless, so that one is shown again.
+            // as a pool of one question does, or a cycle whose last due question the player moved
+            // past without an answer or a skip the server recorded. The feed is endless, so that one
+            // is shown again.
             takeNext() ?: batch.firstOrNull()?.also { handOutMutex.withLock { handOut(it) } }
         } ?: throw WyrException(DomainError.OUT_OF_QUESTIONS, "server returned no questions")
     }
@@ -76,6 +78,17 @@ public class DefaultQuestionRepository(
             if (cache.count() > lowWaterMark) return
             fetchAndQueue()
         }
+    }
+
+    /**
+     * Sends the skip through [withSessionRecovery], as a vote is sent: a dead session is replaced by
+     * one fresh guest and the skip retried as it.
+     *
+     * The queue is left alone. What is skipped is the question on screen, which is not queued, and
+     * a refill in flight keeps it out of its batch as it does every question handed out meanwhile.
+     */
+    override suspend fun skip(questionId: String) {
+        session.withSessionRecovery { api.skip(SkipRequest(questionId)) }
     }
 
     // Under the refill lock, so a refill that fetched before the reset has put its batch before the

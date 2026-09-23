@@ -12,6 +12,7 @@ import io.ntole.wyr.core.domain.player.PlayerRepository
 import io.ntole.wyr.core.domain.question.GetNextQuestion
 import io.ntole.wyr.core.domain.question.QuestionCache
 import io.ntole.wyr.core.domain.question.QuestionRepository
+import io.ntole.wyr.core.domain.question.SkipQuestion
 import io.ntole.wyr.core.domain.session.SessionDiagnostics
 import io.ntole.wyr.core.domain.session.SessionRepository
 import io.ntole.wyr.core.domain.vote.CastVote
@@ -60,6 +61,7 @@ public fun dataModule(baseUrl: String): Module =
         single<PlayerRepository> { DefaultPlayerRepository(api = get(), session = get()) }
 
         factory { GetNextQuestion(questions = get(), session = get()) }
+        factory { SkipQuestion(questions = get(), session = get()) }
         factory { CastVote(votes = get(), session = get()) }
         factory { GetPlayerStats(players = get(), session = get()) }
     }
