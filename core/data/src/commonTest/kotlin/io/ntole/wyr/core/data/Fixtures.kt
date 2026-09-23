@@ -16,6 +16,12 @@ import io.ntole.wyr.core.network.WyrJson
 
 internal const val BASE_URL = "https://wyr.test"
 
+// A literal rather than an encoded VoteResultDto: the tests using it are about sessions, and the
+// scoring fields are free to change underneath them (unknown keys are ignored).
+internal const val VOTE_RESULT_JSON =
+    """{"questionId":"q1","yourChoice":"A","tally":{"votesA":1,"votesB":0},""" +
+        """"pointsAwarded":1,"totalPoints":1,"streak":0}"""
+
 /** A session whose every credential names [playerId], so a request's header says who sent it. */
 internal fun session(playerId: String): SessionDto =
     SessionDto(

@@ -18,14 +18,15 @@ import io.ntole.wyr.core.domain.error.WyrException
  */
 internal suspend fun <T> DefaultSessionRepository.withSessionRecovery(call: suspend () -> T): T {
     // Captured before the call goes out. By the time it fails, a concurrent caller may already
-    // have replaced the dead session, and reading the id then would reset the new one too.
-    val sentAs = currentPlayerId()
+    // have replaced the dead session, or another client sharing the store refreshed it, and
+    // reading the store then would reset the new one too.
+    val sentWith = storedSession()
     return try {
         runApi(call)
     } catch (failure: WyrException) {
         if (failure.error != DomainError.UNAUTHORIZED) throw failure
 
-        resetIfStill(sentAs)
+        resetIfStill(sentWith)
         runApi(call)
     }
 }

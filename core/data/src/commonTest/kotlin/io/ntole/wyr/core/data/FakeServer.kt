@@ -63,7 +63,7 @@ internal class FakeServer {
                 when {
                     refusal != null -> respondErrorDto(refusal.first, refusal.second)
                     player !in players -> respondErrorDto(HttpStatusCode.Unauthorized, ErrorCode.UNAUTHORIZED)
-                    else -> respondJson(VOTE_RESULT)
+                    else -> respondJson(VOTE_RESULT_JSON)
                 }
             }
 
@@ -84,13 +84,5 @@ internal class FakeServer {
                 accessTokenExpiresInSeconds = 900,
             )
         return respondJson(WyrJson.encodeToString(session))
-    }
-
-    private companion object {
-        // A literal rather than an encoded VoteResultDto: these tests are about sessions, and the
-        // scoring fields are free to change underneath them (unknown keys are ignored).
-        const val VOTE_RESULT =
-            """{"questionId":"q1","yourChoice":"A","tally":{"votesA":1,"votesB":0},""" +
-                """"pointsAwarded":1,"totalPoints":1,"streak":0}"""
     }
 }

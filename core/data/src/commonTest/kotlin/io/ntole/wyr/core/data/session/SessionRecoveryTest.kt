@@ -29,7 +29,8 @@ class SessionRecoveryTest {
     @Test
     fun `concurrent resets of one dead session mint one guest`() =
         runTest {
-            val players = awaitAll(async { sessions.resetIfStill("a") }, async { sessions.resetIfStill("a") })
+            val dead = session("a")
+            val players = awaitAll(async { sessions.resetIfStill(dead) }, async { sessions.resetIfStill(dead) })
 
             assertEquals(1, server.guestsMinted)
             assertEquals(listOf("guest1", "guest1"), players)
@@ -40,7 +41,7 @@ class SessionRecoveryTest {
         runTest {
             store.write(session("b"))
 
-            assertEquals("b", sessions.resetIfStill("a"))
+            assertEquals("b", sessions.resetIfStill(session("a")))
             assertEquals(0, server.guestsMinted)
         }
 
@@ -49,8 +50,31 @@ class SessionRecoveryTest {
         runTest {
             store.clear()
 
-            assertEquals("guest1", sessions.resetIfStill("a"))
+            assertEquals("guest1", sessions.resetIfStill(session("a")))
             assertEquals(1, server.guestsMinted)
+        }
+
+    @Test
+    fun `a session another client refreshed first is not replaced`() =
+        runTest {
+            // Two browser tabs share one store and spend the same refresh token at once. The
+            // server rotates it for the other tab and refuses this one, whose refusal then arrives
+            // with the store holding the live, rotated session: same player, new tokens.
+            val refreshedElsewhere = session("a").copy(accessToken = "access-a2", refreshToken = "refresh-a2")
+            var attempts = 0
+
+            val result =
+                sessions.withSessionRecovery {
+                    if (attempts++ == 0) {
+                        store.write(refreshedElsewhere)
+                        throw ApiException(ErrorCode.INVALID_REFRESH_TOKEN, status = 401)
+                    }
+                    "ok with ${store.read()?.accessToken}"
+                }
+
+            assertEquals("ok with access-a2", result)
+            assertEquals(0, server.guestsMinted)
+            assertEquals(refreshedElsewhere, store.read())
         }
 
     @Test
