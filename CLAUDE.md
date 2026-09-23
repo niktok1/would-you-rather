@@ -148,6 +148,10 @@ it satisfies the §2 selection rule.
   e.g. `io.ntole.wyr.core.question`.
 - Never catch `CancellationException` into an error state. `runApi` in `:core:data` rethrows it
   deliberately; anything that swallows it breaks structured concurrency.
+- Client failures are classified once each. `WyrHttpClient` turns only an HTTP error response
+  into `ApiException` and lets everything else through untouched; `runApi` alone decides
+  `NETWORK`. Wrapping earlier is what once made offline, a dead refresh and cancellation all
+  `UNKNOWN`.
 - Two ktlint rules are suppressed and both are documented at the suppression site: PascalCase
   `@Composable`/`@Test` function names (`.editorconfig`), and `MainViewController` on iOS.
 
@@ -266,6 +270,9 @@ auth SDK, satisfying §2.
   a replayed token is dead on arrival.
 - `POST /v1/auth/link` does not exist yet. It is the intended next step and is what will make an
   account survive reinstall and sync across devices.
+- On the client, `SessionStore` is the only copy of the credentials: Ktor's bearer cache is off
+  (`cacheTokens = false`), so a session change applies to the very next request. A dead session
+  is replaced through `withSessionRecovery` in `:core:data`, which mints at most one guest for it.
 
 **Known limitation, by design for now:** a guest account is bound to one device's storage. Lose
 the device or clear storage and the account — and its points — are gone. Token storage is also
