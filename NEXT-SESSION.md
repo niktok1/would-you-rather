@@ -11,7 +11,7 @@ Repo initialized on `main` with the personal identity and `user.useConfigOnly = 
 
 ### Verified working
 
-- `:server` on H2: 70 tests green, including 27 end-to-end flow tests in `ApiFlowTest`. Flat
+- `:server` on H2: 85 tests green, including 33 end-to-end flow tests in `ApiFlowTest`. Flat
   scoring is covered there (every vote pays 1, majority and minority alike, and the total
   accumulates) and by `PlayerStoreTest`, which races awards for one player and refreshes of one
   token. The endless feed, re-answering and attempt replay are covered there too, and by
@@ -20,6 +20,9 @@ Repo initialized on `main` with the personal identity and `user.useConfigOnly = 
   waited on its vote's lock while a cycle started. `GET /v1/me` is covered in `ApiFlowTest` (a
   fresh guest, a re-answer and a replay, the lazy start of a cycle) and by `StatsStoreTest`, which
   commits an answer in the middle of a stats read to show it counts in every number or in none.
+  `POST /v1/skips` is covered in `ApiFlowTest` (out of the cycle and back in the next, a repeat,
+  an answer after a skip, 404, 401 and malformed bodies) and by `SkipStoreTest`, which also races
+  two first skips of one question, and a skip that waited on another's lock while a cycle started.
 - Live curl run against `./gradlew :server:run` confirmed guest auth, paging, voting,
   refresh-token rotation, replay rejection, and the `ErrorDto` envelope on 400/401/404/409. That
   run predates flat scoring, `fix/read-committed` and the endless feed, so the scoring it checked
@@ -33,8 +36,9 @@ Repo initialized on `main` with the personal identity and `user.useConfigOnly = 
   a row, and every answer paid 1. The last vote sent again as the same attempt was replayed: +0,
   and the stored side although the request asked for the other. A skipped question came back in
   the next batch. That run predates feed cycles (`feat/feed-cycles`): the least-recently-answered
-  loop it saw is gone, and cycles have run only in the server tests.
-- Client tests: `:core:domain` 11, `:core:data` 52, `:core:network` 22, `:app:shared` 49 (the
+  loop it saw is gone, and cycles have run only in the server tests. It also predates server-side
+  skips (`feat/skip-per-cycle`), which keep a skipped question out until the next cycle.
+- Client tests: `:core:domain` 12, `:core:data` 56, `:core:network` 24, `:app:shared` 52 (the
   ViewModels and the Koin graph). `:app:shared` compiles for JVM, JS, wasmJs and the iOS
   simulator.
 - `:app:androidApp:assembleDebug` produces a real APK.
@@ -48,10 +52,12 @@ Repo initialized on `main` with the personal identity and `user.useConfigOnly = 
 - **The endless feed and vote replay on Postgres.** `RANDOM()` in the feed, the compare-and-set
   that starts a cycle, a first answer racing another (the 23505 aborts the transaction and Exposed
   reruns it), and the `SELECT ... FOR UPDATE` that makes a retry wait and replay have only run on
-  H2. The store races in `QuestionStoreTest` and `VoteStoreTest` poll H2's `SESSIONS`, like
-  `PlayerStoreTest`. The stats read has run only on H2 too: one statement with a correlated
-  subquery on `players.current_cycle`. That one statement sees one committed state at READ
-  COMMITTED is documented PostgreSQL behaviour, not something a test here has seen.
+  H2. So has the skip, locked and then written as a vote is, with a first skip racing another on
+  the `skips` key. The store races in `QuestionStoreTest`, `VoteStoreTest` and `SkipStoreTest`
+  poll H2's `SESSIONS`, like `PlayerStoreTest`. The stats read has run only on H2 too: one
+  statement with a correlated subquery on `players.current_cycle`. That one statement sees one
+  committed state at READ COMMITTED is documented PostgreSQL behaviour, not something a test here
+  has seen.
 - **READ COMMITTED and the refresh compare-and-set on Postgres.** Every race and burst in
   `PlayerStoreTest` runs on H2, even in the `server-postgres` job: it hardcodes `jdbc:h2:mem:`,
   because its wait-for-the-lock polling reads H2's `INFORMATION_SCHEMA.SESSIONS`. So the ci.yml
@@ -80,7 +86,9 @@ Repo initialized on `main` with the personal identity and `user.useConfigOnly = 
 - **The UI has never been looked at.** It compiles and its ViewModel is tested, but no
   screenshot of the play screen or the reveal state has been taken on any platform. Treat the
   layout and the §5b palette in practice as unreviewed. The dev console has not been opened
-  either: its actions are tested through its ViewModel, and the use cases behind them ran live.
+  either: its actions are tested through its ViewModel, and the use cases behind them ran live,
+  all but `SkipQuestion`, which has run only against `FakeServer`. `POST /v1/skips` itself has run
+  only in the server's own tests.
 
 ## Running it locally
 
@@ -116,8 +124,12 @@ The app opens on the **Console** tab (`io.ntole.wyr.dev`). **Play** is the froze
   player id and when its access token expires. Opening the console reads the stats, which ensures a
   session too, so the first open mints a guest. *New guest* drops the session and the question
   queue, then mints a fresh player and loads a question for it.
-- **Play.** *Skip* loads the next question and sends nothing, so the feed serves the skipped one
-  again in a later batch. *A* / *B* answer it, each tap as a new attempt, and the raw
+- **Play.** *Skip* records the skip of the question on screen (`POST /v1/skips`), then loads the
+  next question and reads the stats. The skipped one is not due for the rest of the cycle and
+  comes back in the next, `answeredBefore` only if it was ever answered. A skip that fails is
+  logged as `recordSkip` with its error, and the next question loads anyway, its entry ending
+  `skip=unrecorded`; that question stays due, so the feed can serve it again this cycle. Skip is
+  off until a question is loaded. *A* / *B* answer it, each tap as a new attempt, and the raw
   `VoteOutcome` appears below, `replayed` included. A question the feed looped back to shows
   `answeredBefore: true` and logs as `question=<id> looped`. The header's total points is the last
   outcome's `totalPoints`; the Stats section has the server's own count.
@@ -133,19 +145,20 @@ The app opens on the **Console** tab (`io.ntole.wyr.dev`). **Play** is the froze
   24 again in a new random order.
 - **Stats.** Every number `GET /v1/me` returns: total points, answers given (re-answers count,
   replays do not), distinct questions answered, the cycle, and how many questions are still due in
-  it. Read when the console opens, after every vote, *Answer N* and *New guest*, and on *Read
-  stats*. *Read stats* is an action like any other, logged as `readStats` whether it works or not.
-  The other reads are logged only when they fail, as `refreshStats`. A read that fails keeps what
-  was shown, which after a vote is nothing: a vote's outcome drops the stats it outdated. A red
+  it. Read when the console opens, after every vote, *Skip*, *Answer N* and *New guest*, and on
+  *Read stats*. *Read stats* is an action like any other, logged as `readStats` whether it works or
+  not. The other reads are logged only when they fail, as `refreshStats`. A read that fails keeps
+  what was shown, which after a vote is nothing: a vote's outcome drops the stats it outdated. A red
   `MISMATCH totalPoints` line means the stats and the last outcome disagree: a vote landed whose
-  answer was lost (*Retry last vote* replays it, and the flag goes), a vote from the Play tab, or
-  a bug. The two are compared only for one player. A read the server refused as a dead session (a
-  restarted `:server:run` does that) recovers it, and the stats are then a fresh guest's: instead
-  of the flag, Stats shows `lastOutcome: paid to <id>, not compared`. **To see the lazy cycle
-  start:** once the last due question is answered, Stats shows the finished cycle with
-  `dueThisCycle: 0`. The next cycle starts only when the feed is next asked for questions, which
-  the console does when its queue is empty (*Next question*, *Skip*, or the next answer of *Answer
-  N*). *Read stats* then shows it, with the whole pool due.
+  answer was lost (*Retry last vote* replays it, and the flag goes), a vote from the Play tab, or a
+  bug. The two are compared only for one player. A read the server refused as a dead session (a
+  restarted `:server:run` does that) recovers it, and the stats are then a fresh guest's: instead of
+  the flag, Stats shows `lastOutcome: paid to <id>, not compared`. **To see the lazy cycle start:**
+  once the last due question is answered or skipped, Stats shows the finished cycle with
+  `dueThisCycle: 0`. The next cycle starts only when the feed is next asked for questions, which the
+  console does when its queue is empty (*Next question*, *Skip*, or the next answer of *Answer N*).
+  *Read stats* then shows it, with the whole pool due; a *Skip* that asked the feed shows it at
+  once, since it reads the stats after its next question.
 - **Questions.** Fetch the next question, or empty the local queue, and see its size.
 - **Vote by id.** Sends a vote for whatever id is typed, as a new attempt. An unknown id provokes
   `QUESTION_NOT_FOUND` (404). A known one is simply answered again and pays 1: there is no
@@ -221,15 +234,20 @@ known `PlayViewModel` issues (the Play tab is frozen).
   queued, and `DefaultQuestionRepository` drops the one it handed out last. An "ever seen" set is
   what used to end the game after one pass; do not bring one back. `OUT_OF_QUESTIONS` now means
   the server sent an empty batch, and nothing else.
-- **The feed runs in cycles, and a cycle ends only when everything in it is answered**
-  (CLAUDE.md §8d). Every question comes back once per cycle, in a new random order each time;
-  nothing loops by answer time any more, and `answered_at` is information only. Batches are never
-  topped up, so they shrink towards the end of a cycle, and a skipped question stays due: once it
-  is the last one, the feed serves it again and nothing else until it is answered. A cycle is per
-  player, so a category with nothing due is served again rather than starting the next cycle
-  while other categories are still due. Two server rules to keep: starting a cycle is a
-  compare-and-set on the cycle read (`PlayerStore.startNextCycle`), and an answer reads its cycle
-  after its vote's lock (`VoteStore.cast`). Both have races in the store tests.
+- **The feed runs in cycles, and a cycle ends only when everything in it is answered or
+  skipped** (CLAUDE.md §8d). Every question comes back once per cycle, in a new random order each
+  time; nothing loops by answer time any more, and `answered_at` is information only. Batches are
+  never topped up, so they shrink towards the end of a cycle. A skip is kept on the server
+  (`skips`, one row per player and question) for the cycle it was made in, and the one due
+  predicate in `QuestionStore` reads it beside the vote, so the feed and the stats' due count
+  cannot disagree about it. A skip is no vote: it pays nothing, the tally never sees it, and it
+  does not make a question `answeredBefore`. Only a skip the server never recorded leaves its
+  question due: once that is the last one, the feed serves it again and nothing else until it is
+  answered or skipped. A cycle is per player, so a category with nothing due is served again
+  rather than starting the next cycle while other categories are still due. Three server rules to
+  keep: starting a cycle is a compare-and-set on the cycle read (`PlayerStore.startNextCycle`), and
+  an answer and a skip each read their cycle after their row's lock (`VoteStore.cast`,
+  `SkipStore.skip`). All three have races in the store tests.
 - **An attempt id is made once per tap and reused only to retry that tap.** `AttemptId.random()`
   is the only way to make one. Making a new one for a retry pays twice; reusing one for a new tap
   turns that answer into a replay that pays nothing. The server stores only the latest attempt per
