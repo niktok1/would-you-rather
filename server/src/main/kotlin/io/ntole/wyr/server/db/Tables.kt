@@ -73,6 +73,13 @@ object Votes : Table("votes") {
      * first answers from the same player.
      */
     override val primaryKey = PrimaryKey(playerId, questionId)
+
+    init {
+        // For the tally, counted on every vote. question_id is the key's second column, so the key
+        // cannot find one question's votes, and PostgreSQL does not index a foreign key by itself.
+        // With side in it, the count needs only the index.
+        index(isUnique = false, questionId, side)
+    }
 }
 
 /**
