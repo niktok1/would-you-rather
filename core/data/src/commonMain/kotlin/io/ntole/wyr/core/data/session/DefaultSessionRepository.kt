@@ -30,13 +30,22 @@ public class DefaultSessionRepository(
     override suspend fun clear(): Unit = mutex.withLock { sessionStore.clear() }
 
     /**
-     * Throw away a session the server no longer accepts and mint a fresh one.
+     * Throw away a session the server no longer accepts and mint a fresh one — unless that has
+     * already happened.
+     *
+     * [failedPlayerId] is who the failed request went out as, captured before it was sent. When
+     * several requests fail on one dead session, the first caller here mints the guest; the rest
+     * find the store already holds someone else and get that player instead of each minting their
+     * own and orphaning all but the last. Returns the player to retry as.
      *
      * The honest cost of guest-only auth: the old player row is orphaned, so points earned
      * against it are gone. Linking a provider account is what will remove this cliff.
      */
-    public suspend fun reset(): String =
+    internal suspend fun resetIfStill(failedPlayerId: String?): String =
         mutex.withLock {
+            val stored = sessionStore.read()?.playerId
+            if (stored != null && stored != failedPlayerId) return@withLock stored
+
             sessionStore.clear()
             mintGuest()
         }

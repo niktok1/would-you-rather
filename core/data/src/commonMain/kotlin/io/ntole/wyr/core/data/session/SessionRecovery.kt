@@ -16,12 +16,16 @@ import io.ntole.wyr.core.domain.error.WyrException
  * Exactly one retry: if a freshly minted guest is refused as well, the failure is real and goes
  * to the caller.
  */
-internal suspend fun <T> DefaultSessionRepository.withSessionRecovery(call: suspend () -> T): T =
-    try {
+internal suspend fun <T> DefaultSessionRepository.withSessionRecovery(call: suspend () -> T): T {
+    // Captured before the call goes out. By the time it fails, a concurrent caller may already
+    // have replaced the dead session, and reading the id then would reset the new one too.
+    val sentAs = currentPlayerId()
+    return try {
         runApi(call)
     } catch (failure: WyrException) {
         if (failure.error != DomainError.UNAUTHORIZED) throw failure
 
-        reset()
+        resetIfStill(sentAs)
         runApi(call)
     }
+}
