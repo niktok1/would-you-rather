@@ -19,6 +19,7 @@ import io.ntole.wyr.core.auth.RefreshRequest
 import io.ntole.wyr.core.auth.SessionDto
 import io.ntole.wyr.core.error.ErrorCode
 import io.ntole.wyr.core.error.ErrorDto
+import io.ntole.wyr.core.player.PlayerStatsDto
 import io.ntole.wyr.core.question.QuestionCategory
 import io.ntole.wyr.core.question.QuestionDto
 import io.ntole.wyr.core.question.QuestionPageDto
@@ -30,6 +31,7 @@ import io.ntole.wyr.server.auth.TokenService
 import io.ntole.wyr.server.config.ServerConfig
 import io.ntole.wyr.server.vote.Scoring
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
 import java.util.UUID
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -465,6 +467,110 @@ class ApiFlowTest {
             assertEquals(ErrorCode.VALIDATION_FAILED, malformed.body<ErrorDto>().code)
         }
 
+    @Test
+    fun `a fresh guest's stats are all zero on the first cycle with the whole pool due`() =
+        runServer("stats-fresh") { client ->
+            val player = client.guest()
+
+            val response = client.me(player)
+            val pool = client.wholePool(player)
+
+            assertEquals(HttpStatusCode.OK, response.status)
+            assertEquals(
+                PlayerStatsDto(
+                    playerId = player.playerId,
+                    totalPoints = 0,
+                    answersGiven = 0,
+                    questionsAnswered = 0,
+                    cycle = 1,
+                    dueThisCycle = pool.size,
+                ),
+                response.body<PlayerStatsDto>(),
+            )
+            // Sent even where they equal the contract's defaults, which is all a fresh player has but
+            // the due count, so the values above are the server's rather than the decoder's.
+            assertEquals(
+                setOf("playerId", "totalPoints", "answersGiven", "questionsAnswered", "cycle", "dueThisCycle"),
+                response.body<JsonObject>().keys,
+            )
+        }
+
+    @Test
+    fun `the stats count every paid answer and agree with the last vote's total`() =
+        runServer("stats-answers") { client ->
+            val player = client.guest()
+            val other = client.guest()
+            val pool = client.wholePool(player)
+            val (first, second, third) = pool
+            client.vote(other, first.id, OptionSide.A)
+
+            client.vote(player, first.id, OptionSide.A)
+            client.vote(player, second.id, OptionSide.B)
+            client.vote(player, third.id, OptionSide.A)
+            client.vote(player, first.id, OptionSide.B, attemptId = "re-answer")
+            val replay = client.vote(player, first.id, OptionSide.B, attemptId = "re-answer")
+            assertTrue(replay.replayed)
+
+            val stats = client.stats(player)
+
+            assertEquals(player.playerId, stats.playerId)
+            assertEquals(replay.totalPoints, stats.totalPoints, "the total the last vote reported")
+            assertEquals(4, stats.answersGiven, "the re-answer counts, the replay does not")
+            assertEquals(3, stats.questionsAnswered, "distinct questions, and only this player's")
+            assertEquals(1, stats.cycle)
+            assertEquals(pool.size - 3, stats.dueThisCycle)
+        }
+
+    @Test
+    fun `the stats show the next cycle only once the feed has started it`() =
+        runServer("stats-cycle") { client ->
+            val player = client.guest()
+            val pool = client.wholePool(player)
+            pool.forEach { question -> client.vote(player, question.id, OptionSide.A) }
+
+            // The cycle is finished, but the next one starts only on the next feed request.
+            val finished = client.stats(player)
+            assertEquals(1, finished.cycle)
+            assertEquals(0, finished.dueThisCycle)
+            assertEquals(pool.size, finished.questionsAnswered)
+            assertEquals(finished, client.stats(player), "reading the stats does not start it")
+
+            client.batch(player, "?${WyrApi.Query.LIMIT}=1")
+            val started = client.stats(player)
+            assertEquals(2, started.cycle)
+            assertEquals(pool.size, started.dueThisCycle)
+
+            client.vote(player, pool.first().id, OptionSide.B)
+            val answered = client.stats(player)
+            assertEquals(pool.size - 1, answered.dueThisCycle)
+            assertEquals(pool.size, answered.questionsAnswered, "answered in both cycles, still one question")
+            assertEquals(pool.size + 1, answered.answersGiven)
+            assertEquals(pool.size + 1, answered.totalPoints)
+        }
+
+    @Test
+    fun `the stats need a session`() =
+        runServer("stats-no-token") { client ->
+            val response = client.get(WyrApi.Paths.ME)
+
+            assertEquals(HttpStatusCode.Unauthorized, response.status)
+            assertEquals(ErrorCode.UNAUTHORIZED, response.body<ErrorDto>().code)
+        }
+
+    @Test
+    fun `a validly signed token for a player that does not exist gets no stats`() =
+        runServer("stats-ghost-player") { client ->
+            // As for the ghost-player vote, the helper's token for a real player has to pass first.
+            val real = client.guest()
+            val accepted = client.get(WyrApi.Paths.ME) { bearerAuth(signAccessToken(real.playerId)) }
+            assertEquals(HttpStatusCode.OK, accepted.status)
+
+            val response = client.get(WyrApi.Paths.ME) { bearerAuth(signAccessToken("no-such-player")) }
+
+            assertEquals(HttpStatusCode.Unauthorized, response.status)
+            assertEquals(ErrorCode.UNAUTHORIZED, response.body<ErrorDto>().code)
+        }
+
     private fun runServer(
         databaseName: String,
         block: suspend ApplicationTestBuilder.(HttpClient) -> Unit,
@@ -524,6 +630,11 @@ class ApiFlowTest {
     }
 
     private fun List<QuestionDto>.ids(): List<String> = map { it.id }
+
+    private suspend fun HttpClient.me(session: SessionDto): HttpResponse =
+        get(WyrApi.Paths.ME) { bearerAuth(session.accessToken) }
+
+    private suspend fun HttpClient.stats(session: SessionDto): PlayerStatsDto = me(session).body()
 
     /** A fresh answer unless [attemptId] repeats an earlier one. */
     private suspend fun HttpClient.vote(

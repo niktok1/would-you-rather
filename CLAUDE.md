@@ -128,8 +128,9 @@ implementation. Until that lands, `QuestionCache` (a port in `:core:domain`) is 
   members are deprecated **as errors**.
 
 **Transaction isolation** — decided 2026-09-23: every server transaction runs at **READ
-COMMITTED**, PostgreSQL's default, set on the pool in `DatabaseFactory.poolConfig`. Three rules
-follow, and code that breaks one loses updates silently rather than failing:
+COMMITTED**, PostgreSQL's default, set on the pool in `DatabaseFactory.poolConfig`. Four rules
+follow, and code that breaks one loses updates or shows numbers that disagree, silently rather than
+failing:
 - A counter is an SQL increment (`total_points = total_points + n`), never a read then a write.
   A burst on one row then just queues on its lock; `PlayerStoreTest` pins 8 at once.
 - Any other read-then-write is a compare-and-set: the `UPDATE`'s `WHERE` repeats what the read
@@ -144,6 +145,9 @@ follow, and code that breaks one loses updates silently rather than failing:
   never caught and carried on from: PostgreSQL aborts a transaction at its first error. It
   propagates, and Exposed rolls back and reruns the whole transaction, which then sees the
   committed row (`VoteStore.cast`).
+- Numbers that must agree with one another are read in one statement, which sees one committed
+  state; two statements can straddle another transaction's commit (the tally in `VoteStore`,
+  `StatsStore.of`).
 
 REPEATABLE_READ was dropped because it refuses the second of two concurrent writes to a row
 (SQLState 40001) and Exposed makes only 3 attempts with no delay, so a burst on one row, such as
@@ -403,6 +407,13 @@ and every request shows in its HTTP trace (`HttpTrace` in `:core:network`, never
   or a modified client can do that. Built in `VoteStore.cast` and in `AttemptId`, made once per
   tap: the Play tab resends a vote lost to `NETWORK` as the same attempt, as `withSessionRecovery`
   does its retry.
+- **Stats** *(built)*: `GET /v1/me` reports the session player's total points, answers given
+  (every paid answer, re-answers included and replays not, in `players.answers_given`, an SQL
+  increment beside the points), distinct questions answered, current cycle, and how many questions
+  are still due in it, counted by the feed's own predicate (`QuestionStore.dueCount`). Built in
+  `StatsStore.of`, as one statement. It only reads, and the cycle starts lazily on the next feed
+  request, so between the answer that finishes a cycle and that request it reports the finished
+  cycle with nothing due.
 - **Skipping** *(built)*: allowed. It earns nothing and is not recorded, so the question
   stays due and comes back later in the same cycle. Nothing is sent: the console's Skip takes the
   next question, and the feed serves the skipped one again in a later batch. A cycle cannot finish

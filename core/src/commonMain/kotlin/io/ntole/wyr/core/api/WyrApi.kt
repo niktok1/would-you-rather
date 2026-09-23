@@ -27,6 +27,13 @@ public object WyrApi {
          */
         public const val QUESTIONS: String = "/$VERSION/questions"
         public const val VOTES: String = "/$VERSION/votes"
+
+        /**
+         * The stats of the player the bearer token names, as a
+         * [io.ntole.wyr.core.player.PlayerStatsDto]. Requires a session. Reading them changes
+         * nothing: in particular it never starts the next cycle, which only [QUESTIONS] does.
+         */
+        public const val ME: String = "/$VERSION/me"
     }
 
     public object Query {

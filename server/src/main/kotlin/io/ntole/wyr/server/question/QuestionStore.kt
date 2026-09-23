@@ -13,11 +13,13 @@ import org.jetbrains.exposed.v1.core.Random
 import org.jetbrains.exposed.v1.core.ResultRow
 import org.jetbrains.exposed.v1.core.SortOrder
 import org.jetbrains.exposed.v1.core.and
+import org.jetbrains.exposed.v1.core.count
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.core.intParam
 import org.jetbrains.exposed.v1.core.isNull
 import org.jetbrains.exposed.v1.core.less
 import org.jetbrains.exposed.v1.core.or
+import org.jetbrains.exposed.v1.core.wrapAsExpression
 import org.jetbrains.exposed.v1.jdbc.Query
 import org.jetbrains.exposed.v1.jdbc.select
 import org.jetbrains.exposed.v1.jdbc.selectAll
@@ -75,6 +77,17 @@ object QuestionStore {
     }
 
     /**
+     * How many questions are due for [playerId] in [cycle], in every category: what the feed would
+     * serve them, counted by the feed's own predicate so the two cannot disagree. An expression to
+     * embed in a larger statement, which [cycle] may be a column of (`StatsStore`).
+     */
+    internal fun dueCount(
+        playerId: String,
+        cycle: Expression<Int>,
+    ): Expression<Long?> =
+        wrapAsExpression(candidates(playerId, category = null, dueIn = cycle, columns = listOf(Questions.id.count())))
+
+    /**
      * Which questions [playerId] may be served at all, whether answered or not. This is the one
      * place that decides it, so the feed and anything that counts what a player has left agree.
      *
@@ -83,15 +96,19 @@ object QuestionStore {
      */
     internal fun servableTo(playerId: String): Op<Boolean> = Op.TRUE
 
-    /** The questions in [category] [servableTo] the player: only those due in [dueIn], unless it is null. */
+    /**
+     * The questions in [category] [servableTo] the player: only those due in [dueIn], unless it is null.
+     * Selects what a batch is built from, unless [columns] asks for something else.
+     */
     private fun candidates(
         playerId: String,
         category: QuestionCategory?,
         dueIn: Expression<Int>?,
+        columns: List<Expression<*>> = Questions.columns + Votes.answeredInCycle,
     ): Query =
         Questions
             .join(Votes, JoinType.LEFT, Questions.id, Votes.questionId) { Votes.playerId eq playerId }
-            .select(Questions.columns + Votes.answeredInCycle)
+            .select(columns)
             .where { servableTo(playerId) and inCategory(category) and isDue(dueIn) }
 
     private fun Query.randomBatch(limit: Int): List<QuestionDto> =

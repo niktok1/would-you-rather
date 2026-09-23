@@ -13,6 +13,7 @@ import io.ntole.wyr.server.auth.authRoutes
 import io.ntole.wyr.server.config.ServerConfig
 import io.ntole.wyr.server.db.DatabaseFactory
 import io.ntole.wyr.server.db.Db
+import io.ntole.wyr.server.player.playerRoutes
 import io.ntole.wyr.server.plugins.installPlugins
 import io.ntole.wyr.server.question.questionRoutes
 import io.ntole.wyr.server.vote.voteRoutes
@@ -52,6 +53,7 @@ fun Application.wyrModule(config: ServerConfig) {
         authRoutes(db, tokens, config)
         questionRoutes(db)
         voteRoutes(db)
+        playerRoutes(db)
     }
 }
 
