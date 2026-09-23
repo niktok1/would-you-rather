@@ -8,9 +8,8 @@ import kotlinx.serialization.Serializable
  * Self-contained by design: [yourChoice] is echoed back so a cached response still renders
  * correctly without the original request.
  *
- * [totalPoints] and [streak] are the server's authoritative running values, not deltas. The
- * client displays them rather than accumulating [pointsAwarded] itself, which would let the
- * two sides diverge.
+ * [totalPoints] is the server's authoritative running value, not a delta. The client displays
+ * it rather than accumulating [pointsAwarded] itself, which would let the two sides diverge.
  */
 @Serializable
 public data class VoteResultDto(
@@ -19,5 +18,4 @@ public data class VoteResultDto(
     public val tally: VoteTallyDto,
     public val pointsAwarded: Int,
     public val totalPoints: Int,
-    public val streak: Int,
 )

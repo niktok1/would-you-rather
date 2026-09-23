@@ -194,7 +194,7 @@ adding another `WyrColors` value.
 | primary text     | `#412402`  | `#F3EDEF`  |
 | heading accent   | `#993556`  | `#ED93B1`  |
 | OR pill text/bg  | `#993556` on `#FBEAF0` | `#F4C0D1` on `#3A2330` |
-| muted (pts/streak) | `#888780` | `#888780` |
+| muted (pts)      | `#888780`  | `#888780`  |
 
 **Open check (not blocking):** verify every text/background pair meets WCAG AA contrast — the
 amber block (`#412402` on `#EF9F27`) and `muted` `#888780` on both backgrounds are the ones to

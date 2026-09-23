@@ -14,7 +14,6 @@ internal fun VoteResultDto.toDomain(): VoteOutcome =
         tally = tally.toDomain(),
         pointsAwarded = pointsAwarded,
         totalPoints = totalPoints,
-        streak = streak,
     )
 
 internal fun VoteTallyDto.toDomain(): Tally = Tally(votesA = votesA, votesB = votesB)

@@ -111,14 +111,13 @@ private fun Header(state: PlayUiState) {
             textAlign = TextAlign.Center,
         )
 
-        // Points and streak only mean something once the server has scored a vote, so they stay
-        // hidden until there is a real number to show rather than a placeholder zero.
+        // Points only mean something once the server has scored a vote, so they stay hidden
+        // until there is a real number to show rather than a placeholder zero.
         val outcome = (state as? PlayUiState.Revealed)?.outcome
         if (outcome != null) {
             Spacer(Modifier.size(dimens.spaceSm))
             Row(horizontalArrangement = Arrangement.spacedBy(dimens.spaceMd)) {
                 Stat(label = "points", value = outcome.totalPoints.toString())
-                Stat(label = "streak", value = outcome.streak.toString())
                 Stat(label = "this vote", value = "+${outcome.pointsAwarded}")
             }
         }

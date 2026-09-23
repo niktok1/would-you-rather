@@ -67,7 +67,6 @@ class TallyTest {
                 tally = Tally(votesA = 5, votesB = 5),
                 pointsAwarded = 10,
                 totalPoints = 10,
-                streak = 1,
             )
         assertTrue(outcome.agreedWithMajority)
     }

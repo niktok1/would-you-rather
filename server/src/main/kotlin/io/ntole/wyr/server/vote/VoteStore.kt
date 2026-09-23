@@ -66,7 +66,6 @@ object VoteStore {
             tally = VoteTallyDto(votesA = votesA, votesB = votesB),
             pointsAwarded = award.points,
             totalPoints = updated.totalPoints,
-            streak = updated.streak,
         )
     }
 

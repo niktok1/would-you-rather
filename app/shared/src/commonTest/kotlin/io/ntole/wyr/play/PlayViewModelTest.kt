@@ -63,7 +63,6 @@ class PlayViewModelTest {
             val state = assertIs<PlayUiState.Revealed>(viewModel.state.value)
             assertEquals(Side.A, state.outcome.yourSide)
             assertEquals(42, state.outcome.totalPoints)
-            assertEquals(3, state.outcome.streak)
         }
 
     @Test
@@ -137,7 +136,6 @@ class PlayViewModelTest {
                 tally = Tally(votesA = 7, votesB = 3),
                 pointsAwarded = 17,
                 totalPoints = 42,
-                streak = 3,
             )
     }
 

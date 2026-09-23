@@ -64,8 +64,7 @@ class ApiFlowTest {
             // The voter's own vote is included in the tally they are shown.
             assertEquals(1L, result.tally.votesA)
             assertEquals(0L, result.tally.votesB)
-            // First vote is trivially the majority, so it earns base + bonus and opens a streak.
-            assertEquals(1, result.streak)
+            // First vote is trivially the majority, so it earns base + bonus.
             assertEquals(result.pointsAwarded, result.totalPoints)
             assertTrue(result.pointsAwarded > Scoring.BASE_POINTS)
         }
