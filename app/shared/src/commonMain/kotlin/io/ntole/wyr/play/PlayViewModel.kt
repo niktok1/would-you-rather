@@ -6,6 +6,7 @@ import io.ntole.wyr.core.domain.error.DomainError
 import io.ntole.wyr.core.domain.error.WyrException
 import io.ntole.wyr.core.domain.question.GetNextQuestion
 import io.ntole.wyr.core.domain.question.QuestionRepository
+import io.ntole.wyr.core.domain.vote.AttemptId
 import io.ntole.wyr.core.domain.vote.CastVote
 import io.ntole.wyr.core.domain.vote.Side
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -45,16 +46,18 @@ class PlayViewModel(
     fun choose(side: Side) {
         val asking = _state.value as? PlayUiState.Asking ?: return
 
-        // Guard against a double tap turning into two votes and an ALREADY_VOTED error.
+        // Guard against a double tap turning into two answers.
         if (asking.isSubmitting) return
         _state.value = asking.copy(isSubmitting = true)
+        // One attempt per tap (CLAUDE.md §8d).
+        val attempt = AttemptId.random()
 
         viewModelScope.launch {
             _state.value =
                 try {
                     PlayUiState.Revealed(
                         question = asking.question,
-                        outcome = castVote(asking.question.id, side),
+                        outcome = castVote(asking.question.id, side, attempt),
                     )
                 } catch (failure: WyrException) {
                     // Already voted is not really a failure to show: the question is spent, so move

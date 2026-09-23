@@ -3,11 +3,14 @@ package io.ntole.wyr.core.domain.vote
 /** Casts votes and reports back what the server decided. Implemented in `:core:data`. */
 public interface VoteRepository {
     /**
-     * @throws io.ntole.wyr.core.domain.error.WyrException on any failure, including
-     *   [io.ntole.wyr.core.domain.error.DomainError.ALREADY_VOTED].
+     * Sends one answer as [attempt]. A retry of that same answer passes the same [attempt] again
+     * (see [AttemptId]).
+     *
+     * @throws io.ntole.wyr.core.domain.error.WyrException on any failure.
      */
     public suspend fun cast(
         questionId: String,
         side: Side,
+        attempt: AttemptId,
     ): VoteOutcome
 }

@@ -4,19 +4,19 @@ import io.ntole.wyr.core.data.mapper.toDomain
 import io.ntole.wyr.core.data.mapper.toWire
 import io.ntole.wyr.core.data.session.DefaultSessionRepository
 import io.ntole.wyr.core.data.session.withSessionRecovery
+import io.ntole.wyr.core.domain.vote.AttemptId
 import io.ntole.wyr.core.domain.vote.Side
 import io.ntole.wyr.core.domain.vote.VoteOutcome
 import io.ntole.wyr.core.domain.vote.VoteRepository
 import io.ntole.wyr.core.network.api.VoteApi
 import io.ntole.wyr.core.vote.VoteRequest
-import kotlin.uuid.Uuid
 
 /**
  * Casts votes, recovering once from a session the server has stopped accepting (see
  * [withSessionRecovery]).
  *
- * Each call is one answer, so it gets an attempt id of its own (CLAUDE.md §8d), and the retry
- * after a recovered session resends that same request.
+ * The retry after a recovered session resends the same request, the caller's attempt id included:
+ * it is still the same answer, now sent as the new guest.
  */
 public class DefaultVoteRepository(
     private val api: VoteApi,
@@ -25,8 +25,9 @@ public class DefaultVoteRepository(
     override suspend fun cast(
         questionId: String,
         side: Side,
+        attempt: AttemptId,
     ): VoteOutcome {
-        val request = VoteRequest(questionId = questionId, choice = side.toWire(), attemptId = Uuid.random().toString())
+        val request = VoteRequest(questionId = questionId, choice = side.toWire(), attemptId = attempt.value)
 
         return session.withSessionRecovery { api.cast(request) }.toDomain()
     }

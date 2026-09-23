@@ -9,6 +9,7 @@ import io.ntole.wyr.core.domain.question.QuestionCache
 import io.ntole.wyr.core.domain.question.QuestionRepository
 import io.ntole.wyr.core.domain.session.SessionDiagnostics
 import io.ntole.wyr.core.domain.session.SessionRepository
+import io.ntole.wyr.core.domain.vote.AttemptId
 import io.ntole.wyr.core.domain.vote.CastVote
 import io.ntole.wyr.core.domain.vote.Side
 import io.ntole.wyr.core.network.trace.HttpExchange
@@ -93,7 +94,8 @@ class DevConsoleViewModel(
         questionId: String,
         side: Side,
     ) = perform(action, args = "questionId=$questionId side=$side") {
-        val outcome = castVote(questionId, side)
+        // Every tap is an answer of its own (CLAUDE.md §8d).
+        val outcome = castVote(questionId, side, AttemptId.random())
         _state.update { it.copy(lastOutcome = outcome) }
         "+${outcome.pointsAwarded} total=${outcome.totalPoints}"
     }

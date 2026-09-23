@@ -7,6 +7,7 @@ import io.ntole.wyr.core.domain.question.GetNextQuestion
 import io.ntole.wyr.core.domain.question.Question
 import io.ntole.wyr.core.domain.question.QuestionRepository
 import io.ntole.wyr.core.domain.session.SessionRepository
+import io.ntole.wyr.core.domain.vote.AttemptId
 import io.ntole.wyr.core.domain.vote.CastVote
 import io.ntole.wyr.core.domain.vote.Side
 import io.ntole.wyr.core.domain.vote.Tally
@@ -78,6 +79,25 @@ class PlayViewModelTest {
             testScheduler.advanceUntilIdle()
 
             assertEquals(1, votes.callCount, "double tap must not double vote")
+        }
+
+    @Test
+    fun `every tap is an answer with an attempt of its own`() =
+        runTest(dispatcher) {
+            // The same question twice, as when the feed loops back to it: the second tap answers it
+            // again, and reusing the first attempt would have the server replay it instead.
+            val votes = RecordingVoteRepository()
+            val viewModel = viewModel(votes = votes)
+            testScheduler.advanceUntilIdle()
+
+            viewModel.choose(Side.A)
+            testScheduler.advanceUntilIdle()
+            viewModel.next()
+            testScheduler.advanceUntilIdle()
+            viewModel.choose(Side.A)
+            testScheduler.advanceUntilIdle()
+
+            assertEquals(2, votes.attempts.toSet().size)
         }
 
     @Test
@@ -161,18 +181,21 @@ class PlayViewModelTest {
         override suspend fun cast(
             questionId: String,
             side: Side,
+            attempt: AttemptId,
         ): VoteOutcome = OUTCOME.copy(yourSide = side)
     }
 
     private class RecordingVoteRepository : VoteRepository {
-        var callCount = 0
-            private set
+        val attempts = mutableListOf<AttemptId>()
+
+        val callCount: Int get() = attempts.size
 
         override suspend fun cast(
             questionId: String,
             side: Side,
+            attempt: AttemptId,
         ): VoteOutcome {
-            callCount++
+            attempts += attempt
             return OUTCOME.copy(yourSide = side)
         }
     }
@@ -183,6 +206,7 @@ class PlayViewModelTest {
         override suspend fun cast(
             questionId: String,
             side: Side,
+            attempt: AttemptId,
         ): VoteOutcome = throw WyrException(error)
     }
 

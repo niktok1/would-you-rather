@@ -11,6 +11,7 @@ import io.ntole.wyr.core.data.respondJson
 import io.ntole.wyr.core.data.session
 import io.ntole.wyr.core.data.storeHolding
 import io.ntole.wyr.core.data.vote.DefaultVoteRepository
+import io.ntole.wyr.core.domain.vote.AttemptId
 import io.ntole.wyr.core.domain.vote.Side
 import io.ntole.wyr.core.error.ErrorCode
 import io.ntole.wyr.core.network.SessionStore
@@ -91,7 +92,10 @@ class SharedSessionStoreTest {
             val first = tab()
             val second = tab()
 
-            awaitAll(async { first.cast("q1", Side.A) }, async { second.cast("q1", Side.A) })
+            awaitAll(
+                async { first.cast("q1", Side.A, AttemptId.random()) },
+                async { second.cast("q1", Side.A, AttemptId.random()) },
+            )
 
             assertEquals(2, refreshes)
             assertEquals(0, guestsMinted)

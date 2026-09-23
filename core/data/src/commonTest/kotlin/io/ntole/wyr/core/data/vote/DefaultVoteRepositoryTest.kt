@@ -9,6 +9,7 @@ import io.ntole.wyr.core.data.session.DefaultSessionRepository
 import io.ntole.wyr.core.data.storeHolding
 import io.ntole.wyr.core.domain.error.DomainError
 import io.ntole.wyr.core.domain.error.WyrException
+import io.ntole.wyr.core.domain.vote.AttemptId
 import io.ntole.wyr.core.domain.vote.Side
 import io.ntole.wyr.core.error.ErrorCode
 import io.ntole.wyr.core.network.SessionStore
@@ -19,7 +20,6 @@ import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
-import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
 
 class DefaultVoteRepositoryTest {
@@ -36,7 +36,7 @@ class DefaultVoteRepositoryTest {
     @Test
     fun `a vote on a dead session is retried as a fresh guest`() =
         runTest {
-            val outcome = votes.cast("q1", Side.A)
+            val outcome = votes.cast("q1", Side.A, AttemptId.random())
 
             assertEquals("q1", outcome.questionId)
             assertEquals(1, server.guestsMinted)
@@ -45,25 +45,34 @@ class DefaultVoteRepositoryTest {
         }
 
     @Test
-    fun `every cast is an answer with an attempt id of its own`() =
+    fun `the caller's attempt is sent and resent unchanged by the session recovery`() =
         runTest {
-            votes.cast("q1", Side.A)
-            votes.cast("q1", Side.A)
+            val answer = AttemptId.random()
+            val nextAnswer = AttemptId.random()
 
-            // The first went out twice, around the session recovery, and that retry is the same
-            // answer. The second cast is another answer.
-            val (first, retried, second) = server.voteAttempts
-            assertEquals(first, retried)
-            assertNotEquals(first, second)
-            assertTrue(second.isNotBlank() && second.length <= WyrApi.Limits.MAX_ATTEMPT_ID_LENGTH, second)
+            votes.cast("q1", Side.A, answer)
+            // The caller retrying the same answer, then answering again.
+            votes.cast("q1", Side.A, answer)
+            votes.cast("q1", Side.A, nextAnswer)
+
+            // The first cast went out twice, around the session recovery. That retry is the same
+            // answer, so it carries the same attempt as the caller's own retry does.
+            assertEquals(listOf(answer, answer, answer, nextAnswer).map { it.value }, server.voteAttempts)
         }
+
+    @Test
+    fun `a random attempt fits the wire's limit`() {
+        val attemptId = AttemptId.random().value
+
+        assertTrue(attemptId.isNotBlank() && attemptId.length <= WyrApi.Limits.MAX_ATTEMPT_ID_LENGTH, attemptId)
+    }
 
     @Test
     fun `recovery is attempted only once`() =
         runTest {
             server.refuseVotesWith = HttpStatusCode.Unauthorized to ErrorCode.UNAUTHORIZED
 
-            val failure = assertFailsWith<WyrException> { votes.cast("q1", Side.A) }
+            val failure = assertFailsWith<WyrException> { votes.cast("q1", Side.A, AttemptId.random()) }
 
             assertEquals(DomainError.UNAUTHORIZED, failure.error)
             assertEquals(1, server.guestsMinted)
@@ -74,7 +83,7 @@ class DefaultVoteRepositoryTest {
         runTest {
             server.refuseVotesWith = HttpStatusCode.Conflict to ErrorCode.ALREADY_VOTED
 
-            val failure = assertFailsWith<WyrException> { votes.cast("q1", Side.A) }
+            val failure = assertFailsWith<WyrException> { votes.cast("q1", Side.A, AttemptId.random()) }
 
             assertEquals(DomainError.ALREADY_VOTED, failure.error)
             assertEquals(0, server.guestsMinted)

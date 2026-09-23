@@ -10,6 +10,7 @@ import io.ntole.wyr.core.domain.question.QuestionRepository
 import io.ntole.wyr.core.domain.session.SessionDiagnostics
 import io.ntole.wyr.core.domain.session.SessionInfo
 import io.ntole.wyr.core.domain.session.SessionRepository
+import io.ntole.wyr.core.domain.vote.AttemptId
 import io.ntole.wyr.core.domain.vote.CastVote
 import io.ntole.wyr.core.domain.vote.Side
 import io.ntole.wyr.core.domain.vote.Tally
@@ -216,6 +217,23 @@ class DevConsoleViewModelTest {
         }
 
     @Test
+    fun `every vote is an answer with an attempt of its own`() =
+        runTest(dispatcher) {
+            val viewModel = viewModel()
+            viewModel.nextQuestion()
+            testScheduler.advanceUntilIdle()
+
+            viewModel.vote(Side.A)
+            testScheduler.advanceUntilIdle()
+            viewModel.vote(Side.A)
+            testScheduler.advanceUntilIdle()
+            viewModel.voteById("q1", Side.A)
+            testScheduler.advanceUntilIdle()
+
+            assertEquals(3, votes.attempts.toSet().size)
+        }
+
+    @Test
     fun `a vote by id surfaces QUESTION_NOT_FOUND and ALREADY_VOTED as Err entries`() =
         runTest(dispatcher) {
             votes.answer = { questionId, _ ->
@@ -365,11 +383,16 @@ class DevConsoleViewModelTest {
             OUTCOME.copy(questionId = questionId, yourSide = side)
         }
 
+        /** Every attempt cast, in order. */
+        val attempts = mutableListOf<AttemptId>()
+
         override suspend fun cast(
             questionId: String,
             side: Side,
+            attempt: AttemptId,
         ): VoteOutcome {
             calls += "cast"
+            attempts += attempt
             return answer(questionId, side)
         }
     }
