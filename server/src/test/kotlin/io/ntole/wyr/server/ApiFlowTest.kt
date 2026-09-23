@@ -97,26 +97,25 @@ class ApiFlowTest {
         }
 
     @Test
-    fun `voting twice on the same question is rejected`() =
-        runServer("double-vote") { client ->
-            val session = client.guest()
-            val question = client.batch(session).first()
+    fun `answering again pays again and moves the player's one vote`() =
+        runServer("re-answer") { client ->
+            val player = client.guest()
+            val other = client.guest()
+            val question = client.batch(player).first()
+            client.vote(other, question.id, OptionSide.A)
 
-            client.post(WyrApi.Paths.VOTES) {
-                bearerAuth(session.accessToken)
-                contentType(ContentType.Application.Json)
-                setBody(VoteRequest(question.id, OptionSide.A))
-            }
+            val first = client.vote(player, question.id, OptionSide.A)
+            val again = client.vote(player, question.id, OptionSide.B)
 
-            val second =
-                client.post(WyrApi.Paths.VOTES) {
-                    bearerAuth(session.accessToken)
-                    contentType(ContentType.Application.Json)
-                    setBody(VoteRequest(question.id, OptionSide.B))
-                }
-
-            assertEquals(HttpStatusCode.Conflict, second.status)
-            assertEquals(ErrorCode.ALREADY_VOTED, second.body<ErrorDto>().code)
+            assertEquals(VoteTallyDto(votesA = 2, votesB = 0), first.tally)
+            assertEquals(OptionSide.B, again.yourChoice, "the pick may change")
+            assertEquals(
+                VoteTallyDto(votesA = 1, votesB = 1),
+                again.tally,
+                "the player's vote moved rather than doubled",
+            )
+            assertEquals(Scoring.POINTS_PER_ANSWER, again.pointsAwarded)
+            assertEquals(2 * Scoring.POINTS_PER_ANSWER, again.totalPoints)
         }
 
     @Test

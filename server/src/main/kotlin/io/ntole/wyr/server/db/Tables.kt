@@ -42,15 +42,20 @@ object Questions : Table("questions") {
 object Votes : Table("votes") {
     val playerId = varchar("player_id", 36).references(Players.id)
     val questionId = varchar("question_id", 36).references(Questions.id)
+
+    /** The player's latest pick. Re-answering moves it (CLAUDE.md §8d). */
     val side = varchar("side", 1)
+
+    /** When the player first answered. */
     val createdAt = long("created_at")
 
-    /** When the player answered. The feed loops answered questions back oldest first by this. */
+    /** When the player last answered. The feed loops answered questions back oldest first by this. */
     val answeredAt = long("answered_at")
 
     /**
-     * The composite key is the actual defence against double voting — an application-level check
-     * would still lose a race between two concurrent requests from the same player.
+     * One row per player per question, so the tally holds one vote per player. The key is what
+     * enforces that — an application-level check would still lose a race between two concurrent
+     * first answers from the same player.
      */
     override val primaryKey = PrimaryKey(playerId, questionId)
 

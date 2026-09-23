@@ -15,7 +15,12 @@ public enum class ErrorCode {
     /** No question exists with the given id. */
     QUESTION_NOT_FOUND,
 
-    /** This player has already voted on this question. */
+    /**
+     * This player has already voted on this question.
+     *
+     * No longer sent: answering a question again is a fresh answer (CLAUDE.md §8d). It stays in
+     * the contract because it is on the wire, and dropping a member is a breaking change of its own.
+     */
     ALREADY_VOTED,
 
     /** The request body failed validation. */

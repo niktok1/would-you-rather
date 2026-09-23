@@ -134,7 +134,10 @@ follow, and code that breaks one loses updates silently rather than failing:
   A burst on one row then just queues on its lock; `PlayerStoreTest` pins 8 at once.
 - Any other read-then-write is a compare-and-set: the `UPDATE`'s `WHERE` repeats what the read
   relied on, and 0 rows updated means another transaction won (`PlayerStore.rotateRefreshToken`).
-- Uniqueness is a constraint (the `Votes` primary key), never a prior `SELECT`.
+- Uniqueness is a constraint (the `Votes` primary key), never a prior `SELECT`. A violation is
+  never caught and carried on from: PostgreSQL aborts a transaction at its first error. It
+  propagates, and Exposed rolls back and reruns the whole transaction, which then sees the
+  committed row (`VoteStore.cast`).
 
 REPEATABLE_READ was dropped because it refuses the second of two concurrent writes to a row
 (SQLState 40001) and Exposed makes only 3 attempts with no delay, so a burst on one row, such as

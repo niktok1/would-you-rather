@@ -21,7 +21,7 @@ fun Route.voteRoutes(db: Db) {
 
             if (body.questionId.isBlank()) throw ApiFailure.validation("questionId is blank")
 
-            // One transaction covers insert, tally, and the point award, so they commit or fail
+            // One transaction covers the vote, the tally, and the point award, so they commit or fail
             // together. The points do not depend on the tally (§8c). It is not a lock: at READ
             // COMMITTED the tally counts what other players had committed when it ran, which can
             // include votes committed after this request began, and misses votes still in flight.

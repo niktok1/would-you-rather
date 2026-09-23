@@ -8,33 +8,33 @@ import io.ntole.wyr.server.player.PlayerStore
 import io.ntole.wyr.server.plugins.ApiFailure
 import io.ntole.wyr.server.question.QuestionStore
 import org.jetbrains.exposed.v1.core.and
+import org.jetbrains.exposed.v1.core.count
 import org.jetbrains.exposed.v1.core.eq
-import org.jetbrains.exposed.v1.exceptions.ExposedSQLException
 import org.jetbrains.exposed.v1.jdbc.insert
+import org.jetbrains.exposed.v1.jdbc.select
 import org.jetbrains.exposed.v1.jdbc.selectAll
+import org.jetbrains.exposed.v1.jdbc.update
 
 object VoteStore {
     /**
-     * SQLState of a unique or primary key violation. The SQL standard leaves this subclass to the
-     * implementation; 23505 is DB2's code, which PostgreSQL and H2 both adopted. Neither uses it
-     * for a foreign key failure (PostgreSQL 23503, H2 23506). Another database may not match —
-     * MySQL reports 23000 — so check this before pointing the server at one.
-     */
-    private const val UNIQUE_VIOLATION = "23505"
-
-    /**
-     * Records a vote and scores it. Must run inside a transaction.
+     * Records an answer and scores it. Must run inside a transaction.
      *
-     * Ordering matters twice. The player is resolved *before* the insert: a validly signed token
+     * A player holds one vote per question, their latest (CLAUDE.md §8d). A first answer inserts
+     * it; answering again moves it to the new side and pays again. `created_at` keeps when the
+     * player first answered and `answered_at` when they last did, which is what the feed loops by.
+     *
+     * Ordering matters twice. The player is resolved *before* any write: a validly signed token
      * can outlive its player (an H2 dev server restarted with the constant dev secret still
      * accepts yesterday's tokens), and inserting first would trip the Votes foreign key instead
-     * of answering 401. And the vote is inserted *before* the tally is counted, so the returned
+     * of answering 401. And the vote is written *before* the tally is counted, so the returned
      * percentages already include the player's own vote — which is what the reveal screen shows.
      *
-     * At the server's READ COMMITTED both checks are plain reads, and that is enough. Nothing
-     * deletes a question or a player, so neither check can go stale before the insert, and the
-     * foreign keys would refuse the vote if one did. A second vote by the same player is refused
-     * by the Votes primary key, never by a read, so two racing for one question cannot both land.
+     * Two first answers racing on one question both find no vote and both insert. The second waits
+     * on the first's uncommitted key, then fails on the primary key (SQLState 23505) once it
+     * commits. That failure is deliberately not caught: PostgreSQL aborts a transaction at its
+     * first error, so nothing more could run in this one. It propagates, Exposed rolls back and
+     * runs the whole transaction again (`Db.query` goes through `transaction`, 3 attempts), and the
+     * rerun finds the committed vote and moves it: two answers, two points, one vote.
      */
     fun cast(
         playerId: String,
@@ -46,61 +46,81 @@ object VoteStore {
 
         if (PlayerStore.find(playerId) == null) throw ApiFailure.unauthorized("unknown player")
 
-        insertVote(playerId, questionId, choice, now)
+        // A plain read is enough to choose: an update by key applies to the row as committed
+        // whatever this read saw, and an insert it was wrong about fails on the key as above.
+        if (hasVoted(playerId, questionId)) {
+            moveVote(playerId, questionId, choice, now)
+        } else {
+            insertVote(playerId, questionId, choice, now)
+        }
 
-        val votesA = countVotes(questionId, OptionSide.A)
-        val votesB = countVotes(questionId, OptionSide.B)
+        val tally = tally(questionId)
 
         val totalPoints = PlayerStore.addPoints(playerId = playerId, points = Scoring.POINTS_PER_ANSWER)
 
         return VoteResultDto(
             questionId = questionId,
             yourChoice = choice,
-            tally = VoteTallyDto(votesA = votesA, votesB = votesB),
+            tally = tally,
             pointsAwarded = Scoring.POINTS_PER_ANSWER,
             totalPoints = totalPoints,
         )
     }
 
-    internal fun insertVote(
+    private fun hasVoted(
+        playerId: String,
+        questionId: String,
+    ): Boolean =
+        Votes
+            .selectAll()
+            .where { (Votes.playerId eq playerId) and (Votes.questionId eq questionId) }
+            .limit(1)
+            .any()
+
+    private fun insertVote(
         playerId: String,
         questionId: String,
         choice: OptionSide,
-        now: Long = System.currentTimeMillis(),
+        now: Long,
     ) {
-        try {
-            Votes.insert { row ->
-                row[Votes.playerId] = playerId
-                row[Votes.questionId] = questionId
-                row[Votes.side] = choice.name
-                row[Votes.createdAt] = now
-                row[Votes.answeredAt] = now
-            }
-        } catch (failure: ExposedSQLException) {
-            // Anything but a duplicate (a foreign key, a lost connection) is a real fault, not a
-            // second vote, and must surface as one rather than be quietly skipped by the client.
-            if (failure.sqlState != UNIQUE_VIOLATION) throw failure
-
-            // The composite primary key rejected it. Two requests racing for the same
-            // (player, question) both get here, and exactly one of them wins — which is why the
-            // check is the constraint rather than a prior SELECT.
-            throw ApiFailure.alreadyVoted(questionId, failure)
+        Votes.insert { row ->
+            row[Votes.playerId] = playerId
+            row[Votes.questionId] = questionId
+            row[Votes.side] = choice.name
+            row[Votes.createdAt] = now
+            row[Votes.answeredAt] = now
         }
     }
 
-    /**
-     * One side's count, as a statement of its own. At READ COMMITTED each statement sees the votes
-     * committed before it began, so the two sides can straddle another player's commit. While votes
-     * are only ever inserted, that just makes one side a moment newer. Once a vote can change side
-     * (re-answering, CLAUDE.md §8d), count both sides in one statement, or a switched vote can be
-     * counted on both.
-     */
-    private fun countVotes(
+    private fun moveVote(
+        playerId: String,
         questionId: String,
-        side: OptionSide,
-    ): Long =
-        Votes
-            .selectAll()
-            .where { (Votes.questionId eq questionId) and (Votes.side eq side.name) }
-            .count()
+        choice: OptionSide,
+        now: Long,
+    ) {
+        val moved =
+            Votes.update({ (Votes.playerId eq playerId) and (Votes.questionId eq questionId) }) { row ->
+                row[side] = choice.name
+                row[answeredAt] = now
+            }
+        // Nothing deletes a vote, so the one found above is still there.
+        check(moved == 1) { "vote by $playerId on $questionId vanished mid-transaction" }
+    }
+
+    /**
+     * Both sides' counts, in one statement. At READ COMMITTED each statement sees the votes
+     * committed before it began, so two counts could straddle another player's re-answer and count
+     * their one vote on both sides, or on neither.
+     */
+    private fun tally(questionId: String): VoteTallyDto {
+        val votes = Votes.side.count()
+        val counts =
+            Votes
+                .select(Votes.side, votes)
+                .where { Votes.questionId eq questionId }
+                .groupBy(Votes.side)
+                .associate { row -> row[Votes.side] to row[votes] }
+
+        return VoteTallyDto(votesA = counts[OptionSide.A.name] ?: 0L, votesB = counts[OptionSide.B.name] ?: 0L)
+    }
 }

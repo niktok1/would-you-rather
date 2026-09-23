@@ -19,16 +19,6 @@ class ApiFailure(
         fun questionNotFound(id: String) =
             ApiFailure(HttpStatusCode.NotFound, ErrorCode.QUESTION_NOT_FOUND, "no question $id")
 
-        fun alreadyVoted(
-            questionId: String,
-            cause: Throwable? = null,
-        ) = ApiFailure(
-            HttpStatusCode.Conflict,
-            ErrorCode.ALREADY_VOTED,
-            "already voted on $questionId",
-            cause,
-        )
-
         fun validation(
             message: String,
             cause: Throwable? = null,

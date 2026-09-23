@@ -65,6 +65,16 @@ class QuestionStoreTest {
     }
 
     @Test
+    fun `a re-answer sends the question to the back of the loop`() {
+        val player = newPlayer()
+        pool.forEachIndexed { index, id -> answer(player, id, at = 1_000L + index) }
+
+        answer(player, pool.first(), at = 5_000L)
+
+        assertEquals(pool.drop(1) + pool.first(), feed(player).map { it.id })
+    }
+
+    @Test
     fun `another player's answers do not count as this player's`() {
         val player = newPlayer()
         val other = newPlayer()
