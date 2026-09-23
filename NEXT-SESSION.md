@@ -134,14 +134,15 @@ The app opens on the **Console** tab (`io.ntole.wyr.dev`). **Play** is the froze
 - **Stats.** Every number `GET /v1/me` returns: total points, answers given (re-answers count,
   replays do not), distinct questions answered, the cycle, and how many questions are still due in
   it. Read when the console opens, after every vote, *Answer N* and *New guest*, and on *Read
-  stats*. A read that works is not logged. One that fails logs `refreshStats` and keeps what was
-  shown, which after a vote is nothing: a vote's outcome drops the stats it outdated. A red `MISMATCH totalPoints` line means the stats and the last outcome disagree:
-  a vote landed whose answer was lost (*Retry last vote* replays it, and the flag goes), a vote
-  from the Play tab, or a bug. **To see the lazy cycle start:** once the last due question is
-  answered, Stats shows the finished cycle with `dueThisCycle: 0`. The next cycle starts only when
-  the feed is next asked for questions, which the console does when its queue is empty (*Next
-  question*, *Skip*, or the next answer of *Answer N*). *Read stats* then shows it, with the whole
-  pool due.
+  stats*. *Read stats* is an action like any other, logged as `readStats` whether it works or not.
+  The other reads are logged only when they fail, as `refreshStats`. A read that fails keeps what
+  was shown, which after a vote is nothing: a vote's outcome drops the stats it outdated. A red
+  `MISMATCH totalPoints` line means the stats and the last outcome disagree: a vote landed whose
+  answer was lost (*Retry last vote* replays it, and the flag goes), a vote from the Play tab, or
+  a bug. **To see the lazy cycle start:** once the last due question is answered, Stats shows the
+  finished cycle with `dueThisCycle: 0`. The next cycle starts only when the feed is next asked
+  for questions, which the console does when its queue is empty (*Next question*, *Skip*, or the
+  next answer of *Answer N*). *Read stats* then shows it, with the whole pool due.
 - **Questions.** Fetch the next question, or empty the local queue, and see its size.
 - **Vote by id.** Sends a vote for whatever id is typed, as a new attempt. An unknown id provokes
   `QUESTION_NOT_FOUND` (404). A known one is simply answered again and pays 1: there is no
