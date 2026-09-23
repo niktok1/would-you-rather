@@ -49,8 +49,8 @@ public class DefaultQuestionRepository(
 
     /**
      * Every id handed out since the latest fetch went out, starting with the one on screen then.
-     * The batch still lists each of them as unanswered, whatever the player has done with them
-     * since. Reset by every fetch, so a question kept out of one batch is queued by the next.
+     * The batch still lists each of them as due, whatever the player has done with them since.
+     * Reset by every fetch, so a question kept out of one batch is queued by the next.
      */
     private val handedOutSinceFetch = mutableSetOf<String>()
 
