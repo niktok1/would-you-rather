@@ -56,7 +56,7 @@ class ReceiveBodyTest {
             val response =
                 client.post("/probe") {
                     contentType(ContentType.Application.Json)
-                    setBody("""{"questionId":"seed-1","choice":"A"}""")
+                    setBody("""{"questionId":"seed-1","choice":"A","attemptId":"a1"}""")
                 }
 
             assertEquals(HttpStatusCode.InternalServerError, response.status)

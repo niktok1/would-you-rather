@@ -15,6 +15,7 @@ import io.ntole.wyr.core.network.WyrJson
 import io.ntole.wyr.core.question.QuestionCategory
 import io.ntole.wyr.core.question.QuestionDto
 import io.ntole.wyr.core.question.QuestionPageDto
+import io.ntole.wyr.core.vote.VoteRequest
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
@@ -37,6 +38,9 @@ internal class FakeServer {
 
     /** The `Authorization` header of every vote, in arrival order. */
     val votesSentAs = mutableListOf<String?>()
+
+    /** The attempt id of every vote, in arrival order. */
+    val voteAttempts = mutableListOf<String>()
 
     /** The `Authorization` header of every feed request, in arrival order. */
     val feedsSentAs = mutableListOf<String?>()
@@ -74,6 +78,8 @@ internal class FakeServer {
             WyrApi.Paths.VOTES -> {
                 val authorization = request.headers[HttpHeaders.Authorization]
                 votesSentAs += authorization
+                voteAttempts +=
+                    WyrJson.decodeFromString<VoteRequest>(request.body.toByteArray().decodeToString()).attemptId
                 val player = authorization?.removePrefix("Bearer access-")
                 val refusal = refuseVotesWith
                 when {

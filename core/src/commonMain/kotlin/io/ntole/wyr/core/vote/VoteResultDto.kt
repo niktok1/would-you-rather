@@ -10,6 +10,10 @@ import kotlinx.serialization.Serializable
  *
  * [totalPoints] is the server's authoritative running value, not a delta. The client displays
  * it rather than accumulating [pointsAwarded] itself, which would let the two sides diverge.
+ *
+ * [replayed] is true when the request repeated the attempt already recorded for this question
+ * (see [VoteRequest.attemptId]). Nothing was written: [pointsAwarded] is 0, and [yourChoice] is the
+ * side stored by that attempt, whatever the repeat asked for.
  */
 @Serializable
 public data class VoteResultDto(
@@ -18,4 +22,5 @@ public data class VoteResultDto(
     public val tally: VoteTallyDto,
     public val pointsAwarded: Int,
     public val totalPoints: Int,
+    public val replayed: Boolean = false,
 )

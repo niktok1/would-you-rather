@@ -95,7 +95,9 @@ class QuestionStoreTest {
         questionId: String,
         at: Long,
     ) {
-        transaction(database) { VoteStore.cast(player, questionId, OptionSide.A, now = at) }
+        transaction(database) {
+            VoteStore.cast(player, questionId, OptionSide.A, attemptId = UUID.randomUUID().toString(), now = at)
+        }
     }
 
     private fun feed(

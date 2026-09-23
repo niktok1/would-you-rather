@@ -1,6 +1,7 @@
 package io.ntole.wyr.core.data.vote
 
 import io.ktor.http.HttpStatusCode
+import io.ntole.wyr.core.api.WyrApi
 import io.ntole.wyr.core.data.BASE_URL
 import io.ntole.wyr.core.data.FakeServer
 import io.ntole.wyr.core.data.session
@@ -18,6 +19,8 @@ import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertNotEquals
+import kotlin.test.assertTrue
 
 class DefaultVoteRepositoryTest {
     private val server = FakeServer()
@@ -39,6 +42,20 @@ class DefaultVoteRepositoryTest {
             assertEquals(1, server.guestsMinted)
             assertEquals("guest1", store.read()?.playerId)
             assertEquals(listOf<String?>("Bearer access-a", "Bearer access-guest1"), server.votesSentAs)
+        }
+
+    @Test
+    fun `every cast is an answer with an attempt id of its own`() =
+        runTest {
+            votes.cast("q1", Side.A)
+            votes.cast("q1", Side.A)
+
+            // The first went out twice, around the session recovery, and that retry is the same
+            // answer. The second cast is another answer.
+            val (first, retried, second) = server.voteAttempts
+            assertEquals(first, retried)
+            assertNotEquals(first, second)
+            assertTrue(second.isNotBlank() && second.length <= WyrApi.Limits.MAX_ATTEMPT_ID_LENGTH, second)
         }
 
     @Test

@@ -1,5 +1,6 @@
 package io.ntole.wyr.server.db
 
+import io.ntole.wyr.core.api.WyrApi
 import org.jetbrains.exposed.v1.core.Table
 
 /**
@@ -51,6 +52,13 @@ object Votes : Table("votes") {
 
     /** When the player last answered. The feed loops answered questions back oldest first by this. */
     val answeredAt = long("answered_at")
+
+    /**
+     * The client's key for the latest answer (CLAUDE.md §8d). A request carrying it again is a
+     * retry of that answer and is replayed. Only the latest is kept, so a retry of an older answer
+     * arriving after a newer one counts as a fresh answer.
+     */
+    val attemptId = varchar("attempt_id", WyrApi.Limits.MAX_ATTEMPT_ID_LENGTH)
 
     /**
      * One row per player per question, so the tally holds one vote per player. The key is what

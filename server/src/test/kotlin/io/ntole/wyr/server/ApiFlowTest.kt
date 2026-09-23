@@ -30,6 +30,7 @@ import io.ntole.wyr.server.auth.TokenService
 import io.ntole.wyr.server.config.ServerConfig
 import io.ntole.wyr.server.vote.Scoring
 import kotlinx.serialization.json.Json
+import java.util.UUID
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -60,7 +61,7 @@ class ApiFlowTest {
                     .post(WyrApi.Paths.VOTES) {
                         bearerAuth(session.accessToken)
                         contentType(ContentType.Application.Json)
-                        setBody(VoteRequest(questionId = question.id, choice = OptionSide.A))
+                        setBody(VoteRequest(questionId = question.id, choice = OptionSide.A, attemptId = "attempt-1"))
                     }.body()
 
             assertEquals(question.id, result.questionId)
@@ -71,6 +72,7 @@ class ApiFlowTest {
             // A first answer earns the flat point, and that point is the whole running total.
             assertEquals(Scoring.POINTS_PER_ANSWER, result.pointsAwarded)
             assertEquals(Scoring.POINTS_PER_ANSWER, result.totalPoints)
+            assertFalse(result.replayed)
         }
 
     @Test
@@ -116,6 +118,52 @@ class ApiFlowTest {
             )
             assertEquals(Scoring.POINTS_PER_ANSWER, again.pointsAwarded)
             assertEquals(2 * Scoring.POINTS_PER_ANSWER, again.totalPoints)
+            assertFalse(again.replayed, "a new attempt is a fresh answer")
+        }
+
+    @Test
+    fun `repeating an attempt replays its result and pays nothing`() =
+        runServer("replay") { client ->
+            val player = client.guest()
+            val question = client.batch(player).first()
+            val answered = client.vote(player, question.id, OptionSide.A, attemptId = "attempt-1")
+
+            // A retry of that answer, even one that asks for the other side this time.
+            val replay = client.vote(player, question.id, OptionSide.B, attemptId = "attempt-1")
+
+            assertTrue(replay.replayed)
+            assertEquals(0, replay.pointsAwarded)
+            assertEquals(answered.totalPoints, replay.totalPoints)
+            assertEquals(OptionSide.A, replay.yourChoice, "the stored side, not the repeat's")
+            assertEquals(answered.tally, replay.tally)
+
+            // A new attempt is an answer again, and from then on it is the one a retry replays.
+            val switched = client.vote(player, question.id, OptionSide.B, attemptId = "attempt-2")
+            assertEquals(Scoring.POINTS_PER_ANSWER, switched.pointsAwarded)
+            val replayOfSwitch = client.vote(player, question.id, OptionSide.A, attemptId = "attempt-2")
+            assertTrue(replayOfSwitch.replayed)
+            assertEquals(OptionSide.B, replayOfSwitch.yourChoice)
+            assertEquals(VoteTallyDto(votesA = 0, votesB = 1), replayOfSwitch.tally)
+            assertEquals(switched.totalPoints, replayOfSwitch.totalPoints)
+        }
+
+    @Test
+    fun `an attempt id that is blank or too long is a validation error`() =
+        runServer("bad-attempt") { client ->
+            val player = client.guest()
+            val longest = "x".repeat(WyrApi.Limits.MAX_ATTEMPT_ID_LENGTH)
+
+            listOf("empty" to "", "blank" to "   ", "too long" to longest + "x").forEach { (case, attemptId) ->
+                val response = client.castVote(player, VoteRequest("seed-1", OptionSide.A, attemptId))
+                assertEquals(HttpStatusCode.BadRequest, response.status, case)
+                assertEquals(ErrorCode.VALIDATION_FAILED, response.body<ErrorDto>().code, case)
+            }
+
+            // The limit itself is allowed, so the column has room for it.
+            assertEquals(
+                HttpStatusCode.OK,
+                client.castVote(player, VoteRequest("seed-1", OptionSide.A, longest)).status,
+            )
         }
 
     @Test
@@ -126,7 +174,7 @@ class ApiFlowTest {
             val response =
                 client.post(WyrApi.Paths.VOTES) {
                     contentType(ContentType.Application.Json)
-                    setBody(VoteRequest(question.id, OptionSide.A))
+                    setBody(VoteRequest(question.id, OptionSide.A, attemptId = "attempt-1"))
                 }
 
             assertEquals(HttpStatusCode.Unauthorized, response.status)
@@ -180,7 +228,7 @@ class ApiFlowTest {
                 client.post(WyrApi.Paths.VOTES) {
                     bearerAuth(session.accessToken)
                     contentType(ContentType.Application.Json)
-                    setBody(VoteRequest("no-such-question", OptionSide.A))
+                    setBody(VoteRequest("no-such-question", OptionSide.A, attemptId = "attempt-1"))
                 }
 
             assertEquals(HttpStatusCode.NotFound, response.status)
@@ -199,7 +247,7 @@ class ApiFlowTest {
                 client.post(WyrApi.Paths.VOTES) {
                     bearerAuth(signAccessToken(real.playerId))
                     contentType(ContentType.Application.Json)
-                    setBody(VoteRequest(question.id, OptionSide.A))
+                    setBody(VoteRequest(question.id, OptionSide.A, attemptId = "attempt-1"))
                 }
             assertEquals(HttpStatusCode.OK, accepted.status)
 
@@ -209,7 +257,7 @@ class ApiFlowTest {
                 client.post(WyrApi.Paths.VOTES) {
                     bearerAuth(signAccessToken("no-such-player"))
                     contentType(ContentType.Application.Json)
-                    setBody(VoteRequest(question.id, OptionSide.A))
+                    setBody(VoteRequest(question.id, OptionSide.A, attemptId = "attempt-1"))
                 }
 
             assertEquals(HttpStatusCode.Unauthorized, response.status)
@@ -225,7 +273,7 @@ class ApiFlowTest {
                 client.post(WyrApi.Paths.VOTES) {
                     bearerAuth(signAccessToken(session.playerId, secret = "not-the-server-secret"))
                     contentType(ContentType.Application.Json)
-                    setBody(VoteRequest("seed-1", OptionSide.A))
+                    setBody(VoteRequest("seed-1", OptionSide.A, attemptId = "attempt-1"))
                 }
 
             assertEquals(HttpStatusCode.Unauthorized, response.status)
@@ -254,9 +302,14 @@ class ApiFlowTest {
             }
 
             assertRejected("malformed json", "{not json")
-            assertRejected("unknown side", """{"questionId":"seed-1","choice":"C"}""")
-            assertRejected("blank questionId", """{"questionId":"  ","choice":"A"}""")
-            assertRejected("not sent as json", """{"questionId":"seed-1","choice":"A"}""", ContentType.Text.Plain)
+            assertRejected("unknown side", """{"questionId":"seed-1","choice":"C","attemptId":"a1"}""")
+            assertRejected("blank questionId", """{"questionId":"  ","choice":"A","attemptId":"a1"}""")
+            assertRejected("no attemptId", """{"questionId":"seed-1","choice":"A"}""")
+            assertRejected(
+                "not sent as json",
+                """{"questionId":"seed-1","choice":"A","attemptId":"a1"}""",
+                ContentType.Text.Plain,
+            )
         }
 
     @Test
@@ -455,16 +508,23 @@ class ApiFlowTest {
 
     private fun List<QuestionDto>.ids(): List<String> = map { it.id }
 
+    /** A fresh answer unless [attemptId] repeats an earlier one. */
     private suspend fun HttpClient.vote(
         session: SessionDto,
         questionId: String,
         choice: OptionSide,
-    ): VoteResultDto =
+        attemptId: String = UUID.randomUUID().toString(),
+    ): VoteResultDto = castVote(session, VoteRequest(questionId, choice, attemptId)).body()
+
+    private suspend fun HttpClient.castVote(
+        session: SessionDto,
+        request: VoteRequest,
+    ): HttpResponse =
         post(WyrApi.Paths.VOTES) {
             bearerAuth(session.accessToken)
             contentType(ContentType.Application.Json)
-            setBody(VoteRequest(questionId, choice))
-        }.body()
+            setBody(request)
+        }
 
     /**
      * Signs an access token the way the server under [runServer] does, for a player id the server

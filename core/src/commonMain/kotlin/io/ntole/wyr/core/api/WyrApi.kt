@@ -37,5 +37,8 @@ public object WyrApi {
     public object Limits {
         public const val DEFAULT_PAGE_SIZE: Int = 20
         public const val MAX_PAGE_SIZE: Int = 100
+
+        /** Longest [io.ntole.wyr.core.vote.VoteRequest.attemptId] the server accepts. A UUID is 36. */
+        public const val MAX_ATTEMPT_ID_LENGTH: Int = 64
     }
 }

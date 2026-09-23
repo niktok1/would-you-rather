@@ -20,18 +20,23 @@ fun Route.voteRoutes(db: Db) {
             val body = call.receiveOrReject<VoteRequest>("vote request")
 
             if (body.questionId.isBlank()) throw ApiFailure.validation("questionId is blank")
+            if (body.attemptId.isBlank()) throw ApiFailure.validation("attemptId is blank")
+            if (body.attemptId.length > WyrApi.Limits.MAX_ATTEMPT_ID_LENGTH) {
+                throw ApiFailure.validation("attemptId is over ${WyrApi.Limits.MAX_ATTEMPT_ID_LENGTH} characters")
+            }
 
             // One transaction covers the vote, the tally, and the point award, so they commit or fail
-            // together. The points do not depend on the tally (§8c). It is not a lock: at READ
-            // COMMITTED the tally counts what other players had committed when it ran, which can
-            // include votes committed after this request began, and misses votes still in flight.
-            // The stored votes, which the next read counts, are exact.
+            // together. The points do not depend on the tally (§8c). It locks only this player's vote,
+            // not the tally: at READ COMMITTED the tally counts what other players had committed when
+            // it ran, which can include votes committed after this request began, and misses votes
+            // still in flight. The stored votes, which the next read counts, are exact.
             val result =
                 db.query {
                     VoteStore.cast(
                         playerId = playerId,
                         questionId = body.questionId,
                         choice = body.choice,
+                        attemptId = body.attemptId,
                     )
                 }
 

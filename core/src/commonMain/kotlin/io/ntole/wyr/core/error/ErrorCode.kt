@@ -18,8 +18,9 @@ public enum class ErrorCode {
     /**
      * This player has already voted on this question.
      *
-     * No longer sent: answering a question again is a fresh answer (CLAUDE.md §8d). It stays in
-     * the contract because it is on the wire, and dropping a member is a breaking change of its own.
+     * No longer sent: answering a question again is a fresh answer, and repeating an attempt is
+     * replayed (CLAUDE.md §8d). It stays in the contract because it is on the wire, and dropping a
+     * member is a breaking change of its own.
      */
     ALREADY_VOTED,
 

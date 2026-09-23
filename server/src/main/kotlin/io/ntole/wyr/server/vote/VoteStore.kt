@@ -7,12 +7,12 @@ import io.ntole.wyr.server.db.Votes
 import io.ntole.wyr.server.player.PlayerStore
 import io.ntole.wyr.server.plugins.ApiFailure
 import io.ntole.wyr.server.question.QuestionStore
+import org.jetbrains.exposed.v1.core.ResultRow
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.count
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.select
-import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.update
 
 object VoteStore {
@@ -22,6 +22,10 @@ object VoteStore {
      * A player holds one vote per question, their latest (CLAUDE.md §8d). A first answer inserts
      * it; answering again moves it to the new side and pays again. `created_at` keeps when the
      * player first answered and `answered_at` when they last did, which is what the feed loops by.
+     *
+     * Every answer carries the client's [attemptId], and the vote keeps the latest. A request that
+     * repeats it is a retry of an answer already recorded, and is replayed: nothing is written, it
+     * pays nothing, and it reports the stored side with the current tally and total.
      *
      * Ordering matters twice. The player is resolved *before* any write: a validly signed token
      * can outlive its player (an H2 dev server restarted with the constant dev secret still
@@ -33,25 +37,29 @@ object VoteStore {
      * on the first's uncommitted key, then fails on the primary key (SQLState 23505) once it
      * commits. That failure is deliberately not caught: PostgreSQL aborts a transaction at its
      * first error, so nothing more could run in this one. It propagates, Exposed rolls back and
-     * runs the whole transaction again (`Db.query` goes through `transaction`, 3 attempts), and the
-     * rerun finds the committed vote and moves it: two answers, two points, one vote.
+     * runs the whole transaction again (`Db.query` goes through `transaction`, 3 attempts). The
+     * rerun finds the committed vote and treats it like any other: a different attempt moves it
+     * (two answers, one vote), and the same attempt replays it.
      */
     fun cast(
         playerId: String,
         questionId: String,
         choice: OptionSide,
+        attemptId: String,
         now: Long = System.currentTimeMillis(),
     ): VoteResultDto {
         if (!QuestionStore.exists(questionId)) throw ApiFailure.questionNotFound(questionId)
 
         if (PlayerStore.find(playerId) == null) throw ApiFailure.unauthorized("unknown player")
 
-        // A plain read is enough to choose: an update by key applies to the row as committed
-        // whatever this read saw, and an insert it was wrong about fails on the key as above.
-        if (hasVoted(playerId, questionId)) {
-            moveVote(playerId, questionId, choice, now)
+        val stored = lockVote(playerId, questionId)
+
+        if (stored != null && stored[Votes.attemptId] == attemptId) return replay(playerId, questionId, stored)
+
+        if (stored == null) {
+            insertVote(playerId, questionId, choice, attemptId, now)
         } else {
-            insertVote(playerId, questionId, choice, now)
+            moveVote(playerId, questionId, choice, attemptId, now)
         }
 
         val tally = tally(questionId)
@@ -64,23 +72,54 @@ object VoteStore {
             tally = tally,
             pointsAwarded = Scoring.POINTS_PER_ANSWER,
             totalPoints = totalPoints,
+            replayed = false,
         )
     }
 
-    private fun hasVoted(
+    /**
+     * The player's vote on the question, locked until this transaction ends, or null before their
+     * first answer.
+     *
+     * Locked because what happens next depends on the attempt id read here, and at READ COMMITTED a
+     * plain read can be stale by the time this transaction writes: a retry arriving while its
+     * attempt is still in flight would read the attempt before it, take itself for a fresh answer,
+     * and pay again. `FOR UPDATE` makes it wait for the attempt to commit and then read the row that
+     * attempt left, and so replay it. Before a first answer there is no row to lock, and two first
+     * answers race on the primary key instead (see [cast]).
+     */
+    private fun lockVote(
         playerId: String,
         questionId: String,
-    ): Boolean =
+    ): ResultRow? =
         Votes
-            .selectAll()
+            .select(Votes.side, Votes.attemptId)
             .where { (Votes.playerId eq playerId) and (Votes.questionId eq questionId) }
-            .limit(1)
-            .any()
+            .forUpdate()
+            .singleOrNull()
+
+    private fun replay(
+        playerId: String,
+        questionId: String,
+        stored: ResultRow,
+    ): VoteResultDto {
+        // Read now, not taken from the check in cast: that ran before any wait for the lock, and the
+        // attempt being replayed may have paid its point since.
+        val player = checkNotNull(PlayerStore.find(playerId)) { "player $playerId vanished mid-transaction" }
+        return VoteResultDto(
+            questionId = questionId,
+            yourChoice = OptionSide.valueOf(stored[Votes.side]),
+            tally = tally(questionId),
+            pointsAwarded = 0,
+            totalPoints = player.totalPoints,
+            replayed = true,
+        )
+    }
 
     private fun insertVote(
         playerId: String,
         questionId: String,
         choice: OptionSide,
+        attemptId: String,
         now: Long,
     ) {
         Votes.insert { row ->
@@ -89,21 +128,25 @@ object VoteStore {
             row[Votes.side] = choice.name
             row[Votes.createdAt] = now
             row[Votes.answeredAt] = now
+            row[Votes.attemptId] = attemptId
         }
     }
 
+    /** Under [lockVote]'s lock, so an update by key is exactly the row that was read. */
     private fun moveVote(
         playerId: String,
         questionId: String,
         choice: OptionSide,
+        attemptId: String,
         now: Long,
     ) {
         val moved =
             Votes.update({ (Votes.playerId eq playerId) and (Votes.questionId eq questionId) }) { row ->
                 row[side] = choice.name
                 row[answeredAt] = now
+                row[Votes.attemptId] = attemptId
             }
-        // Nothing deletes a vote, so the one found above is still there.
+        // Nothing deletes a vote, and this transaction holds its lock.
         check(moved == 1) { "vote by $playerId on $questionId vanished mid-transaction" }
     }
 
