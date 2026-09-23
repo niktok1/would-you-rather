@@ -67,6 +67,13 @@ public object WyrHttpClient {
                     // The server rotates the refresh token the moment it answers a refresh. Were
                     // the caller cancelled before the write below, the store would keep a dead
                     // refresh token and the next 401 would cost the player their guest account.
+                    //
+                    // The cost: in Ktor 3.5 the wait for the provider's lock runs inside the same
+                    // NonCancellable block, so every call queued behind a refresh is uncancellable
+                    // until the refresh ends. Only each engine's own timeout bounds that. There is
+                    // deliberately no HttpTimeout here: a refresh abandoned on a timeout after the
+                    // server answered loses the rotated token just as a cancelled one would, and a
+                    // cold start on Render's free tier can take tens of seconds.
                     nonCancellableRefresh = true
 
                     loadTokens { sessionStore.read()?.toBearerTokens() }
