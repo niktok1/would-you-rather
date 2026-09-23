@@ -11,24 +11,39 @@ Repo initialized on `main` with the personal identity and `user.useConfigOnly = 
 
 ### Verified working
 
-- `:server` on H2: 36 tests green, including 14 end-to-end flow tests in `ApiFlowTest`. Flat
+- `:server` on H2: 52 tests green, including 21 end-to-end flow tests in `ApiFlowTest`. Flat
   scoring is covered there (every vote pays 1, majority and minority alike, and the total
   accumulates) and by `PlayerStoreTest`, which races awards for one player and refreshes of one
-  token.
+  token. The endless feed, re-answering and attempt replay are covered there too, and by
+  `QuestionStoreTest` and `VoteStoreTest`.
 - Live curl run against `./gradlew :server:run` confirmed guest auth, paging, voting,
   refresh-token rotation, replay rejection, and the `ErrorDto` envelope on 400/401/404/409. That
-  run predates flat scoring and `fix/read-committed`, so the scoring it checked was the old streak
-  rule, and the rotation was the old find-then-update-by-id at REPEATABLE_READ, not today's
-  compare-and-set at READ COMMITTED.
-- `:app:shared` compiles for JVM, JS, and wasmJs; 5 ViewModel tests green.
+  run predates flat scoring, `fix/read-committed` and the endless feed, so the scoring it checked
+  was the old streak rule, and the rotation was the old find-then-update-by-id at REPEATABLE_READ,
+  not today's compare-and-set at READ COMMITTED. The cursor paging and the 409 it checked no
+  longer exist.
+- The client against a live `:server:run` on H2, on `feat/endless-feed`: a throwaway JVM test,
+  not committed, drove `GetNextQuestion` and `CastVote` through the real CIO client for 60
+  answers. The first 24 were the 24 seeds, all different, in random order. From the 25th every
+  question came back `answeredBefore`, least recently answered first, never the same one twice in
+  a row, and every answer paid 1. The last vote sent again as the same attempt was replayed: +0,
+  and the stored side although the request asked for the other. A skipped question came back in
+  the next batch.
+- Client tests: `:core:domain` 10, `:core:data` 47, `:core:network` 21, `:app:shared` 34 (the
+  ViewModels and the Koin graph). `:app:shared` compiles for JVM, JS, wasmJs and the iOS
+  simulator.
 - `:app:androidApp:assembleDebug` produces a real APK.
 - `ktlintCheck` clean across every module.
 
 ### NOT verified
 
-- **Flat scoring and the refresh rotation on a live server.** Nobody has re-run the curl pass
-  since either landed, so the 1-point rule and the compare-and-set rotation are proven by tests
-  only.
+- **The refresh rotation on a live server.** Nobody has re-run the curl pass since it landed, so
+  the compare-and-set rotation is proven by tests only. The 1-point rule has been seen live, in
+  the client run above.
+- **The endless feed and vote replay on Postgres.** `RANDOM()` and `NULLS FIRST` in the feed, a
+  first answer racing another (the 23505 aborts the transaction and Exposed reruns it), and the
+  `SELECT ... FOR UPDATE` that makes a retry wait and replay have only run on H2. The store races
+  in `QuestionStoreTest` and `VoteStoreTest` poll H2's `SESSIONS`, like `PlayerStoreTest`.
 - **READ COMMITTED and the refresh compare-and-set on Postgres.** Every race and burst in
   `PlayerStoreTest` runs on H2, even in the `server-postgres` job: it hardcodes `jdbc:h2:mem:`,
   because its wait-for-the-lock polling reads H2's `INFORMATION_SCHEMA.SESSIONS`. So the ci.yml
@@ -56,7 +71,8 @@ Repo initialized on `main` with the personal identity and `user.useConfigOnly = 
   rest.
 - **The UI has never been looked at.** It compiles and its ViewModel is tested, but no
   screenshot of the play screen or the reveal state has been taken on any platform. Treat the
-  layout and the §5b palette in practice as unreviewed.
+  layout and the §5b palette in practice as unreviewed. The dev console has not been opened
+  either: its actions are tested through its ViewModel, and the use cases behind them ran live.
 
 ## Running it locally
 
@@ -91,12 +107,25 @@ The app opens on the **Console** tab (`io.ntole.wyr.dev`). **Play** is the froze
 - **Session.** *Ensure session* mints a guest, or reuses the stored one. The header then shows the
   player id and when its access token expires. *New guest* drops the session and the question
   queue, then mints a fresh player and loads a question for it.
-- **Play.** *Skip* loads the next question and sends nothing. *A* / *B* answer it, and the raw
-  `VoteOutcome` appears below. The header's total points is the last outcome's `totalPoints`;
-  there is no stats endpoint yet.
+- **Play.** *Skip* loads the next question and sends nothing, so the feed serves the skipped one
+  again in a later batch. *A* / *B* answer it, each tap as a new attempt, and the raw
+  `VoteOutcome` appears below, `replayed` included. A question the feed looped back to shows
+  `answeredBefore: true` and logs as `question=<id> looped`. The header's total points is the last
+  outcome's `totalPoints`; there is no stats endpoint yet.
+- **Retry last vote (same attempt)**, under Play. Sends the last vote again unchanged, attempt id
+  included, whether or not it got an answer. While it is still that question's latest answer the server
+  replays it, logged as `+0 total=<n> replayed`. A vote that never landed is paid as an answer.
+  Every vote's log entry shows its attempt id, so the two entries can be compared.
+- **Answer many.** *Answer N* answers N questions in a row (1 to 50), alternating A and B. Each
+  answer is logged as `answer` as it lands, then the run as `answered=N looped=K total=T`; a
+  failure ends the run, and its vote is left for *Retry last vote*. **To see the loop:** the server
+  seeds 24 questions, so press *New guest*, then *Answer N* with 25. The first 24 are the seeds in
+  random order and the 25th logs `looped`. After that the loop comes round least recently
+  answered first.
 - **Questions.** Fetch the next question, or empty the local queue, and see its size.
-- **Vote by id.** Sends a vote for whatever id is typed. An unknown id provokes
-  `QUESTION_NOT_FOUND` (404) and a repeat provokes `ALREADY_VOTED` (409).
+- **Vote by id.** Sends a vote for whatever id is typed, as a new attempt. An unknown id provokes
+  `QUESTION_NOT_FOUND` (404). A known one is simply answered again and pays 1: there is no
+  "already voted" any more.
 - **Action log.** Every action, newest first: `ok`, `err` (the `DomainError` and its diagnostic
   message) or `crash` (anything else thrown), with how long it took. One action runs at a time.
 - **HTTP trace.** Every request that went out, with status and time. A refreshed call shows as
@@ -161,6 +190,18 @@ known `PlayViewModel` issues (the Play tab is frozen).
   `PlayerStoreTest` pins a burst of 8 awards through `DatabaseFactory.poolConfig`, and races two
   awards and two refreshes at a hand-picked READ COMMITTED so those tests stay discriminating
   whatever the server's level becomes.
+- **The client keeps no record of which questions it has served** (CLAUDE.md §8d). The server
+  knows what the player answered and leads every batch with whatever is still unanswered, which
+  includes what is queued and the question on screen. `InMemoryQuestionCache` drops only ids still
+  queued, and `DefaultQuestionRepository` drops the one it handed out last. An "ever seen" set is
+  what used to end the game after one pass; do not bring one back. `OUT_OF_QUESTIONS` now means
+  the server sent an empty batch, and nothing else.
+- **An attempt id is made once per tap and reused only to retry that tap.** `AttemptId.random()`
+  is the only way to make one. Making a new one for a retry pays twice; reusing one for a new tap
+  turns that answer into a replay that pays nothing. The server stores only the latest attempt per
+  player and question, so a retry that arrives after a newer answer pays as a fresh answer.
+  `PlayViewModel` keeps a vote lost to `NETWORK` for Try again and moves on after any other
+  failure, since a refused vote would fail the same way every time.
 - `Tally.percentB` is defined as `100 - percentA` rather than rounded independently, so the two
   always sum to 100. There is a property test over every split up to 40/40.
 - `:server` must not depend on `:core:domain` (§3). That is why scoring lives in `:server`.
