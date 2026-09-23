@@ -11,7 +11,6 @@ object Players : Table("players") {
     val id = varchar("id", 36)
     val createdAt = long("created_at")
     val totalPoints = integer("total_points").default(0)
-    val streak = integer("streak").default(0)
 
     /** SHA-256 of the current refresh token. The token itself is never stored. */
     val refreshTokenHash = varchar("refresh_token_hash", 64).nullable()

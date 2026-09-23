@@ -294,19 +294,16 @@ accounts exist.
 "surprise me" filter, and it stays in `QuestionCategory` as-is. The unfiltered feed already mixes
 every category.
 
-## 8c. Scoring rules — v1
-
-> **Being replaced** by the flat scoring in §8d. Until `feat/flat-scoring` lands, this section
-> still describes the code as it is.
+## 8c. Scoring rules — flat
 
 Server-authoritative, in `io.ntole.wyr.server.vote.Scoring`. The client displays what the server
 returns and never recomputes points, so the two cannot disagree.
 
-- Every vote earns 10 base points.
-- Picking the more popular side extends a streak and pays `5 + min(streak, 10) * 2`.
-- Picking the minority side pays base only and resets the streak to 0.
-- An **exact tie counts as agreeing**, matching `VoteOutcome.agreedWithMajority` on the client.
-  If those two ever diverge, the reveal screen will contradict the points it shows.
+- Every answer earns `Scoring.POINTS_PER_ANSWER`, which is **1 point**, whichever side it picks
+  (§8d). There is no majority bonus and no streak.
+- The reveal's "with the crowd" verdict is `VoteOutcome.agreedWithMajority` on the client (an
+  exact tie counts as agreeing). It is display only: no points depend on it, so the server keeps
+  no copy of the rule.
 
 Deliberately lives in `:server` and not `:core:domain`, so `:server` needs no dependency on the
 client's domain module and the §3 graph stays intact.
@@ -323,7 +320,7 @@ rewards reading the crowd may come later as a separate, opt-in mode, never as th
 **Current focus.** UI polish is paused. Functionality ships behind a plain engineering dev
 console, which is the default root screen. `PlayScreen` stays as a frozen second tab.
 
-- **Scoring** *(not built; replaces §8c)*: every answer earns exactly **1 point**, whichever side
+- **Scoring** *(built; see §8c)*: every answer earns exactly **1 point**, whichever side
   it picks. There is no majority bonus and no streak: the streak is removed from the server, the
   contract, and the domain. The reveal still shows the split and whether the player sided with
   the majority, as information only.

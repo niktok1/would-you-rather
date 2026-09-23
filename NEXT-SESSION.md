@@ -70,7 +70,7 @@ rules live in CLAUDE.md §8d. Each item is one short-lived branch, in order:
 1. `fix/server-errors` *(done)* — a vote from an unknown player returns 401, not 409
    ALREADY_VOTED; only a real duplicate returns 409; add a body-parse helper; drop logback from
    TRACE to INFO; `?category=UNKNOWN` returns 400; parse CORS origins that include a scheme.
-2. `feat/flat-scoring` — 1 point per answer, streak removed (§8d).
+2. `feat/flat-scoring` *(done)* — 1 point per answer, streak removed (§8d).
 3. `fix/client-errors-session` — truthful error mapping (offline, dead refresh, and cancellation
    currently all show UNKNOWN); invalidate Ktor's cached bearer on session change; single-flight
    reset; first `:core:network` / `:core:data` tests.
@@ -101,9 +101,10 @@ known `PlayViewModel` issues (the Play tab is frozen).
 - **Exposed 1.x renamed everything.** Packages are `org.jetbrains.exposed.v1.*`, and
   `SqlExpressionBuilder.eq` is deprecated *as an error* — import the top-level `eq` instead.
   Expect to hit this again the first time you write a new query.
-- **The tie rule is duplicated in two places on purpose** and must stay in sync: `Scoring.award`
-  on the server and `VoteOutcome.agreedWithMajority` on the client both treat an exact tie as
-  agreement. There is a test on each side asserting it.
+- **The majority verdict on the reveal is client-side and display only.**
+  `VoteOutcome.agreedWithMajority` treats an exact tie as agreement, and nothing on the server
+  mirrors it because no points depend on it (§8d). Scoring against the tally again would bring
+  back a rule the two sides must keep in sync.
 - `Tally.percentB` is defined as `100 - percentA` rather than rounded independently, so the two
   always sum to 100. There is a property test over every split up to 40/40.
 - `:server` must not depend on `:core:domain` (§3). That is why scoring lives in `:server`.

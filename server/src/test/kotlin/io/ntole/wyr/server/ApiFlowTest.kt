@@ -22,6 +22,7 @@ import io.ntole.wyr.core.question.QuestionPageDto
 import io.ntole.wyr.core.vote.OptionSide
 import io.ntole.wyr.core.vote.VoteRequest
 import io.ntole.wyr.core.vote.VoteResultDto
+import io.ntole.wyr.core.vote.VoteTallyDto
 import io.ntole.wyr.server.auth.TokenService
 import io.ntole.wyr.server.config.ServerConfig
 import io.ntole.wyr.server.vote.Scoring
@@ -64,9 +65,32 @@ class ApiFlowTest {
             // The voter's own vote is included in the tally they are shown.
             assertEquals(1L, result.tally.votesA)
             assertEquals(0L, result.tally.votesB)
-            // First vote is trivially the majority, so it earns base + bonus.
-            assertEquals(result.pointsAwarded, result.totalPoints)
-            assertTrue(result.pointsAwarded > Scoring.BASE_POINTS)
+            // A first answer earns the flat point, and that point is the whole running total.
+            assertEquals(Scoring.POINTS_PER_ANSWER, result.pointsAwarded)
+            assertEquals(Scoring.POINTS_PER_ANSWER, result.totalPoints)
+        }
+
+    @Test
+    fun `every answer pays one point whichever side it picks, and the total accumulates`() =
+        runServer("flat-scoring") { client ->
+            val (opened, contested) = client.get(WyrApi.Paths.QUESTIONS).body<QuestionPageDto>().questions
+            val player: SessionDto = client.post(WyrApi.Paths.AUTH_GUEST).body()
+
+            // A tally holds one vote per player, so a real minority takes two other players on
+            // the majority side first. Their majority picks pay the same flat point.
+            repeat(times = 2) {
+                val other: SessionDto = client.post(WyrApi.Paths.AUTH_GUEST).body()
+                assertEquals(Scoring.POINTS_PER_ANSWER, client.vote(other, contested.id, OptionSide.A).pointsAwarded)
+            }
+
+            val majority = client.vote(player, opened.id, OptionSide.A)
+            val minority = client.vote(player, contested.id, OptionSide.B)
+            assertEquals(VoteTallyDto(votesA = 1, votesB = 0), majority.tally)
+            assertEquals(VoteTallyDto(votesA = 2, votesB = 1), minority.tally)
+
+            assertEquals(Scoring.POINTS_PER_ANSWER, majority.pointsAwarded)
+            assertEquals(Scoring.POINTS_PER_ANSWER, minority.pointsAwarded)
+            assertEquals(2 * Scoring.POINTS_PER_ANSWER, minority.totalPoints)
         }
 
     @Test
@@ -346,6 +370,17 @@ class ApiFlowTest {
 
         block(client)
     }
+
+    private suspend fun io.ktor.client.HttpClient.vote(
+        session: SessionDto,
+        questionId: String,
+        choice: OptionSide,
+    ): VoteResultDto =
+        post(WyrApi.Paths.VOTES) {
+            bearerAuth(session.accessToken)
+            contentType(ContentType.Application.Json)
+            setBody(VoteRequest(questionId, choice))
+        }.body()
 
     /**
      * Signs an access token the way the server under [runServer] does, for a player id the server

@@ -11,7 +11,6 @@ object PlayerStore {
     data class Player(
         val id: String,
         val totalPoints: Int,
-        val streak: Int,
     )
 
     fun createGuest(
@@ -24,12 +23,11 @@ object PlayerStore {
             row[Players.id] = id
             row[Players.createdAt] = System.currentTimeMillis()
             row[Players.totalPoints] = 0
-            row[Players.streak] = 0
             row[Players.refreshTokenHash] = refreshTokenHash
             row[Players.refreshTokenExpiresAt] = refreshExpiresAt
         }
 
-        return Player(id = id, totalPoints = 0, streak = 0)
+        return Player(id = id, totalPoints = 0)
     }
 
     fun find(id: String): Player? =
@@ -42,7 +40,6 @@ object PlayerStore {
                 Player(
                     id = row[Players.id],
                     totalPoints = row[Players.totalPoints],
-                    streak = row[Players.streak],
                 )
             }
 
@@ -66,7 +63,6 @@ object PlayerStore {
                 Player(
                     id = row[Players.id],
                     totalPoints = row[Players.totalPoints],
-                    streak = row[Players.streak],
                 )
             }
 
@@ -84,16 +80,14 @@ object PlayerStore {
     fun applyAward(
         playerId: String,
         pointsAwarded: Int,
-        newStreak: Int,
     ): Player {
         val current = find(playerId) ?: error("player $playerId vanished mid-transaction")
         val newTotal = current.totalPoints + pointsAwarded
 
         Players.update({ Players.id eq playerId }) { row ->
             row[totalPoints] = newTotal
-            row[streak] = newStreak
         }
 
-        return current.copy(totalPoints = newTotal, streak = newStreak)
+        return current.copy(totalPoints = newTotal)
     }
 }

@@ -13,7 +13,12 @@ public data class VoteOutcome(
     public val pointsAwarded: Int,
     public val totalPoints: Int,
 ) {
-    /** True when the player picked the more popular side. A tie counts as agreeing. */
+    /**
+     * True when the player picked the more popular side. A tie counts as agreeing.
+     *
+     * Display only. Points do not depend on the majority (CLAUDE.md §8d), so the server has no
+     * copy of this rule to agree with.
+     */
     public val agreedWithMajority: Boolean
         get() = tally.majority == null || tally.majority == yourSide
 }

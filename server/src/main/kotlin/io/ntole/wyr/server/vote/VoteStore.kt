@@ -38,33 +38,20 @@ object VoteStore {
     ): VoteResultDto {
         if (!QuestionStore.exists(questionId)) throw ApiFailure.questionNotFound(questionId)
 
-        val player = PlayerStore.find(playerId) ?: throw ApiFailure.unauthorized("unknown player")
+        if (PlayerStore.find(playerId) == null) throw ApiFailure.unauthorized("unknown player")
 
         insertVote(playerId, questionId, choice)
 
         val votesA = countVotes(questionId, OptionSide.A)
         val votesB = countVotes(questionId, OptionSide.B)
 
-        val award =
-            Scoring.award(
-                choice = choice,
-                votesA = votesA,
-                votesB = votesB,
-                previousStreak = player.streak,
-            )
-
-        val updated =
-            PlayerStore.applyAward(
-                playerId = playerId,
-                pointsAwarded = award.points,
-                newStreak = award.streak,
-            )
+        val updated = PlayerStore.applyAward(playerId = playerId, pointsAwarded = Scoring.POINTS_PER_ANSWER)
 
         return VoteResultDto(
             questionId = questionId,
             yourChoice = choice,
             tally = VoteTallyDto(votesA = votesA, votesB = votesB),
-            pointsAwarded = award.points,
+            pointsAwarded = Scoring.POINTS_PER_ANSWER,
             totalPoints = updated.totalPoints,
         )
     }
