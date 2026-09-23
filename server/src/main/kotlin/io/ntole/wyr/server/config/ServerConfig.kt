@@ -32,6 +32,7 @@ data class ServerConfig(
 
         private val WEB_SCHEMES = setOf("http", "https")
         private const val MAX_PORT = 65_535
+        private const val ANY_HOST = "*"
 
         fun fromEnvironment(env: (String) -> String? = System::getenv): ServerConfig {
             val databaseUrl = env("DATABASE_URL")?.takeIf { it.isNotBlank() }
@@ -63,16 +64,21 @@ data class ServerConfig(
         }
 
         /**
-         * Accepts `host[:port]`, `http://host[:port]`, or `https://host[:port]` — the shapes a
-         * browser's `Origin` header can take — and fails at config load on anything else, so a
-         * typo stops the boot with the offending entry named instead of silently blocking the web
-         * client, or crashing later inside the CORS plugin.
+         * Accepts an origin as a browser sends it (`http://` or `https://` plus `host[:port]`),
+         * or a bare `host[:port]`, which allows both schemes. The host may start with one
+         * wildcard label (`*.example.com`), and a bare `*` with no scheme allows every origin —
+         * the only wildcards Ktor's CORS plugin takes.
+         *
+         * Anything else fails at config load with the offending entry named, instead of silently
+         * blocking the web client or crashing later inside the CORS plugin without saying which
+         * entry. A `*` host with a scheme is refused too: Ktor would drop the scheme and allow
+         * every origin.
          */
         internal fun parseWebOrigin(raw: String): WebOrigin {
             fun reject(reason: String): Nothing =
                 throw IllegalArgumentException(
                     "ALLOWED_WEB_ORIGINS entry \"$raw\" $reason; expected host[:port], " +
-                        "http://host[:port], or https://host[:port]",
+                        "http://host[:port], or https://host[:port], where host may start with *.",
                 )
 
             val schemeEnd = raw.indexOf("://")
@@ -87,6 +93,13 @@ data class ServerConfig(
             if (name.isEmpty()) reject("has no host")
             if (name.any { it == '@' || it.isWhitespace() }) reject("is not a bare host")
             if (':' in host && !validPort) reject("has a malformed port")
+
+            if (host == ANY_HOST) {
+                if (scheme != null) reject("restricts * to a scheme, which Ktor ignores for *")
+            } else if ('*' in name) {
+                val leadingLabel = name.startsWith("*.") && name.length > 2 && name.count { it == '*' } == 1
+                if (!leadingLabel) reject("has a wildcard that is not a single leading *. label")
+            }
 
             return WebOrigin(host = host, scheme = scheme)
         }

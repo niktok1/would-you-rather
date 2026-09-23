@@ -21,7 +21,10 @@ class CorsTest {
             // An entry with a scheme used to crash the boot inside Ktor's allowHost.
             val config =
                 ServerConfig.fromEnvironment(
-                    mapOf("ALLOWED_WEB_ORIGINS" to "https://app.example.com, dev.example.com:8080")::get,
+                    mapOf(
+                        "ALLOWED_WEB_ORIGINS" to
+                            "https://app.example.com, dev.example.com:8080, https://*.preview.test",
+                    )::get,
                 )
 
             application {
@@ -41,5 +44,9 @@ class CorsTest {
             // A bare host keeps Ktor's default schemes.
             assertEquals("http://dev.example.com:8080", allowedOrigin("http://dev.example.com:8080"))
             assertEquals("https://dev.example.com:8080", allowedOrigin("https://dev.example.com:8080"))
+
+            // A wildcard label keeps its scheme restriction, unlike a bare *.
+            assertEquals("https://pr-7.preview.test", allowedOrigin("https://pr-7.preview.test"))
+            assertNull(allowedOrigin("http://pr-7.preview.test"))
         }
 }

@@ -80,6 +80,23 @@ class ServerConfigTest {
     }
 
     @Test
+    fun `a leading wildcard label and a bare star are the wildcards accepted`() {
+        val config =
+            ServerConfig.fromEnvironment(
+                mapOf("ALLOWED_WEB_ORIGINS" to "*.example.com, https://*.example.com:8443, *")::get,
+            )
+
+        assertEquals(
+            listOf(
+                WebOrigin("*.example.com", scheme = null),
+                WebOrigin("*.example.com:8443", scheme = "https"),
+                WebOrigin("*", scheme = null),
+            ),
+            config.allowedWebOrigins,
+        )
+    }
+
+    @Test
     fun `a web origin that is not a bare origin fails at config load and names the entry`() {
         val malformed =
             listOf(
@@ -91,6 +108,15 @@ class ServerConfigTest {
                 "app.example.com:http",
                 "app.example.com:99999",
                 "user@app.example.com",
+                // Ktor drops the scheme for a bare *, so these would open CORS to every origin.
+                "https://*",
+                "http://*",
+                // Wildcards Ktor's CORS plugin refuses, which would otherwise crash the boot
+                // later without naming the entry.
+                "*:8080",
+                "app.*.example.com",
+                "*.*.example.com",
+                "https://*.",
             )
 
         malformed.forEach { raw ->
