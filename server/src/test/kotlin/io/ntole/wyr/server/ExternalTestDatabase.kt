@@ -39,3 +39,33 @@ internal class ExternalTestDatabase(
         }
     }
 }
+
+/** The database one API test's server connects to, already clean for that test. */
+internal data class TestDatabaseSettings(
+    val jdbcUrl: String,
+    val user: String?,
+    val password: String?,
+)
+
+/**
+ * Picks the database for the test named [databaseName] and hands it over clean. H2 isolates tests
+ * by database name, so the default needs nothing more; a shared external database is wiped first.
+ *
+ * This lives here rather than inline in `runServer` so the wipe is pinned by a test. The current
+ * ApiFlowTest cases happen to pass on a shared database even without it, in the order JUnit runs
+ * them today, so dropping the call would stay green until a rename or a new test reordered them.
+ */
+internal fun testDatabaseFor(
+    databaseName: String,
+    env: (String) -> String? = System::getenv,
+): TestDatabaseSettings {
+    val external =
+        ExternalTestDatabase.fromEnvironment(env)
+            ?: return TestDatabaseSettings(
+                jdbcUrl = "jdbc:h2:mem:wyr-test-$databaseName;DB_CLOSE_DELAY=-1",
+                user = null,
+                password = null,
+            )
+    external.dropAppTables()
+    return TestDatabaseSettings(external.jdbcUrl, external.user, external.password)
+}

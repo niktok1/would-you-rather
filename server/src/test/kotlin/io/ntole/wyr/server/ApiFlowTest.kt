@@ -204,16 +204,14 @@ class ApiFlowTest {
         databaseName: String,
         block: suspend ApplicationTestBuilder.(io.ktor.client.HttpClient) -> Unit,
     ) = testApplication {
-        // H2 isolates tests by database name; a shared external database has to be wiped instead.
-        val external = ExternalTestDatabase.fromEnvironment()
-        external?.dropAppTables()
+        val database = testDatabaseFor(databaseName)
 
         val config =
             ServerConfig(
                 port = 0,
-                jdbcUrl = external?.jdbcUrl ?: "jdbc:h2:mem:wyr-test-$databaseName;DB_CLOSE_DELAY=-1",
-                dbUser = external?.user,
-                dbPassword = external?.password,
+                jdbcUrl = database.jdbcUrl,
+                dbUser = database.user,
+                dbPassword = database.password,
                 jwtSecret = "test-secret",
                 jwtIssuer = "wyr-test",
                 jwtAudience = "wyr-test-client",
