@@ -70,7 +70,7 @@ class VoteStoreTest {
         assertEquals(Scoring.POINTS_PER_ANSWER, replay.totalPoints)
         val vote = storedVotes().single()
         assertEquals(OptionSide.A.name, vote[Votes.side])
-        assertEquals(1_000L, vote[Votes.answeredAt], "a replay is not an answer, so the loop order stays")
+        assertEquals(1_000L, vote[Votes.answeredAt], "a replay is not an answer")
     }
 
     @Test

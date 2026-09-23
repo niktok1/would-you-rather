@@ -20,8 +20,10 @@ object VoteStore {
      * Records an answer and scores it. Must run inside a transaction.
      *
      * A player holds one vote per question, their latest (CLAUDE.md §8d). A first answer inserts
-     * it; answering again moves it to the new side and pays again. `created_at` keeps when the
-     * player first answered and `answered_at` when they last did, which is what the feed loops by.
+     * it; answering again moves it to the new side and pays again, even within the cycle it was
+     * last answered in (§8b leaves that to rate limiting). Either way the vote records the player's
+     * current cycle, so the feed does not serve the question again until the next one. `created_at`
+     * keeps when the player first answered and `answered_at` when they last did.
      *
      * Every answer carries the client's [attemptId], and the vote keeps the latest. A request that
      * repeats it is a retry of an answer already recorded, and is replayed: nothing is written, it
@@ -50,16 +52,16 @@ object VoteStore {
     ): VoteResultDto {
         if (!QuestionStore.exists(questionId)) throw ApiFailure.questionNotFound(questionId)
 
-        if (PlayerStore.find(playerId) == null) throw ApiFailure.unauthorized("unknown player")
+        val player = PlayerStore.find(playerId) ?: throw ApiFailure.unauthorized("unknown player")
 
         val stored = lockVote(playerId, questionId)
 
         if (stored != null && stored[Votes.attemptId] == attemptId) return replay(playerId, questionId, stored)
 
         if (stored == null) {
-            insertVote(playerId, questionId, choice, attemptId, now)
+            insertVote(playerId, questionId, choice, attemptId, player.cycle, now)
         } else {
-            moveVote(playerId, questionId, choice, attemptId, now)
+            moveVote(playerId, questionId, choice, attemptId, player.cycle, now)
         }
 
         val tally = tally(questionId)
@@ -120,6 +122,7 @@ object VoteStore {
         questionId: String,
         choice: OptionSide,
         attemptId: String,
+        cycle: Int,
         now: Long,
     ) {
         Votes.insert { row ->
@@ -128,6 +131,7 @@ object VoteStore {
             row[Votes.side] = choice.name
             row[Votes.createdAt] = now
             row[Votes.answeredAt] = now
+            row[Votes.answeredInCycle] = cycle
             row[Votes.attemptId] = attemptId
         }
     }
@@ -138,12 +142,14 @@ object VoteStore {
         questionId: String,
         choice: OptionSide,
         attemptId: String,
+        cycle: Int,
         now: Long,
     ) {
         val moved =
             Votes.update({ (Votes.playerId eq playerId) and (Votes.questionId eq questionId) }) { row ->
                 row[side] = choice.name
                 row[answeredAt] = now
+                row[answeredInCycle] = cycle
                 row[Votes.attemptId] = attemptId
             }
         // Nothing deletes a vote, and this transaction holds its lock.

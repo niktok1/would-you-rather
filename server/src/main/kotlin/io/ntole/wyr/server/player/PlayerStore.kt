@@ -15,6 +15,8 @@ object PlayerStore {
     data class Player(
         val id: String,
         val totalPoints: Int,
+        /** Which pass over the questions the feed is on for this player (CLAUDE.md §8d). */
+        val cycle: Int,
     )
 
     fun createGuest(
@@ -29,9 +31,10 @@ object PlayerStore {
             row[Players.totalPoints] = 0
             row[Players.refreshTokenHash] = refreshTokenHash
             row[Players.refreshTokenExpiresAt] = refreshExpiresAt
+            row[Players.currentCycle] = Players.FIRST_CYCLE
         }
 
-        return Player(id = id, totalPoints = 0)
+        return Player(id = id, totalPoints = 0, cycle = Players.FIRST_CYCLE)
     }
 
     fun find(id: String): Player? =
@@ -44,6 +47,7 @@ object PlayerStore {
                 Player(
                     id = row[Players.id],
                     totalPoints = row[Players.totalPoints],
+                    cycle = row[Players.currentCycle],
                 )
             }
 
@@ -95,8 +99,29 @@ object PlayerStore {
                 Player(
                     id = row[Players.id],
                     totalPoints = row[Players.totalPoints],
+                    cycle = row[Players.currentCycle],
                 )
             }
+
+    /**
+     * Starts the player's next cycle, provided they are still on cycle [from]. Must run inside a
+     * transaction.
+     *
+     * A compare-and-set on [from], the cycle the caller read, not an increment by id: the feed
+     * starts the next cycle when it finds nothing due, and two feed requests can find that at once.
+     * At READ COMMITTED the second waits on the first's row lock and then re-checks its `WHERE`
+     * against the row the first committed. By id alone that still matches, and the cycle moves
+     * twice, cutting short the one the first had just started. With [from] in it, nothing matches
+     * and the second leaves it alone, which is what it wanted anyway: the cycle after [from] exists.
+     */
+    fun startNextCycle(
+        playerId: String,
+        from: Int,
+    ) {
+        Players.update({ (Players.id eq playerId) and (Players.currentCycle eq from) }) { row ->
+            row[currentCycle] = currentCycle + 1
+        }
+    }
 
     /**
      * Adds [points] to the player's total and returns the new total. Must run inside a transaction.

@@ -18,9 +18,9 @@ public object WyrApi {
 
         /**
          * The next batch of questions for the player the bearer token names. Requires a session,
-         * because the feed is per player (CLAUDE.md §8d): questions they have not answered come
-         * first, in random order, and once none remain, answered ones loop back, least recently
-         * answered first. There is no cursor; asking again is how to get the next batch.
+         * because the feed is per player (CLAUDE.md §8d): it runs in cycles, serving each question
+         * once per cycle in a new random order, and a batch holds only what the player has not yet
+         * answered in the current one. There is no cursor; asking again is how to get the next batch.
          */
         public const val QUESTIONS: String = "/$VERSION/questions"
         public const val VOTES: String = "/$VERSION/votes"

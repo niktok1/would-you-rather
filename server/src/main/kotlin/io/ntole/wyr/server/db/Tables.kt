@@ -17,11 +17,21 @@ object Players : Table("players") {
     val refreshTokenHash = varchar("refresh_token_hash", 64).nullable()
     val refreshTokenExpiresAt = long("refresh_token_expires_at").nullable()
 
+    /**
+     * The feed's current pass over the questions (CLAUDE.md §8d), counted from [FIRST_CYCLE]. A
+     * question is due while the player's vote on it was cast in an earlier cycle, and the feed
+     * starts the next cycle once nothing is due. Only ever moves forward, one at a time, through
+     * `PlayerStore.startNextCycle`.
+     */
+    val currentCycle = integer("current_cycle").default(FIRST_CYCLE)
+
     override val primaryKey = PrimaryKey(id)
 
     init {
         index(isUnique = true, refreshTokenHash)
     }
+
+    const val FIRST_CYCLE: Int = 1
 }
 
 object Questions : Table("questions") {
@@ -51,14 +61,20 @@ object Votes : Table("votes") {
     val createdAt = long("created_at")
 
     /**
-     * When the player last answered. The feed loops answered questions back oldest first by this.
-     *
-     * Not indexed. The feed sorts its join's output with the unanswered (null here) first, which no
-     * index on votes can supply, and the key already finds the player's votes. An index would only
-     * cost: every re-answer rewrites this column, and PostgreSQL skips writing index entries for an
-     * update (a HOT update) only when no indexed column changes.
+     * When the player last answered. Information only: nothing orders or filters by it since the
+     * feed moved to cycles ([answeredInCycle]), so it is not indexed.
      */
     val answeredAt = long("answered_at")
+
+    /**
+     * The player's [Players.currentCycle] when they last answered, so the question is not due again
+     * until a later cycle (CLAUDE.md §8d). A replay leaves it alone, as it does the rest of the row.
+     *
+     * Not indexed. The feed reads it only off the rows its join finds, and the key already finds
+     * those. An index would only cost: every re-answer rewrites this column, and PostgreSQL skips
+     * writing index entries for an update (a HOT update) only when no indexed column changes.
+     */
+    val answeredInCycle = integer("answered_in_cycle")
 
     /**
      * The client's key for the latest answer (CLAUDE.md §8d). A request carrying it again is a

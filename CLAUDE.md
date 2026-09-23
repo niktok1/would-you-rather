@@ -133,7 +133,8 @@ follow, and code that breaks one loses updates silently rather than failing:
 - A counter is an SQL increment (`total_points = total_points + n`), never a read then a write.
   A burst on one row then just queues on its lock; `PlayerStoreTest` pins 8 at once.
 - Any other read-then-write is a compare-and-set: the `UPDATE`'s `WHERE` repeats what the read
-  relied on, and 0 rows updated means another transaction won (`PlayerStore.rotateRefreshToken`).
+  relied on, and 0 rows updated means another transaction won (`PlayerStore.rotateRefreshToken`,
+  `PlayerStore.startNextCycle`).
   Or the read takes the row lock (`SELECT ... FOR UPDATE`), so a concurrent writer waits and then
   reads the row as committed (`VoteStore.cast`, which branches on more than one outcome).
 - Uniqueness is a constraint (the `Votes` primary key), never a prior `SELECT`. A violation is
@@ -312,9 +313,9 @@ accounts exist.
   (`QuestionStatus`, author field) and the moderator model are not.
 - **Rate limiting** — `ErrorCode.RATE_LIMITED` exists on the wire and nothing emits it yet.
   Until something limits votes, points can be farmed: the server pays a new attempt on an answered
-  question at once, without checking that the feed has looped it back (§8d, re-answering), so a
-  script re-answering one question earns a point per request. Undecided: leave it to rate limiting,
-  or pay a re-answer only once the question could have come round again.
+  question at once, without checking that it is due again (§8d, re-answering), so a script
+  re-answering one question earns a point per request. *Decided 2026-09-23:* that is accepted for
+  now and left to rate limiting; a re-answer keeps paying every time, inside its cycle or not.
 - **Schema migrations** — *interim policy, decided 2026-09-23:* nothing is deployed, so until the
   first Render deploy a schema change ships as a fresh database through `SchemaUtils.create`, and
   `render.yaml` keeps `autoDeployTrigger: "off"` so connecting the blueprint cannot deploy early.
@@ -363,14 +364,29 @@ and every request shows in its HTTP trace (`HttpTrace` in `:core:network`, never
   it picks. There is no majority bonus and no streak: the streak is removed from the server, the
   contract, and the domain. The reveal still shows the split and whether the player sided with
   the majority, as information only.
-- **Endless feed** *(built)*: the game never ends. A player is served questions they have
-  not answered, in **random order per player**. Once none remain, answered questions loop back,
-  least-recently-answered first. `GET /v1/questions` requires a bearer token and is per-player.
-  Built in `QuestionStore.feed` (one statement) and `DefaultQuestionRepository`, which keeps no
-  record of what it served beyond one refill: it drops only questions still queued and those handed
-  out since the refill went out, the one then on screen included.
-- **Re-answering** *(built)*: a looped question can be answered again. It earns the point
-  again and the player may change their pick. The tally always holds **one vote per player per
+- **Endless feed** *(built; cycles decided 2026-09-23)*: the game never ends, and it runs in
+  **cycles**. Every question comes back **exactly once per cycle**, and every cycle is a **new
+  random order**; this replaced looping least-recently-answered first. A question is *due* while
+  the player has not answered it in their current cycle, and a batch holds only due questions,
+  never topped up with ones answered this cycle. Once nothing is due the cycle is finished: the
+  next request starts the next cycle and serves the whole pool again, so a batch is never empty
+  while the pool is not. `GET /v1/questions` requires a bearer token and is per-player.
+  Built in `QuestionStore.feed` (each batch one statement), on `players.current_cycle` and
+  `votes.answered_in_cycle`. Starting a cycle is a compare-and-set on the cycle read
+  (`PlayerStore.startNextCycle`), so two requests that both find it finished start it once.
+  `DefaultQuestionRepository` keeps no record of what it served beyond one refill: it drops only
+  questions still queued and those handed out since the refill went out, the one then on screen
+  included.
+  - *Categories:* a cycle is **per player, not per category**. A request filtered to a category
+    with nothing due in it, while other questions still are, serves that category's questions
+    again, in random order and all `answeredBefore`, and leaves the cycle alone: starting the next
+    one would cut short the player's pass over the rest. The cycle starts only once nothing at all
+    is due, whichever category is asked for, and a request that finds no questions starts nothing.
+  - `answeredBefore` means the player has a vote on the question, from any cycle.
+- **Re-answering** *(built)*: a question can be answered again, whether or not the feed has
+  served it again. It earns the point again **every time**, inside its cycle or not (farming is
+  left to rate limiting, §8b), and the player may change their pick. Every answer, first or not,
+  counts for the player's current cycle. The tally always holds **one vote per player per
   question**, their latest. Built in `VoteStore.cast`, which moves the player's vote.
 - **Retry safety** *(built)*: every vote carries a client-generated idempotency key. A repeat
   of the key last recorded for that question is replayed: nothing is written, it pays nothing, and
@@ -382,8 +398,10 @@ and every request shows in its HTTP trace (`HttpTrace` in `:core:network`, never
   tap: the Play tab resends a vote lost to `NETWORK` as the same attempt, as `withSessionRecovery`
   does its retry.
 - **Skipping** *(built)*: allowed. It earns nothing and is not recorded, so the question
-  stays unanswered and comes back later. Nothing is sent: the console's Skip takes the next
-  question, and the feed serves the skipped one again in a later batch.
+  stays due and comes back later in the same cycle. Nothing is sent: the console's Skip takes the
+  next question, and the feed serves the skipped one again in a later batch. A cycle cannot finish
+  while a skipped question is still due, so once it is the last one due the feed serves it again
+  at once, and nothing else, until it is answered.
 - **Own questions** *(not built)*: an author is never served their own question.
 - **Likes** *(not built)*: any player may like any question except their own, at any time
   (before or after answering), once each, and may unlike it. Each like currently held is **+1

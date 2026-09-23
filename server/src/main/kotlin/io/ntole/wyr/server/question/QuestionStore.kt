@@ -5,6 +5,7 @@ import io.ntole.wyr.core.question.QuestionDto
 import io.ntole.wyr.core.question.QuestionPageDto
 import io.ntole.wyr.server.db.Questions
 import io.ntole.wyr.server.db.Votes
+import io.ntole.wyr.server.player.PlayerStore
 import org.jetbrains.exposed.v1.core.JoinType
 import org.jetbrains.exposed.v1.core.Op
 import org.jetbrains.exposed.v1.core.Random
@@ -12,6 +13,10 @@ import org.jetbrains.exposed.v1.core.ResultRow
 import org.jetbrains.exposed.v1.core.SortOrder
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
+import org.jetbrains.exposed.v1.core.isNull
+import org.jetbrains.exposed.v1.core.less
+import org.jetbrains.exposed.v1.core.or
+import org.jetbrains.exposed.v1.jdbc.Query
 import org.jetbrains.exposed.v1.jdbc.select
 import org.jetbrains.exposed.v1.jdbc.selectAll
 
@@ -20,37 +25,47 @@ object QuestionStore {
      * The next batch of at most [limit] questions for [playerId] (CLAUDE.md §8d). Must run inside a
      * transaction.
      *
-     * Questions the player has not answered come first, in random order. When fewer than [limit]
-     * remain, the batch is topped up with answered ones, least recently answered first and marked
-     * [QuestionDto.answeredBefore], so the feed loops instead of running dry: a batch is empty only
-     * when nothing in [category] is [servableTo] the player at all.
+     * The feed runs in cycles, and every question comes back once per cycle. A question is due
+     * while the player has not answered it in their current cycle: never answered, or last answered
+     * in an earlier one. A batch holds only due questions, in an order drawn at random for each
+     * request, so every cycle comes round in a new order. It is not topped up with questions
+     * answered this cycle, which would serve them twice in one.
      *
-     * One statement, not an unanswered query then an answered one. The left join finds at most one
-     * vote per question (the Votes key is player and question), so no question appears twice. And
-     * at READ COMMITTED one statement reads one snapshot, where two could straddle a vote the player
-     * commits in between, and serve that question once as unanswered and once as answered.
+     * Once nothing is due, the player has finished the cycle. This request starts the next one and
+     * serves the whole pool again, all of it due now, in a fresh random order, so a batch is empty
+     * only when nothing in [category] is [servableTo] the player at all. Two requests can both find
+     * the cycle finished. [PlayerStore.startNextCycle] lets only the first start the next one, and
+     * the second serves the pool it read, which is due in the cycle the first started.
      *
-     * `answered_at` sorts the unanswered (no vote, so null) first, and then answered ones oldest
-     * first. The random key only breaks ties: it shuffles all of the unanswered, and answers given
-     * in the same millisecond. Exposed renders it as `RANDOM()`, which H2 and PostgreSQL both have.
+     * A cycle is per player, not per category. When nothing in [category] is due but something
+     * outside it still is, the player has not finished the cycle, and starting the next one would
+     * cut short their pass over the rest. So the category's questions are served again instead, in
+     * random order and all [QuestionDto.answeredBefore], and the cycle stays. Answering one again
+     * still pays (§8d, re-answering) and counts for the same cycle.
+     *
+     * [QuestionDto.answeredBefore] means the player has a vote on the question, from any cycle.
+     *
+     * Each batch comes from one statement. The left join finds at most one vote per question (the
+     * Votes key is player and question), so no question appears twice. The random key is rendered
+     * `RANDOM()`, which H2 and PostgreSQL both have.
      */
     fun feed(
         playerId: String,
         limit: Int,
         category: QuestionCategory?,
     ): QuestionPageDto {
-        val rows =
-            Questions
-                .join(Votes, JoinType.LEFT, Questions.id, Votes.questionId) { Votes.playerId eq playerId }
-                .select(Questions.columns + Votes.answeredAt)
-                .where { servableTo(playerId) and inCategory(category) }
-                .orderBy(Votes.answeredAt to SortOrder.ASC_NULLS_FIRST, Random() to SortOrder.ASC)
-                .limit(limit)
-                .toList()
+        val cycle = checkNotNull(PlayerStore.find(playerId)) { "player $playerId vanished mid-transaction" }.cycle
 
-        return QuestionPageDto(
-            questions = rows.map { row -> toDto(row, answeredBefore = row.getOrNull(Votes.answeredAt) != null) },
-        )
+        val due = candidates(playerId, category, dueIn = cycle).randomBatch(limit)
+        if (due.isNotEmpty()) return QuestionPageDto(questions = due)
+
+        // Nothing in the category is due, so every question in it, if it has any, was answered in
+        // this cycle.
+        val again = candidates(playerId, category, dueIn = null).randomBatch(limit)
+        val cycleFinished = category == null || candidates(playerId, category = null, dueIn = cycle).empty()
+        if (again.isNotEmpty() && cycleFinished) PlayerStore.startNextCycle(playerId, from = cycle)
+
+        return QuestionPageDto(questions = again)
     }
 
     /**
@@ -62,8 +77,28 @@ object QuestionStore {
      */
     internal fun servableTo(playerId: String): Op<Boolean> = Op.TRUE
 
+    /** The questions in [category] [servableTo] the player: only those due in [dueIn], unless it is null. */
+    private fun candidates(
+        playerId: String,
+        category: QuestionCategory?,
+        dueIn: Int?,
+    ): Query =
+        Questions
+            .join(Votes, JoinType.LEFT, Questions.id, Votes.questionId) { Votes.playerId eq playerId }
+            .select(Questions.columns + Votes.answeredInCycle)
+            .where { servableTo(playerId) and inCategory(category) and isDue(dueIn) }
+
+    private fun Query.randomBatch(limit: Int): List<QuestionDto> =
+        orderBy(Random() to SortOrder.ASC)
+            .limit(limit)
+            .map { row -> toDto(row, answeredBefore = row.getOrNull(Votes.answeredInCycle) != null) }
+
     private fun inCategory(category: QuestionCategory?): Op<Boolean> =
         category?.let { wanted -> Questions.category eq wanted.name } ?: Op.TRUE
+
+    /** Not yet answered in [cycle]: no vote, or one from an earlier cycle. A null [cycle] lets all through. */
+    private fun isDue(cycle: Int?): Op<Boolean> =
+        cycle?.let { current -> Votes.answeredInCycle.isNull() or (Votes.answeredInCycle less current) } ?: Op.TRUE
 
     fun exists(id: String): Boolean =
         Questions

@@ -393,7 +393,7 @@ class ApiFlowTest {
         }
 
     @Test
-    fun `once everything is answered the feed loops back over the answered questions`() =
+    fun `once everything is answered the next cycle serves every question again`() =
         runServer("feed-loop") { client ->
             val player = client.guest()
             val pool = client.wholePool(player)
@@ -401,34 +401,31 @@ class ApiFlowTest {
 
             val looped = client.wholePool(player)
 
-            // Never empty while there are questions. Least recently answered first is pinned by
-            // QuestionStoreTest, which picks the answer times: here answers can share a
-            // millisecond, and the order among those is random.
+            // Never empty while there are questions. That each cycle comes round in a new order, and
+            // serves each question once however it is batched, is pinned by QuestionStoreTest.
             assertEquals(pool.ids().toSet(), looped.ids().toSet())
             assertEquals(looped.size, looped.ids().toSet().size, "a looped batch must not repeat a question")
-            assertTrue(looped.all { it.answeredBefore }, "every question in the loop was answered before")
+            assertTrue(looped.all { it.answeredBefore }, "every question in the new cycle was answered before")
             assertEquals(1, client.batch(player, "?${WyrApi.Query.LIMIT}=1").size)
         }
 
     @Test
-    fun `the last few unanswered questions come first and then the batch loops`() =
-        runServer("feed-top-up") { client ->
+    fun `a batch holds only what is still due in the cycle`() =
+        runServer("feed-due") { client ->
             val player = client.guest()
             val pool = client.wholePool(player)
             val left = pool.take(3)
-            val answered = pool.drop(3).ids()
-            answered.forEach { id -> client.vote(player, id, OptionSide.B) }
+            pool.drop(3).forEach { question -> client.vote(player, question.id, OptionSide.B) }
 
             val batch = client.batch(player, "?${WyrApi.Query.LIMIT}=5")
 
-            assertEquals(5, batch.size)
-            assertEquals(left.ids().toSet(), batch.take(3).ids().toSet(), "the unanswered questions come first")
-            assertTrue(batch.take(3).none { it.answeredBefore })
-            assertTrue(batch.drop(3).all { it.answeredBefore && it.id in answered }, "then it loops")
+            assertEquals(left.ids().toSet(), batch.ids().toSet(), "no top-up with questions answered this cycle")
+            assertEquals(3, batch.size)
+            assertTrue(batch.none { it.answeredBefore })
         }
 
     @Test
-    fun `a category filter applies to unanswered and looped questions alike`() =
+    fun `a category with nothing due is served again until the whole cycle is done`() =
         runServer("feed-category") { client ->
             val player = client.guest()
             val food = "&${WyrApi.Query.CATEGORY}=${QuestionCategory.FOOD.name}"
@@ -436,16 +433,19 @@ class ApiFlowTest {
             val foodPool = client.wholePool(player, food)
             assertTrue(foodPool.size >= 2 && foodPool.all { it.category == QuestionCategory.FOOD })
 
-            val unanswered = foodPool.first()
+            val last = foodPool.first()
             foodPool.drop(1).forEach { question -> client.vote(player, question.id, OptionSide.A) }
-            val batch = client.wholePool(player, food)
+            assertEquals(listOf(last.id), client.wholePool(player, food).ids(), "only the food still due")
 
-            assertEquals(foodPool.ids().toSet(), batch.ids().toSet(), "only food, answered or not")
-            assertEquals(unanswered.id, batch.first().id, "the one unanswered food question comes first")
-            assertFalse(batch.first().answeredBefore)
-            assertTrue(batch.drop(1).all { it.answeredBefore })
-            // Unfiltered, only those food questions count as answered.
-            assertEquals(pool.size - (foodPool.size - 1), client.wholePool(player).count { !it.answeredBefore })
+            client.vote(player, last.id, OptionSide.A)
+            val again = client.wholePool(player, food)
+
+            assertEquals(foodPool.ids().toSet(), again.ids().toSet(), "all of the food again, rather than nothing")
+            assertTrue(again.all { it.answeredBefore })
+            // The cycle is the player's, not the category's, so it has not moved on for the rest.
+            val unfiltered = client.wholePool(player)
+            assertEquals(pool.ids().toSet() - foodPool.ids().toSet(), unfiltered.ids().toSet())
+            assertFalse(unfiltered.any { it.answeredBefore })
         }
 
     @Test
