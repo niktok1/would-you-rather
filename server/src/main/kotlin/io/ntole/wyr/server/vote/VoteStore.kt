@@ -45,14 +45,14 @@ object VoteStore {
         val votesA = countVotes(questionId, OptionSide.A)
         val votesB = countVotes(questionId, OptionSide.B)
 
-        val updated = PlayerStore.applyAward(playerId = playerId, pointsAwarded = Scoring.POINTS_PER_ANSWER)
+        val totalPoints = PlayerStore.addPoints(playerId = playerId, points = Scoring.POINTS_PER_ANSWER)
 
         return VoteResultDto(
             questionId = questionId,
             yourChoice = choice,
             tally = VoteTallyDto(votesA = votesA, votesB = votesB),
             pointsAwarded = Scoring.POINTS_PER_ANSWER,
-            totalPoints = updated.totalPoints,
+            totalPoints = totalPoints,
         )
     }
 

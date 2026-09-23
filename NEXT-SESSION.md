@@ -105,6 +105,11 @@ known `PlayViewModel` issues (the Play tab is frozen).
   `VoteOutcome.agreedWithMajority` treats an exact tie as agreement, and nothing on the server
   mirrors it because no points depend on it (§8d). Scoring against the tally again would bring
   back a rule the two sides must keep in sync.
+- **Concurrent writes to one row are retried, not lost — at REPEATABLE_READ.** The Hikari pool
+  sets that level, so the database refuses the second of two conflicting writes, and Exposed
+  re-runs a failed transaction up to 3 times by default. That hides a read-then-write bug, which
+  then only shows at READ COMMITTED. Counters (points now, like counts later) should increment in
+  SQL anyway; `PlayerStoreTest` races two awards at both levels.
 - `Tally.percentB` is defined as `100 - percentA` rather than rounded independently, so the two
   always sum to 100. There is a property test over every split up to 40/40.
 - `:server` must not depend on `:core:domain` (§3). That is why scoring lives in `:server`.

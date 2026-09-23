@@ -301,6 +301,8 @@ returns and never recomputes points, so the two cannot disagree.
 
 - Every answer earns `Scoring.POINTS_PER_ANSWER`, which is **1 point**, whichever side it picks
   (§8d). There is no majority bonus and no streak.
+- `PlayerStore.addPoints` adds in SQL (`total_points = total_points + n`), never as a read then a
+  write, so two votes by one player landing together cannot lose a point.
 - The reveal's "with the crowd" verdict is `VoteOutcome.agreedWithMajority` on the client (an
   exact tie counts as agreeing). It is display only: no points depend on it, so the server keeps
   no copy of the rule.

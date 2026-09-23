@@ -2,7 +2,9 @@ package io.ntole.wyr.server.player
 
 import io.ntole.wyr.server.db.Players
 import org.jetbrains.exposed.v1.core.eq
+import org.jetbrains.exposed.v1.core.plus
 import org.jetbrains.exposed.v1.jdbc.insert
+import org.jetbrains.exposed.v1.jdbc.select
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.update
 import java.util.UUID
@@ -77,17 +79,28 @@ object PlayerStore {
         }
     }
 
-    fun applyAward(
+    /**
+     * Adds [points] to the player's total and returns the new total. Must run inside a transaction.
+     *
+     * The addition happens in SQL (`total_points = total_points + n`) rather than as a read and
+     * then a write, so two votes by one player landing together cannot both start from the same
+     * total and lose a point. The server's REPEATABLE_READ happens to rescue a read-then-write
+     * too, because the database refuses the second write and Exposed retries the transaction, but
+     * at READ COMMITTED it silently drops the point. The increment must not depend on either.
+     *
+     * The total is read back in the same transaction, which holds the row lock from the update,
+     * so it is exactly the total this award produced.
+     */
+    fun addPoints(
         playerId: String,
-        pointsAwarded: Int,
-    ): Player {
-        val current = find(playerId) ?: error("player $playerId vanished mid-transaction")
-        val newTotal = current.totalPoints + pointsAwarded
+        points: Int,
+    ): Int {
+        val updated = Players.update({ Players.id eq playerId }) { row -> row[totalPoints] = totalPoints + points }
+        check(updated == 1) { "player $playerId vanished mid-transaction" }
 
-        Players.update({ Players.id eq playerId }) { row ->
-            row[totalPoints] = newTotal
-        }
-
-        return current.copy(totalPoints = newTotal)
+        return Players
+            .select(Players.totalPoints)
+            .where { Players.id eq playerId }
+            .single()[Players.totalPoints]
     }
 }
