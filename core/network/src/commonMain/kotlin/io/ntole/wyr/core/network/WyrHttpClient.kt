@@ -1,7 +1,9 @@
 package io.ntole.wyr.core.network
 
 import io.ktor.client.HttpClient
+import io.ktor.client.HttpClientConfig
 import io.ktor.client.call.body
+import io.ktor.client.engine.HttpClientEngine
 import io.ktor.client.plugins.HttpResponseValidator
 import io.ktor.client.plugins.auth.Auth
 import io.ktor.client.plugins.auth.providers.BearerTokens
@@ -28,11 +30,16 @@ import io.ktor.serialization.kotlinx.json.json as jsonConverter
  * module's build script), so Ktor picks it up itself and common code stays platform-free.
  */
 public object WyrHttpClient {
+    /**
+     * @param engine for tests, which pass a `MockEngine`. Production leaves it null so Ktor
+     *   discovers the platform's engine as described above.
+     */
     public fun create(
         baseUrl: String,
         sessionStore: SessionStore,
-    ): HttpClient =
-        HttpClient {
+        engine: HttpClientEngine? = null,
+    ): HttpClient {
+        val config: HttpClientConfig<*>.() -> Unit = {
             expectSuccess = true
 
             install(ContentNegotiation) {
@@ -90,6 +97,8 @@ public object WyrHttpClient {
                 }
             }
         }
+        return if (engine == null) HttpClient(config) else HttpClient(engine, config)
+    }
 }
 
 private fun Throwable.asResponseOrNull(): HttpResponse? = (this as? io.ktor.client.plugins.ResponseException)?.response
