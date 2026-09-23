@@ -154,7 +154,7 @@ class DevConsoleViewModelTest {
             answer.complete(QUESTION)
             testScheduler.advanceUntilIdle()
 
-            assertEquals(listOf("next"), calls)
+            assertEquals(listOf("ensure", "next"), calls)
             assertFalse(viewModel.state.value.isBusy)
             assertEquals(listOf("nextQuestion"), viewModel.log.map { it.action })
         }
@@ -167,7 +167,8 @@ class DevConsoleViewModelTest {
             viewModel.newGuest()
             testScheduler.advanceUntilIdle()
 
-            assertEquals(listOf("clear", "reset", "ensure", "next"), calls)
+            // The second ensure is GetNextQuestion making sure of the session it just got.
+            assertEquals(listOf("clear", "reset", "ensure", "ensure", "next"), calls)
             assertEquals(QUESTION, viewModel.state.value.question)
             assertEquals(LogResult.Ok("playerId=p1 question=q1"), viewModel.onlyResult())
         }
@@ -197,7 +198,7 @@ class DevConsoleViewModelTest {
             viewModel.skip()
             testScheduler.advanceUntilIdle()
 
-            assertEquals(listOf("next", "next"), calls)
+            assertEquals(listOf("ensure", "next", "ensure", "next"), calls)
             assertEquals(QUESTION.copy(id = "q2"), viewModel.state.value.question)
             assertEquals("questionId=q1", viewModel.log.first().args)
         }
@@ -298,7 +299,7 @@ class DevConsoleViewModelTest {
             diagnostics = diagnostics,
             questions = questions,
             queue = queue,
-            getNextQuestion = GetNextQuestion(questions),
+            getNextQuestion = GetNextQuestion(questions, sessions),
             castVote = CastVote(votes, sessions),
             httpTrace = HttpTrace(),
             // Virtual time, so an elapsed time is exactly what the fakes delayed.

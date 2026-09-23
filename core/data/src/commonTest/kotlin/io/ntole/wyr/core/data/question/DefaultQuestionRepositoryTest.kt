@@ -9,6 +9,7 @@ import io.ntole.wyr.core.data.respondJson
 import io.ntole.wyr.core.data.session
 import io.ntole.wyr.core.data.session.DefaultSessionRepository
 import io.ntole.wyr.core.data.storeHolding
+import io.ntole.wyr.core.domain.question.GetNextQuestion
 import io.ntole.wyr.core.network.SessionStore
 import io.ntole.wyr.core.network.WyrHttpClient
 import io.ntole.wyr.core.network.WyrJson
@@ -78,6 +79,22 @@ class DefaultQuestionRepositoryTest {
 
             assertEquals(1, server.guestsMinted)
             assertEquals(listOf(null, "Bearer access-guest1"), server.feedsSentAs)
+        }
+
+    @Test
+    fun `a first launch's first question is asked for with a bearer already`() =
+        runTest {
+            val server = FakeServer()
+            val store = storeHolding(null)
+            val client = WyrHttpClient.create(BASE_URL, store, server.engine)
+            val sessions = DefaultSessionRepository(AuthApi(client), store)
+            val getNextQuestion =
+                GetNextQuestion(DefaultQuestionRepository(QuestionApi(client), sessions, cache), sessions)
+
+            assertEquals("q1", getNextQuestion().id)
+
+            // Not refused and then recovered: the session was ensured before the feed was asked.
+            assertEquals(listOf<String?>("Bearer access-guest1"), server.feedsSentAs)
         }
 
     private fun repositoryOver(

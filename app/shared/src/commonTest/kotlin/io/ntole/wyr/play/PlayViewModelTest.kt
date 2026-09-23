@@ -135,7 +135,7 @@ class PlayViewModelTest {
         questions: QuestionRepository = FakeQuestionRepository(),
         votes: VoteRepository = FakeVoteRepository(),
     ) = PlayViewModel(
-        getNextQuestion = GetNextQuestion(questions),
+        getNextQuestion = GetNextQuestion(questions, NoOpSessionRepository),
         castVote = CastVote(votes, NoOpSessionRepository),
         questions = questions,
     )

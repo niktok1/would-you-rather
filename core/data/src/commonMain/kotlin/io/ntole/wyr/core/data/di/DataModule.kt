@@ -53,6 +53,6 @@ public fun dataModule(baseUrl: String): Module =
         single<QuestionRepository> { DefaultQuestionRepository(api = get(), session = get(), cache = get()) }
         single<VoteRepository> { DefaultVoteRepository(api = get(), session = get()) }
 
-        factory { GetNextQuestion(questions = get()) }
+        factory { GetNextQuestion(questions = get(), session = get()) }
         factory { CastVote(votes = get(), session = get()) }
     }
