@@ -75,9 +75,13 @@ rules live in CLAUDE.md §8d. Each item is one short-lived branch, in order:
    ALREADY_VOTED; only a real duplicate returns 409; add a body-parse helper; drop logback from
    TRACE to INFO; `?category=UNKNOWN` returns 400; parse CORS origins that include a scheme.
 2. `feat/flat-scoring` *(done)* — 1 point per answer, streak removed (§8d).
-3. `fix/client-errors-session` — truthful error mapping (offline, dead refresh, and cancellation
-   currently all show UNKNOWN); invalidate Ktor's cached bearer on session change; single-flight
-   reset; first `:core:network` / `:core:data` tests.
+3. `fix/client-errors-session` *(done)* — truthful error mapping (offline, dead refresh, and
+   cancellation used to all show UNKNOWN); the bearer is read from `SessionStore` on every
+   request (`cacheTokens = false`) instead of cached; one guest minted per dead session; first
+   `:core:network` / `:core:data` tests.
+3a. `fix/read-committed` — run transactions at READ COMMITTED, where SQL increments are correct
+   without retries, and make refresh-token rotation a compare-and-set so it stays single-use.
+   This resolves the CLAUDE.md §8b "Isolation for hot counters" item before likes need it.
 4. `feat/dev-console` — the engineering UI, as the default root.
 5. `feat/endless-feed` — per-player random unanswered questions, then loop; re-answering;
    idempotency key; skip.
@@ -100,8 +104,9 @@ known `PlayViewModel` issues (the Play tab is frozen).
 
 - **The wire enum rule (§5) is load-bearing and easy to break silently.** It only works because
   `WyrJson` sets `coerceInputValues = true` *and* `ServerJson` sets `encodeDefaults = true`.
-  Remove either and the `UNKNOWN` defaults become decorative — with no test failure, because the
-  breakage only shows up on a client build older than a server enum addition.
+  Remove either and the `UNKNOWN` defaults become decorative. `WyrJsonTest` in `:core:network`
+  pins the client half, but nothing pins the server's `encodeDefaults` yet, and a server-side
+  slip only breaks client builds older than the server.
 - **Exposed 1.x renamed everything.** Packages are `org.jetbrains.exposed.v1.*`, and
   `SqlExpressionBuilder.eq` is deprecated *as an error* — import the top-level `eq` instead.
   Expect to hit this again the first time you write a new query.
