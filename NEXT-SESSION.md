@@ -11,16 +11,20 @@ Repo initialized on `main` with the personal identity and `user.useConfigOnly = 
 
 ### Verified working
 
-- `:server` on H2: 17 tests green, including 8 end-to-end flow tests.
-- Live curl run against `./gradlew :server:run` confirmed guest auth, paging, voting, the
-  majority *and* minority scoring paths, refresh-token rotation, replay rejection, and the
-  `ErrorDto` envelope on 400/401/404/409.
+- `:server` on H2: 34 tests green, including 14 end-to-end flow tests in `ApiFlowTest`. Flat
+  scoring is covered there (every vote pays 1, majority and minority alike, and the total
+  accumulates) and by `PlayerStoreTest`, which races two awards for one player.
+- Live curl run against `./gradlew :server:run` confirmed guest auth, paging, voting,
+  refresh-token rotation, replay rejection, and the `ErrorDto` envelope on 400/401/404/409. That
+  run predates flat scoring, so the scoring it checked was the old streak rule.
 - `:app:shared` compiles for JVM, JS, and wasmJs; 5 ViewModel tests green.
 - `:app:androidApp:assembleDebug` produces a real APK.
 - `ktlintCheck` clean across every module.
 
 ### NOT verified
 
+- **Flat scoring on a live server.** Nobody has re-run the curl pass since it landed, so the
+  1-point rule is proven by tests only.
 - **iOS.** This machine has Command Line Tools but no Xcode. The Kotlin compile does not need
   Xcode: `iosArm64` and `iosSimulatorArm64` main sources and the simulator test sources now
   compile. That check caught `MainViewController` using `GlobalContext`, which Koin's native
