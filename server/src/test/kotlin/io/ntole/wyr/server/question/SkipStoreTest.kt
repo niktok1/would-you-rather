@@ -96,6 +96,21 @@ class SkipStoreTest {
     }
 
     @Test
+    fun `skipping one question again in a later cycle leaves the player's other skips where they were`() {
+        val player = newPlayer()
+        val other = pool.first { it != QUESTION }
+        skip(player, QUESTION)
+        skip(player, other)
+        (pool - QUESTION - other).forEach { id -> answer(player, id) }
+        assertEquals(pool.sorted(), feed(player).ids().sorted(), "both due again in cycle 2")
+
+        skip(player, QUESTION)
+
+        assertEquals(setOf(QUESTION to 2, other to 1), skipsOf(player).toSet(), "only that one skip moved")
+        assertEquals((pool - QUESTION).sorted(), feed(player).ids().sorted(), "so the other is still due in cycle 2")
+    }
+
+    @Test
     fun `skipping again in the same cycle changes nothing`() {
         val player = newPlayer()
         skip(player, QUESTION)
