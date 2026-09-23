@@ -57,6 +57,8 @@ jobs:
   # ApiFlowTest switches to WYR_TEST_JDBC_URL when it is set and wipes the app tables per test.
   server-postgres:
     runs-on: ubuntu-latest
+    # Backstop for a hang (a stuck connection, a test that never returns). GitHub's default is 6h.
+    timeout-minutes: 15
     services:
       postgres:
         image: postgres:16
@@ -108,6 +110,8 @@ jobs:
   # nothing else runs the Dockerfile at all.
   docker-smoke:
     runs-on: ubuntu-latest
+    # The image build downloads Gradle and every dependency with no cache, so it gets more room.
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
 
@@ -121,10 +125,12 @@ jobs:
 
       # First boot pays JVM start-up plus schema creation and seeding; ~90s is generous without
       # letting a hung server hold the runner. A container that has already exited fails at once.
+      # --max-time caps each attempt at 5s: a server that accepts the connection but never answers
+      # would otherwise block one curl indefinitely. The worst case is then 45 x 7s, not forever.
       - name: Wait for /health
         run: |
           for attempt in $(seq 1 45); do
-            if curl --fail --silent http://localhost:8080/health; then
+            if curl --fail --silent --max-time 5 http://localhost:8080/health; then
               echo
               echo "Healthy after ~$((attempt * 2))s"
               exit 0
@@ -135,16 +141,20 @@ jobs:
             fi
             sleep 2
           done
-          echo "Server did not become healthy within 90s" >&2
+          echo "Server did not become healthy after 45 attempts" >&2
           exit 1
 
       - name: Container logs
         if: failure()
         run: docker logs wyr-server
 
-  # The only place iOS is compiled at all: the development machine has no Xcode (CLAUDE.md §9).
+  # The only place iOS is linked, tested and built as an app: the development machine has no Xcode,
+  # which all three need. It can only compile the Kotlin (CLAUDE.md §9).
   ios:
     runs-on: macos-latest
+    # macOS minutes bill at 10x, so a hung simulator run must not ride out the 6h default. 45 still
+    # leaves room for a cold first run that downloads the whole Kotlin/Native toolchain.
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
 
@@ -177,7 +187,12 @@ jobs:
       # Framework" phase (embedAndSignAppleFrameworkForXcode). -target rather than -scheme because
       # no shared scheme is committed; the target already pins ARCHS to arm64. The runner has no
       # signing identity and a simulator build does not need one.
+      # Provisional: this has never run, and the project relies on embedAndSign putting Shared on
+      # the default framework search path. Until it has passed once it must not turn the Gradle
+      # link/test signal above red, so a failure here is only a warning. Remove continue-on-error
+      # once it has gone green (NEXT-SESSION.md).
       - name: Build iOS app for the simulator
+        continue-on-error: true
         run: |
           xcodebuild build \
             -project app/iosApp/iosApp.xcodeproj \

@@ -35,7 +35,9 @@ Repo initialized on `main` with the personal identity and `user.useConfigOnly = 
 - **The three new CI jobs** — `server-postgres`, `docker-smoke`, `ios` — are written but have
   never run, and cannot until a GitHub remote exists. The Postgres harness was exercised locally
   by pointing `WYR_TEST_JDBC_URL` at a shared H2 database, which proves the per-test drop but
-  not the Postgres dialect.
+  not the Postgres dialect. The `xcodebuild` step in `ios` is `continue-on-error` because it is
+  the least certain of them; **once it has gone green, delete that line** so it gates like the
+  rest.
 - **The UI has never been looked at.** It compiles and its ViewModel is tested, but no
   screenshot of the play screen or the reveal state has been taken on any platform. Treat the
   layout and the §5b palette in practice as unreviewed.

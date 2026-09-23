@@ -358,9 +358,10 @@ console, which is the default root screen. `PlayScreen` stays as a frozen second
   `.github/workflows/ci.yml`. That workflow is the definition of "green". Besides `verify` it runs
   `server-postgres` (the server suite against a Postgres service container), `docker-smoke` (builds
   the image and polls `/health`), and `ios` (framework link, simulator tests, and an `xcodebuild`
-  simulator build on macOS). None of those three can run on this machine. `:server:test` uses H2
-  unless `WYR_TEST_JDBC_URL` (plus `WYR_TEST_DB_USER` / `WYR_TEST_DB_PASSWORD`) names another
-  database; the suite then drops every app table (`appTables`) before each test.
+  simulator build on macOS; that last step is `continue-on-error` until it has passed once). None
+  of those three can run on this machine. `:server:test` uses H2 unless `WYR_TEST_JDBC_URL` (plus
+  `WYR_TEST_DB_USER` / `WYR_TEST_DB_PASSWORD`) names another database; the suite then drops every
+  app table (`appTables`) before each test.
 - **iOS cannot be linked, tested, or run on a machine without Xcode** (Command Line Tools alone
   are not enough). The Kotlin compile does not need Xcode, so before pushing iOS-touching code
   run `./gradlew :app:shared:compileKotlinIosSimulatorArm64 :app:shared:compileTestKotlinIosSimulatorArm64`
