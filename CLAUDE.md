@@ -311,6 +311,10 @@ accounts exist.
 - **Question submission + moderation** — the game rules are settled in §8d; the contract
   (`QuestionStatus`, author field) and the moderator model are not.
 - **Rate limiting** — `ErrorCode.RATE_LIMITED` exists on the wire and nothing emits it yet.
+  Until something limits votes, points can be farmed: the server pays a new attempt on an answered
+  question at once, without checking that the feed has looped it back (§8d, re-answering), so a
+  script re-answering one question earns a point per request. Undecided: leave it to rate limiting,
+  or pay a re-answer only once the question could have come round again.
 - **Schema migrations** — *interim policy, decided 2026-09-23:* nothing is deployed, so until the
   first Render deploy a schema change ships as a fresh database through `SchemaUtils.create`, and
   `render.yaml` keeps `autoDeployTrigger: "off"` so connecting the blueprint cannot deploy early.
