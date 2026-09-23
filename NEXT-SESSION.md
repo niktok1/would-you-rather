@@ -21,10 +21,13 @@ Repo initialized on `main` with the personal identity and `user.useConfigOnly = 
 
 ### NOT verified
 
-- **iOS.** This machine has Command Line Tools but no Xcode, so `iosArm64` /
-  `iosSimulatorArm64` were never compiled and the Xcode project was never opened. The iOS
-  source (`IosTokenStorage`, `PlatformModule.ios.kt`, `MainViewController`) is written but
-  unproven. **Build this first on a machine with Xcode**, or let the `ios` CI job do it.
+- **iOS.** This machine has Command Line Tools but no Xcode. The Kotlin compile does not need
+  Xcode: `iosArm64` and `iosSimulatorArm64` main sources and the simulator test sources now
+  compile. That check caught `MainViewController` using `GlobalContext`, which Koin's native
+  artifact does not expose; it now uses `KoinPlatform.getKoinOrNull()`. Framework linking, the
+  simulator tests and the Xcode project do need Xcode (`linkDebugFramework*` fails here with
+  `MissingXcodeException`), so the app itself is still unproven. **Build it first on a machine
+  with Xcode**, or let the `ios` CI job do it.
 - **`Dockerfile` and `render.yaml`.** Docker is not installed here, so the image has never been
   built and nothing has been deployed. What the image runs *is* verified: the fat jar, built with
   `WYR_SERVER_ONLY=1 ./gradlew :server:buildFatJar`, now registers both JDBC drivers, boots on H2

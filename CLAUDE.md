@@ -359,5 +359,8 @@ console, which is the default root screen. `PlayScreen` stays as a frozen second
   simulator build on macOS). None of those three can run on this machine. `:server:test` uses H2
   unless `WYR_TEST_JDBC_URL` (plus `WYR_TEST_DB_USER` / `WYR_TEST_DB_PASSWORD`) names another
   database; the suite then drops every app table (`appTables`) before each test.
-- **iOS cannot be built or verified on a machine without Xcode** (Command Line Tools alone are
-  not enough). Anything iOS-specific is unverified until built on a machine with full Xcode.
+- **iOS cannot be linked, tested, or run on a machine without Xcode** (Command Line Tools alone
+  are not enough). The Kotlin compile does not need Xcode, so before pushing iOS-touching code
+  run `./gradlew :app:shared:compileKotlinIosSimulatorArm64 :app:shared:compileTestKotlinIosSimulatorArm64`
+  locally. Framework linking, the simulator tests and the Xcode app stay unverified until the
+  `ios` CI job or a machine with full Xcode runs them.

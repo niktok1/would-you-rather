@@ -2,7 +2,7 @@ package io.ntole.wyr
 
 import androidx.compose.ui.window.ComposeUIViewController
 import io.ntole.wyr.di.initKoin
-import org.koin.core.context.GlobalContext
+import org.koin.mp.KoinPlatform
 
 /**
  * iOS entry point, called from `iOSApp.swift`.
@@ -17,7 +17,7 @@ import org.koin.core.context.GlobalContext
 @Suppress("ktlint:standard:function-naming")
 fun MainViewController() =
     ComposeUIViewController {
-        if (GlobalContext.getOrNull() == null) {
+        if (KoinPlatform.getKoinOrNull() == null) {
             initKoin()
         }
         App()
