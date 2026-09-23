@@ -9,6 +9,7 @@ import io.ntole.wyr.core.domain.question.GetNextQuestion
 import io.ntole.wyr.core.domain.question.Question
 import io.ntole.wyr.core.domain.question.QuestionCache
 import io.ntole.wyr.core.domain.question.QuestionRepository
+import io.ntole.wyr.core.domain.question.SkipQuestion
 import io.ntole.wyr.core.domain.session.SessionDiagnostics
 import io.ntole.wyr.core.domain.session.SessionRepository
 import io.ntole.wyr.core.domain.vote.AttemptId
@@ -38,6 +39,7 @@ class DevConsoleViewModel(
     private val questions: QuestionRepository,
     private val queue: QuestionCache,
     private val getNextQuestion: GetNextQuestion,
+    private val skipQuestion: SkipQuestion,
     private val castVote: CastVote,
     private val getPlayerStats: GetPlayerStats,
     httpTrace: HttpTrace,
@@ -79,11 +81,23 @@ class DevConsoleViewModel(
 
     fun nextQuestion() = perform("nextQuestion") { loadQuestion().summary() }
 
-    /** Skipping sends nothing (CLAUDE.md §8d), so it is only a fetch of the next question. */
-    fun skip() =
-        perform("skip", args = "questionId=${_state.value.question?.id}") {
-            loadQuestion().summary()
+    /**
+     * Records the skip of the question on screen, then loads the next one (CLAUDE.md §8d). The
+     * skipped question is not due for the rest of the cycle and comes back in the next. A skip
+     * changes what is due, so the stats are read again after.
+     *
+     * A skip the server did not record does not keep the player on the question. Its failure is
+     * logged as a `recordSkip` entry of its own, and the next question loads anyway, the skip's entry
+     * ending `skip=unrecorded`. The question then stays due, so the feed can serve it again this
+     * cycle, and Skip can be tried on it then.
+     */
+    fun skip() {
+        val questionId = _state.value.question?.id ?: return
+        perform("skip", args = "questionId=$questionId", readsStats = true) {
+            val recorded = recordSkip(questionId)
+            loadQuestion().summary() + if (recorded) "" else " skip=unrecorded"
         }
+    }
 
     fun resetQueue() =
         perform("resetQueue") {
@@ -92,10 +106,10 @@ class DevConsoleViewModel(
         }
 
     /**
-     * The stats again, as an action of their own. Next question and Skip, which are what ask the
-     * feed for more, do not read them, so this is how to watch the next cycle start once the last
-     * question due is answered (CLAUDE.md §8d): the cycle stays finished until the feed is next
-     * asked for questions.
+     * The stats again, as an action of their own. Next question, which asks the feed for more, does
+     * not read them, so this is how to watch the next cycle start once the last question due is
+     * answered (CLAUDE.md §8d): the cycle stays finished until the feed is next asked for questions.
+     * Skip reads them after its next question, so a skip that asked the feed shows the start itself.
      */
     fun readStats() = perform("readStats") { loadStats().summary() }
 
@@ -242,6 +256,23 @@ class DevConsoleViewModel(
         if (result !is LogResult.Ok) {
             log(LogEntry("refreshHeader", "", started.elapsedNow().inWholeMilliseconds, result))
         }
+    }
+
+    /**
+     * Best effort, as [refreshStats]: a failure is logged as an entry of its own instead of ending
+     * the action it is part of. Returns whether the server recorded the skip.
+     */
+    private suspend fun recordSkip(questionId: String): Boolean {
+        val started = timeSource.markNow()
+        val result =
+            resultOf {
+                skipQuestion(questionId)
+                "recorded"
+            }
+        if (result !is LogResult.Ok) {
+            log(LogEntry("recordSkip", "questionId=$questionId", started.elapsedNow().inWholeMilliseconds, result))
+        }
+        return result is LogResult.Ok
     }
 
     /**

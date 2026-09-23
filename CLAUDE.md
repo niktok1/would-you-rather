@@ -421,7 +421,8 @@ and every request shows in its HTTP trace (`HttpTrace` in `:core:network`, never
   no longer due in that cycle and comes back in the **next** one. A player is therefore never
   stuck at the end of a cycle on a question they keep skipping. Built as `POST /v1/skips` in
   `SkipStore.skip`, on `skips.skipped_in_cycle`, which the feed's due predicate compares with the
-  cycle as it does the vote's.
+  cycle as it does the vote's. The console's Skip sends it through `SkipQuestion`, then loads the
+  next question even when the skip failed.
 - **Own questions** *(not built)*: an author is never served their own question, and cannot
   like it.
 - **Likes** *(not built)*: any player may like any question except their own, at any time

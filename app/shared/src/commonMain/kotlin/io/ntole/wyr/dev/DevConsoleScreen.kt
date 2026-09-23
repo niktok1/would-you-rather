@@ -84,7 +84,7 @@ fun DevConsoleScreen(
                 Buttons {
                     Button(onClick = { onVote(Side.A) }, enabled = idle && question != null) { Text("A") }
                     Button(onClick = { onVote(Side.B) }, enabled = idle && question != null) { Text("B") }
-                    OutlinedButton(onClick = onSkip, enabled = idle) { Text("Skip") }
+                    OutlinedButton(onClick = onSkip, enabled = idle && question != null) { Text("Skip") }
                 }
                 val lastVote = state.lastVote
                 Value(
