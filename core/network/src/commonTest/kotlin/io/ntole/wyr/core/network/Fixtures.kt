@@ -10,6 +10,7 @@ import io.ktor.http.headersOf
 import io.ntole.wyr.core.auth.SessionDto
 import io.ntole.wyr.core.error.ErrorCode
 import io.ntole.wyr.core.error.ErrorDto
+import io.ntole.wyr.core.question.QuestionPageDto
 
 internal const val BASE_URL = "https://wyr.test"
 
@@ -26,6 +27,12 @@ internal fun storeHolding(session: SessionDto?): SessionStore =
     SessionStore(InMemoryTokenStorage()).also { store -> session?.let(store::write) }
 
 internal val jsonHeaders = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString())
+
+internal fun MockRequestHandleScope.respondEmptyPage(): HttpResponseData =
+    respond(WyrJson.encodeToString(QuestionPageDto(questions = emptyList())), HttpStatusCode.OK, jsonHeaders)
+
+internal fun MockRequestHandleScope.respondSession(session: SessionDto): HttpResponseData =
+    respond(WyrJson.encodeToString(session), HttpStatusCode.OK, jsonHeaders)
 
 /** An error exactly as the server's StatusPages renders one. */
 internal fun MockRequestHandleScope.respondErrorDto(

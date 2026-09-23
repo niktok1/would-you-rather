@@ -55,6 +55,15 @@ public object WyrHttpClient {
 
             install(Auth) {
                 bearer {
+                    // SessionStore stays the only copy of the credentials. Ktor would otherwise
+                    // cache what loadTokens returned and keep sending it after the data layer
+                    // replaces or clears the session — as the previous player, until rejected.
+                    // Clearing that cache is no fix: in Ktor 3.5 clearToken() is deferred to a
+                    // GlobalScope coroutine whenever a load or refresh holds the provider's lock,
+                    // and requests in between still get the stale token. Loading per request
+                    // costs one preference read.
+                    cacheTokens = false
+
                     loadTokens {
                         sessionStore.read()?.let { session ->
                             BearerTokens(session.accessToken, session.refreshToken)
