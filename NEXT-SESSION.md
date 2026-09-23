@@ -17,15 +17,26 @@ Repo initialized on `main` with the personal identity and `user.useConfigOnly = 
   token.
 - Live curl run against `./gradlew :server:run` confirmed guest auth, paging, voting,
   refresh-token rotation, replay rejection, and the `ErrorDto` envelope on 400/401/404/409. That
-  run predates flat scoring, so the scoring it checked was the old streak rule.
+  run predates flat scoring and `fix/read-committed`, so the scoring it checked was the old streak
+  rule, and the rotation was the old find-then-update-by-id at REPEATABLE_READ, not today's
+  compare-and-set at READ COMMITTED.
 - `:app:shared` compiles for JVM, JS, and wasmJs; 5 ViewModel tests green.
 - `:app:androidApp:assembleDebug` produces a real APK.
 - `ktlintCheck` clean across every module.
 
 ### NOT verified
 
-- **Flat scoring on a live server.** Nobody has re-run the curl pass since it landed, so the
-  1-point rule is proven by tests only.
+- **Flat scoring and the refresh rotation on a live server.** Nobody has re-run the curl pass
+  since either landed, so the 1-point rule and the compare-and-set rotation are proven by tests
+  only.
+- **READ COMMITTED and the refresh compare-and-set on Postgres.** Every race and burst in
+  `PlayerStoreTest` runs on H2, even in the `server-postgres` job: it hardcodes `jdbc:h2:mem:`,
+  because its wait-for-the-lock polling reads H2's `INFORMATION_SCHEMA.SESSIONS`. So the ci.yml
+  note that isolation differences surface in that job holds only for `ApiFlowTest`'s sequential
+  flows. On Postgres the rotation stays single-use because an `UPDATE` that waited on a row lock
+  re-checks its `WHERE` against the committed row. That is documented Postgres behaviour, not
+  something a test here has seen, and the same goes for the concurrent-seed recovery described on
+  `Seed.questionsIfEmpty`. Porting the races means polling `pg_stat_activity` instead.
 - **iOS.** This machine has Command Line Tools but no Xcode. The Kotlin compile does not need
   Xcode: `iosArm64` and `iosSimulatorArm64` main sources and the simulator test sources now
   compile. That check caught `MainViewController` using `GlobalContext`, which Koin's native
