@@ -160,6 +160,17 @@ class SkipStoreTest {
     }
 
     @Test
+    fun `another player's skips do not count as this player's`() {
+        val player = newPlayer()
+        val skippers = List(2) { newPlayer() }
+        skippers.forEach { skipper -> skip(skipper, QUESTION) }
+
+        assertEquals(pool.sorted(), feed(player).ids().sorted(), "the whole pool, each question once")
+        assertEquals(pool.size, statsOf(player).dueThisCycle)
+        assertEquals(pool.size - 1, statsOf(skippers.first()).dueThisCycle, "while each skip counts for its player")
+    }
+
+    @Test
     fun `two first skips racing on one question leave one skip`() {
         val player = newPlayer()
 
