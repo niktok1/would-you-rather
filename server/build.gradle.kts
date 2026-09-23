@@ -39,3 +39,15 @@ dependencies {
     testImplementation(libs.ktor.clientContentNegotiation)
     testImplementation(libs.kotlin.testJunit)
 }
+
+// Both the H2 and Postgres drivers register through META-INF/services/java.sql.Driver. Shadow's
+// default EXCLUDE strategy keeps only the first copy, so the fat jar knew Postgres and died on H2.
+// Merging needs both halves: INCLUDE lets every copy reach the transformer, and the transformer
+// joins them. Gradle does not track a filesMatching action as a task input, so after changing only
+// that block, rebuild with --rerun.
+tasks.shadowJar {
+    filesMatching("META-INF/services/**") {
+        duplicatesStrategy = DuplicatesStrategy.INCLUDE
+    }
+    mergeServiceFiles()
+}
