@@ -77,11 +77,21 @@ public object WyrHttpClient {
                     refreshTokens {
                         val current = sessionStore.read() ?: return@refreshTokens null
                         val refreshed: SessionDto =
-                            client
-                                .post(WyrApi.Paths.AUTH_REFRESH) {
-                                    markAsRefreshTokenRequest()
-                                    setBody(RefreshRequest(current.refreshToken))
-                                }.body()
+                            try {
+                                client
+                                    .post(WyrApi.Paths.AUTH_REFRESH) {
+                                        markAsRefreshTokenRequest()
+                                        setBody(RefreshRequest(current.refreshToken))
+                                    }.body()
+                            } catch (refused: ApiException) {
+                                // Another client sharing this store (a second browser tab, a
+                                // second desktop instance) may have spent the same refresh token
+                                // first; the server rotates on use. If the store has moved on,
+                                // retry as what it holds rather than report a dead session.
+                                val stored = sessionStore.read()
+                                if (refused.code != ErrorCode.INVALID_REFRESH_TOKEN || stored == current) throw refused
+                                return@refreshTokens stored?.toBearerTokens()
+                            }
 
                         // The data layer may have replaced or cleared the session while this was in
                         // flight. Writing now would put the old player back over the new one, so

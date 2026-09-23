@@ -173,6 +173,36 @@ class BearerSessionTest {
             assertEquals(listOf("Bearer access-a", null, "Bearer access-b"), engine.authorizationHeaders())
         }
 
+    @Test
+    fun `a refresh token another client spent first is not taken for a dead session`() =
+        runTest {
+            // Two browser tabs share one store. The other tab's refresh with "refresh-a" won; the
+            // server refuses this one, and by the time it answers the store holds the rotation.
+            val store = storeHolding(session("a"))
+            val engine =
+                MockEngine { request ->
+                    when {
+                        request.url.encodedPath == WyrApi.Paths.AUTH_REFRESH -> {
+                            store.write(session("a2"))
+                            respondErrorDto(HttpStatusCode.Unauthorized, ErrorCode.INVALID_REFRESH_TOKEN)
+                        }
+
+                        request.headers[HttpHeaders.Authorization] == "Bearer access-a2" -> {
+                            respondEmptyPage()
+                        }
+
+                        else -> {
+                            respondErrorDto(HttpStatusCode.Unauthorized, ErrorCode.UNAUTHORIZED)
+                        }
+                    }
+                }
+
+            QuestionApi(WyrHttpClient.create(BASE_URL, store, engine)).page()
+
+            assertEquals(session("a2"), store.read())
+            assertEquals(listOf("Bearer access-a", null, "Bearer access-a2"), engine.authorizationHeaders())
+        }
+
     private fun MockEngine.authorizationHeaders(): List<String?> =
         requestHistory.map { it.headers[HttpHeaders.Authorization] }
 }
