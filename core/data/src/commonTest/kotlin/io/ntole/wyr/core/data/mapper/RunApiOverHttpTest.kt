@@ -70,6 +70,39 @@ class RunApiOverHttpTest {
             assertEquals(DomainError.UNAUTHORIZED, errorFrom(deadSession))
         }
 
+    @Test
+    fun `a success body this build cannot read is SERVER`() =
+        runTest {
+            // Contract drift, such as the server dropping a field this build still requires.
+            // Nothing is wrong with the connection, and retrying will not help.
+            val driftedServer =
+                MockEngine {
+                    respond(
+                        """{"unexpected":true}""",
+                        HttpStatusCode.OK,
+                        headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString()),
+                    )
+                }
+
+            assertEquals(DomainError.SERVER, errorFrom(driftedServer))
+        }
+
+    @Test
+    fun `a success page that is not JSON at all stays NETWORK`() =
+        runTest {
+            // What a captive portal's login page looks like to the app: the network is in the way.
+            val captivePortal =
+                MockEngine {
+                    respond(
+                        "<html><body>Sign in to the Wi-Fi</body></html>",
+                        HttpStatusCode.OK,
+                        headersOf(HttpHeaders.ContentType, ContentType.Text.Html.toString()),
+                    )
+                }
+
+            assertEquals(DomainError.NETWORK, errorFrom(captivePortal))
+        }
+
     private suspend fun errorFrom(engine: MockEngine): DomainError {
         val api = QuestionApi(WyrHttpClient.create(BASE_URL, storeHolding(session("a")), engine))
         return assertFailsWith<WyrException> { runApi { api.page() } }.error

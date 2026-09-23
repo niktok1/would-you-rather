@@ -12,10 +12,10 @@ public enum class DomainError {
     UNAUTHORIZED,
     RATE_LIMITED,
 
-    /** Request never reached the server, or the response was unreadable. */
+    /** Request never reached the server, or its answer did not arrive whole. */
     NETWORK,
 
-    /** Server reached and it failed. */
+    /** Server reached and it failed, or it answered in a shape this build cannot decode. */
     SERVER,
 
     /** No questions left to serve locally or remotely. */

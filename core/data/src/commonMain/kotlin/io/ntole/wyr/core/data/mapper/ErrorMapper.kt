@@ -5,6 +5,7 @@ import io.ntole.wyr.core.domain.error.WyrException
 import io.ntole.wyr.core.error.ErrorCode
 import io.ntole.wyr.core.network.ApiException
 import kotlinx.coroutines.CancellationException
+import kotlinx.serialization.SerializationException
 
 /**
  * Runs a network call and converts every failure into a [WyrException].
@@ -22,11 +23,26 @@ internal suspend fun <T> runApi(block: suspend () -> T): T =
     } catch (api: ApiException) {
         throw WyrException(api.toDomainError(), api.message, api)
     } catch (other: Throwable) {
-        // Nothing came back, or what came back was unreadable. A fault in the program or the VM
-        // is neither, and must not be dressed up as one.
+        // Nothing came back, or it did not arrive whole. A fault in the program or the VM is
+        // neither, and must not be dressed up as one.
         if (!other.isRequestFailure()) throw other
+        // An answer arrived and this build could not decode it: client and server disagree about
+        // the contract. Like a rejected request body (VALIDATION_FAILED), that is a bug on one
+        // side, and "check your connection" would send the player looking in the wrong place.
+        if (other.isUndecodableBody()) throw WyrException(DomainError.SERVER, other.message, other)
         throw WyrException(DomainError.NETWORK, other.message, other)
     }
+
+/**
+ * Whether decoding a body failed. Ktor wraps the decoder's [SerializationException] in its own
+ * converter exception, so the cause chain is searched (bounded, in case of a cycle). A body that
+ * was not JSON at all — a captive portal's login page, say — fails before decoding and stays
+ * NETWORK.
+ */
+private fun Throwable.isUndecodableBody(): Boolean =
+    generateSequence(this) { it.cause }.take(MAX_CAUSE_DEPTH).any { it is SerializationException }
+
+private const val MAX_CAUSE_DEPTH = 8
 
 /**
  * Whether this is an ordinary failed exchange, as opposed to a bug or a VM fault.
