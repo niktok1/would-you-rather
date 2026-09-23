@@ -414,19 +414,27 @@ and every request shows in its HTTP trace (`HttpTrace` in `:core:network`, never
   `StatsStore.of`, as one statement. It only reads, and the cycle starts lazily on the next feed
   request, so between the answer that finishes a cycle and that request it reports the finished
   cycle with nothing due.
-- **Skipping** *(built)*: allowed. It earns nothing and is not recorded, so the question
-  stays due and comes back later in the same cycle. Nothing is sent: the console's Skip takes the
-  next question, and the feed serves the skipped one again in a later batch. A cycle cannot finish
-  while a skipped question is still due, so once it is the last one due the feed serves it again
-  at once, and nothing else, until it is answered.
-- **Own questions** *(not built)*: an author is never served their own question.
+- **Skipping** *(changing — decided 2026-09-23, not built yet)*: allowed, earns nothing, and
+  never touches the tally. The server **records the skip for the player's current cycle only**, so
+  the question is no longer due in that cycle and comes back in the **next** one. A player is
+  therefore never stuck at the end of a cycle on a question they keep skipping. (Until this is
+  built, nothing is sent and a skipped question stays due in the same cycle.)
+- **Own questions** *(not built)*: an author is never served their own question, and cannot
+  like it.
 - **Likes** *(not built)*: any player may like any question except their own, at any time
   (before or after answering), once each, and may unlike it. Each like currently held is **+1
   point to the author**, and unliking takes that point back. The like count is visible before
   answering. For now likes do nothing else; serving questions by quality is a later idea.
-- **Submitting** *(not built)*: earns no points directly, because authors earn through likes. A
-  submitted question is served only after a moderator approves it.
-
+- **Submitting** *(not built; details decided 2026-09-23)*: earns no points directly, because
+  authors earn through likes. The author writes both options and **picks the category** (a real
+  one, not `UNKNOWN`). A player may have at most **20 submissions pending** moderation at once.
+  A submitted question is served only after a moderator approves it; once approved it is due for
+  every player in their current cycle.
+- **Moderation** *(not built)*: a moderator approves or rejects each pending submission and **may
+  change its category** when approving. A rejection carries a **short reason**, and the author
+  sees the status of each of their submissions and, for a rejected one, that reason. The
+  moderator is whoever holds the server's admin token (an environment variable; admin routes are
+  off when it is unset), not a role on a player account.
 ---
 
 ## 9. How to work in this repo
