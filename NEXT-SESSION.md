@@ -11,11 +11,13 @@ Repo initialized on `main` with the personal identity and `user.useConfigOnly = 
 
 ### Verified working
 
-- `:server` on H2: 52 tests green, including 21 end-to-end flow tests in `ApiFlowTest`. Flat
+- `:server` on H2: 59 tests green, including 22 end-to-end flow tests in `ApiFlowTest`. Flat
   scoring is covered there (every vote pays 1, majority and minority alike, and the total
   accumulates) and by `PlayerStoreTest`, which races awards for one player and refreshes of one
   token. The endless feed, re-answering and attempt replay are covered there too, and by
-  `QuestionStoreTest` and `VoteStoreTest`.
+  `QuestionStoreTest` and `VoteStoreTest`. Feed cycles are pinned in `QuestionStoreTest`,
+  including two requests racing to start the next cycle, and in `VoteStoreTest`, an answer that
+  waited on its vote's lock while a cycle started.
 - Live curl run against `./gradlew :server:run` confirmed guest auth, paging, voting,
   refresh-token rotation, replay rejection, and the `ErrorDto` envelope on 400/401/404/409. That
   run predates flat scoring, `fix/read-committed` and the endless feed, so the scoring it checked
@@ -28,8 +30,9 @@ Repo initialized on `main` with the personal identity and `user.useConfigOnly = 
   question came back `answeredBefore`, least recently answered first, never the same one twice in
   a row, and every answer paid 1. The last vote sent again as the same attempt was replayed: +0,
   and the stored side although the request asked for the other. A skipped question came back in
-  the next batch.
-- Client tests: `:core:domain` 10, `:core:data` 47, `:core:network` 21, `:app:shared` 34 (the
+  the next batch. That run predates feed cycles (`feat/feed-cycles`): the least-recently-answered
+  loop it saw is gone, and cycles have run only in the server tests.
+- Client tests: `:core:domain` 10, `:core:data` 49, `:core:network` 21, `:app:shared` 36 (the
   ViewModels and the Koin graph). `:app:shared` compiles for JVM, JS, wasmJs and the iOS
   simulator.
 - `:app:androidApp:assembleDebug` produces a real APK.
@@ -40,10 +43,11 @@ Repo initialized on `main` with the personal identity and `user.useConfigOnly = 
 - **The refresh rotation on a live server.** Nobody has re-run the curl pass since it landed, so
   the compare-and-set rotation is proven by tests only. The 1-point rule has been seen live, in
   the client run above.
-- **The endless feed and vote replay on Postgres.** `RANDOM()` and `NULLS FIRST` in the feed, a
-  first answer racing another (the 23505 aborts the transaction and Exposed reruns it), and the
-  `SELECT ... FOR UPDATE` that makes a retry wait and replay have only run on H2. The store races
-  in `QuestionStoreTest` and `VoteStoreTest` poll H2's `SESSIONS`, like `PlayerStoreTest`.
+- **The endless feed and vote replay on Postgres.** `RANDOM()` in the feed, the compare-and-set
+  that starts a cycle, a first answer racing another (the 23505 aborts the transaction and Exposed
+  reruns it), and the `SELECT ... FOR UPDATE` that makes a retry wait and replay have only run on
+  H2. The store races in `QuestionStoreTest` and `VoteStoreTest` poll H2's `SESSIONS`, like
+  `PlayerStoreTest`.
 - **READ COMMITTED and the refresh compare-and-set on Postgres.** Every race and burst in
   `PlayerStoreTest` runs on H2, even in the `server-postgres` job: it hardcodes `jdbc:h2:mem:`,
   because its wait-for-the-lock polling reads H2's `INFORMATION_SCHEMA.SESSIONS`. So the ci.yml
@@ -120,8 +124,8 @@ The app opens on the **Console** tab (`io.ntole.wyr.dev`). **Play** is the froze
   answer is logged as `answer` as it lands, then the run as `answered=N looped=K total=T`; a
   failure ends the run, and its vote is left for *Retry last vote*. **To see the loop:** the server
   seeds 24 questions, so press *New guest*, then *Answer N* with 25. The first 24 are the seeds in
-  random order and the 25th logs `looped`. After that the loop comes round least recently
-  answered first.
+  random order and the 25th logs `looped`: it is the first question of cycle 2, which serves all
+  24 again in a new random order.
 - **Questions.** Fetch the next question, or empty the local queue, and see its size.
 - **Vote by id.** Sends a vote for whatever id is typed, as a new attempt. An unknown id provokes
   `QUESTION_NOT_FOUND` (404). A known one is simply answered again and pays 1: there is no
@@ -191,11 +195,20 @@ known `PlayViewModel` issues (the Play tab is frozen).
   awards and two refreshes at a hand-picked READ COMMITTED so those tests stay discriminating
   whatever the server's level becomes.
 - **The client keeps no record of which questions it has served** (CLAUDE.md §8d). The server
-  knows what the player answered and leads every batch with whatever is still unanswered, which
+  knows what the player answered in their current cycle and serves only what is still due, which
   includes what is queued and the question on screen. `InMemoryQuestionCache` drops only ids still
   queued, and `DefaultQuestionRepository` drops the one it handed out last. An "ever seen" set is
   what used to end the game after one pass; do not bring one back. `OUT_OF_QUESTIONS` now means
   the server sent an empty batch, and nothing else.
+- **The feed runs in cycles, and a cycle ends only when everything in it is answered**
+  (CLAUDE.md §8d). Every question comes back once per cycle, in a new random order each time;
+  nothing loops by answer time any more, and `answered_at` is information only. Batches are never
+  topped up, so they shrink towards the end of a cycle, and a skipped question stays due: once it
+  is the last one, the feed serves it again and nothing else until it is answered. A cycle is per
+  player, so a category with nothing due is served again rather than starting the next cycle
+  while other categories are still due. Two server rules to keep: starting a cycle is a
+  compare-and-set on the cycle read (`PlayerStore.startNextCycle`), and an answer reads its cycle
+  after its vote's lock (`VoteStore.cast`). Both have races in the store tests.
 - **An attempt id is made once per tap and reused only to retry that tap.** `AttemptId.random()`
   is the only way to make one. Making a new one for a retry pays twice; reusing one for a new tap
   turns that answer into a replay that pays nothing. The server stores only the latest attempt per

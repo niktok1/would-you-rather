@@ -20,12 +20,13 @@ import kotlinx.coroutines.sync.withLock
  * session stored, or a dead one, the refused fetch mints a guest and is retried once as it.
  *
  * The server knows what the player has answered, so nothing here remembers what was served beyond
- * the refill in flight. A batch leads with every question unanswered when the server read it, and
- * that includes the ones still queued and the one on screen. The cache drops the queued ones. The
- * one on screen is dropped here, or a refill while the player looks at it would queue it again, and
- * show it twice in a row when nothing else is queued. So is every question handed out while the
- * batch was in flight: the player may have answered it since, and queued again it would come back
- * as unanswered, a few questions later rather than when the feed loops to it.
+ * the refill in flight. A batch holds only questions still due in the player's cycle when the
+ * server read it (CLAUDE.md §8d), and those include the ones still queued and the one on screen.
+ * The cache drops the queued ones. The one on screen is dropped here, or a refill while the player
+ * looks at it would queue it again, and show it twice in a row when nothing else is queued. So is
+ * every question handed out while the batch was in flight: the player may have answered it since,
+ * and queued again it would come back a few questions later, in the cycle it was just answered in,
+ * rather than in the next one.
  */
 public class DefaultQuestionRepository(
     private val api: QuestionApi,
@@ -62,7 +63,8 @@ public class DefaultQuestionRepository(
 
             val batch = fetchAndQueue()
             // Nothing queued but a batch that was not empty: it held only the question on screen,
-            // as a pool of one question does. The feed is endless, so that one is shown again.
+            // as a pool of one question does, or a cycle whose last due question was skipped. The
+            // feed is endless, so that one is shown again.
             takeNext() ?: batch.firstOrNull()?.also { handOutMutex.withLock { handOut(it) } }
         } ?: throw WyrException(DomainError.OUT_OF_QUESTIONS, "server returned no questions")
     }
