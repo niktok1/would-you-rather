@@ -105,11 +105,21 @@ known `PlayViewModel` issues (the Play tab is frozen).
   `VoteOutcome.agreedWithMajority` treats an exact tie as agreement, and nothing on the server
   mirrors it because no points depend on it (§8d). Scoring against the tally again would bring
   back a rule the two sides must keep in sync.
-- **Concurrent writes to one row are retried, not lost — at REPEATABLE_READ.** The Hikari pool
-  sets that level, so the database refuses the second of two conflicting writes, and Exposed
-  re-runs a failed transaction up to 3 times by default. That hides a read-then-write bug, which
-  then only shows at READ COMMITTED. Counters (points now, like counts later) should increment in
-  SQL anyway; `PlayerStoreTest` races two awards at both levels.
+- **At REPEATABLE_READ, concurrent writes to one row fail, and are retried only briefly.** The
+  Hikari pool sets that level. The database refuses the second of two conflicting writes to a
+  row (SQLState 40001), even an SQL increment. Exposed re-runs the whole transaction, but makes
+  only 3 attempts in total with no delay between them. Once they run out the request is a 500.
+  No point is lost, since the vote rolls back too, but the answer is rejected. A probe of 8
+  concurrent awards to one player saw 3 succeed and 5 fail. At READ COMMITTED (Postgres's
+  default) the SQL increment alone is correct and nothing needs a retry. The retry also hides a
+  read-then-write bug, which only shows at READ COMMITTED. `PlayerStoreTest` races two awards at
+  both levels, and two awards fit in 3 attempts.
+- **Open decision, to settle with the user before likes** (CLAUDE.md §8b). Likes put many
+  players' +1s on one author's row at once, which will use up the 3 attempts. There are two
+  options. Run the vote and like transactions at READ COMMITTED with a per-transaction
+  `transactionIsolation` override, which the SQL increment makes safe. Or keep REPEATABLE_READ
+  and configure `maxAttempts` plus a retry delay. Pin whichever is chosen with a burst test
+  through the route.
 - `Tally.percentB` is defined as `100 - percentA` rather than rounded independently, so the two
   always sum to 100. There is a property test over every split up to 40/40.
 - `:server` must not depend on `:core:domain` (§3). That is why scoring lives in `:server`.

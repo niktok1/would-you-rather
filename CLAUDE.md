@@ -289,6 +289,12 @@ accounts exist.
   A real migration tool (`exposed-migration-jdbc` plus a runner) must be chosen before the first
   column change **after** that deploy.
 - **WCAG AA contrast audit** — see §5b. Paused along with UI polish (§8d).
+- **Isolation for hot counters** — resolve before likes (§8d). The pool runs REPEATABLE_READ,
+  where concurrent writes to one row fail with SQLState 40001 even as an SQL increment. Exposed
+  makes 3 attempts in total with no delay, and then the request is a 500. So a burst on one row,
+  such as many likes paying one author, will fail requests. There are two options. Run those
+  transactions at READ COMMITTED, where the SQL increment alone is correct. Or keep
+  REPEATABLE_READ and set `maxAttempts` plus a retry delay.
 
 `RANDOM` was an open item and is resolved: it is a content category (the absurd questions), not a
 "surprise me" filter, and it stays in `QuestionCategory` as-is. The unfiltered feed already mixes

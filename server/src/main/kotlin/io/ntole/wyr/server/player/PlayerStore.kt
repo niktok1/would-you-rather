@@ -84,9 +84,17 @@ object PlayerStore {
      *
      * The addition happens in SQL (`total_points = total_points + n`) rather than as a read and
      * then a write, so two votes by one player landing together cannot both start from the same
-     * total and lose a point. The server's REPEATABLE_READ happens to rescue a read-then-write
-     * too, because the database refuses the second write and Exposed retries the transaction, but
-     * at READ COMMITTED it silently drops the point. The increment must not depend on either.
+     * total and lose a point. At READ COMMITTED (Postgres's default) that alone is enough: the
+     * second award waits for the first's row lock, then adds to the committed total. A
+     * read-then-write at that level silently drops the point.
+     *
+     * The server runs at REPEATABLE_READ (`DatabaseFactory`), where the increment is not enough on
+     * its own. The database refuses the second of two concurrent writes to the row (SQLState
+     * 40001) and the whole transaction fails. Exposed then re-runs it, but makes only 3 attempts
+     * in total with no delay between them. A burst of writes to one row can use them all up, and
+     * the request fails with a 500. No point is lost, because the vote rolls back with it, but the
+     * answer is rejected. Whether to drop to READ COMMITTED or tune the retry is open (CLAUDE.md
+     * §8b).
      *
      * The total is read back in the same transaction, which holds the row lock from the update,
      * so it is exactly the total this award produced.
