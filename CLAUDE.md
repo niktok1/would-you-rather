@@ -363,7 +363,8 @@ and every request shows in its HTTP trace (`HttpTrace` in `:core:network`, never
   not answered, in **random order per player**. Once none remain, answered questions loop back,
   least-recently-answered first. `GET /v1/questions` requires a bearer token and is per-player.
   Built in `QuestionStore.feed` (one statement) and `DefaultQuestionRepository`, which keeps no
-  record of what it served: it drops only questions still queued and the one on screen.
+  record of what it served beyond one refill: it drops only questions still queued and those handed
+  out since the refill went out, the one then on screen included.
 - **Re-answering** *(built)*: a looped question can be answered again. It earns the point
   again and the player may change their pick. The tally always holds **one vote per player per
   question**, their latest. Built in `VoteStore.cast`, which moves the player's vote.

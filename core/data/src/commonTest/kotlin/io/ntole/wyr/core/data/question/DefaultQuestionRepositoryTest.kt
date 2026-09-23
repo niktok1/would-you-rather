@@ -61,29 +61,58 @@ class DefaultQuestionRepositoryTest {
     @Test
     fun `a question handed out while a refill is in flight is not queued by it`() =
         runTest {
-            val secondBatchRequested = CompletableDeferred<Unit>()
-            val answerSecondBatch = CompletableDeferred<Unit>()
-            var requests = 0
-            val engine =
-                MockEngine {
-                    val request = requests++
-                    if (request == 1) {
-                        secondBatchRequested.complete(Unit)
-                        answerSecondBatch.await()
-                    }
-                    respondJson(WyrJson.encodeToString(if (request == 0) batchOf("q1", "q2") else batchOf("q2", "q3")))
-                }
-            val repository = repositoryOver(engine)
+            // The server read the batch while q1 was on screen and q2 queued, so it lists both.
+            val feed = HeldRefill(batchOf("q1", "q2"), batchOf("q1", "q2", "q3"))
+            val repository = repositoryOver(feed.engine)
             assertEquals("q1", repository.next().id)
 
             val refill = async { repository.prefetch() }
-            secondBatchRequested.await()
-            // Taken from the queue without waiting for the refill, which then brings it back.
+            feed.requested.await()
+            // The player answers q1 and moves on without waiting for the refill.
             assertEquals("q2", repository.next().id)
-            answerSecondBatch.complete(Unit)
+            feed.release.complete(Unit)
             refill.await()
 
+            // Not q1 again: answered by now, and it would be served next as though it were not.
             assertEquals(listOf("q3"), List(cache.count()) { repository.next().id })
+        }
+
+    @Test
+    fun `every question handed out while a refill is in flight is kept out of it`() =
+        runTest {
+            val feed = HeldRefill(batchOf("q1", "q2", "q3"), batchOf("q1", "q2", "q3", "q4"))
+            val repository = repositoryOver(feed.engine)
+            assertEquals("q1", repository.next().id)
+
+            val refill = async { repository.prefetch() }
+            feed.requested.await()
+            assertEquals("q2", repository.next().id)
+            assertEquals("q3", repository.next().id)
+            feed.release.complete(Unit)
+            refill.await()
+
+            // Not only the one on screen when the batch lands: q2 is kept out too.
+            assertEquals(listOf("q4"), List(cache.count()) { repository.next().id })
+        }
+
+    @Test
+    fun `a question kept out of a refill is queued by the next batch that serves it`() =
+        runTest {
+            // The player skips q1 and q2, so the third batch still serves them as unanswered.
+            val feed =
+                HeldRefill(batchOf("q1", "q2"), batchOf("q1", "q2", "q3"), batchOf("q1", "q2", "q3"))
+            val repository = repositoryOver(feed.engine)
+            assertEquals("q1", repository.next().id)
+            val refill = async { repository.prefetch() }
+            feed.requested.await()
+            assertEquals("q2", repository.next().id)
+            feed.release.complete(Unit)
+            refill.await()
+            assertEquals("q3", repository.next().id)
+
+            repository.prefetch()
+
+            assertEquals(listOf("q1", "q2"), List(cache.count()) { repository.next().id })
         }
 
     @Test
@@ -212,6 +241,24 @@ class DefaultQuestionRepositoryTest {
     ): DefaultQuestionRepository {
         val client = WyrHttpClient.create(BASE_URL, store, engine)
         return DefaultQuestionRepository(QuestionApi(client), DefaultSessionRepository(AuthApi(client), store), cache)
+    }
+
+    /** A [feedOf] whose second request stays in flight, once [requested], until [release]. */
+    private class HeldRefill(
+        vararg batches: QuestionPageDto,
+    ) {
+        val requested = CompletableDeferred<Unit>()
+        val release = CompletableDeferred<Unit>()
+        private var served = 0
+        val engine =
+            MockEngine {
+                val request = served++
+                if (request == 1) {
+                    requested.complete(Unit)
+                    release.await()
+                }
+                respondJson(WyrJson.encodeToString(batches[minOf(request, batches.lastIndex)]))
+            }
     }
 
     /** A feed that answers the n-th request with the n-th batch, and every later one with the last. */

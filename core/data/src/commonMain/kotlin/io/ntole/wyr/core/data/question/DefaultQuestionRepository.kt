@@ -19,11 +19,13 @@ import kotlinx.coroutines.sync.withLock
  * The feed needs a session, so a refill goes through [withSessionRecovery] as a vote does: with no
  * session stored, or a dead one, the refused fetch mints a guest and is retried once as it.
  *
- * The server knows what the player has answered, so nothing here remembers what was served. A
- * batch leads with every question still unanswered, and that includes the ones still queued and
- * the one on screen. The cache drops the queued ones. The one [next] handed out last is dropped
- * here, or a refill while the player looks at it would queue it again, and show it twice in a row
- * when nothing else is queued.
+ * The server knows what the player has answered, so nothing here remembers what was served beyond
+ * the refill in flight. A batch leads with every question unanswered when the server read it, and
+ * that includes the ones still queued and the one on screen. The cache drops the queued ones. The
+ * one on screen is dropped here, or a refill while the player looks at it would queue it again, and
+ * show it twice in a row when nothing else is queued. So is every question handed out while the
+ * batch was in flight: the player may have answered it since, and queued again it would come back
+ * as unanswered, a few questions later rather than when the feed loops to it.
  */
 public class DefaultQuestionRepository(
     private val api: QuestionApi,
@@ -35,13 +37,21 @@ public class DefaultQuestionRepository(
     private val refillMutex = Mutex()
 
     /**
-     * Makes taking a question and recording it in [lastHandedOut] one step, as seen by a refill
-     * filtering its batch. Never held across a request, so [next] does not wait on a prefetch.
+     * Makes taking a question and recording it in [lastHandedOut] and [handedOutSinceFetch] one
+     * step, as seen by a refill filtering its batch. Never held across a request, so [next] does not
+     * wait on a prefetch.
      */
     private val handOutMutex = Mutex()
 
     /** The id of the question [next] returned last, which is the one on screen. */
     private var lastHandedOut: String? = null
+
+    /**
+     * Every id handed out since the latest fetch went out, starting with the one on screen then.
+     * The batch still lists each of them as unanswered, whatever the player has done with them
+     * since. Reset by every fetch, so a question kept out of one batch is queued by the next.
+     */
+    private val handedOutSinceFetch = mutableSetOf<String>()
 
     override suspend fun next(): Question {
         takeNext()?.let { return it }
@@ -53,7 +63,7 @@ public class DefaultQuestionRepository(
             val batch = fetchAndQueue()
             // Nothing queued but a batch that was not empty: it held only the question on screen,
             // as a pool of one question does. The feed is endless, so that one is shown again.
-            takeNext() ?: batch.firstOrNull()?.also { handOutMutex.withLock { lastHandedOut = it.id } }
+            takeNext() ?: batch.firstOrNull()?.also { handOutMutex.withLock { handOut(it) } }
         } ?: throw WyrException(DomainError.OUT_OF_QUESTIONS, "server returned no questions")
     }
 
@@ -75,18 +85,29 @@ public class DefaultQuestionRepository(
 
     private suspend fun takeNext(): Question? =
         handOutMutex.withLock {
-            cache.takeNext()?.also { lastHandedOut = it.id }
+            cache.takeNext()?.also(::handOut)
         }
+
+    /** Needs [handOutMutex]. */
+    private fun handOut(question: Question) {
+        lastHandedOut = question.id
+        handedOutSinceFetch += question.id
+    }
 
     /** Fetches the next batch and queues what it can. Returns the whole batch. Needs [refillMutex]. */
     private suspend fun fetchAndQueue(): List<Question> {
+        handOutMutex.withLock {
+            handedOutSinceFetch.clear()
+            lastHandedOut?.let { handedOutSinceFetch += it }
+        }
+
         val batch =
             session
                 .withSessionRecovery { api.page(limit = WyrApi.Limits.DEFAULT_PAGE_SIZE) }
                 .questions
                 .map { it.toDomain() }
 
-        handOutMutex.withLock { cache.put(batch.filter { it.id != lastHandedOut }) }
+        handOutMutex.withLock { cache.put(batch.filter { it.id !in handedOutSinceFetch }) }
         return batch
     }
 
