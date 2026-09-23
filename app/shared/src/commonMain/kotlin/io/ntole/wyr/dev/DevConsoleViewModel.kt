@@ -3,6 +3,8 @@ package io.ntole.wyr.dev
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import io.ntole.wyr.core.domain.error.WyrException
+import io.ntole.wyr.core.domain.player.GetPlayerStats
+import io.ntole.wyr.core.domain.player.PlayerStats
 import io.ntole.wyr.core.domain.question.GetNextQuestion
 import io.ntole.wyr.core.domain.question.Question
 import io.ntole.wyr.core.domain.question.QuestionCache
@@ -37,6 +39,7 @@ class DevConsoleViewModel(
     private val queue: QuestionCache,
     private val getNextQuestion: GetNextQuestion,
     private val castVote: CastVote,
+    private val getPlayerStats: GetPlayerStats,
     httpTrace: HttpTrace,
     private val timeSource: TimeSource = TimeSource.Monotonic,
 ) : ViewModel() {
@@ -47,7 +50,14 @@ class DevConsoleViewModel(
     val httpExchanges: StateFlow<List<HttpExchange>> = httpTrace.exchanges
 
     init {
-        viewModelScope.launch { refreshSnapshot() }
+        // One action like any other, so no vote can land while the first stats read is in flight.
+        // The header first, since it needs no network. Then the stats, which ensure a session and so
+        // can mint one, and the header again, to show it.
+        exclusively("refreshStats") {
+            refreshSnapshot()
+            refreshStats()
+            refreshSnapshot()
+        }
     }
 
     fun ensureSession() = perform("ensureSession") { "playerId=${sessions.ensure()}" }
@@ -57,9 +67,9 @@ class DevConsoleViewModel(
      * the next one, so the new player never resumes the old one's queue.
      */
     fun newGuest() =
-        perform("newGuest") {
+        perform("newGuest", readsStats = true) {
             sessions.clear()
-            _state.update { it.copy(question = null, lastOutcome = null, lastVote = null) }
+            _state.update { it.copy(question = null, lastOutcome = null, lastVote = null, stats = null) }
             questions.reset()
             val playerId = sessions.ensure()
             "playerId=$playerId ${loadQuestion().summary()}"
@@ -78,6 +88,14 @@ class DevConsoleViewModel(
             questions.reset()
             "queue emptied"
         }
+
+    /**
+     * The stats again, as an action of their own. Next question and Skip, which are what ask the
+     * feed for more, do not read them, so this is how to watch the next cycle start once the last
+     * question due is answered (CLAUDE.md §8d): the cycle stays finished until the feed is next
+     * asked for questions.
+     */
+    fun readStats() = perform("readStats") { loadStats().summary() }
 
     /** A new attempt, because every tap is an answer of its own (CLAUDE.md §8d). */
     fun vote(side: Side) {
@@ -107,7 +125,7 @@ class DevConsoleViewModel(
      * (CLAUDE.md §8d). Each answer is logged as it lands, and a failure ends the run as its result.
      */
     fun answerMany(count: Int) =
-        perform("answerMany", args = "n=$count") {
+        perform("answerMany", args = "n=$count", readsStats = true) {
             require(count in 1..MAX_ANSWER_MANY) { "n must be in 1..$MAX_ANSWER_MANY, was $count" }
             var looped = 0
             repeat(count) { index ->
@@ -126,13 +144,15 @@ class DevConsoleViewModel(
     private fun send(
         action: String,
         vote: SentVote,
-    ) = perform(action, args = vote.args()) { cast(vote).summary() }
+    ) = perform(action, args = vote.args(), readsStats = true) { cast(vote).summary() }
 
     private suspend fun cast(vote: SentVote): VoteOutcome {
         // Before it goes out, so a vote whose response is lost can still be retried.
         _state.update { it.copy(lastVote = vote) }
         val outcome = castVote(vote.questionId, vote.side, vote.attempt)
-        _state.update { it.copy(lastOutcome = outcome) }
+        // The stats read before this outcome no longer describe the server, so they go rather than
+        // be compared with it, until the read that follows every vote brings them back.
+        _state.update { it.copy(lastOutcome = outcome, stats = null) }
         return outcome
     }
 
@@ -142,25 +162,45 @@ class DevConsoleViewModel(
         return question
     }
 
+    private suspend fun loadStats(): PlayerStats {
+        val stats = getPlayerStats()
+        _state.update { it.copy(stats = stats) }
+        return stats
+    }
+
     /**
-     * Runs [block] as the one action in flight and logs how it ended. A second action while one
-     * runs is ignored, so the log reads in the order things happened.
+     * Runs [block] as the one action in flight and logs how it ended. [readsStats] reads the stats
+     * again afterwards, for an action that can change them.
      */
     private fun perform(
         action: String,
         args: String = "",
+        readsStats: Boolean = false,
         block: suspend () -> String,
+    ) = exclusively(action) {
+        val started = timeSource.markNow()
+        val result = resultOf(block)
+        log(LogEntry(action, args, started.elapsedNow().inWholeMilliseconds, result))
+        // After a failure too: a vote whose answer was lost may still have landed.
+        if (readsStats) refreshStats()
+        // Whatever the action did, or failed halfway through doing, shows in the header.
+        refreshSnapshot()
+    }
+
+    /**
+     * Runs [work] as the one action in flight, named [action] in the header. A second action while
+     * one runs is ignored, so the log reads in the order things happened.
+     */
+    private fun exclusively(
+        action: String,
+        work: suspend () -> Unit,
     ) {
         if (_state.value.isBusy) return
         _state.update { it.copy(running = action) }
 
         viewModelScope.launch {
             try {
-                val started = timeSource.markNow()
-                val result = resultOf(block)
-                log(LogEntry(action, args, started.elapsedNow().inWholeMilliseconds, result))
-                // Whatever the action did, or failed halfway through doing, shows in the header.
-                refreshSnapshot()
+                work()
             } finally {
                 _state.update { it.copy(running = null) }
             }
@@ -199,12 +239,31 @@ class DevConsoleViewModel(
         }
     }
 
+    /**
+     * Best effort, as [refreshSnapshot]: a failure keeps the stats shown, if any, and is logged as an
+     * entry of its own instead of as the action's result.
+     */
+    private suspend fun refreshStats() {
+        val started = timeSource.markNow()
+        val result =
+            resultOf {
+                loadStats()
+                "refreshed"
+            }
+        if (result !is LogResult.Ok) {
+            log(LogEntry("refreshStats", "", started.elapsedNow().inWholeMilliseconds, result))
+        }
+    }
+
     /** A question the feed looped back to says so, which is how the loop shows in the log. */
     private fun Question.summary(): String = "question=$id" + if (answeredBefore) " looped" else ""
 
     private fun SentVote.args(): String = "questionId=$questionId side=$side attempt=${attempt.value}"
 
     private fun VoteOutcome.summary(): String = "+$pointsAwarded total=$totalPoints" + if (replayed) " replayed" else ""
+
+    private fun PlayerStats.summary(): String =
+        "total=$totalPoints answers=$answersGiven questions=$questionsAnswered cycle=$cycle due=$dueThisCycle"
 
     private fun log(entry: LogEntry) {
         _state.update { it.copy(log = (listOf(entry) + it.log).take(LOG_CAPACITY)) }

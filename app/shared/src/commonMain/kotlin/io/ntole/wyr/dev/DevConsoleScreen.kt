@@ -53,6 +53,7 @@ fun DevConsoleScreen(
     onVoteById: (questionId: String, side: Side) -> Unit,
     onRetryLastVote: () -> Unit,
     onAnswerMany: (count: Int) -> Unit,
+    onReadStats: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val dimens = WyrThemeAccessors.dimens
@@ -116,6 +117,13 @@ fun DevConsoleScreen(
                 }
             }
 
+            Section("Stats") {
+                Stats(state)
+                Buttons {
+                    OutlinedButton(onClick = onReadStats, enabled = idle) { Text("Read stats") }
+                }
+            }
+
             Section("Session") {
                 Buttons {
                     Button(onClick = onEnsureSession, enabled = idle) { Text("Ensure session") }
@@ -172,6 +180,26 @@ private fun Header(state: DevConsoleState) {
             Value("running", running)
             LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
         }
+    }
+}
+
+/** The stats as the server counted them, and whether they disagree with the last outcome. */
+@Composable
+private fun Stats(state: DevConsoleState) {
+    val stats = state.stats
+    if (stats == null) {
+        Value("stats", "not read")
+    } else {
+        Value("playerId", stats.playerId)
+        Value("totalPoints", stats.totalPoints.toString())
+        Value("answersGiven", stats.answersGiven.toString())
+        Value("questionsAnswered", stats.questionsAnswered.toString())
+        Value("cycle", stats.cycle.toString())
+        Value("dueThisCycle", stats.dueThisCycle.toString())
+    }
+    if (state.pointsMismatch) {
+        val outcomeTotal = state.lastOutcome?.totalPoints
+        CodeLine("MISMATCH totalPoints: stats=${stats?.totalPoints} lastOutcome=$outcomeTotal", failed = true)
     }
 }
 

@@ -2,6 +2,9 @@ package io.ntole.wyr.dev
 
 import io.ntole.wyr.core.domain.error.DomainError
 import io.ntole.wyr.core.domain.error.WyrException
+import io.ntole.wyr.core.domain.player.GetPlayerStats
+import io.ntole.wyr.core.domain.player.PlayerRepository
+import io.ntole.wyr.core.domain.player.PlayerStats
 import io.ntole.wyr.core.domain.question.Category
 import io.ntole.wyr.core.domain.question.GetNextQuestion
 import io.ntole.wyr.core.domain.question.Question
@@ -43,6 +46,7 @@ class DevConsoleViewModelTest {
     private val queue = FakeQueue()
     private val questions = FakeQuestions(calls, queue)
     private val votes = FakeVotes(calls)
+    private val players = FakePlayers(calls, sessions)
 
     @BeforeTest
     fun setUp() {
@@ -58,23 +62,22 @@ class DevConsoleViewModelTest {
     @Test
     fun `a finished action is logged as Ok and refreshes the header`() =
         runTest(dispatcher) {
-            val viewModel = viewModel()
-            testScheduler.advanceUntilIdle()
-            assertEquals(null, viewModel.state.value.session)
+            val viewModel = openConsole()
+            assertEquals(sessionOf("p1"), viewModel.state.value.session)
+            sessions.playerId = "p2"
 
             viewModel.ensureSession()
             testScheduler.advanceUntilIdle()
 
             val state = viewModel.state.value
-            assertEquals(listOf(LogEntry("ensureSession", "", 0, LogResult.Ok("playerId=p1"))), state.log)
-            assertEquals(sessionOf("p1"), state.session)
+            assertEquals(listOf(LogEntry("ensureSession", "", 0, LogResult.Ok("playerId=p2"))), state.log)
+            assertEquals(sessionOf("p2"), state.session)
         }
 
     @Test
     fun `Reset queue shows the emptied queue in the header`() =
         runTest(dispatcher) {
-            val viewModel = viewModel()
-            testScheduler.advanceUntilIdle()
+            val viewModel = openConsole()
             assertEquals(QUEUE_SIZE, viewModel.state.value.queueSize)
 
             viewModel.resetQueue()
@@ -86,8 +89,8 @@ class DevConsoleViewModelTest {
     @Test
     fun `a classified failure is logged as Err with its message`() =
         runTest(dispatcher) {
+            val viewModel = openConsole()
             sessions.ensure = { throw WyrException(DomainError.NETWORK, "connect timed out") }
-            val viewModel = viewModel()
 
             viewModel.ensureSession()
             testScheduler.advanceUntilIdle()
@@ -98,8 +101,8 @@ class DevConsoleViewModelTest {
     @Test
     fun `anything else thrown is logged as Crash`() =
         runTest(dispatcher) {
+            val viewModel = openConsole()
             sessions.ensure = { error("boom") }
-            val viewModel = viewModel()
 
             viewModel.ensureSession()
             testScheduler.advanceUntilIdle()
@@ -112,7 +115,7 @@ class DevConsoleViewModelTest {
         runTest(dispatcher) {
             // What a browser with site data blocked does: localStorage throws on every read.
             diagnostics.info = { error("storage blocked") }
-            val viewModel = viewModel()
+            val viewModel = openConsole()
 
             viewModel.ensureSession()
             testScheduler.advanceUntilIdle()
@@ -130,8 +133,8 @@ class DevConsoleViewModelTest {
     @Test
     fun `cancellation is not logged as a failure`() =
         runTest(dispatcher) {
+            val viewModel = openConsole()
             sessions.ensure = { throw CancellationException("caller went away") }
-            val viewModel = viewModel()
 
             viewModel.ensureSession()
             testScheduler.advanceUntilIdle()
@@ -145,7 +148,7 @@ class DevConsoleViewModelTest {
         runTest(dispatcher) {
             val answer = CompletableDeferred<Question>()
             questions.next = { answer.await() }
-            val viewModel = viewModel()
+            val viewModel = openConsole()
 
             viewModel.nextQuestion()
             viewModel.ensureSession()
@@ -163,13 +166,14 @@ class DevConsoleViewModelTest {
     @Test
     fun `New guest clears the session then resets the queue then mints a player then loads a question`() =
         runTest(dispatcher) {
-            val viewModel = viewModel()
+            val viewModel = openConsole()
 
             viewModel.newGuest()
             testScheduler.advanceUntilIdle()
 
-            // The second ensure is GetNextQuestion making sure of the session it just got.
-            assertEquals(listOf("clear", "reset", "ensure", "ensure", "next"), calls)
+            // The second ensure is GetNextQuestion making sure of the session it just got, and the
+            // last two are the new player's stats being read.
+            assertEquals(listOf("clear", "reset", "ensure", "ensure", "next", "ensure", "stats"), calls)
             assertEquals(QUESTION, viewModel.state.value.question)
             assertEquals(LogResult.Ok("playerId=p1 question=q1"), viewModel.onlyResult())
         }
@@ -177,7 +181,7 @@ class DevConsoleViewModelTest {
     @Test
     fun `New guest shows the new player in the header`() =
         runTest(dispatcher) {
-            val viewModel = viewModel()
+            val viewModel = openConsole()
             viewModel.ensureSession()
             testScheduler.advanceUntilIdle()
             sessions.playerId = "p2"
@@ -191,7 +195,7 @@ class DevConsoleViewModelTest {
     @Test
     fun `Skip loads the next question and sends no vote`() =
         runTest(dispatcher) {
-            val viewModel = viewModel()
+            val viewModel = openConsole()
             viewModel.nextQuestion()
             testScheduler.advanceUntilIdle()
             questions.next = { QUESTION.copy(id = "q2") }
@@ -207,7 +211,7 @@ class DevConsoleViewModelTest {
     @Test
     fun `a vote shows the outcome the server returned`() =
         runTest(dispatcher) {
-            val viewModel = viewModel()
+            val viewModel = openConsole()
             viewModel.nextQuestion()
             testScheduler.advanceUntilIdle()
 
@@ -221,7 +225,7 @@ class DevConsoleViewModelTest {
     @Test
     fun `a question the feed looped back to is labelled in the log`() =
         runTest(dispatcher) {
-            val viewModel = viewModel()
+            val viewModel = openConsole()
             viewModel.nextQuestion()
             testScheduler.advanceUntilIdle()
             questions.next = { QUESTION.copy(answeredBefore = true) }
@@ -241,7 +245,7 @@ class DevConsoleViewModelTest {
             votes.answer = { questionId, side ->
                 OUTCOME.copy(questionId = questionId, yourSide = side, pointsAwarded = 0, replayed = true)
             }
-            val viewModel = viewModel()
+            val viewModel = openConsole()
             viewModel.nextQuestion()
             testScheduler.advanceUntilIdle()
 
@@ -259,7 +263,7 @@ class DevConsoleViewModelTest {
     @Test
     fun `every vote is an answer with an attempt of its own`() =
         runTest(dispatcher) {
-            val viewModel = viewModel()
+            val viewModel = openConsole()
             viewModel.nextQuestion()
             testScheduler.advanceUntilIdle()
 
@@ -277,7 +281,7 @@ class DevConsoleViewModelTest {
     fun `a vote by id on an unknown question surfaces QUESTION_NOT_FOUND as an Err entry`() =
         runTest(dispatcher) {
             votes.answer = { _, _ -> throw WyrException(DomainError.QUESTION_NOT_FOUND, "no such question") }
-            val viewModel = viewModel()
+            val viewModel = openConsole()
 
             viewModel.voteById(" missing ", Side.A)
             testScheduler.advanceUntilIdle()
@@ -290,7 +294,7 @@ class DevConsoleViewModelTest {
     @Test
     fun `Retry last vote sends the same vote again as the same attempt`() =
         runTest(dispatcher) {
-            val viewModel = viewModel()
+            val viewModel = openConsole()
             viewModel.nextQuestion()
             testScheduler.advanceUntilIdle()
             viewModel.vote(Side.B)
@@ -319,7 +323,7 @@ class DevConsoleViewModelTest {
                 }
                 OUTCOME.copy(questionId = questionId, yourSide = side)
             }
-            val viewModel = viewModel()
+            val viewModel = openConsole()
             viewModel.voteById("q7", Side.A)
             testScheduler.advanceUntilIdle()
 
@@ -334,8 +338,7 @@ class DevConsoleViewModelTest {
     @Test
     fun `Retry last vote with no vote sent does nothing`() =
         runTest(dispatcher) {
-            val viewModel = viewModel()
-            testScheduler.advanceUntilIdle()
+            val viewModel = openConsole()
 
             viewModel.retryLastVote()
             testScheduler.advanceUntilIdle()
@@ -348,7 +351,7 @@ class DevConsoleViewModelTest {
     fun `New guest forgets the last vote`() =
         runTest(dispatcher) {
             // Retrying it would be the new player's answer, not a retry of anything they did.
-            val viewModel = viewModel()
+            val viewModel = openConsole()
             viewModel.voteById("q1", Side.A)
             testScheduler.advanceUntilIdle()
 
@@ -367,7 +370,7 @@ class DevConsoleViewModelTest {
             val served =
                 ArrayDeque(listOf(QUESTION, QUESTION.copy(id = "q2"), QUESTION.copy(id = "q3", answeredBefore = true)))
             questions.next = { served.removeFirst() }
-            val viewModel = viewModel()
+            val viewModel = openConsole()
 
             viewModel.answerMany(3)
             testScheduler.advanceUntilIdle()
@@ -399,7 +402,7 @@ class DevConsoleViewModelTest {
                 if (answered++ == 1) throw WyrException(DomainError.NETWORK, "read timed out")
                 OUTCOME.copy(questionId = questionId, yourSide = side)
             }
-            val viewModel = viewModel()
+            val viewModel = openConsole()
 
             viewModel.answerMany(3)
             testScheduler.advanceUntilIdle()
@@ -420,19 +423,20 @@ class DevConsoleViewModelTest {
     fun `Answer N out of range is logged as a crash and sends nothing`() =
         runTest(dispatcher) {
             // The screen only offers 1 to MAX_ANSWER_MANY, so anything else reaching here is a bug.
-            val viewModel = viewModel()
+            val viewModel = openConsole()
 
             viewModel.answerMany(0)
             testScheduler.advanceUntilIdle()
 
             assertEquals("IllegalArgumentException", assertIs<LogResult.Crash>(viewModel.onlyResult()).type)
-            assertEquals(emptyList(), calls)
+            // Only the stats read that follows every Answer N.
+            assertEquals(listOf("ensure", "stats"), calls)
         }
 
     @Test
     fun `the log keeps only the newest entries`() =
         runTest(dispatcher) {
-            val viewModel = viewModel()
+            val viewModel = openConsole()
             val actions = DevConsoleViewModel.LOG_CAPACITY + 5
 
             repeat(actions) { index ->
@@ -448,18 +452,209 @@ class DevConsoleViewModelTest {
         }
 
     @Test
+    fun `opening the console reads the stats and so ensures a session`() =
+        runTest(dispatcher) {
+            val viewModel = viewModel()
+            testScheduler.advanceUntilIdle()
+
+            val state = viewModel.state.value
+            assertEquals(statsOf("p1"), state.stats)
+            assertEquals(listOf("ensure", "stats"), calls)
+            assertEquals(sessionOf("p1"), state.session, "the header shows the session the read ensured")
+            assertEquals(emptyList(), state.log, "a read that worked is not logged")
+            assertFalse(state.pointsMismatch, "no vote yet to disagree with")
+            assertFalse(state.isBusy)
+        }
+
+    @Test
+    fun `nothing else runs while the stats read on opening is in flight`() =
+        runTest(dispatcher) {
+            val answer = CompletableDeferred<PlayerStats>()
+            players.stats = { answer.await() }
+            val viewModel = viewModel()
+            testScheduler.advanceUntilIdle()
+
+            viewModel.nextQuestion()
+            testScheduler.advanceUntilIdle()
+            answer.complete(statsOf("p1"))
+            testScheduler.advanceUntilIdle()
+
+            assertEquals(listOf("ensure", "stats"), calls)
+            assertEquals(emptyList(), viewModel.log)
+        }
+
+    @Test
+    fun `a stats read that fails on opening is logged and shows no stats`() =
+        runTest(dispatcher) {
+            players.stats = { throw WyrException(DomainError.NETWORK, "connect timed out") }
+            val viewModel = viewModel()
+            testScheduler.advanceUntilIdle()
+
+            assertEquals(null, viewModel.state.value.stats)
+            assertEquals(
+                LogEntry("refreshStats", "", 0, LogResult.Err(DomainError.NETWORK, "connect timed out")),
+                viewModel.log.single(),
+            )
+            assertFalse(viewModel.state.value.isBusy)
+        }
+
+    @Test
+    fun `every kind of vote reads the stats again`() =
+        runTest(dispatcher) {
+            val viewModel = openConsole()
+            viewModel.nextQuestion()
+            testScheduler.advanceUntilIdle()
+            val opened = players.reads
+
+            viewModel.vote(Side.A)
+            testScheduler.advanceUntilIdle()
+            assertEquals(opened + 1, players.reads, "after a vote")
+            viewModel.voteById("q2", Side.B)
+            testScheduler.advanceUntilIdle()
+            assertEquals(opened + 2, players.reads, "after a vote by id")
+            viewModel.retryLastVote()
+            testScheduler.advanceUntilIdle()
+            assertEquals(opened + 3, players.reads, "after a retry")
+
+            assertEquals(statsOf("p1"), viewModel.state.value.stats)
+        }
+
+    @Test
+    fun `Answer N reads the stats once when the run is over`() =
+        runTest(dispatcher) {
+            val viewModel = openConsole()
+
+            viewModel.answerMany(3)
+            testScheduler.advanceUntilIdle()
+
+            assertEquals(3, votes.sent.size)
+            assertEquals(listOf("stats"), calls.filter { it == "stats" })
+            assertEquals(statsOf("p1"), viewModel.state.value.stats)
+        }
+
+    @Test
+    fun `New guest shows the new player's stats`() =
+        runTest(dispatcher) {
+            val viewModel = openConsole()
+            sessions.playerId = "p2"
+
+            viewModel.newGuest()
+            testScheduler.advanceUntilIdle()
+
+            assertEquals(statsOf("p2"), viewModel.state.value.stats)
+        }
+
+    @Test
+    fun `New guest shows no stats rather than the old player's when the read fails`() =
+        runTest(dispatcher) {
+            val viewModel = openConsole()
+            sessions.playerId = "p2"
+            players.stats = { throw WyrException(DomainError.NETWORK, "read timed out") }
+
+            viewModel.newGuest()
+            testScheduler.advanceUntilIdle()
+
+            assertEquals(null, viewModel.state.value.stats)
+            assertEquals("refreshStats", viewModel.log.first().action)
+        }
+
+    @Test
+    fun `stats that agree with the last outcome raise no flag`() =
+        runTest(dispatcher) {
+            val viewModel = openConsole()
+
+            viewModel.voteById("q1", Side.A)
+            testScheduler.advanceUntilIdle()
+
+            val state = viewModel.state.value
+            assertEquals(OUTCOME.totalPoints, state.stats?.totalPoints)
+            assertFalse(state.pointsMismatch)
+        }
+
+    @Test
+    fun `a vote that landed without its answer shows as a mismatch until it is replayed`() =
+        runTest(dispatcher) {
+            val viewModel = openConsole()
+            viewModel.voteById("q1", Side.A)
+            testScheduler.advanceUntilIdle()
+            // The next vote is paid, but its answer never arrives.
+            var landed = false
+            votes.answer = { questionId, side ->
+                if (!landed) {
+                    landed = true
+                    throw WyrException(DomainError.NETWORK, "read timed out")
+                }
+                OUTCOME.copy(questionId = questionId, yourSide = side, totalPoints = 43, replayed = true)
+            }
+            players.stats = { statsOf("p1").copy(totalPoints = 43) }
+
+            viewModel.voteById("q2", Side.B)
+            testScheduler.advanceUntilIdle()
+            assertTrue(viewModel.state.value.pointsMismatch, "the server has a point the console saw no outcome for")
+
+            viewModel.retryLastVote()
+            testScheduler.advanceUntilIdle()
+            assertFalse(viewModel.state.value.pointsMismatch, "the replay reports the total the stats do")
+        }
+
+    @Test
+    fun `a vote drops the stats it outdated when they cannot be read again`() =
+        runTest(dispatcher) {
+            val viewModel = openConsole()
+            players.stats = { throw WyrException(DomainError.NETWORK, "read timed out") }
+
+            // Its total is not the one the stats read on opening hold, but those are from before it.
+            votes.answer = { questionId, side ->
+                OUTCOME.copy(questionId = questionId, yourSide = side, totalPoints = 43)
+            }
+            viewModel.voteById("q1", Side.A)
+            testScheduler.advanceUntilIdle()
+
+            assertEquals(null, viewModel.state.value.stats)
+            assertFalse(viewModel.state.value.pointsMismatch)
+            assertEquals(listOf("refreshStats", "voteById"), viewModel.log.take(2).map { it.action })
+        }
+
+    @Test
+    fun `Read stats reads them again as an action of its own`() =
+        runTest(dispatcher) {
+            val viewModel = openConsole()
+            players.stats = { statsOf("p1").copy(cycle = 3, dueThisCycle = 24) }
+
+            viewModel.readStats()
+            testScheduler.advanceUntilIdle()
+
+            val stats = viewModel.state.value.stats
+            assertEquals(3, stats?.cycle)
+            assertEquals(
+                LogResult.Ok("total=42 answers=42 questions=20 cycle=3 due=24"),
+                viewModel.onlyResult(),
+            )
+        }
+
+    @Test
     fun `the time an action took is logged`() =
         runTest(dispatcher) {
             questions.next = {
                 delay(250)
                 QUESTION
             }
-            val viewModel = viewModel()
+            val viewModel = openConsole()
 
             viewModel.nextQuestion()
             testScheduler.advanceUntilIdle()
 
             assertEquals(250, viewModel.log.single().elapsedMillis)
+        }
+
+    /**
+     * The console once it has opened: the stats read on opening is done, and [calls] records only
+     * what the test does from then on. [viewModel] is for the tests about opening itself.
+     */
+    private fun openConsole(): DevConsoleViewModel =
+        viewModel().also {
+            dispatcher.scheduler.advanceUntilIdle()
+            calls.clear()
         }
 
     private fun viewModel() =
@@ -471,6 +666,7 @@ class DevConsoleViewModelTest {
             queue = queue,
             getNextQuestion = GetNextQuestion(questions, sessions),
             castVote = CastVote(votes, sessions),
+            getPlayerStats = GetPlayerStats(players, sessions),
             httpTrace = HttpTrace(),
             // Virtual time, so an elapsed time is exactly what the fakes delayed.
             timeSource = dispatcher.scheduler.timeSource,
@@ -485,6 +681,17 @@ class DevConsoleViewModelTest {
         const val EXPIRY = 1_790_000_000_000L
 
         fun sessionOf(playerId: String) = SessionInfo(playerId, accessTokenExpiresAtEpochMillis = EXPIRY)
+
+        /** Agrees with [OUTCOME] on the total, as the server's stats do after that vote. */
+        fun statsOf(playerId: String) =
+            PlayerStats(
+                playerId = playerId,
+                totalPoints = OUTCOME.totalPoints,
+                answersGiven = OUTCOME.totalPoints,
+                questionsAnswered = 20,
+                cycle = 2,
+                dueThisCycle = 4,
+            )
 
         val QUESTION =
             Question(
@@ -569,6 +776,24 @@ class DevConsoleViewModelTest {
             attempts += attempt
             sent += questionId to side
             return answer(questionId, side)
+        }
+    }
+
+    /** Reads for whichever player [FakeSessions] holds, as the server answers for the bearer's. */
+    private class FakePlayers(
+        private val calls: MutableList<String>,
+        private val sessions: FakeSessions,
+    ) : PlayerRepository {
+        var stats: suspend () -> PlayerStats = { statsOf(sessions.stored ?: "no session") }
+
+        /** How many times the stats were read. */
+        var reads = 0
+            private set
+
+        override suspend fun stats(): PlayerStats {
+            calls += "stats"
+            reads++
+            return stats.invoke()
         }
     }
 

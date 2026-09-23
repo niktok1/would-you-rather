@@ -25,6 +25,7 @@ internal val uiModule =
                 queue = get(),
                 getNextQuestion = get(),
                 castVote = get(),
+                getPlayerStats = get(),
                 httpTrace = get(),
             )
         }
