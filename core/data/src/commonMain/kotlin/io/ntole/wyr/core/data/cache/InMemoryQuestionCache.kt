@@ -6,7 +6,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
 /**
- * Process-lifetime queue of unplayed questions.
+ * Process-lifetime queue of questions still to be handed out.
  *
  * This is the current [QuestionCache] on every platform. CLAUDE.md §4 designates SQLDelight for
  * the local cache, and it remains the intended implementation for Android, iOS, and desktop —
@@ -17,14 +17,16 @@ import kotlinx.coroutines.sync.withLock
 public class InMemoryQuestionCache : QuestionCache {
     private val mutex = Mutex()
     private val queue = ArrayDeque<Question>()
-    private val seenIds = mutableSetOf<String>()
 
     override suspend fun put(questions: List<Question>): Unit =
         mutex.withLock {
-            // Pages can overlap when the server reshuffles between requests; dropping ids we
-            // have already queued stops the same question appearing twice in one session.
+            // The feed serves a question until it is answered, so a batch repeats whatever is still
+            // queued from the last one. Only the queue is checked: a question handed out before must
+            // be queued again when the feed loops back to it (CLAUDE.md §8d). Remembering every id
+            // ever queued is what used to end the game after one pass.
+            val queued = queue.mapTo(mutableSetOf()) { it.id }
             questions.forEach { question ->
-                if (seenIds.add(question.id)) queue.addLast(question)
+                if (queued.add(question.id)) queue.addLast(question)
             }
         }
 
@@ -32,9 +34,5 @@ public class InMemoryQuestionCache : QuestionCache {
 
     override suspend fun count(): Int = mutex.withLock { queue.size }
 
-    override suspend fun clear(): Unit =
-        mutex.withLock {
-            queue.clear()
-            seenIds.clear()
-        }
+    override suspend fun clear(): Unit = mutex.withLock { queue.clear() }
 }

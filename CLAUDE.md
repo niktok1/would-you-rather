@@ -304,8 +304,10 @@ accounts exist.
 - **Provider linking** (Google / Apple / passkeys) — needed to make accounts durable. Requires
   OAuth client credentials, and Apple additionally requires a paid developer account. Passkeys
   have no desktop-JVM story, so desktop would need a browser handoff.
-- **SQLDelight cache** — see §4. Needs a per-platform split because of web. Lower priority once
-  the endless feed (§8d) makes the server the source of truth for what a player has answered.
+- **SQLDelight cache** — see §4. Needs a per-platform split because of web. Lower priority now
+  that the endless feed (§8d) makes the server the source of truth for what a player has answered:
+  the client keeps no record of what it served, so a persisted queue would only save one fetch
+  after a restart.
 - **Question submission + moderation** — the game rules are settled in §8d; the contract
   (`QuestionStatus`, author field) and the moderator model are not.
 - **Rate limiting** — `ErrorCode.RATE_LIMITED` exists on the wire and nothing emits it yet.
@@ -357,17 +359,20 @@ and every request shows in its HTTP trace (`HttpTrace` in `:core:network`, never
   it picks. There is no majority bonus and no streak: the streak is removed from the server, the
   contract, and the domain. The reveal still shows the split and whether the player sided with
   the majority, as information only.
-- **Endless feed** *(not built)*: the game never ends. A player is served questions they have
+- **Endless feed** *(built)*: the game never ends. A player is served questions they have
   not answered, in **random order per player**. Once none remain, answered questions loop back,
   least-recently-answered first. `GET /v1/questions` requires a bearer token and is per-player.
-- **Re-answering** *(not built)*: a looped question can be answered again. It earns the point
+  Built in `QuestionStore.feed` (one statement) and `DefaultQuestionRepository`, which keeps no
+  record of what it served: it drops only questions still queued and the one on screen.
+- **Re-answering** *(built)*: a looped question can be answered again. It earns the point
   again and the player may change their pick. The tally always holds **one vote per player per
-  question**, their latest.
+  question**, their latest. Built in `VoteStore.cast`, which moves the player's vote.
 - **Retry safety** *(not built)*: every vote carries a client-generated idempotency key. A repeat
   of the same key returns the stored result and pays nothing. A new key on an answered question
   is a fresh answer.
-- **Skipping** *(not built)*: allowed. It earns nothing and is not recorded, so the question
-  stays unanswered and comes back later.
+- **Skipping** *(built)*: allowed. It earns nothing and is not recorded, so the question
+  stays unanswered and comes back later. Nothing is sent: the console's Skip takes the next
+  question, and the feed serves the skipped one again in a later batch.
 - **Own questions** *(not built)*: an author is never served their own question.
 - **Likes** *(not built)*: any player may like any question except their own, at any time
   (before or after answering), once each, and may unlike it. Each like currently held is **+1
