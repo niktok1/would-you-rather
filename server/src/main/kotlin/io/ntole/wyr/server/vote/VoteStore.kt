@@ -15,8 +15,10 @@ import org.jetbrains.exposed.v1.jdbc.selectAll
 
 object VoteStore {
     /**
-     * SQLState of a unique or primary key violation. It is the SQL-standard code, so H2 and
-     * PostgreSQL agree on it, and neither reuses it for a foreign key failure (23506 and 23503).
+     * SQLState of a unique or primary key violation. The SQL standard leaves this subclass to the
+     * implementation; 23505 is DB2's code, which PostgreSQL and H2 both adopted. Neither uses it
+     * for a foreign key failure (PostgreSQL 23503, H2 23506). Another database may not match —
+     * MySQL reports 23000 — so check this before pointing the server at one.
      */
     private const val UNIQUE_VIOLATION = "23505"
 
