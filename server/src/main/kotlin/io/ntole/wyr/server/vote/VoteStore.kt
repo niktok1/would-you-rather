@@ -30,6 +30,11 @@ object VoteStore {
      * accepts yesterday's tokens), and inserting first would trip the Votes foreign key instead
      * of answering 401. And the vote is inserted *before* the tally is counted, so the returned
      * percentages already include the player's own vote — which is what the reveal screen shows.
+     *
+     * At the server's READ COMMITTED both checks are plain reads, and that is enough. Nothing
+     * deletes a question or a player, so neither check can go stale before the insert, and the
+     * foreign keys would refuse the vote if one did. A second vote by the same player is refused
+     * by the Votes primary key, never by a read, so two racing for one question cannot both land.
      */
     fun cast(
         playerId: String,
@@ -80,6 +85,13 @@ object VoteStore {
         }
     }
 
+    /**
+     * One side's count, as a statement of its own. At READ COMMITTED each statement sees the votes
+     * committed before it began, so the two sides can straddle another player's commit. While votes
+     * are only ever inserted, that just makes one side a moment newer. Once a vote can change side
+     * (re-answering, CLAUDE.md §8d), count both sides in one statement, or a switched vote can be
+     * counted on both.
+     */
     private fun countVotes(
         questionId: String,
         side: OptionSide,

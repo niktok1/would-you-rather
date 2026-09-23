@@ -127,6 +127,19 @@ implementation. Until that lands, `QuestionCache` (a port in `:core:domain`) is 
   top-level functions (`import org.jetbrains.exposed.v1.core.eq`). The `SqlExpressionBuilder`
   members are deprecated **as errors**.
 
+**Transaction isolation** — decided 2026-09-23: every server transaction runs at **READ
+COMMITTED**, PostgreSQL's default, set on the pool in `DatabaseFactory.poolConfig`. Three rules
+follow, and code that breaks one loses updates silently rather than failing:
+- A counter is an SQL increment (`total_points = total_points + n`), never a read then a write.
+  A burst on one row then just queues on its lock; `PlayerStoreTest` pins 8 at once.
+- Any other read-then-write is a compare-and-set: the `UPDATE`'s `WHERE` repeats what the read
+  relied on, and 0 rows updated means another transaction won (`PlayerStore.rotateRefreshToken`).
+- Uniqueness is a constraint (the `Votes` primary key), never a prior `SELECT`.
+
+REPEATABLE_READ was dropped because it refuses the second of two concurrent writes to a row
+(SQLState 40001) and Exposed makes only 3 attempts with no delay, so a burst on one row, such as
+many likes paying one author, failed requests.
+
 Adding a library = update this table AND the version catalog in the same change, and confirm
 it satisfies the §2 selection rule.
 
@@ -297,16 +310,13 @@ accounts exist.
   A real migration tool (`exposed-migration-jdbc` plus a runner) must be chosen before the first
   column change **after** that deploy.
 - **WCAG AA contrast audit** — see §5b. Paused along with UI polish (§8d).
-- **Isolation for hot counters** — resolve before likes (§8d). The pool runs REPEATABLE_READ,
-  where concurrent writes to one row fail with SQLState 40001 even as an SQL increment. Exposed
-  makes 3 attempts in total with no delay, and then the request is a 500. So a burst on one row,
-  such as many likes paying one author, will fail requests. There are two options. Run those
-  transactions at READ COMMITTED, where the SQL increment alone is correct. Or keep
-  REPEATABLE_READ and set `maxAttempts` plus a retry delay.
 
 `RANDOM` was an open item and is resolved: it is a content category (the absurd questions), not a
 "surprise me" filter, and it stays in `QuestionCategory` as-is. The unfiltered feed already mixes
 every category.
+
+Isolation for hot counters was an open item and is resolved: transactions run at READ COMMITTED,
+under the rules in §4.
 
 ## 8c. Scoring rules — flat
 

@@ -30,10 +30,10 @@ fun Route.voteRoutes(db: Db) {
             if (body.questionId.isBlank()) throw ApiFailure.validation("questionId is blank")
 
             // One transaction covers insert, tally, and the point award, so they commit or fail
-            // together. The points do not depend on the tally (§8c). It is not a lock: under
-            // REPEATABLE_READ a concurrent vote by another player on the same question may not be
-            // visible yet, so the tally can lag by votes still in flight. The stored votes, which
-            // the next read counts, are exact.
+            // together. The points do not depend on the tally (§8c). It is not a lock: at READ
+            // COMMITTED the tally counts what other players had committed when it ran, which can
+            // include votes committed after this request began, and misses votes still in flight.
+            // The stored votes, which the next read counts, are exact.
             val result =
                 db.query {
                     VoteStore.cast(

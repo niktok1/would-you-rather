@@ -11,6 +11,11 @@ import org.jetbrains.exposed.v1.jdbc.selectAll
  * bootstrap content.
  */
 object Seed {
+    /**
+     * A check then an insert, and deliberately not a compare-and-set (CLAUDE.md §4). Two servers
+     * booting at once on an empty database would both insert, and the second would fail startup on
+     * the primary key. Accepted: one instance runs, and a restart finds the seeds.
+     */
     fun questionsIfEmpty() {
         if (Questions.selectAll().limit(1).any()) return
 
