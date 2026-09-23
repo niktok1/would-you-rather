@@ -137,14 +137,15 @@ failing:
   relied on, and 0 rows updated means another transaction won (`PlayerStore.rotateRefreshToken`,
   `PlayerStore.startNextCycle`).
   Or the read takes the row lock (`SELECT ... FOR UPDATE`), so a concurrent writer waits and then
-  reads the row as committed (`VoteStore.cast`, which branches on more than one outcome).
+  reads the row as committed (`VoteStore.cast`, which branches on more than one outcome, and
+  `SkipStore.skip`).
   The one exception is a value copied from another row, which may be a plain read where a stale
   copy is provably harmless, with the proof at the read (`VoteStore.currentCycle`: the feed moves
-  the cycle on only once the answer's question is already answered in the one read).
-- Uniqueness is a constraint (the `Votes` primary key), never a prior `SELECT`. A violation is
-  never caught and carried on from: PostgreSQL aborts a transaction at its first error. It
-  propagates, and Exposed rolls back and reruns the whole transaction, which then sees the
-  committed row (`VoteStore.cast`).
+  the cycle on only once the answer's question is already answered or skipped in the one read).
+- Uniqueness is a constraint (the `Votes` and `Skips` primary keys), never a prior `SELECT`. A
+  violation is never caught and carried on from: PostgreSQL aborts a transaction at its first
+  error. It propagates, and Exposed rolls back and reruns the whole transaction, which then sees
+  the committed row (`VoteStore.cast`, `SkipStore.skip`).
 - Numbers that must agree with one another are read in one statement, which sees one committed
   state; two statements can straddle another transaction's commit (the tally in `VoteStore`,
   `StatsStore.of`).
@@ -374,10 +375,10 @@ and every request shows in its HTTP trace (`HttpTrace` in `:core:network`, never
 - **Endless feed** *(built; cycles decided 2026-09-23)*: the game never ends, and it runs in
   **cycles**. Every question comes back **exactly once per cycle**, and every cycle is a **new
   random order**; this replaced looping least-recently-answered first. A question is *due* while
-  the player has not answered it in their current cycle, and a batch holds only due questions,
-  never topped up with ones answered this cycle. Once nothing is due the cycle is finished: the
-  next request starts the next cycle and serves the whole pool again, so a batch is never empty
-  while the pool is not. `GET /v1/questions` requires a bearer token and is per-player.
+  the player has neither answered nor skipped it in their current cycle, and a batch holds only
+  due questions, never topped up with ones done this cycle. Once nothing is due the cycle is
+  finished: the next request starts the next cycle and serves the whole pool again, so a batch is
+  never empty while the pool is not. `GET /v1/questions` requires a bearer token and is per-player.
   Built in `QuestionStore.feed` (each batch one statement), on `players.current_cycle` and
   `votes.answered_in_cycle`. Starting a cycle is a compare-and-set on the cycle read
   (`PlayerStore.startNextCycle`), so two requests that both find it finished start it once. The
@@ -389,9 +390,10 @@ and every request shows in its HTTP trace (`HttpTrace` in `:core:network`, never
   included.
   - *Categories:* a cycle is **per player, not per category**. A request filtered to a category
     with nothing due in it, while other questions still are, serves that category's questions
-    again, in random order and all `answeredBefore`, and leaves the cycle alone: starting the next
-    one would cut short the player's pass over the rest. The cycle starts only once nothing at all
-    is due, whichever category is asked for, and a request that finds no questions starts nothing.
+    again, in random order and `answeredBefore` on those answered, and leaves the cycle alone:
+    starting the next one would cut short the player's pass over the rest. The cycle starts only
+    once nothing at all is due, whichever category is asked for, and a request that finds no
+    questions starts nothing.
   - `answeredBefore` means the player has a vote on the question, from any cycle.
 - **Re-answering** *(built)*: a question can be answered again, whether or not the feed has
   served it again. It earns the point again **every time**, inside its cycle or not (farming is
@@ -414,11 +416,12 @@ and every request shows in its HTTP trace (`HttpTrace` in `:core:network`, never
   `StatsStore.of`, as one statement. It only reads, and the cycle starts lazily on the next feed
   request, so between the answer that finishes a cycle and that request it reports the finished
   cycle with nothing due.
-- **Skipping** *(changing — decided 2026-09-23, not built yet)*: allowed, earns nothing, and
-  never touches the tally. The server **records the skip for the player's current cycle only**, so
-  the question is no longer due in that cycle and comes back in the **next** one. A player is
-  therefore never stuck at the end of a cycle on a question they keep skipping. (Until this is
-  built, nothing is sent and a skipped question stays due in the same cycle.)
+- **Skipping** *(built; decided 2026-09-23)*: allowed, earns nothing, and never touches the
+  tally. The server **records the skip for the player's current cycle only**, so the question is
+  no longer due in that cycle and comes back in the **next** one. A player is therefore never
+  stuck at the end of a cycle on a question they keep skipping. Built as `POST /v1/skips` in
+  `SkipStore.skip`, on `skips.skipped_in_cycle`, which the feed's due predicate compares with the
+  cycle as it does the vote's.
 - **Own questions** *(not built)*: an author is never served their own question, and cannot
   like it.
 - **Likes** *(not built)*: any player may like any question except their own, at any time

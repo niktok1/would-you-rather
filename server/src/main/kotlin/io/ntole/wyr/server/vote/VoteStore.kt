@@ -113,8 +113,8 @@ object VoteStore {
      *
      * The feed can still start a cycle between this read and the commit, and that is harmless. It
      * starts one only when nothing is due, and this answer is not committed yet, so its question
-     * was already answered in the cycle read here: counting this answer there too is what answering
-     * just before the new cycle would have done.
+     * was already answered or skipped in the cycle read here: counting this answer there too is what
+     * answering just before the new cycle would have done.
      */
     private fun currentCycle(playerId: String): Int =
         checkNotNull(PlayerStore.find(playerId)) { "player $playerId vanished mid-transaction" }.cycle

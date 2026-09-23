@@ -23,6 +23,7 @@ import io.ntole.wyr.core.player.PlayerStatsDto
 import io.ntole.wyr.core.question.QuestionCategory
 import io.ntole.wyr.core.question.QuestionDto
 import io.ntole.wyr.core.question.QuestionPageDto
+import io.ntole.wyr.core.question.SkipRequest
 import io.ntole.wyr.core.vote.OptionSide
 import io.ntole.wyr.core.vote.VoteRequest
 import io.ntole.wyr.core.vote.VoteResultDto
@@ -468,6 +469,117 @@ class ApiFlowTest {
         }
 
     @Test
+    fun `a skip takes the question out of this cycle, pays nothing, and it comes back in the next`() =
+        runServer("skip") { client ->
+            val player = client.guest()
+            val pool = client.wholePool(player)
+            val skipped = pool.first()
+
+            val response = client.skip(player, skipped.id)
+
+            assertEquals(HttpStatusCode.NoContent, response.status)
+            assertEquals(pool.ids().toSet() - skipped.id, client.wholePool(player).ids().toSet())
+            assertEquals(
+                PlayerStatsDto(
+                    playerId = player.playerId,
+                    totalPoints = 0,
+                    answersGiven = 0,
+                    questionsAnswered = 0,
+                    cycle = 1,
+                    dueThisCycle = pool.size - 1,
+                ),
+                client.stats(player),
+                "nothing paid or counted, and one question fewer due",
+            )
+
+            pool.drop(1).forEach { question -> client.vote(player, question.id, OptionSide.A) }
+            assertEquals(0, client.stats(player).dueThisCycle, "only the skipped one was left, so the cycle is done")
+
+            val next = client.wholePool(player)
+            assertEquals(pool.ids().toSet(), next.ids().toSet(), "the next cycle serves it again")
+            assertFalse(next.single { it.id == skipped.id }.answeredBefore, "a skip is no answer")
+            assertEquals(2, client.stats(player).cycle)
+        }
+
+    @Test
+    fun `skipping again is harmless and answering after a skip is an ordinary answer`() =
+        runServer("skip-repeat") { client ->
+            val player = client.guest()
+            val question = client.batch(player).first()
+
+            assertEquals(HttpStatusCode.NoContent, client.skip(player, question.id).status)
+            assertEquals(HttpStatusCode.NoContent, client.skip(player, question.id).status, "the repeat")
+            val answered = client.vote(player, question.id, OptionSide.B)
+
+            assertEquals(Scoring.POINTS_PER_ANSWER, answered.pointsAwarded)
+            assertEquals(VoteTallyDto(votesA = 0, votesB = 1), answered.tally, "the vote, and nothing for the skips")
+            val stats = client.stats(player)
+            assertEquals(Scoring.POINTS_PER_ANSWER, stats.totalPoints)
+            assertEquals(1, stats.answersGiven)
+            assertEquals(1, stats.questionsAnswered)
+        }
+
+    @Test
+    fun `skipping a question that does not exist is a not-found`() =
+        runServer("skip-missing-question") { client ->
+            val response = client.skip(client.guest(), "no-such-question")
+
+            assertEquals(HttpStatusCode.NotFound, response.status)
+            assertEquals(ErrorCode.QUESTION_NOT_FOUND, response.body<ErrorDto>().code)
+        }
+
+    @Test
+    fun `skipping needs a session`() =
+        runServer("skip-no-token") { client ->
+            val response =
+                client.post(WyrApi.Paths.SKIPS) {
+                    contentType(ContentType.Application.Json)
+                    setBody(SkipRequest("seed-1"))
+                }
+
+            assertEquals(HttpStatusCode.Unauthorized, response.status)
+            assertEquals(ErrorCode.UNAUTHORIZED, response.body<ErrorDto>().code)
+        }
+
+    @Test
+    fun `a validly signed token for a player that does not exist cannot skip`() =
+        runServer("skip-ghost-player") { client ->
+            // As for the ghost-player vote, the helper's token for a real player has to pass first.
+            val real = client.guest()
+            assertEquals(HttpStatusCode.NoContent, client.skip(signAccessToken(real.playerId), "seed-1").status)
+
+            val response = client.skip(signAccessToken("no-such-player"), "seed-1")
+
+            assertEquals(HttpStatusCode.Unauthorized, response.status)
+            assertEquals(ErrorCode.UNAUTHORIZED, response.body<ErrorDto>().code)
+        }
+
+    @Test
+    fun `a skip body the server cannot use is a validation error`() =
+        runServer("malformed-skip") { client ->
+            val session = client.guest()
+
+            listOf(
+                "malformed json" to "{not json",
+                "no questionId" to "{}",
+                "blank questionId" to """{"questionId":"  "}""",
+                // PostgreSQL refuses a NUL in text, which H2 stores, so only the check can catch it.
+                "NUL in questionId" to """{"questionId":"seed-1\u0000"}""",
+                "newline in questionId" to """{"questionId":"seed-1\n"}""",
+            ).forEach { (case, body) ->
+                val response =
+                    client.post(WyrApi.Paths.SKIPS) {
+                        bearerAuth(session.accessToken)
+                        contentType(ContentType.Application.Json)
+                        setBody(body)
+                    }
+
+                assertEquals(HttpStatusCode.BadRequest, response.status, case)
+                assertEquals(ErrorCode.VALIDATION_FAILED, response.body<ErrorDto>().code, case)
+            }
+        }
+
+    @Test
     fun `a fresh guest's stats are all zero on the first cycle with the whole pool due`() =
         runServer("stats-fresh") { client ->
             val player = client.guest()
@@ -630,6 +742,21 @@ class ApiFlowTest {
     }
 
     private fun List<QuestionDto>.ids(): List<String> = map { it.id }
+
+    private suspend fun HttpClient.skip(
+        session: SessionDto,
+        questionId: String,
+    ): HttpResponse = skip(session.accessToken, questionId)
+
+    private suspend fun HttpClient.skip(
+        accessToken: String,
+        questionId: String,
+    ): HttpResponse =
+        post(WyrApi.Paths.SKIPS) {
+            bearerAuth(accessToken)
+            contentType(ContentType.Application.Json)
+            setBody(SkipRequest(questionId))
+        }
 
     private suspend fun HttpClient.me(session: SessionDto): HttpResponse =
         get(WyrApi.Paths.ME) { bearerAuth(session.accessToken) }

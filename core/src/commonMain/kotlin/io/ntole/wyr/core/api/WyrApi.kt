@@ -19,14 +19,22 @@ public object WyrApi {
         /**
          * The next batch of questions for the player the bearer token names. Requires a session,
          * because the feed is per player (CLAUDE.md §8d): it runs in cycles, serving each question
-         * once per cycle in a new random order, and a batch holds only what the player has not yet
-         * answered in the current one. The exception is a [Query.CATEGORY] with nothing in it left to
-         * answer this cycle while something outside it is: that category is served again, all
-         * `answeredBefore`, within the same cycle. There is no cursor; asking again is how to get the
-         * next batch.
+         * once per cycle in a new random order, and a batch holds only what the player has neither
+         * answered nor skipped ([SKIPS]) in the current one. The exception is a [Query.CATEGORY] with
+         * nothing in it left to answer this cycle while something outside it is: that category is
+         * served again within the same cycle, `answeredBefore` on what the player has answered. There
+         * is no cursor; asking again is how to get the next batch.
          */
         public const val QUESTIONS: String = "/$VERSION/questions"
         public const val VOTES: String = "/$VERSION/votes"
+
+        /**
+         * Skips a question for the rest of the session player's current cycle (CLAUDE.md §8d), with a
+         * [io.ntole.wyr.core.question.SkipRequest]. Requires a session. The question comes back in the
+         * next cycle. A skip pays nothing and leaves the tally alone, and skipping again in the same
+         * cycle changes nothing. Answered with 204 and no body.
+         */
+        public const val SKIPS: String = "/$VERSION/skips"
 
         /**
          * The stats of the player the bearer token names, as a

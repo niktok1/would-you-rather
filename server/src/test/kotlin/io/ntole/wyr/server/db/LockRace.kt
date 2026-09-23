@@ -36,7 +36,8 @@ internal fun connectH2(
  *
  * [queued] is the `INFORMATION_SCHEMA.SESSIONS` condition that picks out a session waiting on the
  * first. H2 names the blocker of a session waiting on a row lock, but not of one inserting a key
- * the first holds uncommitted ([INSERTING_INTO_VOTES]); that one shows only by what it executes.
+ * the first holds uncommitted ([INSERTING_INTO_VOTES], [INSERTING_INTO_SKIPS]); that one shows only
+ * by what it executes.
  *
  * [whileQueued] runs once they all are, before the first is let go, so whatever it commits lands
  * after the first's work and before the rest of theirs.
@@ -113,6 +114,9 @@ internal const val WAITING_ON_A_ROW_LOCK = "BLOCKER_ID IS NOT NULL"
  * waits for that transaction to end, so once the first has inserted, one seen here is queued on it.
  */
 internal const val INSERTING_INTO_VOTES = "UPPER(EXECUTING_STATEMENT) LIKE 'INSERT INTO VOTES%'"
+
+/** As [INSERTING_INTO_VOTES], for an insert into `skips`. */
+internal const val INSERTING_INTO_SKIPS = "UPPER(EXECUTING_STATEMENT) LIKE 'INSERT INTO SKIPS%'"
 
 private const val TIMEOUT_SECONDS = 10L
 private const val POLL_MILLIS = 5L

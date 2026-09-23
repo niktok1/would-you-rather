@@ -1,18 +1,26 @@
 package io.ntole.wyr.server.question
 
+import io.ktor.http.HttpStatusCode
 import io.ktor.server.auth.authenticate
 import io.ktor.server.response.respond
 import io.ktor.server.routing.Route
 import io.ktor.server.routing.get
+import io.ktor.server.routing.post
 import io.ntole.wyr.core.api.WyrApi
 import io.ntole.wyr.core.question.QuestionCategory
+import io.ntole.wyr.core.question.SkipRequest
 import io.ntole.wyr.server.auth.JWT_AUTH
 import io.ntole.wyr.server.auth.authenticatedPlayerId
 import io.ntole.wyr.server.db.Db
 import io.ntole.wyr.server.player.PlayerStore
 import io.ntole.wyr.server.plugins.ApiFailure
+import io.ntole.wyr.server.plugins.receiveOrReject
+import io.ntole.wyr.server.plugins.requireValidId
 
-/** The feed is per player (CLAUDE.md §8d), so reading questions needs a session, as voting does. */
+/**
+ * The feed is per player (CLAUDE.md §8d), so reading questions needs a session, as voting does, and
+ * so does skipping one, which changes what the feed serves that player.
+ */
 fun Route.questionRoutes(db: Db) {
     authenticate(JWT_AUTH) {
         get(WyrApi.Paths.QUESTIONS) {
@@ -43,6 +51,18 @@ fun Route.questionRoutes(db: Db) {
                 }
 
             call.respond(batch)
+        }
+
+        post(WyrApi.Paths.SKIPS) {
+            val playerId = call.authenticatedPlayerId()
+
+            val body = call.receiveOrReject<SkipRequest>("skip request")
+            requireValidId("questionId", body.questionId)
+
+            db.query { SkipStore.skip(playerId = playerId, questionId = body.questionId) }
+
+            // A skip pays nothing and reveals nothing, so there is nothing to send back.
+            call.respond(HttpStatusCode.NoContent)
         }
     }
 }

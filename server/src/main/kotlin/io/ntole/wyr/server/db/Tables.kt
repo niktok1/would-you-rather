@@ -26,8 +26,8 @@ object Players : Table("players") {
 
     /**
      * The feed's current pass over the questions (CLAUDE.md §8d), counted from [FIRST_CYCLE]. A
-     * question is due while the player's vote on it was cast in an earlier cycle, and the feed
-     * starts the next cycle once nothing is due. Only ever moves forward, one at a time, through
+     * question is due while the player has neither answered nor skipped it in this cycle, and the
+     * feed starts the next cycle once nothing is due. Only ever moves forward, one at a time, through
      * `PlayerStore.startNextCycle`.
      */
     val currentCycle = integer("current_cycle").default(FIRST_CYCLE)
@@ -106,8 +106,31 @@ object Votes : Table("votes") {
 }
 
 /**
+ * The questions players have skipped (CLAUDE.md §8d). A skip is kept apart from [Votes] because it
+ * is not an answer: it pays nothing, the tally never counts it, and a question skipped but never
+ * answered is not `answeredBefore`.
+ */
+object Skips : Table("skips") {
+    val playerId = varchar("player_id", 36).references(Players.id)
+    val questionId = varchar("question_id", 36).references(Questions.id)
+
+    /**
+     * The latest [Players.currentCycle] the player skipped the question in, so it is not due for the
+     * rest of that cycle and is due again in the next. Only ever moves through `SkipStore.skip`.
+     */
+    val skippedInCycle = integer("skipped_in_cycle")
+
+    /**
+     * One row per player per question, holding only the latest skip: a skip from an earlier cycle
+     * says nothing about what is due now. The feed's join finds the player's skip by this key, so it
+     * needs no index of its own.
+     */
+    override val primaryKey = PrimaryKey(playerId, questionId)
+}
+
+/**
  * Every table the server owns. Schema creation and the test harness's clean-slate drop both read
  * this one list, so a new table belongs here rather than in a `SchemaUtils` call — otherwise it
  * is created in production but survives between tests on a shared database.
  */
-val appTables: Array<Table> = arrayOf(Players, Questions, Votes)
+val appTables: Array<Table> = arrayOf(Players, Questions, Votes, Skips)

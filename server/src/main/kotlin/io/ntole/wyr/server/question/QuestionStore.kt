@@ -4,8 +4,10 @@ import io.ntole.wyr.core.question.QuestionCategory
 import io.ntole.wyr.core.question.QuestionDto
 import io.ntole.wyr.core.question.QuestionPageDto
 import io.ntole.wyr.server.db.Questions
+import io.ntole.wyr.server.db.Skips
 import io.ntole.wyr.server.db.Votes
 import io.ntole.wyr.server.player.PlayerStore
+import org.jetbrains.exposed.v1.core.Column
 import org.jetbrains.exposed.v1.core.Expression
 import org.jetbrains.exposed.v1.core.JoinType
 import org.jetbrains.exposed.v1.core.Op
@@ -30,31 +32,34 @@ object QuestionStore {
      * transaction.
      *
      * The feed runs in cycles, and every question comes back once per cycle. A question is due
-     * while the player has not answered it in their current cycle: never answered, or last answered
-     * in an earlier one. A batch holds only due questions, in an order drawn at random for each
-     * request, so every cycle comes round in a new order. It is not topped up with questions
-     * answered this cycle, which would serve them twice in one.
+     * while the player has neither answered nor skipped it in their current cycle: each of those
+     * never happened, or last happened in an earlier one ([SkipStore.skip]). A batch holds only due
+     * questions, in an order drawn at random for each request, so every cycle comes round in a new
+     * order. It is not topped up with questions answered or skipped this cycle, which would serve
+     * them twice in one.
      *
-     * Once nothing is due, the player has finished the cycle. This request starts the next one and
-     * serves the whole pool again, all of it due now, in a fresh random order, so a batch is empty
-     * only when nothing in [category] is [servableTo] the player at all. Two requests can both find
-     * the cycle finished. [PlayerStore.startNextCycle] lets only the first start the next one, and
-     * the second serves the pool it read, which is due in the cycle the first started. The one
-     * exception is a question answered in that new cycle before the second read the pool: the
-     * second serves it again in the cycle it was just answered in. That takes two overlapping
-     * requests from one player, and the client sends one at a time (`DefaultQuestionRepository`).
+     * Once nothing is due, the player has finished the cycle, whether its last questions were
+     * answered or skipped. This request starts the next one and serves the whole pool again, all of
+     * it due now, in a fresh random order, so a batch is empty only when nothing in [category] is
+     * [servableTo] the player at all. Two requests can both find the cycle finished.
+     * [PlayerStore.startNextCycle] lets only the first start the next one, and the second serves the
+     * pool it read, which is due in the cycle the first started. The one exception is a question
+     * answered or skipped in that new cycle before the second read the pool: the second serves it
+     * again in the cycle it was just done in. That takes two overlapping requests from one player,
+     * and the client sends one at a time (`DefaultQuestionRepository`).
      *
      * A cycle is per player, not per category. When nothing in [category] is due but something
      * outside it still is, the player has not finished the cycle, and starting the next one would
      * cut short their pass over the rest. So the category's questions are served again instead, in
-     * random order and all [QuestionDto.answeredBefore], and the cycle stays. Answering one again
-     * still pays (§8d, re-answering) and counts for the same cycle.
+     * random order, and the cycle stays. Answering one again still pays (§8d, re-answering) and
+     * counts for the same cycle.
      *
-     * [QuestionDto.answeredBefore] means the player has a vote on the question, from any cycle.
+     * [QuestionDto.answeredBefore] means the player has a vote on the question, from any cycle. A
+     * skip is no vote, so a question skipped but never answered is not answered before.
      *
-     * Each batch comes from one statement. The left join finds at most one vote per question (the
-     * Votes key is player and question), so no question appears twice. The random key is rendered
-     * `RANDOM()`, which H2 and PostgreSQL both have.
+     * Each batch comes from one statement. The left joins find at most one vote and one skip per
+     * question (the Votes and Skips keys are both player and question), so no question appears
+     * twice. The random key is rendered `RANDOM()`, which H2 and PostgreSQL both have.
      */
     fun feed(
         playerId: String,
@@ -67,8 +72,8 @@ object QuestionStore {
         val due = candidates(playerId, category, dueIn = current).randomBatch(limit)
         if (due.isNotEmpty()) return QuestionPageDto(questions = due)
 
-        // Nothing in the category is due, so every question in it, if it has any, was answered in
-        // this cycle.
+        // Nothing in the category is due, so every question in it, if it has any, was answered or
+        // skipped in this cycle.
         val again = candidates(playerId, category, dueIn = null).randomBatch(limit)
         val cycleFinished = category == null || candidates(playerId, category = null, dueIn = current).empty()
         if (again.isNotEmpty() && cycleFinished) PlayerStore.startNextCycle(playerId, from = cycle)
@@ -108,6 +113,7 @@ object QuestionStore {
     ): Query =
         Questions
             .join(Votes, JoinType.LEFT, Questions.id, Votes.questionId) { Votes.playerId eq playerId }
+            .join(Skips, JoinType.LEFT, Questions.id, Skips.questionId) { Skips.playerId eq playerId }
             .select(columns)
             .where { servableTo(playerId) and inCategory(category) and isDue(dueIn) }
 
@@ -120,14 +126,22 @@ object QuestionStore {
         category?.let { wanted -> Questions.category eq wanted.name } ?: Op.TRUE
 
     /**
-     * Not yet answered in [cycle]: no vote, or one from an earlier cycle. A null [cycle] lets all through.
+     * Neither answered nor skipped in [cycle]: no vote, or one from an earlier cycle, and no skip, or
+     * one from an earlier cycle. A null [cycle] lets all through.
      *
      * An expression rather than a number, so the cycle can be a column as well as a value, and a
      * statement that reads the player's row can count what is due in that same statement. The feed
      * passes its cycle as a parameter.
      */
     private fun isDue(cycle: Expression<Int>?): Op<Boolean> =
-        cycle?.let { current -> Votes.answeredInCycle.isNull() or (Votes.answeredInCycle less current) } ?: Op.TRUE
+        cycle?.let { current -> noneIn(Votes.answeredInCycle, current) and noneIn(Skips.skippedInCycle, current) }
+            ?: Op.TRUE
+
+    /** No left-joined row, which reads [inCycle] as null, or one from a cycle before [cycle]. */
+    private fun noneIn(
+        inCycle: Column<Int>,
+        cycle: Expression<Int>,
+    ): Op<Boolean> = inCycle.isNull() or (inCycle less cycle)
 
     fun exists(id: String): Boolean =
         Questions
