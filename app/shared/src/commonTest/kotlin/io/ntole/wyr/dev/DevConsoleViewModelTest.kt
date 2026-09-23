@@ -37,7 +37,9 @@ class DevConsoleViewModelTest {
     private val dispatcher = StandardTestDispatcher()
     private val calls = mutableListOf<String>()
     private val sessions = FakeSessions(calls)
-    private val questions = FakeQuestions(calls)
+    private val diagnostics = FakeDiagnostics(sessions)
+    private val queue = FakeQueue()
+    private val questions = FakeQuestions(calls, queue)
     private val votes = FakeVotes(calls)
 
     @BeforeTest
@@ -55,14 +57,28 @@ class DevConsoleViewModelTest {
     fun `a finished action is logged as Ok and refreshes the header`() =
         runTest(dispatcher) {
             val viewModel = viewModel()
+            testScheduler.advanceUntilIdle()
+            assertEquals(null, viewModel.state.value.session)
 
             viewModel.ensureSession()
             testScheduler.advanceUntilIdle()
 
             val state = viewModel.state.value
             assertEquals(listOf(LogEntry("ensureSession", "", 0, LogResult.Ok("playerId=p1"))), state.log)
-            assertEquals(SESSION, state.session)
-            assertEquals(QUEUE_SIZE, state.queueSize)
+            assertEquals(sessionOf("p1"), state.session)
+        }
+
+    @Test
+    fun `Reset queue shows the emptied queue in the header`() =
+        runTest(dispatcher) {
+            val viewModel = viewModel()
+            testScheduler.advanceUntilIdle()
+            assertEquals(QUEUE_SIZE, viewModel.state.value.queueSize)
+
+            viewModel.resetQueue()
+            testScheduler.advanceUntilIdle()
+
+            assertEquals(0, viewModel.state.value.queueSize)
         }
 
     @Test
@@ -133,6 +149,20 @@ class DevConsoleViewModelTest {
             assertEquals(listOf("clear", "reset", "ensure", "next"), calls)
             assertEquals(QUESTION, viewModel.state.value.question)
             assertEquals(LogResult.Ok("playerId=p1 question=q1"), viewModel.onlyResult())
+        }
+
+    @Test
+    fun `New guest shows the new player in the header`() =
+        runTest(dispatcher) {
+            val viewModel = viewModel()
+            viewModel.ensureSession()
+            testScheduler.advanceUntilIdle()
+            sessions.playerId = "p2"
+
+            viewModel.newGuest()
+            testScheduler.advanceUntilIdle()
+
+            assertEquals(sessionOf("p2"), viewModel.state.value.session)
         }
 
     @Test
@@ -227,9 +257,9 @@ class DevConsoleViewModelTest {
         DevConsoleViewModel(
             apiBaseUrl = "http://localhost:8080",
             sessions = sessions,
-            diagnostics = FixedDiagnostics,
+            diagnostics = diagnostics,
             questions = questions,
-            queue = FixedQueue,
+            queue = queue,
             getNextQuestion = GetNextQuestion(questions),
             castVote = CastVote(votes, sessions),
             httpTrace = HttpTrace(),
@@ -243,7 +273,9 @@ class DevConsoleViewModelTest {
 
     private companion object {
         const val QUEUE_SIZE = 3
-        val SESSION = SessionInfo(playerId = "p1", accessTokenExpiresAtEpochMillis = 1_790_000_000_000L)
+        const val EXPIRY = 1_790_000_000_000L
+
+        fun sessionOf(playerId: String) = SessionInfo(playerId, accessTokenExpiresAtEpochMillis = EXPIRY)
 
         val QUESTION =
             Question(
@@ -270,20 +302,26 @@ class DevConsoleViewModelTest {
         var playerId = "p1"
         var ensure: suspend () -> String = { playerId }
 
+        /** The player the last [ensure] minted, until [clear] drops it. What the header reports. */
+        var stored: String? = null
+            private set
+
         override suspend fun ensure(): String {
             calls += "ensure"
-            return ensure.invoke()
+            return ensure.invoke().also { stored = it }
         }
 
         override suspend fun currentPlayerId(): String = playerId
 
         override suspend fun clear() {
             calls += "clear"
+            stored = null
         }
     }
 
     private class FakeQuestions(
         private val calls: MutableList<String>,
+        private val queue: FakeQueue,
     ) : QuestionRepository {
         var next: suspend () -> Question = { QUESTION }
 
@@ -296,6 +334,7 @@ class DevConsoleViewModelTest {
 
         override suspend fun reset() {
             calls += "reset"
+            queue.clear()
         }
     }
 
@@ -315,17 +354,24 @@ class DevConsoleViewModelTest {
         }
     }
 
-    private object FixedDiagnostics : SessionDiagnostics {
-        override suspend fun info(): SessionInfo = SESSION
+    /** Follows [FakeSessions], so the header only changes when an action changed the session. */
+    private class FakeDiagnostics(
+        private val sessions: FakeSessions,
+    ) : SessionDiagnostics {
+        override suspend fun info(): SessionInfo? = sessions.stored?.let(::sessionOf)
     }
 
-    private object FixedQueue : QuestionCache {
+    private class FakeQueue : QuestionCache {
+        private var size = QUEUE_SIZE
+
         override suspend fun put(questions: List<Question>) = Unit
 
         override suspend fun takeNext(): Question? = null
 
-        override suspend fun count(): Int = QUEUE_SIZE
+        override suspend fun count(): Int = size
 
-        override suspend fun clear() = Unit
+        override suspend fun clear() {
+            size = 0
+        }
     }
 }
