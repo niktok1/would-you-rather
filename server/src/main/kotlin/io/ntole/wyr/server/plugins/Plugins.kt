@@ -48,7 +48,10 @@ fun Application.installPlugins(
     install(CORS) {
         // Web is an in-scope client target, and a browser will not call the API cross-origin
         // without this. Hosts come from config so production is never wide open by default.
-        config.allowedWebOrigins.forEach { origin -> allowHost(origin) }
+        config.allowedWebOrigins.forEach { origin ->
+            val scheme = origin.scheme
+            if (scheme == null) allowHost(origin.host) else allowHost(origin.host, schemes = listOf(scheme))
+        }
         allowHeader(HttpHeaders.Authorization)
         allowHeader(HttpHeaders.ContentType)
         allowMethod(HttpMethod.Get)

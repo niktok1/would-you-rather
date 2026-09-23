@@ -1,7 +1,9 @@
 package io.ntole.wyr.server.config
 
 import kotlin.test.Test
+import kotlin.test.assertContains
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
@@ -57,6 +59,46 @@ class ServerConfigTest {
         assertEquals(9999, config.port)
         assertFalse(config.usesDevJwtSecret)
         assertFalse(config.isEphemeralDatabase)
-        assertEquals(listOf("wyr.example.com", "localhost:8080"), config.allowedWebOrigins)
+        assertEquals(
+            listOf(WebOrigin("wyr.example.com", scheme = null), WebOrigin("localhost:8080", scheme = null)),
+            config.allowedWebOrigins,
+        )
+    }
+
+    @Test
+    fun `a web origin written with its scheme is split into host and scheme`() {
+        // The form an operator copies out of a browser; Ktor's allowHost refuses it unsplit.
+        val config =
+            ServerConfig.fromEnvironment(
+                mapOf("ALLOWED_WEB_ORIGINS" to "https://app.example.com, http://localhost:8080")::get,
+            )
+
+        assertEquals(
+            listOf(WebOrigin("app.example.com", scheme = "https"), WebOrigin("localhost:8080", scheme = "http")),
+            config.allowedWebOrigins,
+        )
+    }
+
+    @Test
+    fun `a web origin that is not a bare origin fails at config load and names the entry`() {
+        val malformed =
+            listOf(
+                "https://app.example.com/play",
+                "https://app.example.com/",
+                "https://",
+                ":8080",
+                "ftp://app.example.com",
+                "app.example.com:http",
+                "app.example.com:99999",
+                "user@app.example.com",
+            )
+
+        malformed.forEach { raw ->
+            val failure =
+                assertFailsWith<IllegalArgumentException>("\"$raw\" should be rejected") {
+                    ServerConfig.fromEnvironment(mapOf("ALLOWED_WEB_ORIGINS" to raw)::get)
+                }
+            assertContains(failure.message.orEmpty(), "\"$raw\"")
+        }
     }
 }

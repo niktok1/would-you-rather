@@ -16,7 +16,7 @@ data class ServerConfig(
     val jwtAudience: String,
     val accessTokenTtlSeconds: Long,
     val refreshTokenTtlSeconds: Long,
-    val allowedWebOrigins: List<String>,
+    val allowedWebOrigins: List<WebOrigin>,
 ) {
     /** True when running against the throwaway in-memory database. */
     val isEphemeralDatabase: Boolean get() = jdbcUrl.startsWith("jdbc:h2:")
@@ -29,6 +29,9 @@ data class ServerConfig(
         private const val DEFAULT_PORT = 8080
         private const val ACCESS_TTL_SECONDS = 15L * 60L
         private const val REFRESH_TTL_SECONDS = 30L * 24L * 60L * 60L
+
+        private val WEB_SCHEMES = setOf("http", "https")
+        private const val MAX_PORT = 65_535
 
         fun fromEnvironment(env: (String) -> String? = System::getenv): ServerConfig {
             val databaseUrl = env("DATABASE_URL")?.takeIf { it.isNotBlank() }
@@ -54,8 +57,38 @@ data class ServerConfig(
                         ?.split(',')
                         ?.map(String::trim)
                         ?.filter(String::isNotEmpty)
+                        ?.map(::parseWebOrigin)
                         .orEmpty(),
             )
+        }
+
+        /**
+         * Accepts `host[:port]`, `http://host[:port]`, or `https://host[:port]` — the shapes a
+         * browser's `Origin` header can take — and fails at config load on anything else, so a
+         * typo stops the boot with the offending entry named instead of silently blocking the web
+         * client, or crashing later inside the CORS plugin.
+         */
+        internal fun parseWebOrigin(raw: String): WebOrigin {
+            fun reject(reason: String): Nothing =
+                throw IllegalArgumentException(
+                    "ALLOWED_WEB_ORIGINS entry \"$raw\" $reason; expected host[:port], " +
+                        "http://host[:port], or https://host[:port]",
+                )
+
+            val schemeEnd = raw.indexOf("://")
+            val scheme = if (schemeEnd < 0) null else raw.substring(0, schemeEnd).lowercase()
+            val host = if (schemeEnd < 0) raw else raw.substring(schemeEnd + "://".length)
+            val name = host.substringBefore(':')
+            val port = host.substringAfter(':', missingDelimiterValue = "")
+            val validPort = port.all(Char::isDigit) && port.toIntOrNull() in 1..MAX_PORT
+
+            if (scheme != null && scheme !in WEB_SCHEMES) reject("has an unsupported scheme")
+            if (host.any { it in "/?#" }) reject("has a path, which an origin never does")
+            if (name.isEmpty()) reject("has no host")
+            if (name.any { it == '@' || it.isWhitespace() }) reject("is not a bare host")
+            if (':' in host && !validPort) reject("has a malformed port")
+
+            return WebOrigin(host = host, scheme = scheme)
         }
 
         /**
