@@ -232,9 +232,11 @@ This project must never be attributed to any employer identity.
 - **Host: Render.** Chosen for flat, predictable per-service pricing (not usage-metered) and
   push-to-deploy from GitHub. Declared in `render.yaml`.
 - `:server` deploys as a Render **web service**, built from the root `Dockerfile`. Health check
-  path is `/health`. **Auto-deploy is off** (`autoDeploy: false` in `render.yaml`) until the first
-  deploy, per the interim schema-migration policy in §8b; the first-deploy milestone turns it back
-  on so a push to `main` deploys.
+  path is `/health`. **Auto-deploy is off** (`autoDeployTrigger: "off"` in `render.yaml`) until
+  the first deploy, per the interim schema-migration policy in §8b. The first-deploy milestone
+  sets `autoDeployTrigger: checksPass`, which deploys a commit on `main` only after its CI checks
+  pass. Not `commit`, which is what the deprecated `autoDeploy: true` means: it deploys every
+  commit whether or not CI is green.
 - PostgreSQL is a **Render managed Postgres** instance in the **same region** as the web
   service (use the internal connection URL, never the external one).
 - Connection string and all secrets come from Render **environment variables** — never
@@ -246,8 +248,8 @@ This project must never be attributed to any employer identity.
 - Free tier caveats to design around: free web services spin down after ~15 min idle (cold
   start on next request), and free Postgres is time-limited — migrate to a paid instance before
   relying on persistence.
-- Do not hand-deploy. Once auto-deploy is on, the path is: push to `main` → CI (ktlint +
-  tests) → Render builds → publishes.
+- Do not hand-deploy. Once auto-deploy is on (`checksPass`), the path is: push to `main` → CI
+  (ktlint + tests) → Render builds → publishes.
 
 ## 8a. Authentication — resolved
 
@@ -283,9 +285,9 @@ accounts exist.
 - **Rate limiting** — `ErrorCode.RATE_LIMITED` exists on the wire and nothing emits it yet.
 - **Schema migrations** — *interim policy, decided 2026-09-23:* nothing is deployed, so until the
   first Render deploy a schema change ships as a fresh database through `SchemaUtils.create`, and
-  `render.yaml` keeps `autoDeploy: false` so connecting the blueprint cannot deploy early. A real
-  migration tool (`exposed-migration-jdbc` plus a runner) must be chosen before the first column
-  change **after** that deploy.
+  `render.yaml` keeps `autoDeployTrigger: "off"` so connecting the blueprint cannot deploy early.
+  A real migration tool (`exposed-migration-jdbc` plus a runner) must be chosen before the first
+  column change **after** that deploy.
 - **WCAG AA contrast audit** — see §5b. Paused along with UI polish (§8d).
 
 `RANDOM` was an open item and is resolved: it is a content category (the absurd questions), not a

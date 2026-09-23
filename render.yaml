@@ -1,5 +1,5 @@
-# Render blueprint (CLAUDE.md §8). Once auto-deploy is on: push to main -> Render builds the
-# Dockerfile -> publishes. Never hand-deploy.
+# Render blueprint (CLAUDE.md §8). Once auto-deploy is on (checksPass): push to main -> CI passes
+# -> Render builds the Dockerfile -> publishes. Never hand-deploy.
 #
 # Caveats this config is written around, both from §8:
 #   - a free web service spins down after ~15 min idle, so the first request after a quiet spell
@@ -16,8 +16,10 @@ services:
     branch: main
     # Off until the first deploy, per the interim schema-migration policy (CLAUDE.md §8b): until
     # then a schema change ships as a fresh database, so connecting this blueprint must not be able
-    # to deploy early. Flip back to true at the first-deploy milestone.
-    autoDeploy: false
+    # to deploy early. The first-deploy milestone sets checksPass, which waits for CI on the commit.
+    # Not commit (the deprecated autoDeploy: true): that deploys alongside CI, red or not.
+    # Quoted because YAML 1.1 parsers read a bare off as the boolean false.
+    autoDeployTrigger: "off"
     healthCheckPath: /health
     envVars:
       # Internal connection string, not the external one — same region, no public egress.

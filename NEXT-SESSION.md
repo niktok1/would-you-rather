@@ -63,8 +63,8 @@ UI polish is paused and the work is functionality-first behind an engineering de
 rules live in CLAUDE.md §8d. Each item is one short-lived branch, in order:
 
 0. `chore/ci-coverage` — fix fat-jar JDBC driver registration (the image cannot boot on H2),
-   close the Hikari pool on stop, set `autoDeploy: false`, and add CI jobs for Postgres, iOS
-   compile, and a Docker `/health` smoke test.
+   close the Hikari pool on stop, set `autoDeployTrigger: "off"`, and add CI jobs for Postgres,
+   iOS compile, and a Docker `/health` smoke test.
 1. `fix/server-errors` — a vote from an unknown player returns 401, not 409 ALREADY_VOTED; only a
    real duplicate returns 409; add a body-parse helper; drop logback from TRACE to INFO;
    `?category=UNKNOWN` returns 400; parse CORS origins that include a scheme.
@@ -80,7 +80,8 @@ rules live in CLAUDE.md §8d. Each item is one short-lived branch, in order:
 8. `feat/moderation`.
 9. `feat/question-likes`.
 10. `feat/category-play`.
-11. Pre-deploy hardening and the first Render deploy.
+11. Pre-deploy hardening and the first Render deploy, which sets `autoDeployTrigger: checksPass`
+    in `render.yaml` (CLAUDE.md §8).
 
 **Blocked on the user:** no git remote exists yet, so `.github/workflows/ci.yml` has never run.
 It needs a GitHub repo on the personal account (§7). Render and iOS verification both depend on
