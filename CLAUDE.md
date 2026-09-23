@@ -345,6 +345,8 @@ rewards reading the crowd may come later as a separate, opt-in mode, never as th
 
 **Current focus.** UI polish is paused. Functionality ships behind a plain engineering dev
 console, which is the default root screen. `PlayScreen` stays as a frozen second tab.
+The console is built, in `io.ntole.wyr.dev` (`:app:shared`). A feature adds its section there,
+and every request shows in its HTTP trace (`HttpTrace` in `:core:network`, never headers or bodies).
 
 - **Scoring** *(built; see §8c)*: every answer earns exactly **1 point**, whichever side
   it picks. There is no majority bonus and no streak: the streak is removed from the server, the

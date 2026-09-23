@@ -73,7 +73,34 @@ Server first, then a client. The server defaults to in-memory H2 and logs a warn
 Android uses `http://10.0.2.2:8080` (the emulator's alias for the host loopback); desktop, iOS
 simulator, and web use `http://localhost:8080`. All four are in
 `io.ntole.wyr.di.DevApiBaseUrl`. For the **web** client the server also needs
-`ALLOWED_WEB_ORIGINS` set or CORS preflight will reject every request.
+`ALLOWED_WEB_ORIGINS` set or CORS preflight will reject every request. The page's dev server
+takes the first free port from 8080, so with the API already there it serves on 8081:
+
+```bash
+ALLOWED_WEB_ORIGINS=localhost:8081 ./gradlew :server:run
+```
+
+```bash
+./gradlew :app:webApp:wasmJsBrowserDevelopmentRun
+```
+
+### The dev console
+
+The app opens on the **Console** tab (`io.ntole.wyr.dev`). **Play** is the frozen game screen.
+
+- **Session.** *Ensure session* mints a guest, or reuses the stored one. The header then shows the
+  player id and when its access token expires. *New guest* drops the session and the question
+  queue, then mints a fresh player and loads a question for it.
+- **Play.** *Skip* loads the next question and sends nothing. *A* / *B* answer it, and the raw
+  `VoteOutcome` appears below. The header's total points is the last outcome's `totalPoints`;
+  there is no stats endpoint yet.
+- **Questions.** Fetch the next question, or empty the local queue, and see its size.
+- **Vote by id.** Sends a vote for whatever id is typed. An unknown id provokes
+  `QUESTION_NOT_FOUND` (404) and a repeat provokes `ALREADY_VOTED` (409).
+- **Action log.** Every action, newest first: `ok`, `err` (the `DomainError` and its diagnostic
+  message) or `crash` (anything else thrown), with how long it took. One action runs at a time.
+- **HTTP trace.** Every request that went out, with status and time. A refreshed call shows as
+  the 401, the refresh, and the retry.
 
 ## Roadmap (agreed 2026-09-23)
 
