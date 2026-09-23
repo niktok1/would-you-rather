@@ -64,12 +64,12 @@ simulator, and web use `http://localhost:8080`. All four are in
 UI polish is paused and the work is functionality-first behind an engineering dev console. Game
 rules live in CLAUDE.md §8d. Each item is one short-lived branch, in order:
 
-0. `chore/ci-coverage` — fix fat-jar JDBC driver registration (the image cannot boot on H2),
-   close the Hikari pool on stop, set `autoDeployTrigger: "off"`, and add CI jobs for Postgres,
-   iOS compile, and a Docker `/health` smoke test.
-1. `fix/server-errors` — a vote from an unknown player returns 401, not 409 ALREADY_VOTED; only a
-   real duplicate returns 409; add a body-parse helper; drop logback from TRACE to INFO;
-   `?category=UNKNOWN` returns 400; parse CORS origins that include a scheme.
+0. `chore/ci-coverage` *(done)* — fix fat-jar JDBC driver registration (the image cannot boot on
+   H2), close the Hikari pool on stop, set `autoDeployTrigger: "off"`, and add CI jobs for
+   Postgres, iOS compile, and a Docker `/health` smoke test.
+1. `fix/server-errors` *(done)* — a vote from an unknown player returns 401, not 409
+   ALREADY_VOTED; only a real duplicate returns 409; add a body-parse helper; drop logback from
+   TRACE to INFO; `?category=UNKNOWN` returns 400; parse CORS origins that include a scheme.
 2. `feat/flat-scoring` — 1 point per answer, streak removed (§8d).
 3. `fix/client-errors-session` — truthful error mapping (offline, dead refresh, and cancellation
    currently all show UNKNOWN); invalidate Ktor's cached bearer on session change; single-flight
