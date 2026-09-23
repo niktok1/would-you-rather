@@ -1,8 +1,8 @@
 package io.ntole.wyr
 
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.ntole.wyr.play.PlayScreen
 import io.ntole.wyr.play.PlayViewModel
 import io.ntole.wyr.theme.WyrTheme
@@ -19,7 +19,7 @@ import org.koin.compose.viewmodel.koinViewModel
 fun App() {
     WyrTheme {
         val viewModel = koinViewModel<PlayViewModel>()
-        val state by viewModel.state.collectAsState()
+        val state by viewModel.state.collectAsStateWithLifecycle()
 
         PlayScreen(
             state = state,

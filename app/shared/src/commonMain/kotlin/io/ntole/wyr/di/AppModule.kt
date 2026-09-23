@@ -3,19 +3,14 @@ package io.ntole.wyr.di
 import io.ntole.wyr.core.data.di.dataModule
 import io.ntole.wyr.play.PlayViewModel
 import org.koin.core.context.startKoin
+import org.koin.core.module.dsl.viewModelOf
 import org.koin.core.qualifier.named
 import org.koin.dsl.KoinAppDeclaration
 import org.koin.dsl.module
 
 private val uiModule =
     module {
-        factory {
-            PlayViewModel(
-                getNextQuestion = get(),
-                castVote = get(),
-                questions = get(),
-            )
-        }
+        viewModelOf(::PlayViewModel)
     }
 
 /**
