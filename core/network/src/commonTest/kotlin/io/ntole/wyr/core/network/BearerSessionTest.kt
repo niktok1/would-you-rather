@@ -9,6 +9,7 @@ import io.ntole.wyr.core.network.api.QuestionApi
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.test.runTest
@@ -99,6 +100,39 @@ class BearerSessionTest {
             awaitAll(async { api.page() }, async { api.page() })
 
             assertEquals(1, engine.requestHistory.count { it.url.encodedPath == WyrApi.Paths.AUTH_REFRESH })
+            assertEquals(session("a2"), store.read())
+        }
+
+    @Test
+    fun `a refresh outlives the cancelled call that started it`() =
+        runTest {
+            // The server rotates the refresh token the moment it answers. Abandoning the refresh
+            // then would leave a dead refresh token in the store.
+            val store = storeHolding(session("a"))
+            val refreshArrived = CompletableDeferred<Unit>()
+            val answerRefresh = CompletableDeferred<Unit>()
+            val engine =
+                MockEngine { request ->
+                    when (request.url.encodedPath) {
+                        WyrApi.Paths.AUTH_REFRESH -> {
+                            refreshArrived.complete(Unit)
+                            answerRefresh.await()
+                            respondSession(session("a2"))
+                        }
+
+                        else -> {
+                            respondErrorDto(HttpStatusCode.Unauthorized, ErrorCode.UNAUTHORIZED)
+                        }
+                    }
+                }
+            val api = QuestionApi(WyrHttpClient.create(BASE_URL, store, engine))
+
+            val call = launch { api.page() }
+            refreshArrived.await()
+            call.cancel()
+            answerRefresh.complete(Unit)
+            call.join()
+
             assertEquals(session("a2"), store.read())
         }
 

@@ -64,6 +64,11 @@ public object WyrHttpClient {
                     // costs one preference read.
                     cacheTokens = false
 
+                    // The server rotates the refresh token the moment it answers a refresh. Were
+                    // the caller cancelled before the write below, the store would keep a dead
+                    // refresh token and the next 401 would cost the player their guest account.
+                    nonCancellableRefresh = true
+
                     loadTokens {
                         sessionStore.read()?.let { session ->
                             BearerTokens(session.accessToken, session.refreshToken)
