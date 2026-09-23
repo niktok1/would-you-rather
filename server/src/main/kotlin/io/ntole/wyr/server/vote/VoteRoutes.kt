@@ -11,6 +11,7 @@ import io.ntole.wyr.server.auth.authenticatedPlayerId
 import io.ntole.wyr.server.db.Db
 import io.ntole.wyr.server.plugins.ApiFailure
 import io.ntole.wyr.server.plugins.receiveOrReject
+import io.ntole.wyr.server.plugins.requireValidId
 
 fun Route.voteRoutes(db: Db) {
     authenticate(JWT_AUTH) {
@@ -19,19 +20,10 @@ fun Route.voteRoutes(db: Db) {
 
             val body = call.receiveOrReject<VoteRequest>("vote request")
 
-            if (body.questionId.isBlank()) throw ApiFailure.validation("questionId is blank")
-            if (body.attemptId.isBlank()) throw ApiFailure.validation("attemptId is blank")
+            requireValidId("questionId", body.questionId)
+            requireValidId("attemptId", body.attemptId)
             if (body.attemptId.length > WyrApi.Limits.MAX_ATTEMPT_ID_LENGTH) {
                 throw ApiFailure.validation("attemptId is over ${WyrApi.Limits.MAX_ATTEMPT_ID_LENGTH} characters")
-            }
-            // PostgreSQL refuses a NUL in text, and a refused parameter fails the transaction as a
-            // database error: retried, then a 500 for what is the client's mistake. No id has any
-            // control character, so all of them are refused here rather than only NUL.
-            if (body.questionId.any(Char::isISOControl)) {
-                throw ApiFailure.validation("questionId has a control character")
-            }
-            if (body.attemptId.any(Char::isISOControl)) {
-                throw ApiFailure.validation("attemptId has a control character")
             }
 
             // One transaction covers the vote, the tally, and the point award, so they commit or fail
