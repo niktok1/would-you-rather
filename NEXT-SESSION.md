@@ -49,20 +49,37 @@ simulator, and web use `http://localhost:8080`. All four are in
 `io.ntole.wyr.di.DevApiBaseUrl`. For the **web** client the server also needs
 `ALLOWED_WEB_ORIGINS` set or CORS preflight will reject every request.
 
-## Next steps (in rough priority order)
+## Roadmap (agreed 2026-09-23)
 
-1. **Build iOS on a machine with Xcode.** Highest-risk unverified area.
-2. **Look at the UI** on desktop and Android; refine the §5b palette against reality and run the
-   WCAG AA contrast check that §5b flags as outstanding.
-3. **Provider linking** (`POST /v1/auth/link`) — the seam exists and is documented in §8a. Until
-   it lands, losing the device loses the account. This is the biggest functional gap.
-4. **Verify the Docker build and deploy to Render**, then set `ALLOWED_WEB_ORIGINS` and point the
-   clients at the deployed URL instead of localhost.
-5. **SQLDelight cache** with the per-platform split described in §4, so the question queue
-   survives a restart on Android/iOS/desktop.
-6. **Design the submit-question screen**, then extend the contract with author + `QuestionStatus`.
-7. **Design the stats/profile screen**, then add the player-stats DTO. The server already tracks
-   `totalPoints` and `streak` per player, so the data exists.
+UI polish is paused and the work is functionality-first behind an engineering dev console. Game
+rules live in CLAUDE.md §8d. Each item is one short-lived branch, in order:
+
+0. `chore/ci-coverage` — fix fat-jar JDBC driver registration (the image cannot boot on H2),
+   close the Hikari pool on stop, set `autoDeploy: false`, and add CI jobs for Postgres, iOS
+   compile, and a Docker `/health` smoke test.
+1. `fix/server-errors` — a vote from an unknown player returns 401, not 409 ALREADY_VOTED; only a
+   real duplicate returns 409; add a body-parse helper; drop logback from TRACE to INFO;
+   `?category=UNKNOWN` returns 400; parse CORS origins that include a scheme.
+2. `feat/flat-scoring` — 1 point per answer, streak removed (§8d).
+3. `fix/client-errors-session` — truthful error mapping (offline, dead refresh, and cancellation
+   currently all show UNKNOWN); invalidate Ktor's cached bearer on session change; single-flight
+   reset; first `:core:network` / `:core:data` tests.
+4. `feat/dev-console` — the engineering UI, as the default root.
+5. `feat/endless-feed` — per-player random unanswered questions, then loop; re-answering;
+   idempotency key; skip.
+6. `feat/player-stats` — `GET /v1/me`.
+7. `feat/question-submission` — split into server + contract, then client + console.
+8. `feat/moderation`.
+9. `feat/question-likes`.
+10. `feat/category-play`.
+11. Pre-deploy hardening and the first Render deploy.
+
+**Blocked on the user:** no git remote exists yet, so `.github/workflows/ci.yml` has never run.
+It needs a GitHub repo on the personal account (§7). Render and iOS verification both depend on
+CI running.
+
+Deferred: provider linking (§8a), SQLDelight, a leaderboard, UI polish and WCAG, and the
+known `PlayViewModel` issues (the Play tab is frozen).
 
 ## Things worth knowing before you touch the code
 

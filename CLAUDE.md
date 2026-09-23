@@ -274,17 +274,26 @@ accounts exist.
 - **Provider linking** (Google / Apple / passkeys) — needed to make accounts durable. Requires
   OAuth client credentials, and Apple additionally requires a paid developer account. Passkeys
   have no desktop-JVM story, so desktop would need a browser handoff.
-- **SQLDelight cache** — see §4. Needs a per-platform split because of web.
-- **`RANDOM` category** — is it a content category or a "surprise me" filter? It is currently a
-  member of `QuestionCategory`; if it is really a filter, it does not belong there.
-- **Question submission + moderation** — the submit-question screen is undesigned, and with it
-  `QuestionStatus` and the author field on the contract.
+- **SQLDelight cache** — see §4. Needs a per-platform split because of web. Lower priority once
+  the endless feed (§8d) makes the server the source of truth for what a player has answered.
+- **Question submission + moderation** — the game rules are settled in §8d; the contract
+  (`QuestionStatus`, author field) and the moderator model are not.
 - **Rate limiting** — `ErrorCode.RATE_LIMITED` exists on the wire and nothing emits it yet.
-- **Schema migrations** — `SchemaUtils.create` only adds missing tables. The first column change
-  needs `exposed-migration-jdbc` plus a real migration tool.
-- **WCAG AA contrast audit** — see §5b.
+- **Schema migrations** — *interim policy, decided 2026-09-23:* nothing is deployed, so until the
+  first Render deploy a schema change ships as a fresh database through `SchemaUtils.create`, and
+  `render.yaml` keeps `autoDeploy: false` so connecting the blueprint cannot deploy early. A real
+  migration tool (`exposed-migration-jdbc` plus a runner) must be chosen before the first column
+  change **after** that deploy.
+- **WCAG AA contrast audit** — see §5b. Paused along with UI polish (§8d).
+
+`RANDOM` was an open item and is resolved: it is a content category (the absurd questions), not a
+"surprise me" filter, and it stays in `QuestionCategory` as-is. The unfiltered feed already mixes
+every category.
 
 ## 8c. Scoring rules — v1
+
+> **Being replaced** by the flat scoring in §8d. Until `feat/flat-scoring` lands, this section
+> still describes the code as it is.
 
 Server-authoritative, in `io.ntole.wyr.server.vote.Scoring`. The client displays what the server
 returns and never recomputes points, so the two cannot disagree.
@@ -297,6 +306,41 @@ returns and never recomputes points, so the two cannot disagree.
 
 Deliberately lives in `:server` and not `:core:domain`, so `:server` needs no dependency on the
 client's domain module and the §3 graph stays intact.
+
+## 8d. Game mechanics — decided 2026-09-23
+
+Settled with the user. Each rule says whether it is built. The branch that builds a rule updates
+it here (and §8c, for scoring) in the same commit.
+
+**Principle.** This is not a guess-the-majority game. Rewarding majority picks teaches players to
+answer what they think is popular instead of what they actually prefer. A mode that explicitly
+rewards reading the crowd may come later as a separate, opt-in mode, never as the default.
+
+**Current focus.** UI polish is paused. Functionality ships behind a plain engineering dev
+console, which is the default root screen. `PlayScreen` stays as a frozen second tab.
+
+- **Scoring** *(not built; replaces §8c)*: every answer earns exactly **1 point**, whichever side
+  it picks. There is no majority bonus and no streak: the streak is removed from the server, the
+  contract, and the domain. The reveal still shows the split and whether the player sided with
+  the majority, as information only.
+- **Endless feed** *(not built)*: the game never ends. A player is served questions they have
+  not answered, in **random order per player**. Once none remain, answered questions loop back,
+  least-recently-answered first. `GET /v1/questions` requires a bearer token and is per-player.
+- **Re-answering** *(not built)*: a looped question can be answered again. It earns the point
+  again and the player may change their pick. The tally always holds **one vote per player per
+  question**, their latest.
+- **Retry safety** *(not built)*: every vote carries a client-generated idempotency key. A repeat
+  of the same key returns the stored result and pays nothing. A new key on an answered question
+  is a fresh answer.
+- **Skipping** *(not built)*: allowed. It earns nothing and is not recorded, so the question
+  stays unanswered and comes back later.
+- **Own questions** *(not built)*: an author is never served their own question.
+- **Likes** *(not built)*: any player may like any question except their own, at any time
+  (before or after answering), once each, and may unlike it. Each like currently held is **+1
+  point to the author**, and unliking takes that point back. The like count is visible before
+  answering. For now likes do nothing else; serving questions by quality is a later idea.
+- **Submitting** *(not built)*: earns no points directly, because authors earn through likes. A
+  submitted question is served only after a moderator approves it.
 
 ---
 
