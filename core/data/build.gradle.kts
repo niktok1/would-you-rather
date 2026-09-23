@@ -56,6 +56,8 @@ kotlin {
         commonTest.dependencies {
             implementation(libs.kotlin.test)
             implementation(libs.kotlinx.coroutinesTest)
+            // Drives the real client configuration, so runApi is tested against what Ktor throws.
+            implementation(libs.ktor.clientMock)
         }
     }
 }

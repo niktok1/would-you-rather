@@ -5,6 +5,7 @@ import io.ktor.client.HttpClientConfig
 import io.ktor.client.call.body
 import io.ktor.client.engine.HttpClientEngine
 import io.ktor.client.plugins.HttpResponseValidator
+import io.ktor.client.plugins.ResponseException
 import io.ktor.client.plugins.auth.Auth
 import io.ktor.client.plugins.auth.providers.BearerTokens
 import io.ktor.client.plugins.auth.providers.bearer
@@ -21,6 +22,7 @@ import io.ntole.wyr.core.auth.RefreshRequest
 import io.ntole.wyr.core.auth.SessionDto
 import io.ntole.wyr.core.error.ErrorCode
 import io.ntole.wyr.core.error.ErrorDto
+import kotlinx.coroutines.CancellationException
 import io.ktor.serialization.kotlinx.json.json as jsonConverter
 
 /**
@@ -78,22 +80,15 @@ public object WyrHttpClient {
 
             // Turn every non-2xx into an ApiException that carries the server's ErrorCode, so no
             // call site has to inspect status codes or parse bodies.
+            //
+            // Nothing else is touched; returning lets Ktor rethrow the original. An ApiException is
+            // already translated (a failed nested refresh raises one), cancellation must stay
+            // cancellation (CLAUDE.md §5), and a transport failure is runApi's to call NETWORK.
+            // Wrapping those too is what made offline, a dead refresh token and a cancelled call
+            // all look like the same UNKNOWN.
             HttpResponseValidator {
                 handleResponseExceptionWithRequest { cause, _ ->
-                    val response =
-                        cause.asResponseOrNull() ?: throw ApiException(
-                            code = ErrorCode.UNKNOWN,
-                            status = null,
-                            message = cause.message,
-                            cause = cause,
-                        )
-                    val error = runCatching { response.body<ErrorDto>() }.getOrNull()
-                    throw ApiException(
-                        code = error?.code ?: ErrorCode.UNKNOWN,
-                        status = response.status.value,
-                        message = error?.message ?: cause.message,
-                        cause = cause,
-                    )
+                    if (cause is ResponseException) throw cause.toApiException()
                 }
             }
         }
@@ -101,4 +96,23 @@ public object WyrHttpClient {
     }
 }
 
-private fun Throwable.asResponseOrNull(): HttpResponse? = (this as? io.ktor.client.plugins.ResponseException)?.response
+private suspend fun ResponseException.toApiException(): ApiException {
+    val error = response.errorOrNull()
+    return ApiException(
+        code = error?.code ?: ErrorCode.UNKNOWN,
+        status = response.status.value,
+        message = error?.message ?: message,
+        cause = this,
+    )
+}
+
+/** The body as the server's [ErrorDto], or null when it is not one — a proxy's HTML page, say. */
+private suspend fun HttpResponse.errorOrNull(): ErrorDto? =
+    try {
+        body<ErrorDto>()
+    } catch (cancellation: CancellationException) {
+        // Not "no ErrorDto": the caller went away mid-read, and that must reach it (CLAUDE.md §5).
+        throw cancellation
+    } catch (notAnErrorDto: Exception) {
+        null
+    }

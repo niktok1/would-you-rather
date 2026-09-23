@@ -21,10 +21,23 @@ internal suspend fun <T> runApi(block: suspend () -> T): T =
         throw cancellation
     } catch (api: ApiException) {
         throw WyrException(api.toDomainError(), api.message, api)
-    } catch (other: Exception) {
-        // Nothing came back, or what came back was unreadable.
+    } catch (other: Throwable) {
+        // Nothing came back, or what came back was unreadable. A fault in the program or the VM
+        // is neither, and must not be dressed up as one.
+        if (!other.isRequestFailure()) throw other
         throw WyrException(DomainError.NETWORK, other.message, other)
     }
+
+/**
+ * Whether this is an ordinary failed exchange, as opposed to a bug or a VM fault.
+ *
+ * Everywhere but the browser that means an [Exception]. Ktor's browser engines (js and wasmJs)
+ * are the odd ones out: they reject a failed fetch with a bare `kotlin.Error("Fail to fetch")`,
+ * so an offline web player's request would otherwise escape as an unhandled error. Only that
+ * exact class is let in — its subclasses (`NotImplementedError`, `AssertionError`, and on the JVM
+ * `OutOfMemoryError`) are faults that should crash, not read as "offline".
+ */
+private fun Throwable.isRequestFailure(): Boolean = this is Exception || this::class == Error::class
 
 /**
  * The server's own code when it sent one, otherwise the broad class of failure the status carries.

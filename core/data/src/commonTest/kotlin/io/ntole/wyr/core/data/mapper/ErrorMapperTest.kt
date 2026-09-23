@@ -70,6 +70,26 @@ class ErrorMapperTest {
         }
 
     @Test
+    fun `the browser engine's failed fetch is NETWORK`() =
+        runTest {
+            // Ktor's js and wasmJs engines reject a failed fetch with exactly this: an Error, not
+            // an Exception.
+            val failure = assertFailsWith<WyrException> { runApi { throw Error("Fail to fetch") } }
+
+            assertEquals(DomainError.NETWORK, failure.error)
+        }
+
+    @Test
+    fun `a fault in the program is not dressed up as NETWORK`() =
+        runTest {
+            val bug = NotImplementedError()
+
+            val thrown = assertFailsWith<NotImplementedError> { runApi { throw bug } }
+
+            assertSame(bug, thrown)
+        }
+
+    @Test
     fun `cancellation is rethrown, never mapped`() =
         runTest {
             val cancellation = CancellationException("caller went away")
