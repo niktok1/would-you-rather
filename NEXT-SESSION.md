@@ -306,7 +306,8 @@ automatically from every green commit on `main` (its URL is on its Render page).
   token field with clicks and keys through `ImageComposeScene`: Undo in it after a Lock brings
   nothing back (a field not made anew on Lock gives the whole token back). `ModerationOverHttpTest`
   runs it over the real client and a mock engine: 403, a bare 404, a 409 and a 429 with its
-  `Retry-After`, and every request with the admin header and no bearer token. `AdminModuleTest`
+  `Retry-After`, a proxy's HTML 403 claiming no status but the one its detail line carries, and
+  every request with the admin header and no bearer token. `AdminModuleTest`
   resolves the app from its own modules, with no platform module, and pins that nothing there can
   make or keep a player session: wired with the player's data module instead, it fails.
   `QuestionListViewModelTest` drives the list: pages read to the last one and no further, Load more
@@ -646,10 +647,10 @@ most 200 characters once trimmed. After every decision the queue is read again, 
 submission leaves it, and a line above it says what the decision did; not after a 403 or a 429,
 which decided nothing and would refuse the read too. A failure shows where it
 happened: under the submission, or above the queue, named by its options, once the read after it no
-longer lists it. `Wrong admin token (403)`, `Moderation is off on this server (404)` for a server
-without `ADMIN_TOKEN` (or a build without that route), `Already decided (409)`, and `Too many requests
-(429): try again in N s`, where ten wrong tokens in a minute lock the address out, the right token
-too, until the wait is over.
+longer lists it. `Wrong admin token (403)`; `An answer this build cannot name`, with its status in
+the `server:` line under it, where a bare 404 is a server without `ADMIN_TOKEN` (or a build without
+that route); `Already decided (409)`; and `Too many requests (429): try again in N s`, where ten wrong
+tokens in a minute lock the address out, the right token too, until the wait is over.
 
 **All questions** is every question, seeds included, newest first, read on *Load*, a page of 100 at
 a time with *Load more*. The chips narrow it by status (*Retired* among them) and by category, any

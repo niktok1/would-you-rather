@@ -14,9 +14,13 @@ class FailureTest {
     }
 
     @Test
-    fun `a bare 404 says moderation is off on that server`() {
-        // A server without ADMIN_TOKEN has no admin routes, which the data layer reads as UNKNOWN.
-        assertTrue("Moderation is off on this server (404)" in describe(Failure.Refused(DomainError.UNKNOWN)))
+    fun `an answer this build cannot name claims no status, and says what a bare 404 means`() {
+        // A server without ADMIN_TOKEN has no admin routes, which the data layer reads as UNKNOWN; but so
+        // it reads a proxy's page or a code newer than this build, so the status is the detail's to say.
+        val unknown = describe(Failure.Refused(DomainError.UNKNOWN))
+
+        assertTrue(unknown.startsWith("An answer this build cannot name (its status is in the line below)."), unknown)
+        assertTrue("A bare 404 means moderation is off on this server" in unknown, unknown)
     }
 
     @Test

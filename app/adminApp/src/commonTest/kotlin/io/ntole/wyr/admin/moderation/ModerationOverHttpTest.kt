@@ -47,6 +47,7 @@ import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.seconds
@@ -91,7 +92,23 @@ class ModerationOverHttpTest {
             val failure = loadPending(viewModel)
 
             assertEquals(DomainError.UNKNOWN, (failure as Failure.Refused).error)
-            assertTrue("Moderation is off on this server" in describe(failure))
+            assertTrue("A bare 404 means moderation is off on this server" in describe(failure))
+            assertTrue("404" in failure.detail.orEmpty(), failure.detail)
+        }
+
+    @Test
+    fun `an answer that is not the server's claims no status and shows the one it came with`() =
+        runTest(dispatcher) {
+            // A proxy's own page, which no ErrorDto names: it once read as moderation off, with a 404.
+            val html = headersOf(HttpHeaders.ContentType, ContentType.Text.Html.toString())
+            val viewModel = openOver { respond("<html>blocked</html>", HttpStatusCode.Forbidden, html) }
+
+            val failure = loadPending(viewModel) as Failure.Refused
+
+            assertEquals(DomainError.UNKNOWN, failure.error)
+            // No status of its own in the headline, which once said "(404)" of every such answer.
+            assertFalse("(404)" in describe(failure), describe(failure))
+            assertTrue("403" in failure.detail.orEmpty(), failure.detail)
         }
 
     @Test

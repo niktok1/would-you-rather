@@ -42,11 +42,14 @@ private fun describe(
             "Wrong admin token (403): this server refused it. Check it against the server's ADMIN_TOKEN."
         }
 
-        // A server with moderation off has no admin routes, so each is a bare 404, which is the one
-        // answer the data layer cannot name (CLAUDE.md §8d, Moderation). A server older than a route
-        // answers the same.
+        // A server with moderation off has no admin routes, so each is a bare 404, which the data layer
+        // cannot name (CLAUDE.md §8d, Moderation), and nor a server older than a route. But a proxy's
+        // own error page, a 401 without the server's body and a code newer than this build read the
+        // same, so the status is left to the detail line, the client's own account of the exchange.
+
         DomainError.UNKNOWN -> {
-            "Moderation is off on this server (404): it has no ADMIN_TOKEN, or runs a build without this route."
+            "An answer this build cannot name (its status is in the line below). A bare 404 means moderation" +
+                " is off on this server (no ADMIN_TOKEN), or its build has no such route."
         }
 
         DomainError.RATE_LIMITED -> {
