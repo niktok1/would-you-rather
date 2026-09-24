@@ -160,6 +160,16 @@ The app opens on the **Console** tab (`io.ntole.wyr.dev`). **Play** is the froze
   *Read stats* then shows it, with the whole pool due; a *Skip* that asked the feed shows it at
   once, since it reads the stats after its next question.
 - **Questions.** Fetch the next question, or empty the local queue, and see its size.
+- **Category.** A row of chips: *All*, then every category but `OTHER`, which no feed can be
+  filtered to. The selected chip is the repository's own selection (`QuestionRepository.category`),
+  so it shows what the next fetch asks for. Selecting one switches the feed (`?category=<NAME>` in
+  the HTTP trace, none for *All*), drops the queue, and loads a question from the new selection,
+  logged as `selectCategory(category=<NAME>)`, `all` for *All*. It does not read the stats. A category is played
+  within the player's cycle: once nothing in it is due while other questions are, it is served
+  again, `looped` on what was answered, skipped questions included (provisional, CLAUDE.md §8b).
+  A category the server has no questions in logs `OUT_OF_QUESTIONS`, and stays selected. *New
+  guest* and *Reset queue* keep the selection. The Play tab draws from the same repository, so it
+  is filtered too.
 - **Vote by id.** Sends a vote for whatever id is typed, as a new attempt. An unknown id provokes
   `QUESTION_NOT_FOUND` (404). A known one is simply answered again and pays 1: there is no
   "already voted" any more.

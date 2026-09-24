@@ -325,8 +325,8 @@ accounts exist.
   come back only in the next one. Built that way because it is the Categories rule as written,
   which predates recorded skips, and it changes neither rule. The options: keep it; serve again
   only the category's answered questions, and its skipped ones only when it has nothing else; or
-  answer an empty batch, which the client reads as out of questions. No client sends a category
-  yet, so nothing reaches this today. `SkipStoreTest` pins what is built.
+  answer an empty batch, which the client reads as out of questions. The dev console's Category
+  row sends a category, so this is reachable from there. `SkipStoreTest` pins what is built.
 - **Rate limiting** — `ErrorCode.RATE_LIMITED` exists on the wire and nothing emits it yet.
   Until something limits votes, points can be farmed: the server pays a new attempt on an answered
   question at once, without checking that it is due again (§8d, re-answering), so a script
@@ -402,7 +402,9 @@ and every request shows in its HTTP trace (`HttpTrace` in `:core:network`, never
     starting the next one would cut short the player's pass over the rest. The cycle starts only
     once nothing at all is due, whichever category is asked for, and a request that finds no
     questions starts nothing. Questions skipped this cycle are served again this way too, so a skip
-    does not hold through a category filter: *provisional — user decision* (§8b).
+    does not hold through a category filter: *provisional — user decision* (§8b). The client can
+    now select one (`QuestionRepository.setCategory`, from the console's Category row); a switch
+    drops the queue, and New guest keeps the selection.
   - `answeredBefore` means the player has a vote on the question, from any cycle.
 - **Re-answering** *(built)*: a question can be answered again, whether or not the feed has
   served it again. It earns the point again **every time**, inside its cycle or not (farming is
