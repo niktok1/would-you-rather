@@ -1470,6 +1470,7 @@ class ApiFlowTest {
                 refreshTokenTtlSeconds = 3_600,
                 allowedWebOrigins = emptyList(),
                 adminToken = adminToken,
+                rateLimits = NO_PRACTICAL_LIMIT,
             )
 
         application { wyrModule(config) }

@@ -1,0 +1,104 @@
+package io.ntole.wyr.server.config
+
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.hours
+import kotlin.time.Duration.Companion.minutes
+
+/** At most [requests] in every [per], for one key: a player, or a client's address. */
+data class RequestBudget(
+    val requests: Int,
+    val per: Duration,
+)
+
+/**
+ * What one client may send (CLAUDE.md §8b, *Rate limiting*): a budget for each group of routes, spent
+ * apart from every other group's. The feed, votes, skips, likes, submissions and the two reads of the
+ * player's own are per player, so players behind one address do not share them; the rest, whose caller
+ * has no session to name, per client address.
+ *
+ * Each is overridable by the environment variable [fromEnvironment] names, a count per the period the
+ * name ends in. The periods are fixed.
+ */
+data class RateLimits(
+    /** `POST /v1/auth/guest`, per address: what a script minting guests to farm with can get. */
+    val guests: RequestBudget,
+    /** `POST /v1/auth/refresh`, per address. A player refreshes about once per access token. */
+    val refreshes: RequestBudget,
+    /** `GET /v1/questions`. */
+    val feed: RequestBudget,
+    /** `POST /v1/votes`. Every re-answer pays (CLAUDE.md §8d), so this bounds what one player can farm. */
+    val votes: RequestBudget,
+    /** `POST /v1/skips`. */
+    val skips: RequestBudget,
+    /** `POST /v1/likes`. */
+    val likes: RequestBudget,
+    /** `POST /v1/questions`. The pending cap still applies within it. */
+    val submissions: RequestBudget,
+    /** `GET /v1/me`. */
+    val stats: RequestBudget,
+    /** `GET /v1/me/questions`. */
+    val mySubmissions: RequestBudget,
+    /** Every admin route together, per address, whatever token the request carries. */
+    val admin: RequestBudget,
+    /**
+     * Admin requests whose token is missing or wrong, per address, on top of [admin]: what bounds
+     * guessing the admin token. A request with the right one spends none of it, and is not refused by it.
+     */
+    val adminTokenFailures: RequestBudget,
+) {
+    companion object {
+        /**
+         * Generous for a person, however fast they tap: the console's *Answer N* sends at most 50 votes
+         * in a row, with a feed request per batch, and one run fits inside a minute's votes twice over.
+         */
+        val DEFAULT: RateLimits =
+            RateLimits(
+                guests = RequestBudget(requests = 10, per = 1.hours),
+                refreshes = RequestBudget(requests = 30, per = 1.minutes),
+                feed = RequestBudget(requests = 120, per = 1.minutes),
+                votes = RequestBudget(requests = 120, per = 1.minutes),
+                skips = RequestBudget(requests = 120, per = 1.minutes),
+                likes = RequestBudget(requests = 60, per = 1.minutes),
+                submissions = RequestBudget(requests = 30, per = 1.hours),
+                stats = RequestBudget(requests = 120, per = 1.minutes),
+                mySubmissions = RequestBudget(requests = 120, per = 1.minutes),
+                admin = RequestBudget(requests = 60, per = 1.minutes),
+                adminTokenFailures = RequestBudget(requests = 10, per = 1.minutes),
+            )
+
+        /**
+         * [DEFAULT], with the count of each budget whose variable is set replaced. A value that is not
+         * a whole number of at least 1 fails at config load with the variable named, rather than
+         * falling back to the default unnoticed. Blank counts as unset.
+         */
+        fun fromEnvironment(env: (String) -> String?): RateLimits {
+            fun budget(
+                variable: String,
+                default: RequestBudget,
+            ): RequestBudget {
+                val raw = env(variable)?.trim()?.takeIf { it.isNotEmpty() } ?: return default
+                val requests = raw.toIntOrNull()
+                require(requests != null && requests >= 1) {
+                    "$variable is \"$raw\"; expected a whole number of requests of at least 1."
+                }
+                return default.copy(requests = requests)
+            }
+
+            return with(DEFAULT) {
+                RateLimits(
+                    guests = budget("RATE_LIMIT_GUESTS_PER_HOUR", guests),
+                    refreshes = budget("RATE_LIMIT_REFRESHES_PER_MINUTE", refreshes),
+                    feed = budget("RATE_LIMIT_FEED_PER_MINUTE", feed),
+                    votes = budget("RATE_LIMIT_VOTES_PER_MINUTE", votes),
+                    skips = budget("RATE_LIMIT_SKIPS_PER_MINUTE", skips),
+                    likes = budget("RATE_LIMIT_LIKES_PER_MINUTE", likes),
+                    submissions = budget("RATE_LIMIT_SUBMISSIONS_PER_HOUR", submissions),
+                    stats = budget("RATE_LIMIT_STATS_PER_MINUTE", stats),
+                    mySubmissions = budget("RATE_LIMIT_MY_SUBMISSIONS_PER_MINUTE", mySubmissions),
+                    admin = budget("RATE_LIMIT_ADMIN_PER_MINUTE", admin),
+                    adminTokenFailures = budget("RATE_LIMIT_ADMIN_TOKEN_FAILURES_PER_MINUTE", adminTokenFailures),
+                )
+            }
+        }
+    }
+}

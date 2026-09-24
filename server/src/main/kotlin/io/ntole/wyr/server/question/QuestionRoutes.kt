@@ -14,7 +14,9 @@ import io.ntole.wyr.server.auth.authenticatedPlayerId
 import io.ntole.wyr.server.db.Db
 import io.ntole.wyr.server.player.PlayerStore
 import io.ntole.wyr.server.plugins.ApiFailure
+import io.ntole.wyr.server.plugins.RouteLimit
 import io.ntole.wyr.server.plugins.pageLimit
+import io.ntole.wyr.server.plugins.rateLimit
 import io.ntole.wyr.server.plugins.receiveOrReject
 import io.ntole.wyr.server.plugins.requireValidId
 
@@ -24,46 +26,50 @@ import io.ntole.wyr.server.plugins.requireValidId
  */
 fun Route.questionRoutes(db: Db) {
     authenticate(JWT_AUTH) {
-        get(WyrApi.Paths.QUESTIONS) {
-            val playerId = call.authenticatedPlayerId()
-            val params = call.request.queryParameters
+        rateLimit(RouteLimit.FEED) {
+            get(WyrApi.Paths.QUESTIONS) {
+                val playerId = call.authenticatedPlayerId()
+                val params = call.request.queryParameters
 
-            val limit = params.pageLimit()
+                val limit = params.pageLimit()
 
-            // One category per repeat of the parameter, and none for every category. UNKNOWN is the
-            // client's decoding fallback and is never stored, so filtering by it would always answer
-            // an empty batch, which the feed otherwise never does while it has questions. A value that
-            // is not a category at all, a comma-separated list included, is refused as well.
-            val categories =
-                params
-                    .getAll(WyrApi.Query.CATEGORY)
-                    .orEmpty()
-                    .map { raw ->
-                        QuestionCategory.entries.firstOrNull { it.name == raw && it != QuestionCategory.UNKNOWN }
-                            ?: throw ApiFailure.validation("unknown category: $raw")
-                    }.toSet()
+                // One category per repeat of the parameter, and none for every category. UNKNOWN is the
+                // client's decoding fallback and is never stored, so filtering by it would always answer
+                // an empty batch, which the feed otherwise never does while it has questions. A value that
+                // is not a category at all, a comma-separated list included, is refused as well.
+                val categories =
+                    params
+                        .getAll(WyrApi.Query.CATEGORY)
+                        .orEmpty()
+                        .map { raw ->
+                            QuestionCategory.entries.firstOrNull { it.name == raw && it != QuestionCategory.UNKNOWN }
+                                ?: throw ApiFailure.validation("unknown category: $raw")
+                        }.toSet()
 
-            val batch =
-                db.query {
-                    // As for a vote: a validly signed token can outlive its player. Serving it the feed
-                    // of a player with no answers would only put the 401 off until its first vote.
-                    if (PlayerStore.find(playerId) == null) throw ApiFailure.unauthorized("unknown player")
-                    QuestionStore.feed(playerId, limit, categories)
-                }
+                val batch =
+                    db.query {
+                        // As for a vote: a validly signed token can outlive its player. Serving it the feed
+                        // of a player with no answers would only put the 401 off until its first vote.
+                        if (PlayerStore.find(playerId) == null) throw ApiFailure.unauthorized("unknown player")
+                        QuestionStore.feed(playerId, limit, categories)
+                    }
 
-            call.respond(batch)
+                call.respond(batch)
+            }
         }
 
-        post(WyrApi.Paths.SKIPS) {
-            val playerId = call.authenticatedPlayerId()
+        rateLimit(RouteLimit.SKIPS) {
+            post(WyrApi.Paths.SKIPS) {
+                val playerId = call.authenticatedPlayerId()
 
-            val body = call.receiveOrReject<SkipRequest>("skip request")
-            requireValidId("questionId", body.questionId)
+                val body = call.receiveOrReject<SkipRequest>("skip request")
+                requireValidId("questionId", body.questionId)
 
-            db.query { SkipStore.skip(playerId = playerId, questionId = body.questionId) }
+                db.query { SkipStore.skip(playerId = playerId, questionId = body.questionId) }
 
-            // A skip pays nothing and reveals nothing, so there is nothing to send back.
-            call.respond(HttpStatusCode.NoContent)
+                // A skip pays nothing and reveals nothing, so there is nothing to send back.
+                call.respond(HttpStatusCode.NoContent)
+            }
         }
     }
 }

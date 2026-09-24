@@ -18,6 +18,7 @@ import io.ntole.wyr.server.moderation.AdminToken
 import io.ntole.wyr.server.moderation.moderationRoutes
 import io.ntole.wyr.server.player.playerRoutes
 import io.ntole.wyr.server.plugins.installPlugins
+import io.ntole.wyr.server.plugins.installRateLimits
 import io.ntole.wyr.server.question.questionRoutes
 import io.ntole.wyr.server.question.submissionRoutes
 import io.ntole.wyr.server.vote.voteRoutes
@@ -46,10 +47,15 @@ fun Application.wyrModule(config: ServerConfig) {
     val db = Db(database)
     val tokens = TokenService(config)
 
+    // Built once, for the routes and for the rate limit on failed admin tokens alike.
+    val adminToken = config.adminToken?.let { token -> AdminToken(token) }
+
     installPlugins(config, tokens)
+    installRateLimits(config.rateLimits, tokens, adminToken)
 
     routing {
-        // Render pings this to decide whether the service is live.
+        // Render pings this to decide whether the service is live. In no rate-limit group, so a check
+        // is never refused.
         get(WyrApi.Paths.HEALTH) {
             call.respond(mapOf("status" to "ok"))
         }
@@ -61,7 +67,7 @@ fun Application.wyrModule(config: ServerConfig) {
         likeRoutes(db)
         playerRoutes(db)
         // Not registered at all without an admin token, so moderation is off (CLAUDE.md §8d).
-        moderationRoutes(db, config.adminToken?.let { token -> AdminToken(token) })
+        moderationRoutes(db, adminToken)
     }
 }
 
@@ -89,8 +95,8 @@ private fun Application.warnAboutInsecureDefaults(config: ServerConfig) {
     } else if (config.usesShortAdminToken) {
         log.warn(
             "ADMIN_TOKEN is shorter than ${ServerConfig.MIN_ADMIN_TOKEN_LENGTH} characters. Whoever " +
-                "guesses it can approve and reject every submission, and nothing limits how fast they " +
-                "may try. Use a random one, such as the output of openssl rand -hex 32.",
+                "guesses it can approve and reject every submission, and wrong guesses are limited only " +
+                "per address. Use a random one, such as the output of openssl rand -hex 32.",
         )
     }
 }

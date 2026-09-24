@@ -7,6 +7,9 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.hours
+import kotlin.time.Duration.Companion.minutes
 
 class ServerConfigTest {
     @Test
@@ -84,6 +87,64 @@ class ServerConfigTest {
                 }
             assertContains(failure.message.orEmpty(), "ADMIN_TOKEN")
             assertFalse(raw.trim() in failure.message.orEmpty(), "the message must not give the secret away")
+        }
+    }
+
+    @Test
+    fun `the rate limits default to the budgets section 8b records`() {
+        val limits = ServerConfig.fromEnvironment { null }.rateLimits
+
+        assertEquals(RateLimits.DEFAULT, limits)
+        assertEquals(RequestBudget(10, 1.hours), limits.guests)
+        assertEquals(RequestBudget(30, 1.minutes), limits.refreshes)
+        listOf(limits.feed, limits.votes, limits.skips, limits.stats, limits.mySubmissions).forEach { budget ->
+            assertEquals(RequestBudget(120, 1.minutes), budget)
+        }
+        assertEquals(RequestBudget(60, 1.minutes), limits.likes)
+        assertEquals(RequestBudget(30, 1.hours), limits.submissions)
+        assertEquals(RequestBudget(60, 1.minutes), limits.admin)
+        assertEquals(RequestBudget(10, 1.minutes), limits.adminTokenFailures)
+    }
+
+    @Test
+    fun `each rate limit variable sets its own budget's count, per the period its name ends in`() {
+        val budgets: List<Triple<String, (RateLimits) -> RequestBudget, Duration>> =
+            listOf(
+                Triple("RATE_LIMIT_GUESTS_PER_HOUR", RateLimits::guests, 1.hours),
+                Triple("RATE_LIMIT_REFRESHES_PER_MINUTE", RateLimits::refreshes, 1.minutes),
+                Triple("RATE_LIMIT_FEED_PER_MINUTE", RateLimits::feed, 1.minutes),
+                Triple("RATE_LIMIT_VOTES_PER_MINUTE", RateLimits::votes, 1.minutes),
+                Triple("RATE_LIMIT_SKIPS_PER_MINUTE", RateLimits::skips, 1.minutes),
+                Triple("RATE_LIMIT_LIKES_PER_MINUTE", RateLimits::likes, 1.minutes),
+                Triple("RATE_LIMIT_SUBMISSIONS_PER_HOUR", RateLimits::submissions, 1.hours),
+                Triple("RATE_LIMIT_STATS_PER_MINUTE", RateLimits::stats, 1.minutes),
+                Triple("RATE_LIMIT_MY_SUBMISSIONS_PER_MINUTE", RateLimits::mySubmissions, 1.minutes),
+                Triple("RATE_LIMIT_ADMIN_PER_MINUTE", RateLimits::admin, 1.minutes),
+                Triple("RATE_LIMIT_ADMIN_TOKEN_FAILURES_PER_MINUTE", RateLimits::adminTokenFailures, 1.minutes),
+            )
+
+        budgets.forEach { (variable, budgetOf, period) ->
+            val limits = ServerConfig.fromEnvironment(mapOf(variable to " 7 ")::get).rateLimits
+
+            assertEquals(RequestBudget(7, period), budgetOf(limits), variable)
+            budgets.filter { it.first != variable }.forEach { (other, otherOf, _) ->
+                assertEquals(otherOf(RateLimits.DEFAULT), otherOf(limits), "$variable left $other alone")
+            }
+        }
+    }
+
+    @Test
+    fun `a rate limit that is not a whole number of at least 1 fails at config load and names its variable`() {
+        listOf("0", "-3", "abc", "1.5", "10/min", "2147483648").forEach { raw ->
+            val failure =
+                assertFailsWith<IllegalArgumentException>("\"$raw\" should be rejected") {
+                    ServerConfig.fromEnvironment(mapOf("RATE_LIMIT_VOTES_PER_MINUTE" to raw)::get)
+                }
+            assertContains(failure.message.orEmpty(), "RATE_LIMIT_VOTES_PER_MINUTE")
+        }
+        listOf("", "   ").forEach { blank ->
+            val limits = ServerConfig.fromEnvironment(mapOf("RATE_LIMIT_VOTES_PER_MINUTE" to blank)::get).rateLimits
+            assertEquals(RateLimits.DEFAULT, limits, "blank is unset: \"$blank\"")
         }
     }
 

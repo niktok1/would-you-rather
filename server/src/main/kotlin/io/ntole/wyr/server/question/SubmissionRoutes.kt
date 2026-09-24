@@ -14,6 +14,8 @@ import io.ntole.wyr.server.auth.authenticatedPlayerId
 import io.ntole.wyr.server.db.Db
 import io.ntole.wyr.server.player.PlayerStore
 import io.ntole.wyr.server.plugins.ApiFailure
+import io.ntole.wyr.server.plugins.RouteLimit
+import io.ntole.wyr.server.plugins.rateLimit
 import io.ntole.wyr.server.plugins.receiveOrReject
 
 /**
@@ -22,29 +24,33 @@ import io.ntole.wyr.server.plugins.receiveOrReject
  */
 fun Route.submissionRoutes(db: Db) {
     authenticate(JWT_AUTH) {
-        get(WyrApi.Paths.MY_QUESTIONS) {
-            val authorId = call.authenticatedPlayerId()
+        rateLimit(RouteLimit.MY_SUBMISSIONS) {
+            get(WyrApi.Paths.MY_QUESTIONS) {
+                val authorId = call.authenticatedPlayerId()
 
-            val submissions =
-                db.query {
-                    // As for the feed: a validly signed token can outlive its player, and an empty list
-                    // would only hide that the session is dead.
-                    if (PlayerStore.find(authorId) == null) throw ApiFailure.unauthorized("unknown player")
-                    SubmissionStore.byAuthor(authorId)
-                }
+                val submissions =
+                    db.query {
+                        // As for the feed: a validly signed token can outlive its player, and an empty list
+                        // would only hide that the session is dead.
+                        if (PlayerStore.find(authorId) == null) throw ApiFailure.unauthorized("unknown player")
+                        SubmissionStore.byAuthor(authorId)
+                    }
 
-            call.respond(SubmissionListDto(submissions))
+                call.respond(SubmissionListDto(submissions))
+            }
         }
 
-        post(WyrApi.Paths.QUESTIONS) {
-            val authorId = call.authenticatedPlayerId()
+        rateLimit(RouteLimit.SUBMISSIONS) {
+            post(WyrApi.Paths.QUESTIONS) {
+                val authorId = call.authenticatedPlayerId()
 
-            // Checked before the transaction, as a vote's ids are: a refusal needs no database.
-            val submission = checkedSubmission(call.receiveOrReject<SubmitQuestionRequest>("submission"))
+                // Checked before the transaction, as a vote's ids are: a refusal needs no database.
+                val submission = checkedSubmission(call.receiveOrReject<SubmitQuestionRequest>("submission"))
 
-            val stored = db.query { SubmissionStore.submit(authorId, submission) }
+                val stored = db.query { SubmissionStore.submit(authorId, submission) }
 
-            call.respond(HttpStatusCode.Created, stored)
+                call.respond(HttpStatusCode.Created, stored)
+            }
         }
     }
 }

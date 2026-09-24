@@ -64,7 +64,11 @@ public enum class ErrorCode {
     /** The supplied refresh token is unknown, already used, or expired. */
     INVALID_REFRESH_TOKEN,
 
-    /** Too many requests; back off and retry. */
+    /**
+     * Too many requests from this player, or from this address for a caller with no session: back off
+     * and retry. Sent with 429 and a `Retry-After` header, the whole seconds to wait. The refused
+     * request did nothing.
+     */
     RATE_LIMITED,
 
     /** Unexpected server-side failure. */

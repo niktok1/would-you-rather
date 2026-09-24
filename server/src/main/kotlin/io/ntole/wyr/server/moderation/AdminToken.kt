@@ -41,5 +41,11 @@ class AdminToken(
  * here, and a client answers a 401 by refreshing the player's session and then replacing it.
  */
 fun ApplicationCall.requireAdmin(token: AdminToken) {
-    if (!token.matches(request.headers[WyrApi.Headers.ADMIN_TOKEN])) throw ApiFailure.forbidden()
+    if (!token.admits(this)) throw ApiFailure.forbidden()
 }
+
+/**
+ * Whether [call] carries the token in [WyrApi.Headers.ADMIN_TOKEN]: exactly the calls [requireAdmin]
+ * lets through, which is how the failed-token rate limit tells them apart (`installRateLimits`).
+ */
+fun AdminToken.admits(call: ApplicationCall): Boolean = matches(call.request.headers[WyrApi.Headers.ADMIN_TOKEN])

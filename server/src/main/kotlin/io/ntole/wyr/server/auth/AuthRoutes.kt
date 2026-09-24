@@ -10,6 +10,8 @@ import io.ntole.wyr.server.config.ServerConfig
 import io.ntole.wyr.server.db.Db
 import io.ntole.wyr.server.player.PlayerStore
 import io.ntole.wyr.server.plugins.ApiFailure
+import io.ntole.wyr.server.plugins.RouteLimit
+import io.ntole.wyr.server.plugins.rateLimit
 import io.ntole.wyr.server.plugins.receiveOrReject
 
 /**
@@ -22,52 +24,59 @@ fun Route.authRoutes(
     config: ServerConfig,
 ) {
     // Zero-click sign-in: the server mints the player. Nothing is asked of the person using the
-    // app, and because the identity originates here it cannot be forged by a tampered client.
-    post(WyrApi.Paths.AUTH_GUEST) {
-        val refresh = tokens.issueRefreshToken()
-        val expiresAt = System.currentTimeMillis() + config.refreshTokenTtlSeconds * 1_000L
+    // app, and because the identity originates here it cannot be forged by a tampered client. Limited
+    // per address, as the caller has no session yet: what bounds a script minting guests to farm with.
+    rateLimit(RouteLimit.GUESTS) {
+        post(WyrApi.Paths.AUTH_GUEST) {
+            val refresh = tokens.issueRefreshToken()
+            val expiresAt = System.currentTimeMillis() + config.refreshTokenTtlSeconds * 1_000L
 
-        val player =
-            db.query {
-                PlayerStore.createGuest(refreshTokenHash = refresh.hash, refreshExpiresAt = expiresAt)
-            }
+            val player =
+                db.query {
+                    PlayerStore.createGuest(refreshTokenHash = refresh.hash, refreshExpiresAt = expiresAt)
+                }
 
-        call.respond(
-            SessionDto(
-                playerId = player.id,
-                accessToken = tokens.issueAccessToken(player.id),
-                refreshToken = refresh.value,
-                accessTokenExpiresInSeconds = config.accessTokenTtlSeconds,
-            ),
-        )
+            call.respond(
+                SessionDto(
+                    playerId = player.id,
+                    accessToken = tokens.issueAccessToken(player.id),
+                    refreshToken = refresh.value,
+                    accessTokenExpiresInSeconds = config.accessTokenTtlSeconds,
+                ),
+            )
+        }
     }
 
-    post(WyrApi.Paths.AUTH_REFRESH) {
-        val body = call.receiveOrReject<RefreshRequest>("refresh request")
+    // Per address too, as the refresh token is the caller's only credential. A refusal rotates
+    // nothing, so the token still works once the budget is back.
+    rateLimit(RouteLimit.REFRESHES) {
+        post(WyrApi.Paths.AUTH_REFRESH) {
+            val body = call.receiveOrReject<RefreshRequest>("refresh request")
 
-        if (body.refreshToken.isBlank()) throw ApiFailure.validation("refreshToken is blank")
+            if (body.refreshToken.isBlank()) throw ApiFailure.validation("refreshToken is blank")
 
-        val rotated = tokens.issueRefreshToken()
-        val expiresAt = System.currentTimeMillis() + config.refreshTokenTtlSeconds * 1_000L
+            val rotated = tokens.issueRefreshToken()
+            val expiresAt = System.currentTimeMillis() + config.refreshTokenTtlSeconds * 1_000L
 
-        // Rotate on every use, so a replayed token is dead on arrival — even one replayed while
-        // the first use is still in flight, which the rotation refuses as already rotated.
-        val player =
-            db.query {
-                PlayerStore.rotateRefreshToken(
-                    oldHash = tokens.hash(body.refreshToken),
-                    newHash = rotated.hash,
-                    expiresAt = expiresAt,
-                ) ?: throw ApiFailure.invalidRefreshToken()
-            }
+            // Rotate on every use, so a replayed token is dead on arrival — even one replayed while
+            // the first use is still in flight, which the rotation refuses as already rotated.
+            val player =
+                db.query {
+                    PlayerStore.rotateRefreshToken(
+                        oldHash = tokens.hash(body.refreshToken),
+                        newHash = rotated.hash,
+                        expiresAt = expiresAt,
+                    ) ?: throw ApiFailure.invalidRefreshToken()
+                }
 
-        call.respond(
-            SessionDto(
-                playerId = player.id,
-                accessToken = tokens.issueAccessToken(player.id),
-                refreshToken = rotated.value,
-                accessTokenExpiresInSeconds = config.accessTokenTtlSeconds,
-            ),
-        )
+            call.respond(
+                SessionDto(
+                    playerId = player.id,
+                    accessToken = tokens.issueAccessToken(player.id),
+                    refreshToken = rotated.value,
+                    accessTokenExpiresInSeconds = config.accessTokenTtlSeconds,
+                ),
+            )
+        }
     }
 }

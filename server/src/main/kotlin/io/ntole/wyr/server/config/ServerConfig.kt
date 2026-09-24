@@ -23,6 +23,8 @@ data class ServerConfig(
      * let anyone with the source moderate, where no token only leaves every submission pending.
      */
     val adminToken: String?,
+    /** What one client may send to each group of routes (CLAUDE.md §8b, *Rate limiting*). */
+    val rateLimits: RateLimits,
 ) {
     /** True when running against the throwaway in-memory database. */
     val isEphemeralDatabase: Boolean get() = jdbcUrl.startsWith("jdbc:h2:")
@@ -30,8 +32,9 @@ data class ServerConfig(
     val usesDevJwtSecret: Boolean get() = jwtSecret == DEV_JWT_SECRET
 
     /**
-     * True for an admin token short enough to guess. Nothing limits how fast a caller may try tokens
-     * yet (CLAUDE.md §8b, rate limiting), so its length is all that stands in the way.
+     * True for an admin token short enough to guess. Wrong tokens are rate-limited per address
+     * ([RateLimits.adminTokenFailures]), but a caller with many addresses has that budget many times
+     * over, so the length is still what stands in the way.
      */
     val usesShortAdminToken: Boolean get() = adminToken != null && adminToken.length < MIN_ADMIN_TOKEN_LENGTH
 
@@ -76,6 +79,7 @@ data class ServerConfig(
                         ?.map(::parseWebOrigin)
                         .orEmpty(),
                 adminToken = env("ADMIN_TOKEN")?.takeIf { it.isNotBlank() }?.let(::parseAdminToken),
+                rateLimits = RateLimits.fromEnvironment(env),
             )
         }
 

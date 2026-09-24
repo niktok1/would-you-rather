@@ -292,12 +292,12 @@ This project must never be attributed to any employer identity.
 - `ADMIN_TOKEN` is the moderator's credential (§8d, *Moderation*), declared `sync: false` in
   `render.yaml` and set by hand in the dashboard, never committed. It has **no default**: unset or
   blank turns moderation off, so the admin routes are 404, every submission stays pending, and the
-  boot log warns. A token shorter than 32 characters boots with a warning, since nothing limits
-  guesses yet (§8b), and one holding whitespace or anything but visible ASCII fails at boot, since no
-  request header could carry it. Generate one with `openssl rand -hex 32`. It is read at boot, so
-  rotating it is changing the variable and restarting the service, and the old token is dead from
-  then on. A browser on an `ALLOWED_WEB_ORIGINS` origin may send its header (CORS). The dev console's
-  *Moderation* section takes it typed and holds it in memory only.
+  boot log warns. A token shorter than 32 characters boots with a warning, since wrong guesses are
+  limited only per address (§8b), and one holding whitespace or anything but visible ASCII fails at
+  boot, since no request header could carry it. Generate one with `openssl rand -hex 32`. It is
+  read at boot, so rotating it is changing the variable and restarting the service, and the old
+  token is dead from then on. A browser on an `ALLOWED_WEB_ORIGINS` origin may send its header
+  (CORS). The dev console's *Moderation* section takes it typed and holds it in memory only.
 - The Docker build sets `WYR_SERVER_ONLY=1`, which makes `settings.gradle.kts` skip the app
   modules. Without it the Android Gradle plugin fails at configuration time for want of an SDK.
 - Free tier caveats to design around: free web services spin down after ~15 min idle (cold
@@ -381,15 +381,40 @@ accounts exist.
   moderator rejects the copy, and the 20-pending cap bounds how many there can be. Nothing resends
   a submission today (`withSessionRecovery` retries only after a 401, which stored nothing). An
   optional `attemptId` with a default can be added later without breaking a client.
-- **Rate limiting** — `ErrorCode.RATE_LIMITED` exists on the wire and nothing emits it yet.
-  Until something limits votes, points can be farmed: the server pays a new attempt on an answered
-  question at once, without checking that it is due again (§8d, re-answering), so a script
-  re-answering one question earns a point per request. *Decided 2026-09-23:* that is accepted for
-  now and left to rate limiting; a re-answer keeps paying every time, inside its cycle or not.
-  Likes open a second way, not yet decided: a like pays its author once per player, but guests cost
-  nothing to mint (§8a), so a script minting guests can like one author's questions without bound.
-  Nothing limits guesses at the admin token either, which is why the server warns about a short one
-  (§8).
+- **Rate limiting** *(built)* — Ktor's RateLimit plugin (`installRateLimits`, in
+  `io.ntole.wyr.server.plugins`), with a budget for each group of routes (`RouteLimit`), spent apart
+  from every other group's. The budgets are `RateLimits.DEFAULT`, each count overridable by its
+  `RATE_LIMIT_*` variable (`RateLimits.fromEnvironment`; one that is not a whole number of at least 1
+  fails at boot, naming it):
+  - *Per client address*, for a caller with no session to name: guest minting 10 an hour, refreshes
+    30 a minute, the admin routes 60 a minute together, and on top of that, admin requests with a
+    wrong or missing token 10 a minute. A request with the right token neither spends that last
+    budget nor is refused by it, so guessing is bounded without locking the moderator out; it is
+    asked first, so guesses refused by it spend none of the moderator's 60.
+  - *Per player*, so players behind one address do not share a budget: the feed, votes and skips
+    120 a minute each (the console's *Answer N* sends at most 50 votes in a row), likes 60 a minute,
+    submissions 30 an hour (the 20-pending cap still applies), and `GET /v1/me` and
+    `GET /v1/me/questions` 120 a minute each. The key is the player id in the bearer token, which the
+    limiter verifies itself (`verifiedPlayerId`): it runs before authentication, so no principal is
+    there yet. A request without a valid token spends its address's budget of the group instead, and
+    then gets its 401, so a forged token naming a player cannot spend that player's budget.
+  - `/health` is in no group, so Render's checks are never refused.
+
+  The limiter runs before anything else of the route, so a refused request never reaches the
+  database and rotates no refresh token. It answers 429 `RATE_LIMITED` (the `ErrorDto`, from
+  `StatusPages`) with `Retry-After` in whole seconds, at least 1, and logs one INFO line naming the
+  limit and, for a player, their id; never a token or any header's value. `RateLimitTest` pins every
+  group, the keys and the ordering. The client needed no change: a 429 is `DomainError.RATE_LIMITED`,
+  nothing retries it (`withSessionRecovery` retries only after a 401), and the console logs it as an
+  `err` entry.
+
+  What remains: farming is bounded, not gone. A player can still earn up to 120 points a minute by
+  re-answering (*decided 2026-09-23:* a re-answer keeps paying every time, inside its cycle or not),
+  and a script gets 10 fresh guests an hour per address, each with budgets of its own, so liking one
+  author's questions is bounded per address and per hour rather than per author. Counts are in memory
+  and per instance: right for the one Render instance, but a second would grant every budget again, so
+  running two needs a shared store first (Render Key Value, say). A restart, which a deploy or a free
+  instance's spin-down is, resets them.
 - **Schema migrations** — *interim policy, decided 2026-09-23:* nothing is deployed, so until the
   first Render deploy a schema change ships as a fresh database through `SchemaUtils.create`, and
   `render.yaml` keeps `autoDeployTrigger: "off"` so connecting the blueprint cannot deploy early.
@@ -495,9 +520,9 @@ and every request shows in its HTTP trace (`HttpTrace` in `:core:network`, never
   or more, never `OTHER` (*Submitting*).
 - **Re-answering** *(built)*: a question can be answered again, whether or not the feed has
   served it again. It earns the point again **every time**, inside its cycle or not (farming is
-  left to rate limiting, §8b), and the player may change their pick. Every answer, first or not,
-  counts for the player's current cycle. The tally always holds **one vote per player per
-  question**, their latest. Built in `VoteStore.cast`, which moves the player's vote.
+  bounded by rate limiting, 120 votes a minute per player, §8b), and the player may change their
+  pick. Every answer, first or not, counts for the player's current cycle. The tally always holds
+  **one vote per player per question**, their latest. Built in `VoteStore.cast`, which moves the player's vote.
 - **Retry safety** *(built)*: every vote carries a client-generated idempotency key. A repeat
   of the key last recorded for that question is replayed: nothing is written, it pays nothing, and
   it reports the stored side with the current tally and total, not the result first returned. Any

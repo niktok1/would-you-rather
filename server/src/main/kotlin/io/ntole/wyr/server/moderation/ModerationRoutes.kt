@@ -12,7 +12,9 @@ import io.ntole.wyr.core.question.RejectSubmissionRequest
 import io.ntole.wyr.core.question.SubmissionListDto
 import io.ntole.wyr.server.db.Db
 import io.ntole.wyr.server.plugins.ApiFailure
+import io.ntole.wyr.server.plugins.RouteLimit
 import io.ntole.wyr.server.plugins.pageLimit
+import io.ntole.wyr.server.plugins.rateLimit
 import io.ntole.wyr.server.plugins.receiveOrReject
 
 /**
@@ -29,31 +31,38 @@ fun Route.moderationRoutes(
 ) {
     if (adminToken == null) return
 
-    get(WyrApi.Paths.ADMIN_SUBMISSIONS) {
-        call.requireAdmin(adminToken)
-        val params = call.request.queryParameters
+    // Every admin request spends from the admin budget, and one without the right token from the
+    // failed-token budget as well, which is what bounds guessing the token. The failures are asked
+    // first, so a caller who has spent theirs is refused before touching the moderator's own budget.
+    rateLimit(RouteLimit.ADMIN_TOKEN_FAILURES) {
+        rateLimit(RouteLimit.ADMIN) {
+            get(WyrApi.Paths.ADMIN_SUBMISSIONS) {
+                call.requireAdmin(adminToken)
+                val params = call.request.queryParameters
 
-        val status = params.status()
-        val limit = params.pageLimit()
+                val status = params.status()
+                val limit = params.pageLimit()
 
-        call.respond(SubmissionListDto(db.query { ModerationStore.queue(status, limit) }))
-    }
+                call.respond(SubmissionListDto(db.query { ModerationStore.queue(status, limit) }))
+            }
 
-    post(WyrApi.Paths.ADMIN_APPROVALS) {
-        call.requireAdmin(adminToken)
+            post(WyrApi.Paths.ADMIN_APPROVALS) {
+                call.requireAdmin(adminToken)
 
-        // Checked before the transaction, as a submission is: a refusal needs no database.
-        val approval = checkedApproval(call.receiveOrReject<ApproveSubmissionRequest>("approval"))
+                // Checked before the transaction, as a submission is: a refusal needs no database.
+                val approval = checkedApproval(call.receiveOrReject<ApproveSubmissionRequest>("approval"))
 
-        call.respond(db.query { ModerationStore.approve(approval.questionId, approval.categories) })
-    }
+                call.respond(db.query { ModerationStore.approve(approval.questionId, approval.categories) })
+            }
 
-    post(WyrApi.Paths.ADMIN_REJECTIONS) {
-        call.requireAdmin(adminToken)
+            post(WyrApi.Paths.ADMIN_REJECTIONS) {
+                call.requireAdmin(adminToken)
 
-        val rejection = checkedRejection(call.receiveOrReject<RejectSubmissionRequest>("rejection"))
+                val rejection = checkedRejection(call.receiveOrReject<RejectSubmissionRequest>("rejection"))
 
-        call.respond(db.query { ModerationStore.reject(rejection.questionId, rejection.reason) })
+                call.respond(db.query { ModerationStore.reject(rejection.questionId, rejection.reason) })
+            }
+        }
     }
 }
 

@@ -1,6 +1,7 @@
 package io.ntole.wyr.server.db
 
 import io.ktor.server.testing.testApplication
+import io.ntole.wyr.server.config.RateLimits
 import io.ntole.wyr.server.config.ServerConfig
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.selectAll
@@ -42,5 +43,6 @@ class DatabaseFactoryTest {
             refreshTokenTtlSeconds = 3_600,
             allowedWebOrigins = emptyList(),
             adminToken = null,
+            rateLimits = RateLimits.DEFAULT,
         )
 }

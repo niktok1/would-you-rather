@@ -20,6 +20,7 @@ import io.ntole.wyr.core.error.ErrorCode
 import io.ntole.wyr.core.error.ErrorDto
 import io.ntole.wyr.server.auth.JWT_AUTH
 import io.ntole.wyr.server.auth.TokenService
+import io.ntole.wyr.server.auth.playerId
 import io.ntole.wyr.server.config.ServerConfig
 import kotlinx.serialization.json.Json
 
@@ -66,13 +67,7 @@ fun Application.installPlugins(
         jwt(JWT_AUTH) {
             realm = "wyr"
             verifier(tokens.verifier)
-            validate { credential ->
-                credential
-                    .payload
-                    .getClaim(TokenService.CLAIM_PLAYER_ID)
-                    .asString()
-                    ?.let { JWTPrincipal(credential.payload) }
-            }
+            validate { credential -> credential.payload.playerId()?.let { JWTPrincipal(credential.payload) } }
             challenge { _, _ ->
                 call.respond(
                     HttpStatusCode.Unauthorized,
@@ -87,6 +82,15 @@ fun Application.installPlugins(
         // on ErrorCode instead of parsing prose or guessing from a status code.
         exception<ApiFailure> { call, failure ->
             call.respond(failure.status, ErrorDto(message = failure.message, code = failure.code))
+        }
+        // Ktor's rate limiter refuses with a bare 429 (installRateLimits), dressed here as the contract's
+        // error like every other refusal. Its Retry-After, already on the response, is kept.
+        status(HttpStatusCode.TooManyRequests) { call, status ->
+            val retry = call.response.headers[HttpHeaders.RetryAfter]?.let { seconds -> "; retry in $seconds s" }
+            call.respond(
+                status,
+                ErrorDto(code = ErrorCode.RATE_LIMITED, message = "too many requests${retry.orEmpty()}"),
+            )
         }
         exception<Throwable> { call, cause ->
             // Log the detail, return none of it: an unexpected stack trace is not the client's
