@@ -79,7 +79,7 @@ fun DevConsoleScreen(
                     Value("question", "none loaded")
                 } else {
                     Value("id", question.id)
-                    Value("category", question.category.name)
+                    Value("categories", namesOf(question.categories))
                     Value("answeredBefore", question.answeredBefore.toString())
                     Value("A", question.optionA)
                     Value("B", question.optionB)
@@ -301,6 +301,9 @@ private fun Buttons(content: @Composable () -> Unit) {
         content()
     }
 }
+
+/** Every one of [categories], in the order the set holds them. */
+internal fun namesOf(categories: Set<Category>): String = categories.joinToString(", ") { it.name }
 
 private fun tokenExpiry(session: SessionInfo?): String {
     if (session == null) return "no session"

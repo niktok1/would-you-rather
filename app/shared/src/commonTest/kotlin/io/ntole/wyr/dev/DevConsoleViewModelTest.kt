@@ -206,7 +206,7 @@ class DevConsoleViewModelTest {
     fun `selecting a category switches the feed then loads a question from it`() =
         runTest(dispatcher) {
             val viewModel = openConsole()
-            questions.next = { QUESTION.copy(id = "f1", category = Category.FOOD) }
+            questions.next = { QUESTION.copy(id = "f1", categories = setOf(Category.FOOD)) }
 
             viewModel.selectCategory(Category.FOOD)
             testScheduler.advanceUntilIdle()
@@ -883,7 +883,7 @@ class DevConsoleViewModelTest {
                 id = "q1",
                 optionA = "Fly",
                 optionB = "Turn invisible",
-                category = Category.SUPERPOWERS,
+                categories = setOf(Category.SUPERPOWERS),
             )
 
         val OUTCOME =

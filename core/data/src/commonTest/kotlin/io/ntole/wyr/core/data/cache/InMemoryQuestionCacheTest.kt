@@ -36,5 +36,5 @@ class InMemoryQuestionCacheTest {
     }
 
     private fun questions(vararg ids: String): List<Question> =
-        ids.map { id -> Question(id = id, optionA = "$id-a", optionB = "$id-b", category = Category.FOOD) }
+        ids.map { id -> Question(id = id, optionA = "$id-a", optionB = "$id-b", categories = setOf(Category.FOOD)) }
 }

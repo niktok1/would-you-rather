@@ -52,6 +52,7 @@ class GetNextQuestionTest {
     }
 
     private companion object {
-        val QUESTION = Question(id = "q1", optionA = "Fly", optionB = "Turn invisible", category = Category.SUPERPOWERS)
+        val QUESTION =
+            Question(id = "q1", optionA = "Fly", optionB = "Turn invisible", categories = setOf(Category.SUPERPOWERS))
     }
 }

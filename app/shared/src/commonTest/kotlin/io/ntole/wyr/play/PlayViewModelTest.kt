@@ -201,7 +201,7 @@ class PlayViewModelTest {
                 id = "q1",
                 optionA = "Fly",
                 optionB = "Turn invisible",
-                category = Category.SUPERPOWERS,
+                categories = setOf(Category.SUPERPOWERS),
             )
 
         val OUTCOME =

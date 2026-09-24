@@ -84,8 +84,8 @@ Repo initialized on `main` with the personal identity and `user.useConfigOnly = 
   in the server's own tests; the client and the console's section are the next branch.
 - **Multiple categories on Postgres, and in the client.** The `EXISTS ... IN` filter, the batch's
   second statement for its categories and the batch insert of a submission's categories have run
-  only on H2. The client still holds one category per question (the first it can name) and filters
-  by one at most: the domain, the repository and the console are the next step on this branch.
+  only on H2. The client holds every category of a question but filters by one at most: the
+  repository's selection and the console's Category row are the next step on this branch.
 - **READ COMMITTED and the refresh compare-and-set on Postgres.** Every race and burst in
   `PlayerStoreTest` runs on H2, even in the `server-postgres` job: it hardcodes `jdbc:h2:mem:`,
   because its wait-for-the-lock polling reads H2's `INFORMATION_SCHEMA.SESSIONS`. So the ci.yml
@@ -157,7 +157,8 @@ The app opens on the **Console** tab (`io.ntole.wyr.dev`). **Play** is the froze
   comes back in the next, `answeredBefore` only if it was ever answered. A skip that fails is
   logged as `recordSkip` with its error, and the next question loads anyway, its entry ending
   `skip=unrecorded`; that question stays due, so the feed can serve it again this cycle. Skip is
-  off until a question is loaded. *A* / *B* answer it, each tap as a new attempt, and the raw
+  off until a question is loaded. The question shows every category it is filed under, `OTHER` for
+  each one this build cannot name. *A* / *B* answer it, each tap as a new attempt, and the raw
   `VoteOutcome` appears below, `replayed` included. A question the feed looped back to shows
   `answeredBefore: true` and logs as `question=<id> looped`. The header's total points is the last
   outcome's `totalPoints`; the Stats section has the server's own count.

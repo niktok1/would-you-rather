@@ -6,6 +6,10 @@ package io.ntole.wyr.core.domain.question
  * Deliberately not the same type as `QuestionDto`: domain code must never see a DTO, and the
  * mapping between the two lives in `:core:data` (CLAUDE.md §3).
  *
+ * [categories] is every category the question is filed under (CLAUDE.md §8d), and never empty, since
+ * a question is filed under at least one. Each one this build cannot name is [Category.OTHER], so a
+ * question filed under none it can name is filed under [Category.OTHER] alone.
+ *
  * [answeredBefore] is true when the player has answered this question already and the feed has
  * looped back to it (CLAUDE.md §8d). It is for diagnostics such as the dev console: the
  * player-facing reveal does not show a previous pick.
@@ -14,9 +18,13 @@ public data class Question(
     public val id: String,
     public val optionA: String,
     public val optionB: String,
-    public val category: Category,
+    public val categories: Set<Category>,
     public val answeredBefore: Boolean = false,
-)
+) {
+    init {
+        require(categories.isNotEmpty()) { "question $id is filed under no category" }
+    }
+}
 
 /**
  * Domain-side category.

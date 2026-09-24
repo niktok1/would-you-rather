@@ -443,9 +443,10 @@ and every request shows in its HTTP trace (`HttpTrace` in `:core:network`, never
   categories, `?category=` repeated, and none is every category; one that names no real category is
   400. The filter, and the due count beside it (`QuestionStore.dueCount`), is an `EXISTS` on that
   table, never a join, so a question in several of the categories asked for is served and counted
-  once. A submission names one or more (*Submitting*). Until the client's domain holds every
-  category, it plays a question under the first it can name, and it filters by one category at
-  most; no client submits yet.
+  once. A submission names one or more (*Submitting*). On the client a question holds every one
+  (`Question.categories`, a set that is never empty, mapped in `QuestionMapper`): a name this build
+  cannot read is `Category.OTHER` beside the rest, and an empty list is `OTHER` alone. The client
+  filters by one category at most so far; no client submits yet.
 - **Re-answering** *(built)*: a question can be answered again, whether or not the feed has
   served it again. It earns the point again **every time**, inside its cycle or not (farming is
   left to rate limiting, §8b), and the player may change their pick. Every answer, first or not,

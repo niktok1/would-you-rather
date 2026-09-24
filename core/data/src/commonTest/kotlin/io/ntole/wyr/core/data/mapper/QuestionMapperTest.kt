@@ -1,6 +1,7 @@
 package io.ntole.wyr.core.data.mapper
 
 import io.ntole.wyr.core.domain.question.Category
+import io.ntole.wyr.core.network.WyrJson
 import io.ntole.wyr.core.question.QuestionCategory
 import io.ntole.wyr.core.question.QuestionDto
 import kotlin.test.Test
@@ -25,20 +26,33 @@ class QuestionMapperTest {
     }
 
     @Test
-    fun `a question plays under the first of its categories this build can name`() {
+    fun `a question keeps every category it is filed under each once in declaration order`() {
         val cases =
             listOf(
-                listOf(QuestionCategory.ETHICS, QuestionCategory.SUPERPOWERS) to Category.ETHICS,
-                listOf(QuestionCategory.UNKNOWN, QuestionCategory.RANDOM) to Category.RANDOM,
-                listOf(QuestionCategory.UNKNOWN) to Category.OTHER,
-                emptyList<QuestionCategory>() to Category.OTHER,
+                listOf(QuestionCategory.ETHICS, QuestionCategory.SUPERPOWERS) to
+                    listOf(Category.ETHICS, Category.SUPERPOWERS),
+                listOf(QuestionCategory.RANDOM, QuestionCategory.FOOD) to listOf(Category.FOOD, Category.RANDOM),
+                // What a server with two categories this build predates sends it: each is OTHER, once.
+                listOf(QuestionCategory.UNKNOWN, QuestionCategory.RANDOM, QuestionCategory.UNKNOWN) to
+                    listOf(Category.RANDOM, Category.OTHER),
+                listOf(QuestionCategory.UNKNOWN) to listOf(Category.OTHER),
+                // No question is filed under nothing.
+                emptyList<QuestionCategory>() to listOf(Category.OTHER),
             )
 
         cases.forEach { (categories, expected) ->
             val dto = QuestionDto(id = "q1", optionA = "q1-a", optionB = "q1-b", categories = categories)
 
-            assertEquals(expected, dto.toDomain().category, "$categories")
+            // As a list, so the order is checked too.
+            assertEquals(expected, dto.toDomain().categories.toList(), "$categories")
         }
+    }
+
+    @Test
+    fun `a question sent without its categories is filed under OTHER`() {
+        val dto = WyrJson.decodeFromString<QuestionDto>("""{"id":"q1","optionA":"fly","optionB":"swim"}""")
+
+        assertEquals(setOf(Category.OTHER), dto.toDomain().categories)
     }
 
     @Test

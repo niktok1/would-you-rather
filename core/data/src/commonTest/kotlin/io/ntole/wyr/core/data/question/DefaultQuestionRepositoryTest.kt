@@ -224,7 +224,7 @@ class DefaultQuestionRepositoryTest {
             // Without the switch dropping the queue, this is q2, still queued from the unfiltered batch.
             val served = List(3) { repository.next() }
             assertEquals(listOf("e1", "e2", "e3"), served.map { it.id })
-            assertEquals(setOf(Category.ETHICS), served.map { it.category }.toSet())
+            assertEquals(setOf(setOf(Category.ETHICS)), served.map { it.categories }.toSet())
             assertEquals(listOf(null, "ETHICS"), feed.asked)
         }
 

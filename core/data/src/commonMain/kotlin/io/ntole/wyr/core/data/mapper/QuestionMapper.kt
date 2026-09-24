@@ -16,9 +16,16 @@ internal fun QuestionDto.toDomain(): Question =
         id = id,
         optionA = optionA,
         optionB = optionB,
-        // Provisional: the domain holds one category until it holds all of them. The first this
-        // build can name, or OTHER when it can name none, as for a lone UNKNOWN.
-        category = categories.firstOrNull { it != QuestionCategory.UNKNOWN }?.toDomain() ?: Category.OTHER,
+        // Each once, in declaration order. A name this build cannot read is OTHER beside the rest, not
+        // dropped: the question is filed under something more. An empty list, which the server never
+        // sends but a payload without the field decodes as, is OTHER alone: no question is filed under
+        // nothing.
+        categories =
+            categories
+                .map { it.toDomain() }
+                .sorted()
+                .toSet()
+                .ifEmpty { setOf(Category.OTHER) },
         answeredBefore = answeredBefore,
     )
 
@@ -35,7 +42,8 @@ internal fun QuestionCategory.toDomain(): Category =
         QuestionCategory.RANDOM -> Category.RANDOM
 
         // The forward-compatibility landing zone: a category this build predates arrives as
-        // UNKNOWN (because of coerceInputValues) and plays as an ordinary uncategorised question.
+        // UNKNOWN (because of QuestionCategoryListSerializer) and plays as an ordinary uncategorised
+        // one.
         QuestionCategory.UNKNOWN -> Category.OTHER
     }
 
