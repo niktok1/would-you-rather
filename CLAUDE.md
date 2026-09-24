@@ -483,6 +483,13 @@ seed (`Migrations`, `DatabaseFactory.init`). Nothing builds a table any other wa
   than being recorded at V1 whatever it holds. `MigrationsTest` pins all three, the data untouched,
   and `SchemaDriftTest` that V1 builds exactly what `SchemaUtils.create` builds, every table, column,
   key, index and constraint name included, on H2 and on PostgreSQL.
+- *Before this build first boots on a database it did not build*, compare that database's schema
+  with one this build migrated, read-only (`pg_dump --schema-only` of each, then a diff). The
+  baseline checks only that V1's tables are there, and `SchemaUtils.create` never added a column or
+  an index to a table that already existed, so a database an older build first built could lack one
+  and still be recorded at V1, to fail only once a later script or query needs it. And never let
+  `WYR_TEST_JDBC_URL` name the production database: the test suite and `:server:pendingMigration`
+  both wipe the database it names with Flyway's clean.
 - *The drift test* is what stops a forgotten migration. The store tests build their tables straight
   from the definitions in `Tables.kt`, so a definition changed without a script passes them and fails
   only on the live database. `SchemaDriftTest` migrates an empty database and fails on anything
