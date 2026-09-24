@@ -3,9 +3,11 @@ package io.ntole.wyr.server.question
 import io.ntole.wyr.core.api.WyrApi
 import io.ntole.wyr.core.question.QuestionCategory
 import io.ntole.wyr.core.question.QuestionDto
+import io.ntole.wyr.core.question.QuestionStatus
 import io.ntole.wyr.core.vote.OptionSide
 import io.ntole.wyr.core.vote.VoteResultDto
 import io.ntole.wyr.server.db.Players
+import io.ntole.wyr.server.db.QuestionCategories
 import io.ntole.wyr.server.db.Questions
 import io.ntole.wyr.server.db.Seed
 import io.ntole.wyr.server.db.appTables
@@ -19,6 +21,8 @@ import io.ntole.wyr.server.vote.Scoring
 import io.ntole.wyr.server.vote.VoteStore
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.SchemaUtils
+import org.jetbrains.exposed.v1.jdbc.batchInsert
+import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.select
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import java.sql.Connection
@@ -156,6 +160,26 @@ class QuestionStoreTest {
     }
 
     @Test
+    fun `a stored name this build does not know reads as RANDOM and each category goes out once`() {
+        val author = newPlayer()
+        // As a newer build could have filed them, read back by this one after a rollback. The key
+        // keeps a name to one row, so only two names that both read as RANDOM can repeat one.
+        val beside = storedUnder(author, QuestionCategory.FOOD.name, "FROM_THE_FUTURE")
+        val merged = storedUnder(author, QuestionCategory.RANDOM.name, "FROM_THE_FUTURE", "ANOTHER_ONE")
+        val expected =
+            mapOf(
+                beside to listOf(QuestionCategory.FOOD, QuestionCategory.RANDOM),
+                merged to listOf(QuestionCategory.RANDOM),
+            )
+
+        val served = feed(newPlayer()).filter { it.id in expected }.associate { it.id to it.categories }
+        val listed = transaction(database) { SubmissionStore.byAuthor(author) }.associate { it.id to it.categories }
+
+        assertEquals(expected, served, "the feed")
+        assertEquals(expected, listed, "the author's list")
+    }
+
+    @Test
     fun `once everything is answered the next cycle serves every question exactly once`() {
         val player = newPlayer()
         pool.forEach { id -> answer(player, id) }
@@ -279,6 +303,31 @@ class QuestionStoreTest {
 
     private fun newPlayer(): String =
         transaction(database) { PlayerStore.createGuest(UUID.randomUUID().toString(), Long.MAX_VALUE).id }
+
+    /** An approved question by [author], filed under the stored [names] as they are, known or not. */
+    private fun storedUnder(
+        author: String,
+        vararg names: String,
+    ): String {
+        val id = UUID.randomUUID().toString()
+        transaction(database) {
+            Questions.insert { row ->
+                row[Questions.id] = id
+                row[optionA] = "A of $id"
+                row[optionB] = "B of $id"
+                row[authorPlayerId] = author
+                row[status] = QuestionStatus.APPROVED
+                row[submittedAt] = 1_000L
+                row[reviewedAt] = 2_000L
+                row[rejectionReason] = null
+            }
+            QuestionCategories.batchInsert(names.toList()) { name ->
+                this[QuestionCategories.questionId] = id
+                this[QuestionCategories.category] = name
+            }
+        }
+        return id
+    }
 
     private fun answer(
         player: String,

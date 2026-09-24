@@ -11,7 +11,7 @@ Repo initialized on `main` with the personal identity and `user.useConfigOnly = 
 
 ### Verified working
 
-- `:server` on H2: 123 tests green, including 46 end-to-end flow tests in `ApiFlowTest`. Flat
+- `:server` on H2: 124 tests green, including 46 end-to-end flow tests in `ApiFlowTest`. Flat
   scoring is covered there (every vote pays 1, majority and minority alike, and the total
   accumulates) and by `PlayerStoreTest`, which races awards for one player and refreshes of one
   token. The endless feed, re-answering and attempt replay are covered there too, and by
@@ -34,7 +34,9 @@ Repo initialized on `main` with the personal identity and `user.useConfigOnly = 
   question in several categories served once with all of them in declaration order, a filter of
   one or two categories serving each matching question once (an `EXISTS`, and a join mutation fails
   it), the two as one pool, served again only once nothing in it is due, the due count over a set,
-  and that a batch reads its categories in the same number of statements whatever its size.
+  that a batch reads its categories in the same number of statements whatever its size, and that a
+  stored name this build does not know reads as `RANDOM`, sent once however many read as it, in
+  the feed and in the author's list.
   `ApiFlowTest` covers the repeated `?category=`, the 400s for `UNKNOWN`, an unknown name, a
   comma-separated list and an empty value, and submitting under several (deduplicated and ordered,
   and listed back the same) with the 400s for none and for `UNKNOWN`. `SubmissionStoreTest` pins

@@ -236,7 +236,11 @@ object QuestionStore {
 
     /**
      * The category a stored [name] stands for. One written by an older or newer build than this one
-     * still has to read back, and never as `UNKNOWN`, which the server does not send.
+     * still has to read back, and never as `UNKNOWN`, which the server does not send. So a name
+     * this build does not know reads as RANDOM, beside the question's other categories, and
+     * [categoriesOf] lists RANDOM once however many names read as it. That is not what the question
+     * is filed under, and a filter, which compares the stored names, does not find it under RANDOM.
+     * This build writes only names it knows, so only another build's rows get here.
      */
     private fun categoryOf(name: String): QuestionCategory =
         runCatching { QuestionCategory.valueOf(name) }
