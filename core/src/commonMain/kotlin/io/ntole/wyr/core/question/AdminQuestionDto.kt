@@ -15,12 +15,14 @@ import kotlinx.serialization.Serializable
  * either: a moderator judges a question by what it says, not by who wrote it (CLAUDE.md §8b).
  *
  * [submittedAt] is when the server stored the question, submitted or seeded, and [reviewedAt] when a
- * moderator approved or rejected it, or null while none has, as for a seed. Both are epoch
- * milliseconds. [rejectionReason] is the moderator's short reason, sent only for a
- * [QuestionStatus.REJECTED] question and null for any other.
+ * moderator approved or rejected it, or null while none has, as for a seed. [retiredAt] is when a
+ * moderator retired it, sent only for a [QuestionStatus.RETIRED] question: restoring one clears it.
+ * All three are epoch milliseconds. [rejectionReason] is the moderator's short reason, sent only for
+ * a [QuestionStatus.REJECTED] question and null for any other.
  *
  * [tally] is every player's latest answer to it, one vote per player, and [likeCount] how many
- * players like it. The server reads both in one statement, so they are one moment's numbers.
+ * players like it. The server reads both in one statement, so they are one moment's numbers. A
+ * retired question keeps both, and no vote or like reaches it until it is restored.
  *
  * [categories] must keep its serializer and its default, and [status] its default, for a value added
  * server-side to decode on an older client — see [QuestionCategoryListSerializer] and
@@ -37,6 +39,7 @@ public data class AdminQuestionDto(
     public val seed: Boolean = false,
     public val submittedAt: Long,
     public val reviewedAt: Long? = null,
+    public val retiredAt: Long? = null,
     public val rejectionReason: String? = null,
     public val tally: VoteTallyDto,
     public val likeCount: Int = 0,

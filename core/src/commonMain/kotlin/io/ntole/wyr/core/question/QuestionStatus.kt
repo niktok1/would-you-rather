@@ -20,5 +20,12 @@ public enum class QuestionStatus {
     /** Refused by a moderator, with a short reason ([SubmissionDto.rejectionReason]). Served to nobody. */
     REJECTED,
 
+    /**
+     * Approved, then retired by a moderator (CLAUDE.md §8d, *Moderation*): served to nobody until a
+     * moderator restores it, when it is [APPROVED] again. Nothing it earned is taken back: its answers'
+     * points stay, and its likes stay held and paid. A seed can be retired too.
+     */
+    RETIRED,
+
     UNKNOWN,
 }

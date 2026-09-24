@@ -14,11 +14,14 @@ import io.ntole.wyr.server.db.Votes
 import io.ntole.wyr.server.plugins.ApiFailure
 import io.ntole.wyr.server.question.QuestionStore
 import io.ntole.wyr.server.question.SubmissionStore
+import io.ntole.wyr.server.question.standsAt
+import io.ntole.wyr.server.question.statusOf
 import org.jetbrains.exposed.v1.core.Expression
 import org.jetbrains.exposed.v1.core.Op
 import org.jetbrains.exposed.v1.core.ResultRow
 import org.jetbrains.exposed.v1.core.SortOrder
 import org.jetbrains.exposed.v1.core.and
+import org.jetbrains.exposed.v1.core.compoundOr
 import org.jetbrains.exposed.v1.core.count
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.core.greater
@@ -26,6 +29,7 @@ import org.jetbrains.exposed.v1.core.inList
 import org.jetbrains.exposed.v1.core.isNotNull
 import org.jetbrains.exposed.v1.core.less
 import org.jetbrains.exposed.v1.core.or
+import org.jetbrains.exposed.v1.core.statements.UpdateStatement
 import org.jetbrains.exposed.v1.core.wrapAsExpression
 import org.jetbrains.exposed.v1.jdbc.Query
 import org.jetbrains.exposed.v1.jdbc.batchInsert
@@ -40,7 +44,8 @@ import org.jetbrains.exposed.v1.jdbc.update
  */
 object ModerationStore {
     /**
-     * The players' submissions that stand at [status], oldest first, at most [limit]: for
+     * The players' submissions that stand at [status] ([standsAt]: a retired one at
+     * [QuestionStatus.RETIRED], not at approved), oldest first, at most [limit]: for
      * [QuestionStatus.PENDING], the queue a moderator works through, its head the next to decide.
      * Must run inside a transaction. Two submitted in the same millisecond come in id order, as in
      * the author's list. A seed has no author and is never listed, however it stands.
@@ -56,7 +61,7 @@ object ModerationStore {
         val rows =
             Questions
                 .select(SubmissionStore.SUBMISSION_COLUMNS)
-                .where { (Questions.status eq status) and Questions.authorPlayerId.isNotNull() }
+                .where { standsAt(status) and Questions.authorPlayerId.isNotNull() }
                 .orderBy(Questions.submittedAt to SortOrder.ASC, Questions.id to SortOrder.ASC)
                 .limit(limit)
                 .toList()
@@ -162,6 +167,76 @@ object ModerationStore {
     }
 
     /**
+     * Retires the approved question [questionId], a seed included, and returns it as the moderator's
+     * list shows it (CLAUDE.md §8d, *Moderation*). Must run inside a transaction. From its commit on
+     * the question is not servable ([QuestionStore.servable]): served to nobody, due for nobody, so a
+     * cycle can finish without it, and a vote, skip, like or unlike of it is not found. Nothing it
+     * earned is taken back: every answer's point stays, and its likes stay held, so each still counts
+     * in its author's total and likes received (CLAUDE.md §8c). Refused with 409 for a question that
+     * is not approved, a retired one included, and 404 for an id no question has.
+     *
+     * A compare-and-set (CLAUDE.md §4): the update's `WHERE` is standing at approved, so of two
+     * retirements racing, the second waits on the first's row lock, finds the row retired and is
+     * refused. Its update also waits for every vote, skip and like that found the question servable
+     * and holds its row ([QuestionStore.lockIfServable]), so the numbers it answers with hold each of
+     * them, and none can come after: the row stays locked until this transaction ends, and a read
+     * waiting on it finds the question retired.
+     */
+    fun retire(
+        questionId: String,
+        now: Long = System.currentTimeMillis(),
+    ): AdminQuestionDto {
+        move(questionId, from = QuestionStatus.APPROVED) { row -> row[Questions.retiredAt] = now }
+        return listed(questionId)
+    }
+
+    /**
+     * Restores the retired question [questionId] and returns it as the moderator's list shows it,
+     * approved again (CLAUDE.md §8d, *Moderation*). Must run inside a transaction. From its commit on
+     * it is servable as it was before it was retired: due for every player who has neither answered
+     * nor skipped it in their current cycle, since what is due reads the cycle a vote or skip was
+     * made in, and nothing about those changed while it was retired. Refused with 409 for a question
+     * that is not retired and 404 for an id no question has, as a compare-and-set on retired, as
+     * [retire] is on approved.
+     */
+    fun restore(questionId: String): AdminQuestionDto {
+        move(questionId, from = QuestionStatus.RETIRED) { row -> row[Questions.retiredAt] = null }
+        return listed(questionId)
+    }
+
+    /**
+     * Applies [change] to the question [questionId] if it stands at [from], or refuses: 409 for one
+     * that does not, and 404 for an id no question has. A compare-and-set, as [decide] is: 0 rows
+     * updated means the question was not at [from], and as nothing deletes a question, one found
+     * afterwards was already elsewhere when the update ran.
+     */
+    private fun move(
+        questionId: String,
+        from: QuestionStatus,
+        change: Questions.(UpdateStatement) -> Unit,
+    ) {
+        val moved = Questions.update({ (Questions.id eq questionId) and standsAt(from) }, body = change)
+        if (moved > 0) return
+
+        val exists =
+            Questions
+                .select(Questions.id)
+                .where { Questions.id eq questionId }
+                .limit(1)
+                .any()
+        throw if (exists) ApiFailure.wrongStatus(questionId, from) else ApiFailure.questionNotFound(questionId)
+    }
+
+    /**
+     * The question [questionId] as the moderator's list shows it, read by [Listing] as a page is, in
+     * the transaction that just changed it, whose row lock holds until it ends.
+     */
+    private fun listed(questionId: String): AdminQuestionDto {
+        val listing = Listing(Questions.id eq questionId)
+        return listing.toAdminQuestions(listOf(listing.query.single())).single()
+    }
+
+    /**
      * One page of every question, seeds included, as the moderator sees each (CLAUDE.md §8d,
      * *Moderation*): newest first, starting after [after] when there is one, at most [limit]. Must run
      * inside a transaction.
@@ -181,7 +256,7 @@ object ModerationStore {
         after: QuestionCursor?,
         limit: Int,
     ): AdminQuestionPageDto {
-        val statusFilter = if (statuses.isEmpty()) Op.TRUE else Questions.status inList statuses
+        val statusFilter = if (statuses.isEmpty()) Op.TRUE else statuses.map(::standsAt).compoundOr()
         val listing = Listing(statusFilter and QuestionStore.inCategories(categories) and placedAfter(after))
         val rows =
             listing.query
@@ -234,7 +309,7 @@ object ModerationStore {
 
             val categories = QuestionStore.categoriesOf(Questions.id inList rows.map { row -> row[Questions.id] })
             return rows.map { row ->
-                val status = row[Questions.status]
+                val status = statusOf(row)
                 AdminQuestionDto(
                     id = row[Questions.id],
                     optionA = row[Questions.optionA],
@@ -244,6 +319,7 @@ object ModerationStore {
                     seed = row[Questions.authorPlayerId] == null,
                     submittedAt = row[Questions.submittedAt],
                     reviewedAt = row[Questions.reviewedAt],
+                    retiredAt = row[Questions.retiredAt],
                     // As in a submission: only with a rejected question, whatever the column holds.
                     rejectionReason = row[Questions.rejectionReason].takeIf { status == QuestionStatus.REJECTED },
                     tally = VoteTallyDto(votesA = row.countOf(votesForA), votesB = row.countOf(votesForB)),
@@ -275,6 +351,7 @@ object ModerationStore {
                     Questions.status,
                     Questions.submittedAt,
                     Questions.reviewedAt,
+                    Questions.retiredAt,
                     Questions.rejectionReason,
                 )
         }

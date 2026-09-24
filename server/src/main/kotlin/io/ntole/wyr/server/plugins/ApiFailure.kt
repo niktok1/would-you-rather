@@ -2,6 +2,7 @@ package io.ntole.wyr.server.plugins
 
 import io.ktor.http.HttpStatusCode
 import io.ntole.wyr.core.error.ErrorCode
+import io.ntole.wyr.core.question.QuestionStatus
 
 /**
  * The only exception route code should throw.
@@ -34,6 +35,12 @@ class ApiFailure(
         /** A moderator's decision on a question that is no longer, or never was, pending. */
         fun alreadyDecided(id: String) =
             ApiFailure(HttpStatusCode.Conflict, ErrorCode.ALREADY_DECIDED, "question $id is not pending")
+
+        /** A retirement of a question that is not approved, or a restoration of one that is not retired. */
+        fun wrongStatus(
+            id: String,
+            expected: QuestionStatus,
+        ) = ApiFailure(HttpStatusCode.Conflict, ErrorCode.WRONG_STATUS, "question $id is not ${expected.name}")
 
         fun unauthorized(message: String = "missing or invalid credentials") =
             ApiFailure(HttpStatusCode.Unauthorized, ErrorCode.UNAUTHORIZED, message)

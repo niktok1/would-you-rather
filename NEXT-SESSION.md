@@ -88,7 +88,8 @@ automatically from every green commit on `main` (its URL is on its Render page).
   repeat of either writing and paying nothing, likedByMe being each player's own, a self-like paid,
   a seed's likes paying nobody, a like being no answer, the author's total as their answers plus
   the likes their questions hold, 404 for a pending or rejected question and 401 for an unknown
-  player; two first likes racing pay once (on the key, through Exposed's rerun) and two unlikes
+  player; two first likes racing pay once (then on the key, through Exposed's rerun; on the question's
+  row lock since `feat/moderation-app`) and two unlikes
   racing take back once; the feed's likes before answering, in the same number of statements for a
   batch of one as for the pool, and an unlike committed mid-read showing in neither number; and
   `likesReceived` against likes added, removed and given. `StatsStoreTest` commits a like mid-read
@@ -306,10 +307,10 @@ automatically from every green commit on `main` (its URL is on its Render page).
   edge `WyrHttpClient` notes remains: both clients checking the store before either writes can
   still leave the displaced token there, until a lock shared across processes exists.
 - **The endless feed and vote replay on Postgres.** `RANDOM()` in the feed, the compare-and-set
-  that starts a cycle, a first answer racing another (the 23505 aborts the transaction and Exposed
-  reruns it), and the `SELECT ... FOR UPDATE` that makes a retry wait and replay have only run on
-  H2. So has the skip, locked and then written as a vote is, with a first skip racing another on
-  the `skips` key. The store races in `QuestionStoreTest`, `VoteStoreTest` and `SkipStoreTest`
+  that starts a cycle, a first answer racing another (queued on the question's row lock since
+  `feat/moderation-app`; before it, the 23505 aborted the transaction and Exposed reran it), and the
+  `SELECT ... FOR UPDATE` that makes a retry wait and replay have only run on H2. So has the skip,
+  locked and then written as a vote is, with a first skip racing another on the question's row. The store races in `QuestionStoreTest`, `VoteStoreTest` and `SkipStoreTest`
   poll H2's `SESSIONS`, like `PlayerStoreTest`. The stats read has run only on H2 too: one
   statement with a correlated subquery on `players.current_cycle`. That one statement sees one
   committed state at READ COMMITTED is documented PostgreSQL behaviour, not something a test here
@@ -330,9 +331,14 @@ automatically from every green commit on `main` (its URL is on its Render page).
   console's *Moderation* section on any platform. The question list (`GET /v1/admin/questions`,
   `feat/moderation-app`) has run on H2 only: its counts are correlated subqueries and its pages a
   keyset on `(submitted_at, id)` compared in the database's collation, which `ApiFlowTest` runs on
-  PostgreSQL only in the `server-postgres` job, which has not seen the branch.
-- **Likes on Postgres, and in any client but the JVM.** Two first likes racing on the key (the 23505
-  aborts the transaction and Exposed reruns it), two unlikes queuing on one row, the grouped count
+  PostgreSQL only in the `server-postgres` job, which has not seen the branch. So has retirement:
+  `RetirementTest`'s races poll H2's `SESSIONS`, and on PostgreSQL a `SELECT ... FOR UPDATE` that
+  waited on a retirement re-checks its `WHERE` against the committed row, and finds nothing, only as
+  documented behaviour (EvalPlanQual), as for the refresh rotation. H2 does the same, which the
+  races show; that a locking read there re-checks rather than returning the row it first matched was
+  first seen in a standalone check against H2 2.4.240.
+- **Likes on Postgres, and in any client but the JVM.** Two first likes racing, and two unlikes,
+  now each queued on the question's row lock (`feat/moderation-app`), the grouped count
   with its `COUNT(CASE ...)` and the stats' subquery have run only on H2 (`LikeStoreTest` polls H2's
   `SESSIONS`). The client has sent likes only from the JVM (the live run above), and nobody has
   looked at the console's Like button or its likes lines on any platform.
@@ -495,6 +501,17 @@ A page ends with `nextCursor` while more follow; send it back as `?cursor=` for 
 ```bash
 curl -s 'localhost:8080/v1/admin/questions?status=PENDING&status=APPROVED&category=FOOD&limit=5' \
   -H "X-Admin-Token: $ADMIN_TOKEN"
+```
+
+To take an approved question out of play, a seed included, and put it back (provisional, CLAUDE.md
+§8b). A retired one is served to nobody and 404 to vote on, skip, like or unlike, keeps what it
+earned, and lists as `RETIRED`; the wrong status either way is 409 `WRONG_STATUS`:
+
+```bash
+curl -s -X POST localhost:8080/v1/admin/retirements -H "X-Admin-Token: $ADMIN_TOKEN" \
+  -H 'Content-Type: application/json' -d '{"questionId":"seed-1"}'
+curl -s -X POST localhost:8080/v1/admin/restorations -H "X-Admin-Token: $ADMIN_TOKEN" \
+  -H 'Content-Type: application/json' -d '{"questionId":"seed-1"}'
 ```
 
 ### The dev console
@@ -769,16 +786,24 @@ known `PlayViewModel` issues (the Play tab is frozen).
   route must never send one: none sits inside `authenticate(JWT_AUTH)` or reads the bearer token,
   and each calls `requireAdmin` before it reads anything else. A new admin route goes through
   `moderationRoutes`, which registers nothing without a token, and needs its line in
-  `ApiFlowTest.everyAdminRoute`, which the 403 and 404 tests run over. A decision is a
-  compare-and-set on `PENDING`; an update by id alone would let a second moderator overwrite the
-  first.
+  `ApiFlowTest.everyAdminRoute`, which the 403 and 404 tests run over, and in
+  `RateLimitTest.ADMIN_ROUTES`. A decision is a compare-and-set on `PENDING`, and a retirement or
+  restoration one on standing at approved or at retired (`ModerationStore.move`); an update by id
+  alone would let a second moderator overwrite the first.
 - **One predicate decides which questions a player may be served** (`QuestionStore.servable`,
-  CLAUDE.md §8d): an approved one, to every player alike, its author included. The feed, the
-  stats' due count, and votes, skips and likes (`QuestionStore.isServable`) all read it, so a
-  pending or rejected question is served to nobody, due for nobody, and answering, skipping or
-  liking it is 404. A new exclusion belongs there. `isServable` is a plain read because a question
-  only ever becomes servable; a way to withdraw an approved question would need votes, skips and
-  likes to lock the question's row.
+  CLAUDE.md §8d): an approved one not retired, to every player alike, its author included. The feed,
+  the stats' due count, and votes, skips and likes (`QuestionStore.lockIfServable`) all read it, so
+  a pending, rejected or retired question is served to nobody, due for nobody, and answering,
+  skipping, liking or unliking it is 404. A new exclusion belongs there. Since a question can now
+  stop being servable, `lockIfServable` takes the question's row `FOR UPDATE`: a retirement waits
+  for the votes, skips and likes that found it servable, and one behind a retirement finds it
+  retired. So every vote, skip and like of one question queues on its row, and two first ones by a
+  player never race on their key any more; `VoteStoreTest`, `SkipStoreTest` and `LikeStoreTest`
+  race them on the row lock now, and `VoteStoreTest`'s split-tally race moves the other vote
+  straight in the table, since no answer can come between. Retirement is a column,
+  `questions.retired_at`, beside an `APPROVED` status, and `statusOf` / `standsAt`
+  (`io.ntole.wyr.server.question`) read the two as one: read a question's status through them,
+  never `Questions.status` alone, or a retired question reads as approved.
 - **An attempt id is made once per tap and reused only to retry that tap.** `AttemptId.random()`
   is the only way to make one. Making a new one for a retry pays twice; reusing one for a new tap
   turns that answer into a replay that pays nothing. The server stores only the latest attempt per

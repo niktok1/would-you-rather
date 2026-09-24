@@ -30,6 +30,8 @@ import io.ntole.wyr.core.question.ApproveSubmissionRequest
 import io.ntole.wyr.core.question.QuestionCategory
 import io.ntole.wyr.core.question.QuestionPageDto
 import io.ntole.wyr.core.question.RejectSubmissionRequest
+import io.ntole.wyr.core.question.RestoreQuestionRequest
+import io.ntole.wyr.core.question.RetireQuestionRequest
 import io.ntole.wyr.core.question.SkipRequest
 import io.ntole.wyr.core.question.SubmissionListDto
 import io.ntole.wyr.core.question.SubmitQuestionRequest
@@ -517,6 +519,12 @@ class RateLimitTest {
                 },
                 AdminRoute("the question list", HttpStatusCode.OK) { client, token ->
                     client.get(WyrApi.Paths.ADMIN_QUESTIONS) { token?.let { header(WyrApi.Headers.ADMIN_TOKEN, it) } }
+                },
+                AdminRoute("a retirement", HttpStatusCode.NotFound) { client, token ->
+                    client.post(WyrApi.Paths.ADMIN_RETIREMENTS) { admin(token, RetireQuestionRequest(NO_SUBMISSION)) }
+                },
+                AdminRoute("a restoration", HttpStatusCode.NotFound) { client, token ->
+                    client.post(WyrApi.Paths.ADMIN_RESTORATIONS) { admin(token, RestoreQuestionRequest(NO_SUBMISSION)) }
                 },
             )
         val ADMIN_ROUTE_BUDGET = RequestBudget(requests = ADMIN_ROUTES.size, per = 1.minutes)

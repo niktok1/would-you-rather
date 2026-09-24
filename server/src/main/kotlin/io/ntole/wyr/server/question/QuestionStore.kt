@@ -111,13 +111,14 @@ object QuestionStore {
     /**
      * Which questions [playerId] may be served at all, whether answered or not (CLAUDE.md §8d). This
      * is the one place that decides it, so the feed, anything that counts what a player has left,
-     * and what a player may answer, skip or like ([isServable]) all agree.
+     * and what a player may answer, skip or like ([lockIfServable]) all agree.
      *
-     * A question is servable once a moderator has approved it, to every player alike: an author is
-     * served their own questions like anyone else (CLAUDE.md §8d, *Own questions*). A rule that
+     * A question is servable while it stands at approved ([standsAt]): once a moderator has approved
+     * it, and for as long as no moderator has retired it (CLAUDE.md §8d, *Moderation*), to every player
+     * alike: an author is served their own questions like anyone else (*Own questions*). A rule that
      * depended on the player would take them here.
      */
-    internal fun servable(): Op<Boolean> = Questions.status eq QuestionStatus.APPROVED
+    internal fun servable(): Op<Boolean> = standsAt(QuestionStatus.APPROVED)
 
     /**
      * The questions in [categories] (every one for none) that are [servable]: only those due in
@@ -199,19 +200,33 @@ object QuestionStore {
     /**
      * Whether a player may answer, skip or like the question [id]: it exists and is [servable], due
      * or not. Any other question is not found, as far as they are concerned: one still waiting for a
-     * moderator, or a rejected one. An author answers, skips and likes their own like any other.
+     * moderator, a rejected one, or a retired one. An author answers, skips and likes their own like
+     * any other. Must run inside a transaction, and when the question is servable, its row stays
+     * locked until the transaction ends.
      *
-     * A plain read that a vote, a skip or a like then writes after, and safe without a lock because
-     * a question only ever becomes servable, never stops being so: nothing deletes a question, and a
-     * moderator decides only a pending one (§8d, `ModerationStore.decide`). A way to withdraw an
-     * approved question would end that, and the read would then have to lock the question's row.
+     * Locked, because a question can stop being servable: a moderator may retire it
+     * (`ModerationStore.retire`). A vote, skip or like writes after this read, and at READ COMMITTED
+     * a plain read could find the question servable just before a retirement commits, and then write
+     * to a question the moderator had already been told was retired (CLAUDE.md §4). `FOR UPDATE`
+     * orders the two. A retirement's update waits for every transaction that found the question
+     * servable to commit first, so what it answers the moderator with holds all of them. And a read
+     * that comes after the retirement's update waits for it, then reads the row as committed, finds
+     * it retired, and is not found. A read before a restoration commits finds the question retired,
+     * locks nothing and is not found, so a restored question is servable from the commit on.
+     *
+     * The cost is that writes to one question queue for its row one at a time, where before only the
+     * key of the one row each writes held back another (two first answers of one player, say). That
+     * is one question's answers, skips and likes, from every player, each transaction a few short
+     * statements, and the feed serves every player the pool in an order of their own. Only a write
+     * to the row, one that references it, or another such read waits on the lock: the feed, the stats
+     * and the moderator's lists read the row without it.
      */
-    fun isServable(id: String): Boolean =
+    fun lockIfServable(id: String): Boolean =
         Questions
             .select(Questions.id)
             .where { (Questions.id eq id) and servable() }
-            .limit(1)
-            .any()
+            .forUpdate()
+            .singleOrNull() != null
 
     private fun toDto(
         row: ResultRow,

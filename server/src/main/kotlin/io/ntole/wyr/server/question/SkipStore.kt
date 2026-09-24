@@ -19,7 +19,9 @@ object SkipStore {
      * A skip earns nothing and touches no vote, no tally and no count on the player's row. Skipping
      * again in the same cycle writes nothing. Answering after a skip is an ordinary answer, since
      * `VoteStore.cast` never reads a skip. A question the player may not be served is not found, as
-     * for a vote ([QuestionStore.isServable]): nothing serves it to them, so there is nothing to skip.
+     * for a vote ([QuestionStore.lockIfServable]): nothing serves it to them, so there is nothing to
+     * skip. A servable one stays locked until this transaction ends, as for a vote, so a retirement
+     * and a skip of one question never cross.
      *
      * The player is resolved before the write, as for a vote: a validly signed token can outlive its
      * player, and inserting first would trip the Skips foreign key instead of answering 401.
@@ -31,17 +33,17 @@ object SkipStore {
      * `ON CONFLICT` on PostgreSQL but `MERGE` on H2, so the suite would not run the SQL production
      * does, where a locking read, an insert and an update are the same statements on both.
      *
-     * Two first skips racing on one question both find no skip and both insert. As for two first
-     * answers (`VoteStore.cast`), the second waits on the first's uncommitted key and fails on the
-     * primary key once the first commits (SQLState 23505). That failure is deliberately not caught,
-     * since PostgreSQL aborts a transaction at its first error: Exposed rolls back and reruns the
-     * whole transaction, which finds the committed skip and treats it like any other.
+     * Two first skips of one question do not race on its key, as two first answers do not
+     * (`VoteStore.cast`): the second waits on the question's lock, then finds the first's committed
+     * skip and treats it like any other. The key still holds one skip per player per question, and a
+     * failure on it would not be caught, since PostgreSQL aborts a transaction at its first error:
+     * Exposed would roll back and rerun the whole transaction.
      */
     fun skip(
         playerId: String,
         questionId: String,
     ) {
-        if (!QuestionStore.isServable(questionId)) throw ApiFailure.questionNotFound(questionId)
+        if (!QuestionStore.lockIfServable(questionId)) throw ApiFailure.questionNotFound(questionId)
 
         if (PlayerStore.find(playerId) == null) throw ApiFailure.unauthorized("unknown player")
 
@@ -58,8 +60,8 @@ object SkipStore {
 
     /**
      * The cycle the player last skipped the question in, locked until this transaction ends, or null
-     * before their first skip of it. Before a first skip there is no row to lock, and two first
-     * skips race on the primary key instead (see [skip]).
+     * before their first skip of it, as `VoteStore.lockVote` locks the vote. Before a first skip there
+     * is no row to lock, and the question's lock keeps two first skips apart (see [skip]).
      */
     private fun lockSkip(
         playerId: String,

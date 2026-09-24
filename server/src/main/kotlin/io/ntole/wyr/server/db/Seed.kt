@@ -25,8 +25,10 @@ object Seed {
      * on PostgreSQL only MigrationsTest's boots at once reach it, and only when they happen to
      * collide.
      *
-     * The check names only the id, which every schema since V1 has: MigrationsTest seeds a database at
-     * V1 through this, and a column added since would fail it there.
+     * It never changes a question already there, so a seed a moderator retired stays retired through
+     * every boot, and is never written again. The check names only the id, which every schema since V1
+     * has: MigrationsTest seeds a database at V1 through this, and a column added since would fail it
+     * there.
      */
     fun questionsIfEmpty() {
         if (Questions.select(Questions.id).limit(1).any()) return

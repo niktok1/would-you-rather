@@ -99,7 +99,9 @@ object SubmissionStore {
 
     /**
      * A question read with [SUBMISSION_COLUMNS], as its author sees it, filed under [categories].
-     * Every reader of a submission maps it here, the author's list and the moderator's alike.
+     * Every reader of a submission maps it here, the author's list and the moderator's alike. A
+     * retired one is [QuestionStatus.RETIRED] ([statusOf]), so its author sees that it is no longer
+     * served.
      *
      * A reason goes out only with a rejected question, whatever the column holds, so what the
      * contract promises does not rest on every writer of the column clearing it.
@@ -108,7 +110,7 @@ object SubmissionStore {
         row: ResultRow,
         categories: List<QuestionCategory>,
     ): SubmissionDto {
-        val status = row[Questions.status]
+        val status = statusOf(row)
         return SubmissionDto(
             id = row[Questions.id],
             optionA = row[Questions.optionA],
@@ -127,6 +129,7 @@ object SubmissionStore {
             Questions.optionA,
             Questions.optionB,
             Questions.status,
+            Questions.retiredAt,
             Questions.rejectionReason,
             Questions.submittedAt,
         )

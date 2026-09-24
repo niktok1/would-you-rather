@@ -75,8 +75,11 @@ object Questions : Table("questions") {
 
     /**
      * Where the question stands with the moderator. Only an [QuestionStatus.APPROVED] one is ever
-     * served. A seed is approved from the start, and a submission starts out
-     * [QuestionStatus.PENDING]. Never [QuestionStatus.UNKNOWN], the client's decoding fallback.
+     * served, and only while it is not retired ([retiredAt]). A seed is approved from the start, and a
+     * submission starts out [QuestionStatus.PENDING]. Never [QuestionStatus.UNKNOWN], the client's
+     * decoding fallback, and never [QuestionStatus.RETIRED]: a retired question stays approved here, and
+     * is reported retired from [retiredAt] (`statusOf`), which is what keeps a rollback to a build from
+     * before retirement reading every row.
      *
      * Read strictly, unlike a category ([QuestionCategories.category]): a name this build has no
      * [QuestionStatus] for fails the read, and with it the author's whole list
@@ -111,7 +114,8 @@ object Questions : Table("questions") {
      * When a moderator retired the question, or null while it is not retired (CLAUDE.md §8d,
      * *Moderation*). Only an approved question is ever retired, and its [status] stays
      * [QuestionStatus.APPROVED] beside this, so a build from before V3, which knows no retirement, still
-     * reads every row: it would only serve a retired question again. Nothing writes it yet.
+     * reads every row: it would only serve a retired question again. Only `ModerationStore.retire` sets
+     * it, and only `ModerationStore.restore` clears it.
      */
     val retiredAt = long("retired_at").nullable()
 

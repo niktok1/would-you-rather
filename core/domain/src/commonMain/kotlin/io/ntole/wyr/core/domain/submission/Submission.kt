@@ -37,7 +37,8 @@ public data class Submission(
  * [OTHER] is where a status this build does not recognise lands: one added server-side later
  * arrives as the wire's `UNKNOWN` and maps here, so the list still loads. It says only that this
  * build cannot tell, so nothing may read it as any of the others: not as [PENDING], still waiting,
- * nor as [APPROVED], served, nor as [REJECTED], refused.
+ * nor as [APPROVED], served, nor as [REJECTED], refused, nor as [RETIRED], withdrawn. A build from
+ * before [RETIRED] lists a retired question as [OTHER].
  */
 public enum class SubmissionStatus {
     /** Waiting for a moderator. Served to nobody. */
@@ -48,6 +49,12 @@ public enum class SubmissionStatus {
 
     /** Refused by a moderator, with a short reason ([Submission.rejectionReason]). Served to nobody. */
     REJECTED,
+
+    /**
+     * Approved, then retired by a moderator: served to nobody until a moderator restores it, when it is
+     * [APPROVED] again. What it earned stays: its likes are still held, and still pay its author.
+     */
+    RETIRED,
 
     OTHER,
 }

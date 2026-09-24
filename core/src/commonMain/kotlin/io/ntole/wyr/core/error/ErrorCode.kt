@@ -51,6 +51,14 @@ public enum class ErrorCode {
      */
     ALREADY_DECIDED,
 
+    /**
+     * A moderator asked to move a question from a status it does not stand at: to retire one that is
+     * not [io.ntole.wyr.core.question.QuestionStatus.APPROVED], a retired one included, or to restore
+     * one that is not [io.ntole.wyr.core.question.QuestionStatus.RETIRED]. Nothing changed. Sent with
+     * 409.
+     */
+    WRONG_STATUS,
+
     /** Caller is not authenticated, or the credential is expired. */
     UNAUTHORIZED,
 

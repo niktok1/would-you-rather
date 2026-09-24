@@ -44,7 +44,7 @@ public object WyrApi {
         /**
          * Answers a question, with a [io.ntole.wyr.core.vote.VoteRequest], answered with a
          * [io.ntole.wyr.core.vote.VoteResultDto]. Requires a session. A question no player is
-         * served, one a moderator has not approved, is 404
+         * served, one a moderator has not approved or has retired, is 404
          * [io.ntole.wyr.core.error.ErrorCode.QUESTION_NOT_FOUND], as an unknown one is. An author
          * answers their own like any other player (CLAUDE.md §8d).
          */
@@ -71,7 +71,8 @@ public object WyrApi {
          * held is a point to the question's author, paid when it is added and taken back when it is
          * removed. A seed has no author, so its likes count and pay nobody. A like does nothing else:
          * it is no answer and no skip, and leaves what is due alone. A question no player is served is
-         * 404, as for [VOTES].
+         * 404, as for [VOTES], for an unlike too: the likes a retired question holds stay held, and
+         * paid, until it is restored.
          */
         public const val LIKES: String = "/$VERSION/likes"
 
@@ -85,7 +86,8 @@ public object WyrApi {
         /**
          * Every question the player the bearer token names has submitted ([QUESTIONS]), whatever its
          * status, newest first, as a [io.ntole.wyr.core.question.SubmissionListDto]. Requires a
-         * session. A rejected one carries the moderator's reason.
+         * session. A rejected one carries the moderator's reason, and a retired one says so
+         * ([io.ntole.wyr.core.question.QuestionStatus.RETIRED]).
          */
         public const val MY_QUESTIONS: String = "/$VERSION/me/questions"
 
@@ -133,6 +135,33 @@ public object WyrApi {
          * An admin route: needs [Headers.ADMIN_TOKEN].
          */
         public const val ADMIN_QUESTIONS: String = "/$VERSION/admin/questions"
+
+        /**
+         * Retires an approved question, a seed included, with a
+         * [io.ntole.wyr.core.question.RetireQuestionRequest], answered with its
+         * [io.ntole.wyr.core.question.AdminQuestionDto], now
+         * [io.ntole.wyr.core.question.QuestionStatus.RETIRED] (CLAUDE.md §8d, *Moderation*). From then
+         * on it is served to nobody and due for nobody, and a vote, skip, like or unlike of it is 404,
+         * until [ADMIN_RESTORATIONS] restores it. Nothing it earned is taken back: its answers' points
+         * stay, and its likes stay held and paid. An admin route: needs [Headers.ADMIN_TOKEN].
+         *
+         * A question that is not approved, a retired one included, is 409
+         * [io.ntole.wyr.core.error.ErrorCode.WRONG_STATUS], and of two retirements racing for one
+         * question exactly one is made. An id no question has is 404
+         * [io.ntole.wyr.core.error.ErrorCode.QUESTION_NOT_FOUND], and a malformed body 400
+         * [io.ntole.wyr.core.error.ErrorCode.VALIDATION_FAILED].
+         */
+        public const val ADMIN_RETIREMENTS: String = "/$VERSION/admin/retirements"
+
+        /**
+         * Restores a retired question, with a [io.ntole.wyr.core.question.RestoreQuestionRequest],
+         * answered with its [io.ntole.wyr.core.question.AdminQuestionDto], approved again. From then on
+         * it is served as it was before it was retired: due for every player who has neither answered
+         * nor skipped it in their current cycle (CLAUDE.md §8d). A question that is not retired is 409
+         * [io.ntole.wyr.core.error.ErrorCode.WRONG_STATUS]; otherwise refused as [ADMIN_RETIREMENTS]
+         * refuses. An admin route: needs [Headers.ADMIN_TOKEN].
+         */
+        public const val ADMIN_RESTORATIONS: String = "/$VERSION/admin/restorations"
     }
 
     public object Headers {

@@ -45,9 +45,12 @@ object LikeStore {
      * nobody. An author may like their own question, and is paid for it like for anyone's like.
      *
      * Any question the player may be served can be liked, answered or not, and no other: one a
-     * moderator has not approved is not found, as for a vote ([QuestionStore.isServable]). A like
-     * does nothing else. It is no answer and no skip, so it pays the liker nothing and leaves the
-     * tally, the cycle and what is due alone.
+     * moderator has not approved, or has retired, is not found, as for a vote
+     * ([QuestionStore.lockIfServable]), and so is an unlike of it. A retired question's likes stay
+     * held, and so stay paid, until it is restored (CLAUDE.md §8d, *Moderation*). A servable one stays
+     * locked until this transaction ends, so a retirement and a like of one question never cross. A
+     * like does nothing else. It is no answer and no skip, so it pays the liker nothing and leaves
+     * the tally, the cycle and what is due alone.
      *
      * The player is resolved before the write, as for a vote: a validly signed token can outlive its
      * player, and inserting first would trip the Likes foreign key instead of answering 401.
@@ -57,7 +60,7 @@ object LikeStore {
         questionId: String,
         liked: Boolean,
     ): LikeResultDto {
-        if (!QuestionStore.isServable(questionId)) throw ApiFailure.questionNotFound(questionId)
+        if (!QuestionStore.lockIfServable(questionId)) throw ApiFailure.questionNotFound(questionId)
 
         if (PlayerStore.find(playerId) == null) throw ApiFailure.unauthorized("unknown player")
 
@@ -74,15 +77,15 @@ object LikeStore {
     /**
      * Adds the like unless the player holds it already, and says whether it did.
      *
-     * A plain read and then an insert, with no lock, because the read never decides a write the key
-     * does not guard (CLAUDE.md §4). Finding the like, this writes nothing: an unlike that removes it
-     * before this commits leaves the question unliked, as the like and then the unlike would, and
-     * nothing is paid for a like that added nothing. Finding none, it inserts, and only the key
-     * decides whether that is the first like. Two first likes racing both find none and both insert.
-     * The second waits on the first's uncommitted key, then fails on it once the first commits
-     * (SQLState 23505). That failure is deliberately not caught, since PostgreSQL aborts a
-     * transaction at its first error: Exposed rolls back and reruns the whole transaction, which
-     * finds the committed like and adds nothing, so the author is paid once.
+     * A plain read and then an insert, with no lock of the like's own, because the read never decides
+     * a write the key does not guard (CLAUDE.md §4). Finding the like, this writes nothing, and
+     * nothing is paid for a like that added nothing. Finding none, it inserts, and the key decides
+     * whether that is the first like. Two first likes of one question do not race on it today: the
+     * second waits on the question's lock ([QuestionStore.lockIfServable]), then finds the first's
+     * committed like and adds nothing, so the author is paid once. Were they to race, the second
+     * would fail on the key (SQLState 23505), which is deliberately not caught, since PostgreSQL
+     * aborts a transaction at its first error: Exposed would roll back and rerun the whole
+     * transaction, which would find the committed like.
      */
     private fun addLike(
         playerId: String,
@@ -105,8 +108,8 @@ object LikeStore {
 
     /**
      * Removes the like if the player holds it, and says whether it did. One statement, with no read
-     * before it to go stale: of two unlikes racing, the second waits on the row lock the first's
-     * delete holds, then finds the row gone, deletes nothing and takes nothing back.
+     * before it to go stale: of two unlikes, the second, once past the question's lock, finds the row
+     * gone, deletes nothing and takes nothing back.
      */
     private fun removeLike(
         playerId: String,
@@ -163,7 +166,8 @@ object LikeStore {
 
     /**
      * How many likes the questions [authorId] submitted hold now, their own likes included: each is
-     * a point in their total, paid and not taken back. A seed has no author, so its likes are
+     * a point in their total, paid and not taken back. A retired question's likes count as well: they
+     * stay held, and paid (CLAUDE.md §8c). A seed has no author, so its likes are
      * nobody's. An expression to embed in a larger statement (`StatsStore`), so it is read at the
      * same moment as the total those likes paid into.
      */

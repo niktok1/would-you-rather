@@ -141,11 +141,16 @@ failing:
   A burst on one row then just queues on its lock; `PlayerStoreTest` pins 8 at once.
 - Any other read-then-write is a compare-and-set: the `UPDATE`'s `WHERE` repeats what the read
   relied on, and 0 rows updated means another transaction won (`PlayerStore.startNextCycle`,
-  `ModerationStore.decide`). Where the `WHERE` can hold the whole check, nothing need be read first
-  (`PlayerStore.rotateRefreshToken`, whose second racer re-checks it against the first's commit).
+  `ModerationStore.decide`, and a retirement or restoration, `ModerationStore.move`). Where the
+  `WHERE` can hold the whole check, nothing need be read first (`PlayerStore.rotateRefreshToken`,
+  whose second racer re-checks it against the first's commit).
   Or the read takes the row lock (`SELECT ... FOR UPDATE`), so a concurrent writer waits and then
   reads the row as committed (`VoteStore.cast`, which branches on more than one outcome, and
-  `SkipStore.skip`).
+  `SkipStore.skip`). A write that rests on a row it does not write locks that row the same way:
+  every vote, skip and like first locks its question's row if servable
+  (`QuestionStore.lockIfServable`), so a retirement's update waits for them to commit, and one
+  waiting behind a retirement re-reads the row and finds it retired. That orders every vote, skip
+  and like of one question, one at a time.
   A read of rows a racing writer is about to add has no row to lock, so it locks a parent row that
   every such writer locks first (`SubmissionStore.submit` counts an author's pending questions
   under the author's `players` row).
@@ -155,12 +160,15 @@ failing:
 - Uniqueness is a constraint (the `Votes`, `Skips` and `Likes` primary keys), never a prior
   `SELECT`. A violation is never caught and carried on from: PostgreSQL aborts a transaction at its
   first error. It propagates, and Exposed rolls back and reruns the whole transaction, which then
-  sees the committed row (`VoteStore.cast`, `SkipStore.skip`, `LikeStore.setLiked`). A plain read
-  before such an insert only spares a certain violation, and needs no lock when finding the row
-  writes nothing (a like already held).
+  sees the committed row (`Seed.questionsIfEmpty`, which `SeedTest` races). Two first votes, skips
+  or likes of one question no longer reach their key together, since the question's lock orders
+  them (above), but the key is still what holds one per player, and a violation there would take
+  the same path. A plain read before such an insert only spares a certain violation, and needs no
+  lock when finding the row writes nothing (a like already held).
 - Numbers that must agree with one another are read in one statement, which sees one committed
   state; two statements can straddle another transaction's commit (the tally in `VoteStore`,
-  `StatsStore.of`, a question's like count beside `likedByMe` in `LikeStore.likesOf`).
+  `StatsStore.of`, a question's like count beside `likedByMe` in `LikeStore.likesOf`, a question's
+  tally and like count in the moderator's list, `ModerationStore.questions`).
 
 REPEATABLE_READ was dropped because it refuses the second of two concurrent writes to a row
 (SQLState 40001) and Exposed makes only 3 attempts with no delay, so a burst on one row, such as
@@ -466,6 +474,24 @@ accounts exist.
   U+2029 (`checkedRejection`). Chosen as the stricter reading, since a reason is shown to its author
   as a line of text; allowing line breaks later breaks no client. The options: keep it, or allow
   line breaks in a reason.
+- **Retiring a question** — *provisional — user decision.* The user asked for a way to take an
+  approved question out of play and put it back (§8d, *Moderation*); the details are this build's.
+  Built: a moderator retires an approved question, a seed included, and restores a retired one.
+  Retired, it is served to nobody and due for nobody, and a vote, skip, like or unlike of it is 404;
+  nothing it earned is taken back, so its answers' points stay and its likes stay held and paid, and
+  nobody can unlike it until it is restored. Restored, it is due for every player who has not
+  answered or skipped it in their current cycle. It is stored as `questions.retired_at` beside an
+  `APPROVED` status, and sent as `QuestionStatus.RETIRED`, so a rollback to the build before
+  (§8b, *Rollbacks*) reads every row and only serves retired questions again. Every vote, skip and
+  like locks its question's row (`QuestionStore.lockIfServable`, §4), so nothing lands on a
+  question after its retirement commits, at the cost of one question's votes, skips and likes
+  queueing one at a time. The options: keep it; let an unlike through on a retired question, so a
+  player can still take a like back (and its author's point with it); take back what a retired
+  question earned (every total would move, and §8c's sum would need the retired questions left out
+  on both sides); a plain servability read instead of the lock, so writes to one question never
+  queue, where a vote in flight as the retirement commits may still land, and the retirement's
+  answer not count it; or `RETIRED` stored as a status of its own once no build before this one is
+  a rollback target, which drops the column.
 - **Skips under a category filter** — *provisional — user decision.* A request filtered to one
   or more categories with nothing due in any of them, while other questions still are, serves
   those categories again (§8d, *Categories*), and that includes questions skipped this cycle, which
@@ -652,6 +678,9 @@ returns and never recomputes points, so the two cannot disagree.
   their own likes included, paid when the like is added and taken back when it is removed (§8d,
   *Likes*). A seed has no author and pays nobody. So a player's total is always what their answers
   earned plus a point for each like their questions hold, which `GET /v1/me` reports in one read.
+  Retiring a question takes nothing back (§8d, *Moderation*): its answers' points stay, and so do
+  its likes, held and paid and counted in its author's likes received, so the sum holds over every
+  question, retired or not.
 - `PlayerStore.addPoints` adds in SQL (`total_points = total_points + n`), never as a read then a
   write, so two votes by one player landing together cannot lose a point, nor a burst of likes for
   one author.
@@ -764,7 +793,8 @@ and every request shows in its HTTP trace (`HttpTrace` in `:core:network`, never
 - **Own questions** *(built; decided 2026-09-24)*: an author is served their own questions
   **like any other player** and may answer, skip and like them; the user chose the simpler logic.
   `QuestionStore.servable` is the one predicate the feed, the due count and votes, skips and likes
-  (`QuestionStore.isServable`) read, and it asks only that a moderator approved the question.
+  (`QuestionStore.lockIfServable`) read, and it asks only that a moderator approved the question and
+  has not retired it (*Moderation*).
 - **Likes** *(built)*: any player may like any question, **their own
   included**, at any time (before or after answering), once each, and may unlike it. Each like
   currently held is **+1 point to the author**, and unliking takes that point back. The like count
@@ -776,12 +806,13 @@ and every request shows in its HTTP trace (`HttpTrace` in `:core:network`, never
     already holds writes nothing and pays nothing and a retry needs no attempt id; `liked` has no
     default, and a body without it is 400. The answer is a `LikeResultDto`: the question, its
     `likeCount` and `likedByMe`. A question that is not servable is 404 and an unknown player 401,
-    as for votes and skips, and the id is checked as a vote's is.
+    as for votes and skips, and the id is checked as a vote's is. That holds for an unlike too: a
+    retired question's likes stay held and paid until it is restored (*Moderation*).
   - Only a row actually inserted pays the author (`Scoring.POINTS_PER_LIKE`, an SQL increment) and
     only one actually deleted takes the point back, in the same transaction. A like reads whether the
-    row is there and inserts only if not, and two first likes racing fail on the key, which Exposed's
-    rerun turns into a repeat (§4); an unlike is one delete, so of two racing only one deletes.
-    `LikeStoreTest` races both.
+    row is there and inserts only if not, and an unlike is one delete. Two likes or two unlikes of one
+    question queue on its row's lock (§4), so the second finds what the first left, and the key
+    still holds one like per player. `LikeStoreTest` races both.
   - Every feed batch carries each question's `likeCount` and `likedByMe` (`QuestionDto`), answered
     or not, read in one more grouped statement per batch (`LikeStore.likesOf`), never one per
     question, and the two numbers in that one statement so they agree. `GET /v1/me` reports
@@ -820,19 +851,21 @@ and every request shows in its HTTP trace (`HttpTrace` in `:core:network`, never
   until a moderator decides it (*Moderation*). Questions carry an author and a
   `QuestionStatus`, and `QuestionStore.servable` serves only approved ones, due at once in whatever
   cycle each player is on. `GET /v1/me/questions` lists the author's submissions of every status,
-  newest first, a rejected one with its reason (`SubmissionStore.byAuthor`). On the client,
+  newest first, a rejected one with its reason and a retired one as `RETIRED`
+  (`SubmissionStore.byAuthor`; `SubmissionStatus.RETIRED` on the client). On the client,
   `SubmitQuestion` and `GetMySubmissions` go through `withSessionRecovery`
   (`DefaultSubmissionRepository`). `SubmitQuestion` refuses no category, or `OTHER`, before it
   ensures a session, so nothing is sent, not even a guest's mint, and the repository refuses them
   again before building the request; every other rule is the server's. A status this build cannot
   name is `SubmissionStatus.OTHER`. The console's *Submit a question* section drives both.
-- **Moderation** *(built)*: a moderator approves or rejects each pending
-  submission and **may change its categories** when approving (*Categories*: at least one stays, and
-  a change replaces the question's `question_categories` rows in one transaction). A rejection
-  carries a **short reason**, and the author sees the status of each of their submissions and, for a
-  rejected one, that reason (`GET /v1/me/questions`, *Submitting*). The moderator is whoever holds
-  the server's admin token (`ADMIN_TOKEN`, §8), not a role on a player account. Built in
-  `io.ntole.wyr.server.moderation`.
+- **Moderation** *(built)*: a moderator approves or rejects each pending submission, **may change
+  its categories** when approving (*Categories*: at least one stays, and a change replaces the
+  question's `question_categories` rows in one transaction), and **may retire an approved question
+  and restore it** (*Retiring*, below; provisional, §8b), and sees every question (the list). A
+  rejection carries a **short reason**, and the author sees the status of each of their submissions
+  and, for a rejected one, that reason (`GET /v1/me/questions`, *Submitting*). The moderator is
+  whoever holds the server's admin token (`ADMIN_TOKEN`, §8), not a role on a player account. Built
+  in `io.ntole.wyr.server.moderation`.
   - *Off* when the token is unset: the admin routes are not registered, so each is 404 as a path the
     server never had. *On*, every admin route checks the `X-Admin-Token` header
     (`WyrApi.Headers.ADMIN_TOKEN`) before it reads anything else of the request (`requireAdmin`), and
@@ -871,8 +904,26 @@ and every request shows in its HTTP trace (`HttpTrace` in `:core:network`, never
     both kinds). A decision sets `reviewed_at`, and a rejection its reason, which an approval clears.
     New categories are written after the decision is made and in its transaction, so they commit
     with it or not at all. An approved question is servable from the commit on: due at once for
-    every player in their current cycle, its author included. Nothing moves a decided question on:
-    no withdrawing an approval, and no second look at a rejection.
+    every player in their current cycle, its author included. Nothing moves a decided question on
+    but retirement, below: no second look at a rejection, and no approval undone.
+  - *Retiring* (*built; provisional, §8b*): `POST /v1/admin/retirements` takes a
+    `RetireQuestionRequest`, the id of an approved question, a seed's included, and
+    `POST /v1/admin/restorations` a `RestoreQuestionRequest`, the id of a retired one. Both answer
+    200 with the question's `AdminQuestionDto`. A retired question is served to nobody and due for
+    nobody, so a cycle can finish without it, and a vote, skip, like or unlike of it is 404; nothing
+    it earned is taken back (§8c). Its author sees it as `RETIRED` in `GET /v1/me/questions`, the
+    moderator in the queue's and the list's `?status=RETIRED`, never under `APPROVED`. Restored, it
+    is servable again from the commit on, due for every player who has neither answered nor skipped
+    it in their current cycle. Each is a compare-and-set (`ModerationStore.move`, §4): retire only a
+    question standing at approved, restore only one standing at retired, anything else 409
+    `WRONG_STATUS` and changes nothing, an unknown id 404, a malformed body 400; of two moderators
+    racing exactly one wins. Every vote, skip and like locks its question's row first
+    (`QuestionStore.lockIfServable`), so a retirement waits for those that found it servable, and
+    answers with them counted, and one that comes after it finds it retired. Stored as
+    `questions.retired_at` (V3) beside an `APPROVED` status, never as a status: `statusOf` and
+    `standsAt` read the two columns as one status, so a rollback to the build before reads every row.
+    The seed writes only into a database with no question, so a retired seed stays retired through
+    every boot. `RetirementTest` pins it, the races included.
   - *The client* is `ModerationRepository` in `:core:domain`, behind `GetPendingSubmissions`,
     `ApproveSubmission` and `RejectSubmission`, none of which ensures a session: the moderator is
     not a player. `DefaultModerationRepository` calls `ModerationApi` through `runApi` alone, never

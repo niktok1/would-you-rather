@@ -353,6 +353,7 @@ private fun message(error: DomainError): String =
         DomainError.INVALID_SUBMISSION -> "That question can't be sent as written."
         DomainError.SUBMISSION_LIMIT -> "You have too many questions waiting for review."
         DomainError.ALREADY_DECIDED -> "That question has already been reviewed."
+        DomainError.WRONG_STATUS -> "That question can't be changed that way right now."
         DomainError.FORBIDDEN -> "That needs a moderator."
         DomainError.SERVER, DomainError.UNKNOWN -> "Something went wrong on our end."
     }

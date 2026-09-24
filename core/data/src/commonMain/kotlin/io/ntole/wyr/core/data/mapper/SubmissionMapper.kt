@@ -32,9 +32,11 @@ internal fun QuestionStatus.toDomain(): SubmissionStatus =
 
         QuestionStatus.REJECTED -> SubmissionStatus.REJECTED
 
+        QuestionStatus.RETIRED -> SubmissionStatus.RETIRED
+
         // The forward-compatibility landing zone: a status this build predates arrives as UNKNOWN
         // (coerceInputValues, CLAUDE.md §5) and lists as one this build cannot name, never as one of
-        // the three it can.
+        // those it can.
         QuestionStatus.UNKNOWN -> SubmissionStatus.OTHER
     }
 

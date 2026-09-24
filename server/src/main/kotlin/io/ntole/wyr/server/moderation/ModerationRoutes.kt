@@ -9,6 +9,8 @@ import io.ntole.wyr.core.api.WyrApi
 import io.ntole.wyr.core.question.ApproveSubmissionRequest
 import io.ntole.wyr.core.question.QuestionStatus
 import io.ntole.wyr.core.question.RejectSubmissionRequest
+import io.ntole.wyr.core.question.RestoreQuestionRequest
+import io.ntole.wyr.core.question.RetireQuestionRequest
 import io.ntole.wyr.core.question.SubmissionListDto
 import io.ntole.wyr.server.db.Db
 import io.ntole.wyr.server.plugins.ApiFailure
@@ -16,6 +18,7 @@ import io.ntole.wyr.server.plugins.RouteLimit
 import io.ntole.wyr.server.plugins.pageLimit
 import io.ntole.wyr.server.plugins.rateLimit
 import io.ntole.wyr.server.plugins.receiveOrReject
+import io.ntole.wyr.server.plugins.requireValidId
 import io.ntole.wyr.server.question.categoryFilter
 
 /**
@@ -74,6 +77,24 @@ fun Route.moderationRoutes(
                 val limit = params.pageLimit()
 
                 call.respond(db.query { ModerationStore.questions(statuses, categories, after, limit) })
+            }
+
+            post(WyrApi.Paths.ADMIN_RETIREMENTS) {
+                call.requireAdmin(adminToken)
+
+                val retirement = call.receiveOrReject<RetireQuestionRequest>("retirement")
+                requireValidId("questionId", retirement.questionId)
+
+                call.respond(db.query { ModerationStore.retire(retirement.questionId) })
+            }
+
+            post(WyrApi.Paths.ADMIN_RESTORATIONS) {
+                call.requireAdmin(adminToken)
+
+                val restoration = call.receiveOrReject<RestoreQuestionRequest>("restoration")
+                requireValidId("questionId", restoration.questionId)
+
+                call.respond(db.query { ModerationStore.restore(restoration.questionId) })
             }
         }
     }

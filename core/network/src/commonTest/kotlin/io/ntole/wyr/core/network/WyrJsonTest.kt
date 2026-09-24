@@ -8,6 +8,7 @@ import io.ntole.wyr.core.question.QuestionCategoryListSerializer
 import io.ntole.wyr.core.question.QuestionDto
 import io.ntole.wyr.core.question.QuestionStatus
 import io.ntole.wyr.core.question.SubmissionDto
+import kotlinx.serialization.Serializable
 import kotlinx.serialization.SerializationException
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -100,6 +101,56 @@ class WyrJsonTest {
             submission,
         )
     }
+
+    @Test
+    fun `a retired submission and the conflict a retirement can end in decode as themselves`() {
+        val retired =
+            WyrJson.decodeFromString<SubmissionDto>(
+                """{"id":"q1","optionA":"fly","optionB":"swim","categories":["ETHICS"],""" +
+                    """"status":"RETIRED","submittedAt":5}""",
+            )
+        val conflict = WyrJson.decodeFromString<ErrorDto>("""{"code":"WRONG_STATUS","message":"m"}""")
+
+        assertEquals(QuestionStatus.RETIRED, retired.status)
+        assertEquals(ErrorCode.WRONG_STATUS, conflict.code)
+    }
+
+    /**
+     * What a build from before retirement makes of a retired submission and of the conflict, read
+     * through this build's `WyrJson` into the contract as that build had it: the three statuses and
+     * the error codes it knew, each with its `UNKNOWN` default. It lists the submission as a status it
+     * cannot name, rather than failing the whole list, which is what the `UNKNOWN` members are for.
+     */
+    @Test
+    fun `a build from before retirement reads a retired submission and its conflict as UNKNOWN`() {
+        val retired =
+            WyrJson.decodeFromString<SubmissionBeforeRetirement>(
+                """{"id":"q1","status":"RETIRED","submittedAt":5}""",
+            )
+        val conflict = WyrJson.decodeFromString<ErrorBeforeRetirement>("""{"code":"WRONG_STATUS","message":"m"}""")
+
+        assertEquals(StatusBeforeRetirement.UNKNOWN, retired.status)
+        assertEquals(CodeBeforeRetirement.UNKNOWN, conflict.code)
+    }
+
+    @Serializable
+    private enum class StatusBeforeRetirement { PENDING, APPROVED, REJECTED, UNKNOWN }
+
+    @Serializable
+    private enum class CodeBeforeRetirement { QUESTION_NOT_FOUND, ALREADY_DECIDED, FORBIDDEN, UNKNOWN }
+
+    @Serializable
+    private data class SubmissionBeforeRetirement(
+        val id: String,
+        val status: StatusBeforeRetirement = StatusBeforeRetirement.UNKNOWN,
+        val submittedAt: Long,
+    )
+
+    @Serializable
+    private data class ErrorBeforeRetirement(
+        val message: String? = null,
+        val code: CodeBeforeRetirement = CodeBeforeRetirement.UNKNOWN,
+    )
 
     @Test
     fun `a stat the server does not send decodes as its default`() {

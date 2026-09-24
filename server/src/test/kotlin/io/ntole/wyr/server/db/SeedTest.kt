@@ -1,7 +1,10 @@
 package io.ntole.wyr.server.db
 
 import io.ntole.wyr.server.TestDatabaseSettings
+import io.ntole.wyr.server.moderation.ModerationStore
+import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.Database
+import org.jetbrains.exposed.v1.jdbc.select
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
@@ -38,6 +41,32 @@ class SeedTest {
         }
     }
 
+    /**
+     * A seed a moderator retired stays retired through the next boot, which neither writes it again
+     * nor puts it back: the seed writes only into a database with no question in it.
+     */
+    @Test
+    fun `a retired seed stays retired through a boot and is not written again`() {
+        TestDatabaseSettings(h2Url("wyr-seed-retired-${UUID.randomUUID()}"), user = null, password = null)
+            .serverPool()
+            .use { pool ->
+                DatabaseFactory.migrateAndSeed(pool).also { TransactionManager.closeAndUnregister(it) }
+                pool.inTransaction { ModerationStore.retire(RETIRED_SEED, now = RETIRED_AT) }
+
+                DatabaseFactory.migrateAndSeed(pool).also { TransactionManager.closeAndUnregister(it) }
+
+                assertEquals(seededOnce(), pool.inTransaction { seeds() }, "nothing written again")
+                val retiredAt =
+                    pool.inTransaction {
+                        Questions
+                            .select(Questions.retiredAt)
+                            .where { Questions.id eq RETIRED_SEED }
+                            .single()[Questions.retiredAt]
+                    }
+                assertEquals(RETIRED_AT, retiredAt, "and still retired")
+            }
+    }
+
     /** What one seed writes, on a database of its own. */
     private fun seededOnce(): Map<String, Long> =
         TestDatabaseSettings(h2Url("wyr-seed-once-${UUID.randomUUID()}"), user = null, password = null)
@@ -55,4 +84,9 @@ class SeedTest {
             "questions" to Questions.selectAll().count(),
             "question_categories" to QuestionCategories.selectAll().count(),
         )
+
+    private companion object {
+        const val RETIRED_SEED = "seed-1"
+        const val RETIRED_AT = 5_000L
+    }
 }

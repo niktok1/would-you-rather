@@ -26,6 +26,7 @@ import io.ntole.wyr.core.error.ErrorDto
 import io.ntole.wyr.core.like.LikeRequest
 import io.ntole.wyr.core.like.LikeResultDto
 import io.ntole.wyr.core.player.PlayerStatsDto
+import io.ntole.wyr.core.question.AdminQuestionDto
 import io.ntole.wyr.core.question.AdminQuestionPageDto
 import io.ntole.wyr.core.question.ApproveSubmissionRequest
 import io.ntole.wyr.core.question.QuestionCategory
@@ -33,6 +34,8 @@ import io.ntole.wyr.core.question.QuestionDto
 import io.ntole.wyr.core.question.QuestionPageDto
 import io.ntole.wyr.core.question.QuestionStatus
 import io.ntole.wyr.core.question.RejectSubmissionRequest
+import io.ntole.wyr.core.question.RestoreQuestionRequest
+import io.ntole.wyr.core.question.RetireQuestionRequest
 import io.ntole.wyr.core.question.SkipRequest
 import io.ntole.wyr.core.question.SubmissionDto
 import io.ntole.wyr.core.question.SubmissionListDto
@@ -1533,6 +1536,122 @@ class ApiFlowTest {
         }
 
     @Test
+    fun `a retired question is served to nobody, keeps what it earned, and is served again once restored`() =
+        runServer("admin-retire") { client ->
+            val (author, player) = client.guest() to client.guest()
+            val question = client.approvedQuestion(author, "Retired")
+            client.vote(player, question.id, OptionSide.B)
+            client.liked(player, question.id, liked = true)
+
+            val response = client.retire(question.id)
+
+            assertEquals(HttpStatusCode.OK, response.status)
+            val retired = response.body<AdminQuestionDto>()
+            assertEquals(QuestionStatus.RETIRED, retired.status)
+            assertTrue(retired.retiredAt != null, "when it was retired")
+            assertEquals(VoteTallyDto(votesA = 0, votesB = 1) to 1, retired.tally to retired.likeCount, "all kept")
+            listOf("its author" to author, "another player" to player).forEach { (who, session) ->
+                assertFalse(question.id in client.wholePool(session).ids(), "$who is not served it")
+                val refusals =
+                    listOf(
+                        "an answer" to client.castVote(session, VoteRequest(question.id, OptionSide.A, "attempt-2")),
+                        "a skip" to client.skip(session, question.id),
+                        "a like" to client.like(session, question.id, liked = true),
+                        "an unlike" to client.like(session, question.id, liked = false),
+                    )
+                refusals.forEach { (what, refusal) ->
+                    assertEquals(HttpStatusCode.NotFound, refusal.status, "$what by $who")
+                    assertEquals(ErrorCode.QUESTION_NOT_FOUND, refusal.body<ErrorDto>().code, "$what by $who")
+                }
+            }
+            assertEquals(QuestionStatus.RETIRED, client.mySubmissions(author).single().status, "its author sees it")
+            client.stats(author).let { stats ->
+                assertEquals(1 to 1, stats.likesReceived to stats.totalPoints, "the like still held, and paid")
+            }
+            assertEquals(listOf(retired), client.adminQuestionPage("?${WyrApi.Query.STATUS}=RETIRED").questions)
+            assertEquals(listOf(question.id), client.queue("?${WyrApi.Query.STATUS}=RETIRED").map { it.id })
+            assertFalse(question.id in client.queue("?${WyrApi.Query.STATUS}=APPROVED").map { it.id })
+
+            val restored = client.restore(question.id)
+
+            assertEquals(HttpStatusCode.OK, restored.status)
+            assertEquals(
+                retired.copy(status = QuestionStatus.APPROVED, retiredAt = null),
+                restored.body<AdminQuestionDto>(),
+            )
+            assertEquals(QuestionStatus.APPROVED, client.mySubmissions(author).single().status)
+            assertTrue(question.id in client.wholePool(author).ids(), "due again for one who has not answered it")
+            assertEquals(Scoring.POINTS_PER_ANSWER, client.vote(author, question.id, OptionSide.A).pointsAwarded)
+        }
+
+    @Test
+    fun `retiring a question that is not approved, or restoring one that is not retired, is a conflict`() =
+        runServer("admin-retire-conflict") { client ->
+            val author = client.guest()
+            val pending = client.submitted(author, question("Pending"))
+            val rejected = client.reject(client.submitted(author, question("Rejected")).id, "No").body<SubmissionDto>()
+            val approved = client.approvedQuestion(author, "Approved")
+            val retired = client.approvedQuestion(author, "Retired").also { client.retire(it.id) }
+
+            listOf(
+                "retiring a pending one" to client.retire(pending.id),
+                "retiring a rejected one" to client.retire(rejected.id),
+                "retiring a retired one" to client.retire(retired.id),
+                "restoring a pending one" to client.restore(pending.id),
+                "restoring a rejected one" to client.restore(rejected.id),
+                "restoring an approved one" to client.restore(approved.id),
+                "restoring a seed" to client.restore("seed-1"),
+            ).forEach { (case, response) ->
+                assertEquals(HttpStatusCode.Conflict, response.status, case)
+                assertEquals(ErrorCode.WRONG_STATUS, response.body<ErrorDto>().code, case)
+            }
+            listOf("retiring" to client.retire(LONGER_THAN_ANY_ID), "restoring" to client.restore("no-such-question"))
+                .forEach { (case, response) ->
+                    assertEquals(HttpStatusCode.NotFound, response.status, case)
+                    assertEquals(ErrorCode.QUESTION_NOT_FOUND, response.body<ErrorDto>().code, case)
+                }
+            assertEquals(
+                listOf(
+                    QuestionStatus.RETIRED,
+                    QuestionStatus.APPROVED,
+                    QuestionStatus.REJECTED,
+                    QuestionStatus.PENDING,
+                ),
+                client.mySubmissions(author).map { it.status },
+                "each as it was",
+            )
+
+            val seed = client.retire("seed-1").body<AdminQuestionDto>()
+            assertEquals(QuestionStatus.RETIRED to true, seed.status to seed.seed, "a seed retires like any other")
+        }
+
+    @Test
+    fun `a retirement or restoration the server cannot use is a validation error`() =
+        runServer("admin-retire-malformed") { client ->
+            val approved = client.approvedQuestion(client.guest(), "Approved")
+
+            listOf(WyrApi.Paths.ADMIN_RETIREMENTS, WyrApi.Paths.ADMIN_RESTORATIONS).forEach { path ->
+                listOf(
+                    "no questionId" to "{}",
+                    "a blank id" to """{"questionId":"  "}""",
+                    "an id with a NUL" to """{"questionId":"${approved.id}\u0000"}""",
+                    "not json" to "{not json",
+                ).forEach { (case, body) ->
+                    val response = client.moderate(path, body)
+                    assertEquals(HttpStatusCode.BadRequest, response.status, "$case to $path")
+                    assertEquals(ErrorCode.VALIDATION_FAILED, response.body<ErrorDto>().code, "$case to $path")
+                }
+            }
+            val stillApproved =
+                client
+                    .adminQuestionPage(
+                        "?${WyrApi.Query.STATUS}=APPROVED&${WyrApi.Query.LIMIT}=${WyrApi.Limits.MAX_PAGE_SIZE}",
+                    ).questions
+                    .filterNot { it.seed }
+            assertEquals(listOf(approved.id), stillApproved.map { it.id }, "nothing was retired")
+        }
+
+    @Test
     fun `a like is set rather than toggled and pays the author a point for as long as it is held`() =
         runServer("like") { client ->
             val (author, fan) = client.guest() to client.guest()
@@ -1841,6 +1960,18 @@ class ApiFlowTest {
                     setBody(RejectSubmissionRequest("no-such-question", reason = "No"))
                 },
             "the question list" to get(WyrApi.Paths.ADMIN_QUESTIONS) { credentials() },
+            "a retirement" to
+                post(WyrApi.Paths.ADMIN_RETIREMENTS) {
+                    credentials()
+                    contentType(ContentType.Application.Json)
+                    setBody(RetireQuestionRequest("no-such-question"))
+                },
+            "a restoration" to
+                post(WyrApi.Paths.ADMIN_RESTORATIONS) {
+                    credentials()
+                    contentType(ContentType.Application.Json)
+                    setBody(RestoreQuestionRequest("no-such-question"))
+                },
         )
 
     /** Approves [questionId] with the test server's admin token, filing it under [categories] if any. */
@@ -1862,6 +1993,20 @@ class ApiFlowTest {
             header(WyrApi.Headers.ADMIN_TOKEN, TEST_ADMIN_TOKEN)
             contentType(ContentType.Application.Json)
             setBody(RejectSubmissionRequest(questionId, reason))
+        }
+
+    private suspend fun HttpClient.retire(questionId: String): HttpResponse =
+        post(WyrApi.Paths.ADMIN_RETIREMENTS) {
+            header(WyrApi.Headers.ADMIN_TOKEN, TEST_ADMIN_TOKEN)
+            contentType(ContentType.Application.Json)
+            setBody(RetireQuestionRequest(questionId))
+        }
+
+    private suspend fun HttpClient.restore(questionId: String): HttpResponse =
+        post(WyrApi.Paths.ADMIN_RESTORATIONS) {
+            header(WyrApi.Headers.ADMIN_TOKEN, TEST_ADMIN_TOKEN)
+            contentType(ContentType.Application.Json)
+            setBody(RestoreQuestionRequest(questionId))
         }
 
     /** Sends [body] as it is to the admin route [path], with the test server's admin token. */
@@ -1973,6 +2118,7 @@ class ApiFlowTest {
                 "seed",
                 "submittedAt",
                 "reviewedAt",
+                "retiredAt",
                 "rejectionReason",
                 "tally",
                 "likeCount",

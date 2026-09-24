@@ -100,6 +100,8 @@ internal fun ErrorCode.toDomain(): DomainError =
 
         ErrorCode.ALREADY_DECIDED -> DomainError.ALREADY_DECIDED
 
+        ErrorCode.WRONG_STATUS -> DomainError.WRONG_STATUS
+
         // Never UNAUTHORIZED: that would throw the player's session away over a moderator's token.
         ErrorCode.FORBIDDEN -> DomainError.FORBIDDEN
 

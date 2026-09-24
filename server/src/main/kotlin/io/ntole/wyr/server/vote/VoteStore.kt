@@ -31,8 +31,10 @@ object VoteStore {
      * pays nothing, counts as no answer, and it reports the stored side with the current tally and
      * total.
      *
-     * A question the player may not be served is not found ([QuestionStore.isServable]): one a
-     * moderator has not approved, and the player's own.
+     * A question the player may not be served is not found ([QuestionStore.lockIfServable]): one a
+     * moderator has not approved, or has retired. The player's own is served like any other. A
+     * servable one stays locked until this transaction ends, so a retirement waits for this answer
+     * and an answer that waited on a retirement is not found.
      *
      * Ordering matters twice. The player is resolved *before* any write: a validly signed token
      * can outlive its player (an H2 dev server restarted with the constant dev secret still
@@ -40,13 +42,12 @@ object VoteStore {
      * of answering 401. And the vote is written *before* the tally is counted, so the returned
      * percentages already include the player's own vote — which is what the reveal screen shows.
      *
-     * Two first answers racing on one question both find no vote and both insert. The second waits
-     * on the first's uncommitted key, then fails on the primary key (SQLState 23505) once it
-     * commits. That failure is deliberately not caught: PostgreSQL aborts a transaction at its
-     * first error, so nothing more could run in this one. It propagates, Exposed rolls back and
-     * runs the whole transaction again (`Db.query` goes through `transaction`, 3 attempts). The
-     * rerun finds the committed vote and treats it like any other: a different attempt moves it
-     * (two answers, one vote), and the same attempt replays it.
+     * Two first answers to one question do not race on its key: the second waits on the question's
+     * lock, then finds the first's committed vote and treats it like any other: a different attempt
+     * moves it (two answers, one vote), and the same attempt replays it. The key still holds one vote
+     * per player per question (CLAUDE.md §4), and a failure on it would not be caught: PostgreSQL
+     * aborts a transaction at its first error, so it would propagate, and Exposed would roll back and
+     * run the whole transaction again (`Db.query` goes through `transaction`, 3 attempts).
      */
     fun cast(
         playerId: String,
@@ -55,7 +56,7 @@ object VoteStore {
         attemptId: String,
         now: Long = System.currentTimeMillis(),
     ): VoteResultDto {
-        if (!QuestionStore.isServable(questionId)) throw ApiFailure.questionNotFound(questionId)
+        if (!QuestionStore.lockIfServable(questionId)) throw ApiFailure.questionNotFound(questionId)
 
         if (PlayerStore.find(playerId) == null) throw ApiFailure.unauthorized("unknown player")
 
@@ -94,8 +95,11 @@ object VoteStore {
      * plain read can be stale by the time this transaction writes: a retry arriving while its
      * attempt is still in flight would read the attempt before it, take itself for a fresh answer,
      * and pay again. `FOR UPDATE` makes it wait for the attempt to commit and then read the row that
-     * attempt left, and so replay it. Before a first answer there is no row to lock, and two first
-     * answers race on the primary key instead (see [cast]).
+     * attempt left, and so replay it. The question's lock, taken first ([QuestionStore.lockIfServable]),
+     * orders every answer to the question too, so today this waits on no other answer. It stays, so a
+     * replay rests on the row it reads rather than on a lock taken for retirement. Before a first
+     * answer there is no row to lock, and the question's lock keeps two first answers apart (see
+     * [cast]).
      */
     private fun lockVote(
         playerId: String,

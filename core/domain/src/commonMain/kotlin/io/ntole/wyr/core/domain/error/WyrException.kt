@@ -22,6 +22,12 @@ public enum class DomainError {
     ALREADY_DECIDED,
 
     /**
+     * A moderator tried to retire a question that is not approved, a retired one included, or to
+     * restore one that is not retired. Nothing changed.
+     */
+    WRONG_STATUS,
+
+    /**
      * A moderator's request did not carry the server's admin token. Nothing to do with the player's
      * session, which stays as it is.
      */
