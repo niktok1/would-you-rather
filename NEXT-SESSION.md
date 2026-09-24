@@ -295,6 +295,19 @@ automatically from every green commit on `main` (its URL is on its Render page).
   V1 to V3, `/health` 200, the list 200 with the seeds marked and a `nextCursor`, `seed-1` retired
   200 (`RETIRED`, `retiredAt` set), retired again 409 `WRONG_STATUS`, restored 200, and the list
   without the token 403.
+- The moderation app, `:app:adminApp` (CLAUDE.md §8d *Moderation*), JVM tests only.
+  `ModerationViewModelTest` drives the token and the queue over a scripted repository: nothing sent
+  until what is typed can be a token, every request carrying it trimmed, the token absent from the
+  state's text and from a new ViewModel, Lock forgetting everything and cancelling the action in
+  flight (a lock guard dropped, or the cancel, fails it), approvals with and without categories,
+  rejections only with a reason the server takes, the queue read again after every decision and
+  every error, a failure kept once its submission is no longer listed. `ModerationOverHttpTest`
+  runs it over the real client and a mock engine: 403, a bare 404, a 409 and a 429 with its
+  `Retry-After`, and every request with the admin header and no bearer token. `AdminModuleTest`
+  resolves the app from its own modules, with no platform module, and pins that nothing there can
+  make or keep a player session: wired with the player's data module instead, it fails.
+  `ScreensDrawTest` draws the screens off screen (Compose's `ImageComposeScene`) in both themes.
+  `DesktopEnvironmentNameTest` pins `WYR_ENV`. Its JVM, JS and wasmJs compiles run.
 - `:app:androidApp:assembleDebug` produces a real APK.
 - `ktlintCheck` clean across every module.
 
@@ -413,6 +426,11 @@ automatically from every green commit on `main` (its URL is on its Render page).
   all but `SkipQuestion`, which has run only against `FakeServer`. `POST /v1/skips` itself has run
   only in the server's own tests. The *Submit a question* section has not been opened either: its
   ViewModel and line helpers are tested, and its use cases ran live, but it has never been drawn.
+- **The moderation app has not been opened.** No window has been shown and no page served: its
+  screens were drawn off screen by `ScreensDrawTest` and looked at as images once, and its requests
+  have gone only to a mock engine. The webpack build of its page has not run, so neither has the
+  check of `kotlin-js-store`'s lock against it. `ScreensDrawTest` draws with the host's Skia, which
+  CI's Linux runner has yet to run.
 
 ## Running it locally
 
@@ -516,8 +534,8 @@ curl -s -X POST localhost:8080/v1/admin/approvals -H "X-Admin-Token: $ADMIN_TOKE
   -H 'Content-Type: application/json' -d '{"questionId":"<id from the queue>","categories":["SUPERPOWERS","RANDOM"]}'
 ```
 
-Or moderate from the dev console's *Moderation* section (below). Leave `categories` out to keep the
-author's. To reject instead, send
+Or moderate from the moderation app (*The moderation app*, below), or the dev console's *Moderation*
+section. Leave `categories` out to keep the author's. To reject instead, send
 `{"questionId":"<id>","reason":"Too close to a seed"}` to `/v1/admin/rejections`; the reason is
 trimmed and must then be one line of at most 200 characters. `?status=APPROVED` or
 `?status=REJECTED` on the queue lists decided submissions, and `GET /v1/me/questions` with the
@@ -542,6 +560,55 @@ curl -s -X POST localhost:8080/v1/admin/retirements -H "X-Admin-Token: $ADMIN_TO
 curl -s -X POST localhost:8080/v1/admin/restorations -H "X-Admin-Token: $ADMIN_TOKEN" \
   -H 'Content-Type: application/json' -d '{"questionId":"seed-1"}'
 ```
+
+### The moderation app
+
+`:app:adminApp` (CLAUDE.md §3, §8d *Moderation*) moderates and does nothing else: a desktop window
+or a browser page, with no player session. Its header names the server it talks to and that
+server's URL, production's in red, and the desktop window's title names both too. It needs the
+server's admin token, typed into *Admin token*: masked, held in memory only, gone once the app
+closes or *Lock* is pressed, which also forgets everything read with it.
+
+- **Local**, against `./gradlew :server:run` started with an `ADMIN_TOKEN` (*Moderating*, above);
+  type the token it echoed:
+
+  ```bash
+  ./gradlew :app:adminApp:run
+  ```
+
+- **Dev and prod**: the `WYR_ENV` variable, as for the game's desktop client. Type that service's
+  own `ADMIN_TOKEN`, from its Environment tab on Render (`sync: false`, never committed); dev's and
+  prod's differ, and a local one works on neither:
+
+  ```bash
+  WYR_ENV=dev ./gradlew :app:adminApp:run
+  WYR_ENV=prod ./gradlew :app:adminApp:run
+  ```
+
+- **In a browser**: `-Pwyr.env`, local when absent. The server must list the page's origin in its
+  `ALLOWED_WEB_ORIGINS`, or CORS refuses every request, the token's header with it. The page's dev
+  server takes the first free port from 8080, so beside a local API on 8080 it is 8081, and 8082 if
+  the game's page already holds 8081:
+
+  ```bash
+  ALLOWED_WEB_ORIGINS=localhost:8081,localhost:8082 ADMIN_TOKEN=... ./gradlew :server:run
+  ./gradlew :app:adminApp:wasmJsBrowserDevelopmentRun
+  ./gradlew :app:adminApp:wasmJsBrowserDevelopmentRun -Pwyr.env=dev
+  ```
+
+  Against dev or prod the page's origin goes into that service's `ALLOWED_WEB_ORIGINS` on Render;
+  for prod the desktop app needs no such change, so prefer it there.
+
+**Pending** is the queue, oldest first, read on *Load pending*: each submission's options,
+categories, age and id. The chips pick the categories *Approve* files it under in place of the
+author's, none keeping the author's; *Reject* stays off until the reason typed is one line of at
+most 200 characters once trimmed. After every decision the queue is read again, so a decided
+submission leaves it, and a line above it says what the decision did. A failure shows where it
+happened: under the submission, or above the queue, named by its options, once the read after it no
+longer lists it. `Wrong admin token (403)`, `Moderation is off on this server (404)` for a server
+without `ADMIN_TOKEN` (or a build without that route), `Already decided (409)`, and `Too many requests
+(429): try again in N s`, where ten wrong tokens in a minute lock the address out, the right token
+too, until the wait is over.
 
 ### The dev console
 
@@ -698,9 +765,9 @@ rules live in CLAUDE.md §8d. Each item is one short-lived branch, in order:
     verified* above), and moving `wyr-postgres` to a paid instance type by about 2026-10-24.
 12. `feat/moderation-app` *(in progress)* — moderation moves out of the player app's console into
     an app of its own. Built: the server and client half, the list of every question and retiring
-    and restoring (V3; provisional, CLAUDE.md §8b). Next: the app itself, on
-    `moderationDataModule(environment)` and the six moderation use cases (*For the moderation app*,
-    below).
+    and restoring (V3; provisional, CLAUDE.md §8b), and the app, `:app:adminApp`, with its pending
+    queue (*The moderation app*, above). Next: the list of every question in the app, then the
+    console's section goes.
 
 **For the moderation app.** Everything it needs is in `io.ntole.wyr.core.domain.moderation`, and
 none of it needs or makes a player session:
@@ -726,8 +793,8 @@ none of it needs or makes a player session:
 - *Errors:* every call throws `WyrException`: `FORBIDDEN` for a wrong token, `WRONG_STATUS` or
   `ALREADY_DECIDED` for a question another moderator moved first, `QUESTION_NOT_FOUND`, `NETWORK`,
   `RATE_LIMITED`, and `UNKNOWN` for a server with moderation off (a bare 404).
-- *Not built:* nothing moves the dev console's *Moderation* section yet; it still decides the queue,
-  and whether to remove it once the app exists is the app branch's call.
+- *Built on it:* `:app:adminApp`, with its pending queue (*The moderation app*, above). The dev
+  console's *Moderation* section still decides the queue too, until the app lists every question.
 
 **Remote:** `github.com/niktok1/would-you-rather` (private), `origin`, pushed over SSH through the
 `github-wyr` host alias with a deploy key scoped to this repo (CLAUDE.md §7). `gh` is logged in to

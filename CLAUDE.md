@@ -17,6 +17,9 @@ declare `js`/`wasmJs` targets and every client dependency must resolve for them.
 consequence to remember: **SQLDelight has no wasmJs driver**, which is why the local cache is
 currently an interface with an in-memory implementation (see §4).
 
+The **moderation app** (`:app:adminApp`, §3, §8d *Moderation*) is a second client, for whoever holds
+the server's admin token, and targets desktop (JVM) and web only: a moderator works at a computer.
+
 **Learning project.** Built end-to-end with Claude as an exercise in production workflow.
 Not connected to any employer or company infrastructure (see §7).
 
@@ -77,6 +80,11 @@ dependency.
 :app:webApp          js + wasmJs browser entry point, and the build-time environment (§8e).
 app/iosApp           Xcode project consuming the Shared framework (not a Gradle module).
 
+:app:adminApp        The moderation app (§8d, Moderation): its Compose UI, theme, ViewModel and
+                     DI wiring, and its own entry points, a desktop window (jvm) and a page
+                     (js + wasmJs). Depends on :core:domain, :core:data, :core:network.
+                     Never on :app:shared, the game.
+
 :server              Ktor server. Routes, auth, persistence (Exposed). Depends on :core.
 ```
 
@@ -84,6 +92,10 @@ app/iosApp           Xcode project consuming the Shared framework (not a Gradle 
 entry point holds ONLY what cannot be expressed in common code: OS lifecycle binding, platform
 permissions, framework/manifest config, and platform-specific DI wiring. If code can live in
 shared, it lives in shared.
+
+The moderation app is one module, entry points included: nothing else consumes its UI and it has no
+Android or iOS build, so a shared module under platform modules would buy it nothing. The rule holds
+inside it: its `jvmMain` and `webMain` hold only `main()` and the name of the environment.
 
 **Architecture constraints (do not violate):**
 - `:core` must never import anything platform-specific or any business logic.
@@ -237,6 +249,11 @@ Implemented as `WyrTheme` in `:app:shared` (`io.ntole.wyr.theme`): `WyrColors` +
 Material components inherit it instead of falling back to Material defaults. Adding a theme =
 adding another `WyrColors` value.
 
+The moderation app has a theme of its own, `AdminTheme` in `:app:adminApp` (`io.ntole.wyr.admin.theme`),
+since it may not depend on `:app:shared` (§3): Material 3's default light and dark schemes and type
+scale, with `AdminDimens` and `AdminType` beside them. The same rule holds in its screens: no hex, dp
+or sp literal outside that file.
+
 **Visual direction:** playful & bold, theme-aware (full light + dark support).
 
 **Brand option colors — constant across all modes** (these are the identity):
@@ -319,8 +336,8 @@ This project must never be attributed to any employer identity.
   or anything but visible ASCII fails at boot, since no request header could carry it. Generate one
   with `openssl rand -hex 32`. It is read at boot, so rotating it is changing the variable and
   restarting the service, and the old token is dead from then on. A browser on an
-  `ALLOWED_WEB_ORIGINS` origin may send its header (CORS). The dev console's *Moderation* section
-  takes it typed and holds it in memory only.
+  `ALLOWED_WEB_ORIGINS` origin may send its header (CORS). The moderation app and the dev console's
+  *Moderation* section take it typed and hold it in memory only.
 - `CLIENT_IP_HEADER` (`render.yaml`: `CF-Connecting-IP`) names the request header the per-address
   rate limits (§8b) take the client's address from (`clientAddress`). Every request to a Render web
   service passes through Cloudflare, which sets `CF-Connecting-IP` to the address that reached it
@@ -953,6 +970,24 @@ and every request shows in its HTTP trace (`HttpTrace` in `:core:network`, never
     `moderationDataModule(environment)` binds it alone, for a client that only moderates: an HTTP
     client of its own over an in-memory session store nothing writes, no `TokenStorage` needed, no
     session repository, so no bearer token goes out and no guest can be minted (`DataModuleTest`).
+  - *The moderation app* (`:app:adminApp`, `io.ntole.wyr.admin`, §3) is where a moderator works: a
+    desktop window and a browser page on `moderationDataModule` (`adminModules`), so it never has a
+    player session, sends no bearer token and mints no guest (`AdminModuleTest`). Its header always
+    names the server and its URL, production's in the error colors, and so does the desktop window's
+    title (§8e). The admin token is typed into a masked field and held in `ModerationViewModel`'s
+    memory only, never in saved state or storage, and `SecretText` keeps it out of the state's text;
+    Lock forgets it and everything read with it, and cancels the action in flight, so nothing it
+    answers is shown. Nothing is sent until what is typed can be a token (`AdminToken.of`), and one
+    action runs at a time. *Pending* lists the queue, oldest first, each submission with its options,
+    categories and age: Approve files it under the categories picked for it, none keeping the
+    author's, and Reject sends the reason typed once it is a `RejectionReason`. The queue is read
+    again after every decision, whatever became of it, as the console's is. A failure shows where it
+    happened: a read's above the queue, a decision's under its submission, or above the queue, named
+    by its options, once the read after it no longer lists it. A 403 reads as a wrong token, a bare
+    404 (`UNKNOWN`) as moderation off on that server, a 409 as a decision made first, a 429 with the
+    wait its `Retry-After` named (`WyrException.retryAfter`, §8b). `ModerationViewModelTest` drives it
+    over a scripted repository, `ModerationOverHttpTest` over the real client configuration, and
+    `ScreensDrawTest` draws every screen off screen at a desktop window's size.
   - *The console's section* (`io.ntole.wyr.dev.moderation`) takes the token typed and holds it in its
     ViewModel, in memory only: never in saved state or storage, masked, and a password to the keyboard.
     It loads the queue, approves under the categories picked for a submission (none keeps the
@@ -965,8 +1000,8 @@ Every client build targets one of three server environments, chosen **when it is
 can play against the deployed servers and a production build can never talk to a development one by
 accident. `WyrEnvironment` (`io.ntole.wyr.core.network.environment`) names them, each with its API
 base URL, a display name, and whether a build for it shows the developer tools. It lives in
-`:core:network`, not `:app:shared`, so a client without the game UI (the moderation app to come) can
-name one too.
+`:core:network`, not `:app:shared`, so a client without the game UI (the moderation app,
+`:app:adminApp`, §3) can name one too.
 
 | Environment | Server                                                           | Developer tools |
 |-------------|------------------------------------------------------------------|-----------------|
@@ -976,8 +1011,8 @@ name one too.
 
 - *Naming one.* `WyrEnvironment.parse` takes `local`, `dev` or `prod`, in any case, trimmed; no name,
   or a blank one, is LOCAL. Any other value throws, naming it, rather than falling back. Every entry
-  point hands its name to `initKoin(environmentName)`, which has no default, and it is parsed before
-  Koin starts, so a bad name stops the app at launch. LOCAL's URL comes from each platform source set
+  point hands its name to `initKoin(environmentName)` (the moderation app's to `initAdminKoin`),
+  which has no default, and it is parsed before Koin starts, so a bad name stops the app at launch. LOCAL's URL comes from each platform source set
   of `:core:network`, so it is right on every platform, the emulator's included.
 - *Android*: product flavors `local`, `dev` and `prod` in one `environment` dimension;
   `BuildConfig.WYR_ENV` is the flavor's name, which `WyrApplication` passes on. Each installs beside
@@ -989,12 +1024,15 @@ name one too.
   (`desktopEnvironmentName`), which `Main.kt` hands to `initKoin`; unset is LOCAL.
   `WYR_API_BASE_URL`, which pointed the desktop client at any server, is retired: left set in a shell,
   it sent a PROD build's requests wherever it named, with nothing on screen to say so, since a PROD
-  build has no console. No client can put another URL in its environment's place.
+  build has no console. No client can put another URL in its environment's place. The moderation app
+  reads the same variable in its own `jvmMain` (`desktopEnvironmentName` there too), since it cannot
+  see `:app:shared`'s: `WYR_ENV=dev ./gradlew :app:adminApp:run`.
 - *Web*: the Gradle property `wyr.env` (`-Pwyr.env=dev`), local when absent, which the
   `generateWyrEnv` task writes into a Kotlin constant, `WYR_ENV`, under `build/generated`; a name it
   does not know fails the build. The task is `gradle/wyr-env.gradle.kts`, a script each module with a
   browser entry point applies after naming the constant's package in `extra["wyrEnvPackage"]`, so no
-  two copies of the rule can drift. A web build against DEV or PROD also needs that server's
+  two copies of the rule can drift: `:app:webApp` into `io.ntole.wyr`, `:app:adminApp` into
+  `io.ntole.wyr.admin`. A web build against DEV or PROD also needs that server's
   `ALLOWED_WEB_ORIGINS` (Render dashboard, `sync: false`) to include the page's origin, or every
   request fails CORS.
 - *iOS*: the `WYR_ENV` build setting in `app/iosApp/Configuration/Config.xcconfig` (`local` by
@@ -1004,6 +1042,9 @@ name one too.
   that same environment's URL, so the dev console's header, which shows its name and URL, always says
   where requests go. The console tab is shown only where the environment shows developer
   tools (`rootScreensFor`): a PROD build shows the Play screen alone, with no tab to reach the console.
+  The moderation app binds its environment the same way (`adminModules`), and names it on every
+  screen, whatever the environment: its header shows the server's name and URL, production's in the
+  error colors, and the desktop window's title shows both too (`windowTitleOf`).
 - *A session per environment.* Each environment's guest session is stored under a key of its own
   (`SessionStore.keyFor`: `wyr.session.local`, `wyr.session.dev`, and `wyr.session` for PROD, the key
   every build used before there were environments), which `dataModule` is handed with the

@@ -58,4 +58,7 @@ if (!serverOnly) {
     include(":app:desktopApp")
     include(":app:shared")
     include(":app:webApp")
+
+    // The moderation app, desktop and browser, on the client layers alone (CLAUDE.md §3).
+    include(":app:adminApp")
 }

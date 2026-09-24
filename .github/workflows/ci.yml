@@ -30,11 +30,12 @@ jobs:
       - name: Lint
         run: ./gradlew ktlintCheck --no-daemon
 
-      # JVM-hosted tests: the whole server suite plus the shared client tests, and :core:network's
-      # Android host tests (AndroidTokenStorage against a recording SharedPreferences). iOS and
-      # Android instrumented tests need a mac runner and an emulator respectively, so they are not here.
+      # JVM-hosted tests: the whole server suite plus the shared client tests, the moderation app's
+      # (its screens drawn off screen among them), and :core:network's Android host tests
+      # (AndroidTokenStorage against a recording SharedPreferences). iOS and Android instrumented
+      # tests need a mac runner and an emulator respectively, so they are not here.
       - name: Test
-        run: ./gradlew :server:test :core:domain:jvmTest :core:data:jvmTest :core:network:jvmTest :core:network:testAndroidHostTest :app:shared:jvmTest --no-daemon
+        run: ./gradlew :server:test :core:domain:jvmTest :core:data:jvmTest :core:network:jvmTest :core:network:testAndroidHostTest :app:shared:jvmTest :app:adminApp:jvmTest --no-daemon
 
       # Proves every in-scope client target still compiles, including both web targets.
       - name: Compile all client targets
@@ -43,6 +44,9 @@ jobs:
             :app:shared:compileKotlinJvm \
             :app:shared:compileKotlinJs \
             :app:shared:compileKotlinWasmJs \
+            :app:adminApp:compileKotlinJvm \
+            :app:adminApp:compileKotlinJs \
+            :app:adminApp:compileKotlinWasmJs \
             :app:androidApp:assembleDebug
 
       - name: Upload test reports
