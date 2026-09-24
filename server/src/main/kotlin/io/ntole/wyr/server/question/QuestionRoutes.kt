@@ -7,7 +7,6 @@ import io.ktor.server.routing.Route
 import io.ktor.server.routing.get
 import io.ktor.server.routing.post
 import io.ntole.wyr.core.api.WyrApi
-import io.ntole.wyr.core.question.QuestionCategory
 import io.ntole.wyr.core.question.SkipRequest
 import io.ntole.wyr.server.auth.JWT_AUTH
 import io.ntole.wyr.server.auth.authenticatedPlayerId
@@ -33,18 +32,9 @@ fun Route.questionRoutes(db: Db) {
 
                 val limit = params.pageLimit()
 
-                // One category per repeat of the parameter, and none for every category. UNKNOWN is the
-                // client's decoding fallback and is never stored, so filtering by it would always answer
-                // an empty batch, which the feed otherwise never does while it has questions. A value that
-                // is not a category at all, a comma-separated list included, is refused as well.
-                val categories =
-                    params
-                        .getAll(WyrApi.Query.CATEGORY)
-                        .orEmpty()
-                        .map { raw ->
-                            QuestionCategory.entries.firstOrNull { it.name == raw && it != QuestionCategory.UNKNOWN }
-                                ?: throw ApiFailure.validation("unknown category: $raw")
-                        }.toSet()
+                // Filtering by UNKNOWN would always answer an empty batch, which the feed otherwise never
+                // does while it has questions, so it is refused with every other value that is no category.
+                val categories = params.categoryFilter()
 
                 val batch =
                     db.query {
