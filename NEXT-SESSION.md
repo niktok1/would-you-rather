@@ -11,7 +11,7 @@ Repo initialized on `main` with the personal identity and `user.useConfigOnly = 
 
 ### Verified working
 
-- `:server` on H2: 124 tests green, including 46 end-to-end flow tests in `ApiFlowTest`. Flat
+- `:server` on H2: 156 tests green, including 59 end-to-end flow tests in `ApiFlowTest`. Flat
   scoring is covered there (every vote pays 1, majority and minority alike, and the total
   accumulates) and by `PlayerStoreTest`, which races awards for one player and refreshes of one
   token. The endless feed, re-answering and attempt replay are covered there too, and by
@@ -48,6 +48,32 @@ Repo initialized on `main` with the personal identity and `user.useConfigOnly = 
   `DefaultQuestionRepositoryTest`, a selection of several sent whole with every refill, any change to
   it dropping the queue (a refill in flight included), the same set keeping it, and `OTHER` refused;
   and `DevConsoleViewModelTest`, the Category row's toggles and *All*.
+  Moderation (`feat/moderation`, server and contract only): `ModerationStoreTest` races two
+  approvals of one submission, and an approval against a rejection, and exactly one decides it each
+  time, with only the winner's categories written (dropping `PENDING` from the compare-and-set, or
+  replacing the categories before the decision, fails them); it also pins what a decision writes,
+  409 and nothing changed for a decided question or a seed, 404 for an unknown id, and the queue's
+  order, bound, statuses and statement count. `ApiFlowTest` pins the effects end to end: an approved
+  submission due at once for its author, a player midway through the cycle and one who had answered
+  everything else (served it in cycle 1, not a new cycle); a rejected one served to nobody, 404 to
+  answer or skip, its trimmed reason in the author's list; categories named on approval changing
+  what `?category=` finds; 400 for every malformed decision or queue query; 403 `FORBIDDEN` on all
+  three admin routes for a missing, wrong, case-changed or bearer-carried token, and before the body
+  is read; 200 beside any player session, live, forged or dead, never 401; and 404 on all three with
+  `ADMIN_TOKEN` unset. `AdminTokenTest` pins the comparison: one `MessageDigest.isEqual` of two
+  32-byte digests per check, whatever is presented. `ServerConfigTest` pins `ADMIN_TOKEN`'s parsing,
+  `CorsTest` the preflight for `X-Admin-Token`. `SubmissionStoreTest` and `ServableQuestionsTest`
+  now decide through `ModerationStore` rather than writing the table. The whole suite passes against
+  one shared database too (`WYR_TEST_JDBC_URL` at a shared H2), so the per-test drop copes with the
+  new index.
+- Live curl run of moderation against `ADMIN_TOKEN=... ./gradlew :server:run` on H2, on
+  `feat/moderation`: a guest submitted two questions; the queue listed both, oldest first; the queue
+  without the token, and with only the player's bearer token, was 403 `FORBIDDEN`; approving one
+  with `["SUPERPOWERS","RANDOM"]` answered it `APPROVED` under both, and it was then in the
+  `?category=RANDOM` feed and the guest's due count (25); rejecting the other with `"  Too close to
+  a seed "` stored the reason trimmed, which `GET /v1/me/questions` showed; deciding the approved
+  one again was 409 `ALREADY_DECIDED`, an unknown id 404 and a blank reason 400; the queue was then
+  empty and `?status=APPROVED` listed the one approved.
 - Live curl run against `./gradlew :server:run` confirmed guest auth, paging, voting,
   refresh-token rotation, replay rejection, and the `ErrorDto` envelope on 400/401/404/409. That
   run predates flat scoring, `fix/read-committed` and the endless feed, so the scoring it checked
@@ -101,6 +127,14 @@ Repo initialized on `main` with the personal identity and `user.useConfigOnly = 
   submission committed while it waited. That has run only on H2 (`SubmissionStoreTest` polls H2's
   `SESSIONS`); on PostgreSQL it is documented behaviour, not something a test here has seen. The
   client has run against a live `:server:run` on H2 only, and the console's section never.
+- **Moderation on Postgres, and from any client.** A decision is a compare-and-set,
+  `UPDATE ... WHERE id = ? AND status = 'PENDING'`, and a second decision on the question waits on
+  the first's row lock and then re-checks that `WHERE` against the committed row. That has run only
+  on H2 (`ModerationStoreTest` polls H2's `SESSIONS`); on PostgreSQL it is documented READ COMMITTED
+  behaviour, as for the refresh rotation, not something a test here has seen. So are the category
+  rows' delete and batch insert in the decision's transaction, and the new `(status, submitted_at,
+  id)` index. No client sends a moderation request yet, and no browser has sent `X-Admin-Token`:
+  only `CorsTest` has seen its preflight.
 - **Multiple categories on Postgres, and in the client.** The `EXISTS ... IN` filter, the batch's
   second statement for its categories and the batch insert of a submission's categories have run
   only on H2. On the client, several categories per question and a selection of several have run
@@ -163,6 +197,36 @@ ALLOWED_WEB_ORIGINS=localhost:8081 ./gradlew :server:run
 ```bash
 ./gradlew :app:webApp:wasmJsBrowserDevelopmentRun
 ```
+
+### Moderating
+
+Moderation is off unless the server has an admin token (CLAUDE.md §8d): the admin routes are then
+404, every submission stays pending, and the boot log says so. Give it one, at least 32 visible ASCII
+characters with no whitespace, or it warns (shorter) or refuses to boot (whitespace or anything else):
+
+```bash
+export ADMIN_TOKEN=$(openssl rand -hex 32); echo "$ADMIN_TOKEN"
+./gradlew :server:run
+```
+
+Then, in another shell, `export ADMIN_TOKEN=` the token echoed above, submit a question as a fresh
+guest, read the queue, and approve it. `X-Admin-Token` carries the token, never `Authorization`, and
+every admin route answers 403 `FORBIDDEN` without the right one:
+
+```bash
+ACCESS=$(curl -s -X POST localhost:8080/v1/auth/guest | python3 -c 'import sys,json; print(json.load(sys.stdin)["accessToken"])')
+curl -s -X POST localhost:8080/v1/questions -H "Authorization: Bearer $ACCESS" \
+  -H 'Content-Type: application/json' -d '{"optionA":"Fly","optionB":"Swim","categories":["SUPERPOWERS"]}'
+curl -s localhost:8080/v1/admin/submissions -H "X-Admin-Token: $ADMIN_TOKEN"
+curl -s -X POST localhost:8080/v1/admin/approvals -H "X-Admin-Token: $ADMIN_TOKEN" \
+  -H 'Content-Type: application/json' -d '{"questionId":"<id from the queue>","categories":["SUPERPOWERS","RANDOM"]}'
+```
+
+Leave `categories` out to keep the author's. To reject instead, send
+`{"questionId":"<id>","reason":"Too close to a seed"}` to `/v1/admin/rejections`; the reason is
+trimmed and must then be one line of at most 200 characters. `?status=APPROVED` or
+`?status=REJECTED` on the queue lists decided submissions, and `GET /v1/me/questions` with the
+guest's bearer token shows the author's view. Deciding a question twice is 409 `ALREADY_DECIDED`.
 
 ### The dev console
 
@@ -340,6 +404,14 @@ known `PlayViewModel` issues (the Play tab is frozen).
   cycle is a compare-and-set on the cycle read (`PlayerStore.startNextCycle`), and an answer and a
   skip each read their cycle after their row's lock (`VoteStore.cast`, `SkipStore.skip`). All three
   have races in the store tests.
+- **Admin routes answer 403, never 401, and are absent without `ADMIN_TOKEN`** (CLAUDE.md §8d).
+  The client answers any 401 by refreshing and then replacing the player's session, so an admin
+  route must never send one: none sits inside `authenticate(JWT_AUTH)` or reads the bearer token,
+  and each calls `requireAdmin` before it reads anything else. A new admin route goes through
+  `moderationRoutes`, which registers nothing without a token, and needs its line in
+  `ApiFlowTest.everyAdminRoute`, which the 403 and 404 tests run over. A decision is a
+  compare-and-set on `PENDING`; an update by id alone would let a second moderator overwrite the
+  first.
 - **One predicate decides which questions a player may be served** (`QuestionStore.servable`,
   CLAUDE.md §8d): an approved one, to every player alike, its author included. The feed, the
   stats' due count, and votes and skips (`QuestionStore.isServable`) all read it, so a pending or

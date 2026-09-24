@@ -135,7 +135,7 @@ failing:
   A burst on one row then just queues on its lock; `PlayerStoreTest` pins 8 at once.
 - Any other read-then-write is a compare-and-set: the `UPDATE`'s `WHERE` repeats what the read
   relied on, and 0 rows updated means another transaction won (`PlayerStore.rotateRefreshToken`,
-  `PlayerStore.startNextCycle`).
+  `PlayerStore.startNextCycle`, `ModerationStore.decide`).
   Or the read takes the row lock (`SELECT ... FOR UPDATE`), so a concurrent writer waits and then
   reads the row as committed (`VoteStore.cast`, which branches on more than one outcome, and
   `SkipStore.skip`).
@@ -286,6 +286,14 @@ This project must never be attributed to any employer identity.
   committed. `ServerConfig` reads them all, with dev-only defaults, and logs a loud warning
   when running on a dev default.
 - `DATABASE_URL` arrives in `postgres://` form, which JDBC rejects; `ServerConfig` translates it.
+- `ADMIN_TOKEN` is the moderator's credential (§8d, *Moderation*), declared `sync: false` in
+  `render.yaml` and set by hand in the dashboard, never committed. It has **no default**: unset or
+  blank turns moderation off, so the admin routes are 404, every submission stays pending, and the
+  boot log warns. A token shorter than 32 characters boots with a warning, since nothing limits
+  guesses yet (§8b), and one holding whitespace or anything but visible ASCII fails at boot, since no
+  request header could carry it. Generate one with `openssl rand -hex 32`. It is read at boot, so
+  rotating it is changing the variable and restarting the service, and the old token is dead from
+  then on. A browser on an `ALLOWED_WEB_ORIGINS` origin may send its header (CORS).
 - The Docker build sets `WYR_SERVER_ONLY=1`, which makes `settings.gradle.kts` skip the app
   modules. Without it the Android Gradle plugin fails at configuration time for want of an SDK.
 - Free tier caveats to design around: free web services spin down after ~15 min idle (cold
@@ -333,8 +341,15 @@ accounts exist.
   moderator model (an admin token). The submission contract is settled and built on the server:
   `SubmitQuestionRequest`, `SubmissionDto`, `SubmissionListDto` and `QuestionStatus` in `:core`.
   No author travels on the wire: a submission's author is whoever its bearer token names, and a
-  player lists only their own. The client and the console submit and list them. Left:
-  moderation's admin routes.
+  player lists only their own. The client and the console submit and list them. The moderation
+  contract is settled and built on the server too: the admin routes, `ApproveSubmissionRequest`,
+  `RejectSubmissionRequest`, the `X-Admin-Token` header (`WyrApi.Headers`) and the error codes
+  `FORBIDDEN` and `ALREADY_DECIDED`. Left: the client and console for moderating.
+- **A rejection reason is one line** — *provisional — user decision.* §8d asks for a short reason;
+  the server also holds it to one line, as it does an option: no control character, nor U+2028 or
+  U+2029 (`checkedRejection`). Chosen as the stricter reading, since a reason is shown to its author
+  as a line of text; allowing line breaks later breaks no client. The options: keep it, or allow
+  line breaks in a reason.
 - **Skips under a category filter** — *provisional — user decision.* A request filtered to one
   or more categories with nothing due in any of them, while other questions still are, serves
   those categories again (§8d, *Categories*), and that includes questions skipped this cycle, which
@@ -354,6 +369,8 @@ accounts exist.
   question at once, without checking that it is due again (§8d, re-answering), so a script
   re-answering one question earns a point per request. *Decided 2026-09-23:* that is accepted for
   now and left to rate limiting; a re-answer keeps paying every time, inside its cycle or not.
+  Nothing limits guesses at the admin token either, which is why the server warns about a short one
+  (§8).
 - **Schema migrations** — *interim policy, decided 2026-09-23:* nothing is deployed, so until the
   first Render deploy a schema change ships as a fresh database through `SchemaUtils.create`, and
   `render.yaml` keeps `autoDeployTrigger: "off"` so connecting the blueprint cannot deploy early.
@@ -432,7 +449,7 @@ and every request shows in its HTTP trace (`HttpTrace` in `:core:network`, never
     Category row), none for every category; a change drops the queue, and New guest keeps the
     selection.
   - `answeredBefore` means the player has a vote on the question, from any cycle.
-- **Categories** *(decided 2026-09-24; built, but for moderation)*: a
+- **Categories** *(decided 2026-09-24; built, but for moderating from a client)*: a
   question is filed under **any number of categories, at least one**. A player may pick **several**
   categories to play, and a question matches when it is filed under **any** of them; none picked
   means every category. The author picks one or more when submitting, and the moderator may change
@@ -502,8 +519,8 @@ and every request shows in its HTTP trace (`HttpTrace` in `:core:network`, never
   since no correct client sends either: a picker must have one picked before it lets the player
   submit. A category named twice is filed once, and the question's categories are stored in
   declaration order, in the submission's own transaction. The 21st pending submission is 409
-  `SUBMISSION_LIMIT`, counted under the author's row lock (§4). A submission is stored `PENDING`,
-  and nothing approves one until *Moderation* is built. Questions carry an author and a
+  `SUBMISSION_LIMIT`, counted under the author's row lock (§4). A submission is stored `PENDING`
+  until a moderator decides it (*Moderation*). Questions carry an author and a
   `QuestionStatus`, and `QuestionStore.servable` serves only approved ones, due at once in whatever
   cycle each player is on. `GET /v1/me/questions` lists the author's submissions of every status,
   newest first, a rejected one with its reason (`SubmissionStore.byAuthor`). On the client,
@@ -512,15 +529,39 @@ and every request shows in its HTTP trace (`HttpTrace` in `:core:network`, never
   ensures a session, so nothing is sent, not even a guest's mint, and the repository refuses them
   again before building the request; every other rule is the server's. A status this build cannot
   name is `SubmissionStatus.OTHER`. The console's *Submit a question* section drives both.
-- **Moderation** *(not built but for the author's view)*: a moderator approves or rejects each
-  pending submission and **may change its categories** when approving (*Categories*: at least one
-  stays, and a change replaces the question's `question_categories` rows in one transaction). A
-  rejection carries a **short reason**, and the author sees the status of each of their submissions
-  and, for a rejected one, that reason. The moderator is whoever holds the server's admin token (an
-  environment variable; admin routes are off when it is unset), not a role on a player account. The
-  author's view is built on the server (`GET /v1/me/questions`, *Submitting*), and so is what a
-  decision writes (`questions.reviewed_at`, `questions.rejection_reason`, and the
-  `question_categories` rows a change of categories replaces); no decision writes any of it yet.
+- **Moderation** *(server built, client next)*: a moderator approves or rejects each pending
+  submission and **may change its categories** when approving (*Categories*: at least one stays, and
+  a change replaces the question's `question_categories` rows in one transaction). A rejection
+  carries a **short reason**, and the author sees the status of each of their submissions and, for a
+  rejected one, that reason (`GET /v1/me/questions`, *Submitting*). The moderator is whoever holds
+  the server's admin token (`ADMIN_TOKEN`, §8), not a role on a player account. Built in
+  `io.ntole.wyr.server.moderation`.
+  - *Off* when the token is unset: the admin routes are not registered, so each is 404 as a path the
+    server never had. *On*, every admin route checks the `X-Admin-Token` header
+    (`WyrApi.Headers.ADMIN_TOKEN`) before it reads anything else of the request (`requireAdmin`), and
+    answers 403 `FORBIDDEN` without the right one. Never 401: the client answers a 401 by refreshing
+    and then replacing the player's session. The bearer token plays no part and may travel beside
+    it, live or dead. `AdminToken` keeps only the token's SHA-256 digest and compares a presented
+    one's with `MessageDigest.isEqual`, so a refusal takes as long whatever was guessed.
+  - `GET /v1/admin/submissions` is the queue: the players' submissions at `?status=` (`PENDING` when
+    absent; `UNKNOWN`, an unknown name or a second value is 400), oldest first, bounded by `?limit=`
+    as the feed is, in a `SubmissionListDto` of `SubmissionDto`s. Never a seed, and no author.
+  - `POST /v1/admin/approvals` takes an `ApproveSubmissionRequest`: the id, and categories that, when
+    there are any, replace the author's (each real, each once, in declaration order); none keeps the
+    author's. `POST /v1/admin/rejections` takes a `RejectSubmissionRequest`: the id and a reason,
+    trimmed, then non-blank, at most `WyrApi.Limits.MAX_REJECTION_REASON_LENGTH` (200) and one line
+    as an option is (provisional, §8b). A reason that breaks a rule is 400 `VALIDATION_FAILED`, not
+    422: the moderator's client checks it against the same rules before it lets them send. Both
+    answer 200 with the question's `SubmissionDto` as its author now sees it.
+  - A decision is a compare-and-set on `PENDING` (`ModerationStore.decide`, §4): a question that is
+    not pending, a seed included, is 409 `ALREADY_DECIDED` and changes nothing, an unknown id is 404,
+    and of two moderators deciding one submission exactly one wins (`ModerationStoreTest` races
+    both kinds). A decision sets `reviewed_at`, and a rejection its reason, which an approval clears.
+    New categories are written after the decision is made and in its transaction, so they commit
+    with it or not at all. An approved question is servable from the commit on: due at once for
+    every player in their current cycle, its author included. Nothing moves a decided question on:
+    no withdrawing an approval, and no second look at a rejection.
+  - No client moderates yet.
 ---
 
 ## 9. How to work in this repo
