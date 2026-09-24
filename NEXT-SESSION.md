@@ -375,8 +375,9 @@ Server first, then a client. The server defaults to in-memory H2 and logs a warn
 ```
 
 Android uses `http://10.0.2.2:8080` (the emulator's alias for the host loopback); desktop, iOS
-simulator, and web use `http://localhost:8080`. All four are in
-`io.ntole.wyr.di.DevApiBaseUrl`. The **desktop** client takes another server from
+simulator, and web use `http://localhost:8080`. All four are `WyrEnvironment.LOCAL`'s, which a build
+targets unless it names another environment (below); on Android that is the `localDebug` variant, not
+the default. The **desktop** client takes another server from
 `WYR_API_BASE_URL`, read by its platform module (`PlatformModule.jvm.kt`), so it can be pointed at a
 deployed server or another machine; `./gradlew` passes the variable on to the app:
 
@@ -398,6 +399,43 @@ ALLOWED_WEB_ORIGINS=localhost:8081 ./gradlew :server:run
 ```bash
 ./gradlew :app:webApp:wasmJsBrowserDevelopmentRun
 ```
+
+### How to run against dev/prod
+
+Every client build targets one server environment, chosen when it is built, `local` unless it names
+another (CLAUDE.md §8e). `dev` is `wyr-server-dev` at https://wyr-server-dev.onrender.com (in-memory
+H2, reset on every deploy), `prod` is https://wyr-server.onrender.com; both answered `/health` with
+200 on 2026-09-24. The console's header shows the environment and its URL, and a `prod` build has no
+console at all, only Play.
+
+- **Android**: Android Studio's *Build Variants* panel, where `devDebug` is the default, since a
+  phone can reach dev and not the developer's machine. `localDebug` is for the emulator against
+  `./gradlew :server:run`, `prodDebug` for production. They install side by side as *WYR Local*,
+  *WYR Dev* and *WYR*. From the command line: `./gradlew :app:androidApp:installDevDebug`.
+- **Desktop**: the `WYR_ENV` variable (`WYR_API_BASE_URL` still wins over it):
+
+  ```bash
+  WYR_ENV=dev ./gradlew :app:desktopApp:run
+  ```
+
+- **Web**: the `wyr.env` Gradle property, at build time. The server must list the page's origin in
+  its `ALLOWED_WEB_ORIGINS` (Render dashboard, `sync: false`) or CORS preflight rejects every request:
+
+  ```bash
+  ./gradlew :app:webApp:wasmJsBrowserDevelopmentRun -Pwyr.env=dev
+  ```
+
+- **iOS**: the `WYR_ENV` build setting in `app/iosApp/Configuration/Config.xcconfig` (`local`, `dev`
+  or `prod`), then build again. The file is committed, so put it back to `local` before committing,
+  or pass it to one build instead: `xcodebuild ... WYR_ENV=dev`.
+
+Not verified yet: no flavor has been installed or run; the three debug APKs were built and each one's
+id, label and cleartext flag read back with `aapt2`. Desktop stopped at start naming a bad `WYR_ENV`
+run through `./gradlew :app:desktopApp:run`, but has not been run against dev. The web constant was
+generated for `dev` and refused for a bad name, but no page has been served. On iOS only the Kotlin
+compiles here. The `ios` CI job's `xcodebuild` is the first to process the Info.plist and its
+simulator tests the first to run the bundle read, on a test bundle without the key; nothing has yet
+run the app to read its own key.
 
 ### Rate limits
 

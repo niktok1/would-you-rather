@@ -60,7 +60,8 @@ dependency.
                      Depends on NOTHING else in the project — not even :core.
                      The innermost layer. explicitApi() enforced.
 
-:core:network        Ktor client, the Json config, platform token storage, API classes.
+:core:network        Ktor client, the Json config, platform token storage, API classes,
+                     the server environments (WyrEnvironment, §8e).
                      Depends on :core and :core:domain.
 
 :core:data           Repository implementations, local cache, DTO<->domain mapping.
@@ -70,9 +71,10 @@ dependency.
                      screens, theme, ViewModels, DI wiring.
                      Depends on :core:domain, :core:data, :core:network.
 
-:app:androidApp      Android Application/Activity, manifest, Android-only wiring.
+:app:androidApp      Android Application/Activity, manifest, Android-only wiring, and one
+                     product flavor per server environment (§8e).
 :app:desktopApp      JVM main() entry point.
-:app:webApp          js + wasmJs browser entry point.
+:app:webApp          js + wasmJs browser entry point, and the build-time environment (§8e).
 app/iosApp           Xcode project consuming the Shared framework (not a Gradle module).
 
 :server              Ktor server. Routes, auth, persistence (Exposed). Depends on :core.
@@ -840,6 +842,45 @@ and every request shows in its HTTP trace (`HttpTrace` in `:core:network`, never
     It loads the queue, approves under the categories picked for a submission (none keeps the
     author's), rejects once the reason typed is a `RejectionReason`, and reads the queue again after
     every decision, whatever became of it.
+
+## 8e. Client environments — decided 2026-09-24
+
+Every client build targets one of three server environments, chosen **when it is built**, so a phone
+can play against the deployed servers and a production build can never talk to a development one by
+accident. `WyrEnvironment` (`io.ntole.wyr.core.network.environment`) names them, each with its API
+base URL, a display name, and whether a build for it shows the developer tools. It lives in
+`:core:network`, not `:app:shared`, so a client without the game UI (the moderation app to come) can
+name one too.
+
+| Environment | Server                                                           | Developer tools |
+|-------------|------------------------------------------------------------------|-----------------|
+| `LOCAL`     | `http://localhost:8080`; the Android emulator's `10.0.2.2:8080`  | shown           |
+| `DEV`       | `https://wyr-server-dev.onrender.com` (§8: in-memory H2)         | shown           |
+| `PROD`      | `https://wyr-server.onrender.com`                                | hidden          |
+
+- *Naming one.* `WyrEnvironment.parse` takes `local`, `dev` or `prod`, in any case, trimmed; no name,
+  or a blank one, is LOCAL. Any other value throws, naming it, rather than falling back. Every entry
+  point hands its name to `initKoin(environmentName)`, which has no default, and it is parsed before
+  Koin starts, so a bad name stops the app at launch. LOCAL's URL comes from each platform source set
+  of `:core:network`, so it is right on every platform, the emulator's included.
+- *Android*: product flavors `local`, `dev` and `prod` in one `environment` dimension;
+  `BuildConfig.WYR_ENV` is the flavor's name, which `WyrApplication` passes on. Each installs beside
+  the others: application id suffix `.local`, `.dev` or none, launcher label *WYR Local*, *WYR Dev* or
+  *WYR*. Cleartext HTTP (the `usesCleartextTraffic` manifest placeholder) is on for `local` alone;
+  `dev` and `prod` are https only. `dev` is Android Studio's default variant, since a physical phone
+  cannot reach LOCAL. `assembleDebug` builds all three.
+- *Desktop*: the `WYR_ENV` environment variable, read by `Main.kt`; unset is LOCAL.
+  `WYR_API_BASE_URL` still wins over the environment's URL, validated as before (`desktopApiBaseUrl`).
+- *Web*: the Gradle property `wyr.env` (`-Pwyr.env=dev`), local when absent, which `:app:webApp`'s
+  `generateWyrEnv` task writes into a Kotlin constant under `build/generated`; a name it does not know
+  fails the build. A web build against DEV or PROD also needs that server's `ALLOWED_WEB_ORIGINS`
+  (Render dashboard, `sync: false`) to include the page's origin, or every request fails CORS.
+- *iOS*: the `WYR_ENV` build setting in `app/iosApp/Configuration/Config.xcconfig` (`local` by
+  default). `Info.plist` carries it as its `WYR_ENV` key (`$(WYR_ENV)`), and `MainViewController`
+  reads that from the main bundle; a missing key is LOCAL.
+- *In the app.* Koin binds the environment beside the base URL in use (`appModules`), and the dev
+  console's header shows both. The console tab is shown only where the environment shows developer
+  tools (`rootScreensFor`): a PROD build shows the Play screen alone, with no tab to reach the console.
 ---
 
 ## 9. How to work in this repo
