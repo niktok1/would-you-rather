@@ -125,7 +125,9 @@ Repo initialized on `main` with the personal identity and `user.useConfigOnly = 
   `SubmitQuestionTest` the same refused before a session is ensured,
   `DefaultSubmissionRepositoryTest` recovery after a 401 and the 422 and 409 end to end through
   `MockEngine`, and `SubmissionConsoleViewModelTest` the console section.
-- Client tests: COUNTS_PENDING
+- Client tests: `:core:domain` 32, `:core:data` 103, `:core:network` 43, `:app:shared` 104 (the
+  ViewModels and the Koin graph); `:server` 156. `:app:shared` compiles for JVM, JS, wasmJs and
+  the iOS simulator.
 - `:app:androidApp:assembleDebug` produces a real APK.
 - `ktlintCheck` clean across every module.
 
