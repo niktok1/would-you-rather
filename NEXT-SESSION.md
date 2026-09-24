@@ -62,10 +62,11 @@ automatically from every green commit on `main` (its URL is on its Render page).
   submission due at once for its author, a player midway through the cycle and one who had answered
   everything else (served it in cycle 1, not a new cycle); a rejected one served to nobody, 404 to
   answer or skip, its trimmed reason in the author's list; categories named on approval changing
-  what `?category=` finds; 400 for every malformed decision or queue query; 403 `FORBIDDEN` on all
-  three admin routes for a missing, wrong, case-changed or bearer-carried token, and before the body
-  is read; 200 beside any player session, live, forged or dead, never 401; and 404 on all three with
-  `ADMIN_TOKEN` unset. `AdminTokenTest` pins the comparison: one `MessageDigest.isEqual` of two
+  what `?category=` finds; 400 for every malformed decision or queue query; 403 `FORBIDDEN` on every
+  admin route for a missing, wrong, case-changed or bearer-carried token, and before the body is
+  read; 200 beside any player session, live, forged or dead, never 401; and 404 on every one with
+  `ADMIN_TOKEN` unset. That was three routes then; `ApiFlowTest.everyAdminRoute` holds all six now,
+  the question list, retirements and restorations (`feat/moderation-app`) among them. `AdminTokenTest` pins the comparison: one `MessageDigest.isEqual` of two
   32-byte digests per check, whatever is presented. `ServerConfigTest` pins `ADMIN_TOKEN`'s parsing,
   `CorsTest` the preflight for `X-Admin-Token`. `SubmissionStoreTest` and `ServableQuestionsTest`
   now decide through `ModerationStore` rather than writing the table. The whole suite passes against
@@ -80,9 +81,11 @@ automatically from every green commit on `main` (its URL is on its Render page).
   reason, each refusal's `DomainError` with its message, `UNKNOWN` for moderation off, and that neither
   a 403 nor a 401 replaces the player's session or makes one; `AdminTokenTest` and
   `RejectionReasonTest` the token's and the reason's rules; `ModerationMapperTest` the reason limit
-  against the wire's; `ModerationConsoleViewModelTest` the section: nothing sent without a valid token,
-  Reject off until the reason is valid, the queue read again after every decision, picks for a
-  submission no longer listed dropped, and the token in neither the state's text nor the log.
+  against the wire's; and `ModerationConsoleViewModelTest` the console's section then: nothing sent
+  without a valid token, Reject off until the reason is valid, the queue read again after every
+  decision, picks for a submission no longer listed dropped, and the token in neither the state's text
+  nor the log. It went with that section on `feat/moderation-app`, whose `ModerationViewModelTest` and
+  `QuestionListViewModelTest` pin the moderation app instead (below).
   Likes (`feat/question-likes`, server and contract only; `:server` 179 tests with it, 65 of them
   flows): `LikeStoreTest` pins a like paying the author a point and an unlike taking it back, a
   repeat of either writing and paying nothing, likedByMe being each player's own, a self-like paid,
