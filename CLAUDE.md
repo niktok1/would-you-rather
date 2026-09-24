@@ -641,7 +641,8 @@ answer what they think is popular instead of what they actually prefer. A mode t
 rewards reading the crowd may come later as a separate, opt-in mode, never as the default.
 
 **Current focus.** UI polish is paused. Functionality ships behind a plain engineering dev
-console, which is the default root screen. `PlayScreen` stays as a frozen second tab.
+console, the default root screen of a LOCAL or DEV build, where `PlayScreen` stays as a frozen second
+tab; a PROD build shows `PlayScreen` alone (§8e).
 The console is built, in `io.ntole.wyr.dev` (`:app:shared`). A feature adds its section there,
 and every request shows in its HTTP trace (`HttpTrace` in `:core:network`, never headers or bodies).
 
