@@ -37,6 +37,14 @@ public object WyrApi {
          * real category, is 400 [io.ntole.wyr.core.error.ErrorCode.VALIDATION_FAILED].
          */
         public const val QUESTIONS: String = "/$VERSION/questions"
+
+        /**
+         * Answers a question, with a [io.ntole.wyr.core.vote.VoteRequest], answered with a
+         * [io.ntole.wyr.core.vote.VoteResultDto]. Requires a session. A question the player is not
+         * served, one a moderator has not approved or the player's own, is 404
+         * [io.ntole.wyr.core.error.ErrorCode.QUESTION_NOT_FOUND], as an unknown one is. For their
+         * own that is provisional (CLAUDE.md §8b).
+         */
         public const val VOTES: String = "/$VERSION/votes"
 
         /**
@@ -44,7 +52,8 @@ public object WyrApi {
          * [io.ntole.wyr.core.question.SkipRequest]. Requires a session. The question comes back in the
          * next cycle, or sooner only to a [QUESTIONS] request filtered to a category with nothing due
          * in it (see there). A skip pays nothing and leaves the tally alone, and skipping again in the
-         * same cycle changes nothing. Answered with 204 and no body.
+         * same cycle changes nothing. Answered with 204 and no body. A question the player is not
+         * served is 404, as for [VOTES].
          */
         public const val SKIPS: String = "/$VERSION/skips"
 
