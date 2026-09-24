@@ -162,9 +162,24 @@ Repo initialized on `main` with the personal identity and `user.useConfigOnly = 
   `SubmitQuestionTest` the same refused before a session is ensured,
   `DefaultSubmissionRepositoryTest` recovery after a 401 and the 422 and 409 end to end through
   `MockEngine`, and `SubmissionConsoleViewModelTest` the console section.
-- Client tests: `:core:domain` 32, `:core:data` 103, `:core:network` 43, `:app:shared` 104 (the
-  ViewModels and the Koin graph); `:server` 156. `:app:shared` compiles for JVM, JS, wasmJs and
-  the iOS simulator.
+- Client resilience (`fix/client-resilience`, no server or contract change): `RequestTimeoutTest`
+  pins, in virtual time, a call the server never answers failing at 60 s as
+  `HttpRequestTimeoutException`, a 50 s cold start answered, the connect and socket timeouts handed
+  to the engine on every call and on a retry after a refresh, the refresh's 5 minutes with the
+  ordinary connect timeout (from `AuthApi.refresh` too), a 90 s refresh landing although the call
+  that asked for it timed out, and a refresh that never ends giving up at 5 minutes with the old
+  session kept. `RunApiOverHttpTest` pins a timeout as `NETWORK`, `HttpTraceTest` a timeout traced as
+  one and a cancellation still as a cancellation. `AndroidTokenStorageTest`, an Android host test,
+  pins `commit()` over `apply()`, off the caller's thread, one commit at a time in order, a failed
+  commit thrown, and a write whose caller was cancelled landing. `DesktopApiBaseUrlTest` pins
+  `WYR_API_BASE_URL`: bound by the desktop module, blank as unset, trimmed, and every malformed value
+  refused with the variable named. By hand: an invalid value run through
+  `./gradlew :app:desktopApp:run` stopped the app at start naming it, and a second run, on a reused
+  configuration cache, named the new value.
+- Client tests: `:core:domain` 32, `:core:data` 104, `:core:network` 52 (58 as Android host tests:
+  the common ones and `AndroidTokenStorageTest`), `:app:shared` 109 (the ViewModels, the Koin graph
+  and the desktop base URL); `:server` 156. `:app:shared` compiles for JVM, JS, wasmJs and the iOS
+  simulator.
 - `:app:androidApp:assembleDebug` produces a real APK.
 - `ktlintCheck` clean across every module.
 
@@ -213,6 +228,11 @@ Repo initialized on `main` with the personal identity and `user.useConfigOnly = 
   re-checks its `WHERE` against the committed row. That is documented Postgres behaviour, not
   something a test here has seen, and the same goes for the concurrent-seed recovery described on
   `Seed.questionsIfEmpty`. Porting the races means polling `pg_stat_activity` instead.
+- **Timeouts on a real engine, against a real cold start.** Every timeout test runs on
+  `MockEngine`, which enforces only the request timeout (Ktor's own timer). That OkHttp, CIO and
+  Darwin apply the connect and socket timeouts they are handed is their documented behaviour, and
+  the 60 s is a guess at Render's cold start, not a measurement: time the first request after the
+  service has idled once it is deployed.
 - **Durable session writes on a device.** `AndroidTokenStorageTest` pins which call is made and
   where, against a stand-in; that Android's `commit()` then survives a kill is its documented
   behaviour, not something seen here. Whether `NSUserDefaults` keeps a change the app is killed
@@ -547,16 +567,18 @@ known `PlayViewModel` issues (the Play tab is frozen).
 - **A session write returns once it is durable, and suspends for it** (`TokenStorage.write`,
   CLAUDE.md §8a). `AndroidTokenStorage` used `apply()`, which returns before the file is written,
   so a kill just after a refresh could come back with the rotated-out token and orphan the guest.
-  It now `commit()`s, on `Dispatchers.IO` because the ViewModels write from the main thread, one
-  change at a time and in the order asked (`limitedParallelism(1)`: plain `Dispatchers.IO` could
-  commit a clear before an older write), inside `NonCancellable` so a write asked for is never
-  dropped, and a commit that fails throws `IOException`. The write now suspends, so the refresh's
-  check that the session is unchanged can miss a change the data layer has asked for but not yet
-  made; that widens the edge already noted in `WyrHttpClient`, which needs a shared lock to close. `SessionStore.write` and `clear` suspend with it; `storeHolding` in the test
-  fixtures stays a plain function by starting the in-memory write directly, since it never
-  suspends. `AndroidTokenStorageTest` is an Android host test (`:core:network:testAndroidHostTest`,
-  now in CI): it pins `commit()` over `apply()`, the thread, the order, the failure and the
-  cancellation against a recording `SharedPreferences`, since the host has no real one.
+  It now `commit()`s, on `Dispatchers.IO` because the ViewModels write from the main thread, and
+  one change at a time in the order asked (`limitedParallelism(1)`: on the plain pool, a clear could
+  commit ahead of a write asked for before it). It commits inside `NonCancellable`, so a write asked
+  for is never dropped, and a commit that fails throws `IOException`. `SessionStore.write` and
+  `clear` suspend with it; `storeHolding` in the test fixtures stays a plain function by starting
+  the in-memory write directly, since it never suspends. Because the write suspends, the refresh's
+  check that the session is unchanged can now miss a change the data layer has asked for and not
+  yet made: that widens the edge already noted in `WyrHttpClient`, which only a lock shared with the
+  data layer closes. `AndroidTokenStorageTest` is an Android host test
+  (`:core:network:testAndroidHostTest`, now in CI): it pins `commit()` over `apply()`, the thread,
+  the order, the failure and the cancellation against a recording `SharedPreferences`, since the
+  host has no real one.
 - `Tally.percentB` is defined as `100 - percentA` rather than rounded independently, so the two
   always sum to 100. There is a property test over every split up to 40/40.
 - `:server` must not depend on `:core:domain` (§3). That is why scoring lives in `:server`.
