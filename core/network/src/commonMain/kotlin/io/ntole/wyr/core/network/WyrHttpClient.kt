@@ -5,12 +5,15 @@ import io.ktor.client.HttpClientConfig
 import io.ktor.client.call.body
 import io.ktor.client.engine.HttpClientEngine
 import io.ktor.client.plugins.HttpResponseValidator
+import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.plugins.ResponseException
 import io.ktor.client.plugins.auth.Auth
 import io.ktor.client.plugins.auth.providers.BearerTokens
 import io.ktor.client.plugins.auth.providers.bearer
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.client.plugins.defaultRequest
+import io.ktor.client.plugins.timeout
+import io.ktor.client.request.HttpRequestBuilder
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
 import io.ktor.client.request.url
@@ -25,6 +28,9 @@ import io.ntole.wyr.core.error.ErrorDto
 import io.ntole.wyr.core.network.trace.HttpTrace
 import io.ntole.wyr.core.network.trace.HttpTracing
 import kotlinx.coroutines.CancellationException
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.minutes
+import kotlin.time.Duration.Companion.seconds
 import io.ktor.serialization.kotlinx.json.json as jsonConverter
 
 /**
@@ -34,6 +40,38 @@ import io.ktor.serialization.kotlinx.json.json as jsonConverter
  * module's build script), so Ktor picks it up itself and common code stays platform-free.
  */
 public object WyrHttpClient {
+    /**
+     * How long an ordinary call may take, from sending it to the end of its answer. A cold start on
+     * Render's free tier (CLAUDE.md §8) can take most of a minute, and the player whose request
+     * woke the server should get the answer, not NETWORK.
+     *
+     * It is the socket timeout too, the longest silence allowed between two packets, so no engine's
+     * own default gives up first: OkHttp's is 10 s, and CIO's request timeout 15 s.
+     */
+    internal val REQUEST_TIMEOUT: Duration = 60.seconds
+
+    /** How long opening a connection may take. Nothing has reached the server until one is open. */
+    internal val CONNECT_TIMEOUT: Duration = 30.seconds
+
+    /**
+     * The request and socket timeout of a token refresh, in place of [REQUEST_TIMEOUT].
+     *
+     * The server rotates the refresh token as it answers a refresh (CLAUDE.md §8a), so a refresh
+     * abandoned after the server ran it leaves a dead refresh token in the store, and the next 401
+     * costs the player their guest account. The server runs it only once any cold start is over,
+     * and then in milliseconds, so what a timeout can abandon after that is an answer still missing
+     * minutes after it was sent, on a connection that has as good as died.
+     *
+     * Bounded all the same, and not exempt: a refresh holds the bearer provider's lock and runs
+     * NonCancellable (see `nonCancellableRefresh` below), so every call rejected while it runs waits
+     * behind it and cannot be cancelled. On a connection that died without a word, an unbounded
+     * refresh would hold every call until the app is killed.
+     *
+     * Its connect timeout stays [CONNECT_TIMEOUT]: a refresh that never connected never reached the
+     * server, so giving up on it cannot lose a rotation.
+     */
+    internal val REFRESH_TIMEOUT: Duration = 5.minutes
+
     /**
      * @param engine for tests, which pass a `MockEngine`. Production leaves it null so Ktor
      *   discovers the platform's engine as described above.
@@ -47,6 +85,16 @@ public object WyrHttpClient {
     ): HttpClient {
         val config: HttpClientConfig<*>.() -> Unit = {
             expectSuccess = true
+
+            // First, so a call's bound starts when it is made and covers a refresh and retry on its
+            // way. A call waiting on a refresh cannot give up before the refresh ends (see below),
+            // and fails then if its own bound has passed. A timeout fails the call with the
+            // engine's or Ktor's own exception, never an ApiException, so runApi calls it NETWORK.
+            install(HttpTimeout) {
+                requestTimeoutMillis = REQUEST_TIMEOUT.inWholeMilliseconds
+                connectTimeoutMillis = CONNECT_TIMEOUT.inWholeMilliseconds
+                socketTimeoutMillis = REQUEST_TIMEOUT.inWholeMilliseconds
+            }
 
             install(ContentNegotiation) {
                 jsonConverter(WyrJson)
@@ -74,10 +122,9 @@ public object WyrHttpClient {
                     //
                     // The cost: in Ktor 3.5 the wait for the provider's lock runs inside the same
                     // NonCancellable block, so every call queued behind a refresh is uncancellable
-                    // until the refresh ends. Only each engine's own timeout bounds that. There is
-                    // deliberately no HttpTimeout here: a refresh abandoned on a timeout after the
-                    // server answered loses the rotated token just as a cancelled one would, and a
-                    // cold start on Render's free tier can take tens of seconds.
+                    // until the refresh ends. REFRESH_TIMEOUT bounds that: a timeout abandons a
+                    // refresh just as a cancellation would, so the refresh gets a bound far longer
+                    // than an ordinary call's, not the same one.
                     nonCancellableRefresh = true
 
                     loadTokens { sessionStore.read()?.toBearerTokens() }
@@ -92,6 +139,7 @@ public object WyrHttpClient {
                                 client
                                     .post(WyrApi.Paths.AUTH_REFRESH) {
                                         markAsRefreshTokenRequest()
+                                        refreshTimeout()
                                         setBody(RefreshRequest(current.refreshToken))
                                     }.body()
                             } catch (refused: ApiException) {
@@ -138,6 +186,17 @@ public object WyrHttpClient {
             }
         }
         return if (engine == null) HttpClient(config) else HttpClient(engine, config)
+    }
+}
+
+/**
+ * Gives a request that spends the refresh token [WyrHttpClient.REFRESH_TIMEOUT] in place of the
+ * ordinary bound; the connect timeout is left to the client's. Every such request needs it.
+ */
+internal fun HttpRequestBuilder.refreshTimeout() {
+    timeout {
+        requestTimeoutMillis = WyrHttpClient.REFRESH_TIMEOUT.inWholeMilliseconds
+        socketTimeoutMillis = WyrHttpClient.REFRESH_TIMEOUT.inWholeMilliseconds
     }
 }
 

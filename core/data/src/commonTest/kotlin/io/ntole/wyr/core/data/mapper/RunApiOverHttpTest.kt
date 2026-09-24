@@ -1,6 +1,7 @@
 package io.ntole.wyr.core.data.mapper
 
 import io.ktor.client.engine.mock.MockEngine
+import io.ktor.client.engine.mock.MockEngineConfig
 import io.ktor.client.engine.mock.respond
 import io.ktor.client.network.sockets.ConnectTimeoutException
 import io.ktor.http.ContentType
@@ -10,6 +11,7 @@ import io.ktor.http.headersOf
 import io.ntole.wyr.core.api.WyrApi
 import io.ntole.wyr.core.data.BASE_URL
 import io.ntole.wyr.core.data.respondErrorDto
+import io.ntole.wyr.core.data.respondJson
 import io.ntole.wyr.core.data.session
 import io.ntole.wyr.core.data.storeHolding
 import io.ntole.wyr.core.domain.error.DomainError
@@ -17,10 +19,13 @@ import io.ntole.wyr.core.domain.error.WyrException
 import io.ntole.wyr.core.error.ErrorCode
 import io.ntole.wyr.core.network.WyrHttpClient
 import io.ntole.wyr.core.network.api.QuestionApi
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.time.Duration.Companion.hours
 
 /**
  * runApi against what the real client configuration actually throws, rather than hand-built
@@ -33,6 +38,24 @@ class RunApiOverHttpTest {
             val offline = MockEngine { throw ConnectTimeoutException("connect timed out") }
 
             assertEquals(DomainError.NETWORK, errorFrom(offline))
+        }
+
+    @Test
+    fun `a request the server never answered in time is NETWORK`() =
+        runTest {
+            // On the test's scheduler, so the client's request timeout runs out in virtual time.
+            val silent =
+                MockEngine(
+                    MockEngineConfig().apply {
+                        dispatcher = StandardTestDispatcher(testScheduler)
+                        addHandler {
+                            delay(1.hours)
+                            respondJson("""{"questions":[]}""")
+                        }
+                    },
+                )
+
+            assertEquals(DomainError.NETWORK, errorFrom(silent))
         }
 
     @Test

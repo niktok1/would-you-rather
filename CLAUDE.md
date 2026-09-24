@@ -324,6 +324,10 @@ auth SDK, satisfying §2.
 - On the client, `SessionStore` is the only copy of the credentials: Ktor's bearer cache is off
   (`cacheTokens = false`), so a session change applies to the very next request. A dead session
   is replaced through `withSessionRecovery` in `:core:data`, which mints at most one guest for it.
+- Every client request is bounded (`HttpTimeout` in `WyrHttpClient`: 60 s, 30 s to connect), past a
+  Render cold start. A request that spends the refresh token takes `refreshTimeout()` instead, 5
+  minutes: a timeout abandons a refresh as a cancellation does, and with it a token the server has
+  already rotated. It stays bounded because every call rejected meanwhile waits on it, uncancellably.
 
 **Known limitation, by design for now:** a guest account is bound to one device's storage. Lose
 the device or clear storage and the account — and its points — are gone. Token storage is also

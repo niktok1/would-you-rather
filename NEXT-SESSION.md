@@ -518,6 +518,15 @@ known `PlayViewModel` issues (the Play tab is frozen).
   player and question, so a retry that arrives after a newer answer pays as a fresh answer.
   `PlayViewModel` keeps a vote lost to `NETWORK` for Try again and moves on after any other
   failure, since a refused vote would fail the same way every time.
+- **Every request times out, and a refresh far later than the rest** (`WyrHttpClient`, CLAUDE.md
+  §8a). A call gets 60 s, 30 s of it to connect, and the same 60 s as its socket timeout, which
+  overrides each engine's own shorter defaults: OkHttp's 10 s read timeout alone would fail a cold
+  start on Render's free tier. A request that spends the refresh token gets `refreshTimeout()`, 5
+  minutes, because a refresh abandoned after the server rotated the token orphans the guest; any new
+  request that rotates a credential needs it too. A call stuck behind a refresh gives up only once
+  the refresh ends. A timeout reaches `runApi` as the engine's or Ktor's own exception, so it is
+  `NETWORK`. `RequestTimeoutTest` runs every case in virtual time, on a `MockEngine` given the test's
+  dispatcher.
 - `Tally.percentB` is defined as `100 - percentA` rather than rounded independently, so the two
   always sum to 100. There is a property test over every split up to 40/40.
 - `:server` must not depend on `:core:domain` (§3). That is why scoring lives in `:server`.
