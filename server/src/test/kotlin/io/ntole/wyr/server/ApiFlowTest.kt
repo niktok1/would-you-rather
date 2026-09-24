@@ -1260,7 +1260,7 @@ class ApiFlowTest {
                 "a rejection with a NUL in its reason" to
                     (rejections to """{"questionId":"$id","reason":"Not\u0000"}"""),
                 "a rejection with a line separator inside its reason" to
-                    (rejections to """{"questionId":"$id","reason":"Not really"}"""),
+                    (rejections to """{"questionId":"$id","reason":"Not\u2028really"}"""),
             ).forEach { (case, request) ->
                 val (path, body) = request
                 val response = client.moderate(path, body)
