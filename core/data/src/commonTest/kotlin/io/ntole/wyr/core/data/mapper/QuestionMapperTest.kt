@@ -1,9 +1,11 @@
 package io.ntole.wyr.core.data.mapper
 
+import io.ntole.wyr.core.domain.question.Category
 import io.ntole.wyr.core.question.QuestionCategory
 import io.ntole.wyr.core.question.QuestionDto
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNull
 
 class QuestionMapperTest {
     @Test
@@ -20,5 +22,28 @@ class QuestionMapperTest {
 
             assertEquals(answeredBefore, dto.toDomain().answeredBefore)
         }
+    }
+
+    @Test
+    fun `every wire category maps to its domain namesake and UNKNOWN to OTHER`() {
+        QuestionCategory.entries.forEach { wire ->
+            val expected = if (wire == QuestionCategory.UNKNOWN) Category.OTHER else Category.valueOf(wire.name)
+
+            assertEquals(expected, wire.toDomain(), "$wire")
+        }
+    }
+
+    @Test
+    fun `every category the server knows goes back on the wire as itself`() {
+        // What a category filter sends is what the feed serves the category as.
+        QuestionCategory.entries.filter { it != QuestionCategory.UNKNOWN }.forEach { wire ->
+            assertEquals(wire, wire.toDomain().toWireOrNull(), "$wire")
+        }
+    }
+
+    @Test
+    fun `OTHER has no wire category to ask for`() {
+        // Never UNKNOWN: that is a sentinel for what the client cannot read, not a filter.
+        assertNull(Category.OTHER.toWireOrNull())
     }
 }
