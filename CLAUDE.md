@@ -431,7 +431,7 @@ and every request shows in its HTTP trace (`HttpTrace` in `:core:network`, never
     (§8b). The client can select one category so far (`QuestionRepository.setCategory`, from the
     console's Category row); a switch drops the queue, and New guest keeps the selection.
   - `answeredBefore` means the player has a vote on the question, from any cycle.
-- **Categories** *(decided 2026-09-24; filing and serving built on the server, the rest next)*: a
+- **Categories** *(decided 2026-09-24; server built, client next)*: a
   question is filed under **any number of categories, at least one**. A player may pick **several**
   categories to play, and a question matches when it is filed under **any** of them; none picked
   means every category. The author picks one or more when submitting, and the moderator may change
@@ -443,8 +443,9 @@ and every request shows in its HTTP trace (`HttpTrace` in `:core:network`, never
   categories, `?category=` repeated, and none is every category; one that names no real category is
   400. The filter, and the due count beside it (`QuestionStore.dueCount`), is an `EXISTS` on that
   table, never a join, so a question in several of the categories asked for is served and counted
-  once. Not built yet: submitting under several. Until the client's domain holds every category, it
-  plays a question under the first it can name, and it filters by one category at most.
+  once. A submission names one or more (*Submitting*). Until the client's domain holds every
+  category, it plays a question under the first it can name, and it filters by one category at
+  most; no client submits yet.
 - **Re-answering** *(built)*: a question can be answered again, whether or not the feed has
   served it again. It earns the point again **every time**, inside its cycle or not (farming is
   left to rate limiting, §8b), and the player may change their pick. Every answer, first or not,
@@ -483,16 +484,19 @@ and every request shows in its HTTP trace (`HttpTrace` in `:core:network`, never
   point to the author**, and unliking takes that point back. The like count is visible before
   answering. For now likes do nothing else; serving questions by quality is a later idea.
 - **Submitting** *(server built, client next; details decided 2026-09-23)*: earns no points
-  directly, because authors earn through likes. The author writes both options and **picks the
-  category** (a real one, not `UNKNOWN`). A player may have at most **20 submissions pending**
+  directly, because authors earn through likes. The author writes both options and **picks one or
+  more categories** (each a real one, not `UNKNOWN`; *Categories*). A player may have at most **20
+  submissions pending**
   moderation at once. A submitted question is served only after a moderator approves it; once
   approved it is due for every player in their current cycle. Built as `POST /v1/questions`, in
   `SubmissionStore.submit` after `checkedSubmission`. Both options are trimmed, then each must be
   non-blank, at most `WyrApi.Limits.MAX_OPTION_LENGTH` (200, UTF-16 units) and one line (no
   control character, nor U+2028 or U+2029, the line and paragraph separators), and the two must
-  differ ignoring case: otherwise 422 `INVALID_SUBMISSION`, which the player can put right. A
-  category that is not a real one is 400 `VALIDATION_FAILED`,
-  since no correct client sends one. The 21st pending submission is 409 `SUBMISSION_LIMIT`,
+  differ ignoring case: otherwise 422 `INVALID_SUBMISSION`, which the player can put right. No
+  category, or one that is not a real one, is 400 `VALIDATION_FAILED`, since no correct client
+  sends either: a picker must have one picked before it lets the player submit. A category named
+  twice is filed once, and the question's categories are stored in declaration order, in the
+  submission's own transaction. The 21st pending submission is 409 `SUBMISSION_LIMIT`,
   counted under the author's row lock (§4). A submission is stored `PENDING`, and nothing approves
   one until *Moderation* is built. Questions carry an author and a `QuestionStatus`, and
   `QuestionStore.servable` serves only approved ones, due at once in whatever cycle each player

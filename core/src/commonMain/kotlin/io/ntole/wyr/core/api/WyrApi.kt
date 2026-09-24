@@ -35,7 +35,8 @@ public object WyrApi {
          * pending at once, and one more is refused with 409
          * [io.ntole.wyr.core.error.ErrorCode.SUBMISSION_LIMIT]. Options the rules refuse are 422
          * [io.ntole.wyr.core.error.ErrorCode.INVALID_SUBMISSION]; a malformed body, or one naming no
-         * real category, is 400 [io.ntole.wyr.core.error.ErrorCode.VALIDATION_FAILED].
+         * category or one that is not real, is 400
+         * [io.ntole.wyr.core.error.ErrorCode.VALIDATION_FAILED].
          */
         public const val QUESTIONS: String = "/$VERSION/questions"
 

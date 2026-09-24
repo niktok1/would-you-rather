@@ -48,12 +48,15 @@ class SubmissionStoreTest {
     fun `a submission is stored under its author waiting for a moderator`() {
         val author = newPlayer()
 
-        val submission = submit(author, SubmitQuestionRequest("Fly", "Swim", QuestionCategory.SUPERPOWERS), at = 1_000L)
+        val categories = listOf(QuestionCategory.FOOD, QuestionCategory.SUPERPOWERS)
+
+        val submission = submit(author, SubmitQuestionRequest("Fly", "Swim", categories), at = 1_000L)
 
         val row = transaction(database) { Questions.selectAll().where { Questions.id eq submission.id }.single() }
         assertEquals("Fly" to "Swim", row[Questions.optionA] to row[Questions.optionB])
-        assertEquals(listOf(QuestionCategory.SUPERPOWERS), transaction(database) { storedCategories() }[submission.id])
-        assertEquals(listOf(QuestionCategory.SUPERPOWERS), submission.categories)
+        assertEquals(categories, transaction(database) { storedCategories() }[submission.id], "a row for each")
+        assertEquals(categories, submission.categories)
+        assertEquals(listOf(submission), transaction(database) { SubmissionStore.byAuthor(author) })
         assertEquals(author, row[Questions.authorPlayerId])
         assertEquals(QuestionStatus.PENDING, row[Questions.status])
         assertEquals(1_000L, row[Questions.submittedAt])
@@ -166,7 +169,8 @@ class SubmissionStoreTest {
         at: Long = System.currentTimeMillis(),
     ): SubmissionDto = transaction(database) { SubmissionStore.submit(author, request, now = at) }
 
-    private fun question(index: Int) = SubmitQuestionRequest("Option $index", "Other $index", QuestionCategory.RANDOM)
+    private fun question(index: Int) =
+        SubmitQuestionRequest("Option $index", "Other $index", listOf(QuestionCategory.RANDOM))
 
     private fun assertLimitReached(author: String) {
         val refused = assertFailsWith<ApiFailure> { submit(author, question(REFUSED)) }

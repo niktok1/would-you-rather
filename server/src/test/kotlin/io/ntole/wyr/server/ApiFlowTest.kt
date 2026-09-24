@@ -734,7 +734,7 @@ class ApiFlowTest {
                     optionA = "  Be able to fly ",
                     // A line separator is whitespace too, so it is trimmed at an end, not refused.
                     optionB = "\tBreathe underwater\n\u2028",
-                    category = QuestionCategory.SUPERPOWERS,
+                    categories = listOf(QuestionCategory.SUPERPOWERS),
                 )
             val before = System.currentTimeMillis()
 
@@ -765,7 +765,7 @@ class ApiFlowTest {
         runServer("submit-pending") { client ->
             val author = client.guest()
             val player = client.guest()
-            val pending = client.submitted(author, SubmitQuestionRequest("Fly", "Swim", QuestionCategory.FOOD))
+            val pending = client.submitted(author, SubmitQuestionRequest("Fly", "Swim", listOf(QuestionCategory.FOOD)))
 
             listOf("the author" to author, "another player" to player).forEach { (who, session) ->
                 val pool = client.wholePool(session)
@@ -788,23 +788,24 @@ class ApiFlowTest {
             val tooLong = "x".repeat(WyrApi.Limits.MAX_OPTION_LENGTH + 1)
 
             listOf(
-                "blank optionA" to SubmitQuestionRequest("   ", "Swim", QuestionCategory.FOOD),
-                "empty optionB" to SubmitQuestionRequest("Fly", "", QuestionCategory.FOOD),
-                "optionA too long" to SubmitQuestionRequest(tooLong, "Swim", QuestionCategory.FOOD),
-                "optionB too long" to SubmitQuestionRequest("Fly", tooLong, QuestionCategory.FOOD),
-                "the same options ignoring case" to SubmitQuestionRequest("Fly", "fLY", QuestionCategory.FOOD),
-                "the same options once trimmed" to SubmitQuestionRequest("  Fly ", "fly\n", QuestionCategory.FOOD),
+                "blank optionA" to SubmitQuestionRequest("   ", "Swim", listOf(QuestionCategory.FOOD)),
+                "empty optionB" to SubmitQuestionRequest("Fly", "", listOf(QuestionCategory.FOOD)),
+                "optionA too long" to SubmitQuestionRequest(tooLong, "Swim", listOf(QuestionCategory.FOOD)),
+                "optionB too long" to SubmitQuestionRequest("Fly", tooLong, listOf(QuestionCategory.FOOD)),
+                "the same options ignoring case" to SubmitQuestionRequest("Fly", "fLY", listOf(QuestionCategory.FOOD)),
+                "the same options once trimmed" to
+                    SubmitQuestionRequest("  Fly ", "fly\n", listOf(QuestionCategory.FOOD)),
                 // PostgreSQL refuses a NUL in text, which H2 stores, so only the check can catch it. Neither
                 // a NUL nor a DEL is whitespace, so trimming leaves one at either end for the check.
-                "trailing NUL in optionA" to SubmitQuestionRequest("Fly\u0000", "Swim", QuestionCategory.FOOD),
-                "leading DEL in optionB" to SubmitQuestionRequest("Fly", "\u007FSwim", QuestionCategory.FOOD),
-                "newline inside optionB" to SubmitQuestionRequest("Fly", "Swim\nfast", QuestionCategory.FOOD),
-                "tab inside optionA" to SubmitQuestionRequest("Fly\thigh", "Swim", QuestionCategory.FOOD),
+                "trailing NUL in optionA" to SubmitQuestionRequest("Fly\u0000", "Swim", listOf(QuestionCategory.FOOD)),
+                "leading DEL in optionB" to SubmitQuestionRequest("Fly", "\u007FSwim", listOf(QuestionCategory.FOOD)),
+                "newline inside optionB" to SubmitQuestionRequest("Fly", "Swim\nfast", listOf(QuestionCategory.FOOD)),
+                "tab inside optionA" to SubmitQuestionRequest("Fly\thigh", "Swim", listOf(QuestionCategory.FOOD)),
                 // Line breaks that are not control characters: text layout still breaks the line at each.
                 "line separator inside optionA" to
-                    SubmitQuestionRequest("Fly\u2028high", "Swim", QuestionCategory.FOOD),
+                    SubmitQuestionRequest("Fly\u2028high", "Swim", listOf(QuestionCategory.FOOD)),
                 "paragraph separator inside optionB" to
-                    SubmitQuestionRequest("Fly", "Swim\u2029fast", QuestionCategory.FOOD),
+                    SubmitQuestionRequest("Fly", "Swim\u2029fast", listOf(QuestionCategory.FOOD)),
             ).forEach { (case, request) ->
                 val response = client.submit(author, request)
                 assertEquals(HttpStatusCode.UnprocessableEntity, response.status, case)
@@ -821,8 +822,8 @@ class ApiFlowTest {
             val padded = "  ${"y".repeat(longest.length)}  "
 
             listOf(
-                "at the limit" to SubmitQuestionRequest(longest, "Swim", QuestionCategory.FOOD),
-                "at the limit once trimmed" to SubmitQuestionRequest("Fly", padded, QuestionCategory.FOOD),
+                "at the limit" to SubmitQuestionRequest(longest, "Swim", listOf(QuestionCategory.FOOD)),
+                "at the limit once trimmed" to SubmitQuestionRequest("Fly", padded, listOf(QuestionCategory.FOOD)),
             ).forEach { (case, request) ->
                 val response = client.submit(author, request)
                 assertEquals(HttpStatusCode.Created, response.status, case)
@@ -837,13 +838,23 @@ class ApiFlowTest {
             val author = client.guest()
 
             listOf(
-                "UNKNOWN category" to """{"optionA":"Fly","optionB":"Swim","category":"UNKNOWN"}""",
                 "no category" to """{"optionA":"Fly","optionB":"Swim"}""",
-                "unrecognised category" to """{"optionA":"Fly","optionB":"Swim","category":"FROM_THE_FUTURE"}""",
-                "no optionB" to """{"optionA":"Fly","category":"FOOD"}""",
+                "an empty list of categories" to """{"optionA":"Fly","optionB":"Swim","categories":[]}""",
+                "the single category of old" to """{"optionA":"Fly","optionB":"Swim","category":"FOOD"}""",
+                "categories not a list" to """{"optionA":"Fly","optionB":"Swim","categories":"FOOD"}""",
+                "UNKNOWN category" to """{"optionA":"Fly","optionB":"Swim","categories":["UNKNOWN"]}""",
+                "UNKNOWN beside a real category" to
+                    """{"optionA":"Fly","optionB":"Swim","categories":["FOOD","UNKNOWN"]}""",
+                "unrecognised category" to """{"optionA":"Fly","optionB":"Swim","categories":["FROM_THE_FUTURE"]}""",
+                // Decoded as UNKNOWN beside FOOD rather than dropped, so it is not filed under FOOD alone.
+                "unrecognised category beside a real one" to
+                    """{"optionA":"Fly","optionB":"Swim","categories":["FOOD","FROM_THE_FUTURE"]}""",
+                "no optionB" to """{"optionA":"Fly","categories":["FOOD"]}""",
                 "malformed json" to "{not json",
                 // Malformed first: the content is not judged in a request no correct client sends.
-                "UNKNOWN category and a blank option" to """{"optionA":" ","optionB":"Swim","category":"UNKNOWN"}""",
+                "UNKNOWN category and a blank option" to
+                    """{"optionA":" ","optionB":"Swim","categories":["UNKNOWN"]}""",
+                "no category and a blank option" to """{"optionA":" ","optionB":"Swim","categories":[]}""",
             ).forEach { (case, body) ->
                 val response =
                     client.post(WyrApi.Paths.QUESTIONS) {
@@ -859,22 +870,42 @@ class ApiFlowTest {
         }
 
     @Test
+    fun `a submission is filed under every category it names once each and in declaration order`() =
+        runServer("submit-categories") { client ->
+            val author = client.guest()
+            val named = listOf(QuestionCategory.SUPERPOWERS, QuestionCategory.FOOD, QuestionCategory.SUPERPOWERS)
+
+            val submission = client.submitted(author, SubmitQuestionRequest("Fly", "Swim", named))
+
+            assertEquals(listOf(QuestionCategory.FOOD, QuestionCategory.SUPERPOWERS), submission.categories)
+            assertEquals(listOf(submission), client.mySubmissions(author), "and listed as it was answered")
+        }
+
+    @Test
     fun `a player may have only so many submissions pending at once`() =
         runServer("submit-limit") { client ->
             val author = client.guest()
             repeat(WyrApi.Limits.MAX_PENDING_SUBMISSIONS) { index ->
-                val request = SubmitQuestionRequest("Option $index", "Other $index", QuestionCategory.RANDOM)
+                val request = SubmitQuestionRequest("Option $index", "Other $index", listOf(QuestionCategory.RANDOM))
                 assertEquals(HttpStatusCode.Created, client.submit(author, request).status, "submission ${index + 1}")
             }
 
-            val refused = client.submit(author, SubmitQuestionRequest("One", "Too many", QuestionCategory.RANDOM))
+            val refused =
+                client.submit(
+                    author,
+                    SubmitQuestionRequest("One", "Too many", listOf(QuestionCategory.RANDOM)),
+                )
 
             assertEquals(HttpStatusCode.Conflict, refused.status)
             assertEquals(ErrorCode.SUBMISSION_LIMIT, refused.body<ErrorDto>().code)
             assertEquals(WyrApi.Limits.MAX_PENDING_SUBMISSIONS, client.mySubmissions(author).size)
             assertEquals(
                 HttpStatusCode.Created,
-                client.submit(client.guest(), SubmitQuestionRequest("One", "Too many", QuestionCategory.RANDOM)).status,
+                client
+                    .submit(
+                        client.guest(),
+                        SubmitQuestionRequest("One", "Too many", listOf(QuestionCategory.RANDOM)),
+                    ).status,
                 "the limit is per author",
             )
         }
@@ -886,9 +917,16 @@ class ApiFlowTest {
             val other = client.guest()
             val submitted =
                 List(3) { index ->
-                    client.submitted(author, SubmitQuestionRequest("A $index", "B $index", QuestionCategory.FOOD))
+                    client.submitted(
+                        author,
+                        SubmitQuestionRequest("A $index", "B $index", listOf(QuestionCategory.FOOD)),
+                    )
                 }
-            val theirs = client.submitted(other, SubmitQuestionRequest("Theirs", "Not ours", QuestionCategory.ETHICS))
+            val theirs =
+                client.submitted(
+                    other,
+                    SubmitQuestionRequest("Theirs", "Not ours", listOf(QuestionCategory.ETHICS)),
+                )
 
             val listed = client.mySubmissions(author)
 
@@ -927,7 +965,7 @@ class ApiFlowTest {
             val response =
                 client.post(WyrApi.Paths.QUESTIONS) {
                     contentType(ContentType.Application.Json)
-                    setBody(SubmitQuestionRequest("Fly", "Swim", QuestionCategory.FOOD))
+                    setBody(SubmitQuestionRequest("Fly", "Swim", listOf(QuestionCategory.FOOD)))
                 }
 
             assertEquals(HttpStatusCode.Unauthorized, response.status)
@@ -939,7 +977,7 @@ class ApiFlowTest {
         runServer("submit-ghost-player") { client ->
             // As for the ghost-player vote, the helper's token for a real player has to pass first.
             val real = client.guest()
-            val request = SubmitQuestionRequest("Fly", "Swim", QuestionCategory.FOOD)
+            val request = SubmitQuestionRequest("Fly", "Swim", listOf(QuestionCategory.FOOD))
             assertEquals(HttpStatusCode.Created, client.submit(signAccessToken(real.playerId), request).status)
 
             val response = client.submit(signAccessToken("no-such-player"), request)

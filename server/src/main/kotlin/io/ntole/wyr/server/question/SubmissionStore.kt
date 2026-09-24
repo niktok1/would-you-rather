@@ -12,6 +12,7 @@ import org.jetbrains.exposed.v1.core.SortOrder
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.count
 import org.jetbrains.exposed.v1.core.eq
+import org.jetbrains.exposed.v1.jdbc.batchInsert
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.select
 import java.util.UUID
@@ -20,7 +21,9 @@ object SubmissionStore {
     /**
      * Stores [submission] as a question by [authorId], waiting for a moderator, and returns it as
      * its author sees it (CLAUDE.md §8d). Must run inside a transaction, with [submission] already
-     * checked (`checkedSubmission`). It pays nothing: authors earn through likes.
+     * checked (`checkedSubmission`), so its categories are each once and in order. The question and
+     * its categories are written in this one transaction. It pays nothing: authors earn through
+     * likes.
      *
      * An author may have at most [WyrApi.Limits.MAX_PENDING_SUBMISSIONS] pending at once, and a
      * count then an insert is a read-then-write (CLAUDE.md §4). At READ COMMITTED two submissions
@@ -55,16 +58,16 @@ object SubmissionStore {
             row[reviewedAt] = null
             row[rejectionReason] = null
         }
-        QuestionCategories.insert { row ->
-            row[questionId] = id
-            row[category] = submission.category.name
+        QuestionCategories.batchInsert(submission.categories) { category ->
+            this[QuestionCategories.questionId] = id
+            this[QuestionCategories.category] = category.name
         }
 
         return SubmissionDto(
             id = id,
             optionA = submission.optionA,
             optionB = submission.optionB,
-            categories = listOf(submission.category),
+            categories = submission.categories,
             status = QuestionStatus.PENDING,
             rejectionReason = null,
             submittedAt = now,

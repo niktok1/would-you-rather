@@ -15,14 +15,18 @@ import kotlinx.serialization.Serializable
  * one line of text, and PostgreSQL refuses a NUL), and the two must differ ignoring case. Those are
  * the rules a player can break by what they type.
  *
- * [category] is the author's pick, and must be a real one. [QuestionCategory.UNKNOWN], which a
- * missing category also reads as, is refused as a malformed request: no category picker offers it,
- * so only a client bug can send it. The default is there for the wire enum rule (CLAUDE.md §5), not
- * as a value to send.
+ * [categories] are the author's pick, one or more (CLAUDE.md §8d), each a real one, in any order:
+ * the server files the question under each once, in [QuestionCategory] declaration order, however
+ * often the request names it. None, which a missing list also reads as, is refused as a malformed
+ * request, and so is [QuestionCategory.UNKNOWN], which a name the server does not know decodes as
+ * ([QuestionCategoryListSerializer]): a picker must have one picked before it sends, and offers
+ * nothing it cannot name, so only a client bug can send either. The serializer and the empty
+ * default are there for the wire enum rule (CLAUDE.md §5), not as values to send.
  */
 @Serializable
 public data class SubmitQuestionRequest(
     public val optionA: String,
     public val optionB: String,
-    public val category: QuestionCategory = QuestionCategory.UNKNOWN,
+    @Serializable(with = QuestionCategoryListSerializer::class)
+    public val categories: List<QuestionCategory> = emptyList(),
 )
