@@ -547,13 +547,16 @@ known `PlayViewModel` issues (the Play tab is frozen).
 - **A session write returns once it is durable, and suspends for it** (`TokenStorage.write`,
   CLAUDE.md §8a). `AndroidTokenStorage` used `apply()`, which returns before the file is written,
   so a kill just after a refresh could come back with the rotated-out token and orphan the guest.
-  It now `commit()`s, on `Dispatchers.IO` because the ViewModels write from the main thread, inside
-  `NonCancellable` so a write asked for is never dropped, and a commit that fails throws
-  `IOException`. `SessionStore.write` and `clear` suspend with it; `storeHolding` in the test
+  It now `commit()`s, on `Dispatchers.IO` because the ViewModels write from the main thread, one
+  change at a time and in the order asked (`limitedParallelism(1)`: plain `Dispatchers.IO` could
+  commit a clear before an older write), inside `NonCancellable` so a write asked for is never
+  dropped, and a commit that fails throws `IOException`. The write now suspends, so the refresh's
+  check that the session is unchanged can miss a change the data layer has asked for but not yet
+  made; that widens the edge already noted in `WyrHttpClient`, which needs a shared lock to close. `SessionStore.write` and `clear` suspend with it; `storeHolding` in the test
   fixtures stays a plain function by starting the in-memory write directly, since it never
   suspends. `AndroidTokenStorageTest` is an Android host test (`:core:network:testAndroidHostTest`,
-  now in CI): it pins `commit()` over `apply()`, the thread, the failure and the cancellation
-  against a recording `SharedPreferences`, since the host has no real one.
+  now in CI): it pins `commit()` over `apply()`, the thread, the order, the failure and the
+  cancellation against a recording `SharedPreferences`, since the host has no real one.
 - `Tally.percentB` is defined as `100 - percentA` rather than rounded independently, so the two
   always sum to 100. There is a property test over every split up to 40/40.
 - `:server` must not depend on `:core:domain` (§3). That is why scoring lives in `:server`.

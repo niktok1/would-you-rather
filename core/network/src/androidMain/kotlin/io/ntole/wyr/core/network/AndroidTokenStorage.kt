@@ -20,15 +20,16 @@ import java.io.IOException
  * player their guest account. `commit()` returns once the file is written, and blocks until then,
  * so it runs on [ioDispatcher]: a session is written from the calling coroutine, which for the
  * ViewModels is the main thread.
+ *
+ * [ioDispatcher] runs one change at a time, in the order they were asked for. `Dispatchers.IO`
+ * alone could commit a clear and a refreshed session the other way round, which the synchronous
+ * `apply()` on the calling thread never did.
  */
 public class AndroidTokenStorage internal constructor(
     private val prefs: SharedPreferences,
-    private val ioDispatcher: CoroutineDispatcher,
+    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO.limitedParallelism(1, "wyr-token-storage"),
 ) : TokenStorage {
-    public constructor(context: Context) : this(
-        context.getSharedPreferences("wyr.auth", Context.MODE_PRIVATE),
-        Dispatchers.IO,
-    )
+    public constructor(context: Context) : this(context.getSharedPreferences("wyr.auth", Context.MODE_PRIVATE))
 
     override fun read(key: String): String? = prefs.getString(key, null)
 

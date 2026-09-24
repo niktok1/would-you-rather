@@ -155,8 +155,10 @@ public object WyrHttpClient {
                         // The data layer may have replaced or cleared the session while this was in
                         // flight. Writing now would put the old player back over the new one, so
                         // the result is dropped and the call retried as whoever is stored now.
-                        // Remaining edge: a write landing between this check and the next line
-                        // still loses; closing it would need a lock shared with the data layer.
+                        // Remaining edge: a change landing between this check and the write below
+                        // still loses. The write suspends, and on Android it commits on a thread of
+                        // its own, so a change the data layer has asked for but not yet made counts
+                        // too. Closing it would need a lock shared with the data layer.
                         val stored = sessionStore.read()
                         if (stored != current) return@refreshTokens stored?.toBearerTokens()
 

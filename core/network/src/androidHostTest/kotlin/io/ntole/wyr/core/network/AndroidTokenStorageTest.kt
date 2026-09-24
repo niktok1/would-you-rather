@@ -1,23 +1,32 @@
 package io.ntole.wyr.core.network
 
 import android.content.SharedPreferences
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runTest
 import java.io.IOException
+import java.util.Collections
+import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 /**
  * How [AndroidTokenStorage] saves a change. A host test has no real `SharedPreferences` (the
  * Android jar here is stubs), so a recording one stands in for it: what is pinned is which of
- * `commit()` and `apply()` is called, and on which thread, not what Android does with it.
+ * `commit()` and `apply()` is called, on which thread and in what order, not what Android does
+ * with it.
  */
 class AndroidTokenStorageTest {
     @Test
@@ -61,6 +70,38 @@ class AndroidTokenStorageTest {
         }
 
     @Test
+    fun `changes are committed one at a time in the order they were asked for`() =
+        runBlocking {
+            // Dispatchers.IO alone would start the second commit on another thread while the first
+            // still runs, and could finish it first: a clear, say, undone by an older write.
+            val firstStarted = CountDownLatch(1)
+            val releaseFirst = CountDownLatch(1)
+            val secondStarted = CountDownLatch(1)
+            val prefs =
+                RecordingPreferences(
+                    beforeCommit = { keys ->
+                        if ("first" in keys) {
+                            firstStarted.countDown()
+                            releaseFirst.await(WAIT_SECONDS, TimeUnit.SECONDS)
+                        } else {
+                            secondStarted.countDown()
+                        }
+                    },
+                )
+            val storage = AndroidTokenStorage(prefs)
+
+            val first = launch(Dispatchers.Default) { storage.write("first", "1") }
+            assertTrue(firstStarted.await(WAIT_SECONDS, TimeUnit.SECONDS))
+            val second = launch(Dispatchers.Default) { storage.write("second", "2") }
+            val secondStartedAlongside = secondStarted.await(ALONGSIDE_MILLIS, TimeUnit.MILLISECONDS)
+            releaseFirst.countDown()
+            joinAll(first, second)
+
+            assertFalse(secondStartedAlongside, "the second commit started while the first still ran")
+            assertEquals(listOf(setOf("first"), setOf("second")), prefs.committedKeys)
+        }
+
+    @Test
     fun `a commit that fails to reach the disk is reported`() =
         runTest {
             val prefs = RecordingPreferences(commitSucceeds = false)
@@ -89,6 +130,10 @@ class AndroidTokenStorageTest {
 
     private companion object {
         const val STORAGE_THREAD = "wyr-storage-test"
+        const val WAIT_SECONDS = 5L
+
+        /** Ample for a free IO thread to pick the second commit up, were one allowed to. */
+        const val ALONGSIDE_MILLIS = 500L
     }
 }
 
@@ -96,10 +141,12 @@ class AndroidTokenStorageTest {
 private class RecordingPreferences(
     val values: MutableMap<String, String> = mutableMapOf(),
     private val commitSucceeds: Boolean = true,
+    private val beforeCommit: (keys: Set<String>) -> Unit = {},
 ) : SharedPreferences {
     var commits = 0
     var applies = 0
-    val commitThreads = mutableListOf<String>()
+    val commitThreads: MutableList<String> = Collections.synchronizedList(mutableListOf())
+    val committedKeys: MutableList<Set<String>> = Collections.synchronizedList(mutableListOf())
 
     override fun getString(
         key: String?,
@@ -163,8 +210,11 @@ private class RecordingPreferences(
         }
 
         override fun commit(): Boolean {
+            val keys = puts.keys + removals
+            beforeCommit(keys)
             commits++
             commitThreads += Thread.currentThread().name
+            committedKeys += keys
             save()
             return commitSucceeds
         }
