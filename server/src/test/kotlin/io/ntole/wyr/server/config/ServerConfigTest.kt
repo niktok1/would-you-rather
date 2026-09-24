@@ -68,12 +68,19 @@ class ServerConfigTest {
     }
 
     @Test
+    fun `whitespace around an admin token, such as its generator's newline, is trimmed`() {
+        val token = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+
+        listOf("$token\n", " $token ", "\t$token\r\n").forEach { pasted ->
+            assertEquals(token, ServerConfig.fromEnvironment(mapOf("ADMIN_TOKEN" to pasted)::get).adminToken)
+        }
+    }
+
+    @Test
     fun `an admin token no request header could carry fails at config load without showing it`() {
         // Configured, it would never match: moderation on in the config and off in effect.
         val unpresentable =
             listOf(
-                " leading-space-0123456789abcdef0123456789",
-                "trailing-space-0123456789abcdef0123456789 ",
                 "inner space-0123456789abcdef0123456789",
                 "tab\t0123456789abcdef0123456789abcdef",
                 "newline\n0123456789abcdef0123456789abcdef",

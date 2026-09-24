@@ -88,7 +88,7 @@ data class ServerConfig(
                         ?.filter(String::isNotEmpty)
                         ?.map(::parseWebOrigin)
                         .orEmpty(),
-                adminToken = env("ADMIN_TOKEN")?.takeIf { it.isNotBlank() }?.let(::parseAdminToken),
+                adminToken = env("ADMIN_TOKEN")?.trim()?.takeIf { it.isNotEmpty() }?.let(::parseAdminToken),
                 rateLimits = RateLimits.fromEnvironment(env),
                 clientIpHeader = env("CLIENT_IP_HEADER")?.let(::parseClientIpHeader),
                 onRender = env("RENDER") == "true",
@@ -101,6 +101,10 @@ data class ServerConfig(
          * ends with whitespace (a server trims it) and which a client sends only visible ASCII in. So
          * the token must be visible ASCII, 0x21 to 0x7E, with no whitespace anywhere, which every
          * generated token is. The message never includes the token, which is a secret.
+         *
+         * Whitespace around it is trimmed first, at [fromEnvironment]: a token pasted into a dashboard
+         * often carries the newline its generator printed (`openssl rand -hex 32` does), and one did
+         * stop the first Render deploy from booting. Whitespace inside it still fails.
          */
         internal fun parseAdminToken(raw: String): String {
             require(raw.all { it in VISIBLE_ASCII }) {
