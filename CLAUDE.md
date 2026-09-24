@@ -324,10 +324,12 @@ auth SDK, satisfying §2.
 - On the client, `SessionStore` is the only copy of the credentials: Ktor's bearer cache is off
   (`cacheTokens = false`), so a session change applies to the very next request. A dead session
   is replaced through `withSessionRecovery` in `:core:data`, which mints at most one guest for it.
-- Every client request is bounded (`HttpTimeout` in `WyrHttpClient`: 60 s, 30 s to connect), past a
-  Render cold start. A request that spends the refresh token takes `refreshTimeout()` instead, 5
-  minutes: a timeout abandons a refresh as a cancellation does, and with it a token the server has
-  already rotated. It stays bounded because every call rejected meanwhile waits on it, uncancellably.
+- Every client request is bounded (`HttpTimeout` in `WyrHttpClient`: 60 s), past a Render cold
+  start. Android and desktop also give up on a connect after 30 s; iOS applies only the 60 s socket
+  timeout, which covers connecting, and a browser only the request timeout. A request that spends
+  the refresh token takes `refreshTimeout()` instead, 5 minutes: a timeout abandons a refresh as a
+  cancellation does, and with it a token the server has already rotated. It stays bounded because
+  every call rejected meanwhile waits on it, uncancellably.
 - `TokenStorage.write` returns only once the session would survive the app being killed, for the
   same reason: after a refresh, the rotated token is the only live one. It suspends so a blocking
   write can leave the caller's thread (Android `commit()`s on `Dispatchers.IO`, one change at a time

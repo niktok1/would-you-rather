@@ -231,10 +231,13 @@ Repo initialized on `main` with the personal identity and `user.useConfigOnly = 
   something a test here has seen, and the same goes for the concurrent-seed recovery described on
   `Seed.questionsIfEmpty`. Porting the races means polling `pg_stat_activity` instead.
 - **Timeouts on a real engine, against a real cold start.** Every timeout test runs on
-  `MockEngine`, which enforces only the request timeout (Ktor's own timer). That OkHttp, CIO and
-  Darwin apply the connect and socket timeouts they are handed is their documented behaviour, and
-  the 60 s is a guess at Render's cold start, not a measurement: time the first request after the
-  service has idled once it is deployed.
+  `MockEngine`, which enforces only the request timeout (Ktor's own timer). What each engine takes
+  was read in the Ktor 3.5.1 sources: OkHttp maps the connect timeout to its own and the socket
+  timeout to its read and write timeouts; CIO applies both, and drops its own 15 s request timeout
+  once `HttpTimeout` is installed; Darwin takes only the socket timeout, as the request's idle
+  timeout, so iOS has no 30 s connect limit; the browser engines apply neither. That the engines
+  then enforce those is their documented behaviour, and the 60 s is a guess at Render's cold start,
+  not a measurement: time the first request after the service has idled once it is deployed.
 - **Durable session writes on a device.** `AndroidTokenStorageTest` pins which call is made and
   where, against a stand-in; that Android's `commit()` then survives a kill is its documented
   behaviour, not something seen here. Whether `NSUserDefaults` keeps a change the app is killed
@@ -558,12 +561,13 @@ known `PlayViewModel` issues (the Play tab is frozen).
   `PlayViewModel` keeps a vote lost to `NETWORK` for Try again and moves on after any other
   failure, since a refused vote would fail the same way every time.
 - **Every request times out, and a refresh far later than the rest** (`WyrHttpClient`, CLAUDE.md
-  §8a). A call gets 60 s, 30 s of it to connect, and the same 60 s as its socket timeout, which
-  overrides each engine's own shorter defaults: OkHttp's 10 s read timeout alone would fail a cold
-  start on Render's free tier. A request that spends the refresh token gets `refreshTimeout()`, 5
-  minutes, because a refresh abandoned after the server rotated the token orphans the guest; any new
-  request that rotates a credential needs it too. A call stuck behind a refresh gives up only once
-  the refresh ends. A timeout reaches `runApi` as the engine's or Ktor's own exception, so it is
+  §8a). A call gets 60 s, 30 s of it to connect (on OkHttp and CIO; on iOS the 60 s socket timeout
+  covers connecting, and a browser has only the request timeout), and the same 60 s as its socket
+  timeout, which overrides OkHttp's 10 s read timeout: that alone would fail a cold start on
+  Render's free tier. A request that spends the refresh token gets `refreshTimeout()`, 5 minutes,
+  because a refresh abandoned after the server rotated the token orphans the guest; any new request
+  that rotates a credential needs it too. A call stuck behind a refresh gives up only once the
+  refresh ends. A timeout reaches `runApi` as the engine's or Ktor's own exception, so it is
   `NETWORK`. `RequestTimeoutTest` runs every case in virtual time, on a `MockEngine` given the test's
   dispatcher.
 - **A session write returns once it is durable, and suspends for it** (`TokenStorage.write`,

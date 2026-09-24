@@ -45,12 +45,19 @@ public object WyrHttpClient {
      * Render's free tier (CLAUDE.md §8) can take most of a minute, and the player whose request
      * woke the server should get the answer, not NETWORK.
      *
-     * It is the socket timeout too, the longest silence allowed between two packets, so no engine's
-     * own default gives up first: OkHttp's is 10 s, and CIO's request timeout 15 s.
+     * It is the socket timeout too, the longest silence allowed between two packets, so OkHttp's own
+     * 10 s read and write timeouts do not give up first. CIO's own 15 s request timeout is no
+     * concern: CIO drops it for every request once HttpTimeout is installed, whatever the values.
      */
     internal val REQUEST_TIMEOUT: Duration = 60.seconds
 
-    /** How long opening a connection may take. Nothing has reached the server until one is open. */
+    /**
+     * How long opening a connection may take. Nothing has reached the server until one is open.
+     *
+     * Only OkHttp and CIO apply it. Darwin takes the socket timeout alone, as the request's idle
+     * timeout, which covers connecting too, so on iOS a connect gets [REQUEST_TIMEOUT]. The browser
+     * engines apply neither, and a call there is bounded by Ktor's own request timer alone.
+     */
     internal val CONNECT_TIMEOUT: Duration = 30.seconds
 
     /**
