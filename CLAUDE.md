@@ -500,12 +500,15 @@ seed (`Migrations`, `DatabaseFactory.init`). Nothing builds a table any other wa
 - *Adding a migration.* Change the definition in `Tables.kt`, then run
   `./gradlew :server:pendingMigration`: it migrates an empty H2 database, and the one
   `WYR_TEST_JDBC_URL` names if set, which it wipes, and prints what exposed-migration would still run
-  on each to match the definitions. That is a draft. Write it as the next
-  `V<n>__<what_it_does>.sql` beside V1, in lower case and unquoted so it runs on both engines, and
-  make it right for the rows already there: a new NOT NULL column needs a default or a backfill, and a
-  drop takes its data with it. `SchemaDriftTest` then holds the script to the definitions on H2 and,
-  in CI, on PostgreSQL. The first script after V1 also moves `MigrationsTest`'s pre-migration
-  database onto V1, as its KDoc says.
+  on each to match the definitions. That is a draft. Without `WYR_TEST_JDBC_URL`, as on this machine,
+  which has no PostgreSQL, it is H2's alone, in H2's names and types (a binary column is H2's
+  `VARBINARY`, which PostgreSQL refuses; its own is `bytea`), so what PostgreSQL needs differently
+  shows first in the server-postgres CI job. Write the draft as the next `V<n>__<what_it_does>.sql`
+  beside V1, in lower case and unquoted so it runs on both engines, and make it right for the rows
+  already there: a new NOT NULL column needs a default or a backfill, and a drop takes its data with
+  it. `SchemaDriftTest` then holds the script to the definitions on H2 and, in CI, on PostgreSQL. The
+  first script after V1 also moves `MigrationsTest`'s pre-migration database onto V1, as its KDoc
+  says.
 - *A script that has shipped never changes*: Flyway refuses to boot on a changed checksum. A script
   whose name Flyway cannot read fails the boot rather than being skipped (`validateMigrationNaming`),
   and clean is refused outright (`cleanDisabled`); the test harness alone turns it on, to wipe the

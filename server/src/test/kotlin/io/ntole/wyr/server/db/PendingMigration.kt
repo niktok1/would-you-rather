@@ -15,6 +15,10 @@ import javax.sql.DataSource
  * [appTables], and does the same on the external database when `WYR_TEST_JDBC_URL` names one, which
  * it wipes first, as the test suite does: never name the production database there.
  *
+ * Without `WYR_TEST_JDBC_URL` it prints H2's statements alone, in H2's names and types, such as
+ * `VARBINARY` for a binary column where PostgreSQL's is `bytea`: PostgreSQL's differences then show
+ * first in the server-postgres CI job, when SchemaDriftTest runs there.
+ *
  * What it prints is a draft, not the script. Write it as one `V<n>__<what_it_does>.sql` that runs on
  * both engines, the identifiers unquoted and in lower case as in V1, and check what it does to rows
  * already there: a new NOT NULL column needs a default or a backfill, and exposed-migration drops a
