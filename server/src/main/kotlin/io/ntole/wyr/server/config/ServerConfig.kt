@@ -26,12 +26,13 @@ data class ServerConfig(
     /** What one client may send to each group of routes (CLAUDE.md §8b, *Rate limiting*). */
     val rateLimits: RateLimits,
     /**
-     * How many proxies in front of the server append to `X-Forwarded-For`, from `TRUSTED_PROXY_HOPS`:
-     * the client's address, for a per-address rate limit, is the entry that many from the right
-     * (`clientAddress`). 0, the default, trusts no header and takes the socket peer, which is the
-     * client itself when nothing stands in between, as on a laptop. Render's is 3 (`render.yaml`).
+     * The request header the proxy in front sets to the client's address, overwriting any a client
+     * sent, from `CLIENT_IP_HEADER`: a per-address rate limit keys by its value (`clientAddress`).
+     * Render's is Cloudflare's `CF-Connecting-IP` (`render.yaml`). Null, the default, trusts no header
+     * and takes the socket peer, which is the client itself when nothing stands in between, as on a
+     * laptop.
      */
-    val trustedProxyHops: Int,
+    val clientIpHeader: String?,
     /** True on Render, which sets `RENDER` to `true` for every service. Only a boot warning reads it. */
     val onRender: Boolean,
 ) {
@@ -89,7 +90,7 @@ data class ServerConfig(
                         .orEmpty(),
                 adminToken = env("ADMIN_TOKEN")?.takeIf { it.isNotBlank() }?.let(::parseAdminToken),
                 rateLimits = RateLimits.fromEnvironment(env),
-                trustedProxyHops = env("TRUSTED_PROXY_HOPS")?.let(::parseTrustedProxyHops) ?: 0,
+                clientIpHeader = env("CLIENT_IP_HEADER")?.let(::parseClientIpHeader),
                 onRender = env("RENDER") == "true",
             )
         }
@@ -112,19 +113,29 @@ data class ServerConfig(
         private val VISIBLE_ASCII = '!'..'~'
 
         /**
-         * A whole number of at least 0, blank for 0. Anything else fails at config load, naming the
-         * variable: guessed at, a count too high lets a client pick its own address, and one too low
-         * gives every client the same one.
+         * A header name, trimmed, or null for a blank one. Anything else fails at config load, naming
+         * the variable, and so does a header proxies append to (`X-Forwarded-For`, `Forwarded`): its
+         * value is a list that starts with whatever the client wrote, never one address the proxy in
+         * front vouches for.
          */
-        internal fun parseTrustedProxyHops(raw: String): Int {
-            val trimmed = raw.trim()
-            if (trimmed.isEmpty()) return 0
-            val hops = trimmed.toIntOrNull()
-            require(hops != null && hops >= 0) {
-                "TRUSTED_PROXY_HOPS is \"$raw\"; expected how many proxies append to X-Forwarded-For, 0 or more."
+        internal fun parseClientIpHeader(raw: String): String? {
+            val name = raw.trim()
+            if (name.isEmpty()) return null
+            require(name.all { it in HEADER_NAME_CHARS }) {
+                "CLIENT_IP_HEADER is \"$raw\"; expected a header name, such as CF-Connecting-IP."
             }
-            return hops
+            require(APPENDED_HEADERS.none { it.equals(name, ignoreCase = true) }) {
+                "CLIENT_IP_HEADER is $name, which every proxy appends to and a client can write into; " +
+                    "name one the proxy in front overwrites, such as CF-Connecting-IP."
+            }
+            return name
         }
+
+        /** What a header name may hold: RFC 9110's token characters. */
+        private val HEADER_NAME_CHARS: Set<Char> =
+            (('a'..'z') + ('A'..'Z') + ('0'..'9') + "!#$%&'*+-.^_`|~".toList()).toSet()
+
+        private val APPENDED_HEADERS = listOf("X-Forwarded-For", "Forwarded")
 
         /**
          * Accepts an origin as a browser sends it (`http://` or `https://` plus `host[:port]`),

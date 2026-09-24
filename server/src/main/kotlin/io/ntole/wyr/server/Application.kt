@@ -84,11 +84,11 @@ private fun Application.warnAboutInsecureDefaults(config: ServerConfig) {
                 "discarded on shutdown.",
         )
     }
-    if (config.onRender && config.trustedProxyHops == 0) {
+    if (config.onRender && config.clientIpHeader == null) {
         log.warn(
-            "TRUSTED_PROXY_HOPS is 0 on Render, so every request's address is Render's proxy and every " +
+            "CLIENT_IP_HEADER is unset on Render, so every request's address is Render's proxy and every " +
                 "client shares each per-address rate limit, such as ${config.rateLimits.guests.requests} new " +
-                "guests an hour for everyone together. render.yaml sets it to 3.",
+                "guests an hour for everyone together. render.yaml sets it to CF-Connecting-IP.",
         )
     }
     if (config.allowedWebOrigins.isEmpty()) {

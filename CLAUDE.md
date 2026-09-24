@@ -297,18 +297,21 @@ This project must never be attributed to any employer identity.
   or anything but visible ASCII fails at boot, since no request header could carry it. Generate one
   with `openssl rand -hex 32`. It is read at boot, so rotating it is changing the variable and
   restarting the service, and the old token is dead from then on. A browser on an
-  `ALLOWED_WEB_ORIGINS` origin may send its header (CORS). The dev console's *Moderation* section takes it typed and holds it in memory only.
-- `TRUSTED_PROXY_HOPS` (`render.yaml`: 3) is how many proxies in front of the service append to
-  `X-Forwarded-For`: Cloudflare's edge and two of Render's proxies behind it. The per-address rate
-  limits (§8b) take the client's address as the entry that many from the right (`clientAddress`), so
-  entries a client writes itself, which land on the left, are never read, and a chain shorter than
-  that is not trusted at all. 0, the default, trusts no header and keys by the socket peer, which on
-  a laptop is the client and on Render is the proxy, one budget for everyone: the server warns at
-  boot when `RENDER` is `true` and the count is 0. Render does not document the chain. The 3 is the
-  chain others report on requests reaching live Render services (client, a Cloudflare `172.x`, a
-  Render `10.x`), and is to be checked once deployed (NEXT-SESSION.md). Too high a count lets a client pick
-  its own address; too low gives many clients Cloudflare's. No forwarded-header plugin: Ktor's
-  `XForwardedHeaders` would be a new dependency for the one line this needs.
+  `ALLOWED_WEB_ORIGINS` origin may send its header (CORS). The dev console's *Moderation* section
+  takes it typed and holds it in memory only.
+- `CLIENT_IP_HEADER` (`render.yaml`: `CF-Connecting-IP`) names the request header the per-address
+  rate limits (§8b) take the client's address from (`clientAddress`). Every request to a Render web
+  service passes through Cloudflare, which sets `CF-Connecting-IP` to the address that reached it
+  and overwrites any a client sent, so the key does not depend on how many of Render's proxies stand
+  behind Cloudflare. `X-Forwarded-For` is never read, and naming it (or `Forwarded`) fails at boot:
+  each proxy appends to it, its leftmost entry is the client's to write, and live Render services
+  have been reported with one Render proxy behind Cloudflare and with two, so a count of entries
+  from the right would let a client pick its own address whenever the count was one too high. A
+  request without the header, or with more than one value, keys by the socket peer. Unset, the
+  default, trusts no header and keys by the socket peer, which on a laptop is the client and on
+  Render is the proxy, one budget for everyone: the server warns at boot when `RENDER` is `true` and
+  no header is set. To be checked once deployed (NEXT-SESSION.md). No forwarded-header plugin:
+  `ktor-server-forwarded-header` would be a new dependency for the one line this needs.
 - The Docker build sets `WYR_SERVER_ONLY=1`, which makes `settings.gradle.kts` skip the app
   modules. Without it the Android Gradle plugin fails at configuration time for want of an SDK.
 - Free tier caveats to design around: free web services spin down after ~15 min idle (cold
@@ -397,10 +400,10 @@ accounts exist.
   from every other group's. The budgets are `RateLimits.DEFAULT`, each count overridable by its
   `RATE_LIMIT_*` variable (`RateLimits.fromEnvironment`; one that is not a whole number of at least 1
   fails at boot, naming it):
-  - *Per client address* (behind Render's proxies, the one `X-Forwarded-For` entry they vouch for:
-    `TRUSTED_PROXY_HOPS`, §8), for a caller with no session to name: guest minting 10 an hour,
-    refreshes 30 a minute, the admin routes 60 a minute together, and on top of that, admin requests
-    with a wrong or missing token 10 a minute. A request with the right token spends none of that
+  - *Per client address* (on Render, Cloudflare's `CF-Connecting-IP`: `CLIENT_IP_HEADER`, §8), for
+    a caller with no session to name: guest minting 10 an hour, refreshes 30 a minute, the admin
+    routes 60 a minute together, and on top of that, admin requests with a wrong or missing token 10
+    a minute. A request with the right token spends none of that
     last budget, but once an address has spent it, every admin request from the address is refused
     until the budget is back, the right token's too (`LockingOut`): were that one let in, its 200
     among the 429s would give it away, and guessing would be bounded by nothing. So a guesser

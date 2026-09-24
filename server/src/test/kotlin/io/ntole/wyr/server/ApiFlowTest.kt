@@ -1471,7 +1471,7 @@ class ApiFlowTest {
                 allowedWebOrigins = emptyList(),
                 adminToken = adminToken,
                 rateLimits = NO_PRACTICAL_LIMIT,
-                trustedProxyHops = 0,
+                clientIpHeader = null,
                 onRender = false,
             )
 

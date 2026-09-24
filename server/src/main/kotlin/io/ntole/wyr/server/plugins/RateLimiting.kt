@@ -79,7 +79,7 @@ private sealed interface LimitKey {
 
 /**
  * Installs Ktor's rate limiter, with a budget per [RouteLimit] group from [ServerConfig.rateLimits],
- * and client addresses read through [ServerConfig.trustedProxyHops] proxies ([clientAddress]).
+ * and client addresses read from the header [ServerConfig.clientIpHeader] names ([clientAddress]).
  *
  * It counts in memory, per server instance: a second instance would give every client each budget
  * again, so running two needs a shared store first. A key's count is dropped once its period is over,
@@ -95,7 +95,7 @@ fun Application.installRateLimits(
     tokens: TokenService,
     adminToken: AdminToken?,
 ) {
-    val keys = LimitKeys(tokens, config.trustedProxyHops)
+    val keys = LimitKeys(tokens, config.clientIpHeader)
     install(RateLimit) {
         RouteLimit.entries.forEach { limit ->
             register(limit.limitName) {
@@ -149,14 +149,14 @@ private class LockingOut(
 /** Picks the [LimitKey] a request spends, as its group is [KeyedBy]. */
 private class LimitKeys(
     private val tokens: TokenService,
-    private val trustedProxyHops: Int,
+    private val clientIpHeader: String?,
 ) {
     fun of(
         call: ApplicationCall,
         keyedBy: KeyedBy,
     ): LimitKey {
         if (keyedBy == KeyedBy.PLAYER) tokens.verifiedPlayerId(call.request)?.let { return LimitKey.Player(it) }
-        return LimitKey.Address(call.request.clientAddress(trustedProxyHops))
+        return LimitKey.Address(call.request.clientAddress(clientIpHeader))
     }
 }
 

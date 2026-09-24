@@ -149,25 +149,38 @@ class ServerConfigTest {
     }
 
     @Test
-    fun `no proxy is trusted unless TRUSTED_PROXY_HOPS says how many`() {
-        assertEquals(0, ServerConfig.fromEnvironment { null }.trustedProxyHops)
-        mapOf("3" to 3, " 2 " to 2, "0" to 0, "" to 0, "   " to 0).forEach { (raw, hops) ->
+    fun `no header names the client's address unless CLIENT_IP_HEADER does`() {
+        assertNull(ServerConfig.fromEnvironment { null }.clientIpHeader)
+        mapOf(
+            "CF-Connecting-IP" to "CF-Connecting-IP",
+            " True-Client-IP " to "True-Client-IP",
+            "" to null,
+            "  " to null,
+        ).forEach { (raw, header) ->
             assertEquals(
-                hops,
-                ServerConfig.fromEnvironment(mapOf("TRUSTED_PROXY_HOPS" to raw)::get).trustedProxyHops,
+                header,
+                ServerConfig.fromEnvironment(mapOf("CLIENT_IP_HEADER" to raw)::get).clientIpHeader,
                 raw,
             )
         }
     }
 
     @Test
-    fun `a proxy count that is not a whole number of at least 0 fails at config load and names its variable`() {
-        listOf("-1", "three", "1.5", "true").forEach { raw ->
+    fun `a CLIENT_IP_HEADER that is no header name, or one proxies append to, fails at config load and names it`() {
+        listOf("CF Connecting IP", "CF-Connecting-IP:", "CF-Connecting-IP, X-Real-IP", "Réal-IP").forEach { raw ->
             val failure =
                 assertFailsWith<IllegalArgumentException>("\"$raw\" should be rejected") {
-                    ServerConfig.fromEnvironment(mapOf("TRUSTED_PROXY_HOPS" to raw)::get)
+                    ServerConfig.fromEnvironment(mapOf("CLIENT_IP_HEADER" to raw)::get)
                 }
-            assertContains(failure.message.orEmpty(), "TRUSTED_PROXY_HOPS")
+            assertContains(failure.message.orEmpty(), "CLIENT_IP_HEADER")
+        }
+        // Each proxy appends to these, so their first entry is whatever the client wrote.
+        listOf("X-Forwarded-For", "x-forwarded-for", "Forwarded").forEach { raw ->
+            val failure =
+                assertFailsWith<IllegalArgumentException>("\"$raw\" should be rejected") {
+                    ServerConfig.fromEnvironment(mapOf("CLIENT_IP_HEADER" to raw)::get)
+                }
+            assertContains(failure.message.orEmpty(), "appends to")
         }
     }
 

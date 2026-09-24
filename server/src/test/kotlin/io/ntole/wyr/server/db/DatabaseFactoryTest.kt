@@ -44,7 +44,7 @@ class DatabaseFactoryTest {
             allowedWebOrigins = emptyList(),
             adminToken = null,
             rateLimits = RateLimits.DEFAULT,
-            trustedProxyHops = 0,
+            clientIpHeader = null,
             onRender = false,
         )
 }
