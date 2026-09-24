@@ -46,6 +46,7 @@ public enum class Category {
         /**
          * Every category the feed can be filtered to, in declaration order: all but [OTHER], which
          * holds whatever this build cannot name, so there is nothing to ask the server for by it.
+         * The same ones are what a question can be submitted under.
          */
         public val selectable: List<Category> = entries.filter { it != OTHER }
     }
