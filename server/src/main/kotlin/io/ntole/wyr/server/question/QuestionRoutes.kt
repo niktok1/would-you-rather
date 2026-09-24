@@ -14,6 +14,7 @@ import io.ntole.wyr.server.auth.authenticatedPlayerId
 import io.ntole.wyr.server.db.Db
 import io.ntole.wyr.server.player.PlayerStore
 import io.ntole.wyr.server.plugins.ApiFailure
+import io.ntole.wyr.server.plugins.pageLimit
 import io.ntole.wyr.server.plugins.receiveOrReject
 import io.ntole.wyr.server.plugins.requireValidId
 
@@ -27,12 +28,7 @@ fun Route.questionRoutes(db: Db) {
             val playerId = call.authenticatedPlayerId()
             val params = call.request.queryParameters
 
-            val limit =
-                params[WyrApi.Query.LIMIT]
-                    ?.let { raw ->
-                        raw.toIntOrNull() ?: throw ApiFailure.validation("limit must be a number: $raw")
-                    }?.coerceIn(1, WyrApi.Limits.MAX_PAGE_SIZE)
-                    ?: WyrApi.Limits.DEFAULT_PAGE_SIZE
+            val limit = params.pageLimit()
 
             // One category per repeat of the parameter, and none for every category. UNKNOWN is the
             // client's decoding fallback and is never stored, so filtering by it would always answer
