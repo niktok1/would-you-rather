@@ -195,86 +195,144 @@ class DevConsoleViewModelTest {
         }
 
     @Test
-    fun `the Category row offers every category and then each one but OTHER`() {
-        assertEquals(
-            listOf(null, Category.FOOD, Category.LIFESTYLE, Category.ETHICS, Category.SUPERPOWERS, Category.RANDOM),
-            DevConsoleViewModel.CATEGORY_CHOICES,
-        )
-    }
-
-    @Test
-    fun `selecting a category switches the feed then loads a question from it`() =
+    fun `toggling a category filters the feed to it then loads a question from it`() =
         runTest(dispatcher) {
             val viewModel = openConsole()
             questions.next = { QUESTION.copy(id = "f1", categories = setOf(Category.FOOD)) }
 
-            viewModel.selectCategory(Category.FOOD)
+            viewModel.toggleCategory(Category.FOOD)
             testScheduler.advanceUntilIdle()
 
             // Switched first, so the question loaded is the new selection's.
-            assertEquals(listOf("setCategory FOOD", "ensure", "next"), calls)
+            assertEquals(listOf("setCategories [FOOD]", "ensure", "next"), calls)
             val state = viewModel.state.value
-            assertEquals(Category.FOOD, state.category)
+            assertEquals(setOf(Category.FOOD), state.categories)
             assertEquals("f1", state.question?.id)
-            val entry = LogEntry("selectCategory", "category=FOOD", 0, LogResult.Ok("question=f1"))
+            val entry = LogEntry("selectCategories", "categories=FOOD", 0, LogResult.Ok("question=f1"))
             assertEquals(entry, state.log.single())
         }
 
     @Test
-    fun `selecting All lifts the filter`() =
+    fun `toggling a second category plays both in declaration order`() =
         runTest(dispatcher) {
             val viewModel = openConsole()
-            viewModel.selectCategory(Category.FOOD)
+            viewModel.toggleCategory(Category.ETHICS)
             testScheduler.advanceUntilIdle()
             calls.clear()
 
-            viewModel.selectCategory(null)
+            viewModel.toggleCategory(Category.FOOD)
             testScheduler.advanceUntilIdle()
 
-            assertEquals(listOf("setCategory null", "ensure", "next"), calls)
-            assertEquals(null, viewModel.state.value.category)
-            assertEquals("category=all", viewModel.log.first().args)
+            // Not in the order they were toggled: in the order the chips are.
+            assertEquals(listOf("setCategories [FOOD, ETHICS]", "ensure", "next"), calls)
+            val categories = viewModel.state.value.categories
+            assertEquals(listOf(Category.FOOD, Category.ETHICS), categories.toList())
+            assertEquals("categories=FOOD,ETHICS", viewModel.log.first().args)
+        }
+
+    @Test
+    fun `toggling a selected category takes it out and leaves the rest`() =
+        runTest(dispatcher) {
+            val viewModel = openConsole()
+            listOf(Category.FOOD, Category.ETHICS).forEach {
+                viewModel.toggleCategory(it)
+                testScheduler.advanceUntilIdle()
+            }
+            calls.clear()
+
+            viewModel.toggleCategory(Category.FOOD)
+            testScheduler.advanceUntilIdle()
+
+            assertEquals(listOf("setCategories [ETHICS]", "ensure", "next"), calls)
+            assertEquals(setOf(Category.ETHICS), viewModel.state.value.categories)
+        }
+
+    @Test
+    fun `toggling the last selected category out lifts the filter`() =
+        runTest(dispatcher) {
+            // None picked is every category (CLAUDE.md §8d).
+            val viewModel = openConsole()
+            viewModel.toggleCategory(Category.FOOD)
+            testScheduler.advanceUntilIdle()
+            calls.clear()
+
+            viewModel.toggleCategory(Category.FOOD)
+            testScheduler.advanceUntilIdle()
+
+            assertEquals(listOf("setCategories []", "ensure", "next"), calls)
+            assertEquals(emptySet(), viewModel.state.value.categories)
+            assertEquals("categories=all", viewModel.log.first().args)
+        }
+
+    @Test
+    fun `All clears the selection`() =
+        runTest(dispatcher) {
+            val viewModel = openConsole()
+            listOf(Category.FOOD, Category.RANDOM).forEach {
+                viewModel.toggleCategory(it)
+                testScheduler.advanceUntilIdle()
+            }
+            calls.clear()
+
+            viewModel.selectAllCategories()
+            testScheduler.advanceUntilIdle()
+
+            assertEquals(listOf("setCategories []", "ensure", "next"), calls)
+            assertEquals(emptySet(), viewModel.state.value.categories)
+            assertEquals("categories=all", viewModel.log.first().args)
         }
 
     @Test
     fun `the Category row shows the selection the repository holds`() =
         runTest(dispatcher) {
             // The repository outlives the console, so it can open on a feed already filtered.
-            questions.category.value = Category.ETHICS
+            questions.categories.value = setOf(Category.ETHICS)
             val viewModel = openConsole()
-            assertEquals(Category.ETHICS, viewModel.state.value.category)
+            assertEquals(setOf(Category.ETHICS), viewModel.state.value.categories)
 
-            questions.category.value = Category.RANDOM
+            questions.categories.value = setOf(Category.FOOD, Category.RANDOM)
             testScheduler.advanceUntilIdle()
 
-            assertEquals(Category.RANDOM, viewModel.state.value.category)
+            assertEquals(setOf(Category.FOOD, Category.RANDOM), viewModel.state.value.categories)
         }
 
     @Test
-    fun `New guest keeps the category selected`() =
+    fun `a toggle adds to the selection the repository already holds`() =
+        runTest(dispatcher) {
+            questions.categories.value = setOf(Category.ETHICS)
+            val viewModel = openConsole()
+
+            viewModel.toggleCategory(Category.SUPERPOWERS)
+            testScheduler.advanceUntilIdle()
+
+            assertEquals("setCategories [ETHICS, SUPERPOWERS]", calls.first())
+        }
+
+    @Test
+    fun `New guest keeps the categories selected`() =
         runTest(dispatcher) {
             val viewModel = openConsole()
-            viewModel.selectCategory(Category.FOOD)
+            viewModel.toggleCategory(Category.FOOD)
             testScheduler.advanceUntilIdle()
             calls.clear()
 
             viewModel.newGuest()
             testScheduler.advanceUntilIdle()
 
-            assertEquals(emptyList(), calls.filter { it.startsWith("setCategory") })
-            assertEquals(Category.FOOD, viewModel.state.value.category)
+            assertEquals(emptyList(), calls.filter { it.startsWith("setCategories") })
+            assertEquals(setOf(Category.FOOD), viewModel.state.value.categories)
         }
 
     @Test
-    fun `a category with nothing to serve is still selected and its failure logged`() =
+    fun `a selection with nothing to serve is still selected and its failure logged`() =
         runTest(dispatcher) {
             val viewModel = openConsole()
             questions.next = { throw WyrException(DomainError.OUT_OF_QUESTIONS, "server returned no questions") }
 
-            viewModel.selectCategory(Category.RANDOM)
+            viewModel.toggleCategory(Category.RANDOM)
             testScheduler.advanceUntilIdle()
 
-            assertEquals(Category.RANDOM, viewModel.state.value.category)
+            assertEquals(setOf(Category.RANDOM), viewModel.state.value.categories)
             assertEquals(
                 LogResult.Err(DomainError.OUT_OF_QUESTIONS, "server returned no questions"),
                 viewModel.onlyResult(),
@@ -939,7 +997,7 @@ class DevConsoleViewModelTest {
         var next: suspend () -> Question = { QUESTION }
         var skip: suspend (String) -> Unit = {}
 
-        override val category = MutableStateFlow<Category?>(null)
+        override val categories = MutableStateFlow<Set<Category>>(emptySet())
 
         override suspend fun next(): Question {
             calls += "next"
@@ -948,9 +1006,9 @@ class DevConsoleViewModelTest {
 
         override suspend fun prefetch() = Unit
 
-        override suspend fun setCategory(category: Category?) {
-            calls += "setCategory $category"
-            this.category.value = category
+        override suspend fun setCategories(categories: Set<Category>) {
+            calls += "setCategories $categories"
+            this.categories.value = categories
         }
 
         override suspend fun skip(questionId: String) {

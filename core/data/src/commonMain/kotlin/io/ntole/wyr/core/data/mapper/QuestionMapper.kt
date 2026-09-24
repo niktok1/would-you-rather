@@ -52,7 +52,7 @@ internal fun QuestionCategory.toDomain(): Category =
  *
  * [Category.OTHER] has no wire equivalent to ask for — it is a local bucket, not a server-side
  * category — so it maps to `null`. No feed is filtered to it: it is not in [Category.selectable],
- * and `QuestionRepository.setCategory` refuses it.
+ * and `QuestionRepository.setCategories` refuses it.
  */
 internal fun Category.toWireOrNull(): QuestionCategory? =
     when (this) {

@@ -56,7 +56,8 @@ fun DevConsoleScreen(
     onRetryLastVote: () -> Unit,
     onAnswerMany: (count: Int) -> Unit,
     onReadStats: () -> Unit,
-    onSelectCategory: (Category?) -> Unit,
+    onToggleCategory: (Category) -> Unit,
+    onSelectAllCategories: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val dimens = WyrThemeAccessors.dimens
@@ -143,13 +144,20 @@ fun DevConsoleScreen(
             }
 
             Section("Category") {
-                Value("feed filtered to", state.category?.name ?: "every category")
+                Value("feed filtered to", feedFilterOf(state.categories))
                 Buttons {
-                    DevConsoleViewModel.CATEGORY_CHOICES.forEach { category ->
+                    // None selected is every category, so All shows as selected then.
+                    FilterChip(
+                        selected = state.categories.isEmpty(),
+                        onClick = onSelectAllCategories,
+                        label = { Text("All") },
+                        enabled = idle,
+                    )
+                    Category.selectable.forEach { category ->
                         FilterChip(
-                            selected = category == state.category,
-                            onClick = { onSelectCategory(category) },
-                            label = { Text(category?.name ?: "All") },
+                            selected = category in state.categories,
+                            onClick = { onToggleCategory(category) },
+                            label = { Text(category.name) },
                             enabled = idle,
                         )
                     }
@@ -304,6 +312,10 @@ private fun Buttons(content: @Composable () -> Unit) {
 
 /** Every one of [categories], in the order the set holds them. */
 internal fun namesOf(categories: Set<Category>): String = categories.joinToString(", ") { it.name }
+
+/** What a feed filtered to [categories] serves: every category when there are none. */
+internal fun feedFilterOf(categories: Set<Category>): String =
+    if (categories.isEmpty()) "every category" else namesOf(categories)
 
 private fun tokenExpiry(session: SessionInfo?): String {
     if (session == null) return "no session"

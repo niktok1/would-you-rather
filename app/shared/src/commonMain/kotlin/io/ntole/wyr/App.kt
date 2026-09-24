@@ -88,7 +88,8 @@ private fun DevConsole() {
         onRetryLastVote = viewModel::retryLastVote,
         onAnswerMany = viewModel::answerMany,
         onReadStats = viewModel::readStats,
-        onSelectCategory = viewModel::selectCategory,
+        onToggleCategory = viewModel::toggleCategory,
+        onSelectAllCategories = viewModel::selectAllCategories,
     )
 }
 

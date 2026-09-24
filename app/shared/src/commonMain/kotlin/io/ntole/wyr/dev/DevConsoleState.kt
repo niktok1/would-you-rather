@@ -27,10 +27,10 @@ data class DevConsoleState(
     val session: SessionInfo? = null,
     val queueSize: Int? = null,
     /**
-     * The category the feed is filtered to, `null` for every category. Followed as the repository
-     * holds it rather than taken as a snapshot, so it always says what the next fetch asks for.
+     * The categories the feed is filtered to, none for every category. Followed as the repository
+     * holds them rather than taken as a snapshot, so they always say what the next fetch asks for.
      */
-    val category: Category? = null,
+    val categories: Set<Category> = emptySet(),
     val question: Question? = null,
     val lastOutcome: VoteOutcome? = null,
     /**

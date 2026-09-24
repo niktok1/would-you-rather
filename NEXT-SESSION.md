@@ -84,8 +84,8 @@ Repo initialized on `main` with the personal identity and `user.useConfigOnly = 
   in the server's own tests; the client and the console's section are the next branch.
 - **Multiple categories on Postgres, and in the client.** The `EXISTS ... IN` filter, the batch's
   second statement for its categories and the batch insert of a submission's categories have run
-  only on H2. The client holds every category of a question but filters by one at most: the
-  repository's selection and the console's Category row are the next step on this branch.
+  only on H2. On the client, several categories per question and a selection of several have run
+  only against `MockEngine` and the console ViewModel's fakes, never against a live `:server:run`.
 - **READ COMMITTED and the refresh compare-and-set on Postgres.** Every race and burst in
   `PlayerStoreTest` runs on H2, even in the `server-postgres` job: it hardcodes `jdbc:h2:mem:`,
   because its wait-for-the-lock polling reads H2's `INFORMATION_SCHEMA.SESSIONS`. So the ci.yml
@@ -190,16 +190,21 @@ The app opens on the **Console** tab (`io.ntole.wyr.dev`). **Play** is the froze
   once, since it reads the stats after its next question.
 - **Questions.** Fetch the next question, or empty the local queue, and see its size.
 - **Category.** A row of chips: *All*, then every category but `OTHER`, which no feed can be
-  filtered to. The selected chip is the repository's own selection (`QuestionRepository.category`),
-  so it shows what the next fetch asks for. Selecting one switches the feed (`?category=<NAME>` in
-  the HTTP trace, none for *All*), drops the queue, and loads a question from the new selection,
-  logged as `selectCategory(category=<NAME>)`, `all` for *All*. It does not read the stats.
-  Selecting the chip already selected changes nothing: the queue stays, and the next question
-  comes from it, with a request only when it is empty. A category is played within the player's
-  cycle: once nothing in it is due while other questions are, it is served again, `looped` on
-  what was answered, skipped questions included (provisional, CLAUDE.md §8b). A category the
-  server has no questions in logs `OUT_OF_QUESTIONS`, and stays selected. *New guest* and *Reset
-  queue* keep the selection. The Play tab draws from the same repository, so it is filtered too.
+  filtered to. Each category chip toggles that category in or out of the selection, and *All*
+  empties it; *All* shows selected while nothing else is, since none selected is every category,
+  and taking out the last category selected is *All* too. The selected chips are the repository's
+  own selection (`QuestionRepository.categories`), so they show what the next fetch asks for, and
+  "feed filtered to" names them. A change switches the feed (one `?category=<NAME>` per category
+  selected, in declaration order, in the HTTP trace; none for *All*), drops the queue, and loads a
+  question from the new selection, logged as `selectCategories(categories=<NAME>,<NAME>)`, `all`
+  for none. It does not read the stats. *All* with nothing selected changes nothing: the queue
+  stays, and the next question comes from it, with a request only when it is empty. The categories
+  selected are one pool within the player's cycle: a question filed under several of them is served
+  once, and once nothing in any of them is due while other questions are, they are served again,
+  `looped` on what was answered, skipped questions included (provisional, CLAUDE.md §8b). A
+  selection the server has no questions in logs `OUT_OF_QUESTIONS`, and stays selected. *New guest*
+  and *Reset queue* keep the selection. The Play tab draws from the same repository, so it is
+  filtered too.
 - **Vote by id.** Sends a vote for whatever id is typed, as a new attempt. An unknown id provokes
   `QUESTION_NOT_FOUND` (404). A known one is simply answered again and pays 1: there is no
   "already voted" any more.

@@ -27,7 +27,7 @@ import kotlinx.coroutines.sync.withLock
  *
  * The server knows what the player has answered, so nothing here remembers what was served beyond
  * the refill in flight. A batch holds only questions still due in the player's cycle when the
- * server read it, or, filtered to a category with nothing due in it, that category's questions
+ * server read it, or, filtered to categories with nothing due in any of them, their questions
  * again (CLAUDE.md §8d, *Categories*). Either way it can hold the ones still queued and the one on
  * screen. The cache drops the queued ones. The one on screen is dropped here, or a refill while
  * the player looks at it would queue it again, and show it twice in a row when nothing else is
@@ -35,8 +35,8 @@ import kotlinx.coroutines.sync.withLock
  * answered it since, and queued again it would come back a few questions later, in the cycle it
  * was just answered in, rather than in the next one.
  *
- * Every fetch asks for the selected [category], read under the refill lock. A switch takes that lock
- * too, as [reset] does, so no batch fetched for the selection before can land after it.
+ * Every fetch asks for all the selected [categories], read under the refill lock. A change takes
+ * that lock too, as [reset] does, so no batch fetched for the selection before can land after it.
  */
 public class DefaultQuestionRepository(
     private val api: QuestionApi,
@@ -65,9 +65,9 @@ public class DefaultQuestionRepository(
     private val handedOutSinceFetch = mutableSetOf<String>()
 
     /** Written only under [refillMutex], so a fetch asks for the selection it queues its batch under. */
-    private val selectedCategory = MutableStateFlow<Category?>(null)
+    private val selectedCategories = MutableStateFlow<Set<Category>>(emptySet())
 
-    override val category: StateFlow<Category?> = selectedCategory.asStateFlow()
+    override val categories: StateFlow<Set<Category>> = selectedCategories.asStateFlow()
 
     override suspend fun next(): Question {
         takeNext()?.let { return it }
@@ -98,12 +98,15 @@ public class DefaultQuestionRepository(
     // batch before the queue is cleared, rather than after it. Cleared before the new selection shows,
     // so nothing is handed out from the old one's queue once it does. The question on screen stays
     // excluded from the next batch, whichever selection it came from.
-    override suspend fun setCategory(category: Category?) {
-        require(category == null || category in Category.selectable) { "no feed can be filtered to $category" }
+    override suspend fun setCategories(categories: Set<Category>) {
+        // A copy, so a caller that goes on to change its own set changes nothing here.
+        val selection = categories.toSet()
+        val unselectable = selection - Category.selectable
+        require(unselectable.isEmpty()) { "no feed can be filtered to $unselectable" }
         refillMutex.withLock {
-            if (category == selectedCategory.value) return
+            if (selection == selectedCategories.value) return
             cache.clear()
-            selectedCategory.value = category
+            selectedCategories.value = selection
         }
     }
 
@@ -143,7 +146,7 @@ public class DefaultQuestionRepository(
             lastHandedOut?.let { handedOutSinceFetch += it }
         }
 
-        val categories = setOfNotNull(selectedCategory.value?.toWireOrNull())
+        val categories = selectedCategories.value.mapNotNull { it.toWireOrNull() }.toSet()
         val batch =
             session
                 .withSessionRecovery { api.page(limit = WyrApi.Limits.DEFAULT_PAGE_SIZE, categories = categories) }

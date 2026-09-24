@@ -9,17 +9,18 @@ import kotlinx.coroutines.flow.StateFlow
  */
 public interface QuestionRepository {
     /**
-     * The category [next] and [prefetch] ask the feed for, or `null` for every category. It starts
-     * as `null`, and only [setCategory] changes it.
+     * The categories [next] and [prefetch] ask the feed for: the questions filed under any of them,
+     * or under every category while it is empty (CLAUDE.md §8d). It starts empty, and only
+     * [setCategories] changes it.
      */
-    public val category: StateFlow<Category?>
+    public val categories: StateFlow<Set<Category>>
 
     /**
      * The next question to play, fetching more if the local supply is low.
      *
      * The feed is endless (CLAUDE.md §8d): once the player has answered everything, answered
      * questions come back. So there is always a next question while the server has any at all, in
-     * the selected [category] if there is one.
+     * the selected [categories] if there are any.
      *
      * @throws io.ntole.wyr.core.domain.error.WyrException with
      *   [io.ntole.wyr.core.domain.error.DomainError.OUT_OF_QUESTIONS] when the cache is empty and
@@ -31,25 +32,28 @@ public interface QuestionRepository {
     public suspend fun prefetch()
 
     /**
-     * Filters the feed to [category], or back to every category with `null`.
+     * Filters the feed to the questions filed under any of [categories], or back to every category
+     * with none.
      *
      * A change drops every queued question, so nothing queued for the selection before is handed
      * out after this returns. A refill already in flight lands before the change does, as it does
-     * before a [reset], so it cannot put them back after it. Selecting the category already
-     * selected changes nothing. A category is played within the player's cycle, not a cycle of its
-     * own: once nothing in it is due, it is served again (CLAUDE.md §8d, *Categories*).
+     * before a [reset], so it cannot put them back after it. Selecting the categories already
+     * selected changes nothing. Selecting all of [Category.selectable] is not selecting none: a
+     * question filed only under categories this build cannot name is in none of them. The
+     * categories are one pool played within the player's cycle, not a cycle of their own: once
+     * nothing in any of them is due, they are served again (CLAUDE.md §8d, *Categories*).
      *
-     * @throws IllegalArgumentException for [Category.OTHER], which is not in
+     * @throws IllegalArgumentException when [categories] holds [Category.OTHER], which is not in
      *   [Category.selectable], leaving the selection and the queue as they were.
      */
-    public suspend fun setCategory(category: Category?)
+    public suspend fun setCategories(categories: Set<Category>)
 
     /**
      * Skips the question [questionId] for the rest of the player's current cycle (CLAUDE.md §8d).
-     * It pays nothing, and the feed serves it again in the next cycle; only a feed filtered to a
-     * [category] with nothing due in it can serve it sooner (provisional, CLAUDE.md §8b). Skipping
-     * it again in the same cycle changes nothing. It is not a fetch: [next] still hands out
-     * whatever comes next.
+     * It pays nothing, and the feed serves it again in the next cycle; only a feed filtered to
+     * [categories] with nothing due in any of them can serve it sooner (provisional, CLAUDE.md
+     * §8b). Skipping it again in the same cycle changes nothing. It is not a fetch: [next] still
+     * hands out whatever comes next.
      *
      * @throws io.ntole.wyr.core.domain.error.WyrException on any failure, with
      *   [io.ntole.wyr.core.domain.error.DomainError.QUESTION_NOT_FOUND] for a question the server
@@ -62,7 +66,8 @@ public interface QuestionRepository {
      *
      * For when the player changes: the queue was filled from the old one's feed. A refill already
      * in flight lands before the reset does, so it cannot put old questions back after it. The
-     * [category] stays selected: it is what to ask the feed for, not anything of the old player's.
+     * [categories] stay selected: they are what to ask the feed for, not anything of the old
+     * player's.
      */
     public suspend fun reset()
 }

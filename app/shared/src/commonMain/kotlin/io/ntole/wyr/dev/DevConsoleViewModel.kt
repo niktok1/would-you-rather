@@ -56,7 +56,7 @@ class DevConsoleViewModel(
         // Followed rather than snapshotted: the repository outlives this ViewModel, so the selection
         // it holds is the truth, whoever made it.
         viewModelScope.launch {
-            questions.category.collect { category -> _state.update { it.copy(category = category) } }
+            questions.categories.collect { categories -> _state.update { it.copy(categories = categories) } }
         }
 
         // One action like any other, so no vote can land while the first stats read is in flight.
@@ -75,9 +75,9 @@ class DevConsoleViewModel(
      * A fresh player from nothing. The queue is reset between dropping the session and minting
      * the next one, so the new player never resumes the old one's queue.
      *
-     * The category stays selected: it is what the console asks the feed for, not anything of the
-     * old player's, and the Category row keeps showing it. So the new player's first question is
-     * already from it.
+     * The categories stay selected: they are what the console asks the feed for, not anything of
+     * the old player's, and the Category row keeps showing them. So the new player's first question
+     * is already from them.
      */
     fun newGuest() =
         perform("newGuest", readsStats = true) {
@@ -111,14 +111,30 @@ class DevConsoleViewModel(
     }
 
     /**
-     * Filters the feed to [category], or back to every category with `null`, then loads a question
-     * from it. The switch drops the queue, so that question is already the new selection's. A
-     * category is played within the player's cycle: once nothing in it is due, it is served again
-     * (CLAUDE.md §8d).
+     * Adds [category] to the categories the feed is filtered to, or takes it out if it is in them,
+     * then loads a question from the new selection. Taking out the last one lifts the filter, since
+     * none selected is every category (CLAUDE.md §8d).
+     *
+     * Toggled on the repository's own selection, which is the truth, whoever made it.
      */
-    fun selectCategory(category: Category?) =
-        perform("selectCategory", args = "category=${category?.name ?: ALL_CATEGORIES}") {
-            questions.setCategory(category)
+    fun toggleCategory(category: Category) {
+        val selected = questions.categories.value
+        val toggled = if (category in selected) selected - category else selected + category
+        // In declaration order, so the log and the Category row name them in the order the chips are.
+        selectCategories(toggled.sorted().toSet())
+    }
+
+    /** Lifts the filter, so the feed serves every category again, then loads a question from it. */
+    fun selectAllCategories() = selectCategories(emptySet())
+
+    /**
+     * Filters the feed to [categories], then loads a question from them. A change drops the queue,
+     * so that question is already the new selection's. The categories are one pool played within the
+     * player's cycle: once nothing in any of them is due, they are served again (CLAUDE.md §8d).
+     */
+    private fun selectCategories(categories: Set<Category>) =
+        perform("selectCategories", args = "categories=${categories.logName()}") {
+            questions.setCategories(categories)
             loadQuestion().summary()
         }
 
@@ -317,6 +333,8 @@ class DevConsoleViewModel(
     /** A question the feed looped back to says so, which is how the loop shows in the log. */
     private fun Question.summary(): String = "question=$id" + if (answeredBefore) " looped" else ""
 
+    private fun Set<Category>.logName(): String = if (isEmpty()) ALL_CATEGORIES else joinToString(",") { it.name }
+
     private fun SentVote.args(): String = "questionId=$questionId side=$side attempt=${attempt.value}"
 
     private fun VoteOutcome.summary(): String = "+$pointsAwarded total=$totalPoints" + if (replayed) " replayed" else ""
@@ -334,10 +352,7 @@ class DevConsoleViewModel(
         /** Half the log, so one run never pushes everything before it out. */
         const val MAX_ANSWER_MANY: Int = LOG_CAPACITY / 2
 
-        /** What the Category row offers: every category (`null`), then each one the feed can be filtered to. */
-        val CATEGORY_CHOICES: List<Category?> = listOf(null) + Category.selectable
-
-        /** How the log names the `null` choice. */
+        /** How the log names a selection of no categories, which is every category. */
         private const val ALL_CATEGORIES = "all"
     }
 }

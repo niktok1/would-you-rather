@@ -342,8 +342,8 @@ accounts exist.
   rule as written, which predates recorded skips, and it changes neither rule; a filter of several
   categories carries it over unchanged. The options: keep it; serve again only the filter's
   answered questions, and its skipped ones only when it has nothing else; or answer an empty
-  batch, which the client reads as out of questions. The dev console's Category row sends a
-  category, so this is reachable from there. `SkipStoreTest` pins what is built.
+  batch, which the client reads as out of questions. The dev console's Category row sends the
+  categories selected, so this is reachable from there. `SkipStoreTest` pins what is built.
 - **Retrying a submission** — *decided 2026-09-24: keep it simple.* A submission carries no
   attempt id, so one sent again after its response was lost is stored twice, both pending; the
   moderator rejects the copy, and the 20-pending cap bounds how many there can be. Nothing resends
@@ -428,10 +428,11 @@ and every request shows in its HTTP trace (`HttpTrace` in `:core:network`, never
     rest. The cycle starts only once nothing at all is due, whichever categories are asked for, and
     a request that finds no questions starts nothing. Questions skipped this cycle are served again
     this way too, so a skip does not hold through a category filter: *provisional — user decision*
-    (§8b). The client can select one category so far (`QuestionRepository.setCategory`, from the
-    console's Category row); a switch drops the queue, and New guest keeps the selection.
+    (§8b). The client selects any number (`QuestionRepository.setCategories`, from the console's
+    Category row), none for every category; a change drops the queue, and New guest keeps the
+    selection.
   - `answeredBefore` means the player has a vote on the question, from any cycle.
-- **Categories** *(decided 2026-09-24; server built, client next)*: a
+- **Categories** *(decided 2026-09-24; built, but for submitting from a client and moderation)*: a
   question is filed under **any number of categories, at least one**. A player may pick **several**
   categories to play, and a question matches when it is filed under **any** of them; none picked
   means every category. The author picks one or more when submitting, and the moderator may change
@@ -445,8 +446,11 @@ and every request shows in its HTTP trace (`HttpTrace` in `:core:network`, never
   table, never a join, so a question in several of the categories asked for is served and counted
   once. A submission names one or more (*Submitting*). On the client a question holds every one
   (`Question.categories`, a set that is never empty, mapped in `QuestionMapper`): a name this build
-  cannot read is `Category.OTHER` beside the rest, and an empty list is `OTHER` alone. The client
-  filters by one category at most so far; no client submits yet.
+  cannot read is `Category.OTHER` beside the rest, and an empty list is `OTHER` alone. A player's
+  selection is a set too (`QuestionRepository.categories`, empty for every category, never `OTHER`),
+  and every refill sends all of it; the console's Category row toggles each category, and *All*
+  empties it. Selecting all of `Category.selectable` is not selecting none: a question filed only
+  under categories this build cannot name is in none of them. No client submits yet.
 - **Re-answering** *(built)*: a question can be answered again, whether or not the feed has
   served it again. It earns the point again **every time**, inside its cycle or not (farming is
   left to rate limiting, §8b), and the player may change their pick. Every answer, first or not,
