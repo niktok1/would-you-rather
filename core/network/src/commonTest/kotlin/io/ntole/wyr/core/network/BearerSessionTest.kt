@@ -111,7 +111,7 @@ class BearerSessionTest {
     fun `a refresh outlives the cancelled call that started it`() =
         runTest {
             // The server rotates the refresh token the moment it answers. Abandoning the refresh
-            // then would leave in the store a refresh token that dies with the server's grace window.
+            // then would leave in the store a refresh token the server takes once more at most.
             val store = storeHolding(session("a"))
             val refreshArrived = CompletableDeferred<Unit>()
             val answerRefresh = CompletableDeferred<Unit>()
@@ -213,8 +213,8 @@ class BearerSessionTest {
             // Two browser tabs share one store and refresh "refresh-a" at once. The server lets both
             // through (its grace window, CLAUDE.md §8a): the other tab's answer lands in the store
             // first, and this one is answered too. Which of the two is the player's current token is
-            // unknown here, and the other is dead once the grace has passed, so one more refresh as
-            // the stored session settles it on the latest rotation.
+            // unknown here, and the other is good for one refresh only, so one more refresh as the
+            // stored session settles it on the latest rotation.
             val store = storeHolding(session("a"))
             val engine =
                 MockEngine { request ->

@@ -16,10 +16,11 @@ import java.io.IOException
  *
  * Every change is `commit()`ed, never `apply()`ed. `apply()` returns before the file is written,
  * so a process killed just after a refresh (swiped away, or by the low-memory killer) could start
- * again holding the refresh token the server had just rotated out, and a 401 after the server's
- * grace window would cost the player their guest account. `commit()` returns once the file is
- * written, and blocks until then, so it runs on [ioDispatcher]: a session is written from the
- * calling coroutine, which for the ViewModels is the main thread.
+ * again holding the refresh token the server had just rotated out, which the server takes once more
+ * at most (CLAUDE.md §8a): were it already the previous one, the next 401 would cost the player their
+ * guest account. `commit()` returns once the file is written, and blocks until then, so it runs on
+ * [ioDispatcher]: a session is written from the calling coroutine, which for the ViewModels is the
+ * main thread.
  *
  * [ioDispatcher] runs one change at a time, in the order they were asked for. `Dispatchers.IO`
  * alone could commit a clear and a refreshed session the other way round, which the synchronous

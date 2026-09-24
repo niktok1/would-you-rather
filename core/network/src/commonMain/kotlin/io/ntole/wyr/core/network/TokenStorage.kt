@@ -17,8 +17,9 @@ public interface TokenStorage {
     /**
      * Stores [value] under [key], and returns only once it would survive the app's process being
      * killed. Refresh tokens rotate on every use (CLAUDE.md §8a): once the server has answered a
-     * refresh, the token it sent is the only one that stays live past the server's short grace
-     * window, and losing it to a kill orphans the guest unless the app is back within the grace.
+     * refresh, the token it answered with is the one sure to work. The one the app sent works once
+     * more at most, and not at all if it was already the previous one, so losing the new one to a
+     * kill can orphan the guest.
      *
      * Suspending, so that an implementation whose durable write blocks can make it off the
      * caller's thread, which in the app is often the main one. A write asked for is made whole

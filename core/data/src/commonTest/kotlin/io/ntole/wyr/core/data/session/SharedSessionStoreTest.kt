@@ -43,8 +43,9 @@ class SharedSessionStoreTest {
     private val rotatedSessionInUse = CompletableDeferred<Unit>()
 
     // "access-a" has expired. Both tabs refresh with "refresh-a" at once; the server rotates it
-    // for the first and refuses the second, as it does with its grace window off or passed
-    // (CLAUDE.md §8a), answering that one only once the first tab is voting with what it got.
+    // for the first and refuses the second, as it does with its grace window off or past a bound, or
+    // when "refresh-a" was already the previous one (CLAUDE.md §8a), answering that one only once the
+    // first tab is voting with what it got.
     private val engine =
         MockEngine { request ->
             when (request.url.encodedPath) {
@@ -110,10 +111,11 @@ class SharedSessionStoreTest {
     /**
      * The same race against a server with its grace window (CLAUDE.md §8a), which lets both refreshes
      * through, in the order they arrive: the second spends "refresh-a" as the token the first
-     * displaced, which leaves the first's new token only the previous one, dead once the grace has
-     * passed. The first tab hears back first and stores that one, as the tab whose refresh reached the
-     * server first usually does. The second tab, finding it stored, refreshes once more as it, so the
-     * store ends on the player's current token rather than on one the next refresh would find dead.
+     * displaced, which leaves the first's new token only the previous one, good for one refresh: of
+     * the two tabs' next refreshes at once, one would be refused. The first tab hears back first and
+     * stores that one, as the tab whose refresh reached the server first usually does. The second tab,
+     * finding it stored, refreshes once more as it, so the store ends on the player's current token,
+     * with which two refreshes at once both go through.
      */
     @Test
     fun `when the server lets both tabs' refreshes through, the store ends on the player's current token`() =
@@ -186,8 +188,8 @@ class SharedSessionStoreTest {
 
     /**
      * Player "a"'s refresh tokens as the server keeps them with its grace window: the current one, and
-     * the one the last rotation displaced, which works once more. Every refresh here lands within the
-     * grace, so time is left out.
+     * the one the last rotation displaced, which works once more. The grace has no time bound by
+     * default, so time is left out.
      */
     private class GraceServer {
         var current = "refresh-a"

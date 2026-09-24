@@ -66,12 +66,13 @@ public object WyrHttpClient {
      *
      * The server rotates the refresh token as it answers a refresh (CLAUDE.md §8a), so a refresh
      * abandoned after the server ran it leaves in the store the token the server rotated out. The
-     * server takes that token once more within its grace window, 10 minutes by default, which is why
-     * this is shorter: the next call's refresh can still send it, if that call comes within the grace.
-     * Past the grace it is refused, and the player becomes a fresh guest. The server runs a refresh
-     * only once any cold start is over, and then in milliseconds, so what a timeout can abandon after
-     * that is an answer still missing minutes after it was sent, on a connection that has as good as
-     * died.
+     * server takes that token once more, until the next rotation (its grace window), so the next
+     * call's refresh can still send it; a server that bounds the grace in time must bound it longer
+     * than this. But a token that was already the previous one is spent by the refresh abandoned, and
+     * the next refresh with it is refused, making the player a fresh guest, which is why a refresh gets
+     * far longer than an ordinary call. The server runs a refresh only once any cold start is over,
+     * and then in milliseconds, so what a timeout can abandon after that is an answer still missing
+     * minutes after it was sent, on a connection that has as good as died.
      *
      * Bounded all the same, and not exempt: a refresh holds the bearer provider's lock and runs
      * NonCancellable (see `nonCancellableRefresh` below), so every call rejected while it runs waits
@@ -130,8 +131,9 @@ public object WyrHttpClient {
 
                     // The server rotates the refresh token the moment it answers a refresh. Were
                     // the caller cancelled before the write in refreshAs, the store would keep the
-                    // token the server rotated out, which it takes only within its grace window
-                    // (CLAUDE.md §8a), and a 401 after that would cost the player their guest account.
+                    // token the server rotated out, which it takes once more at most (its grace
+                    // window, CLAUDE.md §8a), and not at all if it was already the previous one: the
+                    // next 401 would then cost the player their guest account.
                     //
                     // The cost: in Ktor 3.5 the wait for the provider's lock runs inside the same
                     // NonCancellable block, so every call queued behind a refresh is uncancellable
@@ -207,7 +209,8 @@ private suspend fun RefreshTokensParams.refreshAs(
         } catch (refused: ApiException) {
             // Another client sharing this store (a second browser tab, a second desktop instance)
             // may have spent the same refresh token first; the server rotates on use, and refuses a
-            // token rotated out once its grace window has passed (CLAUDE.md §8a). If the store has
+            // token it rotated out once that token has been spent again or displaced by a later
+            // rotation, or its grace window is off or past a bound (CLAUDE.md §8a). If the store has
             // moved on, retry as what it holds rather than report a dead session.
             val stored = sessionStore.read()
             if (refused.code != ErrorCode.INVALID_REFRESH_TOKEN || stored == sent) throw refused
@@ -220,8 +223,8 @@ private suspend fun RefreshTokensParams.refreshAs(
     // below still loses. The write suspends, and on Android it commits on a thread of its own, so a
     // change the data layer has asked for but not yet made counts too, and so does another client's
     // refresh of this same session, which can then leave the store holding the token the server
-    // keeps only for its grace. Closing it would need a lock shared with the data layer and across
-    // processes.
+    // keeps only as the previous one. Closing it would need a lock shared with the data layer and
+    // across processes.
     val stored = sessionStore.read()
     if (stored == sent) {
         sessionStore.write(refreshed)
@@ -232,17 +235,19 @@ private suspend fun RefreshTokensParams.refreshAs(
     // session while this refresh was in flight, and the server let both through: whichever reached it
     // second spent the token as the one the first had displaced (the grace window, CLAUDE.md §8a).
     // One of the two new refresh tokens is now the player's current one and the other only the
-    // previous one, which dies with the grace, and nothing here says which is which. Keeping the
-    // stored one keeps the previous one whenever the other client's refresh reached the server first,
-    // as it usually does when its answer arrived first; the player's next refresh, once the access
-    // token expires, well past the grace, is then refused, and they become a fresh guest. So refresh
-    // once more as the stored session, which the server takes either way, and keep what that answers:
-    // the latest rotation, so the current token. If that refresh fails, it fails the call as any
-    // refresh does, and the store keeps the other client's session. That is worse than an ordinary
-    // failed refresh when it reached the server and only its answer was lost: the stored token is by
-    // then the previous one, or spent, beside a fresh access token, so the next refresh comes only once
-    // that expires, past the grace, and is refused (CLAUDE.md §8b, *Refresh answers lost past the
-    // grace*).
+    // previous one, and nothing here says which is which. Keeping the stored one keeps the previous
+    // one whenever the other client's refresh reached the server first, as it usually does when its
+    // answer arrived first. The server takes a previous token for one refresh only: these clients
+    // share an access token, so they may well refresh at once again, and of two refreshes with the
+    // previous token one is refused, which replaces the player if the refusal comes before the other's
+    // answer is stored (and a server that bounds the grace in time refuses it past the bound anyway).
+    // So refresh once more as the stored session, which the server takes either way, and keep what
+    // that answers: the latest rotation, so the current token, with which two refreshes at once both
+    // go through. If that refresh fails, it fails the call as any refresh does, and the store keeps
+    // the other client's session. That is worse than an ordinary failed refresh when it reached the
+    // server and only its answer was lost, and the stored token was already the previous one: the
+    // settling refresh spent it, so the next refresh, once the fresh access token beside it expires,
+    // is refused (CLAUDE.md §8b, *Refresh answers lost past the grace*).
     if (settleOvertaken && stored != null && stored.playerId == sent.playerId) {
         return refreshAs(stored, sessionStore, settleOvertaken = false)
     }
