@@ -593,8 +593,11 @@ known `PlayViewModel` issues (the Play tab is frozen).
   locally and on PostgreSQL in CI. The live database was recorded at V1 by its first boot of this
   build without running V1, so its history shows `1 BASELINE`, never `1 SQL`, and that is right. The
   first script after V1 must also move `MigrationsTest`'s pre-migration database onto V1 (its KDoc
-  says how). Two boots at once are safe on PostgreSQL only, under Flyway's advisory lock: two
-  migrations of one H2 database fail inside H2, which is why the boot races skip H2. Flyway warns at
+  says how). Two boots at once are safe on PostgreSQL, under Flyway's advisory lock, only because
+  `Migrations.migrate` takes the baseline itself: Flyway's `baselineOnMigrate` sent a boot that lost
+  a race on an empty database to the baseline, where it failed, so keep it off. H2's DDL commits as
+  it goes, releasing Flyway's lock there, so the four-at-once races skip H2, and `MigrationsTest`
+  interleaves two boots one step at a time on H2 instead. Flyway warns at
   every boot that H2 2.4.240 is newer than the 2.3.232 it has verified; that is only the dev
   database. exposed-migration drafts drops for the indexes H2 builds for foreign keys, which
   `pendingStatements` leaves out.

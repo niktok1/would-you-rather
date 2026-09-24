@@ -26,7 +26,8 @@ internal class SchemaTestEngine private constructor(
     /**
      * Whether several servers may boot on one of these databases at once. Never true of H2, even
      * named as the external database: the server's H2 database is in memory and belongs to the one
-     * process that opened it, and two migrations of one H2 database at once fail inside H2.
+     * process that opened it, and H2's DDL commits as it goes, which releases Flyway's lock there
+     * mid-script, so two migrations of one H2 database at once are not serialized.
      */
     val sharedByServers: Boolean,
     private val open: (name: String) -> TestDatabaseSettings,

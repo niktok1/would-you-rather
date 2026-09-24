@@ -469,14 +469,18 @@ production; `SchemaUtils.create` is left to the store tests.
 - *One set of scripts* serves H2 and PostgreSQL. Identifiers are unquoted and in lower case, so each
   engine folds them as Exposed's own statements for it do. Should a change ever need different SQL
   per engine, split the location by vendor (`classpath:db/migration/{vendor}`) then, not before.
-- *The baseline.* The live database predates Flyway: `SchemaUtils.create(*appTables)` built it, and
-  it has no history. V1 is the statements `SchemaUtils.createStatements(*appTables)` generates for
-  PostgreSQL from the same definitions, only whitespace added, and H2's differ from them only in
-  case. So the live database already holds exactly V1, and Flyway records it at V1 without running
-  it (`baselineOnMigrate`, `baselineVersion` 1). It baselines only a schema that has tables and no
-  history table, and so only once; an empty database runs V1. `MigrationsTest` pins both paths, the
-  data untouched, and `SchemaDriftTest` that V1 builds exactly what `SchemaUtils.create` builds,
-  every table, column, key, index and constraint name included, on H2 and on PostgreSQL.
+- *The baseline.* Every server before this one built its database with
+  `SchemaUtils.create(*appTables)`, which keeps no history. V1 is the statements
+  `SchemaUtils.createStatements(*appTables)` generates for PostgreSQL from the same definitions, only
+  whitespace added, and H2's differ from them only in case. So a database built before migrations
+  already holds exactly V1, and it is recorded at V1 without running it: its history reads
+  `1 BASELINE`, where an empty database runs V1 and reads `1 SQL`. `Migrations.migrate` takes the
+  baseline itself (`baselineVersion` 1), and only for a database holding every table V1 builds
+  (`TABLES_BEFORE_MIGRATIONS`) and no history table; Flyway's `baselineOnMigrate` is off. Any other
+  database with tables and no history fails the boot, rather than being recorded at V1 whatever it
+  holds. `MigrationsTest` pins all three, the data untouched, and `SchemaDriftTest` that V1 builds
+  exactly what `SchemaUtils.create` builds, every table, column, key, index and constraint name
+  included, on H2 and on PostgreSQL.
 - *The drift test* is what stops a forgotten migration. The store tests build their tables straight
   from the definitions in `Tables.kt`, so a definition changed without a script passes them and fails
   only on the live database. `SchemaDriftTest` migrates an empty database and fails on anything
@@ -504,12 +508,20 @@ production; `SchemaUtils.create` is left to the store tests.
   `questions.status` is read strictly, unlike a category, so no build may write a new status until
   the build a rollback would return to can read it.
 - *Several instances booting at once* (Render starts a deploy's new instance before it stops the old
-  one): on PostgreSQL Flyway takes an advisory lock for each step, so one migrates while the rest
-  wait, up to 50 tries a second apart, and then find nothing to do. `MigrationsTest` boots four at
-  once, on PostgreSQL only: H2 does not serialize two migrations of one database, and never needs to,
-  since the server's H2 is in memory and belongs to one process. The seed runs once the migration
-  has committed, and tolerates a racing boot by itself: the second insert fails on the key and
-  Exposed's rerun finds the seeds (`SeedTest` stages it on H2).
+  one): on PostgreSQL each script runs under Flyway's advisory lock, so one boot migrates while the
+  rest wait, up to 50 tries a second apart, and then find nothing to do. Every boot that finds a
+  database built before migrations baselines it, and Flyway accepts a second baseline that finds the
+  marker written. `baselineOnMigrate` stays off because it is not safe here: it asks whether the
+  history exists and then whether the schema is empty with no lock held, so a boot that migrated an
+  empty database between another's two questions sent that one to the baseline, to fail on the
+  history the first had written, on PostgreSQL as on H2. `Migrations.migrate` reads every table in
+  one statement instead, so a boot that sees V1's tables sees the history written before them.
+  `MigrationsTest` boots four at once on PostgreSQL, and on H2 runs a second boot whole at each
+  point where the first reads the schema outside Flyway's lock (`InterleavingDataSource`). The four
+  at once leave H2 out: its DDL commits as it goes, which releases Flyway's lock there mid-script,
+  and it never needs the lock, since the server's H2 is in memory and belongs to one process. The
+  seed runs once the migration has committed, and tolerates a racing boot by itself: the second
+  insert fails on the key and Exposed's rerun finds the seeds (`SeedTest` stages it on H2).
 
 ## 8c. Scoring rules — flat
 
