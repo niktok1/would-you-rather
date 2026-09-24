@@ -280,13 +280,21 @@ This project must never be attributed to any employer identity.
 
 - **Host: Render.** Chosen for flat, predictable per-service pricing (not usage-metered) and
   push-to-deploy from GitHub. Declared in `render.yaml`.
-- `:server` deploys as a Render **web service**, built from the root `Dockerfile`. Health check
-  path is `/health`. **Auto-deploy is off** (`autoDeployTrigger: "off"` in `render.yaml`) until
-  the first deploy, per the interim schema-migration policy in §8b. The first-deploy milestone
-  sets `autoDeployTrigger: checksPass`, which deploys a commit on `main` only after its CI checks
-  pass. Not `commit`, which is what the deprecated `autoDeploy: true` means: it deploys every
-  commit whether or not CI is green.
-- PostgreSQL is a **Render managed Postgres** instance in the **same region** as the web
+- `:server` deploys as **two Render web services** from one `render.yaml`, both built from the root
+  `Dockerfile`, both tracking `main`, health check `/health` (*decided 2026-09-24*):
+  - **dev**, `wyr-server-dev`: `autoDeployTrigger: checksPass`, so every commit on `main` deploys
+    once its CI checks pass. No database: without `DATABASE_URL` it runs on in-memory H2, so its
+    data resets on every deploy, restart and free-tier spin-down (a paid Postgres for dev comes
+    later). Its own `JWT_SECRET` and `ADMIN_TOKEN`, so nothing from one environment works on the
+    other.
+  - **prod**, `wyr-server` on `wyr-postgres`, at https://wyr-server.onrender.com: `autoDeployTrigger:
+    "off"`. It deploys **only by hand**, with Render's *Manual Deploy → Deploy a specific commit*,
+    and only a commit that is green in CI and already live on dev. That is the one exception to
+    "never hand-deploy": promoting to production is a person's decision. First deployed 2026-09-24
+    (`4cdc819`).
+  - Not `commit` for either, which is what the deprecated `autoDeploy: true` means: it deploys every
+    commit whether or not CI is green.
+- PostgreSQL (prod only) is a **Render managed Postgres** instance in the **same region** as the web
   service (use the internal connection URL, never the external one).
 - Connection string and all secrets come from Render **environment variables** — never
   committed. `ServerConfig` reads them all, with dev-only defaults, and logs a loud warning
@@ -318,10 +326,14 @@ This project must never be attributed to any employer identity.
 - The Docker build sets `WYR_SERVER_ONLY=1`, which makes `settings.gradle.kts` skip the app
   modules. Without it the Android Gradle plugin fails at configuration time for want of an SDK.
 - Free tier caveats to design around: free web services spin down after ~15 min idle (cold
-  start on next request), and free Postgres is time-limited — migrate to a paid instance before
-  relying on persistence.
-- Do not hand-deploy. Once auto-deploy is on (`checksPass`), the path is: push to `main` → CI
-  (ktlint + tests) → Render builds → publishes.
+  start on next request) and share 750 instance hours a month across the workspace; only one free
+  Postgres may exist per workspace; and free Postgres expires 30 days after creation, then 14 days'
+  grace before Render deletes it. So `wyr-postgres` (created 2026-09-24) must move to a paid instance
+  type by about 2026-10-24 to keep production's data: an in-place change of instance type, a few
+  minutes unavailable.
+- The paths: push to `main` → CI (ktlint + tests) → Render builds and publishes **dev**; then, by
+  hand, Manual Deploy that same commit to **prod**. Never deploy prod a commit CI has not passed or
+  dev has not run.
 
 ## 8a. Authentication — resolved
 
@@ -458,8 +470,8 @@ Isolation for hot counters was an open item and is resolved: transactions run at
 under the rules in §4.
 
 Schema migrations were an open item and are resolved (*decided 2026-09-24*, replacing the interim
-policy of shipping a schema change as a fresh database, which §8 and `render.yaml` still cite for
-keeping auto-deploy off until the first deploy): **Flyway** runs the scripts in
+policy of shipping a schema change as a fresh database, which ended with the first deploy):
+**Flyway** runs the scripts in
 `server/src/main/resources/db/migration` at every boot, through the server's own pool and before the
 seed (`Migrations`, `DatabaseFactory.init`). Nothing builds a table any other way in production;
 `SchemaUtils.create` is left to the store tests.

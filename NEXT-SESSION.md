@@ -9,6 +9,10 @@ the tally and points**. Server and all client targets except iOS are verified on
 
 Repo initialized on `main` with the personal identity and `user.useConfigOnly = true` (§7).
 
+**Deployed** (CLAUDE.md §8): **prod** `wyr-server` at https://wyr-server.onrender.com on Render
+Postgres, promoted by hand with *Manual Deploy*; **dev** `wyr-server-dev` on in-memory H2, deployed
+automatically from every green commit on `main` (its URL is on its Render page).
+
 ### Verified working
 
 - `:server` on H2: 206 tests green, including 65 end-to-end flow tests in `ApiFlowTest`. Flat
@@ -549,15 +553,16 @@ rules live in CLAUDE.md §8d. Each item is one short-lived branch, in order:
     categories; the console plays several at once (any match).
     Also done: `feat/skip-per-cycle` (a skip returns next cycle) and `fix/client-resilience`
     (request timeouts, durable Android session writes, `WYR_API_BASE_URL` on desktop).
-11. Pre-deploy hardening and the first Render deploy, which sets `autoDeployTrigger: checksPass`
-    in `render.yaml` (CLAUDE.md §8). Rate limiting (§8b) is built on `feat/rate-limiting`, with
-    its `CF-Connecting-IP` check left for once deployed (*NOT verified* above). Left before the
-    deploy: a migration tool before the first column change after it, and the refresh-token grace
-    window.
+11. Pre-deploy hardening and the first Render deploy *(done 2026-09-24)* — first deployed
+    `4cdc819` to prod; then rate limiting (`feat/rate-limiting`), Flyway migrations
+    (`feat/db-migrations`, prod baselines at V1) and the dev/prod split (`chore/dev-and-prod`).
+    Left: the `CF-Connecting-IP` check on dev (*NOT verified* above), the refresh-token grace
+    window, and moving `wyr-postgres` to a paid instance type by about 2026-10-24.
 
 **Remote:** `github.com/niktok1/would-you-rather` (private), `origin`, pushed over SSH through the
 `github-wyr` host alias with a deploy key scoped to this repo (CLAUDE.md §7). `gh` is logged in to
-the personal account for reading CI. The next step that needs the user is a Render account.
+the personal account for reading CI. Render is set up from the blueprint (`wyr` on the personal
+account); its `ADMIN_TOKEN`s are set by hand in each service's Environment tab.
 
 Deferred: provider linking (§8a), SQLDelight, a leaderboard, UI polish and WCAG, and the
 known `PlayViewModel` issues (the Play tab is frozen).

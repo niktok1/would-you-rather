@@ -1,10 +1,16 @@
-# Render blueprint (CLAUDE.md §8). Once auto-deploy is on (checksPass): push to main -> CI passes
-# -> Render builds the Dockerfile -> publishes. Never hand-deploy.
+# Render blueprint (CLAUDE.md §8): two environments from one repo, both tracking main.
+#   - wyr-server-dev deploys every commit on main once its CI checks pass (checksPass). It has no
+#     database of its own: without DATABASE_URL the server runs on in-memory H2, so dev's data
+#     resets on every deploy, restart and free-tier spin-down (decided 2026-09-24; a paid Postgres
+#     for dev comes later).
+#   - wyr-server is production, on wyr-postgres. It never deploys by itself: a person promotes a
+#     commit with Render's Manual Deploy, choosing one that is green in CI and already live on dev.
 #
 # Caveats this config is written around, both from §8:
 #   - a free web service spins down after ~15 min idle, so the first request after a quiet spell
-#     pays a cold start;
-#   - free Postgres is time-limited — move to a paid instance before relying on persistence.
+#     pays a cold start; every free service in the workspace shares 750 instance hours a month;
+#   - free Postgres expires 30 days after creation (then 14 days' grace) — move wyr-postgres to a
+#     paid instance type before then to keep production's data.
 
 services:
   - type: web
@@ -14,11 +20,9 @@ services:
     plan: free
     region: frankfurt
     branch: main
-    # Off until the first deploy, per the interim schema-migration policy (CLAUDE.md §8b): until
-    # then a schema change ships as a fresh database, so connecting this blueprint must not be able
-    # to deploy early. The first-deploy milestone sets checksPass, which waits for CI on the commit.
-    # Not commit (the deprecated autoDeploy: true): that deploys alongside CI, red or not.
-    # Quoted because YAML 1.1 parsers read a bare off as the boolean false.
+    # Production deploys only by hand, with Manual Deploy (decided 2026-09-24): promote a commit
+    # that is green in CI and already live on wyr-server-dev. Quoted because YAML 1.1 parsers read
+    # a bare off as the boolean false.
     autoDeployTrigger: "off"
     healthCheckPath: /health
     envVars:
@@ -56,6 +60,35 @@ services:
       # boot. To be checked once deployed (NEXT-SESSION.md).
       # The RATE_LIMIT_* budgets are not set here, so RateLimits.DEFAULT applies; setting one in the
       # dashboard changes that budget's count at the next restart.
+      - key: CLIENT_IP_HEADER
+        value: CF-Connecting-IP
+
+  - type: web
+    name: wyr-server-dev
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: free
+    region: frankfurt
+    branch: main
+    # Every commit on main whose CI checks pass (not commit, the deprecated autoDeploy: true, which
+    # deploys alongside CI, red or not).
+    autoDeployTrigger: checksPass
+    healthCheckPath: /health
+    envVars:
+      # No DATABASE_URL: the server runs on in-memory H2 and says so at boot. Dev's data lives only
+      # as long as the instance does.
+      # Its own secret, so a session from one environment is refused by the other.
+      - key: JWT_SECRET
+        generateValue: true
+      - key: JWT_ISSUER
+        value: wyr-dev
+      - key: JWT_AUDIENCE
+        value: wyr-client
+      - key: ALLOWED_WEB_ORIGINS
+        sync: false
+      # Dev's own moderator token, never production's.
+      - key: ADMIN_TOKEN
+        sync: false
       - key: CLIENT_IP_HEADER
         value: CF-Connecting-IP
 
