@@ -14,9 +14,9 @@ object DatabaseFactory {
      * Connects, migrates the schema to the latest script, and seeds the starter questions.
      *
      * The schema is Flyway's ([Migrations]), brought up to date before anything reads a table. It is
-     * never `SchemaUtils.create`, which built it until the first deploy: that can only add a missing
-     * table, never change one, and it keeps no record of what a database already holds (CLAUDE.md
-     * §8b).
+     * never `SchemaUtils.create`, which built it before this server had migrations: that can only add
+     * a missing table, never change one, and it keeps no record of what a database already holds
+     * (CLAUDE.md §8b).
      *
      * The seed runs once the migration has committed, in a transaction of its own, so it always finds
      * the finished schema. Several servers booting at once are safe: Flyway lets one migrate while the

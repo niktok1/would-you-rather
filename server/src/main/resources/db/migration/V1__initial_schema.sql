@@ -1,8 +1,8 @@
 -- The schema as the server built it before it had migrations (CLAUDE.md §8b): the statements
 -- SchemaUtils.createStatements(*appTables) generates for PostgreSQL, in its order, with only
--- whitespace added. The live database was built by exactly these statements, through
--- SchemaUtils.create, which is why it is baselined at this version rather than running it
--- (Migrations).
+-- whitespace added. A database a server built before migrations was built by exactly these
+-- statements, through SchemaUtils.create, which is why such a database is baselined at this version
+-- rather than running it (Migrations), while an empty one runs it.
 --
 -- One script serves both engines. The identifiers are unquoted, so PostgreSQL folds them to lower
 -- case and H2 to upper case, which is what Exposed's own statements for each engine produce, and

@@ -590,17 +590,18 @@ known `PlayViewModel` issues (the Play tab is frozen).
   `server/src/main/resources/db/migration`, in lower case and unquoted so H2 and PostgreSQL both run
   it, with a default or a backfill for the rows already there. Never edit a script that has shipped:
   Flyway refuses to boot on a changed checksum. Forget the script and `SchemaDriftTest` fails, on H2
-  locally and on PostgreSQL in CI. The live database was recorded at V1 by its first boot of this
-  build without running V1, so its history shows `1 BASELINE`, never `1 SQL`, and that is right. The
-  first script after V1 must also move `MigrationsTest`'s pre-migration database onto V1 (its KDoc
-  says how). Two boots at once are safe on PostgreSQL, under Flyway's advisory lock, only because
-  `Migrations.migrate` takes the baseline itself: Flyway's `baselineOnMigrate` sent a boot that lost
-  a race on an empty database to the baseline, where it failed, so keep it off. H2's DDL commits as
-  it goes, releasing Flyway's lock there, so the four-at-once races skip H2, and `MigrationsTest`
-  interleaves two boots one step at a time on H2 instead. Flyway warns at
-  every boot that H2 2.4.240 is newer than the 2.3.232 it has verified; that is only the dev
-  database. exposed-migration drafts drops for the indexes H2 builds for foreign keys, which
-  `pendingStatements` leaves out.
+  locally and on PostgreSQL in CI. A database a server built before migrations is recorded at V1 by
+  this build's first boot on it, without running V1, so its history shows `1 BASELINE`; a database
+  nothing had booted on runs V1 and shows `1 SQL`. Either is right for the Render database,
+  depending on whether an earlier build was ever deployed there. The first script after V1 must also
+  move `MigrationsTest`'s pre-migration database onto V1 (its KDoc says how). Two boots at once are
+  safe on PostgreSQL, under Flyway's advisory lock, only because `Migrations.migrate` takes the
+  baseline itself: Flyway's `baselineOnMigrate` sent a boot that lost a race on an empty database to
+  the baseline, where it failed, so keep it off. H2's DDL commits as it goes, releasing Flyway's
+  lock there, so the four-at-once races skip H2, and `MigrationsTest` interleaves two boots one step
+  at a time on H2 instead. Flyway warns at every boot that H2 2.4.240 is newer than the 2.3.232 it
+  has verified; that is only the dev database. exposed-migration drafts drops for the indexes H2
+  builds for foreign keys, which `pendingStatements` leaves out.
 - **The majority verdict on the reveal is client-side and display only.**
   `VoteOutcome.agreedWithMajority` treats an exact tie as agreement, and nothing on the server
   mirrors it because no points depend on it (§8d). Scoring against the tally again would bring

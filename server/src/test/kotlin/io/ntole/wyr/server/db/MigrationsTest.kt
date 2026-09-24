@@ -43,8 +43,9 @@ internal class MigrationsTest(
     }
 
     /**
-     * The live database's own path, taken once, by the first boot of a build with migrations. Tied
-     * to V1 while V1 is the only script: see [buildAsBeforeMigrations].
+     * The path of a database a server before migrations built, taken once, by the first boot of a
+     * build with migrations on it. Tied to V1 while V1 is the only script: see
+     * [buildAsBeforeMigrations].
      */
     @Test
     fun `a database built before migrations is recorded at V1 without running it, its data untouched`() {
@@ -272,7 +273,8 @@ internal class MigrationsTest(
 
     /**
      * The database as the server left it before migrations: its tables built by
-     * `SchemaUtils.create(*appTables)`, exactly as production's were, holding data, and no history.
+     * `SchemaUtils.create(*appTables)`, exactly as every server before this one built its own,
+     * holding data, and no history.
      *
      * The definitions describe V1's schema only while V1 is the only script. The first later one
      * that changes a table must move this onto V1 (Flyway with `target("1")`, then drop the history

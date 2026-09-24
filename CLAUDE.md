@@ -461,11 +461,12 @@ every category.
 Isolation for hot counters was an open item and is resolved: transactions run at READ COMMITTED,
 under the rules in §4.
 
-Schema migrations were an open item and are resolved (*decided 2026-09-24*, with the first deploy,
-which ended the interim policy of shipping a schema change as a fresh database): **Flyway** runs the
-scripts in `server/src/main/resources/db/migration` at every boot, through the server's own pool and
-before the seed (`Migrations`, `DatabaseFactory.init`). Nothing builds a table any other way in
-production; `SchemaUtils.create` is left to the store tests.
+Schema migrations were an open item and are resolved (*decided 2026-09-24*, replacing the interim
+policy of shipping a schema change as a fresh database, which §8 and `render.yaml` still cite for
+keeping auto-deploy off until the first deploy): **Flyway** runs the scripts in
+`server/src/main/resources/db/migration` at every boot, through the server's own pool and before the
+seed (`Migrations`, `DatabaseFactory.init`). Nothing builds a table any other way in production;
+`SchemaUtils.create` is left to the store tests.
 - *One set of scripts* serves H2 and PostgreSQL. Identifiers are unquoted and in lower case, so each
   engine folds them as Exposed's own statements for it do. Should a change ever need different SQL
   per engine, split the location by vendor (`classpath:db/migration/{vendor}`) then, not before.
@@ -474,13 +475,14 @@ production; `SchemaUtils.create` is left to the store tests.
   `SchemaUtils.createStatements(*appTables)` generates for PostgreSQL from the same definitions, only
   whitespace added, and H2's differ from them only in case. So a database built before migrations
   already holds exactly V1, and it is recorded at V1 without running it: its history reads
-  `1 BASELINE`, where an empty database runs V1 and reads `1 SQL`. `Migrations.migrate` takes the
-  baseline itself (`baselineVersion` 1), and only for a database holding every table V1 builds
-  (`TABLES_BEFORE_MIGRATIONS`) and no history table; Flyway's `baselineOnMigrate` is off. Any other
-  database with tables and no history fails the boot, rather than being recorded at V1 whatever it
-  holds. `MigrationsTest` pins all three, the data untouched, and `SchemaDriftTest` that V1 builds
-  exactly what `SchemaUtils.create` builds, every table, column, key, index and constraint name
-  included, on H2 and on PostgreSQL.
+  `1 BASELINE`, where an empty database runs V1 and reads `1 SQL`. Which of the two the Render
+  database shows depends only on whether a build before this one ever booted on it; both are right.
+  `Migrations.migrate` takes the baseline itself (`baselineVersion` 1), and only for a database
+  holding every table V1 builds (`TABLES_BEFORE_MIGRATIONS`) and no history table; Flyway's
+  `baselineOnMigrate` is off. Any other database with tables and no history fails the boot, rather
+  than being recorded at V1 whatever it holds. `MigrationsTest` pins all three, the data untouched,
+  and `SchemaDriftTest` that V1 builds exactly what `SchemaUtils.create` builds, every table, column,
+  key, index and constraint name included, on H2 and on PostgreSQL.
 - *The drift test* is what stops a forgotten migration. The store tests build their tables straight
   from the definitions in `Tables.kt`, so a definition changed without a script passes them and fails
   only on the live database. `SchemaDriftTest` migrates an empty database and fails on anything

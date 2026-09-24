@@ -40,8 +40,9 @@ internal class SchemaDriftTest(
     /**
      * Exact, names included, which exposed-migration does not check: a later migration that drops an
      * index or a constraint names it, and must find it under that name everywhere. While V1 is the
-     * only script this also pins what makes the live database's baseline safe ([Migrations.BASELINE_VERSION]):
-     * `SchemaUtils.create` built that database from these definitions, and V1 builds the same schema.
+     * only script this also pins what makes the baseline of a database built before migrations safe
+     * ([Migrations.BASELINE_VERSION]): `SchemaUtils.create` built such a database from these
+     * definitions, and V1 builds the same schema.
      */
     @Test
     fun `the migrations build exactly the schema SchemaUtils builds from the definitions`() {
