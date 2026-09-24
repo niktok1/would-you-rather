@@ -103,24 +103,19 @@ class ModerationViewModel(
     /** The action in flight, cancelled by [lock]. */
     private var inFlight: Job? = null
 
-    /**
-     * How many times the app has been locked. An action cancelled by a lock may finish its cleanup
-     * after the next action started, and must then leave that one's state alone.
-     */
-    private var locks = 0
-
     override fun setAdminToken(text: String) = _state.update { it.copy(adminToken = SecretText(text)) }
 
     /**
      * Forgets the token and everything read with it: the queue, the list, what was picked and typed,
-     * and every outcome. The action in flight is cancelled, so nothing it answers is shown. The list's
-     * filter stays: it was never the server's.
+     * and every outcome, and, since [ModerationState.locks] moves on, the token field's undo history.
+     * The action in flight is cancelled, so nothing it answers is shown. The list's filter stays: it
+     * was never the server's.
      */
     override fun lock() {
-        locks++
+        // Counted before the cancel, which may run the cancelled action's cleanup at once.
+        _state.update { ModerationState(questions = QuestionList(filter = it.questions.filter), locks = it.locks + 1) }
         inFlight?.cancel()
         inFlight = null
-        _state.update { ModerationState(questions = QuestionList(filter = it.questions.filter)) }
     }
 
     /** Reads the queue, as an action of its own, starting the queue's outcomes afresh. */
@@ -384,7 +379,7 @@ class ModerationViewModel(
         val current = _state.value
         val token = current.token ?: return
         if (current.isBusy) return
-        val lockedAtStart = locks
+        val lockedAtStart = current.locks
         // A notice says what the last action did, so the next one clears it wherever it was shown.
         _state.update { it.noticed(Screen.PENDING, null).noticed(Screen.QUESTIONS, null).copy(running = running) }
 
@@ -394,7 +389,7 @@ class ModerationViewModel(
                     work(token)
                 } finally {
                     // A lock meanwhile has already cleared it, and may have let another action start.
-                    if (lockedAtStart == locks) _state.update { it.copy(running = null) }
+                    if (lockedAtStart == _state.value.locks) _state.update { it.copy(running = null) }
                 }
             }
     }

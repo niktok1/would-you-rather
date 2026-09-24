@@ -131,7 +131,7 @@ class ModerationViewModelTest {
 
             viewModel.lock()
 
-            assertEquals(ModerationState(), viewModel.state.value)
+            assertEquals(ModerationState(locks = 1), viewModel.state.value)
         }
 
     @Test
@@ -163,7 +163,7 @@ class ModerationViewModelTest {
             queue.complete(QUEUE)
             testScheduler.advanceUntilIdle()
 
-            assertEquals(ModerationState(), viewModel.state.value)
+            assertEquals(ModerationState(locks = 1), viewModel.state.value)
         }
 
     @Test

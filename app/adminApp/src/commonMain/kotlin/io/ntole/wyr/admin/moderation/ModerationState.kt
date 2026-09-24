@@ -35,6 +35,12 @@ data class ModerationState(
     val retiring: String? = null,
     /** The action in flight, or `null` when idle. */
     val running: Running? = null,
+    /**
+     * How many times Lock has been pressed. The token field is made anew each time, so its undo
+     * history, which holds what was typed or pasted, goes with the token; and an action a Lock
+     * cancelled, whose cleanup may run after the next one started, leaves that one's state alone.
+     */
+    val locks: Int = 0,
 ) {
     val isBusy: Boolean get() = running != null
 

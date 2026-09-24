@@ -301,7 +301,9 @@ automatically from every green commit on `main` (its URL is on its Render page).
   state's text and from a new ViewModel, Lock forgetting everything and cancelling the action in
   flight (a lock guard dropped, or the cancel, fails it), approvals with and without categories,
   rejections only with a reason the server takes, the queue read again after every decision and
-  every error, a failure kept once its submission is no longer listed. `ModerationOverHttpTest`
+  every error, a failure kept once its submission is no longer listed. `TokenBarTest` drives the
+  token field with clicks and keys through `ImageComposeScene`: Undo in it after a Lock brings
+  nothing back (a field not made anew on Lock gives the whole token back). `ModerationOverHttpTest`
   runs it over the real client and a mock engine: 403, a bare 404, a 409 and a 429 with its
   `Retry-After`, and every request with the admin header and no bearer token. `AdminModuleTest`
   resolves the app from its own modules, with no platform module, and pins that nothing there can
@@ -458,7 +460,9 @@ automatically from every green commit on `main` (its URL is on its Render page).
   ViewModel has run against a local fat jar from the JVM only (*Verified*, above), never against
   dev or prod, and never from a browser, so no page has sent `X-Admin-Token` across CORS. The
   webpack build of its page has not run, so neither has the check of `kotlin-js-store`'s lock
-  against it. `ScreensDrawTest` draws with the host's Skia, which CI's Linux runner has yet to run.
+  against it. `ScreensDrawTest` and `TokenBarTest` run with the host's Skia, which CI's Linux runner
+  has yet to run; `TokenBarTest` sends the desktop's keys, and Undo in the page's token field has not
+  been tried.
 
 ## Running it locally
 

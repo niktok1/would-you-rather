@@ -979,8 +979,10 @@ and every request shows in its HTTP trace (`HttpTrace` in `:core:network`, never
     title (§8e). The admin token is typed into a masked field and held in `ModerationViewModel`'s
     memory only, never in saved state or storage, and `SecretText` keeps it out of the state's text;
     Lock forgets it and everything read with it, and cancels the action in flight, so nothing it
-    answers is shown. Nothing is sent until what is typed can be a token (`AdminToken.of`), and one
-    action runs at a time. *Pending* lists the queue, oldest first, each submission with its options,
+    answers is shown. The field itself is made anew on every Lock (`ModerationState.locks`): a text
+    field keeps its undo history for as long as it is shown, so Undo in the one that held the token
+    gave it back (`TokenBarTest`). Nothing is sent until what is typed can be a token
+    (`AdminToken.of`), and one action runs at a time. *Pending* lists the queue, oldest first, each submission with its options,
     categories and age: Approve files it under the categories picked for it, none keeping the
     author's, and Reject sends the reason typed once it is a `RejectionReason`. The queue is read
     again after every decision, whatever became of it. *All questions* is the

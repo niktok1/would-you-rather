@@ -419,7 +419,7 @@ class QuestionListViewModelTest {
             viewModel.lock()
 
             val filter = QuestionFilter(categories = setOf(Category.RANDOM))
-            assertEquals(ModerationState(questions = QuestionList(filter = filter)), viewModel.state.value)
+            assertEquals(ModerationState(questions = QuestionList(filter = filter), locks = 1), viewModel.state.value)
         }
 
     private fun TestScope.open(): ModerationViewModel =
