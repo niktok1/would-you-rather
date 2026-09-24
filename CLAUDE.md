@@ -139,6 +139,9 @@ failing:
   Or the read takes the row lock (`SELECT ... FOR UPDATE`), so a concurrent writer waits and then
   reads the row as committed (`VoteStore.cast`, which branches on more than one outcome, and
   `SkipStore.skip`).
+  A read of rows a racing writer is about to add has no row to lock, so it locks a parent row that
+  every such writer locks first (`SubmissionStore.submit` counts an author's pending questions
+  under the author's `players` row).
   The one exception is a value copied from another row, which may be a plain read where a stale
   copy is provably harmless, with the proof at the read (`VoteStore.currentCycle`: the feed moves
   the cycle on only once the answer's question is already answered or skipped in the one read).
@@ -452,13 +455,20 @@ and every request shows in its HTTP trace (`HttpTrace` in `:core:network`, never
   (before or after answering), once each, and may unlike it. Each like currently held is **+1
   point to the author**, and unliking takes that point back. The like count is visible before
   answering. For now likes do nothing else; serving questions by quality is a later idea.
-- **Submitting** *(not built but for serving; details decided 2026-09-23)*: earns no points
+- **Submitting** *(server built, client next; details decided 2026-09-23)*: earns no points
   directly, because authors earn through likes. The author writes both options and **picks the
   category** (a real one, not `UNKNOWN`). A player may have at most **20 submissions pending**
   moderation at once. A submitted question is served only after a moderator approves it; once
-  approved it is due for every player in their current cycle. The serving half is built: questions
-  carry an author and a `QuestionStatus`, and `QuestionStore.servableTo` serves only approved ones,
-  which are then due in whatever cycle each player is on. Nothing submits one yet.
+  approved it is due for every player in their current cycle. Built as `POST /v1/questions`, in
+  `SubmissionStore.submit` after `checkedSubmission`. Both options are trimmed, then each must be
+  non-blank, at most `WyrApi.Limits.MAX_OPTION_LENGTH` (200, UTF-16 units) and one line (no
+  control character), and the two must differ ignoring case: otherwise 422 `INVALID_SUBMISSION`,
+  which the player can put right. A category that is not a real one is 400 `VALIDATION_FAILED`,
+  since no correct client sends one. The 21st pending submission is 409 `SUBMISSION_LIMIT`,
+  counted under the author's row lock (§4). A submission is stored `PENDING`, and nothing approves
+  one until *Moderation* is built. Questions carry an author and a `QuestionStatus`, and
+  `QuestionStore.servableTo` serves only approved ones, due at once in whatever cycle each player
+  is on. The client and the console's section come in the next branch.
 - **Moderation** *(not built)*: a moderator approves or rejects each pending submission and **may
   change its category** when approving. A rejection carries a **short reason**, and the author
   sees the status of each of their submissions and, for a rejected one, that reason. The

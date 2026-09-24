@@ -1,0 +1,46 @@
+package io.ntole.wyr.server.question
+
+import io.ntole.wyr.core.api.WyrApi
+import io.ntole.wyr.core.question.QuestionCategory
+import io.ntole.wyr.core.question.SubmitQuestionRequest
+import io.ntole.wyr.server.plugins.ApiFailure
+
+/**
+ * [request] as it is stored, both options trimmed, or an [ApiFailure] for one that breaks a rule
+ * of [SubmitQuestionRequest] (CLAUDE.md §8d).
+ *
+ * Two kinds of refusal, so the client can tell the player apart from a bug. What a player can get
+ * wrong by typing is [ApiFailure.invalidSubmission]: an option blank, too long or holding a control
+ * character, or the two options the same ignoring case. A category that is not a real one is
+ * [ApiFailure.validation], as a malformed body is: [QuestionCategory.UNKNOWN] is the client's
+ * decoding fallback, never stored (as for the feed's filter), and no picker offers it. A request
+ * with both is malformed first.
+ *
+ * Control characters are all refused, not only the NUL PostgreSQL rejects, because an option is one
+ * line of text: a newline or tab inside one is pasted by accident, not meant. Leading and trailing
+ * ones are whitespace and are trimmed like spaces. Nothing else is judged here, invisible
+ * characters included: what a question says is the moderator's to accept or reject.
+ */
+internal fun checkedSubmission(request: SubmitQuestionRequest): SubmitQuestionRequest {
+    if (request.category == QuestionCategory.UNKNOWN) throw ApiFailure.validation("category is not a real one")
+
+    val optionA = checkedOption("optionA", request.optionA)
+    val optionB = checkedOption("optionB", request.optionB)
+    if (optionA.equals(optionB, ignoreCase = true)) throw ApiFailure.invalidSubmission("the two options are the same")
+
+    return SubmitQuestionRequest(optionA = optionA, optionB = optionB, category = request.category)
+}
+
+/** [raw] trimmed, and measured only then, so padding never counts towards the limit. */
+private fun checkedOption(
+    field: String,
+    raw: String,
+): String {
+    val option = raw.trim()
+    if (option.isEmpty()) throw ApiFailure.invalidSubmission("$field is blank")
+    if (option.length > WyrApi.Limits.MAX_OPTION_LENGTH) {
+        throw ApiFailure.invalidSubmission("$field is over ${WyrApi.Limits.MAX_OPTION_LENGTH} characters")
+    }
+    if (option.any(Char::isISOControl)) throw ApiFailure.invalidSubmission("$field has a control character")
+    return option
+}

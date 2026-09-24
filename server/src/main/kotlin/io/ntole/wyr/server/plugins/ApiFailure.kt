@@ -24,6 +24,13 @@ class ApiFailure(
             cause: Throwable? = null,
         ) = ApiFailure(HttpStatusCode.BadRequest, ErrorCode.VALIDATION_FAILED, message, cause)
 
+        /** A submitted question the player can put right, as opposed to a malformed request ([validation]). */
+        fun invalidSubmission(message: String) =
+            ApiFailure(HttpStatusCode.UnprocessableEntity, ErrorCode.INVALID_SUBMISSION, message)
+
+        fun submissionLimit(limit: Int) =
+            ApiFailure(HttpStatusCode.Conflict, ErrorCode.SUBMISSION_LIMIT, "already $limit submissions pending")
+
         fun unauthorized(message: String = "missing or invalid credentials") =
             ApiFailure(HttpStatusCode.Unauthorized, ErrorCode.UNAUTHORIZED, message)
 

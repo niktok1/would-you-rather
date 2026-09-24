@@ -23,7 +23,10 @@ import io.ntole.wyr.core.player.PlayerStatsDto
 import io.ntole.wyr.core.question.QuestionCategory
 import io.ntole.wyr.core.question.QuestionDto
 import io.ntole.wyr.core.question.QuestionPageDto
+import io.ntole.wyr.core.question.QuestionStatus
 import io.ntole.wyr.core.question.SkipRequest
+import io.ntole.wyr.core.question.SubmissionDto
+import io.ntole.wyr.core.question.SubmitQuestionRequest
 import io.ntole.wyr.core.vote.OptionSide
 import io.ntole.wyr.core.vote.VoteRequest
 import io.ntole.wyr.core.vote.VoteResultDto
@@ -689,6 +692,176 @@ class ApiFlowTest {
             assertEquals(ErrorCode.UNAUTHORIZED, response.body<ErrorDto>().code)
         }
 
+    @Test
+    fun `a submission is stored pending with its options trimmed and pays nothing`() =
+        runServer("submit") { client ->
+            val author = client.guest()
+            val request =
+                SubmitQuestionRequest(
+                    optionA = "  Be able to fly ",
+                    optionB = "\tBreathe underwater\n",
+                    category = QuestionCategory.SUPERPOWERS,
+                )
+            val before = System.currentTimeMillis()
+
+            val response = client.submit(author, request)
+
+            val after = System.currentTimeMillis()
+            assertEquals(HttpStatusCode.Created, response.status)
+            val submission = response.body<SubmissionDto>()
+            assertTrue(submission.id.isNotBlank())
+            assertEquals(
+                SubmissionDto(
+                    id = submission.id,
+                    optionA = "Be able to fly",
+                    optionB = "Breathe underwater",
+                    category = QuestionCategory.SUPERPOWERS,
+                    status = QuestionStatus.PENDING,
+                    rejectionReason = null,
+                    submittedAt = submission.submittedAt,
+                ),
+                submission,
+            )
+            assertTrue(submission.submittedAt in before..after, "stored while the request ran")
+            assertEquals(0, client.stats(author).totalPoints, "a submission earns nothing")
+        }
+
+    @Test
+    fun `a pending submission is served to nobody and nobody can answer or skip it`() =
+        runServer("submit-pending") { client ->
+            val author = client.guest()
+            val player = client.guest()
+            val pending = client.submitted(author, SubmitQuestionRequest("Fly", "Swim", QuestionCategory.FOOD))
+
+            listOf("the author" to author, "another player" to player).forEach { (who, session) ->
+                val pool = client.wholePool(session)
+                assertFalse(pool.any { it.id == pending.id }, "$who is not served it")
+                assertEquals(pool.size, client.stats(session).dueThisCycle, "nor is it due for $who")
+
+                val vote = client.castVote(session, VoteRequest(pending.id, OptionSide.A, attemptId = "attempt-1"))
+                assertEquals(HttpStatusCode.NotFound, vote.status, "$who answering it")
+                assertEquals(ErrorCode.QUESTION_NOT_FOUND, vote.body<ErrorDto>().code)
+                val skip = client.skip(session, pending.id)
+                assertEquals(HttpStatusCode.NotFound, skip.status, "$who skipping it")
+                assertEquals(ErrorCode.QUESTION_NOT_FOUND, skip.body<ErrorDto>().code)
+            }
+        }
+
+    @Test
+    fun `a submission that breaks a content rule is refused as the player's to put right`() =
+        runServer("submit-invalid") { client ->
+            val author = client.guest()
+            val tooLong = "x".repeat(WyrApi.Limits.MAX_OPTION_LENGTH + 1)
+
+            listOf(
+                "blank optionA" to SubmitQuestionRequest("   ", "Swim", QuestionCategory.FOOD),
+                "empty optionB" to SubmitQuestionRequest("Fly", "", QuestionCategory.FOOD),
+                "optionA too long" to SubmitQuestionRequest(tooLong, "Swim", QuestionCategory.FOOD),
+                "optionB too long" to SubmitQuestionRequest("Fly", tooLong, QuestionCategory.FOOD),
+                "the same options ignoring case" to SubmitQuestionRequest("Fly", "fLY", QuestionCategory.FOOD),
+                "the same options once trimmed" to SubmitQuestionRequest("  Fly ", "fly\n", QuestionCategory.FOOD),
+                // PostgreSQL refuses a NUL in text, which H2 stores, so only the check can catch it.
+                "NUL in optionA" to SubmitQuestionRequest("Fly\u0000", "Swim", QuestionCategory.FOOD),
+                "newline inside optionB" to SubmitQuestionRequest("Fly", "Swim\nfast", QuestionCategory.FOOD),
+                "tab inside optionA" to SubmitQuestionRequest("Fly\thigh", "Swim", QuestionCategory.FOOD),
+            ).forEach { (case, request) ->
+                val response = client.submit(author, request)
+                assertEquals(HttpStatusCode.UnprocessableEntity, response.status, case)
+                assertEquals(ErrorCode.INVALID_SUBMISSION, response.body<ErrorDto>().code, case)
+            }
+        }
+
+    @Test
+    fun `an option at the length limit is accepted and padding does not count towards it`() =
+        runServer("submit-longest") { client ->
+            val author = client.guest()
+            val longest = "x".repeat(WyrApi.Limits.MAX_OPTION_LENGTH)
+            val padded = "  ${"y".repeat(longest.length)}  "
+
+            listOf(
+                "at the limit" to SubmitQuestionRequest(longest, "Swim", QuestionCategory.FOOD),
+                "at the limit once trimmed" to SubmitQuestionRequest("Fly", padded, QuestionCategory.FOOD),
+            ).forEach { (case, request) ->
+                val response = client.submit(author, request)
+                assertEquals(HttpStatusCode.Created, response.status, case)
+                val stored = response.body<SubmissionDto>()
+                assertEquals(longest.length, maxOf(stored.optionA.length, stored.optionB.length), case)
+            }
+        }
+
+    @Test
+    fun `a submission that is malformed or names no real category is a validation error`() =
+        runServer("submit-malformed") { client ->
+            val author = client.guest()
+
+            listOf(
+                "UNKNOWN category" to """{"optionA":"Fly","optionB":"Swim","category":"UNKNOWN"}""",
+                "no category" to """{"optionA":"Fly","optionB":"Swim"}""",
+                "unrecognised category" to """{"optionA":"Fly","optionB":"Swim","category":"FROM_THE_FUTURE"}""",
+                "no optionB" to """{"optionA":"Fly","category":"FOOD"}""",
+                "malformed json" to "{not json",
+                // Malformed first: the content is not judged in a request no correct client sends.
+                "UNKNOWN category and a blank option" to """{"optionA":" ","optionB":"Swim","category":"UNKNOWN"}""",
+            ).forEach { (case, body) ->
+                val response =
+                    client.post(WyrApi.Paths.QUESTIONS) {
+                        bearerAuth(author.accessToken)
+                        contentType(ContentType.Application.Json)
+                        setBody(body)
+                    }
+
+                assertEquals(HttpStatusCode.BadRequest, response.status, case)
+                assertEquals(ErrorCode.VALIDATION_FAILED, response.body<ErrorDto>().code, case)
+            }
+        }
+
+    @Test
+    fun `a player may have only so many submissions pending at once`() =
+        runServer("submit-limit") { client ->
+            val author = client.guest()
+            repeat(WyrApi.Limits.MAX_PENDING_SUBMISSIONS) { index ->
+                val request = SubmitQuestionRequest("Option $index", "Other $index", QuestionCategory.RANDOM)
+                assertEquals(HttpStatusCode.Created, client.submit(author, request).status, "submission ${index + 1}")
+            }
+
+            val refused = client.submit(author, SubmitQuestionRequest("One", "Too many", QuestionCategory.RANDOM))
+
+            assertEquals(HttpStatusCode.Conflict, refused.status)
+            assertEquals(ErrorCode.SUBMISSION_LIMIT, refused.body<ErrorDto>().code)
+            assertEquals(
+                HttpStatusCode.Created,
+                client.submit(client.guest(), SubmitQuestionRequest("One", "Too many", QuestionCategory.RANDOM)).status,
+                "the limit is per author",
+            )
+        }
+
+    @Test
+    fun `submitting needs a session`() =
+        runServer("submit-no-token") { client ->
+            val response =
+                client.post(WyrApi.Paths.QUESTIONS) {
+                    contentType(ContentType.Application.Json)
+                    setBody(SubmitQuestionRequest("Fly", "Swim", QuestionCategory.FOOD))
+                }
+
+            assertEquals(HttpStatusCode.Unauthorized, response.status)
+            assertEquals(ErrorCode.UNAUTHORIZED, response.body<ErrorDto>().code)
+        }
+
+    @Test
+    fun `a validly signed token for a player that does not exist cannot submit`() =
+        runServer("submit-ghost-player") { client ->
+            // As for the ghost-player vote, the helper's token for a real player has to pass first.
+            val real = client.guest()
+            val request = SubmitQuestionRequest("Fly", "Swim", QuestionCategory.FOOD)
+            assertEquals(HttpStatusCode.Created, client.submit(signAccessToken(real.playerId), request).status)
+
+            val response = client.submit(signAccessToken("no-such-player"), request)
+
+            assertEquals(HttpStatusCode.Unauthorized, response.status)
+            assertEquals(ErrorCode.UNAUTHORIZED, response.body<ErrorDto>().code)
+        }
+
     private fun runServer(
         databaseName: String,
         block: suspend ApplicationTestBuilder.(HttpClient) -> Unit,
@@ -762,6 +935,26 @@ class ApiFlowTest {
             bearerAuth(accessToken)
             contentType(ContentType.Application.Json)
             setBody(SkipRequest(questionId))
+        }
+
+    private suspend fun HttpClient.submit(
+        session: SessionDto,
+        request: SubmitQuestionRequest,
+    ): HttpResponse = submit(session.accessToken, request)
+
+    private suspend fun HttpClient.submitted(
+        session: SessionDto,
+        request: SubmitQuestionRequest,
+    ): SubmissionDto = submit(session, request).body()
+
+    private suspend fun HttpClient.submit(
+        accessToken: String,
+        request: SubmitQuestionRequest,
+    ): HttpResponse =
+        post(WyrApi.Paths.QUESTIONS) {
+            bearerAuth(accessToken)
+            contentType(ContentType.Application.Json)
+            setBody(request)
         }
 
     private suspend fun HttpClient.me(session: SessionDto): HttpResponse =

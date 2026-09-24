@@ -16,6 +16,7 @@ import io.ntole.wyr.server.db.Db
 import io.ntole.wyr.server.player.playerRoutes
 import io.ntole.wyr.server.plugins.installPlugins
 import io.ntole.wyr.server.question.questionRoutes
+import io.ntole.wyr.server.question.submissionRoutes
 import io.ntole.wyr.server.vote.voteRoutes
 
 fun main() {
@@ -52,6 +53,7 @@ fun Application.wyrModule(config: ServerConfig) {
 
         authRoutes(db, tokens, config)
         questionRoutes(db)
+        submissionRoutes(db)
         voteRoutes(db)
         playerRoutes(db)
     }
