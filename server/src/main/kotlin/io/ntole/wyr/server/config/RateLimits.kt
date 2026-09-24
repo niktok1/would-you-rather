@@ -4,7 +4,13 @@ import kotlin.time.Duration
 import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.minutes
 
-/** At most [requests] in every [per], for one key: a player, or a client's address. */
+/**
+ * [requests] for one key, a player or a client's address, in a window of [per] that starts at the
+ * key's first request, or its first after the last window ended, and refills whole when it ends: a
+ * fixed window, as Ktor's limiter counts. So up to twice [requests] can pass in moments, spent just
+ * before one window ends and again just after the next begins, though over any longer span the
+ * average holds.
+ */
 data class RequestBudget(
     val requests: Int,
     val per: Duration,

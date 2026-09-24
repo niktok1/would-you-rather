@@ -399,7 +399,9 @@ accounts exist.
   `io.ntole.wyr.server.plugins`), with a budget for each group of routes (`RouteLimit`), spent apart
   from every other group's. The budgets are `RateLimits.DEFAULT`, each count overridable by its
   `RATE_LIMIT_*` variable (`RateLimits.fromEnvironment`; one that is not a whole number of at least 1
-  fails at boot, naming it):
+  fails at boot, naming it). Each is a fixed window (`RequestBudget`): it starts at a key's first
+  request and refills whole when its period ends, so up to twice a budget can pass in moments where
+  one window ends and the next begins, while over any longer span the average holds:
   - *Per client address* (on Render, Cloudflare's `CF-Connecting-IP`: `CLIENT_IP_HEADER`, §8), for
     a caller with no session to name: guest minting 10 an hour, refreshes 30 a minute, the admin
     routes 60 a minute together, and on top of that, admin requests with a wrong or missing token 10
@@ -431,13 +433,14 @@ accounts exist.
   nothing retries it (`withSessionRecovery` retries only after a 401), and the console logs it as an
   `err` entry.
 
-  What remains: farming is bounded, not gone. A player can still earn up to 120 points a minute by
-  re-answering (*decided 2026-09-23:* a re-answer keeps paying every time, inside its cycle or not),
-  and a script gets 10 fresh guests an hour per address, each with budgets of its own, so liking one
-  author's questions is bounded per address and per hour rather than per author. Counts are in memory
-  and per instance: right for the one Render instance, but a second would grant every budget again, so
-  running two needs a shared store first (Render Key Value, say). A restart, which a deploy or a free
-  instance's spin-down is, resets them.
+  What remains: farming is bounded, not gone. A player can still earn 120 points a minute by
+  re-answering, on average, and up to 240 where two windows meet (*decided 2026-09-23:* a re-answer
+  keeps paying every time, inside its cycle or not), and a script gets 10 fresh guests an hour per
+  address, 20 where two windows meet, each with budgets of its own, so liking one author's questions
+  is bounded per address and per hour rather than per author. Counts are in memory and per instance:
+  right for the one Render instance, but a second would grant every budget again, so running two
+  needs a shared store first (Render Key Value, say). A restart, which a deploy or a free instance's
+  spin-down is, resets them.
 - **Schema migrations** — *interim policy, decided 2026-09-23:* nothing is deployed, so until the
   first Render deploy a schema change ships as a fresh database through `SchemaUtils.create`, and
   `render.yaml` keeps `autoDeployTrigger: "off"` so connecting the blueprint cannot deploy early.
@@ -543,9 +546,10 @@ and every request shows in its HTTP trace (`HttpTrace` in `:core:network`, never
   or more, never `OTHER` (*Submitting*).
 - **Re-answering** *(built)*: a question can be answered again, whether or not the feed has
   served it again. It earns the point again **every time**, inside its cycle or not (farming is
-  bounded by rate limiting, 120 votes a minute per player, §8b), and the player may change their
-  pick. Every answer, first or not, counts for the player's current cycle. The tally always holds
-  **one vote per player per question**, their latest. Built in `VoteStore.cast`, which moves the player's vote.
+  bounded by rate limiting, 120 votes a minute per player on average, §8b), and the player may
+  change their pick. Every answer, first or not, counts for the player's current cycle. The tally
+  always holds **one vote per player per question**, their latest. Built in `VoteStore.cast`, which
+  moves the player's vote.
 - **Retry safety** *(built)*: every vote carries a client-generated idempotency key. A repeat
   of the key last recorded for that question is replayed: nothing is written, it pays nothing, and
   it reports the stored side with the current tally and total, not the result first returned. Any
