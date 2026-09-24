@@ -78,6 +78,20 @@ Repo initialized on `main` with the personal identity and `user.useConfigOnly = 
   against the wire's; `ModerationConsoleViewModelTest` the section: nothing sent without a valid token,
   Reject off until the reason is valid, the queue read again after every decision, picks for a
   submission no longer listed dropped, and the token in neither the state's text nor the log.
+  Likes (`feat/question-likes`, server and contract only; `:server` 179 tests with it, 65 of them
+  flows): `LikeStoreTest` pins a like paying the author a point and an unlike taking it back, a
+  repeat of either writing and paying nothing, likedByMe being each player's own, a self-like paid,
+  a seed's likes paying nobody, a like being no answer, the author's total as their answers plus
+  the likes their questions hold, 404 for a pending or rejected question and 401 for an unknown
+  player; two first likes racing pay once (on the key, through Exposed's rerun) and two unlikes
+  racing take back once; the feed's likes before answering, in the same number of statements for a
+  batch of one as for the pool, and an unlike committed mid-read showing in neither number; and
+  `likesReceived` against likes added, removed and given. `StatsStoreTest` commits a like mid-read
+  and finds it in neither the points nor `likesReceived`. `ApiFlowTest` pins `POST /v1/likes` end to
+  end with the 404s, 401s and 400s (no `liked` is 400, since a like sets rather than toggles).
+  Dropping the key, taking back for an empty delete, paying a repeat, skipping a self-like, reading
+  likes per question or in two statements, or reading `likesReceived` apart from the total, each
+  fails them. The flows pass against one shared H2 too.
 - Live curl run of moderation against `ADMIN_TOKEN=... ./gradlew :server:run` on H2, on
   `feat/moderation`: a guest submitted two questions; the queue listed both, oldest first; the queue
   without the token, and with only the player's bearer token, was 403 `FORBIDDEN`; approving one
@@ -97,6 +111,12 @@ Repo initialized on `main` with the personal identity and `user.useConfigOnly = 
   `?status=PENDING&limit=20`) nor the section's state held the token. The guest's `GET /v1/me/questions`
   then showed both approvals and the rejection with its reason, the `?category=RANDOM` feed served the
   first, and the guest's due count was 26 (the 24 seeds and the two approved).
+- Live run of likes against `PORT=18431 ADMIN_TOKEN=... ./gradlew :server:run` on H2, on
+  `feat/question-likes`, by a throwaway script: liking a pending submission was 404; once approved,
+  a fan's like answered `likeCount` 1 and `likedByMe` true, and again the same; the author's own like
+  made it 2, and `GET /v1/me` showed the author 2 points and `likesReceived` 2; the fan's feed showed
+  the question at 2, liked by them and not answered; the fan's unlike, twice, left 1 and took one
+  point back once; a seed's like answered 1; a body without `liked` was 400 and no token 401.
 - Live curl run against `./gradlew :server:run` confirmed guest auth, paging, voting,
   refresh-token rotation, replay rejection, and the `ErrorDto` envelope on 400/401/404/409. That
   run predates flat scoring, `fix/read-committed` and the endless feed, so the scoring it checked
@@ -159,6 +179,11 @@ Repo initialized on `main` with the personal identity and `user.useConfigOnly = 
   id)` index. The client has sent moderation requests only from the JVM (the live run above), and no
   browser has sent `X-Admin-Token`: only `CorsTest` has seen its preflight. Nobody has looked at the
   console's *Moderation* section on any platform.
+- **Likes on Postgres, and in any client.** Two first likes racing on the key (the 23505 aborts the
+  transaction and Exposed reruns it), two unlikes queuing on one row, the grouped count with its
+  `COUNT(CASE ...)` and the stats' subquery have run only on H2 (`LikeStoreTest` polls H2's
+  `SESSIONS`). No client sends a like yet, and none reads `likeCount`, `likedByMe` or
+  `likesReceived`.
 - **Multiple categories on Postgres, and in the client.** The `EXISTS ... IN` filter, the batch's
   second statement for its categories and the batch insert of a submission's categories have run
   only on H2. On the client, several categories per question and a selection of several have run

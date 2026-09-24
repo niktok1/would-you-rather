@@ -145,13 +145,15 @@ failing:
   The one exception is a value copied from another row, which may be a plain read where a stale
   copy is provably harmless, with the proof at the read (`VoteStore.currentCycle`: the feed moves
   the cycle on only once the answer's question is already answered or skipped in the one read).
-- Uniqueness is a constraint (the `Votes` and `Skips` primary keys), never a prior `SELECT`. A
-  violation is never caught and carried on from: PostgreSQL aborts a transaction at its first
-  error. It propagates, and Exposed rolls back and reruns the whole transaction, which then sees
-  the committed row (`VoteStore.cast`, `SkipStore.skip`).
+- Uniqueness is a constraint (the `Votes`, `Skips` and `Likes` primary keys), never a prior
+  `SELECT`. A violation is never caught and carried on from: PostgreSQL aborts a transaction at its
+  first error. It propagates, and Exposed rolls back and reruns the whole transaction, which then
+  sees the committed row (`VoteStore.cast`, `SkipStore.skip`, `LikeStore.setLiked`). A plain read
+  before such an insert only spares a certain violation, and needs no lock when finding the row
+  writes nothing (a like already held).
 - Numbers that must agree with one another are read in one statement, which sees one committed
   state; two statements can straddle another transaction's commit (the tally in `VoteStore`,
-  `StatsStore.of`).
+  `StatsStore.of`, a question's like count beside `likedByMe` in `LikeStore.likesOf`).
 
 REPEATABLE_READ was dropped because it refuses the second of two concurrent writes to a row
 (SQLState 40001) and Exposed makes only 3 attempts with no delay, so a burst on one row, such as
@@ -371,6 +373,8 @@ accounts exist.
   question at once, without checking that it is due again (§8d, re-answering), so a script
   re-answering one question earns a point per request. *Decided 2026-09-23:* that is accepted for
   now and left to rate limiting; a re-answer keeps paying every time, inside its cycle or not.
+  Likes open a second way, not yet decided: a like pays its author once per player, but guests cost
+  nothing to mint (§8a), so a script minting guests can like one author's questions without bound.
   Nothing limits guesses at the admin token either, which is why the server warns about a short one
   (§8).
 - **Schema migrations** — *interim policy, decided 2026-09-23:* nothing is deployed, so until the
@@ -396,8 +400,13 @@ returns and never recomputes points, so the two cannot disagree.
 
 - Every answer earns `Scoring.POINTS_PER_ANSWER`, which is **1 point**, whichever side it picks
   (§8d). There is no majority bonus and no streak.
+- Every like a question holds earns its author `Scoring.POINTS_PER_LIKE`, which is **1 point**,
+  their own likes included, paid when the like is added and taken back when it is removed (§8d,
+  *Likes*). A seed has no author and pays nobody. So a player's total is always what their answers
+  earned plus a point for each like their questions hold, which `GET /v1/me` reports in one read.
 - `PlayerStore.addPoints` adds in SQL (`total_points = total_points + n`), never as a read then a
-  write, so two votes by one player landing together cannot lose a point.
+  write, so two votes by one player landing together cannot lose a point, nor a burst of likes for
+  one author.
 - The reveal's "with the crowd" verdict is `VoteOutcome.agreedWithMajority` on the client (an
   exact tie counts as agreeing). It is display only: no points depend on it, so the server keeps
   no copy of the rule.
@@ -488,10 +497,12 @@ and every request shows in its HTTP trace (`HttpTrace` in `:core:network`, never
 - **Stats** *(built)*: `GET /v1/me` reports the session player's total points, answers given
   (every paid answer, re-answers included and replays not, in `players.answers_given`, an SQL
   increment beside the points), distinct questions answered, current cycle, and how many questions
-  are still due in it, counted by the feed's own predicate (`QuestionStore.dueCount`). Built in
-  `StatsStore.of`, as one statement. It only reads, and the cycle starts lazily on the next feed
-  request, so between the answer that finishes a cycle and that request it reports the finished
-  cycle with nothing due.
+  are still due in it, counted by the feed's own predicate (`QuestionStore.dueCount`), and the
+  likes received: how many likes the questions the player submitted hold now, their own included
+  (`LikeStore.receivedBy`, *Likes*). Built in `StatsStore.of`, as one statement, so the total always
+  agrees with the answers given and the likes received (§8c). It only reads, and the cycle starts
+  lazily on the next feed request, so between the answer that finishes a cycle and that request it
+  reports the finished cycle with nothing due.
 - **Skipping** *(built; decided 2026-09-23)*: allowed, earns nothing, and never touches the
   tally. The server **records the skip for the player's current cycle only**, so the question is
   no longer due in that cycle and comes back in the **next** one, except through a category filter
@@ -502,12 +513,31 @@ and every request shows in its HTTP trace (`HttpTrace` in `:core:network`, never
   next question even when the skip failed.
 - **Own questions** *(built; decided 2026-09-24)*: an author is served their own questions
   **like any other player** and may answer, skip and like them; the user chose the simpler logic.
-  `QuestionStore.servable` is the one predicate the feed, the due count and votes and skips
+  `QuestionStore.servable` is the one predicate the feed, the due count and votes, skips and likes
   (`QuestionStore.isServable`) read, and it asks only that a moderator approved the question.
-- **Likes** *(not built)*: any player may like any question, **their own included**, at any
-  time (before or after answering), once each, and may unlike it. Each like currently held is **+1
-  point to the author**, and unliking takes that point back. The like count is visible before
-  answering. For now likes do nothing else; serving questions by quality is a later idea.
+- **Likes** *(server built, client next)*: any player may like any question, **their own
+  included**, at any time (before or after answering), once each, and may unlike it. Each like
+  currently held is **+1 point to the author**, and unliking takes that point back. The like count
+  is visible before answering. For now likes do nothing else; serving questions by quality is a
+  later idea. A seed has no author: a like on one counts and pays nobody.
+  - Built as `POST /v1/likes` (`WyrApi.Paths.LIKES`), in `LikeStore.setLiked`, on `likes`, one row
+    per player and question while the like is held, under a primary key on both. A `LikeRequest`
+    names the question and `liked`, which *sets* the like rather than toggling it, so asking for what
+    already holds writes nothing and pays nothing and a retry needs no attempt id; `liked` has no
+    default, and a body without it is 400. The answer is a `LikeResultDto`: the question, its
+    `likeCount` and `likedByMe`. A question that is not servable is 404 and an unknown player 401,
+    as for votes and skips, and the id is checked as a vote's is.
+  - Only a row actually inserted pays the author (`Scoring.POINTS_PER_LIKE`, an SQL increment) and
+    only one actually deleted takes the point back, in the same transaction. A like reads whether the
+    row is there and inserts only if not, and two first likes racing fail on the key, which Exposed's
+    rerun turns into a repeat (§4); an unlike is one delete, so of two racing only one deletes.
+    `LikeStoreTest` races both.
+  - Every feed batch carries each question's `likeCount` and `likedByMe` (`QuestionDto`), answered
+    or not, read in one more grouped statement per batch (`LikeStore.likesOf`), never one per
+    question, and the two numbers in that one statement so they agree. `GET /v1/me` reports
+    `likesReceived` (*Stats*). Nothing about a like touches the tally, the cycle or what is due.
+  - No author travels on the wire, so the result carries no points: an author sees theirs in their
+    stats. `SubmissionDto` carries no like count yet.
 - **Submitting** *(built; details decided 2026-09-23)*: earns no points
   directly, because authors earn through likes. The author writes both options and **picks one or
   more categories** (each a real one, not `UNKNOWN`; *Categories*). A player may have at most **20

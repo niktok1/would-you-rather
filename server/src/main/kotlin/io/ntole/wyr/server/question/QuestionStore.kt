@@ -111,7 +111,7 @@ object QuestionStore {
     /**
      * Which questions [playerId] may be served at all, whether answered or not (CLAUDE.md §8d). This
      * is the one place that decides it, so the feed, anything that counts what a player has left,
-     * and what a player may answer or skip ([isServable]) all agree.
+     * and what a player may answer, skip or like ([isServable]) all agree.
      *
      * A question is servable once a moderator has approved it, to every player alike: an author is
      * served their own questions like anyone else (CLAUDE.md §8d, *Own questions*). A rule that
@@ -197,12 +197,12 @@ object QuestionStore {
     ): Op<Boolean> = inCycle.isNull() or (inCycle less cycle)
 
     /**
-     * Whether a player may answer or skip the question [id]: it exists and is [servable], due or
-     * not. Any other question is not found, as far as they are concerned: one still waiting for a
-     * moderator, or a rejected one. An author answers and skips their own like any other.
+     * Whether a player may answer, skip or like the question [id]: it exists and is [servable], due
+     * or not. Any other question is not found, as far as they are concerned: one still waiting for a
+     * moderator, or a rejected one. An author answers, skips and likes their own like any other.
      *
-     * A plain read that a vote or a skip then writes after, and safe without a lock because a
-     * question only ever becomes servable, never stops being so: nothing deletes a question, and a
+     * A plain read that a vote, a skip or a like then writes after, and safe without a lock because
+     * a question only ever becomes servable, never stops being so: nothing deletes a question, and a
      * moderator decides only a pending one (§8d, `ModerationStore.decide`). A way to withdraw an
      * approved question would end that, and the read would then have to lock the question's row.
      */
