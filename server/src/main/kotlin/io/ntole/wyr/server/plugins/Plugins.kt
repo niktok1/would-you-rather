@@ -15,6 +15,7 @@ import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.server.plugins.cors.routing.CORS
 import io.ktor.server.plugins.statuspages.StatusPages
 import io.ktor.server.response.respond
+import io.ntole.wyr.core.api.WyrApi
 import io.ntole.wyr.core.error.ErrorCode
 import io.ntole.wyr.core.error.ErrorDto
 import io.ntole.wyr.server.auth.JWT_AUTH
@@ -54,6 +55,9 @@ fun Application.installPlugins(
         }
         allowHeader(HttpHeaders.Authorization)
         allowHeader(HttpHeaders.ContentType)
+        // So a moderator can work from the web client too (CLAUDE.md §8d). Allowing a browser to send
+        // it grants nothing by itself: the routes still check its value, and are absent without one.
+        allowHeader(WyrApi.Headers.ADMIN_TOKEN)
         allowMethod(HttpMethod.Get)
         allowMethod(HttpMethod.Post)
     }

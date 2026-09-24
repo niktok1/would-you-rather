@@ -2,15 +2,19 @@ package io.ntole.wyr.server.plugins
 
 import io.ktor.client.request.get
 import io.ktor.client.request.header
+import io.ktor.client.request.options
 import io.ktor.http.HttpHeaders
+import io.ktor.http.HttpStatusCode
 import io.ktor.server.response.respondText
 import io.ktor.server.routing.get
+import io.ktor.server.routing.post
 import io.ktor.server.routing.routing
 import io.ktor.server.testing.testApplication
 import io.ntole.wyr.core.api.WyrApi
 import io.ntole.wyr.server.auth.TokenService
 import io.ntole.wyr.server.config.ServerConfig
 import kotlin.test.Test
+import kotlin.test.assertContains
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
 
@@ -48,5 +52,31 @@ class CorsTest {
             // A wildcard label keeps its scheme restriction, unlike a bare *.
             assertEquals("https://pr-7.preview.test", allowedOrigin("https://pr-7.preview.test"))
             assertNull(allowedOrigin("http://pr-7.preview.test"))
+        }
+
+    @Test
+    fun `a browser on an allowed origin may send the admin token`() =
+        testApplication {
+            val config = ServerConfig.fromEnvironment(mapOf("ALLOWED_WEB_ORIGINS" to "https://app.example.com")::get)
+
+            application {
+                installPlugins(config, TokenService(config))
+                routing { post(WyrApi.Paths.ADMIN_APPROVALS) { call.respondText("ok") } }
+            }
+
+            // A header of the app's own, so the browser asks first; refused, a moderator on the web
+            // client could never reach an admin route.
+            val preflight =
+                client.options(WyrApi.Paths.ADMIN_APPROVALS) {
+                    header(HttpHeaders.Origin, "https://app.example.com")
+                    header(HttpHeaders.AccessControlRequestMethod, "POST")
+                    header(HttpHeaders.AccessControlRequestHeaders, "${WyrApi.Headers.ADMIN_TOKEN}, content-type")
+                }
+
+            assertEquals(HttpStatusCode.OK, preflight.status)
+            assertContains(
+                preflight.headers[HttpHeaders.AccessControlAllowHeaders].orEmpty().lowercase(),
+                WyrApi.Headers.ADMIN_TOKEN.lowercase(),
+            )
         }
 }
