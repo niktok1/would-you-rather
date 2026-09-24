@@ -1610,14 +1610,15 @@ class ApiFlowTest {
                     assertEquals(HttpStatusCode.NotFound, response.status, case)
                     assertEquals(ErrorCode.QUESTION_NOT_FOUND, response.body<ErrorDto>().code, case)
                 }
+            // By id, not by position: submissions made within one millisecond list in id order.
             assertEquals(
-                listOf(
-                    QuestionStatus.RETIRED,
-                    QuestionStatus.APPROVED,
-                    QuestionStatus.REJECTED,
-                    QuestionStatus.PENDING,
+                mapOf(
+                    retired.id to QuestionStatus.RETIRED,
+                    approved.id to QuestionStatus.APPROVED,
+                    rejected.id to QuestionStatus.REJECTED,
+                    pending.id to QuestionStatus.PENDING,
                 ),
-                client.mySubmissions(author).map { it.status },
+                client.mySubmissions(author).associate { it.id to it.status },
                 "each as it was",
             )
 
