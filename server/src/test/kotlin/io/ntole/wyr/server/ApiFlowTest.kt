@@ -645,13 +645,22 @@ class ApiFlowTest {
                     questionsAnswered = 0,
                     cycle = 1,
                     dueThisCycle = pool.size,
+                    likesReceived = 0,
                 ),
                 response.body<PlayerStatsDto>(),
             )
             // Sent even where they equal the contract's defaults, which is all a fresh player has but
             // the due count, so the values above are the server's rather than the decoder's.
             assertEquals(
-                setOf("playerId", "totalPoints", "answersGiven", "questionsAnswered", "cycle", "dueThisCycle"),
+                setOf(
+                    "playerId",
+                    "totalPoints",
+                    "answersGiven",
+                    "questionsAnswered",
+                    "cycle",
+                    "dueThisCycle",
+                    "likesReceived",
+                ),
                 response.body<JsonObject>().keys,
             )
         }

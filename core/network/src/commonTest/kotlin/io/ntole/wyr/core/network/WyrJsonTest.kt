@@ -113,9 +113,18 @@ class WyrJsonTest {
                 questionsAnswered = 0,
                 cycle = 1,
                 dueThisCycle = 0,
+                likesReceived = 0,
             ),
             stats,
         )
+    }
+
+    @Test
+    fun `a question sent without its likes decodes as liked by nobody`() {
+        val question = WyrJson.decodeFromString<QuestionDto>("""{"id":"q1","optionA":"fly","optionB":"swim"}""")
+
+        assertEquals(0, question.likeCount)
+        assertEquals(false, question.likedByMe)
     }
 
     @Test

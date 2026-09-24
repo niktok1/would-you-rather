@@ -25,7 +25,8 @@ public object WyrApi {
          * this cycle while something outside it is: its categories are served again within the same
          * cycle, `answeredBefore` on what the player has answered. That includes what the player
          * skipped in them, which is provisional (CLAUDE.md §8b). There is no cursor; asking again is
-         * how to get the next batch.
+         * how to get the next batch. Every question comes with how many players like it and whether
+         * this one does ([LIKES]), answered or not.
          *
          * POST: submits a question of the session player's own, with a
          * [io.ntole.wyr.core.question.SubmitQuestionRequest], answered 201 with its
@@ -58,6 +59,21 @@ public object WyrApi {
          * is 404, as for [VOTES].
          */
         public const val SKIPS: String = "/$VERSION/skips"
+
+        /**
+         * Likes or unlikes a question for the session player (CLAUDE.md §8d), with a
+         * [io.ntole.wyr.core.like.LikeRequest], answered with a [io.ntole.wyr.core.like.LikeResultDto].
+         * Requires a session. Any question the player is served may be liked, their own included, at
+         * any time, whether they have answered it or not.
+         *
+         * The request sets the like rather than toggling it, so a player holds at most one like per
+         * question, and asking for what already holds changes nothing: a retry is harmless. Each like
+         * held is a point to the question's author, paid when it is added and taken back when it is
+         * removed. A seed has no author, so its likes count and pay nobody. A like does nothing else:
+         * it is no answer and no skip, and leaves what is due alone. A question no player is served is
+         * 404, as for [VOTES].
+         */
+        public const val LIKES: String = "/$VERSION/likes"
 
         /**
          * The stats of the player the bearer token names, as a

@@ -20,6 +20,11 @@ import kotlinx.serialization.Serializable
  * [answeredBefore] is true when the requesting player has answered this question already and the
  * feed has looped back to it. It exists so the dev console can label a looped question; the
  * player-facing reveal does not show a previous pick (CLAUDE.md §8d).
+ *
+ * [likeCount] is how many players like the question, the requesting one included when [likedByMe]
+ * (CLAUDE.md §8d). Both are sent whether or not the player has answered it, since a like count is
+ * visible before answering. The server reads them together, so they always agree. They default to
+ * none, so a question from a server that sends no likes decodes as liked by nobody.
  */
 @Serializable
 public data class QuestionDto(
@@ -29,4 +34,6 @@ public data class QuestionDto(
     @Serializable(with = QuestionCategoryListSerializer::class)
     public val categories: List<QuestionCategory> = emptyList(),
     public val answeredBefore: Boolean = false,
+    public val likeCount: Int = 0,
+    public val likedByMe: Boolean = false,
 )

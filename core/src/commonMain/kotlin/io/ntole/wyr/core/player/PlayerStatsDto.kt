@@ -10,6 +10,9 @@ import kotlinx.serialization.Serializable
  * [questionsAnswered] counts the distinct questions the player has a vote on, so it is never more
  * than [answersGiven].
  *
+ * [likesReceived] is how many likes the questions the player submitted hold now, the player's own
+ * likes of them included (CLAUDE.md §8d). Each is a point in [totalPoints] for as long as it is held.
+ *
  * [cycle] is the player's current pass over the questions, counted from 1, and [dueThisCycle] how
  * many are still due in it, over every category. A cycle ends when nothing is due, but the next one
  * starts only when the feed is next asked for a batch: in between, these report the finished cycle
@@ -28,4 +31,5 @@ public data class PlayerStatsDto(
     public val questionsAnswered: Int = 0,
     public val cycle: Int = 1,
     public val dueThisCycle: Int = 0,
+    public val likesReceived: Int = 0,
 )
