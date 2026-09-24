@@ -43,10 +43,6 @@ object Players : Table("players") {
 
 object Questions : Table("questions") {
     val id = varchar("id", 36)
-
-    /** Monotonic insertion order. */
-    val seq = long("seq").uniqueIndex()
-
     val optionA = varchar("option_a", MAX_OPTION_LENGTH)
     val optionB = varchar("option_b", MAX_OPTION_LENGTH)
     val category = varchar("category", 32)

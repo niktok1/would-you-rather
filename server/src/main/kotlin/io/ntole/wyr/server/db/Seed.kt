@@ -26,9 +26,7 @@ object Seed {
         val now = System.currentTimeMillis()
 
         Questions.batchInsert(STARTERS.withIndex().toList()) { (index, starter) ->
-            val ordinal = index + 1
-            this[Questions.id] = "seed-$ordinal"
-            this[Questions.seq] = ordinal.toLong()
+            this[Questions.id] = "seed-${index + 1}"
             this[Questions.optionA] = starter.optionA
             this[Questions.optionB] = starter.optionB
             this[Questions.category] = starter.category.name
