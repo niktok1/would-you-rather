@@ -213,6 +213,10 @@ Repo initialized on `main` with the personal identity and `user.useConfigOnly = 
   re-checks its `WHERE` against the committed row. That is documented Postgres behaviour, not
   something a test here has seen, and the same goes for the concurrent-seed recovery described on
   `Seed.questionsIfEmpty`. Porting the races means polling `pg_stat_activity` instead.
+- **Durable session writes on a device.** `AndroidTokenStorageTest` pins which call is made and
+  where, against a stand-in; that Android's `commit()` then survives a kill is its documented
+  behaviour, not something seen here. Whether `NSUserDefaults` keeps a change the app is killed
+  straight after (`IosTokenStorage`) is unchecked too.
 - **iOS.** This machine has Command Line Tools but no Xcode. The Kotlin compile does not need
   Xcode: `iosArm64` and `iosSimulatorArm64` main sources and the simulator test sources now
   compile. That check caught `MainViewController` using `GlobalContext`, which Koin's native
@@ -529,6 +533,16 @@ known `PlayViewModel` issues (the Play tab is frozen).
   the refresh ends. A timeout reaches `runApi` as the engine's or Ktor's own exception, so it is
   `NETWORK`. `RequestTimeoutTest` runs every case in virtual time, on a `MockEngine` given the test's
   dispatcher.
+- **A session write returns once it is durable, and suspends for it** (`TokenStorage.write`,
+  CLAUDE.md §8a). `AndroidTokenStorage` used `apply()`, which returns before the file is written,
+  so a kill just after a refresh could come back with the rotated-out token and orphan the guest.
+  It now `commit()`s, on `Dispatchers.IO` because the ViewModels write from the main thread, inside
+  `NonCancellable` so a write asked for is never dropped, and a commit that fails throws
+  `IOException`. `SessionStore.write` and `clear` suspend with it; `storeHolding` in the test
+  fixtures stays a plain function by starting the in-memory write directly, since it never
+  suspends. `AndroidTokenStorageTest` is an Android host test (`:core:network:testAndroidHostTest`,
+  now in CI): it pins `commit()` over `apply()`, the thread, the failure and the cancellation
+  against a recording `SharedPreferences`, since the host has no real one.
 - `Tally.percentB` is defined as `100 - percentA` rather than rounded independently, so the two
   always sum to 100. There is a property test over every split up to 40/40.
 - `:server` must not depend on `:core:domain` (§3). That is why scoring lives in `:server`.

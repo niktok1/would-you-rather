@@ -19,11 +19,12 @@ public class SessionStore(
         return runCatching { json.decodeFromString<SessionDto>(raw) }.getOrNull()
     }
 
-    public fun write(session: SessionDto) {
+    /** Returns once [session] is durable, as [TokenStorage.write] promises. */
+    public suspend fun write(session: SessionDto) {
         storage.write(KEY_SESSION, json.encodeToString(session))
     }
 
-    public fun clear() {
+    public suspend fun clear() {
         storage.remove(KEY_SESSION)
     }
 

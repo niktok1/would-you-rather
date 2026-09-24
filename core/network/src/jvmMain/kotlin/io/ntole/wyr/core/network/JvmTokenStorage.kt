@@ -11,7 +11,7 @@ public class JvmTokenStorage(
 ) : TokenStorage {
     override fun read(key: String): String? = prefs.get(key, null)
 
-    override fun write(
+    override suspend fun write(
         key: String,
         value: String,
     ) {
@@ -19,7 +19,7 @@ public class JvmTokenStorage(
         prefs.flush()
     }
 
-    override fun remove(key: String) {
+    override suspend fun remove(key: String) {
         prefs.remove(key)
         prefs.flush()
     }

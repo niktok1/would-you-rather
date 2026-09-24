@@ -14,12 +14,22 @@ package io.ntole.wyr.core.network
 public interface TokenStorage {
     public fun read(key: String): String?
 
-    public fun write(
+    /**
+     * Stores [value] under [key], and returns only once it would survive the app's process being
+     * killed. Refresh tokens rotate on every use (CLAUDE.md §8a): once the server has answered a
+     * refresh, the token it sent is the only live one, and losing it to a kill orphans the guest.
+     *
+     * Suspending, so that an implementation whose durable write blocks can make it off the
+     * caller's thread, which in the app is often the main one. A write asked for is made whole
+     * even if the caller is cancelled meanwhile, as a write that did not suspend would be.
+     */
+    public suspend fun write(
         key: String,
         value: String,
     )
 
-    public fun remove(key: String)
+    /** Removes [key], as durably as [write] stores one. */
+    public suspend fun remove(key: String)
 }
 
 /** Non-persistent fallback. Used by tests, and by any platform without storage wired up yet. */
@@ -28,14 +38,14 @@ public class InMemoryTokenStorage : TokenStorage {
 
     override fun read(key: String): String? = values[key]
 
-    override fun write(
+    override suspend fun write(
         key: String,
         value: String,
     ) {
         values[key] = value
     }
 
-    override fun remove(key: String) {
+    override suspend fun remove(key: String) {
         values.remove(key)
     }
 }

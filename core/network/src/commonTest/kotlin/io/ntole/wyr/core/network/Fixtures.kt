@@ -11,6 +11,9 @@ import io.ntole.wyr.core.auth.SessionDto
 import io.ntole.wyr.core.error.ErrorCode
 import io.ntole.wyr.core.error.ErrorDto
 import io.ntole.wyr.core.question.QuestionPageDto
+import kotlin.coroutines.Continuation
+import kotlin.coroutines.EmptyCoroutineContext
+import kotlin.coroutines.startCoroutine
 
 internal const val BASE_URL = "https://wyr.test"
 
@@ -23,8 +26,17 @@ internal fun session(playerId: String): SessionDto =
         accessTokenExpiresInSeconds = 900,
     )
 
+/**
+ * A store already holding [session]. Not suspending, so the plain helpers that build a client can
+ * call it: [InMemoryTokenStorage] never suspends, so the write is done when `startCoroutine` returns.
+ */
 internal fun storeHolding(session: SessionDto?): SessionStore =
-    SessionStore(InMemoryTokenStorage()).also { store -> session?.let(store::write) }
+    SessionStore(InMemoryTokenStorage()).also { store ->
+        if (session == null) return@also
+        val write: suspend () -> Unit = { store.write(session) }
+        write.startCoroutine(Continuation(EmptyCoroutineContext) { result -> result.getOrThrow() })
+        check(store.read() == session) { "the in-memory write suspended" }
+    }
 
 internal val jsonHeaders = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString())
 

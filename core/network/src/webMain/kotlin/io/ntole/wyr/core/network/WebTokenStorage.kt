@@ -11,14 +11,14 @@ import web.storage.localStorage
 public class WebTokenStorage : TokenStorage {
     override fun read(key: String): String? = localStorage.getItem(key)
 
-    override fun write(
+    override suspend fun write(
         key: String,
         value: String,
     ) {
         localStorage.setItem(key, value)
     }
 
-    override fun remove(key: String) {
+    override suspend fun remove(key: String) {
         localStorage.removeItem(key)
     }
 }
