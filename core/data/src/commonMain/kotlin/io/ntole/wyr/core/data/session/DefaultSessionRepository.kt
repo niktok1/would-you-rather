@@ -70,9 +70,9 @@ public class DefaultSessionRepository(
         }
 
     private suspend fun mintGuest(): String {
-        val session = runApi { authApi.guest() }
-        persist { sessionStore.write(session) }
-        return session.playerId
+        val guest = runApi { authApi.guest() }
+        persist { sessionStore.write(guest.session()) }
+        return guest.playerId
     }
 
     /**
