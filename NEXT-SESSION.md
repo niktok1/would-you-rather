@@ -11,7 +11,7 @@ Repo initialized on `main` with the personal identity and `user.useConfigOnly = 
 
 ### Verified working
 
-- `:server` on H2: 156 tests green, including 59 end-to-end flow tests in `ApiFlowTest`. Flat
+- `:server` on H2: 179 tests green, including 65 end-to-end flow tests in `ApiFlowTest`. Flat
   scoring is covered there (every vote pays 1, majority and minority alike, and the total
   accumulates) and by `PlayerStoreTest`, which races awards for one player and refreshes of one
   token. The endless feed, re-answering and attempt replay are covered there too, and by
@@ -178,10 +178,10 @@ Repo initialized on `main` with the personal identity and `user.useConfigOnly = 
   trimmed, and every malformed value refused with the variable named. By hand: an invalid value run
   through `./gradlew :app:desktopApp:run` stopped the app at start naming it, and a second run, on a
   reused configuration cache, named the new value.
-- Client tests: `:core:domain` 32, `:core:data` 107, `:core:network` 52 (58 as Android host tests:
-  the common ones and `AndroidTokenStorageTest`), `:app:shared` 109 (the ViewModels, the Koin graph
-  and the desktop base URL); `:server` 156. `:app:shared` compiles for JVM, JS, wasmJs and the iOS
-  simulator.
+- Client tests: `:core:domain` 34, `:core:data` 115, `:core:network` 56 (62 as Android host tests:
+  the common ones and `AndroidTokenStorageTest`), `:app:shared` 122 (the ViewModels, the Koin graph
+  and the desktop base URL); `:server` 179. 568 in all. `:app:shared` compiles for JVM, JS, wasmJs
+  and the iOS simulator.
 - `:app:androidApp:assembleDebug` produces a real APK.
 - `ktlintCheck` clean across every module.
 
@@ -466,19 +466,26 @@ rules live in CLAUDE.md §8d. Each item is one short-lived branch, in order:
    cancellation used to all show UNKNOWN); the bearer is read from `SessionStore` on every
    request (`cacheTokens = false`) instead of cached; one guest minted per dead session; first
    `:core:network` / `:core:data` tests.
-3a. `fix/read-committed` — run transactions at READ COMMITTED, where SQL increments are correct
-   without retries, and make refresh-token rotation a compare-and-set so it stays single-use.
-   This resolves the CLAUDE.md §8b "Isolation for hot counters" item before likes need it.
-4. `feat/dev-console` — the engineering UI, as the default root.
-5. `feat/endless-feed` — per-player random unanswered questions, then loop; re-answering;
-   idempotency key; skip.
-6. `feat/player-stats` — `GET /v1/me`.
-7. `feat/question-submission` — split into server + contract, then client + console.
-8. `feat/moderation`.
-9. `feat/question-likes`.
-10. `feat/category-play`.
+3a. `fix/read-committed` *(done)* — transactions at READ COMMITTED; refresh-token rotation is a
+   compare-and-set.
+4. `feat/dev-console` *(done)* — the engineering UI, as the default root.
+5. `feat/endless-feed` *(done)* — per-player feed, re-answering, idempotency key; then
+   `feat/feed-cycles` *(done)*: every question once per cycle, a new random order each cycle.
+6. `feat/player-stats` *(done)* — `GET /v1/me`.
+7. `feat/question-submission` + `feat/submission-client` *(done)* — submit, list your own, pending
+   cap 20; authors are served their own questions like anyone else.
+8. `feat/moderation` *(done)* — admin-token routes (off when `ADMIN_TOKEN` is unset), approve with
+   optional new categories, reject with a reason; console section.
+9. `feat/question-likes` *(done)* — like/unlike any question (own included), +1 per like held to
+   the author, count visible before answering.
+10. `feat/category-play` + `feat/multi-category` *(done)* — questions carry one or more
+    categories; the console plays several at once (any match).
+    Also done: `feat/skip-per-cycle` (a skip returns next cycle) and `fix/client-resilience`
+    (request timeouts, durable Android session writes, `WYR_API_BASE_URL` on desktop).
 11. Pre-deploy hardening and the first Render deploy, which sets `autoDeployTrigger: checksPass`
-    in `render.yaml` (CLAUDE.md §8).
+    in `render.yaml` (CLAUDE.md §8). Left before it: a GitHub remote so CI runs (Postgres, Docker
+    and iOS jobs have never run), rate limiting (§8b), a migration tool before the first column
+    change after the deploy, and the refresh-token grace window.
 
 **Blocked on the user:** no git remote exists yet, so `.github/workflows/ci.yml` has never run.
 It needs a GitHub repo on the personal account (§7). Render and iOS verification both depend on
