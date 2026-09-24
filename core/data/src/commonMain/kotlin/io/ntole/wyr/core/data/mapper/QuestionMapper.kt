@@ -16,18 +16,22 @@ internal fun QuestionDto.toDomain(): Question =
         id = id,
         optionA = optionA,
         optionB = optionB,
-        // Each once, in declaration order. A name this build cannot read is OTHER beside the rest, not
-        // dropped: the question is filed under something more. An empty list, which the server never
-        // sends but a payload without the field decodes as, is OTHER alone: no question is filed under
-        // nothing.
-        categories =
-            categories
-                .map { it.toDomain() }
-                .sorted()
-                .toSet()
-                .ifEmpty { setOf(Category.OTHER) },
+        categories = categories.toDomainCategories(),
         answeredBefore = answeredBefore,
     )
+
+/**
+ * The categories a question is filed under, as the wire lists them, as the domain holds them: each
+ * once, in declaration order. Shared by every DTO that carries a question's categories.
+ */
+internal fun List<QuestionCategory>.toDomainCategories(): Set<Category> =
+    // A name this build cannot read is OTHER beside the rest, not dropped: the question is filed under
+    // something more. An empty list, which the server never sends but a payload without the field
+    // decodes as, is OTHER alone: no question is filed under nothing.
+    map { it.toDomain() }
+        .sorted()
+        .toSet()
+        .ifEmpty { setOf(Category.OTHER) }
 
 internal fun QuestionCategory.toDomain(): Category =
     when (this) {
