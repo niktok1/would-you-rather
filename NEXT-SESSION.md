@@ -294,6 +294,16 @@ automatically from every green commit on `main` (its URL is on its Render page).
   `ServerConfigTest` the two new variables. Minting with no secret, the recovery route in the refresh
   group, refusing with `INVALID_REFRESH_TOKEN`, a recovery opening no session, and a log line with a
   secret's hash each fail them.
+- Live run of sessions and recovery against the fat jar on Netty (JDK 21, `PORT=18094`, no
+  `DATABASE_URL`): Flyway ran V1, V2 and V4 on the in-memory H2 and `/health` was 200. A guest's
+  mint carried a 43-character secret beside the session's four fields; recovering with it answered
+  the same player in a session of its own, with no secret; that session refreshed twice, the mint's
+  first token twice after it, and the recovered one again. A new secret was a different one, the old
+  was then 401 `INVALID_RECOVERY_SECRET` and the new recovered; an unknown secret was 401
+  `INVALID_RECOVERY_SECRET`, and a new secret without a session 401 `UNAUTHORIZED`. No 43-character
+  token appeared in the server's log. Counts on the branch: `:server` 262 (2 skipped),
+  `:core:domain` 34, `:core:data` 121, `:core:network` 74 (80 as Android host tests), `:app:shared`
+  127; every client target compiles, the iOS simulator's included.
 - Client tests: `:core:domain` 34, `:core:data` 120, `:core:network` 58 (64 as Android host tests:
   the common ones and `AndroidTokenStorageTest`), `:app:shared` 122 (the ViewModels, the Koin graph
   and the desktop base URL); `:server` 235, 2 of them skipped. 569 JVM tests in all, those 2
@@ -343,7 +353,9 @@ automatically from every green commit on `main` (its URL is on its Render page).
 - **Recovery beyond the server.** No client stores or sends the secret yet: the client half (Block
   Store on Android, iCloud Keychain on iOS, the session store out of Android's backups, CLAUDE.md §8a
   *Recovery*) is the next branch. So nothing has yet been restored to a new phone. Guests from before
-  V4 have no secret until their client asks for one.
+  V4 have no secret until their client asks for one. Nothing here logs a secret or its hash, but a
+  statement that fails on a unique key logs the driver's message, which on PostgreSQL names the key's
+  value, as it does a refresh token's hash; none can collide with 256 random bits behind it.
 - **The settling refresh in a real browser or desktop pair.** Two tabs sharing `localStorage`, or
   two desktop instances sharing JVM preferences, have raced a refresh only in
   `SharedSessionStoreTest` on `MockEngine`. JVM preferences sync between processes on their own

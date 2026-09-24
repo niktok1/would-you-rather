@@ -418,9 +418,10 @@ auth SDK, satisfying §2.
     up in the players row alone, so the players row keeps its refresh-token columns as a copy of the
     session opened or rotated last, previous token and stamp included, marked as this build's copy
     (`players.mirrored_refresh_token_hash`). Every open and rotation writes it, under the player's row
-    lock, which a rotation takes after its session's: every write here locks a session before its
-    player. It costs a read and an `UPDATE` per refresh. The columns stay until no rollback target
-    predates sessions; dropping them then is a migration of its own (§8b, *Rollbacks*).
+    lock, which a rotation takes after its session's: every write here that locks a session it did not
+    insert itself locks it before its player. It costs a read and an `UPDATE` per refresh. The columns
+    stay until no rollback target predates sessions; dropping them then is a migration of its own
+    (§8b, *Rollbacks*).
   - *A rollback* to such a build refreshes, for each player, the device that opened or refreshed a
     session last, with the grace this build gave its token, and refuses every other device, whose
     client replaces its player with a fresh guest: the build before has no recovery. It never reads
