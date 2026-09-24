@@ -26,8 +26,10 @@ import io.ntole.wyr.core.error.ErrorCode
 import io.ntole.wyr.core.error.ErrorDto
 import io.ntole.wyr.core.like.LikeRequest
 import io.ntole.wyr.core.player.PlayerStatsDto
+import io.ntole.wyr.core.question.ApproveSubmissionRequest
 import io.ntole.wyr.core.question.QuestionCategory
 import io.ntole.wyr.core.question.QuestionPageDto
+import io.ntole.wyr.core.question.RejectSubmissionRequest
 import io.ntole.wyr.core.question.SkipRequest
 import io.ntole.wyr.core.question.SubmissionListDto
 import io.ntole.wyr.core.question.SubmitQuestionRequest
@@ -183,6 +185,36 @@ class RateLimitTest {
         }
 
     @Test
+    fun `a wrong token to any admin route spends the failed-token budget and is refused by it`() =
+        runServer("admin-routes-failures", NO_PRACTICAL_LIMIT.copy(adminTokenFailures = ADMIN_ROUTE_BUDGET)) { client ->
+            ADMIN_ROUTES.forEach { route ->
+                assertEquals(HttpStatusCode.Forbidden, route.send(client, "wrong-token").status, route.name)
+            }
+
+            ADMIN_ROUTES.forEach { route ->
+                assertRateLimited(
+                    route.send(client, "wrong-token"),
+                    "${route.name} past it",
+                )
+            }
+        }
+
+    @Test
+    fun `every admin route spends the admin budget and is refused by it`() =
+        runServer("admin-routes", NO_PRACTICAL_LIMIT.copy(admin = ADMIN_ROUTE_BUDGET)) { client ->
+            ADMIN_ROUTES.forEach { route ->
+                assertEquals(route.allowed, route.send(client, ADMIN_TOKEN).status, route.name)
+            }
+
+            ADMIN_ROUTES.forEach { route ->
+                assertRateLimited(
+                    route.send(client, ADMIN_TOKEN),
+                    "${route.name} past it",
+                )
+            }
+        }
+
+    @Test
     fun `the default limits let the console's longest run of answers through`() =
         runServer("defaults", RateLimits.DEFAULT) { client ->
             val player = client.guest()
@@ -316,6 +348,13 @@ class RateLimitTest {
         var sent = 0
     }
 
+    /** An admin route, what it answers the right token with, and a request to it with a given token. */
+    private class AdminRoute(
+        val name: String,
+        val allowed: HttpStatusCode,
+        val send: suspend (HttpClient, String?) -> HttpResponse,
+    )
+
     private val groups =
         listOf(
             Group("guests", { copy(guests = it) }, needsSession = false) { caller ->
@@ -411,6 +450,29 @@ class RateLimitTest {
         /** A failed-token budget whose lockout a test can wait out. */
         val LOCKOUT = RequestBudget(requests = 2, per = 2.seconds)
 
+        /**
+         * Every admin route. With a budget of one request per route ([ADMIN_ROUTE_BUDGET]), each is sent
+         * once to spend it and once past it, so a route moved out of either admin group leaves the
+         * budget unspent or is let through past it. Nothing is pending, so a decision the right token
+         * sends finds no submission: 404, once it got that far.
+         */
+        val ADMIN_ROUTES =
+            listOf(
+                AdminRoute("the queue", HttpStatusCode.OK) { client, token -> client.queue(token) },
+                AdminRoute("an approval", HttpStatusCode.NotFound) { client, token ->
+                    client.post(WyrApi.Paths.ADMIN_APPROVALS) {
+                        admin(token, ApproveSubmissionRequest(NO_SUBMISSION))
+                    }
+                },
+                AdminRoute("a rejection", HttpStatusCode.NotFound) { client, token ->
+                    client.post(WyrApi.Paths.ADMIN_REJECTIONS) {
+                        admin(token, RejectSubmissionRequest(NO_SUBMISSION, reason = "Not a question"))
+                    }
+                },
+            )
+        val ADMIN_ROUTE_BUDGET = RequestBudget(requests = ADMIN_ROUTES.size, per = 1.minutes)
+        const val NO_SUBMISSION = "no-such-submission"
+
         /** A client, and the proxy that reached the server, as two trusted proxies record them. */
         const val CLIENT = "203.0.113.7"
         const val OTHER_CLIENT = "203.0.113.8"
@@ -483,6 +545,16 @@ class RateLimitTest {
         /** The moderator's queue, asked for with [token], or with none. */
         suspend fun HttpClient.queue(token: String?): HttpResponse =
             get(WyrApi.Paths.ADMIN_SUBMISSIONS) { token?.let { header(WyrApi.Headers.ADMIN_TOKEN, it) } }
+
+        /** [body], sent with [token] as the admin token, or with none. */
+        inline fun <reified T : Any> HttpRequestBuilder.admin(
+            token: String?,
+            body: T,
+        ) {
+            token?.let { header(WyrApi.Headers.ADMIN_TOKEN, it) }
+            contentType(ContentType.Application.Json)
+            setBody(body)
+        }
 
         inline fun <reified T : Any> HttpRequestBuilder.json(
             session: SessionDto,
