@@ -3,6 +3,7 @@ package io.ntole.wyr
 import androidx.compose.ui.window.ComposeUIViewController
 import io.ntole.wyr.di.initKoin
 import org.koin.mp.KoinPlatform
+import platform.Foundation.NSBundle
 
 /**
  * iOS entry point, called from `iOSApp.swift`.
@@ -18,7 +19,17 @@ import org.koin.mp.KoinPlatform
 fun MainViewController() =
     ComposeUIViewController {
         if (KoinPlatform.getKoinOrNull() == null) {
-            initKoin()
+            initKoin(environmentName = bundledEnvironmentName())
         }
         App()
     }
+
+/**
+ * The app's `WYR_ENV` Info.plist key, which the `WYR_ENV` build setting in `Config.xcconfig` fills in
+ * (CLAUDE.md §8e), or `null` when the bundle has none, which [initKoin] reads as local. A value that
+ * is not a string is handed on as its text, for [initKoin] to refuse by name.
+ */
+internal fun bundledEnvironmentName(): String? =
+    NSBundle.mainBundle.objectForInfoDictionaryKey(ENVIRONMENT_KEY)?.toString()
+
+private const val ENVIRONMENT_KEY = "WYR_ENV"

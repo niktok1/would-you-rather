@@ -4,5 +4,7 @@
 <dict>
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
+	<key>WYR_ENV</key>
+	<string>$(WYR_ENV)</string>
 </dict>
 </plist>

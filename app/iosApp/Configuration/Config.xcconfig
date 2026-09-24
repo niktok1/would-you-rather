@@ -5,3 +5,7 @@ PRODUCT_BUNDLE_IDENTIFIER=io.ntole.wyr.WYR$(TEAM_ID)
 
 CURRENT_PROJECT_VERSION=1
 MARKETING_VERSION=1.0
+
+// The server environment this build targets (CLAUDE.md, section 8e): local, dev or prod.
+// Info.plist carries it as its WYR_ENV key, which the app reads at start; none is local.
+WYR_ENV=local
