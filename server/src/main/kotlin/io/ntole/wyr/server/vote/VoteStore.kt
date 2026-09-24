@@ -55,7 +55,7 @@ object VoteStore {
         attemptId: String,
         now: Long = System.currentTimeMillis(),
     ): VoteResultDto {
-        if (!QuestionStore.isServable(questionId, playerId)) throw ApiFailure.questionNotFound(questionId)
+        if (!QuestionStore.isServable(questionId)) throw ApiFailure.questionNotFound(questionId)
 
         if (PlayerStore.find(playerId) == null) throw ApiFailure.unauthorized("unknown player")
 

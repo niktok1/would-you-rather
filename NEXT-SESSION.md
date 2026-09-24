@@ -273,13 +273,13 @@ known `PlayViewModel` issues (the Play tab is frozen).
   cycle is a compare-and-set on the cycle read (`PlayerStore.startNextCycle`), and an answer and a
   skip each read their cycle after their row's lock (`VoteStore.cast`, `SkipStore.skip`). All three
   have races in the store tests.
-- **One predicate decides which questions a player may be served** (`QuestionStore.servableTo`,
-  CLAUDE.md §8d): an approved one, and never their own. The feed, the stats' due count, and votes
-  and skips (`QuestionStore.isServable`) all read it, so a pending or rejected question is served
-  to nobody, due for nobody, and answering or skipping it is 404, as it is for the author's own
-  approved question (provisional, CLAUDE.md §8b). A new exclusion belongs there. `isServable` is a
-  plain read because a question only ever becomes servable; a way to withdraw an approved question
-  would need votes and skips to lock the question's row.
+- **One predicate decides which questions a player may be served** (`QuestionStore.servable`,
+  CLAUDE.md §8d): an approved one, to every player alike, its author included. The feed, the
+  stats' due count, and votes and skips (`QuestionStore.isServable`) all read it, so a pending or
+  rejected question is served to nobody, due for nobody, and answering or skipping it is 404. A
+  new exclusion belongs there. `isServable` is a plain read because a question only ever becomes
+  servable; a way to withdraw an approved question would need votes and skips to lock the
+  question's row.
 - **An attempt id is made once per tap and reused only to retry that tap.** `AttemptId.random()`
   is the only way to make one. Making a new one for a retry pays twice; reusing one for a new tap
   turns that answer into a replay that pays nothing. The server stores only the latest attempt per

@@ -334,21 +334,11 @@ accounts exist.
   only the category's answered questions, and its skipped ones only when it has nothing else; or
   answer an empty batch, which the client reads as out of questions. The dev console's Category
   row sends a category, so this is reachable from there. `SkipStoreTest` pins what is built.
-- **Answering one's own question** — *provisional — user decision.* §8d says an author is never
-  served their own question and cannot like it, but not whether they may answer or skip it. Built
-  conservatively: either is `QUESTION_NOT_FOUND` (404), as for a question a moderator has not
-  approved, so an author can neither put a vote in their own question's tally nor be paid for it.
-  The other option is to allow both by id, paying as any answer does, although the feed never
-  serves the question to its author. Only a vote by id can reach it (the console's *Vote by id*).
-  `ServableQuestionsTest` pins what is built.
-- **Retrying a submission** — *user decision, before the client can resend one.* A vote carries an
-  attempt id (§8d, *Retry safety*); a submission does not. So one sent again after its response
-  was lost is stored twice, both pending, and the copy holds one of the author's 20 places until a
-  moderator decides it. Nothing resends a submission today: `withSessionRecovery` retries only
-  after a 401, which stored nothing. The options: keep it, leaving duplicates to moderation; add an
-  optional client-made `attemptId` to `SubmitQuestionRequest`, unique per author, with a repeat
-  answered as the stored submission; or refuse a submission whose options match one of the
-  author's pending ones. An `attemptId` can be added later with a default, so no client breaks.
+- **Retrying a submission** — *decided 2026-09-24: keep it simple.* A submission carries no
+  attempt id, so one sent again after its response was lost is stored twice, both pending; the
+  moderator rejects the copy, and the 20-pending cap bounds how many there can be. Nothing resends
+  a submission today (`withSessionRecovery` retries only after a 401, which stored nothing). An
+  optional `attemptId` with a default can be added later without breaking a client.
 - **Rate limiting** — `ErrorCode.RATE_LIMITED` exists on the wire and nothing emits it yet.
   Until something limits votes, points can be farmed: the server pays a new attempt on an answered
   question at once, without checking that it is due again (§8d, re-answering), so a script
@@ -459,14 +449,12 @@ and every request shows in its HTTP trace (`HttpTrace` in `:core:network`, never
   `SkipStore.skip`, on `skips.skipped_in_cycle`, which the feed's due predicate compares with the
   cycle as it does the vote's. The console's Skip sends it through `SkipQuestion`, then loads the
   next question even when the skip failed.
-- **Own questions** *(serving built; likes not built)*: an author is never served their own
-  question, and cannot like it. Built in `QuestionStore.servableTo`, the one predicate the feed,
-  the due count and votes and skips (`QuestionStore.isServable`) all read, beside the rule that
-  only an approved question is served (*Submitting*). A vote on or skip of one's own question is
-  `QUESTION_NOT_FOUND`, as for any question the player is not served: *provisional — user
-  decision* (§8b).
-- **Likes** *(not built)*: any player may like any question except their own, at any time
-  (before or after answering), once each, and may unlike it. Each like currently held is **+1
+- **Own questions** *(built; decided 2026-09-24)*: an author is served their own questions
+  **like any other player** and may answer, skip and like them; the user chose the simpler logic.
+  `QuestionStore.servable` is the one predicate the feed, the due count and votes and skips
+  (`QuestionStore.isServable`) read, and it asks only that a moderator approved the question.
+- **Likes** *(not built)*: any player may like any question, **their own included**, at any
+  time (before or after answering), once each, and may unlike it. Each like currently held is **+1
   point to the author**, and unliking takes that point back. The like count is visible before
   answering. For now likes do nothing else; serving questions by quality is a later idea.
 - **Submitting** *(server built, client next; details decided 2026-09-23)*: earns no points
@@ -482,7 +470,7 @@ and every request shows in its HTTP trace (`HttpTrace` in `:core:network`, never
   since no correct client sends one. The 21st pending submission is 409 `SUBMISSION_LIMIT`,
   counted under the author's row lock (§4). A submission is stored `PENDING`, and nothing approves
   one until *Moderation* is built. Questions carry an author and a `QuestionStatus`, and
-  `QuestionStore.servableTo` serves only approved ones, due at once in whatever cycle each player
+  `QuestionStore.servable` serves only approved ones, due at once in whatever cycle each player
   is on. `GET /v1/me/questions` lists the author's submissions of every status, newest first, a
   rejected one with its reason (`SubmissionStore.byAuthor`). The client and the console's section
   come in the next branch.

@@ -21,7 +21,6 @@ import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.core.intParam
 import org.jetbrains.exposed.v1.core.isNull
 import org.jetbrains.exposed.v1.core.less
-import org.jetbrains.exposed.v1.core.neq
 import org.jetbrains.exposed.v1.core.or
 import org.jetbrains.exposed.v1.core.wrapAsExpression
 import org.jetbrains.exposed.v1.jdbc.Query
@@ -42,7 +41,7 @@ object QuestionStore {
      * Once nothing is due, the player has finished the cycle, whether its last questions were
      * answered or skipped. This request starts the next one and serves the whole pool again, all of
      * it due now, in a fresh random order, so a batch is empty only when nothing in [category] is
-     * [servableTo] the player at all. Two requests can both find the cycle finished.
+     * [servable] at all. Two requests can both find the cycle finished.
      * [PlayerStore.startNextCycle] lets only the first start the next one, and the second serves the
      * pool it read, which is due in the cycle the first started. The one exception is a question
      * answered or skipped in that new cycle before the second read the pool: the second serves it
@@ -99,16 +98,14 @@ object QuestionStore {
      * is the one place that decides it, so the feed, anything that counts what a player has left,
      * and what a player may answer or skip ([isServable]) all agree.
      *
-     * A question is servable once a moderator has approved it, and never to its author. A seed is
-     * approved and has no author, and `<>` against a null author is not true in SQL, so a missing
-     * author needs its own branch.
+     * A question is servable once a moderator has approved it, to every player alike: an author is
+     * served their own questions like anyone else (CLAUDE.md §8d, *Own questions*). A rule that
+     * depended on the player would take them here.
      */
-    internal fun servableTo(playerId: String): Op<Boolean> =
-        (Questions.status eq QuestionStatus.APPROVED) and
-            (Questions.authorPlayerId.isNull() or (Questions.authorPlayerId neq playerId))
+    internal fun servable(): Op<Boolean> = Questions.status eq QuestionStatus.APPROVED
 
     /**
-     * The questions in [category] [servableTo] the player: only those due in [dueIn], unless it is null.
+     * The questions in [category] that are [servable]: only those due in [dueIn], unless it is null.
      * Selects what a batch is built from, unless [columns] asks for something else.
      */
     private fun candidates(
@@ -121,7 +118,7 @@ object QuestionStore {
             .join(Votes, JoinType.LEFT, Questions.id, Votes.questionId) { Votes.playerId eq playerId }
             .join(Skips, JoinType.LEFT, Questions.id, Skips.questionId) { Skips.playerId eq playerId }
             .select(columns)
-            .where { servableTo(playerId) and inCategory(category) and isDue(dueIn) }
+            .where { servable() and inCategory(category) and isDue(dueIn) }
 
     /** What [toDto] reads, and no more: the moderation columns are not the feed's business. */
     private val BATCH_COLUMNS: List<Expression<*>> =
@@ -154,23 +151,19 @@ object QuestionStore {
     ): Op<Boolean> = inCycle.isNull() or (inCycle less cycle)
 
     /**
-     * Whether [playerId] may answer or skip the question [id]: it exists and is [servableTo] them,
-     * due or not. Any other question is not found, as far as they are concerned. That covers one
-     * still waiting for a moderator, a rejected one, and their own, which is provisional (CLAUDE.md
-     * §8b): §8d says only that an author is never served it.
+     * Whether a player may answer or skip the question [id]: it exists and is [servable], due or
+     * not. Any other question is not found, as far as they are concerned: one still waiting for a
+     * moderator, or a rejected one. An author answers and skips their own like any other.
      *
      * A plain read that a vote or a skip then writes after, and safe without a lock because a
-     * question only ever becomes servable, never stops being so: nothing deletes a question or
-     * changes its author, and a moderator decides only a pending one (§8d). A way to withdraw an
+     * question only ever becomes servable, never stops being so: nothing deletes a question, and a
+     * moderator decides only a pending one (§8d). A way to withdraw an
      * approved question would end that, and the read would then have to lock the question's row.
      */
-    fun isServable(
-        id: String,
-        playerId: String,
-    ): Boolean =
+    fun isServable(id: String): Boolean =
         Questions
             .select(Questions.id)
-            .where { (Questions.id eq id) and servableTo(playerId) }
+            .where { (Questions.id eq id) and servable() }
             .limit(1)
             .any()
 

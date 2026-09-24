@@ -34,8 +34,8 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 
 /**
- * Which questions a player may be served, answer or skip (`QuestionStore.servableTo`, CLAUDE.md
- * §8d): only approved ones, and never their own. Driven through the stores at READ COMMITTED as in
+ * Which questions a player may be served, answer or skip (`QuestionStore.servable`, CLAUDE.md
+ * §8d): only approved ones, and to every player alike, their authors included. Driven through the stores at READ COMMITTED as in
  * QuestionStoreTest, with each submitted question written straight into the table as a submission
  * and a moderator's decision would leave it.
  */
@@ -105,26 +105,25 @@ class ServableQuestionsTest {
     }
 
     @Test
-    fun `an author is never served their own approved question while every other player is`() {
+    fun `an author is served their own approved question like every other player`() {
         val author = newPlayer()
         val player = newPlayer()
         val own = submitted(author, QuestionStatus.APPROVED)
 
-        assertEquals(seeds.sorted(), feed(author).ids().sorted())
-        assertEquals(seeds.size, statsOf(author).dueThisCycle)
+        assertEquals((seeds + own).sorted(), feed(author).ids().sorted())
+        assertEquals(seeds.size + 1, statsOf(author).dueThisCycle)
         assertEquals((seeds + own).sorted(), feed(player).ids().sorted())
         assertEquals(seeds.size + 1, statsOf(player).dueThisCycle)
     }
 
     @Test
-    fun `an author cannot answer or skip their own question`() {
-        // Provisional (CLAUDE.md §8b): §8d says only that an author is never served it.
+    fun `an author answers and skips their own question like any other`() {
         val author = newPlayer()
         val own = submitted(author, QuestionStatus.APPROVED)
 
-        assertNotFound("answered") { answer(author, own) }
-        assertNotFound("skipped") { skip(author, own) }
-        assertEquals(Scoring.POINTS_PER_ANSWER, answer(newPlayer(), own).pointsAwarded, "while anyone else can")
+        skip(author, own)
+        assertEquals(seeds.size, statsOf(author).dueThisCycle, "skipped, so not due this cycle")
+        assertEquals(Scoring.POINTS_PER_ANSWER, answer(author, own).pointsAwarded, "and paid for answering")
     }
 
     @Test

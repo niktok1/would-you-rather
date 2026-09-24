@@ -50,7 +50,7 @@ object Questions : Table("questions") {
 
     /**
      * The player who submitted the question (CLAUDE.md §8d), or null for a seed, which nobody wrote.
-     * The author is never served it (`QuestionStore.servableTo`).
+     * The author is served it like any other player (`QuestionStore.servable`).
      */
     val authorPlayerId = varchar("author_player_id", 36).references(Players.id).nullable()
 
