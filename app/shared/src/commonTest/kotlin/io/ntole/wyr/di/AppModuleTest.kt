@@ -60,8 +60,9 @@ class AppModuleTest {
 
             assertEquals(environment, koin.get<WyrEnvironment>())
             assertEquals(environment.apiBaseUrl, koin.get<String>(named(API_BASE_URL)), environment.name)
-            val console = koin.get<DevConsoleViewModel>()
-            assertEquals(environment.apiBaseUrl, console.state.value.apiBaseUrl)
+            val console = koin.get<DevConsoleViewModel>().state.value
+            assertEquals(environment, console.environment)
+            assertEquals(environment.apiBaseUrl, console.apiBaseUrl)
         }
     }
 
@@ -71,8 +72,9 @@ class AppModuleTest {
 
         assertEquals(WyrEnvironment.DEV, koin.get<WyrEnvironment>())
         assertEquals(OVERRIDE, koin.get<String>(named(API_BASE_URL)))
-        val console = koin.get<DevConsoleViewModel>()
-        assertEquals(OVERRIDE, console.state.value.apiBaseUrl)
+        val console = koin.get<DevConsoleViewModel>().state.value
+        assertEquals(WyrEnvironment.DEV, console.environment)
+        assertEquals(OVERRIDE, console.apiBaseUrl)
     }
 
     @Test

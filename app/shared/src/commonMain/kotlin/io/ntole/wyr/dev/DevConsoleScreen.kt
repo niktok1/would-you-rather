@@ -214,6 +214,8 @@ fun DevConsoleScreen(
 private fun Header(state: DevConsoleState) {
     Column(verticalArrangement = Arrangement.spacedBy(WyrThemeAccessors.dimens.spaceXs)) {
         Text("Dev console", style = MaterialTheme.typography.headlineSmall)
+        // First, so which server this build talks to is never in doubt (CLAUDE.md §8e).
+        Value("environment", state.environment.displayName)
         Value("api", state.apiBaseUrl)
         Value("player", state.session?.playerId ?: "no session")
         Value("token expires", tokenExpiry(state.session))

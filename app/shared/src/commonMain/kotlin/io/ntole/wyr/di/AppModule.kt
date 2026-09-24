@@ -31,6 +31,7 @@ internal val uiModule =
         // Not viewModelOf: the base URL is a plain String, found only by its qualifier.
         viewModel {
             DevConsoleViewModel(
+                environment = get(),
                 apiBaseUrl = get(named(API_BASE_URL)),
                 sessions = get(),
                 diagnostics = get(),

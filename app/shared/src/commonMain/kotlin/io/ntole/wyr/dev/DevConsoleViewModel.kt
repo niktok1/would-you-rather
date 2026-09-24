@@ -19,6 +19,7 @@ import io.ntole.wyr.core.domain.vote.AttemptId
 import io.ntole.wyr.core.domain.vote.CastVote
 import io.ntole.wyr.core.domain.vote.Side
 import io.ntole.wyr.core.domain.vote.VoteOutcome
+import io.ntole.wyr.core.network.environment.WyrEnvironment
 import io.ntole.wyr.core.network.trace.HttpExchange
 import io.ntole.wyr.core.network.trace.HttpTrace
 import kotlinx.coroutines.CancellationException
@@ -36,6 +37,7 @@ import kotlin.time.TimeSource
  * exercises what ships rather than a parallel path to the server.
  */
 class DevConsoleViewModel(
+    environment: WyrEnvironment,
     apiBaseUrl: String,
     private val sessions: SessionRepository,
     private val diagnostics: SessionDiagnostics,
@@ -49,7 +51,7 @@ class DevConsoleViewModel(
     httpTrace: HttpTrace,
     private val timeSource: TimeSource = TimeSource.Monotonic,
 ) : ViewModel() {
-    private val _state = MutableStateFlow(DevConsoleState(apiBaseUrl = apiBaseUrl))
+    private val _state = MutableStateFlow(DevConsoleState(environment = environment, apiBaseUrl = apiBaseUrl))
     val state: StateFlow<DevConsoleState> = _state.asStateFlow()
 
     /** Plain data from the network layer, never a DTO, so it is passed through untouched. */

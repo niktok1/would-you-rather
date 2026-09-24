@@ -8,6 +8,7 @@ import io.ntole.wyr.core.domain.session.SessionInfo
 import io.ntole.wyr.core.domain.vote.AttemptId
 import io.ntole.wyr.core.domain.vote.Side
 import io.ntole.wyr.core.domain.vote.VoteOutcome
+import io.ntole.wyr.core.network.environment.WyrEnvironment
 
 /**
  * What the dev console shows, apart from the HTTP trace, which it reads from the network layer
@@ -23,6 +24,9 @@ import io.ntole.wyr.core.domain.vote.VoteOutcome
  * only when they fail, as a `refreshStats` entry.
  */
 data class DevConsoleState(
+    /** The server environment this build was made for (CLAUDE.md §8e). */
+    val environment: WyrEnvironment,
+    /** Where requests go: [environment]'s own URL, unless the platform put another in its place. */
     val apiBaseUrl: String,
     val session: SessionInfo? = null,
     val queueSize: Int? = null,

@@ -23,6 +23,7 @@ import io.ntole.wyr.core.domain.vote.Side
 import io.ntole.wyr.core.domain.vote.Tally
 import io.ntole.wyr.core.domain.vote.VoteOutcome
 import io.ntole.wyr.core.domain.vote.VoteRepository
+import io.ntole.wyr.core.network.environment.WyrEnvironment
 import io.ntole.wyr.core.network.trace.HttpTrace
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
@@ -63,6 +64,14 @@ class DevConsoleViewModelTest {
     @AfterTest
     fun tearDown() {
         Dispatchers.resetMain()
+    }
+
+    @Test
+    fun `the header names the environment and the URL it is reached at`() {
+        val state = viewModel().state.value
+
+        assertEquals(WyrEnvironment.DEV, state.environment)
+        assertEquals(WyrEnvironment.DEV.apiBaseUrl, state.apiBaseUrl)
     }
 
     @Test
@@ -1158,7 +1167,8 @@ class DevConsoleViewModelTest {
 
     private fun viewModel() =
         DevConsoleViewModel(
-            apiBaseUrl = "http://localhost:8080",
+            environment = WyrEnvironment.DEV,
+            apiBaseUrl = WyrEnvironment.DEV.apiBaseUrl,
             sessions = sessions,
             diagnostics = diagnostics,
             questions = questions,
