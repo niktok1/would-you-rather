@@ -290,13 +290,15 @@ automatically from every green commit on `main` (its URL is on its Render page).
 - **The refresh rotation on a live server.** The grace window has run against the fat jar on H2
   (above), never on Render, so its races are proven by tests only. The 1-point rule has been seen
   live, in the client run above.
-- **V2 on PostgreSQL, and on production.** `SchemaDriftTest` and `MigrationsTest` run V2 on
+- **V2 and V3 on PostgreSQL, and on production.** `SchemaDriftTest` and `MigrationsTest` run V2 on
   PostgreSQL only in the `server-postgres` CI job, which has not seen this branch; the script is
-  H2's draft rewritten by hand, the same statements V1 used for its unique constraint. Production
-  (`wyr-postgres`, provably V1; nothing here records a migrating build booting on it yet) runs V2 at
-  its next Manual Deploy, baselining it in the same boot if no earlier one did: three nullable
-  columns and a unique constraint on a table of a few rows, so no rewrite and a moment's lock. Check
-  its history reads `1 BASELINE`, `2 SQL` afterwards.
+  H2's draft rewritten by hand, the same statements V1 used for its unique constraint. V3
+  (`feat/moderation-app`: `questions.retired_at`, one nullable `BIGINT` with no default) has run on
+  H2 alone, its draft from `:server:pendingMigration` without `WYR_TEST_JDBC_URL`. Production
+  (`wyr-postgres`, provably V1; nothing here records a migrating build booting on it yet) runs what
+  it lacks at its next Manual Deploy, baselining it in the same boot if no earlier one did: nullable
+  columns and a unique constraint on tables of a few rows, so no rewrite and a moment's lock. Check
+  its history reads `1 BASELINE`, `2 SQL`, `3 SQL` afterwards.
 - **The settling refresh in a real browser or desktop pair.** Two tabs sharing `localStorage`, or
   two desktop instances sharing JVM preferences, have raced a refresh only in
   `SharedSessionStoreTest` on `MockEngine`. JVM preferences sync between processes on their own
@@ -696,7 +698,9 @@ known `PlayViewModel` issues (the Play tab is frozen).
   wipe the database it names. V2 moved `MigrationsTest`'s pre-migration database onto V1 (V1 run
   alone, the history dropped) and made it read rows with `SELECT *`, since `Tables.kt` now names
   columns V1 lacks; a new script adds its row to `BASELINED_HISTORY` and what it does to existing
-  rows to `afterLaterScripts`. The H2 draft omits `COLUMN` and upper-cases everything; write it in
+  rows to `afterLaterScripts` (`ADDED_COLUMNS` for a column added empty). That database's rows are
+  written through the stores, so a `selectAll` on a table a later script changed fails there: V3 made
+  the seed check only the id. The H2 draft omits `COLUMN` and upper-cases everything; write it in
   lower case, one `ALTER TABLE` per column, since H2 takes no list of `ADD`s. Two boots at once
   are safe on PostgreSQL, under Flyway's advisory lock, only because `Migrations.migrate` takes the
   baseline itself:

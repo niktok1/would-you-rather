@@ -81,6 +81,36 @@ internal class MigrationsTest(
     }
 
     /**
+     * The path the production database takes when every build with a script is deployed in turn
+     * (CLAUDE.md §8b): recorded at V1, then each later script run by a boot of its own, the last by
+     * this build's, on the rows written before it.
+     */
+    @Test
+    fun `a database each build migrated in turn takes this build's scripts, its data kept`() {
+        engine.emptyDatabase("one-build-at-a-time").serverPool().use { pool ->
+            buildAsBeforeMigrations(pool)
+            val before = pool.inTransaction { contents() }
+            serverFlyway(pool).baseline()
+            val latest = BASELINED_HISTORY.size
+            for (version in 2 until latest) {
+                Migrations
+                    .configuration()
+                    .dataSource(pool)
+                    .target("$version")
+                    .load()
+                    .migrate()
+                assertEquals(BASELINED_HISTORY.take(version), history(pool), "the build whose latest is V$version")
+            }
+
+            val result = Migrations.migrate(pool)
+
+            assertEquals(BASELINED_HISTORY, history(pool))
+            assertEquals(1, result.migrationsExecuted, "only this build's own")
+            assertEquals(afterLaterScripts(before), pool.inTransaction { contents() })
+        }
+    }
+
+    /**
      * What marks a database as built before migrations is V1's tables, every one: a baseline of a
      * database missing one would record it at V1 all the same.
      */
@@ -350,12 +380,12 @@ internal class MigrationsTest(
 
     /**
      * [before], a database's contents at V1, as the scripts after V1 leave them. V2 gives every player
-     * no previous refresh token and changes nothing else. A later script that changes the rows already
-     * there adds what it does to them here.
+     * no previous refresh token, V3 retires no question, and neither changes anything else. A later
+     * script that changes the rows already there adds what it does to them here.
      */
     private fun afterLaterScripts(before: Contents): Contents =
         before.mapValues { (table, rows) ->
-            val added = if (table == Players.tableName) PREVIOUS_REFRESH_TOKEN_COLUMNS else emptyList()
+            val added = ADDED_COLUMNS[table].orEmpty()
             rows.map { row -> row + added.associateWith { null } }.canonical()
         }
 
@@ -371,14 +401,21 @@ internal class MigrationsTest(
          * The history of a database built before migrations once a boot has migrated it: V1 recorded
          * without running it, then every later script run.
          */
-        private val BASELINED_HISTORY = listOf("1 BASELINE", "2 SQL")
+        private val BASELINED_HISTORY = listOf("1 BASELINE", "2 SQL", "3 SQL")
 
-        /** The columns V2 adds to players, empty in every row already there. */
-        private val PREVIOUS_REFRESH_TOKEN_COLUMNS =
-            listOf(
-                "previous_refresh_token_hash",
-                "previous_refresh_token_expires_at",
-                "previous_refresh_token_rotated_at",
+        /**
+         * The columns the scripts after V1 add, by table, empty in every row already there: V2's
+         * previous refresh token on players, and V3's retirement on questions.
+         */
+        private val ADDED_COLUMNS =
+            mapOf(
+                Players.tableName to
+                    listOf(
+                        "previous_refresh_token_hash",
+                        "previous_refresh_token_expires_at",
+                        "previous_refresh_token_rotated_at",
+                    ),
+                Questions.tableName to listOf("retired_at"),
             )
 
         /** Past Flyway's own wait for its lock, 50 tries a second apart, so Flyway gives up first. */

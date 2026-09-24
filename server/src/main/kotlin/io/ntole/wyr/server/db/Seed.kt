@@ -3,7 +3,7 @@ package io.ntole.wyr.server.db
 import io.ntole.wyr.core.question.QuestionCategory
 import io.ntole.wyr.core.question.QuestionStatus
 import org.jetbrains.exposed.v1.jdbc.batchInsert
-import org.jetbrains.exposed.v1.jdbc.selectAll
+import org.jetbrains.exposed.v1.jdbc.select
 
 /**
  * Starter question set, so a fresh database is playable immediately.
@@ -24,9 +24,12 @@ object Seed {
      * servers boot. That recovery is Exposed's retry, not anything here. SeedTest stages it on H2;
      * on PostgreSQL only MigrationsTest's boots at once reach it, and only when they happen to
      * collide.
+     *
+     * The check names only the id, which every schema since V1 has: MigrationsTest seeds a database at
+     * V1 through this, and a column added since would fail it there.
      */
     fun questionsIfEmpty() {
-        if (Questions.selectAll().limit(1).any()) return
+        if (Questions.select(Questions.id).limit(1).any()) return
 
         val now = System.currentTimeMillis()
 

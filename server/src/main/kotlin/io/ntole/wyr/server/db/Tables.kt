@@ -107,6 +107,14 @@ object Questions : Table("questions") {
      */
     val rejectionReason = varchar("rejection_reason", WyrApi.Limits.MAX_REJECTION_REASON_LENGTH).nullable()
 
+    /**
+     * When a moderator retired the question, or null while it is not retired (CLAUDE.md §8d,
+     * *Moderation*). Only an approved question is ever retired, and its [status] stays
+     * [QuestionStatus.APPROVED] beside this, so a build from before V3, which knows no retirement, still
+     * reads every row: it would only serve a retired question again. Nothing writes it yet.
+     */
+    val retiredAt = long("retired_at").nullable()
+
     override val primaryKey = PrimaryKey(id)
 
     init {
