@@ -55,5 +55,8 @@ private fun checkedOption(
     return option
 }
 
-/** The categories of U+2028 and U+2029, the only characters in either. */
-private val LINE_SEPARATORS = setOf(CharCategory.LINE_SEPARATOR, CharCategory.PARAGRAPH_SEPARATOR)
+/**
+ * The categories of U+2028 and U+2029, the only characters in either. A moderator's reason is one line
+ * by the same rule (`checkedRejection`).
+ */
+internal val LINE_SEPARATORS = setOf(CharCategory.LINE_SEPARATOR, CharCategory.PARAGRAPH_SEPARATOR)

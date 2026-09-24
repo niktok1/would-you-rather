@@ -23,10 +23,12 @@ import io.ntole.wyr.core.auth.SessionDto
 import io.ntole.wyr.core.error.ErrorCode
 import io.ntole.wyr.core.error.ErrorDto
 import io.ntole.wyr.core.player.PlayerStatsDto
+import io.ntole.wyr.core.question.ApproveSubmissionRequest
 import io.ntole.wyr.core.question.QuestionCategory
 import io.ntole.wyr.core.question.QuestionDto
 import io.ntole.wyr.core.question.QuestionPageDto
 import io.ntole.wyr.core.question.QuestionStatus
+import io.ntole.wyr.core.question.RejectSubmissionRequest
 import io.ntole.wyr.core.question.SkipRequest
 import io.ntole.wyr.core.question.SubmissionDto
 import io.ntole.wyr.core.question.SubmissionListDto
@@ -1107,6 +1109,203 @@ class ApiFlowTest {
             }
         }
 
+    @Test
+    fun `an approved submission is due at once for every player in their current cycle its author included`() =
+        runServer("admin-approve") { client ->
+            val (author, midway, finished) = Triple(client.guest(), client.guest(), client.guest())
+            val pending = client.submitted(author, SubmitQuestionRequest("Fly", "Swim", listOf(QuestionCategory.FOOD)))
+            val seeds = client.wholePool(finished)
+            seeds.forEach { seed -> client.vote(finished, seed.id, OptionSide.A) }
+            client.vote(midway, seeds.first().id, OptionSide.A)
+            assertEquals(0, client.stats(finished).dueThisCycle, "the cycle is finished")
+
+            val response = client.approve(pending.id)
+
+            assertEquals(HttpStatusCode.OK, response.status)
+            val approved = response.body<SubmissionDto>()
+            assertEquals(pending.copy(status = QuestionStatus.APPROVED), approved)
+            assertEquals(listOf(approved), client.mySubmissions(author), "and its author sees it so")
+            assertEquals(seeds.size + 1, client.stats(author).dueThisCycle, "due for its author")
+            assertEquals(seeds.size, client.stats(midway).dueThisCycle, "for a player midway through the cycle")
+            assertEquals(1, client.stats(finished).dueThisCycle, "and for one with nothing else left in it")
+            assertEquals(listOf(pending.id), client.batch(finished).ids(), "served in that cycle")
+            assertEquals(1, client.stats(finished).cycle, "rather than starting the next one")
+            assertTrue(pending.id in client.wholePool(author).ids(), "served to its author like anyone")
+            assertEquals(
+                Scoring.POINTS_PER_ANSWER,
+                client.vote(author, pending.id, OptionSide.B).pointsAwarded,
+                "and answered by them like any other",
+            )
+            assertEquals(emptyList(), client.queue(), "out of the queue")
+            assertEquals(listOf(approved), client.queue("?${WyrApi.Query.STATUS}=APPROVED"))
+        }
+
+    @Test
+    fun `a rejected submission is served to nobody and its author sees why`() =
+        runServer("admin-reject") { client ->
+            val (author, player) = client.guest() to client.guest()
+            val pending = client.submitted(author, SubmitQuestionRequest("Fly", "Swim", listOf(QuestionCategory.FOOD)))
+
+            val response = client.reject(pending.id, "  Not really a dilemma ")
+
+            assertEquals(HttpStatusCode.OK, response.status)
+            val rejected = response.body<SubmissionDto>()
+            assertEquals(
+                pending.copy(status = QuestionStatus.REJECTED, rejectionReason = "Not really a dilemma"),
+                rejected,
+                "its reason stored trimmed",
+            )
+            assertEquals(listOf(rejected), client.mySubmissions(author))
+            listOf("the author" to author, "another player" to player).forEach { (who, session) ->
+                val pool = client.wholePool(session)
+                assertFalse(pending.id in pool.ids(), "$who is not served it")
+                assertEquals(pool.size, client.stats(session).dueThisCycle, "nor is it due for $who")
+                val vote = client.castVote(session, VoteRequest(pending.id, OptionSide.A, attemptId = "attempt-1"))
+                assertEquals(ErrorCode.QUESTION_NOT_FOUND, vote.body<ErrorDto>().code, "$who answering it")
+                assertEquals(ErrorCode.QUESTION_NOT_FOUND, client.skip(session, pending.id).body<ErrorDto>().code)
+            }
+            assertEquals(emptyList(), client.queue(), "out of the queue")
+            assertEquals(listOf(rejected), client.queue("?${WyrApi.Query.STATUS}=REJECTED"))
+        }
+
+    @Test
+    fun `an approval naming categories changes what a category filter finds`() =
+        runServer("admin-recategorize") { client ->
+            val (author, player) = client.guest() to client.guest()
+            val pending = client.submitted(author, SubmitQuestionRequest("Fly", "Swim", listOf(QuestionCategory.FOOD)))
+            val named = listOf(QuestionCategory.SUPERPOWERS, QuestionCategory.ETHICS, QuestionCategory.SUPERPOWERS)
+
+            val approved = client.approve(pending.id, named).body<SubmissionDto>()
+
+            val chosen = listOf(QuestionCategory.ETHICS, QuestionCategory.SUPERPOWERS)
+            assertEquals(chosen, approved.categories, "each once, in declaration order")
+            assertEquals(listOf(approved), client.mySubmissions(author), "and its author sees them")
+            assertEquals(chosen, client.wholePool(player).single { it.id == pending.id }.categories)
+            assertFalse(pending.id in client.wholePool(player, "&category=FOOD").ids(), "no longer filed under food")
+            listOf("ETHICS", "SUPERPOWERS").forEach { category ->
+                assertTrue(pending.id in client.wholePool(player, "&category=$category").ids(), category)
+            }
+
+            // Naming none keeps the author's.
+            val kept = client.submitted(author, SubmitQuestionRequest("Run", "Walk", listOf(QuestionCategory.RANDOM)))
+            assertEquals(listOf(QuestionCategory.RANDOM), client.approve(kept.id).body<SubmissionDto>().categories)
+        }
+
+    @Test
+    fun `a decision on a question that is not pending is a conflict and changes nothing`() =
+        runServer("admin-conflict") { client ->
+            val author = client.guest()
+            val approved = client.approve(client.submitted(author, question("Approved")).id).body<SubmissionDto>()
+            val rejected = client.reject(client.submitted(author, question("Rejected")).id, "No").body<SubmissionDto>()
+
+            listOf("approved" to approved.id, "rejected" to rejected.id, "a seed" to "seed-1").forEach { (case, id) ->
+                listOf(
+                    "approving" to client.approve(id, listOf(QuestionCategory.ETHICS)),
+                    "rejecting" to client.reject(id, "Changed my mind"),
+                ).forEach { (decision, response) ->
+                    assertEquals(HttpStatusCode.Conflict, response.status, "$decision $case")
+                    assertEquals(ErrorCode.ALREADY_DECIDED, response.body<ErrorDto>().code, "$decision $case")
+                }
+            }
+
+            assertEquals(setOf(approved, rejected), client.mySubmissions(author).toSet(), "as first decided")
+            val seed = client.wholePool(author).single { it.id == "seed-1" }
+            assertFalse(QuestionCategory.ETHICS in seed.categories, "a seed's categories kept too")
+        }
+
+    @Test
+    fun `deciding a question that does not exist is a not-found`() =
+        runServer("admin-missing-question") { client ->
+            listOf(
+                "an unknown id" to "no-such-question",
+                // Nothing on the wire bounds an id, so this one reaches the update and is simply not found.
+                "an id longer than any" to LONGER_THAN_ANY_ID,
+            ).forEach { (case, id) ->
+                val decisions = listOf("approving" to client.approve(id), "rejecting" to client.reject(id, "No"))
+                decisions.forEach { (how, response) ->
+                    assertEquals(HttpStatusCode.NotFound, response.status, "$how $case")
+                    assertEquals(ErrorCode.QUESTION_NOT_FOUND, response.body<ErrorDto>().code, "$how $case")
+                }
+            }
+        }
+
+    @Test
+    fun `a decision the server cannot use is a validation error and decides nothing`() =
+        runServer("admin-malformed") { client ->
+            val pending = client.submitted(client.guest(), question("Pending"))
+            val id = pending.id
+            val tooLong = "x".repeat(WyrApi.Limits.MAX_REJECTION_REASON_LENGTH + 1)
+            val approvals = WyrApi.Paths.ADMIN_APPROVALS
+            val rejections = WyrApi.Paths.ADMIN_REJECTIONS
+
+            listOf(
+                "an approval with no questionId" to (approvals to """{"categories":["FOOD"]}"""),
+                "an approval of a blank id" to (approvals to """{"questionId":"  "}"""),
+                "an approval of an id with a NUL" to (approvals to """{"questionId":"$id\u0000"}"""),
+                "an approval naming UNKNOWN" to (approvals to """{"questionId":"$id","categories":["UNKNOWN"]}"""),
+                // Decoded as UNKNOWN beside FOOD rather than dropped, so it is not filed under FOOD alone.
+                "an approval naming an unrecognised category beside a real one" to
+                    (approvals to """{"questionId":"$id","categories":["FOOD","FROM_THE_FUTURE"]}"""),
+                "an approval whose categories are not a list" to
+                    (approvals to """{"questionId":"$id","categories":"FOOD"}"""),
+                "an approval that is not json" to (approvals to "{not json"),
+                "a rejection with no reason" to (rejections to """{"questionId":"$id"}"""),
+                "a rejection with no questionId" to (rejections to """{"reason":"No"}"""),
+                "a rejection with an empty reason" to (rejections to """{"questionId":"$id","reason":""}"""),
+                "a rejection with a blank reason" to (rejections to """{"questionId":"$id","reason":" \t "}"""),
+                "a rejection with a reason too long" to (rejections to """{"questionId":"$id","reason":"$tooLong"}"""),
+                "a rejection with a newline inside its reason" to
+                    (rejections to """{"questionId":"$id","reason":"Not\nreally"}"""),
+                // PostgreSQL refuses a NUL in text, which H2 stores, so only the check can catch it.
+                "a rejection with a NUL in its reason" to
+                    (rejections to """{"questionId":"$id","reason":"Not\u0000"}"""),
+                "a rejection with a line separator inside its reason" to
+                    (rejections to """{"questionId":"$id","reason":"Not really"}"""),
+            ).forEach { (case, request) ->
+                val (path, body) = request
+                val response = client.moderate(path, body)
+                assertEquals(HttpStatusCode.BadRequest, response.status, case)
+                assertEquals(ErrorCode.VALIDATION_FAILED, response.body<ErrorDto>().code, case)
+            }
+            assertEquals(listOf(pending), client.queue(), "still waiting, as submitted")
+        }
+
+    @Test
+    fun `a reason at the length limit is accepted and padding does not count towards it`() =
+        runServer("admin-longest-reason") { client ->
+            val longest = "x".repeat(WyrApi.Limits.MAX_REJECTION_REASON_LENGTH)
+            val pending = client.submitted(client.guest(), question("Pending"))
+
+            val response = client.reject(pending.id, "  $longest\n")
+
+            assertEquals(HttpStatusCode.OK, response.status)
+            assertEquals(longest, response.body<SubmissionDto>().rejectionReason)
+        }
+
+    @Test
+    fun `without the admin token a decision is refused before its body is read`() =
+        runServer("admin-forbidden-body") { client ->
+            val pending = client.submitted(client.guest(), question("Pending"))
+
+            // Nothing about the request answers a caller without the token: not whether it parses, nor
+            // whether the question exists.
+            listOf(
+                "malformed" to (WyrApi.Paths.ADMIN_APPROVALS to "{not json"),
+                "a real approval" to (WyrApi.Paths.ADMIN_APPROVALS to """{"questionId":"${pending.id}"}"""),
+                "a real rejection" to
+                    (WyrApi.Paths.ADMIN_REJECTIONS to """{"questionId":"${pending.id}","reason":"No"}"""),
+            ).forEach { (case, request) ->
+                val (path, body) = request
+                val response =
+                    client.post(path) {
+                        contentType(ContentType.Application.Json)
+                        setBody(body)
+                    }
+                assertEquals(HttpStatusCode.Forbidden, response.status, case)
+            }
+            assertEquals(listOf(pending), client.queue(), "and nothing was decided")
+        }
+
     /** A server on its own database, moderated with [adminToken], or with moderation off for none. */
     private fun runServer(
         databaseName: String,
@@ -1215,13 +1414,63 @@ class ApiFlowTest {
     private suspend fun HttpClient.queue(query: String = ""): List<SubmissionDto> =
         moderatorQueue(query).body<SubmissionListDto>().submissions
 
-    /** One request to each admin route, carrying no credential but what [credentials] adds. */
+    /**
+     * One request to each admin route, carrying no credential but what [credentials] adds. A decision
+     * names a question that does not exist, so none of them can decide anything.
+     */
     private suspend fun HttpClient.everyAdminRoute(
         credentials: HttpRequestBuilder.() -> Unit,
     ): List<Pair<String, HttpResponse>> =
         listOf(
             "the queue" to get(WyrApi.Paths.ADMIN_SUBMISSIONS) { credentials() },
+            "an approval" to
+                post(WyrApi.Paths.ADMIN_APPROVALS) {
+                    credentials()
+                    contentType(ContentType.Application.Json)
+                    setBody(ApproveSubmissionRequest("no-such-question"))
+                },
+            "a rejection" to
+                post(WyrApi.Paths.ADMIN_REJECTIONS) {
+                    credentials()
+                    contentType(ContentType.Application.Json)
+                    setBody(RejectSubmissionRequest("no-such-question", reason = "No"))
+                },
         )
+
+    /** Approves [questionId] with the test server's admin token, filing it under [categories] if any. */
+    private suspend fun HttpClient.approve(
+        questionId: String,
+        categories: List<QuestionCategory> = emptyList(),
+    ): HttpResponse =
+        post(WyrApi.Paths.ADMIN_APPROVALS) {
+            header(WyrApi.Headers.ADMIN_TOKEN, TEST_ADMIN_TOKEN)
+            contentType(ContentType.Application.Json)
+            setBody(ApproveSubmissionRequest(questionId, categories))
+        }
+
+    private suspend fun HttpClient.reject(
+        questionId: String,
+        reason: String,
+    ): HttpResponse =
+        post(WyrApi.Paths.ADMIN_REJECTIONS) {
+            header(WyrApi.Headers.ADMIN_TOKEN, TEST_ADMIN_TOKEN)
+            contentType(ContentType.Application.Json)
+            setBody(RejectSubmissionRequest(questionId, reason))
+        }
+
+    /** Sends [body] as it is to the admin route [path], with the test server's admin token. */
+    private suspend fun HttpClient.moderate(
+        path: String,
+        body: String,
+    ): HttpResponse =
+        post(path) {
+            header(WyrApi.Headers.ADMIN_TOKEN, TEST_ADMIN_TOKEN)
+            contentType(ContentType.Application.Json)
+            setBody(body)
+        }
+
+    /** A food question to submit, set against its own negation. */
+    private fun question(text: String) = SubmitQuestionRequest(text, "Not $text", listOf(QuestionCategory.FOOD))
 
     private suspend fun HttpClient.me(session: SessionDto): HttpResponse =
         get(WyrApi.Paths.ME) { bearerAuth(session.accessToken) }

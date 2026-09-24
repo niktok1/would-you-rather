@@ -4,12 +4,16 @@ import io.ktor.http.Parameters
 import io.ktor.server.response.respond
 import io.ktor.server.routing.Route
 import io.ktor.server.routing.get
+import io.ktor.server.routing.post
 import io.ntole.wyr.core.api.WyrApi
+import io.ntole.wyr.core.question.ApproveSubmissionRequest
 import io.ntole.wyr.core.question.QuestionStatus
+import io.ntole.wyr.core.question.RejectSubmissionRequest
 import io.ntole.wyr.core.question.SubmissionListDto
 import io.ntole.wyr.server.db.Db
 import io.ntole.wyr.server.plugins.ApiFailure
 import io.ntole.wyr.server.plugins.pageLimit
+import io.ntole.wyr.server.plugins.receiveOrReject
 
 /**
  * The moderator's routes (CLAUDE.md §8d, *Moderation*). The moderator is whoever holds the server's
@@ -33,6 +37,23 @@ fun Route.moderationRoutes(
         val limit = params.pageLimit()
 
         call.respond(SubmissionListDto(db.query { ModerationStore.queue(status, limit) }))
+    }
+
+    post(WyrApi.Paths.ADMIN_APPROVALS) {
+        call.requireAdmin(adminToken)
+
+        // Checked before the transaction, as a submission is: a refusal needs no database.
+        val approval = checkedApproval(call.receiveOrReject<ApproveSubmissionRequest>("approval"))
+
+        call.respond(db.query { ModerationStore.approve(approval.questionId, approval.categories) })
+    }
+
+    post(WyrApi.Paths.ADMIN_REJECTIONS) {
+        call.requireAdmin(adminToken)
+
+        val rejection = checkedRejection(call.receiveOrReject<RejectSubmissionRequest>("rejection"))
+
+        call.respond(db.query { ModerationStore.reject(rejection.questionId, rejection.reason) })
     }
 }
 
