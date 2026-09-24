@@ -13,6 +13,12 @@ package io.ntole.wyr.core.domain.question
  * [answeredBefore] is true when the player has answered this question already and the feed has
  * looped back to it (CLAUDE.md §8d). It is for diagnostics such as the dev console: the
  * player-facing reveal does not show a previous pick.
+ *
+ * [likeCount] is how many players like the question, this one included when [likedByMe], as the
+ * server counted them when it served the question (CLAUDE.md §8d), answered or not: a like count is
+ * visible before answering. A queued question keeps the numbers it was fetched with, so the answer
+ * to a like of the player's own, a [io.ntole.wyr.core.domain.like.QuestionLikes], is newer than
+ * they are, and anyone else's like shows only when the feed next serves the question.
  */
 public data class Question(
     public val id: String,
@@ -20,6 +26,8 @@ public data class Question(
     public val optionB: String,
     public val categories: Set<Category>,
     public val answeredBefore: Boolean = false,
+    public val likeCount: Int = 0,
+    public val likedByMe: Boolean = false,
 ) {
     init {
         require(categories.isNotEmpty()) { "question $id is filed under no category" }
