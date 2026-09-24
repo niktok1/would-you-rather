@@ -16,6 +16,7 @@ import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.koin.core.Koin
+import org.koin.core.context.stopKoin
 import org.koin.dsl.koinApplication
 import org.koin.dsl.module
 import org.koin.mp.KoinPlatform
@@ -42,6 +43,8 @@ class AppModuleTest {
 
     @AfterTest
     fun tearDown() {
+        // For the tests that start the app's own Koin; stopping one that never started does nothing.
+        stopKoin()
         Dispatchers.resetMain()
     }
 
@@ -78,6 +81,23 @@ class AppModuleTest {
             assertEquals(DEV_SESSION, dev.read())
             assertNull(prod.read())
         }
+
+    @Test
+    fun `initKoin starts the environment each entry point's name names`() {
+        mapOf(
+            "local" to WyrEnvironment.LOCAL,
+            "dev" to WyrEnvironment.DEV,
+            "prod" to WyrEnvironment.PROD,
+            null to WyrEnvironment.LOCAL,
+        ).forEach { (name, environment) ->
+            // Only the environment is resolved: the platform's own storage is never built, so nothing
+            // of this machine's is read or written.
+            initKoin(environmentName = name)
+
+            assertEquals(environment, KoinPlatform.getKoin().get<WyrEnvironment>(), "\"$name\"")
+            stopKoin()
+        }
+    }
 
     @Test
     fun `an environment name it does not know stops the app before Koin starts`() {
