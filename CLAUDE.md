@@ -373,17 +373,27 @@ auth SDK, satisfying §2.
 - On the client, `SessionStore` is the only copy of the credentials: Ktor's bearer cache is off
   (`cacheTokens = false`), so a session change applies to the very next request. A dead session
   is replaced through `withSessionRecovery` in `:core:data`, which mints at most one guest for it.
+- *Clients sharing one store* (browser tabs, desktop instances) can both refresh one token, and
+  within the grace the server lets both through, so the store may end up holding the displaced
+  token of the two, which dies with the grace. So a refresh that finds the store moved on to another
+  session of the same player refreshes once more as the stored one, which the server takes either
+  way, and keeps that answer, the latest rotation (`refreshAs` in `WyrHttpClient`,
+  `SharedSessionStoreTest`); the once more is never repeated. A session of another player, or none,
+  is the data layer's change and is kept as it was. The lost-answer case needed no client change:
+  the store still holds the token it sent, and the next 401 sends it again. Nor did session
+  recovery: it acts only on a refusal, which the grace makes rarer.
 - Every client request is bounded (`HttpTimeout` in `WyrHttpClient`: 60 s), past a Render cold
   start. Android and desktop also give up on a connect after 30 s; iOS applies only the 60 s socket
   timeout, which covers connecting, and a browser only the request timeout. A request that spends
   the refresh token takes `refreshTimeout()` instead, 5 minutes: a timeout abandons a refresh as a
-  cancellation does, and with it a token the server has already rotated. It stays bounded because
-  every call rejected meanwhile waits on it, uncancellably.
+  cancellation does, and with it a token the server has already rotated, which the server's grace,
+  10 minutes by default, outlasts so the next call's refresh can still send it. It stays bounded
+  because every call rejected meanwhile waits on it, uncancellably.
 - `TokenStorage.write` returns only once the session would survive the app being killed, for the
-  same reason: after a refresh, the rotated token is the only live one. It suspends so a blocking
-  write can leave the caller's thread (Android `commit()`s on `Dispatchers.IO`, one change at a time
-  and in the order asked, never `apply()`s), and a write asked for lands even if its caller is
-  cancelled meanwhile. A write that cannot be made durable fails the call as `NETWORK`: the data
+  same reason: after a refresh, the rotated token is the only one live past the grace. It suspends
+  so a blocking write can leave the caller's thread (Android `commit()`s on `Dispatchers.IO`, one
+  change at a time and in the order asked, never `apply()`s), and a write asked for lands even if
+  its caller is cancelled meanwhile. A write that cannot be made durable fails the call as `NETWORK`: the data
   layer writes the session through `runApi`, so no bare storage exception reaches a ViewModel.
 
 **Known limitation, by design for now:** a guest account is bound to one device's storage. Lose

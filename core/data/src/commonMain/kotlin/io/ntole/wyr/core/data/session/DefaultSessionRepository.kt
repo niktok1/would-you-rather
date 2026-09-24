@@ -44,7 +44,8 @@ public class DefaultSessionRepository(
      *   Minting again would orphan that guest.
      * - Another client sharing this store (a second browser tab, a second desktop instance)
      *   refreshed it first. The server rotated the refresh token for that client and refused it
-     *   to this one. The session is alive; this request only lost the race.
+     *   to this one, as it does once its grace window has passed (CLAUDE.md §8a); within it, two
+     *   such refreshes both go through. The session is alive; this request only lost the race.
      *
      * That second case keeps the player id, which is why the whole session is compared. A refresh
      * the failed call made itself changes the store too, and deferring recovery to the next call

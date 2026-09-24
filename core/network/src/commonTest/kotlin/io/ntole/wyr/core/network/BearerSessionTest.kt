@@ -1,9 +1,13 @@
 package io.ntole.wyr.core.network
 
 import io.ktor.client.engine.mock.MockEngine
+import io.ktor.client.engine.mock.toByteArray
+import io.ktor.client.request.HttpRequestData
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ntole.wyr.core.api.WyrApi
+import io.ntole.wyr.core.auth.RefreshRequest
+import io.ntole.wyr.core.auth.SessionDto
 import io.ntole.wyr.core.error.ErrorCode
 import io.ntole.wyr.core.network.api.QuestionApi
 import kotlinx.coroutines.CompletableDeferred
@@ -202,6 +206,96 @@ class BearerSessionTest {
             assertEquals(session("a2"), store.read())
             assertEquals(listOf("Bearer access-a", null, "Bearer access-a2"), engine.authorizationHeaders())
         }
+
+    @Test
+    fun `a refresh another client's refresh of the same session overtook is settled on the latest rotation`() =
+        runTest {
+            // Two browser tabs share one store and refresh "refresh-a" at once. The server lets both
+            // through (its grace window, CLAUDE.md §8a): the other tab's answer lands in the store
+            // first, and this one is answered too. Which of the two is the player's current token is
+            // unknown here, and the other is dead once the grace has passed, so one more refresh as
+            // the stored session settles it on the latest rotation.
+            val store = storeHolding(session("a"))
+            val engine =
+                MockEngine { request ->
+                    when {
+                        request.url.encodedPath == WyrApi.Paths.AUTH_REFRESH -> {
+                            when (request.presentedRefreshToken()) {
+                                "refresh-a" -> {
+                                    store.write(rotation("a", 2))
+                                    respondSession(rotation("a", 3))
+                                }
+
+                                "refresh-a2" -> {
+                                    respondSession(rotation("a", 4))
+                                }
+
+                                else -> {
+                                    respondErrorDto(HttpStatusCode.Unauthorized, ErrorCode.INVALID_REFRESH_TOKEN)
+                                }
+                            }
+                        }
+
+                        request.headers[HttpHeaders.Authorization] == "Bearer access-a4" -> {
+                            respondEmptyPage()
+                        }
+
+                        else -> {
+                            respondErrorDto(HttpStatusCode.Unauthorized, ErrorCode.UNAUTHORIZED)
+                        }
+                    }
+                }
+
+            QuestionApi(WyrHttpClient.create(BASE_URL, store, engine)).page()
+
+            assertEquals(rotation("a", 4), store.read())
+            assertEquals(listOf("refresh-a", "refresh-a2"), engine.presentedRefreshTokens())
+            assertEquals(listOf("Bearer access-a", null, null, "Bearer access-a4"), engine.authorizationHeaders())
+        }
+
+    @Test
+    fun `a settling refresh overtaken in its turn is not settled again`() =
+        runTest {
+            // Every refresh holds the bearer provider's lock, uncancellably, so the settling refresh
+            // is made once at most: overtaken again, the call is retried as whatever is stored.
+            val store = storeHolding(session("a"))
+            val engine =
+                MockEngine { request ->
+                    when {
+                        request.url.encodedPath == WyrApi.Paths.AUTH_REFRESH -> {
+                            val presented = request.presentedRefreshToken()
+                            val overtakenBy = if (presented == "refresh-a") 2 else 5
+                            store.write(rotation("a", overtakenBy))
+                            respondSession(rotation("a", overtakenBy + 1))
+                        }
+
+                        request.headers[HttpHeaders.Authorization] == "Bearer access-a5" -> {
+                            respondEmptyPage()
+                        }
+
+                        else -> {
+                            respondErrorDto(HttpStatusCode.Unauthorized, ErrorCode.UNAUTHORIZED)
+                        }
+                    }
+                }
+
+            QuestionApi(WyrHttpClient.create(BASE_URL, store, engine)).page()
+
+            assertEquals(listOf("refresh-a", "refresh-a2"), engine.presentedRefreshTokens())
+            assertEquals(rotation("a", 5), store.read())
+        }
+
+    /** [playerId]'s session after its refresh token has rotated to its [n]th: same player, new tokens. */
+    private fun rotation(
+        playerId: String,
+        n: Int,
+    ): SessionDto = session(playerId).copy(accessToken = "access-$playerId$n", refreshToken = "refresh-$playerId$n")
+
+    private suspend fun HttpRequestData.presentedRefreshToken(): String =
+        WyrJson.decodeFromString<RefreshRequest>(body.toByteArray().decodeToString()).refreshToken
+
+    private suspend fun MockEngine.presentedRefreshTokens(): List<String> =
+        requestHistory.filter { it.url.encodedPath == WyrApi.Paths.AUTH_REFRESH }.map { it.presentedRefreshToken() }
 
     private fun MockEngine.authorizationHeaders(): List<String?> =
         requestHistory.map { it.headers[HttpHeaders.Authorization] }
