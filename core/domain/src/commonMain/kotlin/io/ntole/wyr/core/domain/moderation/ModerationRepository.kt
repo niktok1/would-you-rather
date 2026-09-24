@@ -2,10 +2,11 @@ package io.ntole.wyr.core.domain.moderation
 
 import io.ntole.wyr.core.domain.question.Category
 import io.ntole.wyr.core.domain.submission.Submission
+import io.ntole.wyr.core.domain.submission.SubmissionStatus
 
 /**
- * The players' submissions as the moderator decides them (CLAUDE.md §8d, *Moderation*). Implemented
- * in `:core:data`.
+ * The players' submissions as the moderator decides them, and every question as the moderator
+ * retires and restores it (CLAUDE.md §8d, *Moderation*). Implemented in `:core:data`.
  *
  * Every call sends the [AdminToken] it is given, and nothing here keeps it. None needs a player
  * session or touches the one there is: the moderator is whoever holds the token, not a player. A
@@ -53,4 +54,47 @@ public interface ModerationRepository {
         questionId: String,
         reason: RejectionReason,
     ): Submission
+
+    /**
+     * One page of every question, seeds included, newest first, that [filter] picks: the first page
+     * for no [after], or the one after the page whose [ModeratedQuestionPage.next] [after] is, which
+     * must be asked for with the same [filter]. As many as the server lists at once, read from the
+     * server every time.
+     *
+     * @throws IllegalArgumentException when [filter] holds [SubmissionStatus.OTHER] or
+     *   [Category.OTHER], which name nothing the server can filter by, having sent nothing.
+     * @throws io.ntole.wyr.core.domain.error.WyrException on any other failure, as [pending] does.
+     */
+    public suspend fun questions(
+        token: AdminToken,
+        filter: QuestionFilter,
+        after: QuestionCursor?,
+    ): ModeratedQuestionPage
+
+    /**
+     * Retires the approved question [questionId], a seed included, and returns it as the list now
+     * shows it, [SubmissionStatus.RETIRED]. From then on it is served to nobody until [restore]
+     * restores it, and nothing it earned is taken back.
+     *
+     * @throws io.ntole.wyr.core.domain.error.WyrException on any failure, with
+     *   [io.ntole.wyr.core.domain.error.DomainError.WRONG_STATUS] for a question that is not approved,
+     *   a retired one included, and [io.ntole.wyr.core.domain.error.DomainError.QUESTION_NOT_FOUND] for
+     *   an id no question has.
+     */
+    public suspend fun retire(
+        token: AdminToken,
+        questionId: String,
+    ): ModeratedQuestion
+
+    /**
+     * Restores the retired question [questionId] and returns it as the list now shows it, approved
+     * again: due for every player who has neither answered nor skipped it in their current cycle.
+     *
+     * @throws io.ntole.wyr.core.domain.error.WyrException on any failure, as [retire] does, with
+     *   [io.ntole.wyr.core.domain.error.DomainError.WRONG_STATUS] for a question that is not retired.
+     */
+    public suspend fun restore(
+        token: AdminToken,
+        questionId: String,
+    ): ModeratedQuestion
 }

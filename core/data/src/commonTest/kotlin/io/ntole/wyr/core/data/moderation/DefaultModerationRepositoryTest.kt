@@ -18,21 +18,30 @@ import io.ntole.wyr.core.data.storeHolding
 import io.ntole.wyr.core.domain.error.DomainError
 import io.ntole.wyr.core.domain.error.WyrException
 import io.ntole.wyr.core.domain.moderation.AdminToken
+import io.ntole.wyr.core.domain.moderation.ModeratedQuestion
+import io.ntole.wyr.core.domain.moderation.ModeratedQuestionPage
+import io.ntole.wyr.core.domain.moderation.QuestionCursor
+import io.ntole.wyr.core.domain.moderation.QuestionFilter
 import io.ntole.wyr.core.domain.moderation.RejectionReason
 import io.ntole.wyr.core.domain.question.Category
 import io.ntole.wyr.core.domain.submission.Submission
 import io.ntole.wyr.core.domain.submission.SubmissionStatus
+import io.ntole.wyr.core.domain.vote.Tally
 import io.ntole.wyr.core.error.ErrorCode
 import io.ntole.wyr.core.error.ErrorDto
 import io.ntole.wyr.core.network.SessionStore
 import io.ntole.wyr.core.network.WyrHttpClient
 import io.ntole.wyr.core.network.WyrJson
 import io.ntole.wyr.core.network.api.ModerationApi
+import io.ntole.wyr.core.question.AdminQuestionDto
 import io.ntole.wyr.core.question.ApproveSubmissionRequest
 import io.ntole.wyr.core.question.QuestionCategory
 import io.ntole.wyr.core.question.QuestionStatus
 import io.ntole.wyr.core.question.RejectSubmissionRequest
+import io.ntole.wyr.core.question.RestoreQuestionRequest
+import io.ntole.wyr.core.question.RetireQuestionRequest
 import io.ntole.wyr.core.question.SubmissionDto
+import io.ntole.wyr.core.vote.VoteTallyDto
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -154,6 +163,9 @@ class DefaultModerationRepositoryTest {
                         { moderation.pending(token) },
                         { moderation.approve(token, "q1", emptySet()) },
                         { moderation.reject(token, "q1", reason) },
+                        { moderation.questions(token, QuestionFilter(), after = null) },
+                        { moderation.retire(token, "q1") },
+                        { moderation.restore(token, "q1") },
                     )
 
                 decisions.forEach { decision ->
@@ -215,10 +227,125 @@ class DefaultModerationRepositoryTest {
         runTest {
             val store = storeHolding(null)
 
-            repositoryOver(store).pending(token)
+            val moderation = repositoryOver(store)
+            moderation.pending(token)
+            moderation.questions(token, QuestionFilter(), after = null)
+            moderation.retire(token, "q1")
+            moderation.restore(token, "q1")
 
-            assertEquals(listOf(WyrApi.Paths.ADMIN_SUBMISSIONS), engine.requestHistory.map { it.url.encodedPath })
+            assertEquals(
+                listOf(
+                    WyrApi.Paths.ADMIN_SUBMISSIONS,
+                    WyrApi.Paths.ADMIN_QUESTIONS,
+                    WyrApi.Paths.ADMIN_RETIREMENTS,
+                    WyrApi.Paths.ADMIN_RESTORATIONS,
+                ),
+                engine.requestHistory.map { it.url.encodedPath },
+            )
+            assertEquals(listOf(null), engine.requestHistory.map { it.headers[HttpHeaders.Authorization] }.distinct())
             assertEquals(null, store.read())
+        }
+
+    @Test
+    fun `every question is read a page at a time, the filter by its wire names and the cursor as given`() =
+        runTest {
+            val filter =
+                QuestionFilter(
+                    statuses = setOf(SubmissionStatus.RETIRED, SubmissionStatus.PENDING),
+                    categories = setOf(Category.RANDOM, Category.FOOD),
+                )
+
+            val page = repositoryOver(storeHolding(session("a"))).questions(token, filter, QuestionCursor("c1"))
+
+            val sent = engine.requestHistory.single()
+            assertEquals(WyrApi.Paths.ADMIN_QUESTIONS, sent.url.encodedPath)
+            assertEquals(listOf("PENDING", "RETIRED"), sent.url.parameters.getAll(WyrApi.Query.STATUS))
+            assertEquals(listOf("FOOD", "RANDOM"), sent.url.parameters.getAll(WyrApi.Query.CATEGORY))
+            assertEquals("c1", sent.url.parameters[WyrApi.Query.CURSOR])
+            assertEquals(listOf(token.value), adminTokensSent())
+            assertEquals(
+                ModeratedQuestionPage(
+                    questions =
+                        listOf(
+                            LISTED_RETIRED,
+                            // A seed, filed under a category this build cannot name and at a status it
+                            // cannot name either: still listed, as OTHER.
+                            LISTED_RETIRED.copy(
+                                id = "seed-1",
+                                categories = setOf(Category.FOOD, Category.OTHER),
+                                status = SubmissionStatus.OTHER,
+                                isSeed = true,
+                                reviewedAt = null,
+                                retiredAt = null,
+                            ),
+                        ),
+                    next = QuestionCursor("next-page"),
+                ),
+                page,
+            )
+        }
+
+    @Test
+    fun `the first page is asked for with no filter and no cursor`() =
+        runTest {
+            repositoryOver(storeHolding(null)).questions(token, QuestionFilter(), after = null)
+
+            val parameters =
+                engine.requestHistory
+                    .single()
+                    .url.parameters
+            assertEquals(setOf(WyrApi.Query.LIMIT), parameters.names())
+        }
+
+    @Test
+    fun `a filter by what this build cannot name sends nothing`() =
+        runTest {
+            val moderation = repositoryOver(storeHolding(session("a")))
+
+            listOf(
+                QuestionFilter(statuses = setOf(SubmissionStatus.APPROVED, SubmissionStatus.OTHER)),
+                QuestionFilter(categories = setOf(Category.FOOD, Category.OTHER)),
+            ).forEach { filter ->
+                assertFailsWith<IllegalArgumentException>(
+                    "$filter",
+                ) { moderation.questions(token, filter, after = null) }
+            }
+
+            assertEquals(emptyList(), engine.requestHistory)
+        }
+
+    @Test
+    fun `a retirement and a restoration send the question's id and come back as the list shows it`() =
+        runTest {
+            val moderation = repositoryOver(storeHolding(session("a")))
+
+            assertEquals(LISTED_RETIRED, moderation.retire(token, "q1"))
+            assertEquals(
+                LISTED_RETIRED.copy(status = SubmissionStatus.APPROVED, retiredAt = null),
+                moderation.restore(token, "q1"),
+            )
+
+            assertEquals(
+                listOf(WyrApi.Paths.ADMIN_RETIREMENTS, WyrApi.Paths.ADMIN_RESTORATIONS),
+                engine.requestHistory.map { it.url.encodedPath },
+            )
+            assertEquals(RetireQuestionRequest("q1"), decode<RetireQuestionRequest>(engine.requestHistory[0]))
+            assertEquals(RestoreQuestionRequest("q1"), decode<RestoreQuestionRequest>(engine.requestHistory[1]))
+            assertEquals(listOf(token.value, token.value), adminTokensSent())
+        }
+
+    @Test
+    fun `a retirement or restoration of a question at the wrong status reads as WRONG_STATUS`() =
+        runTest {
+            val moderation = repositoryOver(storeHolding(session("a")))
+            refuseWith = { respondError(HttpStatusCode.Conflict, ErrorDto("not approved", ErrorCode.WRONG_STATUS)) }
+
+            listOf<suspend () -> Unit>({ moderation.retire(token, "q1") }, { moderation.restore(token, "q1") })
+                .forEach { move ->
+                    val failure = assertFailsWith<WyrException> { move() }
+                    assertEquals(DomainError.WRONG_STATUS, failure.error)
+                    assertEquals("not approved", failure.message)
+                }
         }
 
     private suspend fun MockRequestHandleScope.answer(request: HttpRequestData): HttpResponseData {
@@ -246,6 +373,18 @@ class DefaultModerationRepositoryTest {
                 respondJson(
                     WyrJson.encodeToString(PENDING.copy(categories = categories, status = QuestionStatus.APPROVED)),
                 )
+            }
+
+            request.url.encodedPath == WyrApi.Paths.ADMIN_QUESTIONS -> {
+                respondJson(PAGE_JSON)
+            }
+
+            request.url.encodedPath == WyrApi.Paths.ADMIN_RETIREMENTS -> {
+                respondJson(WyrJson.encodeToString(RETIRED))
+            }
+
+            request.url.encodedPath == WyrApi.Paths.ADMIN_RESTORATIONS -> {
+                respondJson(WyrJson.encodeToString(RETIRED.copy(status = QuestionStatus.APPROVED, retiredAt = null)))
             }
 
             request.url.encodedPath == WyrApi.Paths.ADMIN_REJECTIONS -> {
@@ -297,6 +436,47 @@ class DefaultModerationRepositoryTest {
                 status = QuestionStatus.PENDING,
                 submittedAt = SUBMITTED_AT,
             )
+
+        val RETIRED =
+            AdminQuestionDto(
+                id = "q1",
+                optionA = "Fly",
+                optionB = "Swim",
+                categories = listOf(QuestionCategory.SUPERPOWERS),
+                status = QuestionStatus.RETIRED,
+                seed = false,
+                submittedAt = SUBMITTED_AT,
+                reviewedAt = SUBMITTED_AT + 1_000,
+                retiredAt = SUBMITTED_AT + 2_000,
+                tally = VoteTallyDto(votesA = 3, votesB = 1),
+                likeCount = 2,
+            )
+
+        /** [RETIRED], as the domain holds it. */
+        val LISTED_RETIRED =
+            ModeratedQuestion(
+                id = "q1",
+                optionA = "Fly",
+                optionB = "Swim",
+                categories = setOf(Category.SUPERPOWERS),
+                status = SubmissionStatus.RETIRED,
+                isSeed = false,
+                submittedAt = Instant.fromEpochMilliseconds(SUBMITTED_AT),
+                reviewedAt = Instant.fromEpochMilliseconds(SUBMITTED_AT + 1_000),
+                retiredAt = Instant.fromEpochMilliseconds(SUBMITTED_AT + 2_000),
+                rejectionReason = null,
+                tally = Tally(votesA = 3, votesB = 1),
+                likeCount = 2,
+            )
+
+        // A literal, so a category and a status this build has never heard of can be in it.
+        val PAGE_JSON =
+            """{"questions":[""" + WyrJson.encodeToString(RETIRED) + "," +
+                """{"id":"seed-1","optionA":"Fly","optionB":"Swim",""" +
+                """"categories":["CATEGORY_FROM_THE_FUTURE","FOOD"],"status":"STATUS_FROM_THE_FUTURE",""" +
+                """"seed":true,"submittedAt":$SUBMITTED_AT,"reviewedAt":null,""" +
+                """"retiredAt":null,"rejectionReason":null,"tally":{"votesA":3,"votesB":1},"likeCount":2}""" +
+                """],"nextCursor":"next-page"}"""
 
         // A literal, so a category name this build has never heard of can be in it.
         val QUEUE_JSON =

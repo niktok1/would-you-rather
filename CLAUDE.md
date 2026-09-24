@@ -939,7 +939,15 @@ and every request shows in its HTTP trace (`HttpTrace` in `:core:network`, never
     wire's limit, which `:core:domain` cannot see, and `ModerationMapperTest` pins the two equal.
     `ModerationApi.questions` asks for a page of the list, one `?status=` and `?category=` per value
     and the cursor sent back as it came, and `retire` and `restore` post a question's id; each
-    carries the token as the others do.
+    carries the token as the others do. Behind `ModerationRepository` they are `GetQuestions`, a
+    `ModeratedQuestionPage` of `ModeratedQuestion`s for a `QuestionFilter` and the `QuestionCursor`
+    the page before gave (none for the first), and `RetireQuestion` and `RestoreQuestion`, each
+    answered with the `ModeratedQuestion` as the list now shows it; through `runApi` alone, as the
+    rest. A `ModeratedQuestion` holds its categories as a question does, its status as a
+    `SubmissionStatus` (`RETIRED`, or `OTHER` for one this build cannot name), whether it is a seed,
+    its times as instants, its `Tally` and its like count. A filter by `SubmissionStatus.OTHER` or
+    `Category.OTHER` is refused before anything is sent. `WRONG_STATUS` is
+    `DomainError.WRONG_STATUS`.
   - *The console's section* (`io.ntole.wyr.dev.moderation`) takes the token typed and holds it in its
     ViewModel, in memory only: never in saved state or storage, masked, and a password to the keyboard.
     It loads the queue, approves under the categories picked for a submission (none keeps the

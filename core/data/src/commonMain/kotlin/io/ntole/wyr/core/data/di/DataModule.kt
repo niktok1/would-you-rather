@@ -14,8 +14,11 @@ import io.ntole.wyr.core.domain.like.LikeRepository
 import io.ntole.wyr.core.domain.like.SetLike
 import io.ntole.wyr.core.domain.moderation.ApproveSubmission
 import io.ntole.wyr.core.domain.moderation.GetPendingSubmissions
+import io.ntole.wyr.core.domain.moderation.GetQuestions
 import io.ntole.wyr.core.domain.moderation.ModerationRepository
 import io.ntole.wyr.core.domain.moderation.RejectSubmission
+import io.ntole.wyr.core.domain.moderation.RestoreQuestion
+import io.ntole.wyr.core.domain.moderation.RetireQuestion
 import io.ntole.wyr.core.domain.player.GetPlayerStats
 import io.ntole.wyr.core.domain.player.PlayerRepository
 import io.ntole.wyr.core.domain.question.GetNextQuestion
@@ -78,6 +81,9 @@ public fun dataModule(environment: WyrEnvironment): Module =
         factory { GetPendingSubmissions(moderation = get()) }
         factory { ApproveSubmission(moderation = get()) }
         factory { RejectSubmission(moderation = get()) }
+        factory { GetQuestions(moderation = get()) }
+        factory { RetireQuestion(moderation = get()) }
+        factory { RestoreQuestion(moderation = get()) }
 
         // Bound as the concrete type as well: repositories recover a dead session through
         // withSessionRecovery, which is recovery machinery and deliberately not on the domain

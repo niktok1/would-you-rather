@@ -5,7 +5,11 @@ import io.ntole.wyr.core.domain.error.WyrException
 import io.ntole.wyr.core.domain.moderation.AdminToken
 import io.ntole.wyr.core.domain.moderation.ApproveSubmission
 import io.ntole.wyr.core.domain.moderation.GetPendingSubmissions
+import io.ntole.wyr.core.domain.moderation.ModeratedQuestion
+import io.ntole.wyr.core.domain.moderation.ModeratedQuestionPage
 import io.ntole.wyr.core.domain.moderation.ModerationRepository
+import io.ntole.wyr.core.domain.moderation.QuestionCursor
+import io.ntole.wyr.core.domain.moderation.QuestionFilter
 import io.ntole.wyr.core.domain.moderation.RejectSubmission
 import io.ntole.wyr.core.domain.moderation.RejectionReason
 import io.ntole.wyr.core.domain.question.Category
@@ -392,6 +396,23 @@ class ModerationConsoleViewModelTest {
             calls += "reject $questionId ${reason.value}"
             return reject.invoke(questionId, reason)
         }
+
+        // The console decides the queue only; the list of every question is the moderation app's.
+        override suspend fun questions(
+            token: AdminToken,
+            filter: QuestionFilter,
+            after: QuestionCursor?,
+        ): ModeratedQuestionPage = error("the console never lists every question")
+
+        override suspend fun retire(
+            token: AdminToken,
+            questionId: String,
+        ): ModeratedQuestion = error("the console never retires a question")
+
+        override suspend fun restore(
+            token: AdminToken,
+            questionId: String,
+        ): ModeratedQuestion = error("the console never restores a question")
     }
 
     private companion object {

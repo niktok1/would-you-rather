@@ -3,9 +3,11 @@ package io.ntole.wyr.core.domain.moderation
 import io.ntole.wyr.core.domain.question.Category
 import io.ntole.wyr.core.domain.submission.Submission
 import io.ntole.wyr.core.domain.submission.SubmissionStatus
+import io.ntole.wyr.core.domain.vote.Tally
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertNotNull
 import kotlin.time.Instant
 
@@ -52,6 +54,41 @@ class ModerationUseCasesTest {
             assertEquals(listOf(token), moderation.tokens)
         }
 
+    @Test
+    fun `every question is listed a page at a time with the token, the filter and the cursor`() =
+        runTest {
+            val filter = QuestionFilter(setOf(SubmissionStatus.RETIRED), setOf(Category.FOOD))
+
+            val first = GetQuestions(moderation)(token)
+            val next = GetQuestions(moderation)(token, filter, after = first.next)
+
+            assertEquals(PAGE, first)
+            assertEquals(PAGE, next)
+            assertEquals(
+                listOf(
+                    "questions ${QuestionFilter()} null",
+                    "questions $filter ${first.next}",
+                ),
+                moderation.calls,
+            )
+            assertEquals(listOf(token, token), moderation.tokens)
+        }
+
+    @Test
+    fun `a retirement and a restoration send the question's id with the token`() =
+        runTest {
+            assertEquals(LISTED.copy(status = SubmissionStatus.RETIRED), RetireQuestion(moderation)(token, "q1"))
+            assertEquals(LISTED, RestoreQuestion(moderation)(token, "q1"))
+
+            assertEquals(listOf("retire q1", "restore q1"), moderation.calls)
+            assertEquals(listOf(token, token), moderation.tokens)
+        }
+
+    @Test
+    fun `a question the moderator lists is filed under one category at least`() {
+        assertFailsWith<IllegalArgumentException> { LISTED.copy(categories = emptySet()) }
+    }
+
     private class RecordingModeration : ModerationRepository {
         val calls = mutableListOf<String>()
         val tokens = mutableListOf<AdminToken>()
@@ -81,6 +118,34 @@ class ModerationUseCasesTest {
             calls += "reject $questionId ${reason.value}"
             return PENDING.copy(status = SubmissionStatus.REJECTED, rejectionReason = reason.value)
         }
+
+        override suspend fun questions(
+            token: AdminToken,
+            filter: QuestionFilter,
+            after: QuestionCursor?,
+        ): ModeratedQuestionPage {
+            tokens += token
+            calls += "questions $filter $after"
+            return PAGE
+        }
+
+        override suspend fun retire(
+            token: AdminToken,
+            questionId: String,
+        ): ModeratedQuestion {
+            tokens += token
+            calls += "retire $questionId"
+            return LISTED.copy(status = SubmissionStatus.RETIRED)
+        }
+
+        override suspend fun restore(
+            token: AdminToken,
+            questionId: String,
+        ): ModeratedQuestion {
+            tokens += token
+            calls += "restore $questionId"
+            return LISTED
+        }
     }
 
     private companion object {
@@ -94,5 +159,23 @@ class ModerationUseCasesTest {
                 rejectionReason = null,
                 submittedAt = Instant.fromEpochMilliseconds(1_790_000_000_000L),
             )
+
+        val LISTED =
+            ModeratedQuestion(
+                id = "q1",
+                optionA = "Fly",
+                optionB = "Swim",
+                categories = setOf(Category.SUPERPOWERS),
+                status = SubmissionStatus.APPROVED,
+                isSeed = false,
+                submittedAt = Instant.fromEpochMilliseconds(1_790_000_000_000L),
+                reviewedAt = Instant.fromEpochMilliseconds(1_790_000_001_000L),
+                retiredAt = null,
+                rejectionReason = null,
+                tally = Tally(votesA = 2, votesB = 1),
+                likeCount = 1,
+            )
+
+        val PAGE = ModeratedQuestionPage(listOf(LISTED), next = QuestionCursor("after-q1"))
     }
 }
