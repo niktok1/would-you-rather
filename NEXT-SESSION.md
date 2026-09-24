@@ -234,9 +234,12 @@ known `PlayViewModel` issues (the Play tab is frozen).
 - **The wire enum rule (§5) is load-bearing and easy to break silently.** It only works because
   `WyrJson` sets `coerceInputValues = true` *and* `ServerJson` sets `encodeDefaults = true`.
   Remove either and the `UNKNOWN` defaults become decorative. `WyrJsonTest` in `:core:network`
-  pins the client half. The server's `encodeDefaults` is pinned only by `ApiFlowTest`'s fresh-guest
-  stats test, which checks every stats field is sent at its default, and a server-side slip only
-  breaks client builds older than the server.
+  pins the client half. The server's `encodeDefaults` is pinned by `ApiFlowTest`'s fresh-guest
+  stats test, which checks every stats field is sent at its default, and by `ServerJsonTest`, which
+  checks an empty list of categories is sent too; a server-side slip only breaks client builds older
+  than the server. A **list** of categories needs `QuestionCategoryListSerializer` on top, because
+  coercion never reaches a list's elements: drop it from a property and one new category fails a
+  whole batch on every older client.
 - **Exposed 1.x renamed everything.** Packages are `org.jetbrains.exposed.v1.*`, and
   `SqlExpressionBuilder.eq` is deprecated *as an error* — import the top-level `eq` instead.
   Expect to hit this again the first time you write a new query.
