@@ -26,6 +26,7 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
@@ -850,12 +851,19 @@ class DevConsoleViewModelTest {
         var next: suspend () -> Question = { QUESTION }
         var skip: suspend (String) -> Unit = {}
 
+        override val category = MutableStateFlow<Category?>(null)
+
         override suspend fun next(): Question {
             calls += "next"
             return next.invoke()
         }
 
         override suspend fun prefetch() = Unit
+
+        override suspend fun setCategory(category: Category?) {
+            calls += "setCategory $category"
+            this.category.value = category
+        }
 
         override suspend fun skip(questionId: String) {
             calls += "skip $questionId"

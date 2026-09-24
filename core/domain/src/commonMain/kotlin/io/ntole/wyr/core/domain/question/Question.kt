@@ -32,4 +32,13 @@ public enum class Category {
     SUPERPOWERS,
     RANDOM,
     OTHER,
+    ;
+
+    public companion object {
+        /**
+         * Every category the feed can be filtered to, in declaration order: all but [OTHER], which
+         * holds whatever this build cannot name, so there is nothing to ask the server for by it.
+         */
+        public val selectable: List<Category> = entries.filter { it != OTHER }
+    }
 }

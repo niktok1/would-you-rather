@@ -42,6 +42,14 @@ class QuestionMapperTest {
     }
 
     @Test
+    fun `the categories a feed can be filtered to are every one the server knows`() {
+        assertEquals(
+            QuestionCategory.entries.filter { it != QuestionCategory.UNKNOWN },
+            Category.selectable.map { it.toWireOrNull() },
+        )
+    }
+
+    @Test
     fun `OTHER has no wire category to ask for`() {
         // Never UNKNOWN: that is a sentinel for what the client cannot read, not a filter.
         assertNull(Category.OTHER.toWireOrNull())

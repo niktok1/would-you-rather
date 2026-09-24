@@ -1,6 +1,8 @@
 package io.ntole.wyr.core.domain.question
 
 import io.ntole.wyr.core.domain.session.SessionRepository
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -21,9 +23,13 @@ class SkipQuestionTest {
     private class RecordingQuestions(
         private val calls: MutableList<String>,
     ) : QuestionRepository {
+        override val category: StateFlow<Category?> = MutableStateFlow(null)
+
         override suspend fun next(): Question = error("a skip fetches nothing")
 
         override suspend fun prefetch() = Unit
+
+        override suspend fun setCategory(category: Category?) = Unit
 
         override suspend fun skip(questionId: String) {
             calls += "skip $questionId"

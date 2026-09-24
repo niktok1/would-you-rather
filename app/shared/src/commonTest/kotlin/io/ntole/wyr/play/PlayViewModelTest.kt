@@ -15,6 +15,8 @@ import io.ntole.wyr.core.domain.vote.VoteOutcome
 import io.ntole.wyr.core.domain.vote.VoteRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
@@ -213,9 +215,13 @@ class PlayViewModelTest {
     }
 
     private class FakeQuestionRepository : QuestionRepository {
+        override val category: StateFlow<Category?> = MutableStateFlow(null)
+
         override suspend fun next(): Question = QUESTION
 
         override suspend fun prefetch() = Unit
+
+        override suspend fun setCategory(category: Category?) = Unit
 
         override suspend fun skip(questionId: String) = Unit
 
@@ -225,9 +231,13 @@ class PlayViewModelTest {
     private class FailingQuestionRepository(
         private val error: DomainError,
     ) : QuestionRepository {
+        override val category: StateFlow<Category?> = MutableStateFlow(null)
+
         override suspend fun next(): Question = throw WyrException(error)
 
         override suspend fun prefetch() = Unit
+
+        override suspend fun setCategory(category: Category?) = Unit
 
         override suspend fun skip(questionId: String) = Unit
 
