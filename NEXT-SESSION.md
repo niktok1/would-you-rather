@@ -117,6 +117,23 @@ Repo initialized on `main` with the personal identity and `user.useConfigOnly = 
   made it 2, and `GET /v1/me` showed the author 2 points and `likesReceived` 2; the fan's feed showed
   the question at 2, liked by them and not answered; the fan's unlike, twice, left 1 and took one
   point back once; a seed's like answered 1; a body without `liked` was 400 and no token 401.
+- The likes client (`feat/question-likes`) against a live `:server:run` on H2, with `PORT` and
+  `ADMIN_TOKEN` set: a throwaway JVM test, not committed, drove `DevConsoleViewModel` and the use
+  cases from the real Koin graph through the real CIO client, as two guests. The author submitted a
+  question, approved it through `ApproveSubmission`, answered one question (stats agreed, total 1),
+  and paged *Next question* to their own: `likeCount` 0, `likedByMe` false. *Like* showed it at 1,
+  liked, logged `setLike(... liked=true)`, and the stats read after showed total 2 and
+  `likesReceived` 1, with `likesMovedSinceOutcome` and no mismatch. A second guest's `SetLike` made it
+  2 and the author's *Read stats* total 3 and 2 received. The author's *Unlike* left it at 1, not
+  liked, and the stats at total 2 and 1 received. The fan's feed then served the question at 1,
+  `likedByMe` true, not answered; a seed liked twice answered 1 both times and unliked 0. The trace
+  showed each like as `POST /v1/likes` 200. In the tests, `LikeApiTest` pins the request (an unlike
+  writes `liked: false` out) and a refusal's code; `LikeMapperTest`, `QuestionMapperTest` and
+  `PlayerMapperTest` the new fields, with a count the player is not part of; `SetLikeTest` the session
+  first; `DefaultLikeRepositoryTest` the first launch's like going out once, recovery after a 401
+  sending the same body, a like lost to `NETWORK` asked for again and held once, and a 404 leaving the
+  session alone, all through `MockEngine`; and `DevConsoleViewModelTest` the Like button and the
+  likes-moved comparison.
 - Live curl run against `./gradlew :server:run` confirmed guest auth, paging, voting,
   refresh-token rotation, replay rejection, and the `ErrorDto` envelope on 400/401/404/409. That
   run predates flat scoring, `fix/read-committed` and the endless feed, so the scoring it checked
@@ -179,11 +196,11 @@ Repo initialized on `main` with the personal identity and `user.useConfigOnly = 
   id)` index. The client has sent moderation requests only from the JVM (the live run above), and no
   browser has sent `X-Admin-Token`: only `CorsTest` has seen its preflight. Nobody has looked at the
   console's *Moderation* section on any platform.
-- **Likes on Postgres, and in any client.** Two first likes racing on the key (the 23505 aborts the
-  transaction and Exposed reruns it), two unlikes queuing on one row, the grouped count with its
-  `COUNT(CASE ...)` and the stats' subquery have run only on H2 (`LikeStoreTest` polls H2's
-  `SESSIONS`). No client sends a like yet, and none reads `likeCount`, `likedByMe` or
-  `likesReceived`.
+- **Likes on Postgres, and in any client but the JVM.** Two first likes racing on the key (the 23505
+  aborts the transaction and Exposed reruns it), two unlikes queuing on one row, the grouped count
+  with its `COUNT(CASE ...)` and the stats' subquery have run only on H2 (`LikeStoreTest` polls H2's
+  `SESSIONS`). The client has sent likes only from the JVM (the live run above), and nobody has
+  looked at the console's Like button or its likes lines on any platform.
 - **Multiple categories on Postgres, and in the client.** The `EXISTS ... IN` filter, the batch's
   second statement for its categories and the batch insert of a submission's categories have run
   only on H2. On the client, several categories per question and a selection of several have run
@@ -295,7 +312,13 @@ The app opens on the **Console** tab (`io.ntole.wyr.dev`). **Play** is the froze
   each one this build cannot name. *A* / *B* answer it, each tap as a new attempt, and the raw
   `VoteOutcome` appears below, `replayed` included. A question the feed looped back to shows
   `answeredBefore: true` and logs as `question=<id> looped`. The header's total points is the last
-  outcome's `totalPoints`; the Stats section has the server's own count.
+  outcome's `totalPoints`; the Stats section has the server's own count. The question shows its
+  `likeCount` and `likedByMe` too, answered or not. *Like* (*Unlike* while `likedByMe`) sets the
+  player's like of it (`POST /v1/likes`), logged as `setLike(questionId=<id> liked=<bool>)` with the
+  server's answer, `question=<id> likes=<n> likedByMe=<bool>`, which the question then shows; the
+  stats are read after. A like that fails leaves the question as it was, so pressing again asks for
+  the same, which the server holds once. Liking your own question pays you a point: submit one,
+  approve it (*Moderating*), and page *Next question* until it comes up.
 - **Retry last vote (same attempt)**, under Play. Sends the last vote again unchanged, attempt id
   included, whether or not it got an answer. While it is still that question's latest answer the server
   replays it, logged as `+0 total=<n> replayed`. A vote that never landed is paid as an answer.
@@ -307,8 +330,9 @@ The app opens on the **Console** tab (`io.ntole.wyr.dev`). **Play** is the froze
   random order and the 25th logs `looped`: it is the first question of cycle 2, which serves all
   24 again in a new random order.
 - **Stats.** Every number `GET /v1/me` returns: total points, answers given (re-answers count,
-  replays do not), distinct questions answered, the cycle, and how many questions are still due in
-  it. Read when the console opens, after every vote, *Skip*, *Answer N* and *New guest*, and on
+  replays do not), distinct questions answered, the cycle, how many questions are still due in it,
+  and the likes the player's own questions hold (`likesReceived`). Read when the console opens, after
+  every vote, *Skip*, *Like*, *Answer N* and *New guest*, and on
   *Read stats*. *Read stats* is an action like any other, logged as `readStats` whether it works or
   not. The other reads are logged only when they fail, as `refreshStats`. A read that fails keeps
   what was shown, which after a vote is nothing: a vote's outcome drops the stats it outdated. A red
@@ -316,7 +340,10 @@ The app opens on the **Console** tab (`io.ntole.wyr.dev`). **Play** is the froze
   answer was lost (*Retry last vote* replays it, and the flag goes), a vote from the Play tab, or a
   bug. The two are compared only for one player. A read the server refused as a dead session (a
   restarted `:server:run` does that) recovers it, and the stats are then a fresh guest's: instead of
-  the flag, Stats shows `lastOutcome: paid to <id>, not compared`. **To see the lazy cycle start:**
+  the flag, Stats shows `lastOutcome: paid to <id>, not compared`. A like of one of the player's
+  questions, theirs or anyone's, moves the total without a vote, so once `likesReceived` differs from
+  what the first read after the last vote counted, Stats shows `lastOutcome: likesReceived was <n>
+  then, not compared` instead of the flag. **To see the lazy cycle start:**
   once the last due question is answered or skipped, Stats shows the finished cycle with
   `dueThisCycle: 0`. The next cycle starts only when the feed is next asked for questions, which the
   console does when its queue is empty (*Next question*, *Skip*, or the next answer of *Answer N*).

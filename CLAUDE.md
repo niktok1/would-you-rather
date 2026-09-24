@@ -515,7 +515,7 @@ and every request shows in its HTTP trace (`HttpTrace` in `:core:network`, never
   **like any other player** and may answer, skip and like them; the user chose the simpler logic.
   `QuestionStore.servable` is the one predicate the feed, the due count and votes, skips and likes
   (`QuestionStore.isServable`) read, and it asks only that a moderator approved the question.
-- **Likes** *(server built, client next)*: any player may like any question, **their own
+- **Likes** *(built)*: any player may like any question, **their own
   included**, at any time (before or after answering), once each, and may unlike it. Each like
   currently held is **+1 point to the author**, and unliking takes that point back. The like count
   is visible before answering. For now likes do nothing else; serving questions by quality is a
@@ -538,6 +538,20 @@ and every request shows in its HTTP trace (`HttpTrace` in `:core:network`, never
     `likesReceived` (*Stats*). Nothing about a like touches the tally, the cycle or what is due.
   - No author travels on the wire, so the result carries no points: an author sees theirs in their
     stats. `SubmissionDto` carries no like count yet.
+  - *The client* is `LikeRepository` in `:core:domain`, behind `SetLike`, which ensures a session
+    first. `DefaultLikeRepository` sends the `LikeRequest` through `withSessionRecovery`, as votes and
+    skips go, and the retry after a recovered session sends the same `liked`, so a resend can never
+    undo the like; nothing resends after any other failure. The answer is a `QuestionLikes`. A
+    `Question` carries `likeCount` and `likedByMe` as the feed served them (`QuestionMapper`), and a
+    queued one keeps them as fetched; `PlayerStats` carries `likesReceived`.
+  - *The console* shows both on the question in its Play section, beside a Like button (Unlike while
+    the player likes it). It asks for the opposite of what the question on screen shows, then puts
+    the server's answer on that question, and only on the one it names. So a like lost to `NETWORK`
+    leaves the question as it was, and pressing again asks for the like again. It reads the stats
+    after every like, a failed one too, and shows `likesReceived`. Since a like moves its author's
+    total without a vote, the console compares its stats with the last vote's total only while they
+    count as many likes received as the first read after that vote did (`likesMovedSinceOutcome`),
+    and works out no points itself.
 - **Submitting** *(built; details decided 2026-09-23)*: earns no points
   directly, because authors earn through likes. The author writes both options and **picks one or
   more categories** (each a real one, not `UNKNOWN`; *Categories*). A player may have at most **20
