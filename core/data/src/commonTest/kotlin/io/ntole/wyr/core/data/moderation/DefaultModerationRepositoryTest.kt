@@ -197,7 +197,8 @@ class DefaultModerationRepositoryTest {
     @Test
     fun `a 401 from an admin route never replaces the player's session`() =
         runTest {
-            // The server never sends one there; a proxy might. The Auth plugin refreshes the player's
+            // The server never sends one there. This one carries its ErrorDto, so it reads as a dead
+            // session, as a proxy's bare 401 would not. The Auth plugin refreshes the player's
             // session, as it does on every 401, but nothing mints a guest in its place.
             val store = storeHolding(session("a"))
             refuseWith = { respondError(HttpStatusCode.Unauthorized, ErrorDto("not here", ErrorCode.UNAUTHORIZED)) }

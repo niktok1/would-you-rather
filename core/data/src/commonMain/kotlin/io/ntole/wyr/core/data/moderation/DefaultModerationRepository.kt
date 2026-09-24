@@ -17,8 +17,9 @@ import io.ntole.wyr.core.network.api.ModerationApi
  *
  * Through [runApi] alone, never `withSessionRecovery`, and with no session to hand: the admin routes
  * answer a wrong token 403, never 401, and no player session is the moderator's to recover. A 401
- * from one anyway, a proxy's say, reaches the caller as `UNAUTHORIZED`, instead of throwing the
- * player's session away for a new guest.
+ * from one anyway still has the Auth plugin refresh the player's session, as every 401 does, but
+ * nothing mints a guest in its place: it reaches the caller as `UNAUTHORIZED` when it carries the
+ * server's `ErrorDto`, and as `UNKNOWN` without one, a proxy's say.
  */
 public class DefaultModerationRepository(
     private val api: ModerationApi,
