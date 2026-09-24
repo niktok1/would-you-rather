@@ -11,7 +11,7 @@ Repo initialized on `main` with the personal identity and `user.useConfigOnly = 
 
 ### Verified working
 
-- `:server` on H2: 110 tests green, including 44 end-to-end flow tests in `ApiFlowTest`. Flat
+- `:server` on H2: 123 tests green, including 46 end-to-end flow tests in `ApiFlowTest`. Flat
   scoring is covered there (every vote pays 1, majority and minority alike, and the total
   accumulates) and by `PlayerStoreTest`, which races awards for one player and refreshes of one
   token. The endless feed, re-answering and attempt replay are covered there too, and by
@@ -29,7 +29,18 @@ Repo initialized on `main` with the personal identity and `user.useConfigOnly = 
   401s), by `SubmissionStoreTest`, which races two submissions for the last pending place at 19,
   and by `ServableQuestionsTest`, which pins what the one servable predicate lets through. The flow
   tests also pass against one shared database (`WYR_TEST_JDBC_URL` at a shared H2), so the per-test
-  drop copes with the new questions-to-players key.
+  drop copes with the new questions-to-players key, and with `question_categories`.
+  Multiple categories (`feat/multi-category`, server and contract only): `QuestionStoreTest` pins a
+  question in several categories served once with all of them in declaration order, a filter of
+  one or two categories serving each matching question once (an `EXISTS`, and a join mutation fails
+  it), the two as one pool, served again only once nothing in it is due, the due count over a set,
+  and that a batch reads its categories in the same number of statements whatever its size.
+  `ApiFlowTest` covers the repeated `?category=`, the 400s for `UNKNOWN`, an unknown name, a
+  comma-separated list and an empty value, and submitting under several (deduplicated and ordered,
+  and listed back the same) with the 400s for none and for `UNKNOWN`. `SubmissionStoreTest` pins
+  the rows, and the author's list in the same number of statements whatever its length.
+  `WyrJsonTest` and `ServerJsonTest` pin an unknown name in a list decoding as `UNKNOWN` on both
+  sides.
 - Live curl run against `./gradlew :server:run` confirmed guest auth, paging, voting,
   refresh-token rotation, replay rejection, and the `ErrorDto` envelope on 400/401/404/409. That
   run predates flat scoring, `fix/read-committed` and the endless feed, so the scoring it checked
@@ -45,7 +56,7 @@ Repo initialized on `main` with the personal identity and `user.useConfigOnly = 
   the next batch. That run predates feed cycles (`feat/feed-cycles`): the least-recently-answered
   loop it saw is gone, and cycles have run only in the server tests. It also predates server-side
   skips (`feat/skip-per-cycle`), which keep a skipped question out until the next cycle.
-- Client tests: `:core:domain` 12, `:core:data` 56, `:core:network` 25, `:app:shared` 52 (the
+- Client tests: `:core:domain` 12, `:core:data` 69, `:core:network` 29, `:app:shared` 58 (the
   ViewModels and the Koin graph). `:app:shared` compiles for JVM, JS, wasmJs and the iOS
   simulator.
 - `:app:androidApp:assembleDebug` produces a real APK.
@@ -71,6 +82,10 @@ Repo initialized on `main` with the personal identity and `user.useConfigOnly = 
   (`SubmissionStoreTest` polls H2's `SESSIONS`); on PostgreSQL it is documented behaviour, not
   something a test here has seen. No client sends a submission yet, so both endpoints have run only
   in the server's own tests; the client and the console's section are the next branch.
+- **Multiple categories on Postgres, and in the client.** The `EXISTS ... IN` filter, the batch's
+  second statement for its categories and the batch insert of a submission's categories have run
+  only on H2. The client still holds one category per question (the first it can name) and filters
+  by one at most: the domain, the repository and the console are the next step on this branch.
 - **READ COMMITTED and the refresh compare-and-set on Postgres.** Every race and burst in
   `PlayerStoreTest` runs on H2, even in the `server-postgres` job: it hardcodes `jdbc:h2:mem:`,
   because its wait-for-the-lock polling reads H2's `INFORMATION_SCHEMA.SESSIONS`. So the ci.yml
