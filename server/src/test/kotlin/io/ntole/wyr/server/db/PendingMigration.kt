@@ -7,6 +7,40 @@ import org.jetbrains.exposed.v1.migration.jdbc.MigrationUtils
 import javax.sql.DataSource
 
 /**
+ * Prints what the next migration has to hold (CLAUDE.md §8b): the statements exposed-migration finds
+ * between the committed scripts and the table definitions in `Tables.kt`.
+ *
+ * Run it with `./gradlew :server:pendingMigration` after changing a definition. It migrates an empty
+ * H2 database with every committed script, then asks exposed-migration what would make it match
+ * [appTables], and does the same on the external database when `WYR_TEST_JDBC_URL` names one, which
+ * it wipes first, as the test suite does.
+ *
+ * What it prints is a draft, not the script. Write it as one `V<n>__<what_it_does>.sql` that runs on
+ * both engines, the identifiers unquoted and in lower case as in V1, and check what it does to rows
+ * already there: a new NOT NULL column needs a default or a backfill, and exposed-migration drops a
+ * column the definitions no longer have, with its data. SchemaDriftTest then holds the script to the
+ * definitions on both engines.
+ */
+fun main() {
+    for (engine in SchemaTestEngine.all()) {
+        engine.emptyDatabase("pending").serverPool().use { pool ->
+            Migrations.migrate(pool)
+            val version = checkNotNull(serverFlyway(pool).info().current()) { "no script ran" }.version.version
+            val statements = pendingStatements(pool)
+
+            println()
+            println("-- $engine, migrated to V$version:")
+            if (statements.isEmpty()) {
+                println("-- nothing pending: the scripts already build what Tables.kt describes.")
+            } else {
+                println("-- V${version.toInt() + 1}__<what_it_does>.sql")
+                statements.forEach { println("$it;") }
+            }
+        }
+    }
+}
+
+/**
  * The statements exposed-migration would run to make the database behind [dataSource] match
  * [appTables]: missing tables, columns, indexes and constraints, columns and indexes the definitions
  * no longer have, and columns whose type, nullability or default differs.

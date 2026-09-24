@@ -484,6 +484,15 @@ production; `SchemaUtils.create` is left to the store tests.
   still change to match `appTables`, and on any difference from the schema `SchemaUtils.create`
   builds, names included, which exposed-migration does not compare. On H2 it leaves out the drops
   exposed-migration drafts for the indexes H2 makes by itself for foreign keys.
+- *Adding a migration.* Change the definition in `Tables.kt`, then run
+  `./gradlew :server:pendingMigration`: it migrates an empty H2 database, and the one
+  `WYR_TEST_JDBC_URL` names if set, which it wipes, and prints what exposed-migration would still run
+  on each to match the definitions. That is a draft. Write it as the next
+  `V<n>__<what_it_does>.sql` beside V1, in lower case and unquoted so it runs on both engines, and
+  make it right for the rows already there: a new NOT NULL column needs a default or a backfill, and a
+  drop takes its data with it. `SchemaDriftTest` then holds the script to the definitions on H2 and,
+  in CI, on PostgreSQL. The first script after V1 also moves `MigrationsTest`'s pre-migration
+  database onto V1, as its KDoc says.
 - *A script that has shipped never changes*: Flyway refuses to boot on a changed checksum. A script
   whose name Flyway cannot read fails the boot rather than being skipped (`validateMigrationNaming`),
   and clean is refused outright (`cleanDisabled`); the test harness alone turns it on, to wipe the

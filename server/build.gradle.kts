@@ -41,8 +41,8 @@ dependencies {
     // Dev/test database so the server runs with no external Postgres. Never used in production.
     implementation(libs.h2)
 
-    // Compares a migrated schema with the table definitions (SchemaDriftTest). Test scope only:
-    // nothing in production diffs a schema.
+    // Compares a migrated schema with the table definitions (SchemaDriftTest) and drafts the next
+    // migration (pendingMigration, below). Test scope only: nothing in production diffs a schema.
     testImplementation(libs.exposed.migrationJdbc)
     testImplementation(libs.ktor.serverTestHost)
     testImplementation(libs.ktor.clientContentNegotiation)
@@ -61,6 +61,16 @@ tasks.shadowJar {
         duplicatesStrategy = DuplicatesStrategy.INCLUDE
     }
     mergeServiceFiles()
+}
+
+// Drafts the next migration (CLAUDE.md §8b): prints what exposed-migration finds between the
+// committed scripts and the table definitions, on H2, and on WYR_TEST_JDBC_URL's database when that
+// is set, which it wipes first as the tests do.
+tasks.register<JavaExec>("pendingMigration") {
+    group = "help"
+    description = "Prints the statements the table definitions need beyond the committed migrations."
+    classpath = sourceSets.test.get().runtimeClasspath
+    mainClass = "io.ntole.wyr.server.db.PendingMigrationKt"
 }
 
 tasks.test {

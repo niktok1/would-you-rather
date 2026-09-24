@@ -22,14 +22,18 @@ internal class SchemaDriftTest(
     /**
      * What exposed-migration would run to make a freshly migrated database match the definitions:
      * nothing, or a definition changed without its script. The failure lists the statements, which
-     * are the draft of the missing script.
+     * are the draft of the missing script, as `./gradlew :server:pendingMigration` prints it.
      */
     @Test
     fun `a migrated database leaves exposed-migration nothing to change`() {
         engine.emptyDatabase("drift").serverPool().use { pool ->
             Migrations.migrate(pool)
 
-            assertEquals(emptyList(), pendingStatements(pool), "the table definitions changed without a migration")
+            assertEquals(
+                emptyList(),
+                pendingStatements(pool),
+                "the table definitions changed without a migration; ./gradlew :server:pendingMigration drafts it",
+            )
         }
     }
 
