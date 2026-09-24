@@ -54,41 +54,56 @@ object PlayerStore {
      * transaction.
      *
      * A refresh may spend a player's current token until it expires, and the token the last rotation
-     * displaced (CLAUDE.md §8a) for [graceMillis] after that rotation, never past its own expiry; a
-     * [graceMillis] of 0 accepts the current token alone. Either way the swap is the same: the token
-     * current until now becomes the previous one, stamped [now], and [newHash] the current one. So a
-     * token works twice at most. Spent while current, it becomes the previous one, which one more
-     * refresh may spend within the grace; spent as the previous one, it is displaced by the token
-     * current then, which becomes the previous one in its place, and it never works again.
+     * displaced (CLAUDE.md §8a) until the next rotation displaces it in turn, never past its own expiry.
+     * A [graceMillis] bounds that in time as well, to so long after the rotation that displaced it, and
+     * 0 accepts the current token alone; null, the server's default, sets no time bound. Either way the
+     * swap is the same: the token current until now becomes the previous one, stamped [now], and
+     * [newHash] the current one. So a token works twice at most. Spent while current, it becomes the
+     * previous one, which one more refresh may spend until the new token's first use displaces it;
+     * spent as the previous one, it is displaced by the token current then, which becomes the previous
+     * one in its place, and it never works again. The stamp is written with no bound too: a bound set
+     * later reads it, and so does a rollback to a build that bounds the grace by default.
      *
-     * Returns `null` alike for an unknown, an expired, a spent and a displaced token past its grace —
-     * the caller must not be able to tell them apart, and neither should an attacker probing the
-     * endpoint.
+     * Returns `null` alike for an unknown, an expired, a spent and a displaced token, and one past a
+     * bound — the caller must not be able to tell them apart, and neither should an attacker probing
+     * the endpoint.
      *
      * One `UPDATE` both checks and swaps: a compare-and-set whose `WHERE` holds everything the swap
      * relies on, with nothing read before it. At READ COMMITTED a second refresh presenting the same
      * token waits on the first's row lock and then re-checks that `WHERE` against the row the first
      * committed, so it never swaps from the state the first swapped from. Of two presenting the current
-     * token, the second finds it the previous one by then and still spends it within the grace, so both
-     * go through and the first's new token is the previous one; of two presenting the previous token,
-     * the second finds it gone and is refused. An update by id after a read, or with the hash in its
-     * `WHERE` and not the rest, lets both through from one state: two live sessions from one token, one
-     * of them never displaced.
+     * token, the second finds it the previous one by then and still spends it, so both go through and
+     * the first's new token is the previous one; of two presenting the previous token, the second finds
+     * it gone and is refused. An update by id after a read, or with the hash in its `WHERE` and not the
+     * rest, lets both through from one state: two live sessions from one token, one of them never
+     * displaced.
      */
     fun rotateRefreshToken(
         presentedHash: String,
         newHash: String,
         expiresAt: Long,
-        graceMillis: Long,
+        graceMillis: Long?,
         now: Long = System.currentTimeMillis(),
     ): Player? {
         val spendableAsCurrent =
             (Players.refreshTokenHash eq presentedHash) and (Players.refreshTokenExpiresAt greater now)
         val spendableAsPrevious =
-            (Players.previousRefreshTokenHash eq presentedHash) and
-                (Players.previousRefreshTokenExpiresAt greater now) and
-                (Players.previousRefreshTokenRotatedAt greater now - graceMillis)
-        val spendable = if (graceMillis > 0) spendableAsCurrent or spendableAsPrevious else spendableAsCurrent
+            (Players.previousRefreshTokenHash eq presentedHash) and (Players.previousRefreshTokenExpiresAt greater now)
+        val spendable =
+            when {
+                graceMillis == null -> {
+                    spendableAsCurrent or spendableAsPrevious
+                }
+
+                graceMillis > 0 -> {
+                    val displacedWithinBound = Players.previousRefreshTokenRotatedAt greater now - graceMillis
+                    spendableAsCurrent or (spendableAsPrevious and displacedWithinBound)
+                }
+
+                else -> {
+                    spendableAsCurrent
+                }
+            }
 
         val swapped =
             Players.update({ spendable }) { row ->
