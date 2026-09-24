@@ -60,5 +60,12 @@ public object WyrApi {
 
         /** Longest [io.ntole.wyr.core.vote.VoteRequest.attemptId] the server accepts. A UUID is 36. */
         public const val MAX_ATTEMPT_ID_LENGTH: Int = 64
+
+        /**
+         * Longest option a question can have, counted as Kotlin's `String.length` counts, in UTF-16
+         * code units: an emoji can take two. Here rather than on the server so a client can check a
+         * question against the same number the server's option columns are sized by.
+         */
+        public const val MAX_OPTION_LENGTH: Int = 200
     }
 }

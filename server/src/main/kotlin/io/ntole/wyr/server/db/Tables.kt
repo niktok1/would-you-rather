@@ -43,14 +43,12 @@ object Players : Table("players") {
 
 object Questions : Table("questions") {
     val id = varchar("id", 36)
-    val optionA = varchar("option_a", MAX_OPTION_LENGTH)
-    val optionB = varchar("option_b", MAX_OPTION_LENGTH)
+    val optionA = varchar("option_a", WyrApi.Limits.MAX_OPTION_LENGTH)
+    val optionB = varchar("option_b", WyrApi.Limits.MAX_OPTION_LENGTH)
     val category = varchar("category", 32)
     val createdAt = long("created_at")
 
     override val primaryKey = PrimaryKey(id)
-
-    const val MAX_OPTION_LENGTH: Int = 200
 }
 
 object Votes : Table("votes") {
