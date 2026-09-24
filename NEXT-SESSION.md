@@ -748,6 +748,10 @@ known `PlayViewModel` issues (the Play tab is frozen).
   store moved on to the same player's other session refreshes once more as it (`refreshAs`), since
   within the grace both tabs' refreshes go through and only the later one's token outlives it.
   `REFRESH_GRACE_SECONDS` that is not a whole number from 0 to a year fails the boot, naming it.
+  The grace saves a lost refresh answer only if the next refresh comes within it, and a lost answer
+  to the settling refresh leaves a demoted token beside a fresh access token, refreshed only past
+  the grace: both are open, with the options, in CLAUDE.md §8b (*Refresh answers lost past the
+  grace*).
 - **A session write returns once it is durable, and suspends for it** (`TokenStorage.write`,
   CLAUDE.md §8a). `AndroidTokenStorage` used `apply()`, which returns before the file is written,
   so a kill just after a refresh could come back with the rotated-out token and orphan the guest.

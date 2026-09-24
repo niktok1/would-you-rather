@@ -67,10 +67,11 @@ public object WyrHttpClient {
      * The server rotates the refresh token as it answers a refresh (CLAUDE.md §8a), so a refresh
      * abandoned after the server ran it leaves in the store the token the server rotated out. The
      * server takes that token once more within its grace window, 10 minutes by default, which is why
-     * this is shorter: the next call's refresh sends it again in time. Past the grace it is refused,
-     * and the player becomes a fresh guest. The server runs a refresh only once any cold start is
-     * over, and then in milliseconds, so what a timeout can abandon after that is an answer still
-     * missing minutes after it was sent, on a connection that has as good as died.
+     * this is shorter: the next call's refresh can still send it, if that call comes within the grace.
+     * Past the grace it is refused, and the player becomes a fresh guest. The server runs a refresh
+     * only once any cold start is over, and then in milliseconds, so what a timeout can abandon after
+     * that is an answer still missing minutes after it was sent, on a connection that has as good as
+     * died.
      *
      * Bounded all the same, and not exempt: a refresh holds the bearer provider's lock and runs
      * NonCancellable (see `nonCancellableRefresh` below), so every call rejected while it runs waits
@@ -237,7 +238,11 @@ private suspend fun RefreshTokensParams.refreshAs(
     // token expires, well past the grace, is then refused, and they become a fresh guest. So refresh
     // once more as the stored session, which the server takes either way, and keep what that answers:
     // the latest rotation, so the current token. If that refresh fails, it fails the call as any
-    // refresh does, and the store keeps the other client's session.
+    // refresh does, and the store keeps the other client's session. That is worse than an ordinary
+    // failed refresh when it reached the server and only its answer was lost: the stored token is by
+    // then the previous one, or spent, beside a fresh access token, so the next refresh comes only once
+    // that expires, past the grace, and is refused (CLAUDE.md §8b, *Refresh answers lost past the
+    // grace*).
     if (settleOvertaken && stored != null && stored.playerId == sent.playerId) {
         return refreshAs(stored, sessionStore, settleOvertaken = false)
     }
