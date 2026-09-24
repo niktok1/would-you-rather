@@ -242,8 +242,10 @@ The app opens on the **Console** tab (`io.ntole.wyr.dev`). **Play** is the froze
   `listSubmissions` whether it works or not; the other reads log only a failure, as
   `refreshSubmissions`. "listed for" is the player it was read as, which after *New guest* is the
   previous one until it is read again. The section has its own log, below the list, and runs one
-  action at a time of its own; its requests show in the HTTP trace with the rest. Nothing approves a
-  submission until moderation is built, so every one stays `PENDING`.
+  action at a time of its own; its requests show in the HTTP trace with the rest. That is not the
+  console's, so *New guest* pressed while a read is in flight can mislabel the list it returns, as
+  "not read" or as the new guest's. Nothing approves a submission until moderation is built, so
+  every one stays `PENDING`.
 - **Action log.** Every action, newest first: `ok`, `err` (the `DomainError` and its diagnostic
   message) or `crash` (anything else thrown), with how long it took. One action runs at a time.
 - **HTTP trace.** Every request that went out, with status and time. A refreshed call shows as

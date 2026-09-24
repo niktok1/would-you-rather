@@ -24,6 +24,9 @@ data class SubmissionConsoleState(
     /**
      * The player [submissions] are, as the session stood once the read returned. Not always the one
      * shown in the console's header: New guest there changes the player without reading this list.
+     * Nor always right: New guest is outside this section's one action at a time, so pressed while
+     * a read is in flight it leaves the previous player's list shown as not read, or as the new
+     * guest's. Only a read that reported the player it ran as would close that.
      */
     val listedFor: String? = null,
     /** The action in flight, or `null` when idle. Only one runs at a time. */

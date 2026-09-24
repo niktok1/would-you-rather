@@ -87,7 +87,8 @@ class SubmissionConsoleViewModel(
     private suspend fun loadSubmissions(): List<Submission> {
         val submissions = getMySubmissions()
         // After the read, not before: a read refused as a session the server has stopped accepting
-        // went out again as a fresh guest, and the list is theirs.
+        // went out again as a fresh guest, and the list is theirs. A New guest racing the read makes
+        // this wrong (SubmissionConsoleState.listedFor).
         val listedFor = sessions.currentPlayerId()
         _state.update { it.copy(submissions = submissions, listedFor = listedFor) }
         return submissions
