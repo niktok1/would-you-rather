@@ -581,6 +581,23 @@ known `PlayViewModel` issues (the Play tab is frozen).
 - **Exposed 1.x renamed everything.** Packages are `org.jetbrains.exposed.v1.*`, and
   `SqlExpressionBuilder.eq` is deprecated *as an error* — import the top-level `eq` instead.
   Expect to hit this again the first time you write a new query.
+- **The schema is Flyway's, and every change to it is a new script** (CLAUDE.md §8b).
+  `DatabaseFactory.init` runs `Migrations.migrate` before the seed, and nothing calls
+  `SchemaUtils.create` in production any more. The store tests still build their tables with it,
+  which is sound only because `SchemaDriftTest` shows it builds what the scripts build, names
+  included. To change a table: edit `Tables.kt`, run `./gradlew :server:pendingMigration`, and write
+  the draft it prints up as the next `V<n>__<what_it_does>.sql` in
+  `server/src/main/resources/db/migration`, in lower case and unquoted so H2 and PostgreSQL both run
+  it, with a default or a backfill for the rows already there. Never edit a script that has shipped:
+  Flyway refuses to boot on a changed checksum. Forget the script and `SchemaDriftTest` fails, on H2
+  locally and on PostgreSQL in CI. The live database was recorded at V1 by its first boot of this
+  build without running V1, so its history shows `1 BASELINE`, never `1 SQL`, and that is right. The
+  first script after V1 must also move `MigrationsTest`'s pre-migration database onto V1 (its KDoc
+  says how). Two boots at once are safe on PostgreSQL only, under Flyway's advisory lock: two
+  migrations of one H2 database fail inside H2, which is why the boot races skip H2. Flyway warns at
+  every boot that H2 2.4.240 is newer than the 2.3.232 it has verified; that is only the dev
+  database. exposed-migration drafts drops for the indexes H2 builds for foreign keys, which
+  `pendingStatements` leaves out.
 - **The majority verdict on the reveal is client-side and display only.**
   `VoteOutcome.agreedWithMajority` treats an exact tie as agreement, and nothing on the server
   mirrors it because no points depend on it (§8d). Scoring against the tally again would bring
