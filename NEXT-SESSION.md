@@ -15,8 +15,9 @@ automatically from every green commit on `main` (its URL is on its Render page).
 
 ### Verified working
 
-- `:server` on H2: 206 tests green, including 65 end-to-end flow tests in `ApiFlowTest`. Flat
-  scoring is covered there (every vote pays 1, majority and minority alike, and the total
+- `:server` on H2: 235 tests green (2 more skipped, the PostgreSQL-only boot races), including 68
+  end-to-end flow tests in `ApiFlowTest`. Flat scoring is covered there (every vote pays 1,
+  majority and minority alike, and the total
   accumulates) and by `PlayerStoreTest`, which races awards for one player and refreshes of one
   token. The endless feed, re-answering and attempt replay are covered there too, and by
   `QuestionStoreTest` and `VoteStoreTest`. Feed cycles are pinned in `QuestionStoreTest`,
@@ -229,10 +230,28 @@ automatically from every green commit on `main` (its URL is on its Render page).
   429 identical to a guess's (`Retry-After: 60`, `RATE_LIMITED`), while the right token from
   another address was 200. The log had one line per refusal and no address or token anywhere. A
   boot with `CLIENT_IP_HEADER=X-Forwarded-For` stopped at start, naming it.
-- Client tests: `:core:domain` 34, `:core:data` 119, `:core:network` 56 (62 as Android host tests:
+- The refresh-token grace window (`feat/refresh-grace-window`, CLAUDE.md §8a), on H2. V2 adds the
+  previous token's three columns; `SchemaDriftTest` holds it to `Tables.kt`, and `MigrationsTest`
+  now builds its database from before migrations as V1 alone and pins V2 on it both ways, baselined
+  by this boot and baselined by an earlier one (production's path), rows kept with the new columns
+  NULL. `PlayerStoreTest` pins a displaced token spent within the grace and refused at its end, a
+  token spent twice then dead, the displaced token's own expiry, grace 0, and both races at READ
+  COMMITTED: two refreshes with the current token both through, the first's token then the
+  previous one; two with the previous token, exactly one. `ApiFlowTest` retries a refresh whose
+  answer was lost and keeps the player and their point, and refuses a third use. Dropping the
+  previous-token branch, its grace bound or its expiry, making the presented token the previous one,
+  reading then updating by id, or the route passing no grace each fails them. On the client,
+  `BearerSessionTest` and `SharedSessionStoreTest` pin the settling refresh when another tab's
+  refresh of the same session overtook one (once only, never for another player's session);
+  removing it, repeating it or settling another player's session each fails them.
+- Live run of the grace window against the fat jar on Netty (JDK 21), `PORT=18091` and no
+  `DATABASE_URL`: Flyway applied V1 and V2 to the in-memory H2, `/health` was 200, and a guest's
+  first refresh token refreshed 200, again 200 as the same player, and a third time 401
+  `INVALID_REFRESH_TOKEN`.
+- Client tests: `:core:domain` 34, `:core:data` 120, `:core:network` 58 (64 as Android host tests:
   the common ones and `AndroidTokenStorageTest`), `:app:shared` 122 (the ViewModels, the Koin graph
-  and the desktop base URL); `:server` 206. 599 in all. `:app:shared` compiles for JVM, JS, wasmJs
-  and the iOS simulator.
+  and the desktop base URL); `:server` 235. 569 JVM tests in all. `:app:shared` compiles for JVM,
+  JS, wasmJs and the iOS simulator (JS and wasmJs not re-run on the grace-window branch).
 - `:app:androidApp:assembleDebug` produces a real APK.
 - `ktlintCheck` clean across every module.
 
@@ -255,9 +274,21 @@ automatically from every green commit on `main` (its URL is on its Render page).
   without a build (`RATE_LIMIT_*`). A browser cannot read `Retry-After`, which CORS does not expose;
   nothing reads it yet. Counts live in one instance's memory and reset with every restart, a deploy
   or a free-tier spin-down included.
-- **The refresh rotation on a live server.** Nobody has re-run the curl pass since it landed, so
-  the compare-and-set rotation is proven by tests only. The 1-point rule has been seen live, in
-  the client run above.
+- **The refresh rotation on a live server.** The grace window has run against the fat jar on H2
+  (above), never on Render, so its races are proven by tests only. The 1-point rule has been seen
+  live, in the client run above.
+- **V2 on PostgreSQL, and on production.** `SchemaDriftTest` and `MigrationsTest` run V2 on
+  PostgreSQL only in the `server-postgres` CI job, which has not seen this branch; the script is
+  H2's draft rewritten by hand, the same statements V1 used for its unique constraint. Production
+  (`wyr-postgres`, recorded `1 BASELINE`) runs V2 at its next Manual Deploy: three nullable columns
+  and a unique constraint on a table of a few rows, so no rewrite and a moment's lock. Check its
+  history reads `1 BASELINE`, `2 SQL` afterwards.
+- **The settling refresh in a real browser or desktop pair.** Two tabs sharing `localStorage`, or
+  two desktop instances sharing JVM preferences, have raced a refresh only in
+  `SharedSessionStoreTest` on `MockEngine`. JVM preferences sync between processes on their own
+  schedule, so two desktop instances may not see each other's write in time for it to matter. The
+  edge `WyrHttpClient` notes remains: both clients checking the store before either writes can
+  still leave the displaced token there, until a lock shared across processes exists.
 - **The endless feed and vote replay on Postgres.** `RANDOM()` in the feed, the compare-and-set
   that starts a cycle, a first answer racing another (the 23505 aborts the transaction and Exposed
   reruns it), and the `SELECT ... FOR UPDATE` that makes a retry wait and replay have only run on
@@ -294,10 +325,12 @@ automatically from every green commit on `main` (its URL is on its Render page).
   `PlayerStoreTest` runs on H2, even in the `server-postgres` job: it hardcodes `jdbc:h2:mem:`,
   because its wait-for-the-lock polling reads H2's `INFORMATION_SCHEMA.SESSIONS`. So the ci.yml
   note that isolation differences surface in that job holds only for `ApiFlowTest`'s sequential
-  flows. On Postgres the rotation stays single-use because an `UPDATE` that waited on a row lock
-  re-checks its `WHERE` against the committed row. That is documented Postgres behaviour, not
-  something a test here has seen, and the same goes for the concurrent-seed recovery described on
-  `Seed.questionsIfEmpty`. Porting the races means polling `pg_stat_activity` instead.
+  flows. On Postgres the rotation obeys the grace window's rules under a race because an `UPDATE`
+  that waited on a row lock re-checks its whole `WHERE`, both halves of its `OR` included, against
+  the committed row, and evaluates its `SET` against that row. That is documented Postgres behaviour
+  (EvalPlanQual), not something a test here has seen, and the same goes for the concurrent-seed
+  recovery described on `Seed.questionsIfEmpty`. Porting the races means polling
+  `pg_stat_activity` instead.
 - **Timeouts on a real engine, against a real cold start.** Every timeout test runs on
   `MockEngine`, which enforces only the request timeout (Ktor's own timer). What each engine takes
   was read in the Ktor 3.5.1 sources: OkHttp maps the connect timeout to its own and the socket
@@ -555,9 +588,10 @@ rules live in CLAUDE.md §8d. Each item is one short-lived branch, in order:
     (request timeouts, durable Android session writes, `WYR_API_BASE_URL` on desktop).
 11. Pre-deploy hardening and the first Render deploy *(done 2026-09-24)* — first deployed
     `4cdc819` to prod; then rate limiting (`feat/rate-limiting`), Flyway migrations
-    (`feat/db-migrations`, prod baselines at V1) and the dev/prod split (`chore/dev-and-prod`).
-    Left: the `CF-Connecting-IP` check on dev (*NOT verified* above), the refresh-token grace
-    window, and moving `wyr-postgres` to a paid instance type by about 2026-10-24.
+    (`feat/db-migrations`, prod baselines at V1), the dev/prod split (`chore/dev-and-prod`) and
+    the refresh-token grace window (`feat/refresh-grace-window`, the first migration after V1:
+    prod takes V2 at its next Manual Deploy). Left: the `CF-Connecting-IP` check on dev (*NOT
+    verified* above), and moving `wyr-postgres` to a paid instance type by about 2026-10-24.
 
 **Remote:** `github.com/niktok1/would-you-rather` (private), `origin`, pushed over SSH through the
 `github-wyr` host alias with a deploy key scoped to this repo (CLAUDE.md §7). `gh` is logged in to
@@ -598,14 +632,18 @@ known `PlayViewModel` issues (the Play tab is frozen).
   locally and on PostgreSQL in CI. A database a server built before migrations is recorded at V1 by
   this build's first boot on it, without running V1, so its history shows `1 BASELINE`; a database
   nothing had booted on runs V1 and shows `1 SQL`. The Render production database, built by `4cdc819`
-  at the first deploy with the same table definitions, will show `1 BASELINE` after its first deploy
-  of this build. Before a migrating build first boots on any other database it did not build,
+  at the first deploy with the same table definitions, was recorded `1 BASELINE`, and V2 runs on it
+  at its next deploy. Before a migrating build first boots on any other database it did not build,
   compare schemas read-only (`pg_dump --schema-only`, CLAUDE.md §8b), since the baseline checks only
   that V1's tables exist.
   Never let `WYR_TEST_JDBC_URL` name the production database: the test suite and `pendingMigration`
-  wipe the database it names. The first script after V1 must also move `MigrationsTest`'s
-  pre-migration database onto V1 (its KDoc says how). Two boots at once are safe on PostgreSQL,
-  under Flyway's advisory lock, only because `Migrations.migrate` takes the baseline itself:
+  wipe the database it names. V2 moved `MigrationsTest`'s pre-migration database onto V1 (V1 run
+  alone, the history dropped) and made it read rows with `SELECT *`, since `Tables.kt` now names
+  columns V1 lacks; a new script adds its row to `BASELINED_HISTORY` and what it does to existing
+  rows to `afterLaterScripts`. The H2 draft omits `COLUMN` and upper-cases everything; write it in
+  lower case, one `ALTER TABLE` per column, since H2 takes no list of `ADD`s. Two boots at once
+  are safe on PostgreSQL, under Flyway's advisory lock, only because `Migrations.migrate` takes the
+  baseline itself:
   Flyway's `baselineOnMigrate` sent a boot that lost a race on an empty database to the baseline,
   where it failed, so keep it off. H2's DDL commits as it goes, releasing Flyway's lock there, so
   the four-at-once races skip H2, and `MigrationsTest` interleaves two boots one step at a time on
@@ -692,11 +730,24 @@ known `PlayViewModel` issues (the Play tab is frozen).
   covers connecting, and a browser has only the request timeout), and the same 60 s as its socket
   timeout, which overrides OkHttp's 10 s read timeout: that alone would fail a cold start on
   Render's free tier. A request that spends the refresh token gets `refreshTimeout()`, 5 minutes,
-  because a refresh abandoned after the server rotated the token orphans the guest; any new request
-  that rotates a credential needs it too. A call stuck behind a refresh gives up only once the
-  refresh ends. A timeout reaches `runApi` as the engine's or Ktor's own exception, so it is
-  `NETWORK`. `RequestTimeoutTest` runs every case in virtual time, on a `MockEngine` given the test's
+  because a refresh abandoned after the server rotated the token leaves a token the server takes
+  only within its grace window, 10 minutes, which must outlast this; any new request that rotates a
+  credential needs it too. A call stuck behind a refresh gives up only once the refresh ends. A
+  timeout reaches `runApi` as the engine's or Ktor's own exception, so it is `NETWORK`.
+  `RequestTimeoutTest` runs every case in virtual time, on a `MockEngine` given the test's
   dispatcher.
+- **A refresh token works twice at most: once current, once more as the previous one within the
+  grace** (CLAUDE.md §8a, `REFRESH_GRACE_SECONDS`, 600 by default, 0 off). Every rotation, whichever
+  token it spent, makes the token current until then the previous one, stamped now, so a token
+  spent as the previous one is gone and the one it displaced gets a grace of its own. Keep
+  `PlayerStore.rotateRefreshToken` one `UPDATE` whose `WHERE` holds the whole check and whose `SET`
+  copies the current columns into the previous ones in SQL: a read first, or an update by id, lets
+  two racers with the previous token both through (`PlayerStoreTest` races it). The grace must stay
+  longer than the client's `REFRESH_TIMEOUT` (5 minutes), and nothing but the KDocs on each side
+  ties them, since `:server` cannot see `:core:network`. On the client, a refresh that finds the
+  store moved on to the same player's other session refreshes once more as it (`refreshAs`), since
+  within the grace both tabs' refreshes go through and only the later one's token outlives it.
+  `REFRESH_GRACE_SECONDS` that is not a whole number from 0 to a year fails the boot, naming it.
 - **A session write returns once it is durable, and suspends for it** (`TokenStorage.write`,
   CLAUDE.md §8a). `AndroidTokenStorage` used `apply()`, which returns before the file is written,
   so a kill just after a refresh could come back with the rotated-out token and orphan the guest.

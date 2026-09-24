@@ -363,11 +363,11 @@ auth SDK, satisfying §2.
   - *The cost* is a stolen token's: presented after its player's own refresh rotated it out, it still
     works, within the grace and once. `ServerConfig.refreshGraceSeconds` says so.
   - *The rotation* is one `UPDATE` whose `WHERE` is the whole check, nothing read before it
-    (`PlayerStore.rotateRefreshToken`, §4): the presented hash as the current one and unexpired, or as
-    the previous one, unexpired and within the grace. Of two refreshes racing with the current token,
-    the second waits on the first's row lock, finds the token the previous one by then and goes
-    through too, the first's new token becoming the previous one; of two racing with the previous
-    token, exactly one goes through. `PlayerStoreTest` races both and pins every rule.
+    (`PlayerStore.rotateRefreshToken`, §4): the presented hash as the current one and unexpired,
+    or as the previous one, unexpired and within the grace. Of two refreshes racing with the
+    current token, the second waits on the first's row lock, finds the token the previous one by
+    then and goes through too, the first's new token becoming the previous one; of two racing with
+    the previous token, exactly one goes through. `PlayerStoreTest` races both and pins every rule.
 - `POST /v1/auth/link` does not exist yet. It is the intended next step and is what will make an
   account survive reinstall and sync across devices.
 - On the client, `SessionStore` is the only copy of the credentials: Ktor's bearer cache is off
@@ -393,8 +393,9 @@ auth SDK, satisfying §2.
   same reason: after a refresh, the rotated token is the only one live past the grace. It suspends
   so a blocking write can leave the caller's thread (Android `commit()`s on `Dispatchers.IO`, one
   change at a time and in the order asked, never `apply()`s), and a write asked for lands even if
-  its caller is cancelled meanwhile. A write that cannot be made durable fails the call as `NETWORK`: the data
-  layer writes the session through `runApi`, so no bare storage exception reaches a ViewModel.
+  its caller is cancelled meanwhile. A write that cannot be made durable fails the call as
+  `NETWORK`: the data layer writes the session through `runApi`, so no bare storage exception
+  reaches a ViewModel.
 
 **Known limitation, by design for now:** a guest account is bound to one device's storage. Lose
 the device or clear storage and the account — and its points — are gone. Token storage is also
