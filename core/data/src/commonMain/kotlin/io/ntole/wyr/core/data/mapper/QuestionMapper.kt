@@ -18,6 +18,8 @@ internal fun QuestionDto.toDomain(): Question =
         optionB = optionB,
         categories = categories.toDomainCategories(),
         answeredBefore = answeredBefore,
+        likeCount = likeCount,
+        likedByMe = likedByMe,
     )
 
 /**

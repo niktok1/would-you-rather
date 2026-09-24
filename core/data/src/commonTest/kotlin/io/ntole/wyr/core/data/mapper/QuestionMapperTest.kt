@@ -26,6 +26,26 @@ class QuestionMapperTest {
     }
 
     @Test
+    fun `a question's likes survive the mapping`() {
+        // Liked by others and not by the player too, so likedByMe cannot be read off the count.
+        listOf(0 to false, 3 to true, 2 to false).forEach { (likeCount, likedByMe) ->
+            val dto =
+                QuestionDto(
+                    id = "q1",
+                    optionA = "q1-a",
+                    optionB = "q1-b",
+                    categories = listOf(QuestionCategory.FOOD),
+                    likeCount = likeCount,
+                    likedByMe = likedByMe,
+                )
+
+            val question = dto.toDomain()
+
+            assertEquals(likeCount to likedByMe, question.likeCount to question.likedByMe)
+        }
+    }
+
+    @Test
     fun `a question keeps every category it is filed under each once in declaration order`() {
         val cases =
             listOf(
