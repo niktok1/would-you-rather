@@ -199,7 +199,7 @@ internal class MigrationsTest(
      * Counts the points at which a boot on a database [build] made reads the schema outside Flyway's
      * lock, then, for each point on a database of its own, boots once with a second boot run whole at
      * that point, and hands [check] the database, how many scripts the two boots ran between them, and
-     * what [build] returned.
+     * what [build] returned. A failure names the point it came at.
      */
     private fun <T> forEveryInterleaving(
         build: (DataSource) -> T,
@@ -213,25 +213,33 @@ internal class MigrationsTest(
         assertTrue(points > 0, "a boot reads the schema")
 
         for (point in 1..points) {
-            val database = engine.emptyDatabase("interleaving-$point")
-            database.serverPool().use { firstPool ->
-                database.serverPool().use { secondPool ->
-                    val built = build(firstPool)
-                    var second: MigrateResult? = null
-                    val first =
-                        InterleavingDataSource(firstPool, at = point) {
-                            second = inAnotherThread { Migrations.migrate(secondPool) }
-                        }
-                    val executed =
-                        try {
-                            Migrations.migrate(first).migrationsExecuted
-                        } catch (failure: FlywayException) {
-                            throw AssertionError("the other boot ran at point $point of $points", failure)
-                        }
+            try {
+                interleaveAt(point, build, check)
+            } catch (failure: Throwable) {
+                throw AssertionError("with the other boot run at point $point of $points", failure)
+            }
+        }
+    }
 
-                    assertTrue(first.interleaved, "the other boot ran at point $point of $points")
-                    check(firstPool, executed + checkNotNull(second).migrationsExecuted, built)
-                }
+    private fun <T> interleaveAt(
+        point: Int,
+        build: (DataSource) -> T,
+        check: (pool: DataSource, executed: Int, built: T) -> Unit,
+    ) {
+        val database = engine.emptyDatabase("interleaving-$point")
+        database.serverPool().use { firstPool ->
+            database.serverPool().use { secondPool ->
+                val built = build(firstPool)
+                var second: MigrateResult? = null
+                val first =
+                    InterleavingDataSource(firstPool, at = point) {
+                        second = inAnotherThread { Migrations.migrate(secondPool) }
+                    }
+
+                val executed = Migrations.migrate(first).migrationsExecuted
+
+                assertTrue(first.interleaved, "the other boot ran")
+                check(firstPool, executed + checkNotNull(second).migrationsExecuted, built)
             }
         }
     }
