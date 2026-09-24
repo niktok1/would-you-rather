@@ -6,8 +6,10 @@ import kotlinx.serialization.json.Json
  * The client's single `Json` instance.
  *
  * **Do not change these flags casually.** `coerceInputValues` is the second half of the wire
- * enum rule in CLAUDE.md §5: without it, the `UNKNOWN` defaults on `QuestionCategory` and
- * `ErrorCode` do nothing and the first server-side enum addition breaks every installed client.
+ * enum rule in CLAUDE.md §5: without it, the `UNKNOWN` defaults on `ErrorCode` and
+ * `QuestionStatus` do nothing and the first server-side enum addition breaks every installed client.
+ * A list of categories does not lean on it, since coercion never reaches a list's elements: each
+ * list is declared with `QuestionCategoryListSerializer`, which decodes an unknown name as `UNKNOWN`.
  * `ignoreUnknownKeys` is the same bargain for added fields.
  */
 public val WyrJson: Json =
