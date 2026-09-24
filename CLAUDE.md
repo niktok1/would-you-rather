@@ -350,7 +350,9 @@ accounts exist.
   first Render deploy a schema change ships as a fresh database through `SchemaUtils.create`, and
   `render.yaml` keeps `autoDeployTrigger: "off"` so connecting the blueprint cannot deploy early.
   A real migration tool (`exposed-migration-jdbc` plus a runner) must be chosen before the first
-  column change **after** that deploy.
+  column change **after** that deploy. A new `QuestionStatus` is a migration too, although no
+  column changes: `questions.status` is read strictly, unlike the category, so no build may write a
+  new status until the build a rollback would return to can read it.
 - **WCAG AA contrast audit** — see §5b. Paused along with UI polish (§8d).
 
 `RANDOM` was an open item and is resolved: it is a content category (the absurd questions), not a

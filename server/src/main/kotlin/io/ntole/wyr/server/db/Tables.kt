@@ -58,6 +58,14 @@ object Questions : Table("questions") {
      * Where the question stands with the moderator. Only an [QuestionStatus.APPROVED] one is ever
      * served. A seed is approved from the start, and a submission starts out
      * [QuestionStatus.PENDING]. Never [QuestionStatus.UNKNOWN], the client's decoding fallback.
+     *
+     * Read strictly, unlike [category] (`QuestionStore.categoryOf`): a name this build has no
+     * [QuestionStatus] for fails the read, and with it the author's whole list
+     * (`SubmissionStore.byAuthor`) as a 500. Everything else, the feed and the pending count
+     * included, only compares it in SQL and still works. That is deliberate: no status this build
+     * knows could stand in truthfully for one it does not, as RANDOM does for a category, and UNKNOWN
+     * is never sent. So a new status is a migration (CLAUDE.md §8b), although no column changes: no
+     * build may write it until the build a rollback would return to can read it.
      */
     val status = enumerationByName<QuestionStatus>("status", 16)
 
