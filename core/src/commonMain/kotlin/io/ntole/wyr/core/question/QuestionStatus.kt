@@ -14,7 +14,7 @@ public enum class QuestionStatus {
     /** Waiting for a moderator. Served to nobody. */
     PENDING,
 
-    /** Approved by a moderator: due for every player but its author, from their current cycle on. */
+    /** Approved by a moderator: due for every player, its author included, from their current cycle on. */
     APPROVED,
 
     /** Refused by a moderator, with a short reason ([SubmissionDto.rejectionReason]). Served to nobody. */

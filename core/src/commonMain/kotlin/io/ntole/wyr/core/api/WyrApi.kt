@@ -30,9 +30,9 @@ public object WyrApi {
          * POST: submits a question of the session player's own, with a
          * [io.ntole.wyr.core.question.SubmitQuestionRequest], answered 201 with its
          * [io.ntole.wyr.core.question.SubmissionDto]. Requires a session, and earns nothing. The
-         * question is stored pending and served to nobody until a moderator approves it, and never to
-         * its author (CLAUDE.md §8d). A player may have at most [Limits.MAX_PENDING_SUBMISSIONS]
-         * pending at once, and one more is refused with 409
+         * question is stored pending and served to nobody until a moderator approves it, and then to
+         * every player, its author included (CLAUDE.md §8d). A player may have at most
+         * [Limits.MAX_PENDING_SUBMISSIONS] pending at once, and one more is refused with 409
          * [io.ntole.wyr.core.error.ErrorCode.SUBMISSION_LIMIT]. Options the rules refuse are 422
          * [io.ntole.wyr.core.error.ErrorCode.INVALID_SUBMISSION]; a malformed body, or one naming no
          * category or one that is not real, is 400
@@ -42,10 +42,10 @@ public object WyrApi {
 
         /**
          * Answers a question, with a [io.ntole.wyr.core.vote.VoteRequest], answered with a
-         * [io.ntole.wyr.core.vote.VoteResultDto]. Requires a session. A question the player is not
-         * served, one a moderator has not approved or the player's own, is 404
-         * [io.ntole.wyr.core.error.ErrorCode.QUESTION_NOT_FOUND], as an unknown one is. For their
-         * own that is provisional (CLAUDE.md §8b).
+         * [io.ntole.wyr.core.vote.VoteResultDto]. Requires a session. A question no player is
+         * served, one a moderator has not approved, is 404
+         * [io.ntole.wyr.core.error.ErrorCode.QUESTION_NOT_FOUND], as an unknown one is. An author
+         * answers their own like any other player (CLAUDE.md §8d).
          */
         public const val VOTES: String = "/$VERSION/votes"
 
@@ -54,8 +54,8 @@ public object WyrApi {
          * [io.ntole.wyr.core.question.SkipRequest]. Requires a session. The question comes back in the
          * next cycle, or sooner only to a [QUESTIONS] request filtered to categories with nothing due
          * in them (see there). A skip pays nothing and leaves the tally alone, and skipping again in the
-         * same cycle changes nothing. Answered with 204 and no body. A question the player is not
-         * served is 404, as for [VOTES].
+         * same cycle changes nothing. Answered with 204 and no body. A question no player is served
+         * is 404, as for [VOTES].
          */
         public const val SKIPS: String = "/$VERSION/skips"
 
