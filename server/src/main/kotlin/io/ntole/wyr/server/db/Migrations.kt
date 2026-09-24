@@ -26,10 +26,11 @@ object Migrations {
      *
      * Every server before this one built its database with `SchemaUtils.create(*appTables)`, and V1 is
      * the statements `SchemaUtils.createStatements(*appTables)` generates from the same definitions,
-     * which have not changed since. So such a database already holds what V1 would build, and running
-     * V1 on it would only fail on what exists. SchemaDriftTest pins that V1 builds what those
-     * definitions describe, names included, on H2 and on PostgreSQL; MigrationsTest pins that such a
-     * database is recorded at V1 with its data untouched, and that an empty one runs V1.
+     * as they stood until V2. So such a database already holds what V1 would build, and running V1 on
+     * it would only fail on what exists. SchemaDriftTest pinned that V1 builds what those definitions
+     * described, names included, on H2 and on PostgreSQL, for as long as V1 was the only script;
+     * MigrationsTest pins that such a database is recorded at V1 and then takes every later script
+     * with its data kept, and that an empty one runs V1.
      *
      * The baseline is taken only once, by the first boot that finds the database so: after that it
      * has a history, and [migrate] never baselines a database with one.

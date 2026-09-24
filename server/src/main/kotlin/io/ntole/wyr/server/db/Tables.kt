@@ -31,6 +31,16 @@ object Players : Table("players") {
     val refreshTokenExpiresAt = long("refresh_token_expires_at").nullable()
 
     /**
+     * The refresh token the last rotation displaced (CLAUDE.md §8a): its SHA-256, the expiry it had
+     * while current, and when it was displaced. A refresh presenting it within the grace window of
+     * that rotation still succeeds, once (`PlayerStore.rotateRefreshToken`). All three are null for a
+     * player who has never refreshed, and for every player from before V2.
+     */
+    val previousRefreshTokenHash = varchar("previous_refresh_token_hash", 64).nullable()
+    val previousRefreshTokenExpiresAt = long("previous_refresh_token_expires_at").nullable()
+    val previousRefreshTokenRotatedAt = long("previous_refresh_token_rotated_at").nullable()
+
+    /**
      * The feed's current pass over the questions (CLAUDE.md §8d), counted from [FIRST_CYCLE]. A
      * question is due while the player has neither answered nor skipped it in this cycle, and the
      * feed starts the next cycle once nothing is due. Only ever moves forward, one at a time, through
@@ -42,6 +52,10 @@ object Players : Table("players") {
 
     init {
         index(isUnique = true, refreshTokenHash)
+        // A refresh looks its token up here as well as in the current hash, so without an index every
+        // refresh presenting a token that is not current, a stranger's guess included, reads the whole
+        // table. Unique as the current hash is: a hash names one token, and that token one player.
+        index(isUnique = true, previousRefreshTokenHash)
     }
 
     const val FIRST_CYCLE: Int = 1

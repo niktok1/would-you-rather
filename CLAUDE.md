@@ -484,15 +484,17 @@ seed (`Migrations`, `DatabaseFactory.init`). Nothing builds a table any other wa
   whitespace added, and H2's differ from them only in case. So a database built before migrations
   already holds exactly V1, and it is recorded at V1 without running it: its history reads
   `1 BASELINE`, where an empty database runs V1 and reads `1 SQL`. The Render production database
-  is the first kind: `4cdc819` built it on 2026-09-24, the first deploy, and `Tables.kt` has not
-  changed a column, key or index since, so it holds exactly V1 and its first boot on this build
-  records `1 BASELINE`.
+  is the first kind: `4cdc819` built it on 2026-09-24, the first deploy, and `Tables.kt` changed no
+  column, key or index between then and V1, so it held exactly V1 and was recorded `1 BASELINE`.
+  V2 (the refresh-token grace window, §8a) runs on it at its next deploy.
   `Migrations.migrate` takes the baseline itself (`baselineVersion` 1), and only for a database
   holding every table V1 builds (`TABLES_BEFORE_MIGRATIONS`) and no history table; Flyway's
   `baselineOnMigrate` is off. Any other database with tables and no history fails the boot, rather
-  than being recorded at V1 whatever it holds. `MigrationsTest` pins all three, the data untouched,
-  and `SchemaDriftTest` that V1 builds exactly what `SchemaUtils.create` builds, every table, column,
-  key, index and constraint name included, on H2 and on PostgreSQL.
+  than being recorded at V1 whatever it holds. `MigrationsTest` pins all three, the data kept through
+  every later script, and production's own path (recorded at V1 by an earlier boot, then migrated by
+  a later build). `SchemaDriftTest` pinned, while V1 was the only script, that V1 builds exactly what
+  `SchemaUtils.create` built, every table, column, key, index and constraint name included, on H2 and
+  on PostgreSQL.
 - *Before a migrating build first boots on any other database it did not build*, compare that
   database's schema with one this build migrated, read-only (`pg_dump --schema-only` of each, then a
   diff); the production database needs no such check, being provably V1 (above). The baseline checks
@@ -515,11 +517,14 @@ seed (`Migrations`, `DatabaseFactory.init`). Nothing builds a table any other wa
   which has no PostgreSQL, it is H2's alone, in H2's names and types (a binary column is H2's
   `VARBINARY`, which PostgreSQL refuses; its own is `bytea`), so what PostgreSQL needs differently
   shows first in the server-postgres CI job. Write the draft as the next `V<n>__<what_it_does>.sql`
-  beside V1, in lower case and unquoted so it runs on both engines, and make it right for the rows
-  already there: a new NOT NULL column needs a default or a backfill, and a drop takes its data with
-  it. `SchemaDriftTest` then holds the script to the definitions on H2 and, in CI, on PostgreSQL. The
-  first script after V1 also moves `MigrationsTest`'s pre-migration database onto V1, as its KDoc
-  says.
+  beside V1, in lower case and unquoted so it runs on both engines, one `ALTER TABLE` per column
+  (H2 takes no list of `ADD` clauses, as PostgreSQL does), and make it right for the rows already
+  there: a new NOT NULL column needs a default or a backfill, and a drop takes its data with it.
+  `SchemaDriftTest` then holds the script to the definitions on H2 and, in CI, on PostgreSQL. In
+  `MigrationsTest`, add the script's row to `BASELINED_HISTORY` and what it does to rows already
+  there to `afterLaterScripts`. Its database built before migrations is V1 run alone with the history
+  dropped (V2 moved it there), since the definitions describe the latest script, and it reads rows
+  with `SELECT *`, since the definitions name columns V1 lacks.
 - *A script that has shipped never changes*: Flyway refuses to boot on a changed checksum. A script
   whose name Flyway cannot read fails the boot rather than being skipped (`validateMigrationNaming`),
   and clean is refused outright (`cleanDisabled`); the test harness alone turns it on, to wipe the

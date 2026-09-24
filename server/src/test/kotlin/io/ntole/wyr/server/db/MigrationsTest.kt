@@ -4,9 +4,9 @@ import io.ntole.wyr.server.TestDatabaseSettings
 import io.ntole.wyr.server.player.PlayerStore
 import org.flywaydb.core.api.FlywayException
 import org.flywaydb.core.api.output.MigrateResult
+import org.jetbrains.exposed.v1.jdbc.JdbcTransaction
 import org.jetbrains.exposed.v1.jdbc.SchemaUtils
 import org.jetbrains.exposed.v1.jdbc.insert
-import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.junit.Assume.assumeTrue
 import org.junit.runner.RunWith
 import org.junit.runners.Parameterized
@@ -23,9 +23,9 @@ import kotlin.test.assertTrue
 
 /**
  * The databases a boot can find (CLAUDE.md §8b): an empty one, which runs every script; one the
- * server built before it had migrations, which is recorded at V1 without running anything; and any
- * other with tables and no history, which fails the boot. On H2 and, in the server-postgres CI job,
- * on PostgreSQL.
+ * server built before it had migrations, which is recorded at V1 without running it and then takes
+ * every later script; and any other with tables and no history, which fails the boot. On H2 and, in
+ * the server-postgres CI job, on PostgreSQL.
  */
 @RunWith(Parameterized::class)
 internal class MigrationsTest(
@@ -44,20 +44,39 @@ internal class MigrationsTest(
 
     /**
      * The path of a database a server before migrations built, taken once, by the first boot of a
-     * build with migrations on it. Tied to V1 while V1 is the only script: see
-     * [buildAsBeforeMigrations].
+     * build with migrations on it: recorded at V1, then taken through every later script.
      */
     @Test
-    fun `a database built before migrations is recorded at V1 without running it, its data untouched`() {
+    fun `a database built before migrations is recorded at V1 without running it, then migrated, its data kept`() {
         engine.emptyDatabase("before-migrations").serverPool().use { pool ->
             buildAsBeforeMigrations(pool)
             val before = pool.inTransaction { contents() }
 
             val result = Migrations.migrate(pool)
 
-            assertEquals(listOf("1 BASELINE"), history(pool), "recorded at V1, and V1 never ran")
-            assertEquals(0, result.migrationsExecuted)
-            assertEquals(before, pool.inTransaction { contents() })
+            assertEquals(BASELINED_HISTORY, history(pool), "recorded at V1, V1 never ran, and every later script did")
+            assertEquals(BASELINED_HISTORY.size - 1, result.migrationsExecuted)
+            assertEquals(afterLaterScripts(before), pool.inTransaction { contents() })
+        }
+    }
+
+    /**
+     * The path the production database takes (CLAUDE.md §8b): the boot of a build whose only script
+     * was V1 recorded it at V1, and the first boot of a later build runs what came after, on the rows
+     * its players wrote in between.
+     */
+    @Test
+    fun `a database an earlier boot recorded at V1 takes every later script, its data kept`() {
+        engine.emptyDatabase("recorded-at-v1").serverPool().use { pool ->
+            buildAsBeforeMigrations(pool)
+            serverFlyway(pool).baseline()
+            val before = pool.inTransaction { contents() }
+
+            val result = Migrations.migrate(pool)
+
+            assertEquals(BASELINED_HISTORY, history(pool))
+            assertEquals(BASELINED_HISTORY.size - 1, result.migrationsExecuted)
+            assertEquals(afterLaterScripts(before), pool.inTransaction { contents() })
         }
     }
 
@@ -153,8 +172,8 @@ internal class MigrationsTest(
             bootAtOnce(database)
 
             database.serverPool().use { pool ->
-                assertEquals(listOf("1 BASELINE"), history(pool))
-                assertEquals(before, pool.inTransaction { contents() })
+                assertEquals(BASELINED_HISTORY, history(pool))
+                assertEquals(afterLaterScripts(before), pool.inTransaction { contents() })
             }
         }
     }
@@ -189,9 +208,9 @@ internal class MigrationsTest(
                 pool.inTransaction { contents() }
             },
         ) { pool, executed, before ->
-            assertEquals(listOf("1 BASELINE"), history(pool))
-            assertEquals(0, executed)
-            assertEquals(before, pool.inTransaction { contents() })
+            assertEquals(BASELINED_HISTORY, history(pool))
+            assertEquals(BASELINED_HISTORY.size - 1, executed, "each later script ran in one boot, V1 in neither")
+            assertEquals(afterLaterScripts(before), pool.inTransaction { contents() })
         }
     }
 
@@ -280,19 +299,27 @@ internal class MigrationsTest(
     }
 
     /**
-     * The database as the server left it before migrations: its tables built by
-     * `SchemaUtils.create(*appTables)`, exactly as every server before this one built its own,
-     * holding data, and no history.
+     * The database as the server left it before migrations: V1's schema, which is exactly what
+     * `SchemaUtils.create(*appTables)` built on every server before this one, holding data, and no
+     * history.
      *
-     * The definitions describe V1's schema only while V1 is the only script. The first later one
-     * that changes a table must move this onto V1 (Flyway with `target("1")`, then drop the history
-     * table), which SchemaDriftTest will have pinned to what `SchemaUtils.create` built until then,
-     * and the tests that start from it must expect that script's row in the history and its change
-     * to the rows.
+     * Built by running V1 alone and then dropping the history, not by `SchemaUtils.create`: the table
+     * definitions have described the latest script's schema since V2, and V1's only while it was the
+     * only script, which is when SchemaDriftTest pinned V1 to what `SchemaUtils.create` built. The rows
+     * are written through the stores, which name only V1's columns in what they write here, as an older
+     * build's did; one that named a later column would fail here, on a table without it.
      */
     private fun buildAsBeforeMigrations(pool: DataSource) {
+        val v1 =
+            Migrations
+                .configuration()
+                .dataSource(pool)
+                .target(Migrations.BASELINE_VERSION)
+                .load()
+        v1.migrate()
         pool.inTransaction {
-            SchemaUtils.create(*appTables)
+            // Flyway quotes its own table's name, in lower case, on H2 as on PostgreSQL.
+            exec("DROP TABLE \"${v1.configuration.table}\"")
             Seed.questionsIfEmpty()
             val author = PlayerStore.createGuest(refreshTokenHash = "a".repeat(64), refreshExpiresAt = 1L)
             PlayerStore.addPoints(author.id, points = 3)
@@ -303,13 +330,56 @@ internal class MigrationsTest(
         }
     }
 
-    /** Every row of every app table, so a comparison shows any row lost, added or changed. */
-    private fun contents(): Map<String, List<String>> =
-        appTables.associate { table -> table.tableName to table.selectAll().map { it.toString() }.sorted() }
+    /**
+     * Every row of every app table, each column by its lower-case name, so a comparison shows any row
+     * lost, added or changed. Read with `SELECT *` rather than through the table definitions, which
+     * name columns a database built before migrations does not have yet.
+     */
+    private fun JdbcTransaction.contents(): Contents =
+        appTables.associate { table ->
+            val rows =
+                exec("SELECT * FROM ${table.tableName}") { result ->
+                    val metadata = result.metaData
+                    val columns = (1..metadata.columnCount).associateBy { metadata.getColumnLabel(it).lowercase() }
+                    buildList {
+                        while (result.next()) add(columns.mapValues { (_, at) -> result.getString(at) })
+                    }
+                }.orEmpty()
+            table.tableName to rows.canonical()
+        }
+
+    /**
+     * [before], a database's contents at V1, as the scripts after V1 leave them. V2 gives every player
+     * no previous refresh token and changes nothing else. A later script that changes the rows already
+     * there adds what it does to them here.
+     */
+    private fun afterLaterScripts(before: Contents): Contents =
+        before.mapValues { (table, rows) ->
+            val added = if (table == Players.tableName) PREVIOUS_REFRESH_TOKEN_COLUMNS else emptyList()
+            rows.map { row -> row + added.associateWith { null } }.canonical()
+        }
+
+    /** Each row with its columns in name order, and the rows in the order that gives them. */
+    private fun List<Map<String, String?>>.canonical(): List<Map<String, String?>> =
+        map { row -> row.toSortedMap() }.sortedBy { row -> row.toString() }
 
     companion object {
         private const val SERVERS = 4
         private const val RACES = 3
+
+        /**
+         * The history of a database built before migrations once a boot has migrated it: V1 recorded
+         * without running it, then every later script run.
+         */
+        private val BASELINED_HISTORY = listOf("1 BASELINE", "2 SQL")
+
+        /** The columns V2 adds to players, empty in every row already there. */
+        private val PREVIOUS_REFRESH_TOKEN_COLUMNS =
+            listOf(
+                "previous_refresh_token_hash",
+                "previous_refresh_token_expires_at",
+                "previous_refresh_token_rotated_at",
+            )
 
         /** Past Flyway's own wait for its lock, 50 tries a second apart, so Flyway gives up first. */
         private const val BOOT_TIMEOUT_SECONDS = 90L
@@ -319,3 +389,6 @@ internal class MigrationsTest(
         fun engines(): List<SchemaTestEngine> = SchemaTestEngine.all()
     }
 }
+
+/** Every app table's rows, by table name, each row its columns by name, as [MigrationsTest] compares them. */
+private typealias Contents = Map<String, List<Map<String, String?>>>
