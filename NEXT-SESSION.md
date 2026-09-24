@@ -320,8 +320,9 @@ automatically from every green commit on `main` (its URL is on its Render page).
   again, drafts kept for a question pending in the list alone, an empty page that claims another ending the
   read, and Lock keeping the filter alone. `DefaultModerationRepositoryTest` pins the queue and a page
   of the list asked for 100 at a time (`ModerationRepository.PAGE_SIZE`, which `ModerationMapperTest`
-  holds to the server's `MAX_PAGE_SIZE`). `ModerationOverHttpTest` adds a 409 `WRONG_STATUS` on a
-  retirement. `ScreensDrawTest` draws both screens and the Retire dialog off screen (Compose's
+  holds to the server's `MAX_PAGE_SIZE`), and `LabelsTest` and `QuestionLabelsTest` a queue that
+  long saying more may be waiting, its tab `Pending (100+)`. `ModerationOverHttpTest` adds a 409
+  `WRONG_STATUS` on a retirement. `ScreensDrawTest` draws both screens and the Retire dialog off screen (Compose's
   `ImageComposeScene`) in both themes. `DataModuleTest` pins that the game's `dataModule` binds
   nothing of the moderator's (binding the API back fails it), and `WyrHttpClientTest` and
   `RunApiOverHttpTest` a 429's `Retry-After` reaching `WyrException.retryAfter` (dropped at either
@@ -637,7 +638,8 @@ closes or *Lock* is pressed, which also forgets everything read with it.
   Against dev or prod the page's origin goes into that service's `ALLOWED_WEB_ORIGINS` on Render;
   for prod the desktop app needs no such change, so prefer it there.
 
-**Pending** is the queue, oldest first, read on *Load pending*, the oldest 100 at most: each submission's options,
+**Pending** is the queue, oldest first, read on *Load pending*, the oldest 100 at most (a queue
+that long says more may be waiting, and its tab reads `Pending (100+)`): each submission's options,
 categories, age and id. The chips pick the categories *Approve* files it under in place of the
 author's, none keeping the author's; *Reject* stays off until the reason typed is one line of at
 most 200 characters once trimmed. After every decision the queue is read again, so a decided

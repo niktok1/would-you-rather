@@ -4,6 +4,7 @@ import io.ntole.wyr.admin.moderation.FakeModeration.Companion.LISTED
 import io.ntole.wyr.admin.moderation.FakeModeration.Companion.RETIRED_AT
 import io.ntole.wyr.admin.moderation.FakeModeration.Companion.listed
 import io.ntole.wyr.admin.tabLabelOf
+import io.ntole.wyr.core.domain.moderation.ModerationRepository
 import io.ntole.wyr.core.domain.moderation.QuestionCursor
 import io.ntole.wyr.core.domain.moderation.QuestionFilter
 import io.ntole.wyr.core.domain.question.Category
@@ -93,5 +94,13 @@ class QuestionLabelsTest {
         assertEquals("All questions", tabLabelOf(Screen.QUESTIONS, ModerationState()))
         assertEquals("Pending (2)", tabLabelOf(Screen.PENDING, read))
         assertEquals("All questions (5)", tabLabelOf(Screen.QUESTIONS, read))
+    }
+
+    @Test
+    fun `a queue as long as one read lists may hold more, and its tab says so`() {
+        val full = List(ModerationRepository.PAGE_SIZE) { index -> FakeModeration.FIRST.copy(id = "q$index") }
+        val state = ModerationState(pending = PendingQueue(submissions = full))
+
+        assertEquals("Pending (${ModerationRepository.PAGE_SIZE}+)", tabLabelOf(Screen.PENDING, state))
     }
 }

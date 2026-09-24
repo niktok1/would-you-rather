@@ -985,10 +985,12 @@ and every request shows in its HTTP trace (`HttpTrace` in `:core:network`, never
     answers is shown. The field itself is made anew on every Lock (`ModerationState.locks`): a text
     field keeps its undo history for as long as it is shown, so Undo in the one that held the token
     gave it back (`TokenBarTest`). Nothing is sent until what is typed can be a token
-    (`AdminToken.of`), and one action runs at a time. *Pending* lists the queue, oldest first, each submission with its options,
-    categories and age: Approve files it under the categories picked for it, none keeping the
-    author's, and Reject sends the reason typed once it is a `RejectionReason`. The queue is read
-    again after every decision, whatever became of it. *All questions* is the
+    (`AdminToken.of`), and one action runs at a time. *Pending* lists the queue, oldest first, each
+    submission with its options, categories and age: Approve files it under the categories picked
+    for it, none keeping the author's, and Reject sends the reason typed once it is a
+    `RejectionReason`. The queue is read again after every decision, whatever became of it. A read
+    lists at most `ModerationRepository.PAGE_SIZE`, and a queue that long says more may be waiting,
+    its tab `Pending (100+)`, rather than naming itself the whole. *All questions* is the
     list, seeds included, newest first, filtered by any statuses (`RETIRED` among them; never
     `OTHER`) and any categories, none being every one: Load reads its first page and Load more the
     next, at the filter the list was read at, with the cursor the page before gave, and changing the

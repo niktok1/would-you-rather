@@ -32,6 +32,7 @@ import io.ntole.wyr.admin.moderation.PendingScreen
 import io.ntole.wyr.admin.moderation.QuestionsScreen
 import io.ntole.wyr.admin.moderation.Screen
 import io.ntole.wyr.admin.moderation.TokenBar
+import io.ntole.wyr.admin.moderation.isFull
 import io.ntole.wyr.admin.moderation.retireWarningOf
 import io.ntole.wyr.admin.theme.AdminDimens
 import io.ntole.wyr.admin.theme.AdminTheme
@@ -117,15 +118,18 @@ private fun RetireDialog(
     )
 }
 
-/** A tab's name, with how many it lists once it has read them. */
+/**
+ * A tab's name, with how many it lists once it has read them, and a `+` on a queue that may hold
+ * more than one read lists.
+ */
 fun tabLabelOf(
     screen: Screen,
     state: ModerationState,
 ): String {
     val count =
         when (screen) {
-            Screen.PENDING -> state.pending.submissions?.size
-            Screen.QUESTIONS -> state.questions.questions?.size
+            Screen.PENDING -> state.pending.submissions?.let { if (isFull(it)) "${it.size}+" else "${it.size}" }
+            Screen.QUESTIONS -> state.questions.questions?.let { "${it.size}" }
         }
     return screen.label + count?.let { " ($it)" }.orEmpty()
 }

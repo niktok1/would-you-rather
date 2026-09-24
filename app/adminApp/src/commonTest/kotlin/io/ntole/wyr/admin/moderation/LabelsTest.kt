@@ -2,6 +2,7 @@ package io.ntole.wyr.admin.moderation
 
 import io.ntole.wyr.admin.serverLineOf
 import io.ntole.wyr.admin.windowTitleOf
+import io.ntole.wyr.core.domain.moderation.ModerationRepository
 import io.ntole.wyr.core.domain.question.Category
 import io.ntole.wyr.core.network.environment.WyrEnvironment
 import kotlin.test.Test
@@ -67,5 +68,16 @@ class LabelsTest {
         assertEquals("Nothing waiting.", queueSummaryOf(emptyList()))
         assertEquals("1 waiting.", queueSummaryOf(listOf(FakeModeration.FIRST)))
         assertEquals("2 waiting, oldest first.", queueSummaryOf(FakeModeration.QUEUE))
+    }
+
+    @Test
+    fun `a queue as long as one read lists is not called the whole of it`() {
+        val full = List(ModerationRepository.PAGE_SIZE) { index -> FakeModeration.FIRST.copy(id = "q$index") }
+
+        assertEquals(
+            "The oldest ${ModerationRepository.PAGE_SIZE}; more may be waiting, read in as these are decided.",
+            queueSummaryOf(full),
+        )
+        assertEquals("${ModerationRepository.PAGE_SIZE - 1} waiting, oldest first.", queueSummaryOf(full.drop(1)))
     }
 }

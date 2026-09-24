@@ -19,6 +19,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import io.ntole.wyr.admin.theme.AdminDimens
 import io.ntole.wyr.admin.theme.AdminType
+import io.ntole.wyr.core.domain.moderation.ModerationRepository
 import io.ntole.wyr.core.domain.submission.Submission
 import kotlin.time.Clock
 import kotlin.time.Instant
@@ -93,11 +94,21 @@ private fun PendingCard(
     }
 }
 
-/** How many are waiting, or that the queue has not been read. */
+/**
+ * How many are waiting, or that the queue has not been read. A queue read as long as a read can be
+ * ([isFull]) is only the oldest of those waiting, and says so.
+ */
 fun queueSummaryOf(submissions: List<Submission>?): String =
     when {
         submissions == null -> "Not read yet."
         submissions.isEmpty() -> "Nothing waiting."
+        isFull(submissions) -> "The oldest ${submissions.size}; more may be waiting, read in as these are decided."
         submissions.size == 1 -> "1 waiting."
         else -> "${submissions.size} waiting, oldest first."
     }
+
+/**
+ * Whether [submissions] is as many as one read of the queue lists ([ModerationRepository.PAGE_SIZE]),
+ * so more may be waiting behind them.
+ */
+fun isFull(submissions: List<Submission>): Boolean = submissions.size >= ModerationRepository.PAGE_SIZE
