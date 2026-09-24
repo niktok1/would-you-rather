@@ -2,6 +2,7 @@ package io.ntole.wyr.core.data.di
 
 import io.ktor.client.HttpClient
 import io.ntole.wyr.core.data.cache.InMemoryQuestionCache
+import io.ntole.wyr.core.data.like.DefaultLikeRepository
 import io.ntole.wyr.core.data.moderation.DefaultModerationRepository
 import io.ntole.wyr.core.data.player.DefaultPlayerRepository
 import io.ntole.wyr.core.data.question.DefaultQuestionRepository
@@ -9,6 +10,8 @@ import io.ntole.wyr.core.data.session.DefaultSessionDiagnostics
 import io.ntole.wyr.core.data.session.DefaultSessionRepository
 import io.ntole.wyr.core.data.submission.DefaultSubmissionRepository
 import io.ntole.wyr.core.data.vote.DefaultVoteRepository
+import io.ntole.wyr.core.domain.like.LikeRepository
+import io.ntole.wyr.core.domain.like.SetLike
 import io.ntole.wyr.core.domain.moderation.ApproveSubmission
 import io.ntole.wyr.core.domain.moderation.GetPendingSubmissions
 import io.ntole.wyr.core.domain.moderation.ModerationRepository
@@ -30,6 +33,7 @@ import io.ntole.wyr.core.network.SessionStore
 import io.ntole.wyr.core.network.TokenStorage
 import io.ntole.wyr.core.network.WyrHttpClient
 import io.ntole.wyr.core.network.api.AuthApi
+import io.ntole.wyr.core.network.api.LikeApi
 import io.ntole.wyr.core.network.api.ModerationApi
 import io.ntole.wyr.core.network.api.PlayerApi
 import io.ntole.wyr.core.network.api.QuestionApi
@@ -58,6 +62,7 @@ public fun dataModule(baseUrl: String): Module =
         single { VoteApi(get()) }
         single { PlayerApi(get()) }
         single { SubmissionApi(get()) }
+        single { LikeApi(get()) }
 
         single<QuestionCache> { InMemoryQuestionCache() }
 
@@ -80,6 +85,7 @@ public fun dataModule(baseUrl: String): Module =
         single<VoteRepository> { DefaultVoteRepository(api = get(), session = get()) }
         single<PlayerRepository> { DefaultPlayerRepository(api = get(), session = get()) }
         single<SubmissionRepository> { DefaultSubmissionRepository(api = get(), session = get()) }
+        single<LikeRepository> { DefaultLikeRepository(api = get(), session = get()) }
 
         factory { GetNextQuestion(questions = get(), session = get()) }
         factory { SkipQuestion(questions = get(), session = get()) }
@@ -87,4 +93,5 @@ public fun dataModule(baseUrl: String): Module =
         factory { GetPlayerStats(players = get(), session = get()) }
         factory { SubmitQuestion(submissions = get(), session = get()) }
         factory { GetMySubmissions(submissions = get(), session = get()) }
+        factory { SetLike(likes = get(), session = get()) }
     }
