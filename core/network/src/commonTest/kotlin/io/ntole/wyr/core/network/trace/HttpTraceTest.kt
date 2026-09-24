@@ -1,7 +1,9 @@
 package io.ntole.wyr.core.network.trace
 
 import io.ktor.client.engine.mock.MockEngine
+import io.ktor.client.engine.mock.MockEngineConfig
 import io.ktor.client.network.sockets.ConnectTimeoutException
+import io.ktor.client.plugins.HttpRequestTimeoutException
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ntole.wyr.core.api.WyrApi
@@ -18,12 +20,20 @@ import io.ntole.wyr.core.network.storeHolding
 import io.ntole.wyr.core.network.trace.HttpExchange.Outcome.Answered
 import io.ntole.wyr.core.network.trace.HttpExchange.Outcome.Failed
 import io.ntole.wyr.core.question.QuestionCategory
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
+import kotlin.test.assertIs
 import kotlin.test.assertTrue
+import kotlin.time.Duration.Companion.hours
 
 class HttpTraceTest {
     private val trace = HttpTrace()
@@ -60,6 +70,47 @@ class HttpTraceTest {
 
             val exchange = trace.exchanges.value.single()
             assertEquals(Failed("ConnectTimeoutException"), exchange.outcome)
+        }
+
+    @Test
+    fun `a request that timed out is recorded as a timeout`() =
+        runTest {
+            val silent =
+                MockEngine(
+                    MockEngineConfig().apply {
+                        dispatcher = StandardTestDispatcher(testScheduler)
+                        addHandler {
+                            delay(1.hours)
+                            respondEmptyPage()
+                        }
+                    },
+                )
+
+            assertFailsWith<HttpRequestTimeoutException> { questionApi(silent).page() }
+
+            val exchange = trace.exchanges.value.single()
+            assertEquals(Failed("HttpRequestTimeoutException"), exchange.outcome)
+        }
+
+    @Test
+    fun `a cancelled request is still recorded as a cancellation`() =
+        runTest {
+            val requestArrived = CompletableDeferred<Unit>()
+            val api =
+                questionApi(
+                    MockEngine {
+                        requestArrived.complete(Unit)
+                        awaitCancellation()
+                    },
+                )
+
+            val call = launch { api.page() }
+            requestArrived.await()
+            call.cancelAndJoin()
+
+            val exchange = trace.exchanges.value.single()
+            val outcome = assertIs<Failed>(exchange.outcome)
+            assertTrue(outcome.exceptionClass.endsWith("CancellationException"), outcome.exceptionClass)
         }
 
     @Test

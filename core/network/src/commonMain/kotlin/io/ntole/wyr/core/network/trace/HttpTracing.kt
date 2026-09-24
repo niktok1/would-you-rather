@@ -2,6 +2,7 @@ package io.ntole.wyr.core.network.trace
 
 import io.ktor.client.plugins.api.Send
 import io.ktor.client.plugins.api.createClientPlugin
+import io.ktor.client.utils.unwrapCancellationException
 import kotlin.time.TimeSource
 
 internal class HttpTracingConfig {
@@ -32,8 +33,13 @@ internal val HttpTracing =
                 try {
                     proceed(request)
                 } catch (failure: Throwable) {
-                    // Recorded and rethrown untouched, cancellation included (CLAUDE.md §5).
-                    record(HttpExchange.Outcome.Failed(failure::class.simpleName ?: "Throwable"))
+                    // Rethrown untouched, cancellation included (CLAUDE.md §5), but recorded as the
+                    // caller will see it. A request timeout cancels the request with the
+                    // HttpRequestTimeoutException as its cause, and only reaches the caller as that
+                    // once Ktor unwraps it, further out; recorded as is, it would read as a
+                    // cancellation nobody asked for.
+                    val seen = failure.unwrapCancellationException()
+                    record(HttpExchange.Outcome.Failed(seen::class.simpleName ?: "Throwable"))
                     throw failure
                 }
             record(HttpExchange.Outcome.Answered(call.response.status.value))

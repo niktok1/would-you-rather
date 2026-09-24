@@ -406,7 +406,9 @@ The app opens on the **Console** tab (`io.ntole.wyr.dev`). **Play** is the froze
 - **Action log.** Every action, newest first: `ok`, `err` (the `DomainError` and its diagnostic
   message) or `crash` (anything else thrown), with how long it took. One action runs at a time.
 - **HTTP trace.** Every request that went out, with status and time. A refreshed call shows as
-  the 401, the refresh, and the retry.
+  the 401, the refresh, and the retry. One that got no answer shows what the caller was thrown:
+  `HttpRequestTimeoutException` once it ran out of time (CLAUDE.md §8a), never the cancellation Ktor
+  wraps it in on the way.
 
 ## Roadmap (agreed 2026-09-23)
 
