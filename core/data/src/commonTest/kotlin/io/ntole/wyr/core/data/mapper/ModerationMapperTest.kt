@@ -2,6 +2,7 @@ package io.ntole.wyr.core.data.mapper
 
 import io.ntole.wyr.core.api.WyrApi
 import io.ntole.wyr.core.domain.moderation.ModeratedQuestion
+import io.ntole.wyr.core.domain.moderation.ModerationRepository
 import io.ntole.wyr.core.domain.moderation.QuestionCursor
 import io.ntole.wyr.core.domain.moderation.QuestionFilter
 import io.ntole.wyr.core.domain.moderation.RejectionReason
@@ -145,6 +146,12 @@ class ModerationMapperTest {
                 categories = setOf(Category.OTHER),
             ).wireCategories()
         }
+    }
+
+    @Test
+    fun `the client's page size is the most the server lists at once`() {
+        // As for the reason's limit below: asked for more, the server would list no more than this.
+        assertEquals(WyrApi.Limits.MAX_PAGE_SIZE, ModerationRepository.PAGE_SIZE)
     }
 
     @Test

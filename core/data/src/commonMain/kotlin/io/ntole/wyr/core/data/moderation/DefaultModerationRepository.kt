@@ -33,7 +33,7 @@ public class DefaultModerationRepository(
     private val api: ModerationApi,
 ) : ModerationRepository {
     override suspend fun pending(token: AdminToken): List<Submission> =
-        runApi { api.pending(token.value) }.submissions.map { it.toDomain() }
+        runApi { api.pending(token.value, limit = ModerationRepository.PAGE_SIZE) }.submissions.map { it.toDomain() }
 
     override suspend fun approve(
         token: AdminToken,
@@ -61,8 +61,11 @@ public class DefaultModerationRepository(
         // Mapped before anything is sent, so a filter by what this build cannot name never leaves it.
         val statuses = filter.wireStatuses()
         val categories = filter.wireCategories()
+        val cursor = after?.value
 
-        return runApi { api.questions(token.value, statuses, categories, cursor = after?.value) }.toDomain()
+        val page = runApi { api.questions(token.value, statuses, categories, cursor, ModerationRepository.PAGE_SIZE) }
+
+        return page.toDomain()
     }
 
     override suspend fun retire(

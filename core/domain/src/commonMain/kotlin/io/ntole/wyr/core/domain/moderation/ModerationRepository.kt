@@ -19,9 +19,9 @@ import io.ntole.wyr.core.domain.submission.SubmissionStatus
  */
 public interface ModerationRepository {
     /**
-     * The submissions waiting for a decision, oldest first, as many as the server lists at once, read
-     * from the server every time. So the first is the next to decide, and asking again once it is
-     * decided gets the rest.
+     * The submissions waiting for a decision, oldest first, at most [PAGE_SIZE] of them, read from the
+     * server every time. So the first is the next to decide, and asking again once it is decided gets
+     * the rest. A list of [PAGE_SIZE] may not be all of them.
      */
     public suspend fun pending(token: AdminToken): List<Submission>
 
@@ -58,8 +58,8 @@ public interface ModerationRepository {
     /**
      * One page of every question, seeds included, newest first, that [filter] picks: the first page
      * for no [after], or the one after the page whose [ModeratedQuestionPage.next] [after] is, which
-     * must be asked for with the same [filter]. As many as the server lists at once, read from the
-     * server every time.
+     * must be asked for with the same [filter]. At most [PAGE_SIZE] questions, read from the server
+     * every time.
      *
      * @throws IllegalArgumentException when [filter] holds [SubmissionStatus.OTHER] or
      *   [Category.OTHER], which name nothing the server can filter by, having sent nothing.
@@ -97,4 +97,14 @@ public interface ModerationRepository {
         token: AdminToken,
         questionId: String,
     ): ModeratedQuestion
+
+    public companion object {
+        /**
+         * The most submissions [pending] lists, and questions a page of [questions] holds: the most
+         * the server lists at once, so the moderator's reads are few, each one a request of the
+         * address's admin budget (CLAUDE.md §8b). It is the server's `WyrApi.Limits.MAX_PAGE_SIZE`,
+         * which this module cannot see (CLAUDE.md §3), so `:core:data`'s tests pin the two equal.
+         */
+        public const val PAGE_SIZE: Int = 100
+    }
 }

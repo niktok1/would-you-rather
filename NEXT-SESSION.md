@@ -318,7 +318,9 @@ automatically from every green commit on `main` (its URL is on its Render page).
   whose filter no longer picks it, a decision from either screen reading the queue and a read list
   again, a retirement or restoration refused as a wrong token or by the rate limit reading nothing
   again, drafts kept for a question pending in the list alone, an empty page that claims another ending the
-  read, and Lock keeping the filter alone. `ModerationOverHttpTest` adds a 409 `WRONG_STATUS` on a
+  read, and Lock keeping the filter alone. `DefaultModerationRepositoryTest` pins the queue and a page
+  of the list asked for 100 at a time (`ModerationRepository.PAGE_SIZE`, which `ModerationMapperTest`
+  holds to the server's `MAX_PAGE_SIZE`). `ModerationOverHttpTest` adds a 409 `WRONG_STATUS` on a
   retirement. `ScreensDrawTest` draws both screens and the Retire dialog off screen (Compose's
   `ImageComposeScene`) in both themes. `DataModuleTest` pins that the game's `dataModule` binds
   nothing of the moderator's (binding the API back fails it), and `WyrHttpClientTest` and
@@ -635,7 +637,7 @@ closes or *Lock* is pressed, which also forgets everything read with it.
   Against dev or prod the page's origin goes into that service's `ALLOWED_WEB_ORIGINS` on Render;
   for prod the desktop app needs no such change, so prefer it there.
 
-**Pending** is the queue, oldest first, read on *Load pending*: each submission's options,
+**Pending** is the queue, oldest first, read on *Load pending*, the oldest 100 at most: each submission's options,
 categories, age and id. The chips pick the categories *Approve* files it under in place of the
 author's, none keeping the author's; *Reject* stays off until the reason typed is one line of at
 most 200 characters once trimmed. After every decision the queue is read again, so a decided
@@ -647,7 +649,7 @@ without `ADMIN_TOKEN` (or a build without that route), `Already decided (409)`, 
 (429): try again in N s`, where ten wrong tokens in a minute lock the address out, the right token
 too, until the wait is over.
 
-**All questions** is every question, seeds included, newest first, read on *Load*, a page of 20 at
+**All questions** is every question, seeds included, newest first, read on *Load*, a page of 100 at
 a time with *Load more*. The chips narrow it by status (*Retired* among them) and by category, any
 of each, none being all; changing them drops what was read, and *Load* reads it at the new filter.
 Each question shows its options, categories, status, seed or player's, votes and likes, when it was
@@ -658,8 +660,8 @@ question as the server answered it, in its place, or drops it once the chips no 
 decision, or a move that failed, reads the list again as deep as it was shown, so the question shows
 where it now stands without losing your place. A question another moderator moved first says `Its
 status changed first (409)`. Every admin request spends the address's 60 a minute (CLAUDE.md §8b): a
-retirement or restoration is one; a decision is one, one more for the queue, and one per page of the
-list shown; nothing is read again after a 403 or a 429.
+retirement or restoration is one; a decision is one, one more for the queue, and one per 100
+questions the list shows; nothing is read again after a 403 or a 429.
 
 ### The dev console
 

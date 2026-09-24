@@ -963,11 +963,14 @@ and every request shows in its HTTP trace (`HttpTrace` in `:core:network`, never
     `ModeratedQuestionPage` of `ModeratedQuestion`s for a `QuestionFilter` and the `QuestionCursor`
     the page before gave (none for the first), and `RetireQuestion` and `RestoreQuestion`, each
     answered with the `ModeratedQuestion` as the list now shows it; through `runApi` alone, as the
-    rest. A `ModeratedQuestion` holds its categories as a question does, its status as a
-    `SubmissionStatus` (`RETIRED`, or `OTHER` for one this build cannot name), whether it is a seed,
-    its times as instants, its `Tally` and its like count. A filter by `SubmissionStatus.OTHER` or
-    `Category.OTHER` is refused before anything is sent. `WRONG_STATUS` is
-    `DomainError.WRONG_STATUS`. `moderationDataModule(environment)` binds it, and only there, for a
+    rest. `DefaultModerationRepository` reads the queue and each page of the list
+    `ModerationRepository.PAGE_SIZE` at a time, 100, the most the server lists at once (a copy
+    `ModerationMapperTest` pins to `WyrApi.Limits.MAX_PAGE_SIZE`), since every read is a request of
+    the address's admin budget (§8b). A `ModeratedQuestion` holds its categories as a question does,
+    its status as a `SubmissionStatus` (`RETIRED`, or `OTHER` for one this build cannot name),
+    whether it is a seed, its times as instants, its `Tally` and its like count. A filter by
+    `SubmissionStatus.OTHER` or `Category.OTHER` is refused before anything is sent. `WRONG_STATUS`
+    is `DomainError.WRONG_STATUS`. `moderationDataModule(environment)` binds it, and only there, for a
     client that only moderates: an HTTP client of its own over an in-memory session store nothing
     writes, no `TokenStorage` needed, no session repository, so no bearer token goes out and no guest
     can be minted. The game's `dataModule` binds none of it, so the game cannot moderate

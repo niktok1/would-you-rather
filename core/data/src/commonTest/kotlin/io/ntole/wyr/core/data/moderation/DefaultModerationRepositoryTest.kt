@@ -20,6 +20,7 @@ import io.ntole.wyr.core.domain.error.WyrException
 import io.ntole.wyr.core.domain.moderation.AdminToken
 import io.ntole.wyr.core.domain.moderation.ModeratedQuestion
 import io.ntole.wyr.core.domain.moderation.ModeratedQuestionPage
+import io.ntole.wyr.core.domain.moderation.ModerationRepository
 import io.ntole.wyr.core.domain.moderation.QuestionCursor
 import io.ntole.wyr.core.domain.moderation.QuestionFilter
 import io.ntole.wyr.core.domain.moderation.RejectionReason
@@ -88,6 +89,13 @@ class DefaultModerationRepositoryTest {
                 pending,
             )
             assertEquals(listOf(token.value), adminTokensSent())
+            // As many as the server lists at once, so a queue longer than its default page is read whole.
+            assertEquals(
+                "${ModerationRepository.PAGE_SIZE}",
+                engine.requestHistory
+                    .single()
+                    .url.parameters[WyrApi.Query.LIMIT],
+            )
         }
 
     @Test
@@ -262,6 +270,7 @@ class DefaultModerationRepositoryTest {
             assertEquals(listOf("PENDING", "RETIRED"), sent.url.parameters.getAll(WyrApi.Query.STATUS))
             assertEquals(listOf("FOOD", "RANDOM"), sent.url.parameters.getAll(WyrApi.Query.CATEGORY))
             assertEquals("c1", sent.url.parameters[WyrApi.Query.CURSOR])
+            assertEquals("${ModerationRepository.PAGE_SIZE}", sent.url.parameters[WyrApi.Query.LIMIT])
             assertEquals(listOf(token.value), adminTokensSent())
             assertEquals(
                 ModeratedQuestionPage(
