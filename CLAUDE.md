@@ -870,7 +870,8 @@ name one too.
   *WYR*. Cleartext HTTP (the `usesCleartextTraffic` manifest placeholder) is on for `local` alone;
   `dev` and `prod` are https only. `dev` is Android Studio's default variant, since a physical phone
   cannot reach LOCAL. `assembleDebug` builds all three.
-- *Desktop*: the `WYR_ENV` environment variable, read by `Main.kt`; unset is LOCAL.
+- *Desktop*: the `WYR_ENV` environment variable, read in `:app:shared`'s jvmMain
+  (`desktopEnvironmentName`), which `Main.kt` hands to `initKoin`; unset is LOCAL.
   `WYR_API_BASE_URL`, which pointed the desktop client at any server, is retired: left set in a shell,
   it sent a PROD build's requests wherever it named, with nothing on screen to say so, since a PROD
   build has no console. No client can put another URL in its environment's place.
