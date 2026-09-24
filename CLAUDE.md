@@ -411,12 +411,12 @@ and every request shows in its HTTP trace (`HttpTrace` in `:core:network`, never
   due questions, never topped up with ones done this cycle. Once nothing is due the cycle is
   finished: the next request starts the next cycle and serves the whole pool again, so a batch is
   never empty while the pool is not. `GET /v1/questions` requires a bearer token and is per-player.
-  Built in `QuestionStore.feed` (each batch one statement), on `players.current_cycle` and
-  `votes.answered_in_cycle`. Starting a cycle is a compare-and-set on the cycle read
-  (`PlayerStore.startNextCycle`), so two requests that both find it finished start it once. The
-  second can still serve again a question answered in the new cycle meanwhile (the feed's KDoc
-  has the case), but only two overlapping requests from one player get there, and the client
-  sends one at a time.
+  Built in `QuestionStore.feed` (each batch chosen in one statement, its categories read in one
+  more), on `players.current_cycle` and `votes.answered_in_cycle`. Starting a cycle is a
+  compare-and-set on the cycle read (`PlayerStore.startNextCycle`), so two requests that both find
+  it finished start it once. The second can still serve again a question answered in the new cycle
+  meanwhile (the feed's KDoc has the case), but only two overlapping requests from one player get
+  there, and the client sends one at a time.
   `DefaultQuestionRepository` keeps no record of what it served beyond one refill: it drops only
   questions still queued and those handed out since the refill went out, the one then on screen
   included.
@@ -491,33 +491,31 @@ and every request shows in its HTTP trace (`HttpTrace` in `:core:network`, never
 - **Submitting** *(server built, client next; details decided 2026-09-23)*: earns no points
   directly, because authors earn through likes. The author writes both options and **picks one or
   more categories** (each a real one, not `UNKNOWN`; *Categories*). A player may have at most **20
-  submissions pending**
-  moderation at once. A submitted question is served only after a moderator approves it; once
-  approved it is due for every player in their current cycle. Built as `POST /v1/questions`, in
-  `SubmissionStore.submit` after `checkedSubmission`. Both options are trimmed, then each must be
-  non-blank, at most `WyrApi.Limits.MAX_OPTION_LENGTH` (200, UTF-16 units) and one line (no
-  control character, nor U+2028 or U+2029, the line and paragraph separators), and the two must
-  differ ignoring case: otherwise 422 `INVALID_SUBMISSION`, which the player can put right. No
-  category, or one that is not a real one, is 400 `VALIDATION_FAILED`, since no correct client
-  sends either: a picker must have one picked before it lets the player submit. A category named
-  twice is filed once, and the question's categories are stored in declaration order, in the
-  submission's own transaction. The 21st pending submission is 409 `SUBMISSION_LIMIT`,
-  counted under the author's row lock (§4). A submission is stored `PENDING`, and nothing approves
-  one until *Moderation* is built. Questions carry an author and a `QuestionStatus`, and
-  `QuestionStore.servable` serves only approved ones, due at once in whatever cycle each player
-  is on. `GET /v1/me/questions` lists the author's submissions of every status, newest first, a
-  rejected one with its reason (`SubmissionStore.byAuthor`). The client and the console's section
-  come in the next branch.
+  submissions pending** moderation at once. A submitted question is served only after a moderator
+  approves it; once approved it is due for every player in their current cycle. Built as
+  `POST /v1/questions`, in `SubmissionStore.submit` after `checkedSubmission`. Both options are
+  trimmed, then each must be non-blank, at most `WyrApi.Limits.MAX_OPTION_LENGTH` (200, UTF-16
+  units) and one line (no control character, nor U+2028 or U+2029, the line and paragraph
+  separators), and the two must differ ignoring case: otherwise 422 `INVALID_SUBMISSION`, which the
+  player can put right. No category, or one that is not a real one, is 400 `VALIDATION_FAILED`,
+  since no correct client sends either: a picker must have one picked before it lets the player
+  submit. A category named twice is filed once, and the question's categories are stored in
+  declaration order, in the submission's own transaction. The 21st pending submission is 409
+  `SUBMISSION_LIMIT`, counted under the author's row lock (§4). A submission is stored `PENDING`,
+  and nothing approves one until *Moderation* is built. Questions carry an author and a
+  `QuestionStatus`, and `QuestionStore.servable` serves only approved ones, due at once in whatever
+  cycle each player is on. `GET /v1/me/questions` lists the author's submissions of every status,
+  newest first, a rejected one with its reason (`SubmissionStore.byAuthor`). The client and the
+  console's section come in the next branch.
 - **Moderation** *(not built but for the author's view)*: a moderator approves or rejects each
   pending submission and **may change its categories** when approving (*Categories*: at least one
   stays, and a change replaces the question's `question_categories` rows in one transaction). A
-  rejection carries a
-  **short reason**, and the author sees the status of each of their submissions and, for a
-  rejected one, that reason. The moderator is whoever holds the server's admin token (an
-  environment variable; admin routes are off when it is unset), not a role on a player account.
-  The author's view is built on the server (`GET /v1/me/questions`, *Submitting*), and so are the
-  columns a decision writes (`questions.reviewed_at`, `questions.rejection_reason`,
-  `question_categories`); nothing writes them yet.
+  rejection carries a **short reason**, and the author sees the status of each of their submissions
+  and, for a rejected one, that reason. The moderator is whoever holds the server's admin token (an
+  environment variable; admin routes are off when it is unset), not a role on a player account. The
+  author's view is built on the server (`GET /v1/me/questions`, *Submitting*), and so is what a
+  decision writes (`questions.reviewed_at`, `questions.rejection_reason`, and the
+  `question_categories` rows a change of categories replaces); no decision writes any of it yet.
 ---
 
 ## 9. How to work in this repo
