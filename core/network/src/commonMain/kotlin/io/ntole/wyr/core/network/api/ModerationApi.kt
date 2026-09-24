@@ -9,14 +9,20 @@ import io.ktor.client.request.parameter
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
 import io.ntole.wyr.core.api.WyrApi
+import io.ntole.wyr.core.question.AdminQuestionDto
+import io.ntole.wyr.core.question.AdminQuestionPageDto
 import io.ntole.wyr.core.question.ApproveSubmissionRequest
+import io.ntole.wyr.core.question.QuestionCategory
 import io.ntole.wyr.core.question.QuestionStatus
 import io.ntole.wyr.core.question.RejectSubmissionRequest
+import io.ntole.wyr.core.question.RestoreQuestionRequest
+import io.ntole.wyr.core.question.RetireQuestionRequest
 import io.ntole.wyr.core.question.SubmissionDto
 import io.ntole.wyr.core.question.SubmissionListDto
 
 /**
- * The moderator's routes (CLAUDE.md §8d, *Moderation*). Each call carries [adminToken] in
+ * The moderator's routes (CLAUDE.md §8d, *Moderation*): the queue and its decisions, and the list of
+ * every question with its retirement and restoration. Each call carries [adminToken] in
  * [WyrApi.Headers.ADMIN_TOKEN], and only that call: the token is the caller's to hold, in memory,
  * and is never set on the client, stored, or put anywhere the HTTP trace reads (it records no
  * headers).
@@ -63,6 +69,50 @@ public class ModerationApi(
     ): SubmissionDto =
         client
             .post(WyrApi.Paths.ADMIN_REJECTIONS) {
+                admin(adminToken)
+                setBody(request)
+            }.body()
+
+    /**
+     * One page of every question, seeds included, newest first: those at any of [statuses] and filed
+     * under any of [categories], either empty for all, one query parameter per value in the order
+     * given. [cursor] is the [AdminQuestionPageDto.nextCursor] of the page before, sent as it came,
+     * or null for the first page. At most [limit] questions.
+     */
+    public suspend fun questions(
+        adminToken: String,
+        statuses: List<QuestionStatus> = emptyList(),
+        categories: List<QuestionCategory> = emptyList(),
+        cursor: String? = null,
+        limit: Int = WyrApi.Limits.DEFAULT_PAGE_SIZE,
+    ): AdminQuestionPageDto =
+        client
+            .get(WyrApi.Paths.ADMIN_QUESTIONS) {
+                admin(adminToken)
+                statuses.forEach { status -> parameter(WyrApi.Query.STATUS, status.name) }
+                categories.forEach { category -> parameter(WyrApi.Query.CATEGORY, category.name) }
+                cursor?.let { parameter(WyrApi.Query.CURSOR, it) }
+                parameter(WyrApi.Query.LIMIT, limit)
+            }.body()
+
+    /** Retires an approved question, answered with it as the moderator's list now shows it. */
+    public suspend fun retire(
+        adminToken: String,
+        request: RetireQuestionRequest,
+    ): AdminQuestionDto =
+        client
+            .post(WyrApi.Paths.ADMIN_RETIREMENTS) {
+                admin(adminToken)
+                setBody(request)
+            }.body()
+
+    /** Restores a retired question, answered with it as the moderator's list now shows it. */
+    public suspend fun restore(
+        adminToken: String,
+        request: RestoreQuestionRequest,
+    ): AdminQuestionDto =
+        client
+            .post(WyrApi.Paths.ADMIN_RESTORATIONS) {
                 admin(adminToken)
                 setBody(request)
             }.body()

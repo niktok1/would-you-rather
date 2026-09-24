@@ -22,12 +22,17 @@ import io.ntole.wyr.core.network.respondSession
 import io.ntole.wyr.core.network.session
 import io.ntole.wyr.core.network.storeHolding
 import io.ntole.wyr.core.network.trace.HttpTrace
+import io.ntole.wyr.core.question.AdminQuestionDto
+import io.ntole.wyr.core.question.AdminQuestionPageDto
 import io.ntole.wyr.core.question.ApproveSubmissionRequest
 import io.ntole.wyr.core.question.QuestionCategory
 import io.ntole.wyr.core.question.QuestionStatus
 import io.ntole.wyr.core.question.RejectSubmissionRequest
+import io.ntole.wyr.core.question.RestoreQuestionRequest
+import io.ntole.wyr.core.question.RetireQuestionRequest
 import io.ntole.wyr.core.question.SubmissionDto
 import io.ntole.wyr.core.question.SubmissionListDto
+import io.ntole.wyr.core.vote.VoteTallyDto
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -123,6 +128,69 @@ class ModerationApiTest {
         }
 
     @Test
+    fun `the question list is asked for with every filter value, the cursor, the limit and the admin token`() =
+        runTest {
+            val engine = MockEngine { respondOk(PAGE) }
+
+            val page =
+                moderationApi(engine, storeHolding(session("a"))).questions(
+                    ADMIN_TOKEN,
+                    statuses = listOf(QuestionStatus.PENDING, QuestionStatus.RETIRED),
+                    categories = listOf(QuestionCategory.FOOD, QuestionCategory.ETHICS),
+                    cursor = "1790000000000:q1",
+                    limit = 50,
+                )
+
+            assertEquals(PAGE, page)
+            val sent = engine.requestHistory.single()
+            assertEquals(HttpMethod.Get, sent.method)
+            assertEquals(WyrApi.Paths.ADMIN_QUESTIONS, sent.url.encodedPath)
+            assertEquals(listOf("PENDING", "RETIRED"), sent.url.parameters.getAll(WyrApi.Query.STATUS))
+            assertEquals(listOf("FOOD", "ETHICS"), sent.url.parameters.getAll(WyrApi.Query.CATEGORY))
+            assertEquals("1790000000000:q1", sent.url.parameters[WyrApi.Query.CURSOR], "sent back as it came")
+            assertEquals("50", sent.url.parameters[WyrApi.Query.LIMIT])
+            assertEquals(ADMIN_TOKEN, sent.headers[WyrApi.Headers.ADMIN_TOKEN])
+        }
+
+    @Test
+    fun `the first page of every question names no filter and no cursor`() =
+        runTest {
+            val engine = MockEngine { respondOk(PAGE) }
+
+            moderationApi(engine, storeHolding(null)).questions(ADMIN_TOKEN)
+
+            val parameters =
+                engine.requestHistory
+                    .single()
+                    .url.parameters
+            assertEquals(setOf(WyrApi.Query.LIMIT), parameters.names(), "none is every one")
+            assertEquals("${WyrApi.Limits.DEFAULT_PAGE_SIZE}", parameters[WyrApi.Query.LIMIT])
+        }
+
+    @Test
+    fun `a retirement and a restoration are posted with the admin token and the question's id`() =
+        runTest {
+            val engine =
+                MockEngine { request ->
+                    respondOk(if (request.url.encodedPath == WyrApi.Paths.ADMIN_RETIREMENTS) RETIRED else LISTED)
+                }
+            val api = moderationApi(engine, storeHolding(session("a")))
+
+            assertEquals(RETIRED, api.retire(ADMIN_TOKEN, RetireQuestionRequest("q1")))
+            assertEquals(LISTED, api.restore(ADMIN_TOKEN, RestoreQuestionRequest("q1")))
+
+            assertEquals(
+                listOf(WyrApi.Paths.ADMIN_RETIREMENTS, WyrApi.Paths.ADMIN_RESTORATIONS),
+                engine.requestHistory.map { it.url.encodedPath },
+            )
+            engine.requestHistory.forEach { sent ->
+                assertEquals(HttpMethod.Post, sent.method)
+                assertEquals(ADMIN_TOKEN, sent.headers[WyrApi.Headers.ADMIN_TOKEN])
+                assertEquals("""{"questionId":"q1"}""", sent.body.toByteArray().decodeToString())
+            }
+        }
+
+    @Test
     fun `a refused token is FORBIDDEN and never refreshes the player's session`() =
         runTest {
             val store = storeHolding(session("a"))
@@ -142,6 +210,9 @@ class ModerationApiTest {
                     { api.pending("not-the-token") },
                     { api.approve("not-the-token", ApproveSubmissionRequest("q1")) },
                     { api.reject("not-the-token", RejectSubmissionRequest("q1", "a duplicate")) },
+                    { api.questions("not-the-token") },
+                    { api.retire("not-the-token", RetireQuestionRequest("q1")) },
+                    { api.restore("not-the-token", RestoreQuestionRequest("q1")) },
                 )
             calls.forEach { call ->
                 val failure = assertFailsWith<ApiException> { call() }
@@ -149,9 +220,16 @@ class ModerationApiTest {
                 assertEquals(403, failure.status)
             }
 
-            // Only the three calls: a 403 is not the 401 the Auth plugin refreshes on.
+            // Only the calls themselves: a 403 is not the 401 the Auth plugin refreshes on.
             assertEquals(
-                listOf(WyrApi.Paths.ADMIN_SUBMISSIONS, WyrApi.Paths.ADMIN_APPROVALS, WyrApi.Paths.ADMIN_REJECTIONS),
+                listOf(
+                    WyrApi.Paths.ADMIN_SUBMISSIONS,
+                    WyrApi.Paths.ADMIN_APPROVALS,
+                    WyrApi.Paths.ADMIN_REJECTIONS,
+                    WyrApi.Paths.ADMIN_QUESTIONS,
+                    WyrApi.Paths.ADMIN_RETIREMENTS,
+                    WyrApi.Paths.ADMIN_RESTORATIONS,
+                ),
                 engine.requestHistory.map { it.url.encodedPath },
             )
             assertEquals(session("a"), store.read())
@@ -237,5 +315,23 @@ class ModerationApiTest {
             )
 
         val REJECTED = PENDING.copy(status = QuestionStatus.REJECTED, rejectionReason = "a duplicate")
+
+        val LISTED =
+            AdminQuestionDto(
+                id = "q1",
+                optionA = "Fly",
+                optionB = "Swim",
+                categories = listOf(QuestionCategory.SUPERPOWERS),
+                status = QuestionStatus.APPROVED,
+                seed = false,
+                submittedAt = 1_790_000_000_000L,
+                reviewedAt = 1_790_000_001_000L,
+                tally = VoteTallyDto(votesA = 3, votesB = 1),
+                likeCount = 2,
+            )
+
+        val RETIRED = LISTED.copy(status = QuestionStatus.RETIRED, retiredAt = 1_790_000_002_000L)
+
+        val PAGE = AdminQuestionPageDto(listOf(RETIRED, LISTED.copy(id = "seed-1", seed = true)), nextCursor = "c")
     }
 }

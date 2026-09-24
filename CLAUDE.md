@@ -466,9 +466,11 @@ accounts exist.
   player lists only their own. The client and the console submit and list them. The moderation
   contract is settled and built on the server too: the admin routes, `ApproveSubmissionRequest`,
   `RejectSubmissionRequest`, the question list's `AdminQuestionPageDto` and `AdminQuestionDto`
-  (paged by `WyrApi.Query.CURSOR`), the `X-Admin-Token` header (`WyrApi.Headers`) and the error codes
-  `FORBIDDEN` and `ALREADY_DECIDED`, and the moderator's client and console section are built on
-  it (§8d, *Moderation*).
+  (paged by `WyrApi.Query.CURSOR`), `RetireQuestionRequest` and `RestoreQuestionRequest`, the
+  `X-Admin-Token` header (`WyrApi.Headers`), `QuestionStatus.RETIRED` and the error codes `FORBIDDEN`,
+  `ALREADY_DECIDED` and `WRONG_STATUS`. The moderator's client (`ModerationApi` calls every admin
+  route) and the console's section are built on it (§8d, *Moderation*); the console decides the
+  queue only.
 - **A rejection reason is one line** — *provisional — user decision.* §8d asks for a short reason;
   the server also holds it to one line, as it does an option: no control character, nor U+2028 or
   U+2029 (`checkedRejection`). Chosen as the stricter reading, since a reason is shown to its author
@@ -935,6 +937,9 @@ and every request shows in its HTTP trace (`HttpTrace` in `:core:network`, never
     keeps the author's categories. `RejectionReason` holds only a reason the server accepts, by
     `checkedRejection`'s rules, so a rejection's 400 can only be a bug; its `MAX_LENGTH` copies the
     wire's limit, which `:core:domain` cannot see, and `ModerationMapperTest` pins the two equal.
+    `ModerationApi.questions` asks for a page of the list, one `?status=` and `?category=` per value
+    and the cursor sent back as it came, and `retire` and `restore` post a question's id; each
+    carries the token as the others do.
   - *The console's section* (`io.ntole.wyr.dev.moderation`) takes the token typed and holds it in its
     ViewModel, in memory only: never in saved state or storage, masked, and a password to the keyboard.
     It loads the queue, approves under the categories picked for a submission (none keeps the
