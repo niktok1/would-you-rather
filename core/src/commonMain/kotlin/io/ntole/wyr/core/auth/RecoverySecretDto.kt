@@ -10,4 +10,7 @@ import kotlinx.serialization.Serializable
 @Serializable
 public data class RecoverySecretDto(
     public val recoverySecret: String,
-)
+) {
+    /** Never the secret itself (see [redacted]). */
+    override fun toString(): String = "RecoverySecretDto(recoverySecret=${redacted(recoverySecret)})"
+}

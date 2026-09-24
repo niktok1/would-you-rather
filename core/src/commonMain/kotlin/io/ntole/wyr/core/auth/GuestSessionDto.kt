@@ -32,4 +32,9 @@ public data class GuestSessionDto(
             refreshToken = refreshToken,
             accessTokenExpiresInSeconds = accessTokenExpiresInSeconds,
         )
+
+    /** Every field as a data class shows it, but for [recoverySecret], which shows only whether it is there. */
+    override fun toString(): String =
+        "GuestSessionDto(playerId=$playerId, accessToken=$accessToken, refreshToken=$refreshToken, " +
+            "accessTokenExpiresInSeconds=$accessTokenExpiresInSeconds, recoverySecret=${redacted(recoverySecret)})"
 }

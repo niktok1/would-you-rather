@@ -1,6 +1,8 @@
 package io.ntole.wyr.core.network
 
 import io.ntole.wyr.core.auth.GuestSessionDto
+import io.ntole.wyr.core.auth.RecoverRequest
+import io.ntole.wyr.core.auth.RecoverySecretDto
 import io.ntole.wyr.core.auth.SessionDto
 import io.ntole.wyr.core.error.ErrorCode
 import io.ntole.wyr.core.error.ErrorDto
@@ -16,7 +18,9 @@ import kotlinx.serialization.descriptors.SerialDescriptor
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 /**
  * Pins the client half of the wire enum rule (CLAUDE.md §5).
@@ -168,6 +172,30 @@ class WyrJsonTest {
             SessionDto.serializer().descriptor.names() + "recoverySecret",
             GuestSessionDto.serializer().descriptor.names(),
         )
+    }
+
+    /**
+     * The secret never rotates, so a copy in a log or a failed test's message recovers its player
+     * until the player replaces it (CLAUDE.md §8a, *Recovery*). Each of these would print it as a data
+     * class does.
+     */
+    @Test
+    fun `no DTO that carries the recovery secret shows it`() {
+        val shown =
+            listOf(
+                WyrJson.decodeFromString<GuestSessionDto>(GUEST_SESSION),
+                RecoverRequest(recoverySecret = "secret"),
+                RecoverySecretDto(recoverySecret = "secret"),
+            ).map { it.toString() }
+
+        // Each secret here is the word itself, which shows after an = only as a field's value.
+        shown.forEach { assertFalse("=secret" in it, it) }
+        assertEquals(
+            "GuestSessionDto(playerId=p1, accessToken=access, refreshToken=refresh, " +
+                "accessTokenExpiresInSeconds=900, recoverySecret=<redacted>)",
+            shown.first(),
+        )
+        assertTrue("recoverySecret=null" in WyrJson.decodeFromString<GuestSessionDto>(SESSION).toString())
     }
 
     @Test

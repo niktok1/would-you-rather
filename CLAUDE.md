@@ -462,6 +462,8 @@ auth SDK, satisfying §2.
     longer has.
   - Both are rate-limited (§8b), and neither the secret nor its hash is ever logged: the refusal's
     line names the limit and a client address, and `RateLimitTest` scans a whole flow's log for both.
+    Nor does a `toString` show it: the three DTOs that carry it say only whether it is there
+    (`WyrJsonTest`).
     Each environment's server keeps secrets of its own (§8e): a DEV secret recovers nobody on PROD,
     and DEV's in-memory database forgets every secret at each restart, where a client meets
     `INVALID_RECOVERY_SECRET`. `RecoveryFlowTest` pins the routes and `SessionStoreTest` the store.

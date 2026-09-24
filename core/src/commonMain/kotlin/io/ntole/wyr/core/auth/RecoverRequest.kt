@@ -12,4 +12,7 @@ import kotlinx.serialization.Serializable
 @Serializable
 public data class RecoverRequest(
     public val recoverySecret: String,
-)
+) {
+    /** Never the secret itself (see [redacted]). */
+    override fun toString(): String = "RecoverRequest(recoverySecret=${redacted(recoverySecret)})"
+}
