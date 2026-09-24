@@ -59,5 +59,37 @@ android {
     }
     buildFeatures {
         compose = true
+        // BuildConfig carries each flavor's environment to WyrApplication, and resValue its label.
+        buildConfig = true
+        resValues = true
+    }
+
+    // One flavor per server environment (CLAUDE.md §8e), each under an id and a launcher label of its
+    // own, so all three install side by side. Only local may send plain http: the emulator reaches a
+    // server on the host at http://10.0.2.2:8080, and the deployed ones are https only.
+    flavorDimensions += "environment"
+    productFlavors {
+        create("local") {
+            applicationIdSuffix = ".local"
+            resValue("string", "app_name", "WYR Local")
+            manifestPlaceholders["usesCleartextTraffic"] = true
+        }
+        create("dev") {
+            // Android Studio's default variant: a physical phone cannot reach a server on the
+            // developer's machine, so local is only for the emulator.
+            isDefault = true
+            applicationIdSuffix = ".dev"
+            resValue("string", "app_name", "WYR Dev")
+            manifestPlaceholders["usesCleartextTraffic"] = false
+        }
+        create("prod") {
+            resValue("string", "app_name", "WYR")
+            manifestPlaceholders["usesCleartextTraffic"] = false
+        }
+        configureEach {
+            dimension = "environment"
+            // The flavor's name is its environment's, as WyrEnvironment.parse reads it.
+            buildConfigField("String", "WYR_ENV", "\"$name\"")
+        }
     }
 }
