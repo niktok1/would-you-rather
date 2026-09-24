@@ -18,6 +18,15 @@ public enum class DomainError {
     /** The player has as many submissions waiting for a moderator as they may have at once. */
     SUBMISSION_LIMIT,
 
+    /** A moderator tried to decide a submission that a moderator has already approved or rejected. */
+    ALREADY_DECIDED,
+
+    /**
+     * A moderator's request did not carry the server's admin token. Nothing to do with the player's
+     * session, which stays as it is.
+     */
+    FORBIDDEN,
+
     /** Request never reached the server, or its answer did not arrive whole. */
     NETWORK,
 

@@ -45,8 +45,21 @@ public enum class ErrorCode {
      */
     SUBMISSION_LIMIT,
 
+    /**
+     * A moderator tried to approve or reject a submission that is not pending: a moderator decided
+     * it already, or it is a seed, approved from the start. Sent with 409.
+     */
+    ALREADY_DECIDED,
+
     /** Caller is not authenticated, or the credential is expired. */
     UNAUTHORIZED,
+
+    /**
+     * An admin route was called without the server's admin token
+     * ([io.ntole.wyr.core.api.WyrApi.Headers.ADMIN_TOKEN]), or with another. Sent with 403, never
+     * 401: no player session is at fault, so a client must not refresh one or replace it.
+     */
+    FORBIDDEN,
 
     /** The supplied refresh token is unknown, already used, or expired. */
     INVALID_REFRESH_TOKEN,

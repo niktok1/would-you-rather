@@ -22,6 +22,8 @@ class ErrorMapperTest {
                     ApiException(ErrorCode.VALIDATION_FAILED, status = 400) to DomainError.SERVER,
                     ApiException(ErrorCode.INVALID_SUBMISSION, status = 422) to DomainError.INVALID_SUBMISSION,
                     ApiException(ErrorCode.SUBMISSION_LIMIT, status = 409) to DomainError.SUBMISSION_LIMIT,
+                    ApiException(ErrorCode.ALREADY_DECIDED, status = 409) to DomainError.ALREADY_DECIDED,
+                    ApiException(ErrorCode.FORBIDDEN, status = 403) to DomainError.FORBIDDEN,
                     ApiException(ErrorCode.UNAUTHORIZED, status = 401) to DomainError.UNAUTHORIZED,
                     ApiException(ErrorCode.INVALID_REFRESH_TOKEN, status = 401) to DomainError.UNAUTHORIZED,
                     ApiException(ErrorCode.RATE_LIMITED, status = 429) to DomainError.RATE_LIMITED,
@@ -58,7 +60,7 @@ class ErrorMapperTest {
     @Test
     fun `without a code any other status stays UNKNOWN`() =
         runTest {
-            listOf(400, 404, 409, 499, 600).forEach { status ->
+            listOf(400, 403, 404, 409, 499, 600).forEach { status ->
                 assertMapsTo(DomainError.UNKNOWN, ApiException(ErrorCode.UNKNOWN, status = status))
             }
         }
