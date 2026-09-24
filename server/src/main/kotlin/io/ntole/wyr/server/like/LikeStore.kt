@@ -8,12 +8,15 @@ import io.ntole.wyr.server.plugins.ApiFailure
 import io.ntole.wyr.server.question.QuestionStore
 import io.ntole.wyr.server.vote.Scoring
 import org.jetbrains.exposed.v1.core.Count
+import org.jetbrains.exposed.v1.core.Expression
+import org.jetbrains.exposed.v1.core.JoinType
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.case
 import org.jetbrains.exposed.v1.core.count
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.core.inList
 import org.jetbrains.exposed.v1.core.intLiteral
+import org.jetbrains.exposed.v1.core.wrapAsExpression
 import org.jetbrains.exposed.v1.jdbc.deleteWhere
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.select
@@ -157,4 +160,18 @@ object LikeStore {
                 row[Likes.questionId] to QuestionLikes(count = row[likes].toInt(), likedByMe = row[mine] > 0)
             }
     }
+
+    /**
+     * How many likes the questions [authorId] submitted hold now, their own likes included: each is
+     * a point in their total, paid and not taken back. A seed has no author, so its likes are
+     * nobody's. An expression to embed in a larger statement (`StatsStore`), so it is read at the
+     * same moment as the total those likes paid into.
+     */
+    internal fun receivedBy(authorId: String): Expression<Long?> =
+        wrapAsExpression(
+            Likes
+                .join(Questions, JoinType.INNER, Likes.questionId, Questions.id)
+                .select(Likes.playerId.count())
+                .where { Questions.authorPlayerId eq authorId },
+        )
 }

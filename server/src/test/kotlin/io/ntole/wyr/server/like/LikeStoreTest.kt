@@ -247,6 +247,32 @@ class LikeStoreTest {
     }
 
     @Test
+    fun `the stats count the likes the player's own questions hold and agree with their points`() {
+        val author = newPlayer()
+        val (first, second) = submitted(author) to submitted(author)
+        val (fan, critic) = newPlayer() to newPlayer()
+        like(fan, first)
+        like(critic, first)
+        like(fan, second)
+        like(author, second)
+        unlike(critic, first)
+        // Likes the author gives count for the questions' authors, never for the author.
+        like(author, submitted(fan))
+        like(author, SEED)
+        answer(author, first)
+
+        val stats = statsOf(author)
+
+        assertEquals(3, stats.likesReceived, "one left on the first, and the second's two, the author's own included")
+        assertEquals(
+            stats.answersGiven * Scoring.POINTS_PER_ANSWER + stats.likesReceived * Scoring.POINTS_PER_LIKE,
+            stats.totalPoints,
+        )
+        assertEquals(1, statsOf(fan).likesReceived, "the author's like on the fan's question")
+        assertEquals(0, statsOf(critic).likesReceived)
+    }
+
+    @Test
     fun `a question not approved cannot be liked or unliked by anybody`() {
         val (author, player) = newPlayer() to newPlayer()
 

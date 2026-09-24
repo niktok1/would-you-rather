@@ -1,20 +1,27 @@
 package io.ntole.wyr.server.player
 
+import io.ntole.wyr.core.like.LikeResultDto
 import io.ntole.wyr.core.player.PlayerStatsDto
+import io.ntole.wyr.core.question.QuestionCategory
+import io.ntole.wyr.core.question.QuestionStatus
 import io.ntole.wyr.core.vote.OptionSide
 import io.ntole.wyr.core.vote.VoteResultDto
 import io.ntole.wyr.server.db.Players
+import io.ntole.wyr.server.db.QuestionCategories
 import io.ntole.wyr.server.db.Questions
 import io.ntole.wyr.server.db.Seed
 import io.ntole.wyr.server.db.appTables
 import io.ntole.wyr.server.db.connectH2
 import io.ntole.wyr.server.db.h2Url
+import io.ntole.wyr.server.like.LikeStore
+import io.ntole.wyr.server.vote.Scoring
 import io.ntole.wyr.server.vote.VoteStore
 import org.jetbrains.exposed.v1.core.Transaction
 import org.jetbrains.exposed.v1.core.statements.StatementContext
 import org.jetbrains.exposed.v1.core.statements.StatementInterceptor
 import org.jetbrains.exposed.v1.core.statements.api.PreparedStatementApi
 import org.jetbrains.exposed.v1.jdbc.SchemaUtils
+import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.select
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import java.sql.Connection
@@ -65,9 +72,40 @@ class StatsStoreTest {
     }
 
     @Test
+    fun `a like committed while the stats are read shows in the points and the likes received or in neither`() {
+        val author = newPlayer()
+        val question = approvedBy(author)
+        val fan = newPlayer()
+        val elsewhere = Executors.newSingleThreadExecutor()
+        try {
+            val stats =
+                transaction(database) {
+                    // Commits a like of the author's question right after this transaction's first
+                    // statement. Read apart from the total, the likes received would count it and the
+                    // total would not hold its point.
+                    registerInterceptor(
+                        afterFirstStatement {
+                            elsewhere
+                                .submit(Callable { like(fan, question) })
+                                .get(TIMEOUT_SECONDS, TimeUnit.SECONDS)
+                        },
+                    )
+                    StatsStore.of(author)
+                }
+
+            assertEquals(fresh(author).copy(dueThisCycle = pool.size + 1), stats, "all from before the like")
+            val liked = statsOf(author)
+            assertEquals(Scoring.POINTS_PER_LIKE, liked?.totalPoints, "and the like did land")
+            assertEquals(1, liked?.likesReceived)
+        } finally {
+            elsewhere.shutdownNow()
+        }
+    }
+
+    @Test
     fun `answers given are counted apart from points`() {
         val player = newPlayer()
-        // What a like will do: pay the player a point with no answer behind it.
+        // What a like does: pay the player a point with no answer behind it.
         transaction(database) { PlayerStore.addPoints(player, points = 5) }
 
         val stats = statsOf(player)
@@ -98,6 +136,7 @@ class StatsStoreTest {
             questionsAnswered = 0,
             cycle = Players.FIRST_CYCLE,
             dueThisCycle = pool.size,
+            likesReceived = 0,
         )
 
     private fun newPlayer(): String =
@@ -110,6 +149,33 @@ class StatsStoreTest {
         transaction(database) {
             VoteStore.cast(player, questionId, OptionSide.A, attemptId = UUID.randomUUID().toString())
         }
+
+    /** An approved food question by [author], as a moderator's approval would leave it. */
+    private fun approvedBy(author: String): String {
+        val id = UUID.randomUUID().toString()
+        transaction(database) {
+            Questions.insert { row ->
+                row[Questions.id] = id
+                row[optionA] = "A of $id"
+                row[optionB] = "B of $id"
+                row[authorPlayerId] = author
+                row[status] = QuestionStatus.APPROVED
+                row[submittedAt] = 1_000L
+                row[reviewedAt] = 2_000L
+                row[rejectionReason] = null
+            }
+            QuestionCategories.insert { row ->
+                row[questionId] = id
+                row[category] = QuestionCategory.FOOD.name
+            }
+        }
+        return id
+    }
+
+    private fun like(
+        player: String,
+        questionId: String,
+    ): LikeResultDto = transaction(database) { LikeStore.setLiked(player, questionId, liked = true) }
 
     private fun statsOf(player: String): PlayerStatsDto? = transaction(database) { StatsStore.of(player) }
 
