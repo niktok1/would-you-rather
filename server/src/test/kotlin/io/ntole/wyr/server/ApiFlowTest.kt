@@ -22,6 +22,8 @@ import io.ntole.wyr.core.auth.RefreshRequest
 import io.ntole.wyr.core.auth.SessionDto
 import io.ntole.wyr.core.error.ErrorCode
 import io.ntole.wyr.core.error.ErrorDto
+import io.ntole.wyr.core.like.LikeRequest
+import io.ntole.wyr.core.like.LikeResultDto
 import io.ntole.wyr.core.player.PlayerStatsDto
 import io.ntole.wyr.core.question.ApproveSubmissionRequest
 import io.ntole.wyr.core.question.QuestionCategory
@@ -1315,6 +1317,138 @@ class ApiFlowTest {
             assertEquals(listOf(pending), client.queue(), "and nothing was decided")
         }
 
+    @Test
+    fun `a like is set rather than toggled and pays the author a point for as long as it is held`() =
+        runServer("like") { client ->
+            val (author, fan) = client.guest() to client.guest()
+            val question = client.approvedQuestion(author, "Fly")
+
+            val response = client.like(fan, question.id, liked = true)
+
+            assertEquals(HttpStatusCode.OK, response.status)
+            assertEquals(LikeResultDto(question.id, likeCount = 1, likedByMe = true), response.body<LikeResultDto>())
+            assertEquals(
+                LikeResultDto(question.id, likeCount = 1, likedByMe = true),
+                client.liked(fan, question.id, liked = true),
+                "liking again changes nothing",
+            )
+            val paid = client.stats(author)
+            assertEquals(Scoring.POINTS_PER_LIKE, paid.totalPoints, "paid once")
+            assertEquals(1, paid.likesReceived)
+            assertEquals(0, client.stats(fan).totalPoints, "and the fan nothing")
+
+            val forFan = client.wholePool(fan).single { it.id == question.id }
+            assertEquals(1 to true, forFan.likeCount to forFan.likedByMe, "shown before the fan answers it")
+            assertFalse(forFan.answeredBefore)
+            val forAuthor = client.wholePool(author).single { it.id == question.id }
+            assertEquals(1 to false, forAuthor.likeCount to forAuthor.likedByMe)
+
+            assertEquals(
+                LikeResultDto(question.id, likeCount = 0, likedByMe = false),
+                client.liked(fan, question.id, liked = false),
+            )
+            assertEquals(
+                LikeResultDto(question.id, likeCount = 0, likedByMe = false),
+                client.liked(fan, question.id, liked = false),
+                "unliking again changes nothing",
+            )
+            val unpaid = client.stats(author)
+            assertEquals(0, unpaid.totalPoints, "the point went with the like, once")
+            assertEquals(0, unpaid.likesReceived)
+        }
+
+    @Test
+    fun `an author may like their own question and a seed's likes pay nobody`() =
+        runServer("like-own-and-seed") { client ->
+            val (author, other) = client.guest() to client.guest()
+            val own = client.approvedQuestion(author, "Fly")
+
+            assertEquals(LikeResultDto(own.id, likeCount = 1, likedByMe = true), client.liked(author, own.id, true))
+            assertEquals(LikeResultDto("seed-1", likeCount = 1, likedByMe = true), client.liked(author, "seed-1", true))
+            assertEquals(LikeResultDto("seed-1", likeCount = 2, likedByMe = true), client.liked(other, "seed-1", true))
+
+            val stats = client.stats(author)
+            assertEquals(Scoring.POINTS_PER_LIKE, stats.totalPoints, "for their own question, not for the seed")
+            assertEquals(1, stats.likesReceived)
+            assertEquals(0, client.stats(other).totalPoints)
+        }
+
+    @Test
+    fun `liking a question that does not exist or is not approved is a not-found`() =
+        runServer("like-missing-question") { client ->
+            val (author, player) = client.guest() to client.guest()
+            val pending = client.submitted(author, question("Pending"))
+            val rejected = client.submitted(author, question("Rejected"))
+            assertEquals(HttpStatusCode.OK, client.reject(rejected.id, "No").status)
+
+            listOf("no-such-question", LONGER_THAN_ANY_ID, pending.id, rejected.id).forEach { questionId ->
+                listOf(author, player).forEach { session ->
+                    listOf(true, false).forEach { liked ->
+                        val response = client.like(session, questionId, liked)
+
+                        assertEquals(HttpStatusCode.NotFound, response.status, "$questionId liked=$liked")
+                        assertEquals(ErrorCode.QUESTION_NOT_FOUND, response.body<ErrorDto>().code, questionId)
+                    }
+                }
+            }
+            assertEquals(0, client.stats(author).totalPoints)
+        }
+
+    @Test
+    fun `liking needs a session`() =
+        runServer("like-no-token") { client ->
+            val response =
+                client.post(WyrApi.Paths.LIKES) {
+                    contentType(ContentType.Application.Json)
+                    setBody(LikeRequest("seed-1", liked = true))
+                }
+
+            assertEquals(HttpStatusCode.Unauthorized, response.status)
+            assertEquals(ErrorCode.UNAUTHORIZED, response.body<ErrorDto>().code)
+        }
+
+    @Test
+    fun `a validly signed token for a player that does not exist cannot like`() =
+        runServer("like-ghost-player") { client ->
+            // As for the ghost-player vote, the helper's token for a real player has to pass first.
+            val real = client.guest()
+            assertEquals(HttpStatusCode.OK, client.like(signAccessToken(real.playerId), "seed-1", liked = true).status)
+
+            val response = client.like(signAccessToken("no-such-player"), "seed-1", liked = true)
+
+            assertEquals(HttpStatusCode.Unauthorized, response.status)
+            assertEquals(ErrorCode.UNAUTHORIZED, response.body<ErrorDto>().code)
+        }
+
+    @Test
+    fun `a like body the server cannot use is a validation error`() =
+        runServer("malformed-like") { client ->
+            val session = client.guest()
+
+            listOf(
+                "malformed json" to "{not json",
+                "no questionId" to """{"liked":true}""",
+                // A like sets rather than toggles, so a request must say which.
+                "no liked" to """{"questionId":"seed-1"}""",
+                "null liked" to """{"questionId":"seed-1","liked":null}""",
+                "blank questionId" to """{"questionId":"  ","liked":true}""",
+                // PostgreSQL refuses a NUL in text, which H2 stores, so only the check can catch it.
+                "NUL in questionId" to """{"questionId":"seed-1\u0000","liked":true}""",
+                "newline in questionId" to """{"questionId":"seed-1\n","liked":true}""",
+            ).forEach { (case, body) ->
+                val response =
+                    client.post(WyrApi.Paths.LIKES) {
+                        bearerAuth(session.accessToken)
+                        contentType(ContentType.Application.Json)
+                        setBody(body)
+                    }
+
+                assertEquals(HttpStatusCode.BadRequest, response.status, case)
+                assertEquals(ErrorCode.VALIDATION_FAILED, response.body<ErrorDto>().code, case)
+            }
+            assertEquals(0, client.wholePool(session).single { it.id == "seed-1" }.likeCount, "and nothing was liked")
+        }
+
     /** A server on its own database, moderated with [adminToken], or with moderation off for none. */
     private fun runServer(
         databaseName: String,
@@ -1480,6 +1614,39 @@ class ApiFlowTest {
 
     /** A food question to submit, set against its own negation. */
     private fun question(text: String) = SubmitQuestionRequest(text, "Not $text", listOf(QuestionCategory.FOOD))
+
+    /** A question by [author], submitted and then approved with the test server's admin token. */
+    private suspend fun HttpClient.approvedQuestion(
+        author: SessionDto,
+        text: String,
+    ): SubmissionDto {
+        val submission = submitted(author, question(text))
+        assertEquals(HttpStatusCode.OK, approve(submission.id).status)
+        return submission
+    }
+
+    private suspend fun HttpClient.liked(
+        session: SessionDto,
+        questionId: String,
+        liked: Boolean,
+    ): LikeResultDto = like(session, questionId, liked).body()
+
+    private suspend fun HttpClient.like(
+        session: SessionDto,
+        questionId: String,
+        liked: Boolean,
+    ): HttpResponse = like(session.accessToken, questionId, liked)
+
+    private suspend fun HttpClient.like(
+        accessToken: String,
+        questionId: String,
+        liked: Boolean,
+    ): HttpResponse =
+        post(WyrApi.Paths.LIKES) {
+            bearerAuth(accessToken)
+            contentType(ContentType.Application.Json)
+            setBody(LikeRequest(questionId, liked))
+        }
 
     private suspend fun HttpClient.me(session: SessionDto): HttpResponse =
         get(WyrApi.Paths.ME) { bearerAuth(session.accessToken) }

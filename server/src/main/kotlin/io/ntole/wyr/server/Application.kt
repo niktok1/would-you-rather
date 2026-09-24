@@ -13,6 +13,7 @@ import io.ntole.wyr.server.auth.authRoutes
 import io.ntole.wyr.server.config.ServerConfig
 import io.ntole.wyr.server.db.DatabaseFactory
 import io.ntole.wyr.server.db.Db
+import io.ntole.wyr.server.like.likeRoutes
 import io.ntole.wyr.server.moderation.AdminToken
 import io.ntole.wyr.server.moderation.moderationRoutes
 import io.ntole.wyr.server.player.playerRoutes
@@ -57,6 +58,7 @@ fun Application.wyrModule(config: ServerConfig) {
         questionRoutes(db)
         submissionRoutes(db)
         voteRoutes(db)
+        likeRoutes(db)
         playerRoutes(db)
         // Not registered at all without an admin token, so moderation is off (CLAUDE.md §8d).
         moderationRoutes(db, config.adminToken?.let { token -> AdminToken(token) })
