@@ -86,6 +86,7 @@ private fun DevConsole() {
         onResetQueue = viewModel::resetQueue,
         onVote = viewModel::vote,
         onSkip = viewModel::skip,
+        onToggleLike = viewModel::toggleLike,
         onVoteById = viewModel::voteById,
         onRetryLastVote = viewModel::retryLastVote,
         onAnswerMany = viewModel::answerMany,

@@ -28,6 +28,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
 import io.ntole.wyr.core.domain.question.Category
+import io.ntole.wyr.core.domain.question.Question
 import io.ntole.wyr.core.domain.session.SessionInfo
 import io.ntole.wyr.core.domain.vote.Side
 import io.ntole.wyr.core.domain.vote.VoteOutcome
@@ -57,6 +58,7 @@ fun DevConsoleScreen(
     onResetQueue: () -> Unit,
     onVote: (Side) -> Unit,
     onSkip: () -> Unit,
+    onToggleLike: () -> Unit,
     onVoteById: (questionId: String, side: Side) -> Unit,
     onRetryLastVote: () -> Unit,
     onAnswerMany: (count: Int) -> Unit,
@@ -89,6 +91,8 @@ fun DevConsoleScreen(
                     Value("id", question.id)
                     Value("categories", namesOf(question.categories))
                     Value("answeredBefore", question.answeredBefore.toString())
+                    Value("likeCount", question.likeCount.toString())
+                    Value("likedByMe", question.likedByMe.toString())
                     Value("A", question.optionA)
                     Value("B", question.optionB)
                 }
@@ -96,6 +100,9 @@ fun DevConsoleScreen(
                     Button(onClick = { onVote(Side.A) }, enabled = idle && question != null) { Text("A") }
                     Button(onClick = { onVote(Side.B) }, enabled = idle && question != null) { Text("B") }
                     OutlinedButton(onClick = onSkip, enabled = idle && question != null) { Text("Skip") }
+                    OutlinedButton(onClick = onToggleLike, enabled = idle && question != null) {
+                        Text(likeActionOf(question))
+                    }
                 }
                 val lastVote = state.lastVote
                 Value(
@@ -324,6 +331,9 @@ private fun Buttons(content: @Composable () -> Unit) {
         content()
     }
 }
+
+/** What the Like button does to [question]: unlike it when the player likes it, like it otherwise. */
+internal fun likeActionOf(question: Question?): String = if (question?.likedByMe == true) "Unlike" else "Like"
 
 /** Every one of [categories], in the order the set holds them. */
 internal fun namesOf(categories: Set<Category>): String = categories.joinToString(", ") { it.name }

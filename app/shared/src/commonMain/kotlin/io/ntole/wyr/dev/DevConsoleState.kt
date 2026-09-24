@@ -16,8 +16,8 @@ import io.ntole.wyr.core.domain.vote.VoteOutcome
  * [session] and [queueSize] are snapshots, taken when the console opens and after every action.
  * A snapshot that cannot be taken leaves them as they were and adds a `refreshHeader` log entry.
  *
- * [stats] are read from the server when the console opens, after every vote, Skip, Answer N and
- * New guest, and on Read stats. A vote's outcome drops them, so they are never older than
+ * [stats] are read from the server when the console opens, after every vote, Skip, Like, Answer N
+ * and New guest, and on Read stats. A vote's outcome drops them, so they are never older than
  * [lastOutcome]. A read that fails leaves them as they were, which may be none. Read stats is an
  * action like any other, logged as `readStats` whether it works or not. The other reads are logged
  * only when they fail, as a `refreshStats` entry.

@@ -3,6 +3,8 @@ package io.ntole.wyr.dev
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import io.ntole.wyr.core.domain.error.WyrException
+import io.ntole.wyr.core.domain.like.QuestionLikes
+import io.ntole.wyr.core.domain.like.SetLike
 import io.ntole.wyr.core.domain.player.GetPlayerStats
 import io.ntole.wyr.core.domain.player.PlayerStats
 import io.ntole.wyr.core.domain.question.Category
@@ -43,6 +45,7 @@ class DevConsoleViewModel(
     private val skipQuestion: SkipQuestion,
     private val castVote: CastVote,
     private val getPlayerStats: GetPlayerStats,
+    private val setLike: SetLike,
     httpTrace: HttpTrace,
     private val timeSource: TimeSource = TimeSource.Monotonic,
 ) : ViewModel() {
@@ -107,6 +110,34 @@ class DevConsoleViewModel(
         perform("skip", args = "questionId=$questionId", readsStats = true) {
             val recorded = recordSkip(questionId)
             loadQuestion().summary() + if (recorded) "" else " skip=unrecorded"
+        }
+    }
+
+    /**
+     * Likes the question on screen, or unlikes it if the player likes it (CLAUDE.md §8d), then shows
+     * it with its likes as the server answered them. A like pays the question's author, who may be
+     * this player, so the stats are read again after, a failed like's too: its answer may be what was
+     * lost.
+     *
+     * Which to ask for is read off the question on screen, and the request sets the like rather than
+     * toggling it. So a like whose answer was lost leaves the question as it was, and pressing again
+     * asks for the like again, which the server holds once however many times it lands.
+     */
+    fun toggleLike() {
+        val question = _state.value.question ?: return
+        val liked = !question.likedByMe
+        perform("setLike", args = "questionId=${question.id} liked=$liked", readsStats = true) {
+            val likes = setLike(question.id, liked)
+            _state.update { state ->
+                val shown = state.question
+                // Only ever onto the question the server says it answered for.
+                if (shown?.id != likes.questionId) {
+                    state
+                } else {
+                    state.copy(question = shown.copy(likeCount = likes.likeCount, likedByMe = likes.likedByMe))
+                }
+            }
+            likes.summary()
         }
     }
 
@@ -345,6 +376,8 @@ class DevConsoleViewModel(
     private fun SentVote.args(): String = "questionId=$questionId side=$side attempt=${attempt.value}"
 
     private fun VoteOutcome.summary(): String = "+$pointsAwarded total=$totalPoints" + if (replayed) " replayed" else ""
+
+    private fun QuestionLikes.summary(): String = "question=$questionId likes=$likeCount likedByMe=$likedByMe"
 
     private fun PlayerStats.summary(): String =
         "total=$totalPoints answers=$answersGiven questions=$questionsAnswered cycle=$cycle due=$dueThisCycle " +
