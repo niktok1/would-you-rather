@@ -301,7 +301,8 @@ automatically from every green commit on `main` (its URL is on its Render page).
   state's text and from a new ViewModel, Lock forgetting everything and cancelling the action in
   flight (a lock guard dropped, or the cancel, fails it), approvals with and without categories,
   rejections only with a reason the server takes, the queue read again after every decision and
-  every error, a failure kept once its submission is no longer listed. `TokenBarTest` drives the
+  every error but a 403 or a 429, after which nothing is read again, a failure kept once its
+  submission is no longer listed. `TokenBarTest` drives the
   token field with clicks and keys through `ImageComposeScene`: Undo in it after a Lock brings
   nothing back (a field not made anew on Lock gives the whole token back). `ModerationOverHttpTest`
   runs it over the real client and a mock engine: 403, a bare 404, a 409 and a 429 with its
@@ -313,6 +314,7 @@ automatically from every green commit on `main` (its URL is on its Render page).
   refused while a read runs, `OTHER` refused as a filter, Retire only after the dialog is confirmed
   and only for an approved question, every action reading the list again as deep as it was shown
   (one page only fails it), a decision from either screen reading the queue and a read list again,
+  a retirement or restoration refused as a wrong token or by the rate limit reading nothing again,
   drafts kept for a question pending in the list alone, an empty page that claims another ending the
   read, and Lock keeping the filter alone. `ModerationOverHttpTest` adds a 409 `WRONG_STATUS` on a
   retirement. `ScreensDrawTest` draws both screens and the Retire dialog off screen (Compose's
@@ -635,7 +637,8 @@ closes or *Lock* is pressed, which also forgets everything read with it.
 categories, age and id. The chips pick the categories *Approve* files it under in place of the
 author's, none keeping the author's; *Reject* stays off until the reason typed is one line of at
 most 200 characters once trimmed. After every decision the queue is read again, so a decided
-submission leaves it, and a line above it says what the decision did. A failure shows where it
+submission leaves it, and a line above it says what the decision did; not after a 403 or a 429,
+which decided nothing and would refuse the read too. A failure shows where it
 happened: under the submission, or above the queue, named by its options, once the read after it no
 longer lists it. `Wrong admin token (403)`, `Moderation is off on this server (404)` for a server
 without `ADMIN_TOKEN` (or a build without that route), `Already decided (409)`, and `Too many requests

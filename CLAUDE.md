@@ -995,7 +995,9 @@ and every request shows in its HTTP trace (`HttpTrace` in `:core:network`, never
     dialog; Restore a retired one; decide a pending one as in the queue, from the same draft of
     categories and reason. Every action on a question reads the list again, as many pages deep as
     were shown, so it shows what the server holds without losing the moderator's place; a decision
-    reads the queue again too. A failure shows where it happened: a read's above its screen, an
+    reads the queue again too. Nothing is read again after a 403 or a 429, which did nothing and
+    would refuse the read too: after a wrong token the read would only spend another of the
+    address's ten a minute, past which every admin request from it is refused (§8b). A failure shows where it happened: a read's above its screen, an
     action's under its question, or at the top of the screen it was started from, named by the
     question's options, once the read after it no longer lists it. A 403 reads as a wrong token, a
     bare 404 (`UNKNOWN`) as moderation off on that server, a 409 as a decision or a move made first,

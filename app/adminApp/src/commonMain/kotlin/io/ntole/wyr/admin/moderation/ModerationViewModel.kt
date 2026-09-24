@@ -2,6 +2,7 @@ package io.ntole.wyr.admin.moderation
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import io.ntole.wyr.core.domain.error.DomainError
 import io.ntole.wyr.core.domain.error.WyrException
 import io.ntole.wyr.core.domain.moderation.AdminToken
 import io.ntole.wyr.core.domain.moderation.ApproveSubmission
@@ -250,6 +251,7 @@ class ModerationViewModel(
      * Sends a decision on [questionId] from [from], which answers with the line to show once it is
      * made, then reads the queue again, and the list if it was read, whatever became of it: a decision
      * whose answer was lost may still have been made, and one another moderator beat has changed both.
+     * Not after a refusal every request would meet ([refusesEveryRequest]), which decided nothing.
      */
     private fun decide(
         action: Action,
@@ -263,6 +265,7 @@ class ModerationViewModel(
                 // Decided, so nothing is left to pick for it.
                 _state.update { it.noticed(from, notice).copy(drafts = it.drafts - questionId) }
             }
+        if (failure.refusesEveryRequest) return@acting failure
         readQueue(token)
         if (_state.value.questions.questions != null) rereadList(token)
         failure
@@ -271,7 +274,8 @@ class ModerationViewModel(
     /**
      * Retires or restores [questionId], which answers with the line to show once it is done, then
      * reads the list again, whatever became of it: a question another moderator moved first answers
-     * `WRONG_STATUS`, and the list then shows where it stands.
+     * `WRONG_STATUS`, and the list then shows where it stands. Not after a refusal every request
+     * would meet ([refusesEveryRequest]), which moved nothing.
      */
     private fun move(
         action: Action,
@@ -283,9 +287,19 @@ class ModerationViewModel(
                 val notice = send(token)
                 _state.update { it.noticed(Screen.QUESTIONS, notice) }
             }
+        if (failure.refusesEveryRequest) return@acting failure
         rereadList(token)
         failure
     }
+
+    /**
+     * Whether this is a refusal the server gave before doing anything, and would give any admin request
+     * sent now: a wrong token (403) or the rate limit (429). Reading again after one would change
+     * nothing on screen and only spend the address's admin budget, and after a 403 one more of its ten
+     * wrong tokens a minute, past which every admin request from it is refused (CLAUDE.md §8b).
+     */
+    private val Failure?.refusesEveryRequest: Boolean
+        get() = this is Failure.Refused && (error == DomainError.FORBIDDEN || error == DomainError.RATE_LIMITED)
 
     /**
      * Runs [work], an action on the question [running] names, from [from]: its earlier failure there

@@ -310,7 +310,8 @@ class ModerationViewModelTest {
             val viewModel = openWithQueue()
             viewModel.setReason("q1", "a duplicate")
 
-            DomainError.entries.forEach { error ->
+            // All but a wrong token and the rate limit, which decide nothing (below).
+            (DomainError.entries - setOf(DomainError.FORBIDDEN, DomainError.RATE_LIMITED)).forEach { error ->
                 moderation.approve = { _, _ -> throw WyrException(error, "the server's word on $error") }
                 moderation.reject = { _, _ -> throw WyrException(error, "the server's word on $error") }
                 moderation.calls.clear()
@@ -328,6 +329,33 @@ class ModerationViewModelTest {
                     ItemFailure("\"Fly\" or \"Swim\"", Failure.Refused(error, detail = "the server's word on $error"))
                 assertEquals(failed, approval, "$error")
                 assertEquals(failed, rejection, "$error")
+            }
+        }
+
+    @Test
+    fun `nothing is read again after a decision refused as a wrong token or by the rate limit`() =
+        runTest(dispatcher) {
+            val viewModel = openWithQueue()
+            viewModel.loadQuestions()
+            testScheduler.advanceUntilIdle()
+            viewModel.setReason("q1", "a duplicate")
+
+            listOf(DomainError.FORBIDDEN, DomainError.RATE_LIMITED).forEach { error ->
+                moderation.approve = { _, _ -> throw WyrException(error, "refused") }
+                moderation.reject = { _, _ -> throw WyrException(error, "refused") }
+                moderation.calls.clear()
+
+                viewModel.approve("q1", Screen.PENDING)
+                testScheduler.advanceUntilIdle()
+                viewModel.reject("q1", Screen.QUESTIONS)
+                testScheduler.advanceUntilIdle()
+
+                // Either is the server's answer before it decides anything, and would be its answer to a
+                // read as well, which after a 403 would spend one more of the address's wrong tokens.
+                assertEquals(listOf("approve q1 []", "reject q1 a duplicate"), moderation.calls, "$error")
+                val refused = ItemFailure("\"Fly\" or \"Swim\"", Failure.Refused(error, detail = "refused"))
+                assertEquals(refused, viewModel.state.value.pending.outcomes.failures["q1"], "$error")
+                assertEquals(refused, viewModel.state.value.questions.outcomes.failures["q1"], "$error")
             }
         }
 

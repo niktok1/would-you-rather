@@ -285,6 +285,32 @@ class QuestionListViewModelTest {
         }
 
     @Test
+    fun `a retirement or restoration refused as a wrong token or by the rate limit reads nothing again`() =
+        runTest(dispatcher) {
+            val viewModel = openWithList()
+            viewModel.loadMore()
+            testScheduler.advanceUntilIdle()
+
+            listOf(DomainError.FORBIDDEN, DomainError.RATE_LIMITED).forEach { error ->
+                moderation.retire = { throw WyrException(error, "refused") }
+                moderation.restore = { throw WyrException(error, "refused") }
+                moderation.calls.clear()
+
+                viewModel.askToRetire("seed-1")
+                viewModel.confirmRetire()
+                testScheduler.advanceUntilIdle()
+                viewModel.restore("q3")
+                testScheduler.advanceUntilIdle()
+
+                // Neither moved anything, and a read now would be refused the same way.
+                assertEquals(listOf("retire seed-1", "restore q3"), moderation.calls, "$error")
+                val failures = viewModel.state.value.questions.outcomes.failures
+                assertEquals(Failure.Refused(error, detail = "refused"), failures["seed-1"]?.failure, "$error")
+                assertEquals(Failure.Refused(error, detail = "refused"), failures["q3"]?.failure, "$error")
+            }
+        }
+
+    @Test
     fun `a pending question in the list is decided as in the queue, and both are read again`() =
         runTest(dispatcher) {
             val viewModel = openWithList()

@@ -88,7 +88,9 @@ enum class Screen(
  * The submissions waiting for a decision, oldest first, as the server last listed them, or `null`
  * until a read works. It is read on Load pending and again after every decision, whatever became of
  * it: a decision changes the queue, and one whose answer was lost, or that another moderator beat,
- * may have changed it too. A read that fails keeps what was listed and says why in [failure].
+ * may have changed it too. Only a decision refused as a wrong token or by the rate limit, which
+ * decided nothing, is not followed by a read. A read that fails keeps what was listed and says why in
+ * [failure].
  */
 data class PendingQueue(
     val submissions: List<Submission>? = null,
@@ -102,8 +104,9 @@ data class PendingQueue(
  * `null` until one is, and [next], where the page after them starts, `null` on the last. Changing
  * the filter drops what was read for the one before; Load reads the first page, Load more the next,
  * and every action on a question reads again as many pages as were shown, so the list shows what
- * the server holds without losing the moderator's place. A read that fails keeps what was listed
- * and says why in [failure].
+ * the server holds without losing the moderator's place; all but one refused as a wrong token or by
+ * the rate limit, which did nothing. A read that fails keeps what was listed and says why in
+ * [failure].
  */
 data class QuestionList(
     val filter: QuestionFilter = QuestionFilter(),
