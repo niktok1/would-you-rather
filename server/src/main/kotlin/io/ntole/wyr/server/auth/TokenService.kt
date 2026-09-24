@@ -33,6 +33,20 @@ class TokenService(
             .withAudience(config.jwtAudience)
             .build()
 
+    /**
+     * [verifier], but taking a token up to a refresh token's lifetime past its expiry. Only for telling
+     * whose rate-limit budget a request spends ([verifiedPlayerId]), never for letting one in: every
+     * player's token expires in its turn, and the request that finds it expired must spend that player's
+     * budget and reach its 401, which is what the client refreshes on, rather than share its address's.
+     */
+    internal val expiredTokenVerifier: JWTVerifier =
+        JWT
+            .require(algorithm)
+            .withIssuer(config.jwtIssuer)
+            .withAudience(config.jwtAudience)
+            .acceptExpiresAt(config.refreshTokenTtlSeconds)
+            .build()
+
     fun issueAccessToken(
         playerId: String,
         now: Long = System.currentTimeMillis(),

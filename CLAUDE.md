@@ -411,8 +411,13 @@ accounts exist.
     submissions 30 an hour (the 20-pending cap still applies), and `GET /v1/me` and
     `GET /v1/me/questions` 120 a minute each. The key is the player id in the bearer token, which the
     limiter verifies itself (`verifiedPlayerId`): it runs before authentication, so no principal is
-    there yet. A request without a valid token spends its address's budget of the group instead, and
-    then gets its 401, so a forged token naming a player cannot spend that player's budget.
+    there yet. A request without a token this server signed spends its address's budget of the group
+    instead, and then gets its 401, so a forged token naming a player cannot spend that player's
+    budget. A token that has only expired, as every player's does in its turn, still names its
+    player for a refresh token's lifetime (`TokenService.expiredTokenVerifier`), so the request that
+    finds it expired spends that player's budget and reaches its 401, which is what the client
+    refreshes on; keyed by address, it would be answered 429 once the address's budget was spent,
+    and the client would not refresh.
   - `/health` is in no group, so Render's checks are never refused.
 
   The limiter runs before anything else of the route, so a refused request never reaches the

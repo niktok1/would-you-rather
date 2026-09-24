@@ -52,6 +52,8 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
@@ -131,6 +133,24 @@ class RateLimitTest {
             assertRateLimited(client.vote(accessToken = null), "a third without a valid token")
 
             assertEquals(HttpStatusCode.OK, client.vote(player).status, "the player's budget was not touched")
+        }
+
+    @Test
+    fun `an expired token still spends its player's budget, so it gets its 401 once its address's is spent`() =
+        runServer("expired-token", NO_PRACTICAL_LIMIT.copy(votes = TWO_A_MINUTE)) { client ->
+            val player = client.guest()
+            repeat(2) { client.vote(accessToken = null) }
+            assertRateLimited(client.vote(accessToken = null), "the address's budget is spent")
+
+            // Past a refresh token's lifetime its session is dead anyway, and it names nobody.
+            val stale = accessTokenIssued(player.playerId, ago = 2.hours)
+            assertRateLimited(client.vote(accessToken = stale), "a token that old spends its address's")
+
+            // As every player's token is, once in its turn: a 429 here would never make the client refresh.
+            val expired = accessTokenIssued(player.playerId, ago = 10.minutes)
+            assertEquals(HttpStatusCode.Unauthorized, client.vote(accessToken = expired).status, "401, not 429")
+            assertEquals(HttpStatusCode.OK, client.vote(player).status, "the player's second of two")
+            assertRateLimited(client.vote(player), "the expired token spent the player's first")
         }
 
     @Test
@@ -505,6 +525,25 @@ class RateLimitTest {
                     "JWT_AUDIENCE" to "wyr-test-client",
                 )
             return TokenService(ServerConfig.fromEnvironment(env::get)).issueAccessToken(playerId)
+        }
+
+        /**
+         * An access token for [playerId] as the server under test issued it [ago]: its 300 s are over by
+         * then, and its refresh token's 3,600 are too once [ago] is past an hour.
+         */
+        fun accessTokenIssued(
+            playerId: String,
+            ago: Duration,
+        ): String {
+            val env =
+                mapOf(
+                    "JWT_SECRET" to "test-secret",
+                    "JWT_ISSUER" to "wyr-test",
+                    "JWT_AUDIENCE" to "wyr-test-client",
+                    "ACCESS_TTL_SECONDS" to "300",
+                )
+            val issuedAt = System.currentTimeMillis() - ago.inWholeMilliseconds
+            return TokenService(ServerConfig.fromEnvironment(env::get)).issueAccessToken(playerId, now = issuedAt)
         }
 
         suspend fun HttpClient.refresh(refreshToken: String): HttpResponse =

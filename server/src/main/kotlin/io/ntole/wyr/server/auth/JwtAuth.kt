@@ -27,12 +27,13 @@ fun ApplicationCall.authenticatedPlayerId(): String =
     principal<JWTPrincipal>()?.payload?.playerId() ?: throw ApiFailure.unauthorized("token carries no player id")
 
 /**
- * The player the request's bearer token names, verified as `authenticate(JWT_AUTH)` verifies it, or
- * null when it carries none that would pass there.
+ * The player the request's bearer token names, verified as `authenticate(JWT_AUTH)` verifies it but
+ * for its expiry ([TokenService.expiredTokenVerifier]), or null when it carries none this server signed.
  *
  * For what runs before authentication has. Ktor's rate limiter picks a request's budget before the
  * `authenticate` block reads the token, whichever of the two is nested in the other, so no principal
- * is there yet (`installRateLimits`). A request this answers null for is refused 401 by the block.
+ * is there yet (`installRateLimits`). A request this answers null for is refused 401 by the block, and
+ * so is one whose token has only expired, after spending its player's budget.
  */
 fun TokenService.verifiedPlayerId(request: ApplicationRequest): String? {
     val header = request.headers[HttpHeaders.Authorization] ?: return null
@@ -46,7 +47,7 @@ fun TokenService.verifiedPlayerId(request: ApplicationRequest): String? {
     // Any case, as the JWT provider takes it.
     if (!bearer.authScheme.equals(AuthScheme.Bearer, ignoreCase = true)) return null
     return try {
-        verifier.verify(bearer.blob).playerId()
+        expiredTokenVerifier.verify(bearer.blob).playerId()
     } catch (refused: JWTVerificationException) {
         null
     }
