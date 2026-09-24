@@ -209,8 +209,11 @@ class DevConsoleViewModel(
         // went out again as a fresh guest, and was paid to them.
         val paidTo = sessions.currentPlayerId()
         // The stats read before this outcome no longer describe the server, so they go rather than
-        // be compared with it, until the read that follows every vote brings them back.
-        _state.update { it.copy(lastOutcome = outcome, lastOutcomePlayerId = paidTo, stats = null) }
+        // be compared with it, until the read that follows every vote brings them back. The likes
+        // received are measured from that read on, so the previous outcome's measure goes too.
+        _state.update {
+            it.copy(lastOutcome = outcome, lastOutcomePlayerId = paidTo, stats = null, likesReceivedAtOutcome = null)
+        }
         return outcome
     }
 
@@ -222,7 +225,11 @@ class DevConsoleViewModel(
 
     private suspend fun loadStats(): PlayerStats {
         val stats = getPlayerStats()
-        _state.update { it.copy(stats = stats) }
+        _state.update {
+            // The first read after an outcome sets the likes later reads are measured against.
+            val atOutcome = it.likesReceivedAtOutcome ?: if (it.lastOutcome != null) stats.likesReceived else null
+            it.copy(stats = stats, likesReceivedAtOutcome = atOutcome)
+        }
         return stats
     }
 

@@ -40,6 +40,11 @@ data class DevConsoleState(
      */
     val lastOutcomePlayerId: String? = null,
     val stats: PlayerStats? = null,
+    /**
+     * The likes received that the first stats read to work after [lastOutcome] counted, or `null`
+     * until one has. What [likesMovedSinceOutcome] measures later reads against.
+     */
+    val likesReceivedAtOutcome: Int? = null,
     /** The last vote sent, whether or not it got an answer, for Retry last vote to send again. */
     val lastVote: SentVote? = null,
     /** The action in flight, or `null` when idle. Only one runs at a time. */
@@ -61,17 +66,32 @@ data class DevConsoleState(
         }
 
     /**
+     * True when [stats] count other likes received than [likesReceivedAtOutcome], so they are not
+     * compared with [lastOutcome]. A like of one of the player's questions, by them or anyone, pays
+     * them without a vote, and an unlike takes it back (CLAUDE.md §8d): the total has moved since the
+     * outcome for a reason that is no mismatch. Never true while [statsForAnotherPlayer] is.
+     */
+    val likesMovedSinceOutcome: Boolean
+        get() {
+            val stats = stats ?: return false
+            val atOutcome = likesReceivedAtOutcome ?: return false
+            return lastOutcome != null && !statsForAnotherPlayer && stats.likesReceived != atOutcome
+        }
+
+    /**
      * True when [stats] and [lastOutcome] disagree on the player's total points. Both are the
      * server's word, and the stats were read after the outcome, so they should agree. When they do
      * not, the server paid for something the console has no outcome for: a vote whose answer was
      * lost, which Retry last vote then replays, or one cast from the Play tab. Otherwise it is a bug.
-     * Never true while [statsForAnotherPlayer] is.
+     * Never true while [statsForAnotherPlayer] or [likesMovedSinceOutcome] is. So a like that lands
+     * between a vote and the first stats read after it, rare but possible from another client, shows
+     * as a mismatch.
      */
     val pointsMismatch: Boolean
         get() {
             val stats = stats ?: return false
             val outcome = lastOutcome ?: return false
-            return !statsForAnotherPlayer && stats.totalPoints != outcome.totalPoints
+            return !statsForAnotherPlayer && !likesMovedSinceOutcome && stats.totalPoints != outcome.totalPoints
         }
 }
 

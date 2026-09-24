@@ -858,6 +858,65 @@ class DevConsoleViewModelTest {
         }
 
     @Test
+    fun `a like of the player's own question since the outcome is not taken for a mismatch`() =
+        runTest(dispatcher) {
+            val viewModel = openConsole()
+            viewModel.voteById("q1", Side.A)
+            testScheduler.advanceUntilIdle()
+            // One of the player's questions liked since: a point more, paid without a vote.
+            players.stats = { statsOf("p1").copy(totalPoints = OUTCOME.totalPoints + 1, likesReceived = 1) }
+
+            viewModel.readStats()
+            testScheduler.advanceUntilIdle()
+
+            val state = viewModel.state.value
+            assertEquals(0, state.likesReceivedAtOutcome)
+            assertTrue(state.likesMovedSinceOutcome)
+            assertFalse(state.pointsMismatch, "the like paid the point, not a vote the console has no outcome for")
+        }
+
+    @Test
+    fun `the stats read right after a vote are compared with it whatever likes they count`() =
+        runTest(dispatcher) {
+            // The total already holds the likes' points, as the outcome's does.
+            players.stats = { statsOf("p1").copy(likesReceived = 5) }
+            val viewModel = openConsole()
+
+            viewModel.voteById("q1", Side.A)
+            testScheduler.advanceUntilIdle()
+
+            val state = viewModel.state.value
+            assertEquals(5, state.likesReceivedAtOutcome)
+            assertFalse(state.likesMovedSinceOutcome)
+            assertFalse(state.pointsMismatch)
+        }
+
+    @Test
+    fun `the next vote measures likes from the stats read after it`() =
+        runTest(dispatcher) {
+            val viewModel = openConsole()
+            viewModel.voteById("q1", Side.A)
+            testScheduler.advanceUntilIdle()
+            players.stats = { statsOf("p1").copy(totalPoints = OUTCOME.totalPoints + 1, likesReceived = 1) }
+            viewModel.readStats()
+            testScheduler.advanceUntilIdle()
+            assertTrue(viewModel.state.value.likesMovedSinceOutcome)
+
+            // The next vote's total counts the like, and so does the read after it.
+            votes.answer = { questionId, side ->
+                OUTCOME.copy(questionId = questionId, yourSide = side, totalPoints = OUTCOME.totalPoints + 2)
+            }
+            players.stats = { statsOf("p1").copy(totalPoints = OUTCOME.totalPoints + 2, likesReceived = 1) }
+            viewModel.voteById("q2", Side.B)
+            testScheduler.advanceUntilIdle()
+
+            val state = viewModel.state.value
+            assertEquals(1, state.likesReceivedAtOutcome)
+            assertFalse(state.likesMovedSinceOutcome)
+            assertFalse(state.pointsMismatch)
+        }
+
+    @Test
     fun `Read stats reads them again as an action of its own`() =
         runTest(dispatcher) {
             val viewModel = openConsole()

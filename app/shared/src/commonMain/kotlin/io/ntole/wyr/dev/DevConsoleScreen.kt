@@ -240,6 +240,9 @@ private fun Stats(state: DevConsoleState) {
     if (state.statsForAnotherPlayer) {
         Value("lastOutcome", "paid to ${state.lastOutcomePlayerId}, not compared")
     }
+    if (state.likesMovedSinceOutcome) {
+        Value("lastOutcome", "likesReceived was ${state.likesReceivedAtOutcome} then, not compared")
+    }
     if (state.pointsMismatch) {
         val outcomeTotal = state.lastOutcome?.totalPoints
         CodeLine("MISMATCH totalPoints: stats=${stats?.totalPoints} lastOutcome=$outcomeTotal", failed = true)
