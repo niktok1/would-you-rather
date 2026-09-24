@@ -462,8 +462,8 @@ auth SDK, satisfying §2.
     longer has.
   - Both are rate-limited (§8b), and neither the secret nor its hash is ever logged: the refusal's
     line names the limit and a client address, and `RateLimitTest` scans a whole flow's log for both.
-    Each environment's server has its own (§8e): a DEV secret recovers nobody on PROD, and DEV's
-    in-memory database forgets every secret at each restart, where a client meets
+    Each environment's server keeps secrets of its own (§8e): a DEV secret recovers nobody on PROD,
+    and DEV's in-memory database forgets every secret at each restart, where a client meets
     `INVALID_RECOVERY_SECRET`. `RecoveryFlowTest` pins the routes and `SessionStoreTest` the store.
   - *The client half* (*decided 2026-09-25*, not built yet): Android keeps the secret in Block Store
     (§2), its cloud copy only where end-to-end encryption is available and a same-device reinstall
