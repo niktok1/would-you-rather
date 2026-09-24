@@ -7,7 +7,7 @@ import kotlinx.serialization.Serializable
  *
  * It carries no cursor: the server knows what the player has answered, so the next request simply
  * gets the next batch. A batch never lists a question twice, and it is never empty while the pool
- * (in the requested category, if any) is not — the feed loops back to answered questions rather
+ * (in the requested categories, if any) is not — the feed loops back to answered questions rather
  * than run out (CLAUDE.md §8d).
  */
 @Serializable

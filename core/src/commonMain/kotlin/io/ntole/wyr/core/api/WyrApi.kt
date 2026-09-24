@@ -20,11 +20,12 @@ public object WyrApi {
          * GET: the next batch of questions for the player the bearer token names. Requires a
          * session, because the feed is per player (CLAUDE.md §8d): it runs in cycles, serving each
          * question once per cycle in a new random order, and a batch holds only what the player has
-         * neither answered nor skipped ([SKIPS]) in the current one. The exception is a
-         * [Query.CATEGORY] with nothing in it due this cycle while something outside it is: that
-         * category is served again within the same cycle, `answeredBefore` on what the player has
-         * answered. That includes what the player skipped in it, which is provisional (CLAUDE.md
-         * §8b). There is no cursor; asking again is how to get the next batch.
+         * neither answered nor skipped ([SKIPS]) in the current one, in the categories
+         * [Query.CATEGORY] asks for if it does. The exception is a filter with nothing in it due
+         * this cycle while something outside it is: its categories are served again within the same
+         * cycle, `answeredBefore` on what the player has answered. That includes what the player
+         * skipped in them, which is provisional (CLAUDE.md §8b). There is no cursor; asking again is
+         * how to get the next batch.
          *
          * POST: submits a question of the session player's own, with a
          * [io.ntole.wyr.core.question.SubmitQuestionRequest], answered 201 with its
@@ -50,8 +51,8 @@ public object WyrApi {
         /**
          * Skips a question for the rest of the session player's current cycle (CLAUDE.md §8d), with a
          * [io.ntole.wyr.core.question.SkipRequest]. Requires a session. The question comes back in the
-         * next cycle, or sooner only to a [QUESTIONS] request filtered to a category with nothing due
-         * in it (see there). A skip pays nothing and leaves the tally alone, and skipping again in the
+         * next cycle, or sooner only to a [QUESTIONS] request filtered to categories with nothing due
+         * in them (see there). A skip pays nothing and leaves the tally alone, and skipping again in the
          * same cycle changes nothing. Answered with 204 and no body. A question the player is not
          * served is 404, as for [VOTES].
          */
@@ -76,7 +77,13 @@ public object WyrApi {
         /** Max questions to return in one batch. */
         public const val LIMIT: String = "limit"
 
-        /** Optional [io.ntole.wyr.core.question.QuestionCategory] name filter. */
+        /**
+         * Optional [io.ntole.wyr.core.question.QuestionCategory] name filter on the feed, repeated for
+         * several: `?category=FOOD&category=ETHICS` serves the questions filed under any of them, each
+         * once, and none is every category (CLAUDE.md §8d). Each value is one name, never a
+         * comma-separated list. A value that names no real category, `UNKNOWN` included, is 400
+         * [io.ntole.wyr.core.error.ErrorCode.VALIDATION_FAILED], whatever the others name.
+         */
         public const val CATEGORY: String = "category"
     }
 

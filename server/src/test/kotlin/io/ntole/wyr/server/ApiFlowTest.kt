@@ -352,12 +352,23 @@ class ApiFlowTest {
         }
 
     @Test
-    fun `the UNKNOWN category is rejected rather than served as an empty batch`() =
+    fun `a category filter naming anything but real categories is rejected rather than served as an empty batch`() =
         runServer("unknown-category") { client ->
-            val response = client.feed(client.guest(), "?${WyrApi.Query.CATEGORY}=${QuestionCategory.UNKNOWN.name}")
+            val player = client.guest()
+            val category = WyrApi.Query.CATEGORY
 
-            assertEquals(HttpStatusCode.BadRequest, response.status)
-            assertEquals(ErrorCode.VALIDATION_FAILED, response.body<ErrorDto>().code)
+            listOf(
+                "UNKNOWN" to "?$category=${QuestionCategory.UNKNOWN.name}",
+                "UNKNOWN beside a real one" to "?$category=FOOD&$category=${QuestionCategory.UNKNOWN.name}",
+                "no category at all beside a real one" to "?$category=FOOD&$category=FROM_THE_FUTURE",
+                "a comma-separated list" to "?$category=FOOD,ETHICS",
+                "an empty name" to "?$category=",
+            ).forEach { (case, query) ->
+                val response = client.feed(player, query)
+
+                assertEquals(HttpStatusCode.BadRequest, response.status, case)
+                assertEquals(ErrorCode.VALIDATION_FAILED, response.body<ErrorDto>().code, case)
+            }
         }
 
     @Test
@@ -457,6 +468,25 @@ class ApiFlowTest {
             val unfiltered = client.wholePool(player)
             assertEquals(pool.ids().toSet() - foodPool.ids().toSet(), unfiltered.ids().toSet())
             assertFalse(unfiltered.any { it.answeredBefore })
+        }
+
+    @Test
+    fun `several categories serve every question filed under any of them once`() =
+        runServer("feed-categories") { client ->
+            val player = client.guest()
+            val category = WyrApi.Query.CATEGORY
+            val food = client.wholePool(player, "&$category=${QuestionCategory.FOOD.name}").ids()
+            val lifestyle = client.wholePool(player, "&$category=${QuestionCategory.LIFESTYLE.name}").ids()
+            assertTrue(food.any { it in lifestyle }, "no question is filed under both")
+
+            val either =
+                client.wholePool(
+                    player,
+                    "&$category=${QuestionCategory.FOOD.name}&$category=${QuestionCategory.LIFESTYLE.name}",
+                )
+
+            assertEquals((food + lifestyle).toSet(), either.ids().toSet())
+            assertEquals(either.size, either.ids().toSet().size, "each once, though some are filed under both")
         }
 
     @Test

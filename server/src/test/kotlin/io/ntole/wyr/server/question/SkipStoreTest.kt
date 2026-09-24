@@ -52,6 +52,8 @@ class SkipStoreTest {
             filedUnder(QuestionCategory.FOOD)
         }
 
+    private val ethics: List<String> = transaction(database) { filedUnder(QuestionCategory.ETHICS) }
+
     @Test
     fun `a skipped question is not due for the rest of the cycle`() {
         val player = newPlayer()
@@ -159,16 +161,17 @@ class SkipStoreTest {
     }
 
     @Test
-    fun `a category with nothing due but a skip is served again while the rest of the cycle is not done`() {
+    fun `categories with nothing due but a skip are served again while the rest of the cycle is not done`() {
         // Provisional (CLAUDE.md §8b): the Categories rule as written, pending the user's decision.
         val player = newPlayer()
-        val skipped = food.first()
-        food.drop(1).forEach { id -> answer(player, id) }
+        val chosen = (food + ethics).distinct()
+        val skipped = chosen.first()
+        chosen.drop(1).forEach { id -> answer(player, id) }
         skip(player, skipped)
 
-        val batch = feed(player, category = QuestionCategory.FOOD)
+        val batch = feed(player, categories = setOf(QuestionCategory.FOOD, QuestionCategory.ETHICS))
 
-        assertEquals(food.sorted(), batch.ids().sorted(), "all of that category again, as when all of it is answered")
+        assertEquals(chosen.sorted(), batch.ids().sorted(), "all of those categories again, as when all is answered")
         assertEquals(listOf(skipped), batch.filterNot { it.answeredBefore }.ids())
         assertEquals(1, cycleOf(player), "a cycle is the player's, and the other categories are still due")
     }
@@ -214,7 +217,7 @@ class SkipStoreTest {
             database,
             { lockSkip(player) },
             { SkipStore.skip(player, QUESTION) },
-            whileQueued = { transaction(database) { QuestionStore.feed(player, limit = 1, category = null) } },
+            whileQueued = { transaction(database) { QuestionStore.feed(player, limit = 1, categories = emptySet()) } },
         )
 
         assertEquals(2, cycleOf(player))
@@ -239,9 +242,9 @@ class SkipStoreTest {
 
     private fun feed(
         player: String,
-        category: QuestionCategory? = null,
+        categories: Set<QuestionCategory> = emptySet(),
     ): List<QuestionDto> =
-        transaction(database) { QuestionStore.feed(player, WyrApi.Limits.MAX_PAGE_SIZE, category).questions }
+        transaction(database) { QuestionStore.feed(player, WyrApi.Limits.MAX_PAGE_SIZE, categories).questions }
 
     private fun statsOf(player: String): PlayerStatsDto =
         checkNotNull(transaction(database) { StatsStore.of(player) }) { "player $player has no stats" }

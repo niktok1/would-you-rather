@@ -70,7 +70,7 @@ class ServableQuestionsTest {
         }
         // Both are food, and with every food seed answered the feed serves that category again.
         foodSeeds.forEach { id -> answer(player, id) }
-        assertEquals(foodSeeds.sorted(), feed(player, QuestionCategory.FOOD).ids().sorted(), "even served again")
+        assertEquals(foodSeeds.sorted(), feed(player, setOf(QuestionCategory.FOOD)).ids().sorted(), "even served again")
     }
 
     @Test
@@ -192,9 +192,9 @@ class ServableQuestionsTest {
 
     private fun feed(
         player: String,
-        category: QuestionCategory? = null,
+        categories: Set<QuestionCategory> = emptySet(),
     ): List<QuestionDto> =
-        transaction(database) { QuestionStore.feed(player, WyrApi.Limits.MAX_PAGE_SIZE, category).questions }
+        transaction(database) { QuestionStore.feed(player, WyrApi.Limits.MAX_PAGE_SIZE, categories).questions }
 
     private fun statsOf(player: String): PlayerStatsDto =
         checkNotNull(transaction(database) { StatsStore.of(player) }) { "player $player has no stats" }

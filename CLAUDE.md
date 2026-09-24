@@ -335,14 +335,15 @@ accounts exist.
   No author travels on the wire: a submission's author is whoever its bearer token names, and a
   player lists only their own. Left: the client and console for submitting, and moderation's
   admin routes.
-- **Skips under a category filter** — *provisional — user decision.* A request filtered to a
-  category with nothing due in it, while other questions still are, serves that category again
-  (§8d, *Categories*), and that includes questions skipped this cycle, which §8d, *Skipping*, says
-  come back only in the next one. Built that way because it is the Categories rule as written,
-  which predates recorded skips, and it changes neither rule. The options: keep it; serve again
-  only the category's answered questions, and its skipped ones only when it has nothing else; or
-  answer an empty batch, which the client reads as out of questions. The dev console's Category
-  row sends a category, so this is reachable from there. `SkipStoreTest` pins what is built.
+- **Skips under a category filter** — *provisional — user decision.* A request filtered to one
+  or more categories with nothing due in any of them, while other questions still are, serves
+  those categories again (§8d, *Categories*), and that includes questions skipped this cycle, which
+  §8d, *Skipping*, says come back only in the next one. Built that way because it is the Categories
+  rule as written, which predates recorded skips, and it changes neither rule; a filter of several
+  categories carries it over unchanged. The options: keep it; serve again only the filter's
+  answered questions, and its skipped ones only when it has nothing else; or answer an empty
+  batch, which the client reads as out of questions. The dev console's Category row sends a
+  category, so this is reachable from there. `SkipStoreTest` pins what is built.
 - **Retrying a submission** — *decided 2026-09-24: keep it simple.* A submission carries no
   attempt id, so one sent again after its response was lost is stored twice, both pending; the
   moderator rejects the copy, and the 20-pending cap bounds how many there can be. Nothing resends
@@ -419,15 +420,16 @@ and every request shows in its HTTP trace (`HttpTrace` in `:core:network`, never
   `DefaultQuestionRepository` keeps no record of what it served beyond one refill: it drops only
   questions still queued and those handed out since the refill went out, the one then on screen
   included.
-  - *Categories:* a cycle is **per player, not per category**. A request filtered to a category
-    with nothing due in it, while other questions still are, serves that category's questions
-    again, in random order and `answeredBefore` on those answered, and leaves the cycle alone:
-    starting the next one would cut short the player's pass over the rest. The cycle starts only
-    once nothing at all is due, whichever category is asked for, and a request that finds no
-    questions starts nothing. Questions skipped this cycle are served again this way too, so a skip
-    does not hold through a category filter: *provisional — user decision* (§8b). The client can
-    now select one (`QuestionRepository.setCategory`, from the console's Category row); a switch
-    drops the queue, and New guest keeps the selection.
+  - *Categories:* a cycle is **per player, not per category**. The categories a request is
+    filtered to are one pool, the questions filed under any of them: while anything in it is due,
+    only what is due is served. A request whose pool has nothing due, while other questions still
+    are, serves the pool's questions again, in random order and `answeredBefore` on those answered,
+    and leaves the cycle alone: starting the next one would cut short the player's pass over the
+    rest. The cycle starts only once nothing at all is due, whichever categories are asked for, and
+    a request that finds no questions starts nothing. Questions skipped this cycle are served again
+    this way too, so a skip does not hold through a category filter: *provisional — user decision*
+    (§8b). The client can select one category so far (`QuestionRepository.setCategory`, from the
+    console's Category row); a switch drops the queue, and New guest keeps the selection.
   - `answeredBefore` means the player has a vote on the question, from any cycle.
 - **Categories** *(decided 2026-09-24; filing and serving built on the server, the rest next)*: a
   question is filed under **any number of categories, at least one**. A player may pick **several**
@@ -437,10 +439,12 @@ and every request shows in its HTTP trace (`HttpTrace` in `:core:network`, never
   in the question's own transaction: `QuestionDto.categories` and `SubmissionDto.categories` carry
   every one, each once, in `QuestionCategory` declaration order, and a list's unknown names decode
   as `UNKNOWN` (§5). A batch reads its questions' categories in one more statement
-  (`QuestionStore.categoriesOf`), never one per question. The feed's filter is an `EXISTS` on that
-  table, never a join, so a question in several categories is served once. Not built yet: a filter
-  of several categories, and submitting under several. Until the client's domain holds every
-  category, it plays a question under the first it can name.
+  (`QuestionStore.categoriesOf`), never one per question. The feed takes a filter of any number of
+  categories, `?category=` repeated, and none is every category; one that names no real category is
+  400. The filter, and the due count beside it (`QuestionStore.dueCount`), is an `EXISTS` on that
+  table, never a join, so a question in several of the categories asked for is served and counted
+  once. Not built yet: submitting under several. Until the client's domain holds every category, it
+  plays a question under the first it can name, and it filters by one category at most.
 - **Re-answering** *(built)*: a question can be answered again, whether or not the feed has
   served it again. It earns the point again **every time**, inside its cycle or not (farming is
   left to rate limiting, §8b), and the player may change their pick. Every answer, first or not,

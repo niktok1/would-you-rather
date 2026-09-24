@@ -5,6 +5,7 @@ import io.ntole.wyr.core.question.QuestionCategory
 import io.ntole.wyr.core.question.QuestionDto
 import io.ntole.wyr.core.vote.OptionSide
 import io.ntole.wyr.core.vote.VoteResultDto
+import io.ntole.wyr.server.db.Players
 import io.ntole.wyr.server.db.Questions
 import io.ntole.wyr.server.db.Seed
 import io.ntole.wyr.server.db.appTables
@@ -16,6 +17,7 @@ import io.ntole.wyr.server.db.storedCategories
 import io.ntole.wyr.server.player.PlayerStore
 import io.ntole.wyr.server.vote.Scoring
 import io.ntole.wyr.server.vote.VoteStore
+import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.SchemaUtils
 import org.jetbrains.exposed.v1.jdbc.select
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
@@ -46,6 +48,12 @@ class QuestionStoreTest {
         transaction(database) {
             filedUnder(QuestionCategory.FOOD)
         }
+
+    private val lifestyle: List<String> = transaction(database) { filedUnder(QuestionCategory.LIFESTYLE) }
+
+    /** Two categories some seeds are both filed under, and the questions in either. */
+    private val foodOrLifestyle = setOf(QuestionCategory.FOOD, QuestionCategory.LIFESTYLE)
+    private val inFoodOrLifestyle: List<String> = (food + lifestyle).distinct()
 
     private val stored: Map<String, List<QuestionCategory>> = transaction(database) { storedCategories() }
 
@@ -81,10 +89,54 @@ class QuestionStoreTest {
     fun `a category serves each question filed under it once whatever else it is filed under`() {
         assertTrue(food.any { id -> stored.getValue(id).size > 1 }, "no food seed is filed under another category too")
 
-        val batch = feed(newPlayer(), category = QuestionCategory.FOOD)
+        val batch = feed(newPlayer(), categories = setOf(QuestionCategory.FOOD))
 
         assertEquals(food.sorted(), batch.ids().sorted())
         batch.forEach { question -> assertEquals(stored[question.id], question.categories, question.id) }
+    }
+
+    @Test
+    fun `several categories serve each question filed under any of them once`() {
+        assertTrue(food.any { it in lifestyle }, "no seed is filed under both, so a join could not repeat one")
+
+        val batch = feed(newPlayer(), categories = foodOrLifestyle)
+
+        assertEquals(inFoodOrLifestyle.sorted(), batch.ids().sorted(), "each once, though some are in both")
+        assertTrue(batch.all { question -> question.categories.any { it in foodOrLifestyle } })
+    }
+
+    @Test
+    fun `several categories are one pool that serves only what is due in it while anything is`() {
+        val player = newPlayer()
+        food.forEach { id -> answer(player, id) }
+
+        val batch = feed(player, categories = foodOrLifestyle)
+
+        assertEquals((lifestyle - food.toSet()).sorted(), batch.ids().sorted(), "the food is done, so not again yet")
+        assertTrue(batch.none { it.answeredBefore })
+    }
+
+    @Test
+    fun `several categories with nothing due are served again while the rest of the cycle is not done`() {
+        val player = newPlayer()
+        inFoodOrLifestyle.forEach { id -> answer(player, id) }
+
+        val batch = feed(player, categories = foodOrLifestyle)
+
+        assertEquals(inFoodOrLifestyle.sorted(), batch.ids().sorted(), "all of them again, each once")
+        assertTrue(batch.all { it.answeredBefore })
+        assertEquals(1, cycleOf(player), "a cycle is the player's, and the other categories are still due")
+        assertEquals((pool - inFoodOrLifestyle.toSet()).sorted(), feed(player).ids().sorted())
+    }
+
+    @Test
+    fun `the due count in several categories counts each question due in any of them once`() {
+        val player = newPlayer()
+        answer(player, inFoodOrLifestyle.first())
+
+        assertEquals(inFoodOrLifestyle.size - 1L, dueCount(player, foodOrLifestyle))
+        assertEquals(food.size - 1L, dueCount(player, setOf(QuestionCategory.FOOD)))
+        assertEquals(pool.size - 1L, dueCount(player, categories = emptySet()), "every category for none")
     }
 
     @Test
@@ -94,7 +146,7 @@ class QuestionStoreTest {
         val statements =
             listOf(1 to one, pool.size to all).map { (limit, player) ->
                 transaction(database) {
-                    val served = QuestionStore.feed(player, limit, category = null).questions.size
+                    val served = QuestionStore.feed(player, limit, categories = emptySet()).questions.size
                     assertEquals(limit, served)
                     statementCount
                 }
@@ -151,8 +203,8 @@ class QuestionStoreTest {
             raceBehindFirst(
                 url,
                 database,
-                { QuestionStore.feed(player, WyrApi.Limits.MAX_PAGE_SIZE, category = null).questions },
-                { QuestionStore.feed(player, WyrApi.Limits.MAX_PAGE_SIZE, category = null).questions },
+                { QuestionStore.feed(player, WyrApi.Limits.MAX_PAGE_SIZE, categories = emptySet()).questions },
+                { QuestionStore.feed(player, WyrApi.Limits.MAX_PAGE_SIZE, categories = emptySet()).questions },
             )
 
         assertEquals(2, cycleOf(player), "started once, not once per request")
@@ -179,7 +231,7 @@ class QuestionStoreTest {
         val player = newPlayer()
         food.forEach { id -> answer(player, id) }
 
-        val batch = feed(player, category = QuestionCategory.FOOD)
+        val batch = feed(player, categories = setOf(QuestionCategory.FOOD))
 
         assertEquals(food.sorted(), batch.ids().sorted(), "all of that category again, rather than nothing")
         assertTrue(batch.all { it.answeredBefore })
@@ -192,7 +244,7 @@ class QuestionStoreTest {
         val player = newPlayer()
         pool.forEach { id -> answer(player, id) }
 
-        val batch = feed(player, category = QuestionCategory.FOOD)
+        val batch = feed(player, categories = setOf(QuestionCategory.FOOD))
 
         assertEquals(food.sorted(), batch.ids().sorted())
         assertEquals(2, cycleOf(player))
@@ -205,7 +257,7 @@ class QuestionStoreTest {
         pool.forEach { id -> answer(player, id) }
 
         // UNKNOWN is never stored, so it stands for a category with no questions in it.
-        assertTrue(feed(player, category = QuestionCategory.UNKNOWN).isEmpty())
+        assertTrue(feed(player, categories = setOf(QuestionCategory.UNKNOWN)).isEmpty())
 
         assertEquals(1, cycleOf(player), "a batch that served nothing must not start a cycle for the rest")
     }
@@ -240,10 +292,20 @@ class QuestionStoreTest {
     private fun feed(
         player: String,
         limit: Int = WyrApi.Limits.MAX_PAGE_SIZE,
-        category: QuestionCategory? = null,
-    ): List<QuestionDto> = transaction(database) { QuestionStore.feed(player, limit, category).questions }
+        categories: Set<QuestionCategory> = emptySet(),
+    ): List<QuestionDto> = transaction(database) { QuestionStore.feed(player, limit, categories).questions }
 
     private fun cycleOf(player: String): Int? = transaction(database) { PlayerStore.find(player)?.cycle }
+
+    /** [QuestionStore.dueCount] read as `StatsStore` reads it, against the player's own cycle. */
+    private fun dueCount(
+        player: String,
+        categories: Set<QuestionCategory>,
+    ): Long? =
+        transaction(database) {
+            val due = QuestionStore.dueCount(player, categories, cycle = Players.currentCycle)
+            Players.select(due).where { Players.id eq player }.single()[due]
+        }
 
     private fun List<QuestionDto>.ids(): List<String> = map { it.id }
 }

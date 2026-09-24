@@ -34,20 +34,25 @@ fun Route.questionRoutes(db: Db) {
                     }?.coerceIn(1, WyrApi.Limits.MAX_PAGE_SIZE)
                     ?: WyrApi.Limits.DEFAULT_PAGE_SIZE
 
-            // UNKNOWN is the client's decoding fallback and is never stored, so filtering by it would
-            // always answer an empty batch, which the feed otherwise never does while it has questions.
-            val category =
-                params[WyrApi.Query.CATEGORY]?.let { raw ->
-                    QuestionCategory.entries.firstOrNull { it.name == raw && it != QuestionCategory.UNKNOWN }
-                        ?: throw ApiFailure.validation("unknown category: $raw")
-                }
+            // One category per repeat of the parameter, and none for every category. UNKNOWN is the
+            // client's decoding fallback and is never stored, so filtering by it would always answer
+            // an empty batch, which the feed otherwise never does while it has questions. A value that
+            // is not a category at all, a comma-separated list included, is refused as well.
+            val categories =
+                params
+                    .getAll(WyrApi.Query.CATEGORY)
+                    .orEmpty()
+                    .map { raw ->
+                        QuestionCategory.entries.firstOrNull { it.name == raw && it != QuestionCategory.UNKNOWN }
+                            ?: throw ApiFailure.validation("unknown category: $raw")
+                    }.toSet()
 
             val batch =
                 db.query {
                     // As for a vote: a validly signed token can outlive its player. Serving it the feed
                     // of a player with no answers would only put the 401 off until its first vote.
                     if (PlayerStore.find(playerId) == null) throw ApiFailure.unauthorized("unknown player")
-                    QuestionStore.feed(playerId, limit, category)
+                    QuestionStore.feed(playerId, limit, categories)
                 }
 
             call.respond(batch)

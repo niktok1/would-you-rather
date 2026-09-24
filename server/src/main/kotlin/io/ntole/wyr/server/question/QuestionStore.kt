@@ -43,7 +43,7 @@ object QuestionStore {
      *
      * Once nothing is due, the player has finished the cycle, whether its last questions were
      * answered or skipped. This request starts the next one and serves the whole pool again, all of
-     * it due now, in a fresh random order, so a batch is empty only when nothing in [category] is
+     * it due now, in a fresh random order, so a batch is empty only when nothing in [categories] is
      * [servable] at all. Two requests can both find the cycle finished.
      * [PlayerStore.startNextCycle] lets only the first start the next one, and the second serves the
      * pool it read, which is due in the cycle the first started. The one exception is a question
@@ -51,54 +51,58 @@ object QuestionStore {
      * again in the cycle it was just done in. That takes two overlapping requests from one player,
      * and the client sends one at a time (`DefaultQuestionRepository`).
      *
-     * A question is in [category] when it is filed under it, whatever else it is filed under too
-     * (CLAUDE.md §8d, *Categories*). A cycle is per player, not per category. When nothing in
-     * [category] is due but something outside it still is, the player has not finished the cycle,
-     * and starting the next one would cut short their pass over the rest. So the category's
-     * questions are served again instead, in random order, and the cycle stays. Answering one again
-     * still pays (§8d, re-answering) and counts for the same cycle. Those skipped this cycle are
-     * served again with the rest, so a skip does not hold through a category filter; that is
-     * provisional (CLAUDE.md §8b).
+     * A question is in [categories] when it is filed under any of them, whatever else it is filed
+     * under too, and every question is when [categories] is empty (CLAUDE.md §8d, *Categories*).
+     * They are one pool: while anything in any of them is due, only what is due is served. A cycle
+     * is per player, not per category. When nothing in [categories] is due but something outside
+     * them still is, the player has not finished the cycle, and starting the next one would cut
+     * short their pass over the rest. So the questions in [categories] are served again instead, in
+     * random order, and the cycle stays. Answering one again still pays (§8d, re-answering) and
+     * counts for the same cycle. Those skipped this cycle are served again with the rest, so a skip
+     * does not hold through a category filter; that is provisional (CLAUDE.md §8b).
      *
      * [QuestionDto.answeredBefore] means the player has a vote on the question, from any cycle. A
      * skip is no vote, so a question skipped but never answered is not answered before.
      *
      * Each batch comes from one statement. The left joins find at most one vote and one skip per
-     * question (the Votes and Skips keys are both player and question), and the category is an
-     * `EXISTS` rather than a join, so no question appears twice, however many categories it has. The
+     * question (the Votes and Skips keys are both player and question), and the categories are an
+     * `EXISTS` rather than a join, so no question appears twice, however many of them it has. The
      * random key is rendered `RANDOM()`, which H2 and PostgreSQL both have. The batch's categories
      * are then read in one more statement ([categoriesOf]).
      */
     fun feed(
         playerId: String,
         limit: Int,
-        category: QuestionCategory?,
+        categories: Set<QuestionCategory>,
     ): QuestionPageDto {
         val cycle = checkNotNull(PlayerStore.find(playerId)) { "player $playerId vanished mid-transaction" }.cycle
         val current = intParam(cycle)
 
-        val due = candidates(playerId, category, dueIn = current).randomBatch(limit)
+        val due = candidates(playerId, categories, dueIn = current).randomBatch(limit)
         if (due.isNotEmpty()) return QuestionPageDto(questions = due)
 
-        // Nothing in the category is due, so every question in it, if it has any, was answered or
-        // skipped in this cycle.
-        val again = candidates(playerId, category, dueIn = null).randomBatch(limit)
-        val cycleFinished = category == null || candidates(playerId, category = null, dueIn = current).empty()
+        // Nothing in the categories is due, so every question in them, if they have any, was answered
+        // or skipped in this cycle.
+        val again = candidates(playerId, categories, dueIn = null).randomBatch(limit)
+        val cycleFinished =
+            categories.isEmpty() || candidates(playerId, categories = emptySet(), dueIn = current).empty()
         if (again.isNotEmpty() && cycleFinished) PlayerStore.startNextCycle(playerId, from = cycle)
 
         return QuestionPageDto(questions = again)
     }
 
     /**
-     * How many questions are due for [playerId] in [cycle], in every category: what the feed would
-     * serve them, counted by the feed's own predicate so the two cannot disagree. An expression to
-     * embed in a larger statement, which [cycle] may be a column of (`StatsStore`).
+     * How many questions in [categories], every one for none, are due for [playerId] in [cycle]: what
+     * the feed would serve them, counted by the feed's own predicate so the two cannot disagree, and
+     * each once however many of [categories] it is filed under. An expression to embed in a larger
+     * statement, which [cycle] may be a column of (`StatsStore`).
      */
     internal fun dueCount(
         playerId: String,
+        categories: Set<QuestionCategory>,
         cycle: Expression<Int>,
     ): Expression<Long?> =
-        wrapAsExpression(candidates(playerId, category = null, dueIn = cycle, columns = listOf(Questions.id.count())))
+        wrapAsExpression(candidates(playerId, categories, dueIn = cycle, columns = listOf(Questions.id.count())))
 
     /**
      * Which questions [playerId] may be served at all, whether answered or not (CLAUDE.md §8d). This
@@ -112,12 +116,13 @@ object QuestionStore {
     internal fun servable(): Op<Boolean> = Questions.status eq QuestionStatus.APPROVED
 
     /**
-     * The questions in [category] that are [servable]: only those due in [dueIn], unless it is null.
-     * Selects what a batch is built from, unless [columns] asks for something else.
+     * The questions in [categories] (every one for none) that are [servable]: only those due in
+     * [dueIn], unless it is null. Selects what a batch is built from, unless [columns] asks for
+     * something else.
      */
     private fun candidates(
         playerId: String,
-        category: QuestionCategory?,
+        categories: Set<QuestionCategory>,
         dueIn: Expression<Int>?,
         columns: List<Expression<*>> = BATCH_COLUMNS,
     ): Query =
@@ -125,7 +130,7 @@ object QuestionStore {
             .join(Votes, JoinType.LEFT, Questions.id, Votes.questionId) { Votes.playerId eq playerId }
             .join(Skips, JoinType.LEFT, Questions.id, Skips.questionId) { Skips.playerId eq playerId }
             .select(columns)
-            .where { servable() and inCategory(category) and isDue(dueIn) }
+            .where { servable() and inCategories(categories) and isDue(dueIn) }
 
     /** What [toDto] reads, and no more: the moderation columns are not the feed's business. */
     private val BATCH_COLUMNS: List<Expression<*>> =
@@ -145,18 +150,22 @@ object QuestionStore {
         }
     }
 
-    /** Filed under [category], among others or not. An `EXISTS`, so a question matches once. */
-    private fun inCategory(category: QuestionCategory?): Op<Boolean> =
-        category?.let { wanted ->
-            exists(
-                QuestionCategories
-                    .select(QuestionCategories.questionId)
-                    .where {
-                        (QuestionCategories.questionId eq Questions.id) and
-                            (QuestionCategories.category eq wanted.name)
-                    },
-            )
-        } ?: Op.TRUE
+    /**
+     * Filed under any of [categories], among others or not, or anything for none. An `EXISTS`, so a
+     * question filed under several of them still matches once, where a join would list it once for
+     * each.
+     */
+    private fun inCategories(categories: Set<QuestionCategory>): Op<Boolean> {
+        if (categories.isEmpty()) return Op.TRUE
+        val names = categories.map { it.name }
+        return exists(
+            QuestionCategories
+                .select(QuestionCategories.questionId)
+                .where {
+                    (QuestionCategories.questionId eq Questions.id) and (QuestionCategories.category inList names)
+                },
+        )
+    }
 
     /**
      * Neither answered nor skipped in [cycle]: no vote, or one from an earlier cycle, and no skip, or

@@ -167,10 +167,10 @@ class VoteStoreTest {
             database,
             { lockVote(player) },
             { VoteStore.cast(player, QUESTION, OptionSide.B, attemptId = "late") },
-            whileQueued = { transaction(database) { QuestionStore.feed(player, limit = 1, category = null) } },
+            whileQueued = { transaction(database) { QuestionStore.feed(player, limit = 1, categories = emptySet()) } },
         )
 
-        val cycle2 = transaction(database) { QuestionStore.feed(player, pool.size, category = null).questions }
+        val cycle2 = transaction(database) { QuestionStore.feed(player, pool.size, categories = emptySet()).questions }
         assertEquals(pool.size - 1, cycle2.size, "the answer landed in cycle 2, so its question is not due in it")
         assertFalse(cycle2.any { it.id == QUESTION })
     }

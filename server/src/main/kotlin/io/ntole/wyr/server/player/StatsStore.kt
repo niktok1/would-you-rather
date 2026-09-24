@@ -30,7 +30,7 @@ object StatsStore {
     fun of(playerId: String): PlayerStatsDto? {
         val questionsAnswered =
             wrapAsExpression<Long>(Votes.select(Votes.questionId.count()).where { Votes.playerId eq playerId })
-        val dueThisCycle = QuestionStore.dueCount(playerId, cycle = Players.currentCycle)
+        val dueThisCycle = QuestionStore.dueCount(playerId, categories = emptySet(), cycle = Players.currentCycle)
 
         return Players
             .select(
