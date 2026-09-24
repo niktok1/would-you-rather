@@ -475,17 +475,20 @@ seed (`Migrations`, `DatabaseFactory.init`). Nothing builds a table any other wa
   `SchemaUtils.createStatements(*appTables)` generates for PostgreSQL from the same definitions, only
   whitespace added, and H2's differ from them only in case. So a database built before migrations
   already holds exactly V1, and it is recorded at V1 without running it: its history reads
-  `1 BASELINE`, where an empty database runs V1 and reads `1 SQL`. Which of the two the Render
-  database shows depends only on whether a build before this one ever booted on it; both are right.
+  `1 BASELINE`, where an empty database runs V1 and reads `1 SQL`. The Render production database
+  is the first kind: `4cdc819` built it on 2026-09-24, the first deploy, and `Tables.kt` has not
+  changed a column, key or index since, so it holds exactly V1 and its first boot on this build
+  records `1 BASELINE`.
   `Migrations.migrate` takes the baseline itself (`baselineVersion` 1), and only for a database
   holding every table V1 builds (`TABLES_BEFORE_MIGRATIONS`) and no history table; Flyway's
   `baselineOnMigrate` is off. Any other database with tables and no history fails the boot, rather
   than being recorded at V1 whatever it holds. `MigrationsTest` pins all three, the data untouched,
   and `SchemaDriftTest` that V1 builds exactly what `SchemaUtils.create` builds, every table, column,
   key, index and constraint name included, on H2 and on PostgreSQL.
-- *Before this build first boots on a database it did not build*, compare that database's schema
-  with one this build migrated, read-only (`pg_dump --schema-only` of each, then a diff). The
-  baseline checks only that V1's tables are there, and `SchemaUtils.create` never added a column or
+- *Before a migrating build first boots on any other database it did not build*, compare that
+  database's schema with one this build migrated, read-only (`pg_dump --schema-only` of each, then a
+  diff); the production database needs no such check, being provably V1 (above). The baseline checks
+  only that V1's tables are there, and `SchemaUtils.create` never added a column or
   an index to a table that already existed, so a database an older build first built could lack one
   and still be recorded at V1, to fail only once a later script or query needs it. And never let
   `WYR_TEST_JDBC_URL` name the production database: the test suite and `:server:pendingMigration`

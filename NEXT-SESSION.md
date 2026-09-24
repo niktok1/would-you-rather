@@ -592,10 +592,11 @@ known `PlayViewModel` issues (the Play tab is frozen).
   Flyway refuses to boot on a changed checksum. Forget the script and `SchemaDriftTest` fails, on H2
   locally and on PostgreSQL in CI. A database a server built before migrations is recorded at V1 by
   this build's first boot on it, without running V1, so its history shows `1 BASELINE`; a database
-  nothing had booted on runs V1 and shows `1 SQL`. Either is right for the Render database,
-  depending on whether an earlier build was ever deployed there. Before this build first boots on a
-  database it did not build, compare that database's schema with one this build migrated, read-only
-  (`pg_dump --schema-only`, CLAUDE.md §8b), since the baseline checks only that V1's tables exist.
+  nothing had booted on runs V1 and shows `1 SQL`. The Render production database, built by `4cdc819`
+  at the first deploy with the same table definitions, will show `1 BASELINE` after its first deploy
+  of this build. Before a migrating build first boots on any other database it did not build,
+  compare schemas read-only (`pg_dump --schema-only`, CLAUDE.md §8b), since the baseline checks only
+  that V1's tables exist.
   Never let `WYR_TEST_JDBC_URL` name the production database: the test suite and `pendingMigration`
   wipe the database it names. The first script after V1 must also move `MigrationsTest`'s
   pre-migration database onto V1 (its KDoc says how). Two boots at once are safe on PostgreSQL,
