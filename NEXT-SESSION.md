@@ -30,7 +30,7 @@ Repo initialized on `main` with the personal identity and `user.useConfigOnly = 
   and by `ServableQuestionsTest`, which pins what the one servable predicate lets through. The flow
   tests also pass against one shared database (`WYR_TEST_JDBC_URL` at a shared H2), so the per-test
   drop copes with the new questions-to-players key, and with `question_categories`.
-  Multiple categories (`feat/multi-category`, server and contract only): `QuestionStoreTest` pins a
+  Multiple categories (`feat/multi-category`): on the server, `QuestionStoreTest` pins a
   question in several categories served once with all of them in declaration order, a filter of
   one or two categories serving each matching question once (an `EXISTS`, and a join mutation fails
   it), the two as one pool, served again only once nothing in it is due, the due count over a set,
@@ -40,7 +40,12 @@ Repo initialized on `main` with the personal identity and `user.useConfigOnly = 
   and listed back the same) with the 400s for none and for `UNKNOWN`. `SubmissionStoreTest` pins
   the rows, and the author's list in the same number of statements whatever its length.
   `WyrJsonTest` and `ServerJsonTest` pin an unknown name in a list decoding as `UNKNOWN` on both
-  sides.
+  sides. On the client, `QuestionMapperTest` pins a question's categories as a set, each once in
+  declaration order, with an unknown name as `OTHER` beside the rest and an empty or missing list as
+  `OTHER` alone; `QuestionApiTest`, one `?category=` per category, in declaration order;
+  `DefaultQuestionRepositoryTest`, a selection of several sent whole with every refill, any change to
+  it dropping the queue (a refill in flight included), the same set keeping it, and `OTHER` refused;
+  and `DevConsoleViewModelTest`, the Category row's toggles and *All*.
 - Live curl run against `./gradlew :server:run` confirmed guest auth, paging, voting,
   refresh-token rotation, replay rejection, and the `ErrorDto` envelope on 400/401/404/409. That
   run predates flat scoring, `fix/read-committed` and the endless feed, so the scoring it checked
@@ -56,7 +61,7 @@ Repo initialized on `main` with the personal identity and `user.useConfigOnly = 
   the next batch. That run predates feed cycles (`feat/feed-cycles`): the least-recently-answered
   loop it saw is gone, and cycles have run only in the server tests. It also predates server-side
   skips (`feat/skip-per-cycle`), which keep a skipped question out until the next cycle.
-- Client tests: `:core:domain` 12, `:core:data` 69, `:core:network` 29, `:app:shared` 58 (the
+- Client tests: `:core:domain` 13, `:core:data` 73, `:core:network` 32, `:app:shared` 64 (the
   ViewModels and the Koin graph). `:app:shared` compiles for JVM, JS, wasmJs and the iOS
   simulator.
 - `:app:androidApp:assembleDebug` produces a real APK.
@@ -260,7 +265,12 @@ known `PlayViewModel` issues (the Play tab is frozen).
   checks an empty list of categories is sent too; a server-side slip only breaks client builds older
   than the server. A **list** of categories needs `QuestionCategoryListSerializer` on top, because
   coercion never reaches a list's elements: drop it from a property and one new category fails a
-  whole batch on every older client.
+  whole batch on every older client. It decodes an unknown name as `UNKNOWN`, never dropping it,
+  since the server decodes submissions with it too and a dropped name would let `[FOOD, NEWCAT]`
+  through as `[FOOD]`; a missing list decodes as an empty one. The client then maps each `UNKNOWN`
+  to `Category.OTHER`, beside the categories it can name, and an empty list to `OTHER` alone
+  (`QuestionMapper`), because `Question.categories` is never empty. `WyrJsonTest` and
+  `QuestionMapperTest` pin the two halves.
 - **Exposed 1.x renamed everything.** Packages are `org.jetbrains.exposed.v1.*`, and
   `SqlExpressionBuilder.eq` is deprecated *as an error* — import the top-level `eq` instead.
   Expect to hit this again the first time you write a new query.
