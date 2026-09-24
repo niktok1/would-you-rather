@@ -466,8 +466,9 @@ and every request shows in its HTTP trace (`HttpTrace` in `:core:network`, never
   approved it is due for every player in their current cycle. Built as `POST /v1/questions`, in
   `SubmissionStore.submit` after `checkedSubmission`. Both options are trimmed, then each must be
   non-blank, at most `WyrApi.Limits.MAX_OPTION_LENGTH` (200, UTF-16 units) and one line (no
-  control character), and the two must differ ignoring case: otherwise 422 `INVALID_SUBMISSION`,
-  which the player can put right. A category that is not a real one is 400 `VALIDATION_FAILED`,
+  control character, nor U+2028 or U+2029, the line and paragraph separators), and the two must
+  differ ignoring case: otherwise 422 `INVALID_SUBMISSION`, which the player can put right. A
+  category that is not a real one is 400 `VALIDATION_FAILED`,
   since no correct client sends one. The 21st pending submission is 409 `SUBMISSION_LIMIT`,
   counted under the author's row lock (§4). A submission is stored `PENDING`, and nothing approves
   one until *Moderation* is built. Questions carry an author and a `QuestionStatus`, and

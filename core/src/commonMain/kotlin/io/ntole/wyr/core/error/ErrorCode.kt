@@ -34,7 +34,7 @@ public enum class ErrorCode {
     /**
      * A submitted question breaks a rule the player can break by what they type (see
      * [io.ntole.wyr.core.question.SubmitQuestionRequest]): an option blank, too long or holding a
-     * control character, or the two options the same. Sent with 422.
+     * control character or a line separator, or the two options the same. Sent with 422.
      */
     INVALID_SUBMISSION,
 

@@ -700,7 +700,8 @@ class ApiFlowTest {
             val request =
                 SubmitQuestionRequest(
                     optionA = "  Be able to fly ",
-                    optionB = "\tBreathe underwater\n",
+                    // A line separator is whitespace too, so it is trimmed at an end, not refused.
+                    optionB = "\tBreathe underwater\n\u2028",
                     category = QuestionCategory.SUPERPOWERS,
                 )
             val before = System.currentTimeMillis()
@@ -767,6 +768,11 @@ class ApiFlowTest {
                 "leading DEL in optionB" to SubmitQuestionRequest("Fly", "\u007FSwim", QuestionCategory.FOOD),
                 "newline inside optionB" to SubmitQuestionRequest("Fly", "Swim\nfast", QuestionCategory.FOOD),
                 "tab inside optionA" to SubmitQuestionRequest("Fly\thigh", "Swim", QuestionCategory.FOOD),
+                // Line breaks that are not control characters: text layout still breaks the line at each.
+                "line separator inside optionA" to
+                    SubmitQuestionRequest("Fly\u2028high", "Swim", QuestionCategory.FOOD),
+                "paragraph separator inside optionB" to
+                    SubmitQuestionRequest("Fly", "Swim\u2029fast", QuestionCategory.FOOD),
             ).forEach { (case, request) ->
                 val response = client.submit(author, request)
                 assertEquals(HttpStatusCode.UnprocessableEntity, response.status, case)

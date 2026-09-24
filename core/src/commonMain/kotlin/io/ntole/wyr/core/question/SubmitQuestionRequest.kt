@@ -11,8 +11,9 @@ import kotlinx.serialization.Serializable
  *
  * The server trims both options, as Kotlin's `trim()` does, and stores them trimmed. Trimmed, each
  * must be non-blank, at most [io.ntole.wyr.core.api.WyrApi.Limits.MAX_OPTION_LENGTH] long and free
- * of control characters (an option is one line of text, and PostgreSQL refuses a NUL), and the two
- * must differ ignoring case. Those are the rules a player can break by what they type.
+ * of control characters and of U+2028 and U+2029, the line and paragraph separators (an option is
+ * one line of text, and PostgreSQL refuses a NUL), and the two must differ ignoring case. Those are
+ * the rules a player can break by what they type.
  *
  * [category] is the author's pick, and must be a real one. [QuestionCategory.UNKNOWN], which a
  * missing category also reads as, is refused as a malformed request: no category picker offers it,
