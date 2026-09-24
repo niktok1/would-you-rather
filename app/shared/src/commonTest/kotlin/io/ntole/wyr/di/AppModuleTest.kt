@@ -1,6 +1,8 @@
 package io.ntole.wyr.di
 
+import io.ntole.wyr.core.auth.SessionDto
 import io.ntole.wyr.core.network.InMemoryTokenStorage
+import io.ntole.wyr.core.network.SessionStore
 import io.ntole.wyr.core.network.TokenStorage
 import io.ntole.wyr.core.network.environment.WyrEnvironment
 import io.ntole.wyr.dev.DevConsoleViewModel
@@ -11,6 +13,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.koin.core.Koin
 import org.koin.core.qualifier.named
@@ -78,6 +81,19 @@ class AppModuleTest {
     }
 
     @Test
+    fun `each environment keeps its own session in the storage the platform shares between them`() =
+        runTest {
+            val storage = InMemoryTokenStorage()
+            val dev = koinFor(WyrEnvironment.DEV, WyrEnvironment.DEV.apiBaseUrl, storage).get<SessionStore>()
+            val prod = koinFor(WyrEnvironment.PROD, WyrEnvironment.PROD.apiBaseUrl, storage).get<SessionStore>()
+
+            dev.write(DEV_SESSION)
+
+            assertEquals(DEV_SESSION, dev.read())
+            assertNull(prod.read())
+        }
+
+    @Test
     fun `an environment name it does not know stops the app before Koin starts`() {
         val failure = assertFailsWith<IllegalArgumentException> { initKoin(environmentName = "staging") }
 
@@ -88,12 +104,21 @@ class AppModuleTest {
     private fun koinFor(
         environment: WyrEnvironment,
         apiBaseUrl: String,
+        storage: TokenStorage = InMemoryTokenStorage(),
     ): Koin {
-        val platform = module { single<TokenStorage> { InMemoryTokenStorage() } }
+        val platform = module { single<TokenStorage> { storage } }
         return koinApplication { modules(listOf(platform) + appModules(environment, apiBaseUrl)) }.koin
     }
 
     private companion object {
         const val OVERRIDE = "https://wyr.example.com"
+
+        val DEV_SESSION =
+            SessionDto(
+                playerId = "dev-player",
+                accessToken = "dev-access",
+                refreshToken = "dev-refresh",
+                accessTokenExpiresInSeconds = 900,
+            )
     }
 }

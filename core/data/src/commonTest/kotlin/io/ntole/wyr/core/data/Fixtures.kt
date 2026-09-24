@@ -13,6 +13,7 @@ import io.ntole.wyr.core.error.ErrorDto
 import io.ntole.wyr.core.network.InMemoryTokenStorage
 import io.ntole.wyr.core.network.SessionStore
 import io.ntole.wyr.core.network.WyrJson
+import io.ntole.wyr.core.network.environment.WyrEnvironment
 import kotlin.coroutines.Continuation
 import kotlin.coroutines.EmptyCoroutineContext
 import kotlin.coroutines.startCoroutine
@@ -39,7 +40,7 @@ internal fun session(playerId: String): SessionDto =
  * call it: [InMemoryTokenStorage] never suspends, so the write is done when `startCoroutine` returns.
  */
 internal fun storeHolding(session: SessionDto?): SessionStore =
-    SessionStore(InMemoryTokenStorage()).also { store ->
+    SessionStore(InMemoryTokenStorage(), WyrEnvironment.LOCAL).also { store ->
         if (session == null) return@also
         val write: suspend () -> Unit = { store.write(session) }
         write.startCoroutine(Continuation(EmptyCoroutineContext) { result -> result.getOrThrow() })

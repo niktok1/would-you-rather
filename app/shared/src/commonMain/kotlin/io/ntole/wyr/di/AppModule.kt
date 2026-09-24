@@ -97,6 +97,6 @@ internal fun appModules(
             single { environment }
             single(named(API_BASE_URL)) { apiBaseUrl }
         },
-        dataModule(apiBaseUrl),
+        dataModule(environment, apiBaseUrl),
         uiModule,
     )

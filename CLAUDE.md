@@ -881,6 +881,13 @@ name one too.
 - *In the app.* Koin binds the environment beside the base URL in use (`appModules`), and the dev
   console's header shows both. The console tab is shown only where the environment shows developer
   tools (`rootScreensFor`): a PROD build shows the Play screen alone, with no tab to reach the console.
+- *A session per environment.* Each environment's guest session is stored under a key of its own
+  (`SessionStore.keyFor`: `wyr.session.local`, `wyr.session.dev`, and `wyr.session` for PROD, the key
+  every build used before there were environments), which `dataModule` is handed with the
+  environment. On desktop, iOS and web one storage serves every environment's build: a JVM
+  Preferences node, one bundle id's `NSUserDefaults`, one origin's `localStorage`. With one key, a
+  build for one server sent the other's tokens to it and, once they were refused, replaced that
+  guest, and its points, with a new one (§8a). Android's flavors have storage of their own anyway.
 ---
 
 ## 9. How to work in this repo

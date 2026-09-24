@@ -406,7 +406,8 @@ Every client build targets one server environment, chosen when it is built, `loc
 another (CLAUDE.md §8e). `dev` is `wyr-server-dev` at https://wyr-server-dev.onrender.com (in-memory
 H2, reset on every deploy), `prod` is https://wyr-server.onrender.com; both answered `/health` with
 200 on 2026-09-24. The console's header shows the environment and its URL, and a `prod` build has no
-console at all, only Play.
+console at all, only Play. Each environment keeps a guest of its own, so switching between them
+loses neither.
 
 - **Android**: Android Studio's *Build Variants* panel, where `devDebug` is the default, since a
   phone can reach dev and not the developer's machine. `localDebug` is for the emulator against

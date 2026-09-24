@@ -10,6 +10,7 @@ import io.ktor.http.headersOf
 import io.ntole.wyr.core.auth.SessionDto
 import io.ntole.wyr.core.error.ErrorCode
 import io.ntole.wyr.core.error.ErrorDto
+import io.ntole.wyr.core.network.environment.WyrEnvironment
 import io.ntole.wyr.core.question.QuestionPageDto
 import kotlin.coroutines.Continuation
 import kotlin.coroutines.EmptyCoroutineContext
@@ -31,7 +32,7 @@ internal fun session(playerId: String): SessionDto =
  * call it: [InMemoryTokenStorage] never suspends, so the write is done when `startCoroutine` returns.
  */
 internal fun storeHolding(session: SessionDto?): SessionStore =
-    SessionStore(InMemoryTokenStorage()).also { store ->
+    SessionStore(InMemoryTokenStorage(), WyrEnvironment.LOCAL).also { store ->
         if (session == null) return@also
         val write: suspend () -> Unit = { store.write(session) }
         write.startCoroutine(Continuation(EmptyCoroutineContext) { result -> result.getOrThrow() })

@@ -39,6 +39,7 @@ import io.ntole.wyr.core.network.api.PlayerApi
 import io.ntole.wyr.core.network.api.QuestionApi
 import io.ntole.wyr.core.network.api.SubmissionApi
 import io.ntole.wyr.core.network.api.VoteApi
+import io.ntole.wyr.core.network.environment.WyrEnvironment
 import io.ntole.wyr.core.network.trace.HttpTrace
 import org.koin.core.module.Module
 import org.koin.dsl.module
@@ -49,11 +50,16 @@ import org.koin.dsl.module
  * Expects a [TokenStorage] to already be registered — that is the one binding only a platform
  * can supply, so it comes from `:app:shared`'s platform module.
  *
+ * @param environment the server environment the build targets, whose session is kept apart from
+ *   every other environment's in that storage ([SessionStore]).
  * @param baseUrl root URL of the API, including scheme.
  */
-public fun dataModule(baseUrl: String): Module =
+public fun dataModule(
+    environment: WyrEnvironment,
+    baseUrl: String,
+): Module =
     module {
-        single { SessionStore(get<TokenStorage>()) }
+        single { SessionStore(get<TokenStorage>(), environment) }
         single { HttpTrace() }
         single<HttpClient> { WyrHttpClient.create(baseUrl = baseUrl, sessionStore = get(), trace = get()) }
 

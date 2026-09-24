@@ -11,6 +11,7 @@ import io.ntole.wyr.core.network.SessionStore
 import io.ntole.wyr.core.network.TokenStorage
 import io.ntole.wyr.core.network.WyrHttpClient
 import io.ntole.wyr.core.network.api.AuthApi
+import io.ntole.wyr.core.network.environment.WyrEnvironment
 import kotlinx.coroutines.test.runTest
 import kotlinx.io.IOException
 import kotlin.test.Test
@@ -26,7 +27,7 @@ import kotlin.test.assertNull
 class SessionStorageFailureTest {
     private val server = FakeServer()
     private val storage = UndurableStorage()
-    private val store = SessionStore(storage)
+    private val store = SessionStore(storage, WyrEnvironment.LOCAL)
     private val sessions =
         DefaultSessionRepository(AuthApi(WyrHttpClient.create(BASE_URL, store, server.engine)), store)
 
