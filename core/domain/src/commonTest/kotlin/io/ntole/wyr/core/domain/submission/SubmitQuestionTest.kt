@@ -5,6 +5,7 @@ import io.ntole.wyr.core.domain.session.SessionRepository
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.time.Instant
 
 class SubmitQuestionTest {
@@ -20,6 +21,21 @@ class SubmitQuestionTest {
             assertEquals(STORED, stored)
             // The options untouched: trimming, like every other content rule, is the server's.
             assertEquals(listOf("ensure", "submit  Fly |Swim|[SUPERPOWERS, FOOD]"), calls)
+        }
+
+    @Test
+    fun `a pick no question can be filed under is refused before the session is ensured`() =
+        runTest {
+            val submitQuestion = SubmitQuestion(RecordingSubmissions(calls), RecordingSessions(calls))
+
+            listOf(emptySet(), setOf(Category.OTHER), setOf(Category.FOOD, Category.OTHER)).forEach { categories ->
+                assertFailsWith<IllegalArgumentException>("$categories") {
+                    submitQuestion("Fly", "Swim", categories)
+                }
+            }
+
+            // Not even the session: on a cold start ensuring it would have minted a guest.
+            assertEquals(emptyList(), calls)
         }
 
     private class RecordingSubmissions(

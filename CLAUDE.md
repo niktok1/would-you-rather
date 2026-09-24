@@ -508,9 +508,10 @@ and every request shows in its HTTP trace (`HttpTrace` in `:core:network`, never
   cycle each player is on. `GET /v1/me/questions` lists the author's submissions of every status,
   newest first, a rejected one with its reason (`SubmissionStore.byAuthor`). On the client,
   `SubmitQuestion` and `GetMySubmissions` go through `withSessionRecovery`
-  (`DefaultSubmissionRepository`), which refuses no category, or `OTHER`, before anything is sent
-  and leaves every other rule to the server; a status this build cannot name is
-  `SubmissionStatus.OTHER`. The console's *Submit a question* section drives both.
+  (`DefaultSubmissionRepository`). `SubmitQuestion` refuses no category, or `OTHER`, before it
+  ensures a session, so nothing is sent, not even a guest's mint, and the repository refuses them
+  again before building the request; every other rule is the server's. A status this build cannot
+  name is `SubmissionStatus.OTHER`. The console's *Submit a question* section drives both.
 - **Moderation** *(not built but for the author's view)*: a moderator approves or rejects each
   pending submission and **may change its categories** when approving (*Categories*: at least one
   stays, and a change replaces the question's `question_categories` rows in one transaction). A

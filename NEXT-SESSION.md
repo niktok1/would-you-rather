@@ -73,9 +73,10 @@ Repo initialized on `main` with the personal identity and `user.useConfigOnly = 
   guest, who then owned the submission and listed only their own. In the tests, `SubmissionApiTest`
   pins the request and the reads, `SubmissionMapperTest` an unknown status as `OTHER` and a
   submission's categories mapped as a question's, with none or `OTHER` refused before sending,
+  `SubmitQuestionTest` the same refused before a session is ensured,
   `DefaultSubmissionRepositoryTest` recovery after a 401 and the 422 and 409 end to end through
   `MockEngine`, and `SubmissionConsoleViewModelTest` the console section.
-- Client tests: `:core:domain` 16, `:core:data` 88, `:core:network` 35, `:app:shared` 83 (the
+- Client tests: `:core:domain` 17, `:core:data` 88, `:core:network` 35, `:app:shared` 83 (the
   ViewModels and the Koin graph). `:app:shared` compiles for JVM, JS, wasmJs and the iOS
   simulator.
 - `:app:androidApp:assembleDebug` produces a real APK.
