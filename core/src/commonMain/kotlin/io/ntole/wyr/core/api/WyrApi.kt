@@ -105,6 +105,14 @@ public object WyrApi {
         public const val MAX_OPTION_LENGTH: Int = 200
 
         /**
+         * Longest reason a moderator can give for rejecting a question, the "short reason" its author
+         * sees (CLAUDE.md §8d), counted as [MAX_OPTION_LENGTH] counts, and once trimmed. Here rather
+         * than on the server so a client can check a reason against the same number the server's
+         * column is sized by.
+         */
+        public const val MAX_REJECTION_REASON_LENGTH: Int = 200
+
+        /**
          * Most submissions one player may have waiting for a moderator at once (CLAUDE.md §8d).
          * Approved and rejected ones do not count, so a decision frees a place.
          */

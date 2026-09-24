@@ -78,7 +78,7 @@ object Questions : Table("questions") {
     val reviewedAt = long("reviewed_at").nullable()
 
     /** The moderator's short reason for rejecting the question, or null for any other. */
-    val rejectionReason = varchar("rejection_reason", MAX_REJECTION_REASON_LENGTH).nullable()
+    val rejectionReason = varchar("rejection_reason", WyrApi.Limits.MAX_REJECTION_REASON_LENGTH).nullable()
 
     override val primaryKey = PrimaryKey(id)
 
@@ -87,9 +87,6 @@ object Questions : Table("questions") {
         // all of them. PostgreSQL does not index a foreign key by itself.
         index(isUnique = false, authorPlayerId, status)
     }
-
-    /** Room for the "short reason" of CLAUDE.md §8d. The moderation route decides what it accepts. */
-    const val MAX_REJECTION_REASON_LENGTH: Int = 200
 }
 
 /**
