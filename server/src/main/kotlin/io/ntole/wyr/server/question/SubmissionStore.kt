@@ -1,6 +1,7 @@
 package io.ntole.wyr.server.question
 
 import io.ntole.wyr.core.api.WyrApi
+import io.ntole.wyr.core.question.QuestionCategory
 import io.ntole.wyr.core.question.QuestionStatus
 import io.ntole.wyr.core.question.SubmissionDto
 import io.ntole.wyr.core.question.SubmitQuestionRequest
@@ -8,6 +9,7 @@ import io.ntole.wyr.server.db.Players
 import io.ntole.wyr.server.db.QuestionCategories
 import io.ntole.wyr.server.db.Questions
 import io.ntole.wyr.server.plugins.ApiFailure
+import org.jetbrains.exposed.v1.core.ResultRow
 import org.jetbrains.exposed.v1.core.SortOrder
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.count
@@ -79,9 +81,6 @@ object SubmissionStore {
      * Must run inside a transaction. Two submitted in the same millisecond come in id order, which is
      * fixed but says nothing about which came first. Seeds have no author, so they never appear.
      *
-     * A reason goes out only with a rejected question, whatever the column holds, so what the
-     * contract promises does not rest on every writer of the column clearing it.
-     *
      * The categories come from one more statement for all of them ([QuestionStore.categoriesOf]),
      * picked by author rather than by id, since nothing bounds how many there are. A submission
      * committed between the two is in the second only, and left out with the rest of it.
@@ -95,21 +94,34 @@ object SubmissionStore {
                 .toList()
         val categories = QuestionStore.categoriesOf(Questions.authorPlayerId eq authorId)
 
-        return rows.map { row ->
-            val status = row[Questions.status]
-            SubmissionDto(
-                id = row[Questions.id],
-                optionA = row[Questions.optionA],
-                optionB = row[Questions.optionB],
-                categories = categories[row[Questions.id]].orEmpty(),
-                status = status,
-                rejectionReason = row[Questions.rejectionReason].takeIf { status == QuestionStatus.REJECTED },
-                submittedAt = row[Questions.submittedAt],
-            )
-        }
+        return rows.map { row -> toSubmission(row, categories[row[Questions.id]].orEmpty()) }
     }
 
-    private val SUBMISSION_COLUMNS =
+    /**
+     * A question read with [SUBMISSION_COLUMNS], as its author sees it, filed under [categories].
+     * Every reader of a submission maps it here, the author's list and the moderator's alike.
+     *
+     * A reason goes out only with a rejected question, whatever the column holds, so what the
+     * contract promises does not rest on every writer of the column clearing it.
+     */
+    internal fun toSubmission(
+        row: ResultRow,
+        categories: List<QuestionCategory>,
+    ): SubmissionDto {
+        val status = row[Questions.status]
+        return SubmissionDto(
+            id = row[Questions.id],
+            optionA = row[Questions.optionA],
+            optionB = row[Questions.optionB],
+            categories = categories,
+            status = status,
+            rejectionReason = row[Questions.rejectionReason].takeIf { status == QuestionStatus.REJECTED },
+            submittedAt = row[Questions.submittedAt],
+        )
+    }
+
+    /** What [toSubmission] reads, and no more. */
+    internal val SUBMISSION_COLUMNS =
         listOf(
             Questions.id,
             Questions.optionA,
