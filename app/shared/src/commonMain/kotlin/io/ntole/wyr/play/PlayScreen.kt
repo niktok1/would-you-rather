@@ -339,7 +339,8 @@ private fun FailureBody(
  * Player-facing copy per [DomainError].
  *
  * Branching on the domain error, never on a server message: `ErrorDto.message` is diagnostic and
- * unlocalised, so it must never reach a screen.
+ * unlocalised, so it must never reach a screen. The Play tab never submits a question; the
+ * submission errors have copy only because every [DomainError] does.
  */
 private fun message(error: DomainError): String =
     when (error) {
@@ -349,5 +350,7 @@ private fun message(error: DomainError): String =
         DomainError.UNAUTHORIZED -> "We couldn't verify your session.\nTrying again should fix it."
         DomainError.QUESTION_NOT_FOUND -> "That question disappeared.\nLet's find another."
         DomainError.ALREADY_VOTED -> "You've already answered that one."
+        DomainError.INVALID_SUBMISSION -> "That question can't be sent as written."
+        DomainError.SUBMISSION_LIMIT -> "You have too many questions waiting for review."
         DomainError.SERVER, DomainError.UNKNOWN -> "Something went wrong on our end."
     }

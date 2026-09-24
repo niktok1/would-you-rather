@@ -93,5 +93,10 @@ internal fun ErrorCode.toDomain(): DomainError =
         // side, not something a player did.
         ErrorCode.VALIDATION_FAILED -> DomainError.SERVER
 
+        // Unlike VALIDATION_FAILED, both are the player's to put right, so they keep their own.
+        ErrorCode.INVALID_SUBMISSION -> DomainError.INVALID_SUBMISSION
+
+        ErrorCode.SUBMISSION_LIMIT -> DomainError.SUBMISSION_LIMIT
+
         ErrorCode.UNKNOWN -> DomainError.UNKNOWN
     }

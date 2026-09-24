@@ -31,7 +31,10 @@ public object WyrApi {
          * [io.ntole.wyr.core.question.SubmissionDto]. Requires a session, and earns nothing. The
          * question is stored pending and served to nobody until a moderator approves it, and never to
          * its author (CLAUDE.md §8d). A player may have at most [Limits.MAX_PENDING_SUBMISSIONS]
-         * pending at once.
+         * pending at once, and one more is refused with 409
+         * [io.ntole.wyr.core.error.ErrorCode.SUBMISSION_LIMIT]. Options the rules refuse are 422
+         * [io.ntole.wyr.core.error.ErrorCode.INVALID_SUBMISSION]; a malformed body, or one naming no
+         * real category, is 400 [io.ntole.wyr.core.error.ErrorCode.VALIDATION_FAILED].
          */
         public const val QUESTIONS: String = "/$VERSION/questions"
         public const val VOTES: String = "/$VERSION/votes"

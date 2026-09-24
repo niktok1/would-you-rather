@@ -24,8 +24,26 @@ public enum class ErrorCode {
      */
     ALREADY_VOTED,
 
-    /** The request body failed validation. */
+    /**
+     * The request body failed validation: it is malformed, or holds what no correct client sends.
+     * A bug on one side, never something the player did. A submitted question the player can put
+     * right is [INVALID_SUBMISSION] instead.
+     */
     VALIDATION_FAILED,
+
+    /**
+     * A submitted question breaks a rule the player can break by what they type (see
+     * [io.ntole.wyr.core.question.SubmitQuestionRequest]): an option blank, too long or holding a
+     * control character, or the two options the same. Sent with 422.
+     */
+    INVALID_SUBMISSION,
+
+    /**
+     * The player already has [io.ntole.wyr.core.api.WyrApi.Limits.MAX_PENDING_SUBMISSIONS]
+     * submissions waiting for a moderator, so another is refused until one of them is decided.
+     * Sent with 409.
+     */
+    SUBMISSION_LIMIT,
 
     /** Caller is not authenticated, or the credential is expired. */
     UNAUTHORIZED,

@@ -12,6 +12,12 @@ public enum class DomainError {
     UNAUTHORIZED,
     RATE_LIMITED,
 
+    /** A submitted question broke a rule the player can put right by editing it. */
+    INVALID_SUBMISSION,
+
+    /** The player has as many submissions waiting for a moderator as they may have at once. */
+    SUBMISSION_LIMIT,
+
     /** Request never reached the server, or its answer did not arrive whole. */
     NETWORK,
 

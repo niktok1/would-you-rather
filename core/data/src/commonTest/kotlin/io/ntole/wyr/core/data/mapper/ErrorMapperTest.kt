@@ -20,6 +20,8 @@ class ErrorMapperTest {
                     ApiException(ErrorCode.QUESTION_NOT_FOUND, status = 404) to DomainError.QUESTION_NOT_FOUND,
                     ApiException(ErrorCode.ALREADY_VOTED, status = 409) to DomainError.ALREADY_VOTED,
                     ApiException(ErrorCode.VALIDATION_FAILED, status = 400) to DomainError.SERVER,
+                    ApiException(ErrorCode.INVALID_SUBMISSION, status = 422) to DomainError.INVALID_SUBMISSION,
+                    ApiException(ErrorCode.SUBMISSION_LIMIT, status = 409) to DomainError.SUBMISSION_LIMIT,
                     ApiException(ErrorCode.UNAUTHORIZED, status = 401) to DomainError.UNAUTHORIZED,
                     ApiException(ErrorCode.INVALID_REFRESH_TOKEN, status = 401) to DomainError.UNAUTHORIZED,
                     ApiException(ErrorCode.RATE_LIMITED, status = 429) to DomainError.RATE_LIMITED,
