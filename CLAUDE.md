@@ -1015,8 +1015,10 @@ name one too.
   build for one server sent the other's tokens to it and, once they were refused, replaced that
   guest, and its points, with a new one (§8a). Android's flavors have storage of their own anyway.
   The recovery secret (§8a, *Recovery*) is one environment's too, since each server's database holds
-  its own: the client half keeps it under a key per environment the same way, one iCloud Keychain
-  item per environment included, or a DEV secret would be sent to PROD and dropped as unknown.
+  its own, so it is kept under a key per environment the same way (`RecoverySecretStore.secretKeyFor`:
+  `wyr.recovery.local`, `wyr.recovery.dev`, `wyr.recovery.prod`, with no legacy key to keep), one
+  iCloud Keychain item per environment included, or a DEV secret would be sent to PROD and dropped as
+  unknown. Renaming a key strands every secret kept under it.
 ---
 
 ## 9. How to work in this repo
