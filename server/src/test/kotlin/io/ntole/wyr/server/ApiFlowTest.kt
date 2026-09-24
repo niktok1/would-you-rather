@@ -761,8 +761,10 @@ class ApiFlowTest {
                 "optionB too long" to SubmitQuestionRequest("Fly", tooLong, QuestionCategory.FOOD),
                 "the same options ignoring case" to SubmitQuestionRequest("Fly", "fLY", QuestionCategory.FOOD),
                 "the same options once trimmed" to SubmitQuestionRequest("  Fly ", "fly\n", QuestionCategory.FOOD),
-                // PostgreSQL refuses a NUL in text, which H2 stores, so only the check can catch it.
-                "NUL in optionA" to SubmitQuestionRequest("Fly\u0000", "Swim", QuestionCategory.FOOD),
+                // PostgreSQL refuses a NUL in text, which H2 stores, so only the check can catch it. Neither
+                // a NUL nor a DEL is whitespace, so trimming leaves one at either end for the check.
+                "trailing NUL in optionA" to SubmitQuestionRequest("Fly\u0000", "Swim", QuestionCategory.FOOD),
+                "leading DEL in optionB" to SubmitQuestionRequest("Fly", "\u007FSwim", QuestionCategory.FOOD),
                 "newline inside optionB" to SubmitQuestionRequest("Fly", "Swim\nfast", QuestionCategory.FOOD),
                 "tab inside optionA" to SubmitQuestionRequest("Fly\thigh", "Swim", QuestionCategory.FOOD),
             ).forEach { (case, request) ->

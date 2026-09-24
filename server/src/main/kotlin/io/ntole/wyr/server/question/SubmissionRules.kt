@@ -17,9 +17,11 @@ import io.ntole.wyr.server.plugins.ApiFailure
  * with both is malformed first.
  *
  * Control characters are all refused, not only the NUL PostgreSQL rejects, because an option is one
- * line of text: a newline or tab inside one is pasted by accident, not meant. Leading and trailing
- * ones are whitespace and are trimmed like spaces. Nothing else is judged here, invisible
- * characters included: what a question says is the moderator's to accept or reject.
+ * line of text: a newline or tab inside one is pasted by accident, not meant. Trimming comes first,
+ * and removes only whitespace: the whitespace controls (tab, newline, VT, FF, CR and 0x1C-0x1F) go
+ * at either end like spaces, and any other control character, NUL and DEL included, is refused
+ * wherever it is. Nothing else is judged here, invisible characters included: what a question says
+ * is the moderator's to accept or reject.
  */
 internal fun checkedSubmission(request: SubmitQuestionRequest): SubmitQuestionRequest {
     if (request.category == QuestionCategory.UNKNOWN) throw ApiFailure.validation("category is not a real one")
