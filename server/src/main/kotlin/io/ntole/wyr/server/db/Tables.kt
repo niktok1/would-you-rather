@@ -32,8 +32,9 @@ object Players : Table("players") {
 
     /**
      * The refresh token the last rotation displaced (CLAUDE.md §8a): its SHA-256, the expiry it had
-     * while current, and when it was displaced. A refresh presenting it within the grace window of
-     * that rotation still succeeds, once (`PlayerStore.rotateRefreshToken`). All three are null for a
+     * while current, and when it was displaced. A refresh presenting it still succeeds, once, until the
+     * next rotation displaces it, and only within a time bound after that rotation where
+     * `REFRESH_GRACE_SECONDS` sets one (`PlayerStore.rotateRefreshToken`). All three are null for a
      * player who has never refreshed, and for every player from before V2.
      */
     val previousRefreshTokenHash = varchar("previous_refresh_token_hash", 64).nullable()

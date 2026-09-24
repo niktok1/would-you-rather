@@ -42,17 +42,26 @@ import io.ntole.wyr.core.vote.VoteResultDto
 import io.ntole.wyr.core.vote.VoteTallyDto
 import io.ntole.wyr.server.auth.TokenService
 import io.ntole.wyr.server.config.ServerConfig
+import io.ntole.wyr.server.db.Players
+import io.ntole.wyr.server.db.inTransaction
+import io.ntole.wyr.server.db.serverPool
 import io.ntole.wyr.server.vote.Scoring
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
+import org.jetbrains.exposed.v1.core.eq
+import org.jetbrains.exposed.v1.jdbc.update
 import java.util.UUID
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.days
+import kotlin.time.Duration.Companion.hours
+import kotlin.time.Duration.Companion.minutes
 
 /**
  * End-to-end coverage of the vertical slice: zero-click session, the question feed, vote, reveal.
@@ -254,16 +263,65 @@ class ApiFlowTest {
         }
 
     /**
-     * The grace lets a displaced token work once more, not for as long as it lasts: spending it
-     * displaces it for good. The token it displaced in turn, the one the lost answer carried, is then
-     * the previous one, and works within the grace, as when two clients sharing one store refresh at once.
+     * The same lost answer with the player back hours later, as one whose app was killed mid-refresh can
+     * be: with no time bound on the grace, the token the server rotated out still keeps them. A test
+     * cannot wait hours, so it restamps the rotation that long ago, which is all the wait would change
+     * for the displaced token short of its own expiry, weeks away here.
      */
     @Test
-    fun `a refresh token works once more within the grace window, and never a third time`() =
+    fun `a refresh whose answer was lost keeps the player when it is sent again hours later`() {
+        val database = testDatabaseFor("refresh-lost-hours")
+        runServer("refresh-lost-hours", database = database) { client ->
+            val original = client.guest()
+            client.vote(original, "seed-1", OptionSide.A)
+            assertEquals(HttpStatusCode.OK, client.refresh(original.refreshToken).status, "only its answer is lost")
+            database.stampLastRotation(original.playerId, ago = 5.hours)
+
+            val retried = client.refresh(original.refreshToken)
+
+            assertEquals(HttpStatusCode.OK, retried.status)
+            val session: SessionDto = retried.body()
+            assertEquals(original.playerId, session.playerId, "the same player, not a fresh guest")
+            assertEquals(1, client.stats(session).totalPoints, "with the points they had")
+        }
+    }
+
+    /**
+     * `REFRESH_GRACE_SECONDS` still bounds the grace when it is set, as its 10 minutes did by default at
+     * first: a lost answer sent again within them keeps the player, and one sent again after is refused.
+     */
+    @Test
+    fun `under a time bound, a refresh whose answer was lost keeps the player only within it`() {
+        val database = testDatabaseFor("refresh-lost-bounded")
+        runServer("refresh-lost-bounded", refreshGraceSeconds = 600, database = database) { client ->
+            val inTime = client.guest()
+            val late = client.guest()
+            assertEquals(HttpStatusCode.OK, client.refresh(inTime.refreshToken).status, "only its answer is lost")
+            assertEquals(HttpStatusCode.OK, client.refresh(late.refreshToken).status, "only its answer is lost")
+            database.stampLastRotation(inTime.playerId, ago = 9.minutes)
+            database.stampLastRotation(late.playerId, ago = 11.minutes)
+
+            val retriedInTime = client.refresh(inTime.refreshToken)
+            val retriedLate = client.refresh(late.refreshToken)
+
+            assertEquals(HttpStatusCode.OK, retriedInTime.status, "within the bound")
+            assertEquals(inTime.playerId, retriedInTime.body<SessionDto>().playerId)
+            assertEquals(HttpStatusCode.Unauthorized, retriedLate.status, "past the bound")
+            assertEquals(ErrorCode.INVALID_REFRESH_TOKEN, retriedLate.body<ErrorDto>().code)
+        }
+    }
+
+    /**
+     * The grace lets a displaced token work once more, not for as long as it waits: spending it
+     * displaces it for good. The token it displaced in turn, the one the lost answer carried, is then
+     * the previous one, and still works, as when two clients sharing one store refresh at once.
+     */
+    @Test
+    fun `a refresh token works once more after its rotation, and never a third time`() =
         runServer("refresh-grace-once") { client ->
             val original = client.guest()
             val first: SessionDto = client.refresh(original.refreshToken).body()
-            assertEquals(HttpStatusCode.OK, client.refresh(original.refreshToken).status, "once more, within the grace")
+            assertEquals(HttpStatusCode.OK, client.refresh(original.refreshToken).status, "once more")
 
             val third = client.refresh(original.refreshToken)
 
@@ -272,6 +330,23 @@ class ApiFlowTest {
             val displaced = client.refresh(first.refreshToken)
             assertEquals(HttpStatusCode.OK, displaced.status, "the first refresh's token, displaced by the second")
             assertEquals(original.playerId, displaced.body<SessionDto>().playerId)
+        }
+
+    /**
+     * With no time bound, what ends a displaced token is the next rotation, here the first use of the
+     * token that displaced it, however soon after.
+     */
+    @Test
+    fun `a displaced refresh token dies at the first use of the token that displaced it`() =
+        runServer("refresh-displaced-for-good") { client ->
+            val original = client.guest()
+            val first: SessionDto = client.refresh(original.refreshToken).body()
+            assertEquals(HttpStatusCode.OK, client.refresh(first.refreshToken).status, "the new token's first use")
+
+            val late = client.refresh(original.refreshToken)
+
+            assertEquals(HttpStatusCode.Unauthorized, late.status)
+            assertEquals(ErrorCode.INVALID_REFRESH_TOKEN, late.body<ErrorDto>().code)
         }
 
     @Test
@@ -1499,17 +1574,17 @@ class ApiFlowTest {
         }
 
     /**
-     * A server on its own database, moderated with [adminToken], or with moderation off for none, and
-     * with production's refresh grace unless a test sets another.
+     * A server on [database], its own unless a test that reaches into it passes one, moderated with
+     * [adminToken], or with moderation off for none, and with production's refresh grace, which has no
+     * time bound, unless a test sets one.
      */
     private fun runServer(
         databaseName: String,
         adminToken: String? = TEST_ADMIN_TOKEN,
-        refreshGraceSeconds: Long = ServerConfig.DEFAULT_REFRESH_GRACE_SECONDS,
+        refreshGraceSeconds: Long? = null,
+        database: TestDatabaseSettings = testDatabaseFor(databaseName),
         block: suspend ApplicationTestBuilder.(HttpClient) -> Unit,
     ) = testApplication {
-        val database = testDatabaseFor(databaseName)
-
         val config =
             ServerConfig(
                 port = 0,
@@ -1520,7 +1595,8 @@ class ApiFlowTest {
                 jwtIssuer = "wyr-test",
                 jwtAudience = "wyr-test-client",
                 accessTokenTtlSeconds = 300,
-                refreshTokenTtlSeconds = 3_600,
+                // Production's 30 days, so a test can stamp a rotation hours ago well within them.
+                refreshTokenTtlSeconds = 30.days.inWholeSeconds,
                 refreshGraceSeconds = refreshGraceSeconds,
                 allowedWebOrigins = emptyList(),
                 adminToken = adminToken,
@@ -1540,6 +1616,24 @@ class ApiFlowTest {
             }
 
         block(client)
+    }
+
+    /**
+     * Restamps [playerId]'s last refresh-token rotation as [ago] before now, as though it had happened
+     * then: a test cannot wait that long. Of the token that rotation displaced, only a bound on the grace
+     * reads the stamp; its expiry is left where it was.
+     */
+    private fun TestDatabaseSettings.stampLastRotation(
+        playerId: String,
+        ago: Duration,
+    ) = serverPool().use { pool ->
+        pool.inTransaction {
+            val restamped =
+                Players.update({ Players.id eq playerId }) { row ->
+                    row[previousRefreshTokenRotatedAt] = System.currentTimeMillis() - ago.inWholeMilliseconds
+                }
+            check(restamped == 1) { "no player $playerId" }
+        }
     }
 
     private suspend fun HttpClient.guest(): SessionDto = post(WyrApi.Paths.AUTH_GUEST).body()

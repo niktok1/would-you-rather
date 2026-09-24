@@ -18,8 +18,10 @@ import java.util.Date
  *    database leak does not hand out working sessions.
  *
  * Refresh tokens are rotated on every use: a refreshed session retires the token that produced it,
- * which works once more within a short grace window (CLAUDE.md §8a, `ServerConfig.refreshGraceSeconds`)
- * and then never again, so a stolen-and-replayed token is a dead end rather than permanent access.
+ * which works once more, until the next rotation displaces it (the grace, CLAUDE.md §8a, which
+ * `ServerConfig.refreshGraceSeconds` can bound in time), and then never again. So an old token replayed
+ * is a dead end once a later rotation has displaced it; one replayed before then works, which is the
+ * grace's cost (CLAUDE.md §8a, *The cost*).
  */
 class TokenService(
     private val config: ServerConfig,

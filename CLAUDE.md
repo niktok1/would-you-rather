@@ -350,64 +350,82 @@ auth SDK, satisfying §2.
 - The access token travels in `Authorization: Bearer`, never in a request body, so `VoteRequest`
   does not change when auth evolves.
 - Only a SHA-256 hash of the refresh token is stored. Refresh tokens **rotate on every use**, with a
-  **grace window** (*decided 2026-09-24*). The token a rotation displaces is kept as the player's
-  previous one, with the expiry it had and when it was displaced (V2), and a refresh presenting it
-  within `REFRESH_GRACE_SECONDS` of that rotation still succeeds: 600 (10 minutes) by default, 0 to
-  turn it off, and never past the token's own expiry. It rotates by the same rule, so the token it
-  presented is dead afterwards and the one it displaced becomes the previous one. A token therefore
-  works twice at most, once while current and once more as the previous one; anything else is 401
-  `INVALID_REFRESH_TOKEN`.
+  **grace window** (*decided 2026-09-24*) that has **no time bound** (*decided 2026-09-24*, replacing
+  the 10 minutes built first). The token a rotation displaces is kept as the player's previous one,
+  with the expiry it had and when it was displaced (V2), and a refresh presenting it still succeeds
+  until the next rotation displaces it, never past the token's own expiry. `REFRESH_GRACE_SECONDS`
+  can bound it in time: unset, the default, sets no bound; 0 turns the grace off; any other number of
+  seconds accepts the previous token only that long after the rotation that displaced it. It rotates
+  by the same rule, so the token it presented is dead afterwards and the one it displaced becomes the
+  previous one; a refresh with the current token displaces the previous one for good the same way. A
+  token therefore works twice at most, once while current and once more as the previous one; anything
+  else is 401 `INVALID_REFRESH_TOKEN`.
   - *Why:* a refresh the server ran whose answer never arrived (a dropped connection, a Render cold
-    start, the client's 5-minute refresh timeout, which the default outlasts) leaves the client with
+    start, the client's 5-minute refresh timeout, the app killed mid-refresh) leaves the client with
     only the token the server rotated out. Without the grace its next refresh is refused and session
     recovery replaces the player with a fresh guest, their points gone. With it, the client's next
-    refresh sends that token again and keeps the player, **provided it reaches the server within the
-    grace of that rotation**. Nothing resends a refresh that failed on the network: the call fails as
-    `NETWORK`, and the token goes again only with a later call's 401, so a player away for longer
-    (the app backgrounded, or killed mid-refresh and opened later) is still replaced (§8b, *Refresh
-    answers lost past the grace*).
-  - *The cost* is a stolen token's: presented after its player's own refresh rotated it out, it still
-    works, within the grace and once. `ServerConfig.refreshGraceSeconds` says so.
+    refresh sends that token again and keeps the player. Nothing resends a refresh that failed on the
+    network: the call fails as `NETWORK`, and the token goes again only with a later call's 401, which
+    for a player who put the app away comes whenever they are back. The 10-minute bound replaced
+    that player all the same, which is why the user dropped it (§8b, *Refresh answers lost past the
+    grace*).
+  - *The cost* is a copy's. A refresh token copied to a second device, or stolen, keeps working beside
+    the original once used, for as long as the two take turns refreshing, as two clients each
+    refreshing once per access token do: each refresh leaves the other's token in the previous slot,
+    where nothing times it out. One drops out when the other refreshes twice in a row, and it need not
+    be the copy. A copy of a token its player's own refresh already rotated out still gets in once if
+    it comes before their next refresh, which for a player away from the app can be as late as the
+    token's own expiry. A time bound parts the two only when one waits in the previous slot longer
+    than the bound: the 10 minutes did whenever one refreshed more than 10 minutes after the other,
+    and a bound under half the access token's 15 minutes always would. Accepted for guest accounts,
+    whose only credential this is (the user's decision, 2026-09-24); account linking changes the
+    picture. `ServerConfig.refreshGraceSeconds` says so.
   - *The rotation* is one `UPDATE` whose `WHERE` is the whole check, nothing read before it
     (`PlayerStore.rotateRefreshToken`, §4): the presented hash as the current one and unexpired,
-    or as the previous one, unexpired and within the grace. Of two refreshes racing with the
-    current token, the second waits on the first's row lock, finds the token the previous one by
-    then and goes through too, the first's new token becoming the previous one; of two racing with
+    or as the previous one, unexpired and, under a bound, displaced within it. Of two refreshes racing
+    with the current token, the second waits on the first's row lock, finds the token the previous one
+    by then and goes through too, the first's new token becoming the previous one; of two racing with
     the previous token, exactly one goes through. `PlayerStoreTest` races both and pins every rule.
+    It stamps every rotation, bound or not: a bound set later reads the stamp, and so does a rollback
+    to a build from before this rule, whose unset `REFRESH_GRACE_SECONDS` means 10 minutes.
 - `POST /v1/auth/link` does not exist yet. It is the intended next step and is what will make an
   account survive reinstall and sync across devices.
 - On the client, `SessionStore` is the only copy of the credentials: Ktor's bearer cache is off
   (`cacheTokens = false`), so a session change applies to the very next request. A dead session
   is replaced through `withSessionRecovery` in `:core:data`, which mints at most one guest for it.
-- *Clients sharing one store* (browser tabs, desktop instances) can both refresh one token, and
-  within the grace the server lets both through, so the store may end up holding the displaced
-  token of the two, which dies with the grace. So a refresh that finds the store moved on to another
-  session of the same player refreshes once more as the stored one, which the server takes either
-  way, and keeps that answer, the latest rotation (`refreshAs` in `WyrHttpClient`,
-  `SharedSessionStoreTest`); the once more is never repeated. A session of another player, or none,
-  is the data layer's change and is kept as it was. A settling refresh that reached the server but
-  whose answer was lost is worse than an ordinary lost refresh: the store keeps the other client's
-  session, whose token it has just made the previous one, or spent if it already was, beside a fresh
-  access token, so the next refresh comes only once that expires (15 minutes by default), past the
-  grace, and is refused (§8b, *Refresh answers lost past the grace*). The lost-answer case got no
-  client change: the store still holds the token it sent, and the next 401 sends it again, which
-  keeps the player only within the grace (*Why*, above). Nor did session recovery: it acts only on a
+- *Clients sharing one store* (browser tabs, desktop instances) can both refresh one token, and the
+  server lets both through, so the store may end up holding the displaced token of the two. The
+  server takes that one once more, but a previous token survives only one refresh: the clients share
+  an access token too, so they may well refresh at once again, and of two refreshes with the previous
+  token one is refused, which replaces the player if it comes before the other's answer is stored
+  (`DefaultSessionRepository.resetIfStill`); under a time bound it also dies with the bound. So a
+  refresh that finds the store moved on to another session of the same player refreshes once more as
+  the stored one, which the server takes either way, and keeps that answer, the latest rotation
+  (`refreshAs` in `WyrHttpClient`, `SharedSessionStoreTest`); the once more is never repeated. A
+  session of another player, or none, is the data layer's change and is kept as it was. A settling
+  refresh that reached the server but whose answer was lost leaves the store holding the other
+  client's session beside a fresh access token. If that session's token was the current one, the
+  settling refresh made it the previous one, which the next refresh can still spend; if it was
+  already the previous one, the usual case, the settling refresh spent it, and the next refresh, once
+  that access token expires (15 minutes by default), is refused (§8b, *Refresh answers lost past the
+  grace*). The lost-answer case needed no client change, bound or none: the store still holds the
+  token it sent, and the next 401 sends it again. Nor did session recovery: it acts only on a
   refusal, which the grace makes rarer.
 - Every client request is bounded (`HttpTimeout` in `WyrHttpClient`: 60 s), past a Render cold
   start. Android and desktop also give up on a connect after 30 s; iOS applies only the 60 s socket
   timeout, which covers connecting, and a browser only the request timeout. A request that spends
   the refresh token takes `refreshTimeout()` instead, 5 minutes: a timeout abandons a refresh as a
-  cancellation does, and with it a token the server has already rotated, which the server's grace,
-  10 minutes by default, outlasts so the next call's refresh can still send it, if that call comes
-  before the grace ends. It stays bounded because every call rejected meanwhile waits on it,
-  uncancellably.
+  cancellation does, and with it a token the server has already rotated, which the next call's
+  refresh can still send once more (the grace, above) unless it was already the previous one; a time
+  bound on the grace must outlast the 5 minutes for that. It stays bounded because every call
+  rejected meanwhile waits on it, uncancellably.
 - `TokenStorage.write` returns only once the session would survive the app being killed, for the
-  same reason: after a refresh, the rotated token is the only one live past the grace. It suspends
-  so a blocking write can leave the caller's thread (Android `commit()`s on `Dispatchers.IO`, one
-  change at a time and in the order asked, never `apply()`s), and a write asked for lands even if
-  its caller is cancelled meanwhile. A write that cannot be made durable fails the call as
-  `NETWORK`: the data layer writes the session through `runApi`, so no bare storage exception
-  reaches a ViewModel.
+  same reason: after a refresh, the rotated token is the one sure to work, the token sent working
+  once more at most, and not at all if it was already the previous one. It suspends so a blocking
+  write can leave the caller's thread (Android `commit()`s on `Dispatchers.IO`, one change at a time
+  and in the order asked, never `apply()`s), and a write asked for lands even if its caller is
+  cancelled meanwhile. A write that cannot be made durable fails the call as `NETWORK`: the data
+  layer writes the session through `runApi`, so no bare storage exception reaches a ViewModel.
 
 **Known limitation, by design for now:** a guest account is bound to one device's storage. Lose
 the device or clear storage and the account — and its points — are gone. Token storage is also
@@ -502,21 +520,19 @@ accounts exist.
   once per player (§8d, *Likes*), and guests cost nothing to mint (§8a), so a script minting guests
   could pay one author a point per guest for each of their questions. The user accepted that: every
   like held pays, whoever holds it, and the only bound is guest minting's per-address budget.
-- **Refresh answers lost past the grace** — *open — user decision.* The grace (§8a) keeps a player
-  whose refresh answer was lost only if their next refresh reaches the server within
-  `REFRESH_GRACE_SECONDS` of the rotation, and nothing resends a refresh that failed on the network,
-  so a player who comes back later (the app backgrounded after a refresh timed out, or killed
-  mid-refresh) still becomes a fresh guest. Two rarer cases leave the stored token already demoted
-  beside a fresh access token, so its refresh comes only after the access token's 15 minutes, past
-  the grace's 10: a settling refresh (`refreshAs`) whose own answer is lost, and a refresh abandoned
-  at its timeout that the server runs only after the next one went through, which before the grace
-  it refused. The options: accept it, which is what is built; have `refreshAs` send a refresh that
-  failed on the network once more at once, as the same token, with a short bound since it holds the
-  bearer provider's lock uncancellably, which helps only when the network is back at once; after a
-  settling refresh fails on the network, store the session without a usable access token, so the
-  next call refreshes at once and within the grace, which rescues it when the stored token was the
-  current one; or a grace longer than the access token's lifetime (20 minutes, say), which covers
-  both rarer cases for a player still playing, at the cost of a longer window for a stolen token.
+- **Refresh answers lost past the grace** — *decided 2026-09-24: no time bound.* The grace (§8a) had
+  a 10-minute bound, and nothing resends a refresh that failed on the network, so a player whose
+  refresh answer was lost and who came back later (the app backgrounded after a refresh timed out,
+  or killed mid-refresh) became a fresh guest. The user dropped the bound: a displaced token now
+  works until the next rotation, short of its own expiry, and `REFRESH_GRACE_SECONDS` still sets one
+  where it is wanted. That also saves the rarer cases that left the stored token the previous one
+  beside a fresh access token, refreshed only once that expired, past the 10 minutes: a refresh
+  abandoned at its timeout that the server ran only after the next one, and a settling refresh
+  (`refreshAs`) whose answer was lost when the stored token was the current one. What remains is a
+  refresh that spends the previous token and whose answer is lost too, which leaves the client a
+  spent token, refused at its next refresh: two lost answers in a row, or a settling refresh whose
+  answer is lost when the stored token was already the previous one, its usual case (§8a, *Clients
+  sharing one store*). What it costs is §8a's *The cost*.
 - **WCAG AA contrast audit** — see §5b. Paused along with UI polish (§8d).
 
 `RANDOM` was an open item and is resolved: it is a content category (the absurd questions), not a

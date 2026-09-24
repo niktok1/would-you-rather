@@ -57,7 +57,7 @@ class DatabaseFactoryTest {
             jwtAudience = "wyr-test-client",
             accessTokenTtlSeconds = 300,
             refreshTokenTtlSeconds = 3_600,
-            refreshGraceSeconds = ServerConfig.DEFAULT_REFRESH_GRACE_SECONDS,
+            refreshGraceSeconds = null,
             allowedWebOrigins = emptyList(),
             adminToken = null,
             rateLimits = RateLimits.DEFAULT,

@@ -10,7 +10,6 @@ import kotlin.test.assertTrue
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.minutes
-import kotlin.time.Duration.Companion.seconds
 
 class ServerConfigTest {
     @Test
@@ -157,13 +156,13 @@ class ServerConfigTest {
     }
 
     /**
-     * Past the client's 5-minute refresh timeout (CLAUDE.md §8a), so a refresh the client gave up on
-     * after the server ran it can still be sent again.
+     * No time bound unless one is set (CLAUDE.md §8a), so a refresh whose answer was lost can be sent
+     * again however much later the player is back; 600, as the grace was at first, is one variable away.
      */
     @Test
-    fun `the refresh grace is ten minutes unless REFRESH_GRACE_SECONDS sets it, 0 turning it off`() {
-        assertEquals(10.minutes, ServerConfig.fromEnvironment { null }.refreshGraceSeconds.seconds)
-        mapOf("90" to 90L, " 30 " to 30L, "0" to 0L, "" to 600L, "  " to 600L).forEach { (raw, seconds) ->
+    fun `the refresh grace has no time bound unless REFRESH_GRACE_SECONDS sets one, 0 turning it off`() {
+        assertNull(ServerConfig.fromEnvironment { null }.refreshGraceSeconds)
+        mapOf("600" to 600L, " 30 " to 30L, "0" to 0L, "" to null, "  " to null).forEach { (raw, seconds) ->
             assertEquals(
                 seconds,
                 ServerConfig.fromEnvironment(mapOf("REFRESH_GRACE_SECONDS" to raw)::get).refreshGraceSeconds,
