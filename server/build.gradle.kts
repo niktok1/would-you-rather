@@ -41,6 +41,9 @@ dependencies {
     // Dev/test database so the server runs with no external Postgres. Never used in production.
     implementation(libs.h2)
 
+    // Compares a migrated schema with the table definitions (SchemaDriftTest). Test scope only:
+    // nothing in production diffs a schema.
+    testImplementation(libs.exposed.migrationJdbc)
     testImplementation(libs.ktor.serverTestHost)
     testImplementation(libs.ktor.clientContentNegotiation)
     testImplementation(libs.kotlin.testJunit)

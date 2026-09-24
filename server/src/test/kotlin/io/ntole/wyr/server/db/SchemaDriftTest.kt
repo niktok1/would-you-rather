@@ -20,10 +20,24 @@ internal class SchemaDriftTest(
     private val engine: SchemaTestEngine,
 ) {
     /**
-     * Exact, names included: a later migration that drops an index or a constraint names it, and
-     * must find it under that name everywhere. While V1 is the only script this also pins what makes
-     * the live database's baseline safe ([Migrations.BASELINE_VERSION]): `SchemaUtils.create` built
-     * that database from these definitions, and V1 builds the same schema.
+     * What exposed-migration would run to make a freshly migrated database match the definitions:
+     * nothing, or a definition changed without its script. The failure lists the statements, which
+     * are the draft of the missing script.
+     */
+    @Test
+    fun `a migrated database leaves exposed-migration nothing to change`() {
+        engine.emptyDatabase("drift").serverPool().use { pool ->
+            Migrations.migrate(pool)
+
+            assertEquals(emptyList(), pendingStatements(pool), "the table definitions changed without a migration")
+        }
+    }
+
+    /**
+     * Exact, names included, which exposed-migration does not check: a later migration that drops an
+     * index or a constraint names it, and must find it under that name everywhere. While V1 is the
+     * only script this also pins what makes the live database's baseline safe ([Migrations.BASELINE_VERSION]):
+     * `SchemaUtils.create` built that database from these definitions, and V1 builds the same schema.
      */
     @Test
     fun `the migrations build exactly the schema SchemaUtils builds from the definitions`() {

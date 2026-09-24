@@ -109,6 +109,7 @@ mechanism; this table is the rationale.
 | Local cache        | SQLDelight             | **Declared, not yet wired — see below**          |
 | Server persistence | Exposed                | JetBrains Kotlin SQL framework, pairs with Ktor  |
 | Schema migrations  | Flyway                 | Server-only Java exception (§2); runs at boot    |
+| Schema diffing     | exposed-migration-jdbc | JetBrains; test scope only (drift test, drafts)  |
 | Dependency inj.    | Koin                   | Pure Kotlin, no codegen, KMP standard            |
 | Date/time          | kotlinx-datetime       | Replaces platform date APIs                      |
 | Connection pool    | HikariCP               | Server-only Java exception (§2)                  |
@@ -476,6 +477,13 @@ production; `SchemaUtils.create` is left to the store tests.
   history table, and so only once; an empty database runs V1. `MigrationsTest` pins both paths, the
   data untouched, and `SchemaDriftTest` that V1 builds exactly what `SchemaUtils.create` builds,
   every table, column, key, index and constraint name included, on H2 and on PostgreSQL.
+- *The drift test* is what stops a forgotten migration. The store tests build their tables straight
+  from the definitions in `Tables.kt`, so a definition changed without a script passes them and fails
+  only on the live database. `SchemaDriftTest` migrates an empty database and fails on anything
+  exposed-migration (`MigrationUtils`, JetBrains' `exposed-migration-jdbc`, test scope only) would
+  still change to match `appTables`, and on any difference from the schema `SchemaUtils.create`
+  builds, names included, which exposed-migration does not compare. On H2 it leaves out the drops
+  exposed-migration drafts for the indexes H2 makes by itself for foreign keys.
 - *A script that has shipped never changes*: Flyway refuses to boot on a changed checksum. A script
   whose name Flyway cannot read fails the boot rather than being skipped (`validateMigrationNaming`),
   and clean is refused outright (`cleanDisabled`); the test harness alone turns it on, to wipe the
