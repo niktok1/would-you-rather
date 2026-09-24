@@ -981,13 +981,24 @@ and every request shows in its HTTP trace (`HttpTrace` in `:core:network`, never
     action runs at a time. *Pending* lists the queue, oldest first, each submission with its options,
     categories and age: Approve files it under the categories picked for it, none keeping the
     author's, and Reject sends the reason typed once it is a `RejectionReason`. The queue is read
-    again after every decision, whatever became of it, as the console's is. A failure shows where it
-    happened: a read's above the queue, a decision's under its submission, or above the queue, named
-    by its options, once the read after it no longer lists it. A 403 reads as a wrong token, a bare
-    404 (`UNKNOWN`) as moderation off on that server, a 409 as a decision made first, a 429 with the
-    wait its `Retry-After` named (`WyrException.retryAfter`, §8b). `ModerationViewModelTest` drives it
-    over a scripted repository, `ModerationOverHttpTest` over the real client configuration, and
-    `ScreensDrawTest` draws every screen off screen at a desktop window's size.
+    again after every decision, whatever became of it, as the console's is. *All questions* is the
+    list, seeds included, newest first, filtered by any statuses (`RETIRED` among them; never
+    `OTHER`) and any categories, none being every one: Load reads its first page and Load more the
+    next, at the filter the list was read at, with the cursor the page before gave, and changing the
+    filter drops what was read at the one before. Each question shows its options, categories,
+    status, whether it is a seed, its votes and likes, its times and a rejection's reason, and what
+    can be done where it stands: Retire an approved one, only once the moderator confirms it in a
+    dialog; Restore a retired one; decide a pending one as in the queue, from the same draft of
+    categories and reason. Every action on a question reads the list again, as many pages deep as
+    were shown, so it shows what the server holds without losing the moderator's place; a decision
+    reads the queue again too. A failure shows where it happened: a read's above its screen, an
+    action's under its question, or at the top of the screen it was started from, named by the
+    question's options, once the read after it no longer lists it. A 403 reads as a wrong token, a
+    bare 404 (`UNKNOWN`) as moderation off on that server, a 409 as a decision or a move made first,
+    a 429 with the wait its `Retry-After` named (`WyrException.retryAfter`, §8b).
+    `ModerationViewModelTest` and `QuestionListViewModelTest` drive it over a scripted repository,
+    `ModerationOverHttpTest` over the real client configuration, and `ScreensDrawTest` draws every
+    screen off screen at a desktop window's size.
   - *The console's section* (`io.ntole.wyr.dev.moderation`) takes the token typed and holds it in its
     ViewModel, in memory only: never in saved state or storage, masked, and a password to the keyboard.
     It loads the queue, approves under the categories picked for a submission (none keeps the

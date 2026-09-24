@@ -1,6 +1,7 @@
 package io.ntole.wyr.admin.moderation
 
 import io.ntole.wyr.core.domain.question.Category
+import io.ntole.wyr.core.domain.submission.SubmissionStatus
 
 /** Buttons that do nothing, for drawing a screen from a state alone. */
 object NoActions : ModerationActions {
@@ -20,7 +21,31 @@ object NoActions : ModerationActions {
         text: String,
     ) = Unit
 
-    override fun approve(questionId: String) = Unit
+    override fun approve(
+        questionId: String,
+        from: Screen,
+    ) = Unit
 
-    override fun reject(questionId: String) = Unit
+    override fun reject(
+        questionId: String,
+        from: Screen,
+    ) = Unit
+
+    override fun toggleStatusFilter(status: SubmissionStatus) = Unit
+
+    override fun toggleCategoryFilter(category: Category) = Unit
+
+    override fun clearFilter() = Unit
+
+    override fun loadQuestions() = Unit
+
+    override fun loadMore() = Unit
+
+    override fun askToRetire(questionId: String) = Unit
+
+    override fun cancelRetire() = Unit
+
+    override fun confirmRetire() = Unit
+
+    override fun restore(questionId: String) = Unit
 }

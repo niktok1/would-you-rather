@@ -9,11 +9,17 @@ import io.ntole.wyr.admin.moderation.FakeModeration
 import io.ntole.wyr.admin.moderation.ItemFailure
 import io.ntole.wyr.admin.moderation.ModerationState
 import io.ntole.wyr.admin.moderation.NoActions
+import io.ntole.wyr.admin.moderation.Outcomes
 import io.ntole.wyr.admin.moderation.PendingQueue
+import io.ntole.wyr.admin.moderation.QuestionList
 import io.ntole.wyr.admin.moderation.Running
+import io.ntole.wyr.admin.moderation.Screen
 import io.ntole.wyr.admin.moderation.SecretText
 import io.ntole.wyr.core.domain.error.DomainError
+import io.ntole.wyr.core.domain.moderation.QuestionCursor
+import io.ntole.wyr.core.domain.moderation.QuestionFilter
 import io.ntole.wyr.core.domain.question.Category
+import io.ntole.wyr.core.domain.submission.SubmissionStatus
 import io.ntole.wyr.core.network.environment.WyrEnvironment
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -27,11 +33,16 @@ import kotlin.time.Duration.Companion.seconds
 class ScreensDrawTest {
     @Test
     fun `the app draws before anything is read`() {
-        draw(WyrEnvironment.LOCAL, ModerationState())
+        Screen.entries.forEach { screen -> draw(WyrEnvironment.LOCAL, ModerationState(), screen) }
     }
 
     @Test
     fun `the app draws a queue with everything a queue can show`() {
+        val failures =
+            mapOf(
+                "q1" to ItemFailure("\"Fly\" or \"Swim\"", Failure.Refused(DomainError.FORBIDDEN)),
+                "gone" to ItemFailure("\"Cats\" or \"Dogs\"", Failure.Bug("IllegalStateException", "boom")),
+            )
         val queue =
             ModerationState(
                 adminToken = SecretText("typed"),
@@ -39,29 +50,48 @@ class ScreensDrawTest {
                     PendingQueue(
                         submissions = FakeModeration.QUEUE,
                         failure = Failure.Refused(DomainError.RATE_LIMITED, 42.seconds, "too many requests"),
-                        failures =
-                            mapOf(
-                                "q1" to ItemFailure("\"Fly\" or \"Swim\"", Failure.Refused(DomainError.FORBIDDEN)),
-                                "gone" to
-                                    ItemFailure("\"Cats\" or \"Dogs\"", Failure.Bug("IllegalStateException", "boom")),
-                            ),
-                        notice = "Approved \"Tea\" or \"Coffee\" under FOOD.",
+                        outcomes = Outcomes(failures, notice = "Approved \"Tea\" or \"Coffee\" under FOOD."),
                     ),
                 drafts = mapOf("q1" to DecisionDraft(setOf(Category.FOOD), "not\none line")),
                 running = Running(Action.APPROVE, "q2"),
             )
 
-        WyrEnvironment.entries.forEach { environment -> draw(environment, queue) }
+        WyrEnvironment.entries.forEach { environment -> draw(environment, queue, Screen.PENDING) }
+    }
+
+    @Test
+    fun `the app draws a list with every status and everything a question can show`() {
+        val reviewed = FakeModeration.LISTED.map { it.copy(reviewedAt = FakeModeration.RETIRED_AT) }
+        val failures = mapOf("seed-1" to ItemFailure("\"Cats\" or \"Dogs\"", Failure.Refused(DomainError.WRONG_STATUS)))
+        val list =
+            ModerationState(
+                adminToken = SecretText("typed"),
+                questions =
+                    QuestionList(
+                        filter = QuestionFilter(setOf(SubmissionStatus.RETIRED), setOf(Category.FOOD)),
+                        questions = reviewed + FakeModeration.listed("q6", status = SubmissionStatus.OTHER),
+                        next = QuestionCursor("6"),
+                        failure = Failure.Refused(DomainError.UNKNOWN),
+                        outcomes = Outcomes(failures, notice = "Restored \"Sea\" or \"Mountains\": served again."),
+                    ),
+                drafts = mapOf("q1" to DecisionDraft(reason = "a duplicate")),
+                running = Running(Action.RETIRE, "seed-1"),
+            )
+
+        draw(WyrEnvironment.DEV, list, Screen.QUESTIONS)
+        // Retire waiting to be confirmed, its dialog over the list.
+        draw(WyrEnvironment.PROD, list.copy(running = null, retiring = "seed-1"), Screen.QUESTIONS)
     }
 
     private fun draw(
         environment: WyrEnvironment,
         state: ModerationState,
+        screen: Screen,
     ) {
         listOf(false, true).forEach { dark ->
             val scene =
                 ImageComposeScene(width = 1100, height = 1400, density = Density(1f)) {
-                    ModerationApp(environment, state, NoActions, darkTheme = dark)
+                    ModerationApp(environment, state, NoActions, screen, onScreenChange = {}, darkTheme = dark)
                 }
             try {
                 val image = scene.render()

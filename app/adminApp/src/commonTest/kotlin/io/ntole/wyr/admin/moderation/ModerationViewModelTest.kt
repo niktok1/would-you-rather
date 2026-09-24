@@ -8,8 +8,11 @@ import io.ntole.wyr.core.domain.error.WyrException
 import io.ntole.wyr.core.domain.moderation.AdminToken
 import io.ntole.wyr.core.domain.moderation.ApproveSubmission
 import io.ntole.wyr.core.domain.moderation.GetPendingSubmissions
+import io.ntole.wyr.core.domain.moderation.GetQuestions
 import io.ntole.wyr.core.domain.moderation.RejectSubmission
 import io.ntole.wyr.core.domain.moderation.RejectionReason
+import io.ntole.wyr.core.domain.moderation.RestoreQuestion
+import io.ntole.wyr.core.domain.moderation.RetireQuestion
 import io.ntole.wyr.core.domain.question.Category
 import io.ntole.wyr.core.domain.submission.Submission
 import kotlinx.coroutines.CancellationException
@@ -67,9 +70,9 @@ class ModerationViewModelTest {
                 assertNull(viewModel.state.value.token, "\"$typed\"")
 
                 viewModel.loadPending()
-                viewModel.approve("q1")
+                viewModel.approve("q1", Screen.PENDING)
                 viewModel.setReason("q1", "a duplicate")
-                viewModel.reject("q1")
+                viewModel.reject("q1", Screen.PENDING)
                 testScheduler.advanceUntilIdle()
             }
 
@@ -84,7 +87,7 @@ class ModerationViewModelTest {
 
             viewModel.loadPending()
             testScheduler.advanceUntilIdle()
-            viewModel.approve("q1")
+            viewModel.approve("q1", Screen.PENDING)
             testScheduler.advanceUntilIdle()
 
             assertEquals(listOf("pending", "approve q1 []", "pending"), moderation.calls)
@@ -98,7 +101,7 @@ class ModerationViewModelTest {
             viewModel.setReason("q1", "a duplicate")
             moderation.reject = { _, _ -> throw WyrException(DomainError.FORBIDDEN, "wrong admin token") }
 
-            viewModel.reject("q1")
+            viewModel.reject("q1", Screen.PENDING)
             testScheduler.advanceUntilIdle()
 
             // The state's text is what a failed assertion or a stray println would show.
@@ -123,7 +126,7 @@ class ModerationViewModelTest {
             viewModel.toggleApprovalCategory("q1", Category.FOOD)
             viewModel.setReason("q2", "a duplicate")
             moderation.approve = { _, _ -> throw WyrException(DomainError.ALREADY_DECIDED) }
-            viewModel.approve("q1")
+            viewModel.approve("q1", Screen.PENDING)
             testScheduler.advanceUntilIdle()
 
             viewModel.lock()
@@ -139,7 +142,7 @@ class ModerationViewModelTest {
 
             viewModel.lock()
             viewModel.loadPending()
-            viewModel.approve("q1")
+            viewModel.approve("q1", Screen.PENDING)
             testScheduler.advanceUntilIdle()
 
             assertEquals(emptyList(), moderation.calls)
@@ -182,7 +185,7 @@ class ModerationViewModelTest {
             testScheduler.advanceUntilIdle()
 
             assertEquals(Running(Action.LOAD_PENDING), viewModel.state.value.running)
-            viewModel.approve("q1")
+            viewModel.approve("q1", Screen.PENDING)
             testScheduler.advanceUntilIdle()
             assertEquals(listOf("pending", "pending"), moderation.calls, "nothing else goes while it runs")
 
@@ -238,13 +241,13 @@ class ModerationViewModelTest {
             val viewModel = openWithQueue()
             moderation.pending = { listOf(SECOND) }
 
-            viewModel.approve("q1")
+            viewModel.approve("q1", Screen.PENDING)
             testScheduler.advanceUntilIdle()
 
             assertEquals(listOf("pending", "approve q1 []", "pending"), moderation.calls)
             val queue = viewModel.state.value.pending
             assertEquals(listOf(SECOND), queue.submissions)
-            assertEquals("Approved \"Fly\" or \"Swim\" under SUPERPOWERS.", queue.notice)
+            assertEquals("Approved \"Fly\" or \"Swim\" under SUPERPOWERS.", queue.outcomes.notice)
         }
 
     @Test
@@ -257,12 +260,15 @@ class ModerationViewModelTest {
             viewModel.toggleApprovalCategory("q1", Category.FOOD)
             viewModel.toggleApprovalCategory("q1", Category.RANDOM)
             viewModel.toggleApprovalCategory("q2", Category.LIFESTYLE)
-            viewModel.approve("q1")
+            viewModel.approve("q1", Screen.PENDING)
             testScheduler.advanceUntilIdle()
 
             // In declaration order, and only q1's.
             assertEquals("approve q1 [FOOD, ETHICS]", moderation.calls[1])
-            assertEquals("Approved \"Fly\" or \"Swim\" under FOOD, ETHICS.", viewModel.state.value.pending.notice)
+            assertEquals(
+                "Approved \"Fly\" or \"Swim\" under FOOD, ETHICS.",
+                viewModel.state.value.pending.outcomes.notice,
+            )
         }
 
     @Test
@@ -275,7 +281,7 @@ class ModerationViewModelTest {
                 viewModel.setReason("q1", reason)
                 assertNull(viewModel.state.value.rejectionOf("q1"), "\"$reason\"")
 
-                viewModel.reject("q1")
+                viewModel.reject("q1", Screen.PENDING)
                 testScheduler.advanceUntilIdle()
             }
 
@@ -288,11 +294,14 @@ class ModerationViewModelTest {
             val viewModel = openWithQueue()
 
             viewModel.setReason("q1", "  Too close to a seed ")
-            viewModel.reject("q1")
+            viewModel.reject("q1", Screen.PENDING)
             testScheduler.advanceUntilIdle()
 
             assertEquals(listOf("pending", "reject q1 Too close to a seed", "pending"), moderation.calls)
-            assertEquals("Rejected \"Fly\" or \"Swim\": Too close to a seed", viewModel.state.value.pending.notice)
+            assertEquals(
+                "Rejected \"Fly\" or \"Swim\": Too close to a seed",
+                viewModel.state.value.pending.outcomes.notice,
+            )
         }
 
     @Test
@@ -306,12 +315,12 @@ class ModerationViewModelTest {
                 moderation.reject = { _, _ -> throw WyrException(error, "the server's word on $error") }
                 moderation.calls.clear()
 
-                viewModel.approve("q1")
+                viewModel.approve("q1", Screen.PENDING)
                 testScheduler.advanceUntilIdle()
-                val approval = viewModel.state.value.pending.failures["q1"]
-                viewModel.reject("q1")
+                val approval = viewModel.state.value.pending.outcomes.failures["q1"]
+                viewModel.reject("q1", Screen.PENDING)
                 testScheduler.advanceUntilIdle()
-                val rejection = viewModel.state.value.pending.failures["q1"]
+                val rejection = viewModel.state.value.pending.outcomes.failures["q1"]
 
                 // Another moderator may have decided it, or the answer been lost after it was made.
                 assertEquals(listOf("approve q1 []", "pending", "reject q1 a duplicate", "pending"), moderation.calls)
@@ -329,7 +338,7 @@ class ModerationViewModelTest {
             moderation.approve = { _, _ -> throw WyrException(DomainError.ALREADY_DECIDED, "already decided") }
             moderation.pending = { listOf(SECOND) }
 
-            viewModel.approve("q1")
+            viewModel.approve("q1", Screen.PENDING)
             testScheduler.advanceUntilIdle()
 
             val queue = viewModel.state.value.pending
@@ -342,9 +351,9 @@ class ModerationViewModelTest {
                             Failure.Refused(DomainError.ALREADY_DECIDED, detail = "already decided"),
                         ),
                 ),
-                queue.failures,
+                queue.outcomes.failures,
             )
-            assertNull(queue.notice)
+            assertNull(queue.outcomes.notice)
         }
 
     @Test
@@ -352,20 +361,20 @@ class ModerationViewModelTest {
         runTest(dispatcher) {
             val viewModel = openWithQueue()
             moderation.approve = { _, _ -> throw WyrException(DomainError.NETWORK) }
-            viewModel.approve("q1")
+            viewModel.approve("q1", Screen.PENDING)
             testScheduler.advanceUntilIdle()
-            viewModel.approve("q2")
+            viewModel.approve("q2", Screen.PENDING)
             testScheduler.advanceUntilIdle()
-            assertEquals(setOf("q1", "q2"), viewModel.state.value.pending.failures.keys)
+            assertEquals(setOf("q1", "q2"), viewModel.state.value.pending.outcomes.failures.keys)
 
             moderation.approve = FakeModeration().approve
-            viewModel.approve("q1")
+            viewModel.approve("q1", Screen.PENDING)
             testScheduler.advanceUntilIdle()
-            assertEquals(setOf("q2"), viewModel.state.value.pending.failures.keys)
+            assertEquals(setOf("q2"), viewModel.state.value.pending.outcomes.failures.keys)
 
             viewModel.loadPending()
             testScheduler.advanceUntilIdle()
-            assertEquals(emptyMap(), viewModel.state.value.pending.failures)
+            assertEquals(emptyMap(), viewModel.state.value.pending.outcomes.failures)
         }
 
     @Test
@@ -377,7 +386,7 @@ class ModerationViewModelTest {
             viewModel.setReason("q2", "half typed")
             moderation.pending = { listOf(SECOND) }
 
-            viewModel.approve("q1")
+            viewModel.approve("q1", Screen.PENDING)
             testScheduler.advanceUntilIdle()
 
             assertEquals(
@@ -397,7 +406,7 @@ class ModerationViewModelTest {
             viewModel.loadPending()
             testScheduler.advanceUntilIdle()
             assertFalse(viewModel.state.value.canSend)
-            viewModel.approve("q1")
+            viewModel.approve("q1", Screen.PENDING)
             queue.complete(QUEUE)
             testScheduler.advanceUntilIdle()
 
@@ -411,12 +420,12 @@ class ModerationViewModelTest {
             val viewModel = openWithQueue()
             moderation.approve = { _, _ -> error("boom") }
 
-            viewModel.approve("q1")
+            viewModel.approve("q1", Screen.PENDING)
             testScheduler.advanceUntilIdle()
 
             assertEquals(
                 Failure.Bug("IllegalStateException", "boom"),
-                viewModel.state.value.pending.failures["q1"]
+                viewModel.state.value.pending.outcomes.failures["q1"]
                     ?.failure,
             )
         }
@@ -440,6 +449,9 @@ class ModerationViewModelTest {
             getPendingSubmissions = GetPendingSubmissions(moderation),
             approveSubmission = ApproveSubmission(moderation),
             rejectSubmission = RejectSubmission(moderation),
+            getQuestions = GetQuestions(moderation),
+            retireQuestion = RetireQuestion(moderation),
+            restoreQuestion = RestoreQuestion(moderation),
         ).also { testScheduler.advanceUntilIdle() }
 
     /** The app with the token typed and [QUEUE] loaded, its read the one call so far. */

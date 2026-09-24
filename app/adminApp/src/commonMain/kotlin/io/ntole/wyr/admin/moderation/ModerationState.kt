@@ -1,14 +1,18 @@
 package io.ntole.wyr.admin.moderation
 
 import io.ntole.wyr.core.domain.moderation.AdminToken
+import io.ntole.wyr.core.domain.moderation.ModeratedQuestion
+import io.ntole.wyr.core.domain.moderation.QuestionCursor
+import io.ntole.wyr.core.domain.moderation.QuestionFilter
 import io.ntole.wyr.core.domain.moderation.RejectionReason
 import io.ntole.wyr.core.domain.question.Category
 import io.ntole.wyr.core.domain.submission.Submission
+import io.ntole.wyr.core.domain.submission.SubmissionStatus
 import kotlin.jvm.JvmInline
 
 /**
- * Everything the moderation app shows: the admin token as typed, the pending queue, and what the
- * moderator has picked or typed for each pending submission.
+ * Everything the moderation app shows: the admin token as typed, the pending queue, the list of every
+ * question, and what the moderator has picked or typed for each pending one.
  *
  * Nothing is read until the moderator asks, since no token has been typed yet. One action runs at a
  * time ([running]), so what the screens show changes in the order things happened.
@@ -21,8 +25,14 @@ data class ModerationState(
      */
     val adminToken: SecretText = SecretText(""),
     val pending: PendingQueue = PendingQueue(),
-    /** For each pending submission, by id, the approval's categories and the rejection's reason. */
+    val questions: QuestionList = QuestionList(),
+    /**
+     * For each pending question, by id, the approval's categories and the rejection's reason, the
+     * same whichever screen it is decided from.
+     */
     val drafts: Map<String, DecisionDraft> = emptyMap(),
+    /** The approved question the moderator asked to retire, waiting for them to confirm it. */
+    val retiring: String? = null,
     /** The action in flight, or `null` when idle. */
     val running: Running? = null,
 ) {
@@ -45,6 +55,27 @@ data class ModerationState(
      * request (CLAUDE.md §8d, *Moderation*).
      */
     fun rejectionOf(questionId: String): RejectionReason? = RejectionReason.of(draftOf(questionId).reason)
+
+    /** What [screen] shows of its actions' outcomes. */
+    fun outcomesOf(screen: Screen): Outcomes =
+        when (screen) {
+            Screen.PENDING -> pending.outcomes
+            Screen.QUESTIONS -> questions.outcomes
+        }
+}
+
+/**
+ * The statuses the list of every question can be filtered by, in declaration order: all but
+ * [SubmissionStatus.OTHER], which holds whatever this build cannot name.
+ */
+val LISTABLE_STATUSES: List<SubmissionStatus> = SubmissionStatus.entries.filter { it != SubmissionStatus.OTHER }
+
+/** The app's two screens, each with the outcomes of the actions started from it. */
+enum class Screen(
+    val label: String,
+) {
+    PENDING("Pending"),
+    QUESTIONS("All questions"),
 }
 
 /**
@@ -57,12 +88,45 @@ data class PendingQueue(
     val submissions: List<Submission>? = null,
     /** Why the last read failed, or `null` once one works. */
     val failure: Failure? = null,
-    /**
-     * Why each decision that failed failed, by the submission's id, shown under it, or above the
-     * queue once it is no longer listed. Kept until the next decision on it, or Load pending.
-     */
+    val outcomes: Outcomes = Outcomes(),
+)
+
+/**
+ * The list of every question, seeds included, newest first, at [filter]: the pages read so far, or
+ * `null` until one is, and [next], where the page after them starts, `null` on the last. Changing
+ * the filter drops what was read for the one before; Load reads the first page, Load more the next,
+ * and every action on a question reads again as many pages as were shown, so the list shows what
+ * the server holds without losing the moderator's place. A read that fails keeps what was listed
+ * and says why in [failure].
+ */
+data class QuestionList(
+    val filter: QuestionFilter = QuestionFilter(),
+    val questions: List<ModeratedQuestion>? = null,
+    val next: QuestionCursor? = null,
+    /** Why the last read failed, or `null` once one works. */
+    val failure: Failure? = null,
+    val outcomes: Outcomes = Outcomes(),
+) {
+    val canLoadMore: Boolean get() = questions != null && next != null
+
+    /** The pending ones among the questions listed, whose drafts the list keeps. */
+    val pendingIds: Set<String>
+        get() =
+            questions
+                .orEmpty()
+                .filter { it.status == SubmissionStatus.PENDING }
+                .map { it.id }
+                .toSet()
+}
+
+/**
+ * The outcomes of the actions started from one screen: why each action on a question failed, by the
+ * question's id, shown under it, or at the top once the screen no longer lists it, kept until the
+ * next action on it or the screen's own Load; and what the last action that worked did, in a line,
+ * until the next action.
+ */
+data class Outcomes(
     val failures: Map<String, ItemFailure> = emptyMap(),
-    /** What the last decision that worked did, in a line, until the next action. */
     val notice: String? = null,
 )
 
@@ -92,6 +156,10 @@ enum class Action {
     LOAD_PENDING,
     APPROVE,
     REJECT,
+    LOAD_QUESTIONS,
+    LOAD_MORE,
+    RETIRE,
+    RESTORE,
 }
 
 /**

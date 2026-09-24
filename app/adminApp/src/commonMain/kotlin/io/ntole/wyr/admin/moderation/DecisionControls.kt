@@ -17,14 +17,16 @@ import io.ntole.wyr.core.domain.moderation.RejectionReason
 import io.ntole.wyr.core.domain.question.Category
 
 /**
- * Approve and Reject for the pending question [questionId], filed under [authorsCategories]: the
- * categories to approve it under in place of the author's, none keeping theirs, and the reason to
- * reject it with. Reject stays off until the reason is one the server accepts.
+ * Approve and Reject for the pending question [questionId], filed under [authorsCategories], on
+ * [screen]: the categories to approve it under in place of the author's, none keeping theirs, and the
+ * reason to reject it with. Reject stays off until the reason is one the server accepts. What is
+ * picked and typed is the question's own, the same on either screen.
  */
 @Composable
 fun DecisionControls(
     questionId: String,
     authorsCategories: Set<Category>,
+    screen: Screen,
     state: ModerationState,
     actions: ModerationActions,
 ) {
@@ -68,11 +70,11 @@ fun DecisionControls(
             modifier = Modifier.fillMaxWidth(),
         )
         FlowRow(horizontalArrangement = Arrangement.spacedBy(AdminDimens.spaceSm)) {
-            Button(onClick = { actions.approve(questionId) }, enabled = state.canSend) {
+            Button(onClick = { actions.approve(questionId, screen) }, enabled = state.canSend) {
                 Text(if (state.running == Running(Action.APPROVE, questionId)) "Approving..." else "Approve")
             }
             OutlinedButton(
-                onClick = { actions.reject(questionId) },
+                onClick = { actions.reject(questionId, screen) },
                 enabled = state.canSend && state.rejectionOf(questionId) != null,
             ) {
                 Text(if (state.running == Running(Action.REJECT, questionId)) "Rejecting..." else "Reject")

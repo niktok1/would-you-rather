@@ -306,7 +306,15 @@ automatically from every green commit on `main` (its URL is on its Render page).
   `Retry-After`, and every request with the admin header and no bearer token. `AdminModuleTest`
   resolves the app from its own modules, with no platform module, and pins that nothing there can
   make or keep a player session: wired with the player's data module instead, it fails.
-  `ScreensDrawTest` draws the screens off screen (Compose's `ImageComposeScene`) in both themes.
+  `QuestionListViewModelTest` drives the list: pages read to the last one and no further, Load more
+  at the filter the list was read at (ignoring it fails), a filter change dropping what was read and
+  refused while a read runs, `OTHER` refused as a filter, Retire only after the dialog is confirmed
+  and only for an approved question, every action reading the list again as deep as it was shown
+  (one page only fails it), a decision from either screen reading the queue and a read list again,
+  drafts kept for a question pending in the list alone, an empty page that claims another ending the
+  read, and Lock keeping the filter alone. `ModerationOverHttpTest` adds a 409 `WRONG_STATUS` on a
+  retirement. `ScreensDrawTest` draws both screens and the Retire dialog off screen (Compose's
+  `ImageComposeScene`) in both themes.
   `DesktopEnvironmentNameTest` pins `WYR_ENV`. Its JVM, JS and wasmJs compiles run.
 - `:app:androidApp:assembleDebug` produces a real APK.
 - `ktlintCheck` clean across every module.
@@ -610,6 +618,16 @@ without `ADMIN_TOKEN` (or a build without that route), `Already decided (409)`, 
 (429): try again in N s`, where ten wrong tokens in a minute lock the address out, the right token
 too, until the wait is over.
 
+**All questions** is every question, seeds included, newest first, read on *Load*, a page of 20 at
+a time with *Load more*. The chips narrow it by status (*Retired* among them) and by category, any
+of each, none being all; changing them drops what was read, and *Load* reads it at the new filter.
+Each question shows its options, categories, status, seed or player's, votes and likes, when it was
+stored, reviewed and retired, and a rejection's reason. An approved one has *Retire...*, which asks
+first in a dialog; a retired one has *Restore*; a pending one has the queue's chips, reason and
+buttons, sharing what was picked and typed with the queue. After every action the list is read
+again as deep as it was shown, so the question shows where it now stands without losing your place.
+A question another moderator moved first says `Its status changed first (409)`.
+
 ### The dev console
 
 The app opens on the **Console** tab (`io.ntole.wyr.dev`). **Play** is the frozen game screen.
@@ -766,8 +784,8 @@ rules live in CLAUDE.md §8d. Each item is one short-lived branch, in order:
 12. `feat/moderation-app` *(in progress)* — moderation moves out of the player app's console into
     an app of its own. Built: the server and client half, the list of every question and retiring
     and restoring (V3; provisional, CLAUDE.md §8b), and the app, `:app:adminApp`, with its pending
-    queue (*The moderation app*, above). Next: the list of every question in the app, then the
-    console's section goes.
+    queue and the list of every question (*The moderation app*, above). Next: the console's section
+    goes.
 
 **For the moderation app.** Everything it needs is in `io.ntole.wyr.core.domain.moderation`, and
 none of it needs or makes a player session:
@@ -793,8 +811,8 @@ none of it needs or makes a player session:
 - *Errors:* every call throws `WyrException`: `FORBIDDEN` for a wrong token, `WRONG_STATUS` or
   `ALREADY_DECIDED` for a question another moderator moved first, `QUESTION_NOT_FOUND`, `NETWORK`,
   `RATE_LIMITED`, and `UNKNOWN` for a server with moderation off (a bare 404).
-- *Built on it:* `:app:adminApp`, with its pending queue (*The moderation app*, above). The dev
-  console's *Moderation* section still decides the queue too, until the app lists every question.
+- *Built on it:* `:app:adminApp`, with its pending queue and the list of every question (*The
+  moderation app*, above). The dev console's *Moderation* section still decides the queue too.
 
 **Remote:** `github.com/niktok1/would-you-rather` (private), `origin`, pushed over SSH through the
 `github-wyr` host alias with a deploy key scoped to this repo (CLAUDE.md §7). `gh` is logged in to

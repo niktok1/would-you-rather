@@ -16,7 +16,10 @@ import io.ntole.wyr.core.data.moderation.DefaultModerationRepository
 import io.ntole.wyr.core.domain.error.DomainError
 import io.ntole.wyr.core.domain.moderation.ApproveSubmission
 import io.ntole.wyr.core.domain.moderation.GetPendingSubmissions
+import io.ntole.wyr.core.domain.moderation.GetQuestions
 import io.ntole.wyr.core.domain.moderation.RejectSubmission
+import io.ntole.wyr.core.domain.moderation.RestoreQuestion
+import io.ntole.wyr.core.domain.moderation.RetireQuestion
 import io.ntole.wyr.core.error.ErrorCode
 import io.ntole.wyr.core.error.ErrorDto
 import io.ntole.wyr.core.network.InMemoryTokenStorage
@@ -25,10 +28,13 @@ import io.ntole.wyr.core.network.WyrHttpClient
 import io.ntole.wyr.core.network.WyrJson
 import io.ntole.wyr.core.network.api.ModerationApi
 import io.ntole.wyr.core.network.environment.WyrEnvironment
+import io.ntole.wyr.core.question.AdminQuestionDto
+import io.ntole.wyr.core.question.AdminQuestionPageDto
 import io.ntole.wyr.core.question.QuestionCategory
 import io.ntole.wyr.core.question.QuestionStatus
 import io.ntole.wyr.core.question.SubmissionDto
 import io.ntole.wyr.core.question.SubmissionListDto
+import io.ntole.wyr.core.vote.VoteTallyDto
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.first
@@ -109,16 +115,49 @@ class ModerationOverHttpTest {
                 }
             loadPending(viewModel)
 
-            viewModel.approve("q1")
+            viewModel.approve("q1", Screen.PENDING)
             settle(viewModel)
 
-            val failed = viewModel.state.value.pending.failures["q1"]
+            val failed = viewModel.state.value.pending.outcomes.failures["q1"]
             assertEquals(
                 ItemFailure("\"Fly\" or \"Swim\"", Failure.Refused(DomainError.ALREADY_DECIDED, detail = "decided")),
                 failed,
             )
             assertEquals(
                 listOf(WyrApi.Paths.ADMIN_SUBMISSIONS, WyrApi.Paths.ADMIN_APPROVALS, WyrApi.Paths.ADMIN_SUBMISSIONS),
+                requests.map { it.url.encodedPath },
+            )
+        }
+
+    @Test
+    fun `a 409 on a retirement shows under the question and the list is read again`() =
+        runTest(dispatcher) {
+            val viewModel =
+                openOver { request ->
+                    when (request.url.encodedPath) {
+                        WyrApi.Paths.ADMIN_RETIREMENTS -> {
+                            respondError(HttpStatusCode.Conflict, ErrorCode.WRONG_STATUS, "not approved")
+                        }
+
+                        else -> {
+                            respondList()
+                        }
+                    }
+                }
+            viewModel.loadQuestions()
+            settle(viewModel)
+
+            viewModel.askToRetire("seed-1")
+            viewModel.confirmRetire()
+            settle(viewModel)
+
+            val failed = viewModel.state.value.questions.outcomes.failures["seed-1"]
+            assertEquals(
+                ItemFailure("\"Cats\" or \"Dogs\"", Failure.Refused(DomainError.WRONG_STATUS, detail = "not approved")),
+                failed,
+            )
+            assertEquals(
+                listOf(WyrApi.Paths.ADMIN_QUESTIONS, WyrApi.Paths.ADMIN_RETIREMENTS, WyrApi.Paths.ADMIN_QUESTIONS),
                 requests.map { it.url.encodedPath },
             )
         }
@@ -152,7 +191,7 @@ class ModerationOverHttpTest {
             val viewModel = openOver { respondQueue() }
 
             assertNull(loadPending(viewModel))
-            viewModel.approve("q1")
+            viewModel.approve("q1", Screen.PENDING)
             settle(viewModel)
 
             assertEquals(3, requests.size)
@@ -182,6 +221,9 @@ class ModerationOverHttpTest {
             getPendingSubmissions = GetPendingSubmissions(repository),
             approveSubmission = ApproveSubmission(repository),
             rejectSubmission = RejectSubmission(repository),
+            getQuestions = GetQuestions(repository),
+            retireQuestion = RetireQuestion(repository),
+            restoreQuestion = RestoreQuestion(repository),
         ).also {
             it.setAdminToken(FakeModeration.TOKEN)
             testScheduler.advanceUntilIdle()
@@ -211,6 +253,22 @@ class ModerationOverHttpTest {
                 submittedAt = 1_790_000_000_000L,
             )
         return respond(WyrJson.encodeToString(SubmissionListDto(listOf(submission))), HttpStatusCode.OK, JSON)
+    }
+
+    private fun MockRequestHandleScope.respondList(): HttpResponseData {
+        val seed =
+            AdminQuestionDto(
+                id = "seed-1",
+                optionA = "Cats",
+                optionB = "Dogs",
+                categories = listOf(QuestionCategory.RANDOM),
+                status = QuestionStatus.APPROVED,
+                seed = true,
+                submittedAt = 1_790_000_000_000L,
+                tally = VoteTallyDto(votesA = 3, votesB = 1),
+                likeCount = 2,
+            )
+        return respond(WyrJson.encodeToString(AdminQuestionPageDto(listOf(seed))), HttpStatusCode.OK, JSON)
     }
 
     private fun MockRequestHandleScope.respondError(

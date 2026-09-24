@@ -10,6 +10,7 @@ import io.ntole.wyr.core.domain.moderation.RejectionReason
 import io.ntole.wyr.core.domain.question.Category
 import io.ntole.wyr.core.domain.submission.Submission
 import io.ntole.wyr.core.domain.submission.SubmissionStatus
+import io.ntole.wyr.core.domain.vote.Tally
 import kotlin.time.Instant
 
 /**
@@ -55,21 +56,45 @@ class FakeModeration : ModerationRepository {
         return reject.invoke(questionId, reason)
     }
 
+    /** Every question, [LISTED], two a page, whatever the filter, unless a test scripts another. */
+    var questions: suspend (
+        QuestionFilter,
+        QuestionCursor?,
+    ) -> ModeratedQuestionPage = { _, after -> pageOf(LISTED, after) }
+    var retire: suspend (String) -> ModeratedQuestion = { id ->
+        LISTED.single { it.id == id }.copy(status = SubmissionStatus.RETIRED, retiredAt = RETIRED_AT)
+    }
+    var restore: suspend (String) -> ModeratedQuestion = { id ->
+        LISTED.single { it.id == id }.copy(status = SubmissionStatus.APPROVED, retiredAt = null)
+    }
+
     override suspend fun questions(
         token: AdminToken,
         filter: QuestionFilter,
         after: QuestionCursor?,
-    ): ModeratedQuestionPage = error("not scripted: questions")
+    ): ModeratedQuestionPage {
+        tokens += token
+        calls += "questions ${filter.statuses} ${filter.categories} after=${after?.value}"
+        return questions.invoke(filter, after)
+    }
 
     override suspend fun retire(
         token: AdminToken,
         questionId: String,
-    ): ModeratedQuestion = error("not scripted: retire")
+    ): ModeratedQuestion {
+        tokens += token
+        calls += "retire $questionId"
+        return retire.invoke(questionId)
+    }
 
     override suspend fun restore(
         token: AdminToken,
         questionId: String,
-    ): ModeratedQuestion = error("not scripted: restore")
+    ): ModeratedQuestion {
+        tokens += token
+        calls += "restore $questionId"
+        return restore.invoke(questionId)
+    }
 
     companion object {
         const val TOKEN = "s3cret-admin-token"
@@ -98,5 +123,53 @@ class FakeModeration : ModerationRepository {
 
         /** Oldest first, as the server lists the queue. */
         val QUEUE = listOf(FIRST, SECOND)
+
+        val RETIRED_AT: Instant = Instant.fromEpochMilliseconds(1_790_000_900_000L)
+
+        /** A question as the list shows one, approved and a player's unless a test says otherwise. */
+        fun listed(
+            id: String,
+            optionA: String = "A of $id",
+            optionB: String = "B of $id",
+            status: SubmissionStatus = SubmissionStatus.APPROVED,
+            isSeed: Boolean = false,
+        ): ModeratedQuestion =
+            ModeratedQuestion(
+                id = id,
+                optionA = optionA,
+                optionB = optionB,
+                categories = setOf(Category.RANDOM),
+                status = status,
+                isSeed = isSeed,
+                submittedAt = Instant.fromEpochMilliseconds(1_790_000_500_000L),
+                reviewedAt = null,
+                retiredAt = if (status == SubmissionStatus.RETIRED) RETIRED_AT else null,
+                rejectionReason = if (status == SubmissionStatus.REJECTED) "a duplicate" else null,
+                tally = Tally(votesA = 3, votesB = 1),
+                likeCount = 2,
+            )
+
+        /** Newest first, as the server lists every question: one of each status, a seed among them. */
+        val LISTED =
+            listOf(
+                listed("q1", "Fly", "Swim", status = SubmissionStatus.PENDING),
+                listed("seed-1", "Cats", "Dogs", isSeed = true),
+                listed("q3", "Sea", "Mountains", status = SubmissionStatus.RETIRED),
+                listed("q4", "Tea", "Tea", status = SubmissionStatus.REJECTED),
+                listed("q5", "Early", "Late"),
+            )
+
+        /** The page of [questions] after [after], two a page, each cursor naming where it starts. */
+        fun pageOf(
+            questions: List<ModeratedQuestion>,
+            after: QuestionCursor?,
+        ): ModeratedQuestionPage {
+            val start = after?.value?.toInt() ?: 0
+            val end = minOf(start + PAGE_SIZE, questions.size)
+            val next = if (end < questions.size) QuestionCursor("$end") else null
+            return ModeratedQuestionPage(questions.subList(start, end), next)
+        }
+
+        const val PAGE_SIZE = 2
     }
 }

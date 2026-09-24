@@ -56,8 +56,8 @@ fun PendingScreen(
                     Text(text = queueSummaryOf(submissions), style = MaterialTheme.typography.bodyMedium)
                 }
                 queue.failure?.let { FailureLine(it) }
-                queue.notice?.let { NoticeLine(it) }
-                UnlistedFailures(queue.failures, submissions.orEmpty().map { it.id }.toSet())
+                queue.outcomes.notice?.let { NoticeLine(it) }
+                UnlistedFailures(queue.outcomes.failures, submissions.orEmpty().map { it.id }.toSet())
             }
         }
         items(submissions.orEmpty(), key = { it.id }) { submission ->
@@ -86,8 +86,9 @@ private fun PendingCard(
             Text(text = "B: ${submission.optionB}", style = MaterialTheme.typography.titleMedium)
             Text(text = "Categories: ${namesOf(submission.categories)}", style = MaterialTheme.typography.bodyMedium)
             Text(text = submission.id, style = AdminType.code, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            DecisionControls(submission.id, submission.categories, state, actions)
-            state.pending.failures[submission.id]?.let { FailureLine(it.failure) }
+            DecisionControls(submission.id, submission.categories, Screen.PENDING, state, actions)
+            state.pending.outcomes.failures[submission.id]
+                ?.let { FailureLine(it.failure) }
         }
     }
 }
