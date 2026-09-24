@@ -15,8 +15,8 @@ automatically from every green commit on `main` (its URL is on its Render page).
 
 ### Verified working
 
-- `:server` on H2: 235 tests, 233 green and 2 skipped (the PostgreSQL-only boot races), including
-  68 end-to-end flow tests in `ApiFlowTest`. Flat scoring is covered there (every vote pays 1,
+- `:server` on H2: 263 tests, 261 green and 2 skipped (the PostgreSQL-only boot races), including
+  73 end-to-end flow tests in `ApiFlowTest`. Flat scoring is covered there (every vote pays 1,
   majority and minority alike, and the total
   accumulates) and by `PlayerStoreTest`, which races awards for one player and refreshes of one
   token. The endless feed, re-answering and attempt replay are covered there too, and by
@@ -266,6 +266,35 @@ automatically from every green commit on `main` (its URL is on its Render page).
   and the desktop base URL); `:server` 235, 2 of them skipped. 569 JVM tests in all, those 2
   included. `:app:shared` compiles for JVM, JS, wasmJs and the iOS simulator (JS and wasmJs not
   re-run on the grace-window branch).
+- The moderation app's server and client half (`feat/moderation-app`, CLAUDE.md §8d *Moderation*),
+  on H2. `QuestionListTest` pins the list of every question: newest first with the seeds marked,
+  the status and category filters (any of each, a question in two categories once), pages that
+  follow their cursors to a last one that says so, a question stored between two pages not moving
+  one already listed, the tally and like count, a re-answer committed mid-page counted on one side
+  or neither, and two statements a page whatever its length. `RetirementTest` pins retiring and
+  restoring: served to nobody, due for nobody, a cycle finishing without it, 404 for a vote, skip,
+  like and unlike, every number but what is due unchanged (§8c's sum included), the author's
+  `RETIRED`, the queue's and the list's `RETIRED` apart from `APPROVED`, 409 `WRONG_STATUS` for
+  every wrong status and 404, a seed, two retirements and two restorations racing (exactly one
+  each), a retirement waiting for a vote that holds the question and counting it, and a vote,
+  skip, like and unlike waiting on a retirement and then 404. `SeedTest` pins a retired seed
+  through a second boot, `MigrationsTest` V3 on the pre-migration database and a database each
+  build migrated in turn (`1 BASELINE`, `2 SQL`, `3 SQL`, rows kept), `SchemaDriftTest` V3 against
+  `Tables.kt`, `ApiFlowTest` the four routes end to end (403, 404 with moderation off, 409, 400s),
+  and `RateLimitTest` the new routes in both admin groups. Mutations caught: no lock on the
+  servability read, a retirement's `WHERE` by status alone, a retired row read as approved,
+  `servable` ignoring retirement, a full last page claiming another, the keyset's tie-break
+  including the cursor's own id, one vote count read in a statement of its own, and V3 missing.
+  On the client, `ModerationApiTest`, `DefaultModerationRepositoryTest`, `ModerationMapperTest`,
+  `ModerationUseCasesTest`, `DataModuleTest` (`moderationDataModule` needs no storage and binds no
+  session) and `WyrJsonTest` (`RETIRED` and `WRONG_STATUS`, and a build without them reading
+  `UNKNOWN`) cover the rest. Counts: `:server` 263, 2 skipped; `:core:domain` 37, `:core:data`
+  132, `:core:network` 75 (81 as Android host tests), `:app:shared` 127. Every client target
+  compiles, iOS simulator main and test included, and `:app:androidApp:assembleDebug` builds. The
+  fat jar on JDK 21, `PORT=18092`, no `DATABASE_URL` and a throwaway `ADMIN_TOKEN`: Flyway applied
+  V1 to V3, `/health` 200, the list 200 with the seeds marked and a `nextCursor`, `seed-1` retired
+  200 (`RETIRED`, `retiredAt` set), retired again 409 `WRONG_STATUS`, restored 200, and the list
+  without the token 403.
 - `:app:androidApp:assembleDebug` produces a real APK.
 - `ktlintCheck` clean across every module.
 
@@ -667,6 +696,38 @@ rules live in CLAUDE.md §8d. Each item is one short-lived branch, in order:
     the refresh-token grace window (`feat/refresh-grace-window`, the first migration after V1:
     prod takes V2 at its next Manual Deploy). Left: the `CF-Connecting-IP` check on dev (*NOT
     verified* above), and moving `wyr-postgres` to a paid instance type by about 2026-10-24.
+12. `feat/moderation-app` *(in progress)* — moderation moves out of the player app's console into
+    an app of its own. Built: the server and client half, the list of every question and retiring
+    and restoring (V3; provisional, CLAUDE.md §8b). Next: the app itself, on
+    `moderationDataModule(environment)` and the six moderation use cases (*For the moderation app*,
+    below).
+
+**For the moderation app.** Everything it needs is in `io.ntole.wyr.core.domain.moderation`, and
+none of it needs or makes a player session:
+
+- *Wiring:* `moderationDataModule(environment)` (`:core:data`) binds the moderation repository and
+  the use cases over an HTTP client of their own, with no `TokenStorage`, so a platform entry point
+  needs only the `WyrEnvironment` it targets (CLAUDE.md §8e). Without Koin it is
+  `DefaultModerationRepository(ModerationApi(WyrHttpClient.create(environment.apiBaseUrl,
+  SessionStore(InMemoryTokenStorage(), environment))))`.
+- *The token:* `AdminToken.of(typed)` is null for what no header could carry; hold it in memory only,
+  as the console does, and hand it to every call.
+- *The queue:* `GetPendingSubmissions(token)`, `ApproveSubmission(token, id, categories)` (none keeps
+  the author's, `OTHER` refused), `RejectSubmission(token, id, RejectionReason.of(text))`, each
+  answered with a `Submission`.
+- *Every question:* `GetQuestions(token, QuestionFilter(statuses, categories), after)` answers a
+  `ModeratedQuestionPage`: `questions`, newest first, and `next`, the `QuestionCursor` to pass back as
+  `after` with the same filter, null on the last page. A `ModeratedQuestion` has its options,
+  categories, `SubmissionStatus` (`PENDING`, `APPROVED`, `REJECTED`, `RETIRED`, `OTHER`), `isSeed`,
+  `submittedAt` / `reviewedAt` / `retiredAt`, `rejectionReason`, `tally` (`Tally`, with its
+  percentages) and `likeCount`. A filter holding `OTHER` throws before sending.
+- *Retiring:* `RetireQuestion(token, id)` and `RestoreQuestion(token, id)` answer the
+  `ModeratedQuestion` as it now stands.
+- *Errors:* every call throws `WyrException`: `FORBIDDEN` for a wrong token, `WRONG_STATUS` or
+  `ALREADY_DECIDED` for a question another moderator moved first, `QUESTION_NOT_FOUND`, `NETWORK`,
+  `RATE_LIMITED`, and `UNKNOWN` for a server with moderation off (a bare 404).
+- *Not built:* nothing moves the dev console's *Moderation* section yet; it still decides the queue,
+  and whether to remove it once the app exists is the app branch's call.
 
 **Remote:** `github.com/niktok1/would-you-rather` (private), `origin`, pushed over SSH through the
 `github-wyr` host alias with a deploy key scoped to this repo (CLAUDE.md §7). `gh` is logged in to
