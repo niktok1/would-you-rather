@@ -468,12 +468,17 @@ and every request shows in its HTTP trace (`HttpTrace` in `:core:network`, never
   counted under the author's row lock (§4). A submission is stored `PENDING`, and nothing approves
   one until *Moderation* is built. Questions carry an author and a `QuestionStatus`, and
   `QuestionStore.servableTo` serves only approved ones, due at once in whatever cycle each player
-  is on. The client and the console's section come in the next branch.
-- **Moderation** *(not built)*: a moderator approves or rejects each pending submission and **may
-  change its category** when approving. A rejection carries a **short reason**, and the author
-  sees the status of each of their submissions and, for a rejected one, that reason. The
-  moderator is whoever holds the server's admin token (an environment variable; admin routes are
-  off when it is unset), not a role on a player account.
+  is on. `GET /v1/me/questions` lists the author's submissions of every status, newest first, a
+  rejected one with its reason (`SubmissionStore.byAuthor`). The client and the console's section
+  come in the next branch.
+- **Moderation** *(not built but for the author's view)*: a moderator approves or rejects each
+  pending submission and **may change its category** when approving. A rejection carries a
+  **short reason**, and the author sees the status of each of their submissions and, for a
+  rejected one, that reason. The moderator is whoever holds the server's admin token (an
+  environment variable; admin routes are off when it is unset), not a role on a player account.
+  The author's view is built on the server (`GET /v1/me/questions`, *Submitting*), and so are the
+  columns a decision writes (`questions.reviewed_at`, `questions.rejection_reason`); nothing writes
+  them yet.
 ---
 
 ## 9. How to work in this repo

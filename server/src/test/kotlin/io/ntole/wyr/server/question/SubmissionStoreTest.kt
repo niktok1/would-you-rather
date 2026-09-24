@@ -96,6 +96,37 @@ class SubmissionStoreTest {
     }
 
     @Test
+    fun `an author's submissions are listed newest first with a reason only on a rejected one`() {
+        val author = newPlayer()
+        val oldest = submit(author, question(1), at = 1_000L)
+        val newest = submit(author, question(2), at = 3_000L)
+        val middle = submit(author, question(3), at = 2_000L)
+        submit(newPlayer(), question(4), at = 4_000L)
+        decide(oldest.id, QuestionStatus.REJECTED)
+        decide(newest.id, QuestionStatus.APPROVED)
+        // A reason on an approved question, which no writer should leave and the list must not pass on.
+        transaction(database) { Questions.update({ Questions.id eq newest.id }) { it[rejectionReason] = "stale" } }
+
+        val listed = transaction(database) { SubmissionStore.byAuthor(author) }
+
+        assertEquals(listOf(newest.id, middle.id, oldest.id), listed.map { it.id }, "newest first, only the author's")
+        assertEquals(
+            listOf(QuestionStatus.APPROVED, QuestionStatus.PENDING, QuestionStatus.REJECTED),
+            listed.map { it.status },
+        )
+        assertEquals(listOf(null, null, "not a real dilemma"), listed.map { it.rejectionReason })
+        assertEquals(middle, listed[1], "a pending one reads back as its submission was answered")
+    }
+
+    @Test
+    fun `submissions from the same millisecond are listed in a fixed order`() {
+        val author = newPlayer()
+        val ids = List(5) { index -> submit(author, question(index), at = 1_000L).id }
+
+        assertEquals(ids.sorted(), transaction(database) { SubmissionStore.byAuthor(author) }.map { it.id })
+    }
+
+    @Test
     fun `a submission by a player that does not exist is unauthorized and stores nothing`() {
         val before = transaction(database) { Questions.selectAll().count() }
 

@@ -182,10 +182,15 @@ object QuestionStore {
             id = row[Questions.id],
             optionA = row[Questions.optionA],
             optionB = row[Questions.optionB],
-            // A category written by an older/newer build than this one still has to read back.
-            category =
-                runCatching { QuestionCategory.valueOf(row[Questions.category]) }
-                    .getOrDefault(QuestionCategory.RANDOM),
+            category = categoryOf(row),
             answeredBefore = answeredBefore,
         )
+
+    /**
+     * The row's category. One written by an older or newer build than this one still has to read
+     * back, and never as `UNKNOWN`, which the server does not send.
+     */
+    internal fun categoryOf(row: ResultRow): QuestionCategory =
+        runCatching { QuestionCategory.valueOf(row[Questions.category]) }
+            .getOrDefault(QuestionCategory.RANDOM)
 }

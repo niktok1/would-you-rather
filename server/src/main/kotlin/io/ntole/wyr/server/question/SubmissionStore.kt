@@ -7,6 +7,7 @@ import io.ntole.wyr.core.question.SubmitQuestionRequest
 import io.ntole.wyr.server.db.Players
 import io.ntole.wyr.server.db.Questions
 import io.ntole.wyr.server.plugins.ApiFailure
+import org.jetbrains.exposed.v1.core.SortOrder
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.count
 import org.jetbrains.exposed.v1.core.eq
@@ -65,6 +66,43 @@ object SubmissionStore {
             submittedAt = now,
         )
     }
+
+    /**
+     * Every question [authorId] has submitted, whatever its status, newest first (CLAUDE.md §8d).
+     * Must run inside a transaction. Two submitted in the same millisecond come in id order, which is
+     * fixed but says nothing about which came first. Seeds have no author, so they never appear.
+     *
+     * A reason goes out only with a rejected question, whatever the column holds, so what the
+     * contract promises does not rest on every writer of the column clearing it.
+     */
+    fun byAuthor(authorId: String): List<SubmissionDto> =
+        Questions
+            .select(SUBMISSION_COLUMNS)
+            .where { Questions.authorPlayerId eq authorId }
+            .orderBy(Questions.submittedAt to SortOrder.DESC, Questions.id to SortOrder.ASC)
+            .map { row ->
+                val status = row[Questions.status]
+                SubmissionDto(
+                    id = row[Questions.id],
+                    optionA = row[Questions.optionA],
+                    optionB = row[Questions.optionB],
+                    category = QuestionStore.categoryOf(row),
+                    status = status,
+                    rejectionReason = row[Questions.rejectionReason].takeIf { status == QuestionStatus.REJECTED },
+                    submittedAt = row[Questions.submittedAt],
+                )
+            }
+
+    private val SUBMISSION_COLUMNS =
+        listOf(
+            Questions.id,
+            Questions.optionA,
+            Questions.optionB,
+            Questions.category,
+            Questions.status,
+            Questions.rejectionReason,
+            Questions.submittedAt,
+        )
 
     /**
      * Locks the author's row until this transaction ends. It also resolves the author, as a vote

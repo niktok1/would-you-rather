@@ -26,6 +26,7 @@ import io.ntole.wyr.core.question.QuestionPageDto
 import io.ntole.wyr.core.question.QuestionStatus
 import io.ntole.wyr.core.question.SkipRequest
 import io.ntole.wyr.core.question.SubmissionDto
+import io.ntole.wyr.core.question.SubmissionListDto
 import io.ntole.wyr.core.question.SubmitQuestionRequest
 import io.ntole.wyr.core.vote.OptionSide
 import io.ntole.wyr.core.vote.VoteRequest
@@ -769,6 +770,7 @@ class ApiFlowTest {
                 assertEquals(HttpStatusCode.UnprocessableEntity, response.status, case)
                 assertEquals(ErrorCode.INVALID_SUBMISSION, response.body<ErrorDto>().code, case)
             }
+            assertEquals(emptyList(), client.mySubmissions(author), "none of them was stored")
         }
 
     @Test
@@ -813,6 +815,7 @@ class ApiFlowTest {
                 assertEquals(HttpStatusCode.BadRequest, response.status, case)
                 assertEquals(ErrorCode.VALIDATION_FAILED, response.body<ErrorDto>().code, case)
             }
+            assertEquals(emptyList(), client.mySubmissions(author), "none of them was stored")
         }
 
     @Test
@@ -828,11 +831,54 @@ class ApiFlowTest {
 
             assertEquals(HttpStatusCode.Conflict, refused.status)
             assertEquals(ErrorCode.SUBMISSION_LIMIT, refused.body<ErrorDto>().code)
+            assertEquals(WyrApi.Limits.MAX_PENDING_SUBMISSIONS, client.mySubmissions(author).size)
             assertEquals(
                 HttpStatusCode.Created,
                 client.submit(client.guest(), SubmitQuestionRequest("One", "Too many", QuestionCategory.RANDOM)).status,
                 "the limit is per author",
             )
+        }
+
+    @Test
+    fun `an author's submissions are listed newest first and nobody else's are`() =
+        runServer("my-questions") { client ->
+            val author = client.guest()
+            val other = client.guest()
+            val submitted =
+                List(3) { index ->
+                    client.submitted(author, SubmitQuestionRequest("A $index", "B $index", QuestionCategory.FOOD))
+                }
+            val theirs = client.submitted(other, SubmitQuestionRequest("Theirs", "Not ours", QuestionCategory.ETHICS))
+
+            val listed = client.mySubmissions(author)
+
+            assertEquals(submitted.toSet(), listed.toSet(), "as each submission was answered, and only the author's")
+            assertEquals(listed.sortedByDescending { it.submittedAt }, listed, "newest first")
+            assertEquals(listOf(theirs), client.mySubmissions(other))
+            assertEquals(emptyList(), client.mySubmissions(client.guest()), "a player who submitted nothing")
+        }
+
+    @Test
+    fun `listing one's submissions needs a session`() =
+        runServer("my-questions-no-token") { client ->
+            val response = client.get(WyrApi.Paths.MY_QUESTIONS)
+
+            assertEquals(HttpStatusCode.Unauthorized, response.status)
+            assertEquals(ErrorCode.UNAUTHORIZED, response.body<ErrorDto>().code)
+        }
+
+    @Test
+    fun `a validly signed token for a player that does not exist lists no submissions`() =
+        runServer("my-questions-ghost-player") { client ->
+            // As for the ghost-player vote, the helper's token for a real player has to pass first.
+            val real = client.guest()
+            val accepted = client.get(WyrApi.Paths.MY_QUESTIONS) { bearerAuth(signAccessToken(real.playerId)) }
+            assertEquals(HttpStatusCode.OK, accepted.status)
+
+            val response = client.get(WyrApi.Paths.MY_QUESTIONS) { bearerAuth(signAccessToken("no-such-player")) }
+
+            assertEquals(HttpStatusCode.Unauthorized, response.status)
+            assertEquals(ErrorCode.UNAUTHORIZED, response.body<ErrorDto>().code)
         }
 
     @Test
@@ -941,6 +987,9 @@ class ApiFlowTest {
         session: SessionDto,
         request: SubmitQuestionRequest,
     ): HttpResponse = submit(session.accessToken, request)
+
+    private suspend fun HttpClient.mySubmissions(session: SessionDto): List<SubmissionDto> =
+        get(WyrApi.Paths.MY_QUESTIONS) { bearerAuth(session.accessToken) }.body<SubmissionListDto>().submissions
 
     private suspend fun HttpClient.submitted(
         session: SessionDto,
