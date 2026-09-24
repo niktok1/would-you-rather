@@ -58,14 +58,15 @@ fun Route.authRoutes(
             val rotated = tokens.issueRefreshToken()
             val expiresAt = System.currentTimeMillis() + config.refreshTokenTtlSeconds * 1_000L
 
-            // Rotate on every use. The token a rotation displaces still works once more, until the next
-            // rotation displaces it or, when REFRESH_GRACE_SECONDS sets a bound, that long after this one
-            // (the grace, CLAUDE.md §8a), and never past its own expiry. So a refresh whose answer was lost
+            // Rotate on every use, in the session the token belongs to, so no other device of the player
+            // is touched (CLAUDE.md §8a, *Sessions*). The token a rotation displaces still works once more,
+            // until the next rotation displaces it or, when REFRESH_GRACE_SECONDS sets a bound, that long
+            // after this one (the grace), and never past its own expiry. So a refresh whose answer was lost
             // can be sent again with it, however much later, and then never again: a token replayed a
             // second time is refused.
-            val player =
+            val playerId =
                 db.query {
-                    PlayerStore.rotateRefreshToken(
+                    SessionStore.rotate(
                         presentedHash = tokens.hash(body.refreshToken),
                         newHash = rotated.hash,
                         expiresAt = expiresAt,
@@ -75,8 +76,8 @@ fun Route.authRoutes(
 
             call.respond(
                 SessionDto(
-                    playerId = player.id,
-                    accessToken = tokens.issueAccessToken(player.id),
+                    playerId = playerId,
+                    accessToken = tokens.issueAccessToken(playerId),
                     refreshToken = rotated.value,
                     accessTokenExpiresInSeconds = config.accessTokenTtlSeconds,
                 ),

@@ -1,15 +1,19 @@
 package io.ntole.wyr.server.db
 
 import io.ntole.wyr.server.TestDatabaseSettings
+import io.ntole.wyr.server.auth.SessionStore
 import io.ntole.wyr.server.player.PlayerStore
 import org.flywaydb.core.api.FlywayException
 import org.flywaydb.core.api.output.MigrateResult
 import org.jetbrains.exposed.v1.jdbc.JdbcTransaction
 import org.jetbrains.exposed.v1.jdbc.SchemaUtils
 import org.jetbrains.exposed.v1.jdbc.insert
+import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.junit.Assume.assumeTrue
 import org.junit.runner.RunWith
 import org.junit.runners.Parameterized
+import java.sql.Connection
+import java.util.UUID
 import java.util.concurrent.Callable
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
@@ -77,6 +81,42 @@ internal class MigrationsTest(
             assertEquals(BASELINED_HISTORY, history(pool))
             assertEquals(BASELINED_HISTORY.size - 1, result.migrationsExecuted)
             assertEquals(afterLaterScripts(before), pool.inTransaction { contents() })
+        }
+    }
+
+    /**
+     * V4 on a database the builds before it served (CLAUDE.md §8a, *Sessions*): each player's refresh
+     * token moves into a session of its own, the previous one V2 keeps and its grace included, so every
+     * client refreshes across the deploy as before it, now from its session.
+     */
+    @Test
+    fun `V4 opens a session for every player holding a refresh token, so each refreshes as before it`() {
+        engine.emptyDatabase("sessions-backfill").serverPool().use { pool ->
+            Migrations
+                .configuration()
+                .dataSource(pool)
+                .target("2")
+                .load()
+                .migrate()
+            val (refreshing, displaced) =
+                pool.inTransaction {
+                    playerAsMintedBefore(refreshTokenHash = "current") to
+                        playerAsMintedBefore(refreshTokenHash = "rotated", previousRefreshTokenHash = "displaced")
+                }
+
+            Migrations.migrate(pool)
+
+            pool.inTransaction {
+                assertEquals(setOf(refreshing, displaced), Sessions.selectAll().map { it[Sessions.playerId] }.toSet())
+                assertEquals(
+                    refreshing,
+                    SessionStore.rotate("current", "after-current", Long.MAX_VALUE, graceMillis = null),
+                )
+                assertEquals(
+                    displaced,
+                    SessionStore.rotate("displaced", "after-displaced", Long.MAX_VALUE, graceMillis = null),
+                )
+            }
         }
     }
 
@@ -306,8 +346,10 @@ internal class MigrationsTest(
      * Built by running V1 alone and then dropping the history, not by `SchemaUtils.create`: the table
      * definitions have described the latest script's schema since V2, and V1's only while it was the
      * only script, which is when SchemaDriftTest pinned V1 to what `SchemaUtils.create` built. The rows
-     * are written through the stores, which name only V1's columns in what they write here, as an older
-     * build's did; one that named a later column would fail here, on a table without it.
+     * are written through the stores where what those write names only V1's columns, as an older build's
+     * did; one that named a later column would fail here, on a table without it. The player is inserted
+     * as an older build minted one, with its refresh token in its own row, since a mint now opens a
+     * session, in a table V1 does not have.
      */
     private fun buildAsBeforeMigrations(pool: DataSource) {
         val v1 =
@@ -321,22 +363,52 @@ internal class MigrationsTest(
             // Flyway quotes its own table's name, in lower case, on H2 as on PostgreSQL.
             exec("DROP TABLE \"${v1.configuration.table}\"")
             Seed.questionsIfEmpty()
-            val author = PlayerStore.createGuest(refreshTokenHash = "a".repeat(64), refreshExpiresAt = 1L)
-            PlayerStore.addPoints(author.id, points = 3)
+            val author = playerAsMintedBefore(refreshTokenHash = "a".repeat(64), refreshExpiresAt = 1L)
+            PlayerStore.addPoints(author, points = 3)
             Likes.insert { row ->
-                row[playerId] = author.id
+                row[playerId] = author
                 row[questionId] = "seed-1"
             }
         }
     }
 
     /**
-     * Every row of every app table, each column by its lower-case name, so a comparison shows any row
-     * lost, added or changed. Read with `SELECT *` rather than through the table definitions, which
-     * name columns a database built before migrations does not have yet.
+     * A guest as a build from before sessions minted one, its refresh token in the players row, as
+     * [previousRefreshTokenHash] too where one is given, which a build from V2 on had once the player
+     * refreshed. Names no column V1 lacks unless it is given one of V2's. Returns the player's id.
      */
-    private fun JdbcTransaction.contents(): Contents =
-        appTables.associate { table ->
+    private fun JdbcTransaction.playerAsMintedBefore(
+        refreshTokenHash: String,
+        refreshExpiresAt: Long = Long.MAX_VALUE,
+        previousRefreshTokenHash: String? = null,
+    ): String {
+        val id = UUID.randomUUID().toString()
+        Players.insert { row ->
+            row[Players.id] = id
+            row[createdAt] = System.currentTimeMillis()
+            row[totalPoints] = 0
+            row[answersGiven] = 0
+            row[Players.refreshTokenHash] = refreshTokenHash
+            row[refreshTokenExpiresAt] = refreshExpiresAt
+            row[currentCycle] = Players.FIRST_CYCLE
+            if (previousRefreshTokenHash != null) {
+                row[Players.previousRefreshTokenHash] = previousRefreshTokenHash
+                row[previousRefreshTokenExpiresAt] = Long.MAX_VALUE
+                row[previousRefreshTokenRotatedAt] = System.currentTimeMillis()
+            }
+        }
+        return id
+    }
+
+    /**
+     * Every row of every app table the database has, each column by its lower-case name, so a
+     * comparison shows any row lost, added or changed, and any table added. Read with `SELECT *` rather
+     * than through the table definitions, which name columns and tables a database built before
+     * migrations does not have yet.
+     */
+    private fun JdbcTransaction.contents(): Contents {
+        val present = schemaTables()
+        return appTables.filter { it.tableName in present }.associate { table ->
             val rows =
                 exec("SELECT * FROM ${table.tableName}") { result ->
                     val metadata = result.metaData
@@ -347,17 +419,48 @@ internal class MigrationsTest(
                 }.orEmpty()
             table.tableName to rows.canonical()
         }
+    }
+
+    /** The tables of the connection's own schema, by lower-case name, as [Migrations] reads them. */
+    private fun JdbcTransaction.schemaTables(): Set<String> {
+        val jdbc = connection.connection as Connection
+        return jdbc.metaData.getTables(jdbc.catalog, jdbc.schema, "%", null).use { rows ->
+            buildSet { while (rows.next()) add(rows.getString("TABLE_NAME").lowercase()) }
+        }
+    }
 
     /**
      * [before], a database's contents at V1, as the scripts after V1 leave them. V2 gives every player
-     * no previous refresh token and changes nothing else. A later script that changes the rows already
-     * there adds what it does to them here.
+     * no previous refresh token. V4 gives nobody a recovery secret, and every player who holds a refresh
+     * token a session holding it, under the player's own id and creation time, and marks their row, the
+     * mirror, with that session's token. None changes anything else. A later script that changes the
+     * rows already there adds what it does to them here.
      */
-    private fun afterLaterScripts(before: Contents): Contents =
-        before.mapValues { (table, rows) ->
-            val added = if (table == Players.tableName) PREVIOUS_REFRESH_TOKEN_COLUMNS else emptyList()
-            rows.map { row -> row + added.associateWith { null } }.canonical()
-        }
+    private fun afterLaterScripts(before: Contents): Contents {
+        val players = before.getValue(Players.tableName).map { row -> row + ADDED_COLUMNS.associateWith { null } }
+        val sessions =
+            players
+                .filter { player -> player["refresh_token_hash"] != null && player["refresh_token_expires_at"] != null }
+                .map { player ->
+                    mapOf(
+                        "id" to player["id"],
+                        "player_id" to player["id"],
+                        "refresh_token_hash" to player["refresh_token_hash"],
+                        "refresh_token_expires_at" to player["refresh_token_expires_at"],
+                        "previous_refresh_token_hash" to player["previous_refresh_token_hash"],
+                        "previous_refresh_token_expires_at" to player["previous_refresh_token_expires_at"],
+                        "previous_refresh_token_rotated_at" to player["previous_refresh_token_rotated_at"],
+                        "created_at" to player["created_at"],
+                    )
+                }
+        val marked =
+            players.map { player ->
+                val session = sessions.singleOrNull { it["player_id"] == player["id"] }
+                player + ("mirrored_refresh_token_hash" to session?.get("refresh_token_hash"))
+            }
+        return (before + mapOf(Players.tableName to marked, Sessions.tableName to sessions))
+            .mapValues { (_, rows) -> rows.canonical() }
+    }
 
     /** Each row with its columns in name order, and the rows in the order that gives them. */
     private fun List<Map<String, String?>>.canonical(): List<Map<String, String?>> =
@@ -371,14 +474,20 @@ internal class MigrationsTest(
          * The history of a database built before migrations once a boot has migrated it: V1 recorded
          * without running it, then every later script run.
          */
-        private val BASELINED_HISTORY = listOf("1 BASELINE", "2 SQL")
+        private val BASELINED_HISTORY = listOf("1 BASELINE", "2 SQL", "4 SQL")
 
-        /** The columns V2 adds to players, empty in every row already there. */
-        private val PREVIOUS_REFRESH_TOKEN_COLUMNS =
+        /**
+         * The columns the scripts after V1 add to players, empty in every row already there but for
+         * the mark, which V4 then sets ([afterLaterScripts]): V2's previous refresh token, and V4's mark
+         * and recovery secret.
+         */
+        private val ADDED_COLUMNS =
             listOf(
                 "previous_refresh_token_hash",
                 "previous_refresh_token_expires_at",
                 "previous_refresh_token_rotated_at",
+                "mirrored_refresh_token_hash",
+                "recovery_secret_hash",
             )
 
         /** Past Flyway's own wait for its lock, 50 tries a second apart, so Flyway gives up first. */

@@ -150,7 +150,7 @@ failing:
 - Any other read-then-write is a compare-and-set: the `UPDATE`'s `WHERE` repeats what the read
   relied on, and 0 rows updated means another transaction won (`PlayerStore.startNextCycle`,
   `ModerationStore.decide`). Where the `WHERE` can hold the whole check, nothing need be read first
-  (`PlayerStore.rotateRefreshToken`, whose second racer re-checks it against the first's commit).
+  (`SessionStore.rotate`, whose second racer re-checks it against the first's commit).
   Or the read takes the row lock (`SELECT ... FOR UPDATE`), so a concurrent writer waits and then
   reads the row as committed (`VoteStore.cast`, which branches on more than one outcome, and
   `SkipStore.skip`).
@@ -359,15 +359,15 @@ auth SDK, satisfying §2.
   does not change when auth evolves.
 - Only a SHA-256 hash of the refresh token is stored. Refresh tokens **rotate on every use**, with a
   **grace window** (*decided 2026-09-24*) that has **no time bound** (*decided 2026-09-24*, replacing
-  the 10 minutes built first). The token a rotation displaces is kept as the player's previous one,
-  with the expiry it had and when it was displaced (V2), and a refresh presenting it still succeeds
-  until the next rotation displaces it, never past the token's own expiry. `REFRESH_GRACE_SECONDS`
-  can bound it in time: unset, the default, sets no bound; 0 turns the grace off; any other number of
-  seconds accepts the previous token only that long after the rotation that displaced it. It rotates
-  by the same rule, so the token it presented is dead afterwards and the one it displaced becomes the
-  previous one; a refresh with the current token displaces the previous one for good the same way. A
-  token therefore works twice at most, once while current and once more as the previous one; anything
-  else is 401 `INVALID_REFRESH_TOKEN`.
+  the 10 minutes built first). The token a rotation displaces is kept as its session's previous one
+  (*Sessions*, below), with the expiry it had and when it was displaced, and a refresh presenting it
+  still succeeds until the next rotation displaces it, never past the token's own expiry.
+  `REFRESH_GRACE_SECONDS` can bound it in time: unset, the default, sets no bound; 0 turns the grace
+  off; any other number of seconds accepts the previous token only that long after the rotation that
+  displaced it. It rotates by the same rule, so the token it presented is dead afterwards and the one
+  it displaced becomes the previous one; a refresh with the current token displaces the previous one
+  for good the same way. A token therefore works twice at most, once while current and once more as
+  the previous one; anything else is 401 `INVALID_REFRESH_TOKEN`.
   - *Why:* a refresh the server ran whose answer never arrived (a dropped connection, a Render cold
     start, the client's 5-minute refresh timeout, the app killed mid-refresh) leaves the client with
     only the token the server rotated out. Without the grace its next refresh is refused and session
@@ -388,23 +388,54 @@ auth SDK, satisfying §2.
     and a bound under half the access token's 15 minutes always would. Accepted for guest accounts,
     whose only credential this is (the user's decision, 2026-09-24); account linking changes the
     picture. `ServerConfig.refreshGraceSeconds` says so.
-  - *The rotation* is one `UPDATE` whose `WHERE` is the whole check, nothing read before it
-    (`PlayerStore.rotateRefreshToken`, §4): the presented hash as the current one and unexpired,
+  - *The rotation* is one `UPDATE` of the session whose `WHERE` is the whole check, nothing read
+    before it (`SessionStore.rotate`, §4): the presented hash as the current one and unexpired,
     or as the previous one, unexpired and, under a bound, displaced within it. Of two refreshes racing
     with the current token, the second waits on the first's row lock, finds the token the previous one
     by then and goes through too, the first's new token becoming the previous one; of two racing with
-    the previous token, exactly one goes through. `PlayerStoreTest` races both and pins every rule.
+    the previous token, exactly one goes through. `SessionStoreTest` races both and pins every rule.
     It stamps every rotation, bound or not: a bound set later reads the stamp, and so does a rollback
     to a build from before this rule, whose unset `REFRESH_GRACE_SECONDS` means 10 minutes. A build
-    from before V2 (any before `08397e4`) rotates without touching the previous token's columns, so
-    after a rollback to one they can name a token displaced several rotations back, which with no
-    bound works again once this rule is back, until that player's next refresh or its own expiry. A
-    database V2 has only just given those columns holds nothing in them, so the first deploy of V2
-    needs nothing more. But before rolling forward again after such a rollback, while the old build
-    still runs, clear them: `UPDATE players SET previous_refresh_token_hash = NULL,
-    previous_refresh_token_expires_at = NULL, previous_refresh_token_rotated_at = NULL`. That costs
-    only a lost answer from before the rollback whose player has not been back since. A bound set for
-    the roll-forward is no substitute: a stale token not yet displaced works again once it is unset.
+    from before V2 (any before `08397e4`) rotates the players row, the mirror (*Sessions*), without
+    touching the previous token's columns, so after a rollback to one they can name a token displaced
+    several rotations back, which with no bound works again once this rule is back, until that
+    player's next refresh or its own expiry. A database V2 has only just given those columns holds
+    nothing in them, so the first deploy of V2 needs nothing more. But before rolling forward again
+    after such a rollback, while the old build still runs, clear them: `UPDATE players SET
+    previous_refresh_token_hash = NULL, previous_refresh_token_expires_at = NULL,
+    previous_refresh_token_rotated_at = NULL`. That costs only a lost answer from before the rollback
+    whose player has not been back since. A bound set for the roll-forward is no substitute: a stale
+    token not yet displaced works again once it is unset.
+- **Sessions** (*decided 2026-09-25*): a player's refresh tokens live in `sessions`, **one
+  refresh-token family per device**, each rotating on its own row by the rules above, so a refresh on
+  one device never touches another's tokens, and nothing caps how many a player has. A mint opens a
+  player's first session (`SessionStore.open`). V4 opened one for every player who held a refresh
+  token, under the player's own id and with their previous token and its grace, so every client kept
+  refreshing across the deploy. No row is deleted: an expired session is dead where it lies.
+  - *The mirror.* A build from before sessions (the V2 and V3 builds among them) looks a refresh token
+    up in the players row alone, so the players row keeps its refresh-token columns as a copy of the
+    session opened or rotated last, previous token and stamp included, marked as this build's copy
+    (`players.mirrored_refresh_token_hash`). Every open and rotation writes it, under the player's row
+    lock, which a rotation takes after its session's: every write here locks a session before its
+    player. It costs a read and an `UPDATE` per refresh. The columns stay until no rollback target
+    predates sessions; dropping them then is a migration of its own (§8b, *Rollbacks*).
+  - *A rollback* to such a build refreshes, for each player, the device that opened or refreshed a
+    session last, with the grace this build gave its token, and refuses every other device, whose
+    client replaces its player with a fresh guest. The guests it mints have no session and no mark.
+  - *Rolling forward* needs nothing by hand. A mirror whose current token is not its mark was moved by
+    a build without sessions: during a rollback, or while the build before still serves as a deploy's
+    new instance starts, which the first deploy of V4 goes through too. A refresh no session takes is
+    tried there by the same rules and, spent, folded back into the session the mark names, the device
+    the build without sessions went on refreshing, or into a new session for a guest minted there
+    (`SessionStore.foldMirror`). The mark is read first so that session is locked before the player,
+    and the player's update is a compare-and-set on it (§4). Two refreshes racing with such a token
+    behave as two with a session's token. `SessionStoreTest` pins the mirror, a build without sessions
+    refreshing from it, both folds and their races.
+  - *What a rollback still costs:* every device but the one used last, as above; and, for a player
+    with more than one session, the chain a build without sessions moved in the mirror, if another of
+    their sessions refreshes first once rolled forward, since a session's rotation always rewrites the
+    mirror: that device is refused. A rollback past V2 still needs the mirror's previous token cleared
+    before rolling forward (*The rotation*, above).
 - `POST /v1/auth/link` does not exist yet. It is the intended next step and is what will make an
   account survive reinstall and sync across devices.
 - On the client, `SessionStore` is the only copy of the credentials: Ktor's bearer cache is off
@@ -577,8 +608,9 @@ seed (`Migrations`, `DatabaseFactory.init`). Nothing builds a table any other wa
   is the first kind: `4cdc819` built it on 2026-09-24, the first deploy, and `Tables.kt` changed no
   column, key or index between then and V1, so it holds exactly V1, and the first migrating build to
   boot on it records `1 BASELINE`. §8 records no such deploy yet, so its next Manual Deploy may
-  baseline it and run V2 (the refresh-token grace window, §8a) in one boot, or run V2 alone on an
-  earlier baseline; either way its history then reads `1 BASELINE`, `2 SQL`.
+  baseline it and run V2 (the refresh-token grace window, §8a) and V4 (sessions, §8a) in one boot, or
+  run what it lacks on an earlier baseline; either way its history then reads `1 BASELINE`, `2 SQL`,
+  `4 SQL`.
   `Migrations.migrate` takes the baseline itself (`baselineVersion` 1), and only for a database
   holding every table V1 builds (`TABLES_BEFORE_MIGRATIONS`) and no history table; Flyway's
   `baselineOnMigrate` is off. Any other database with tables and no history fails the boot, rather
@@ -616,7 +648,7 @@ seed (`Migrations`, `DatabaseFactory.init`). Nothing builds a table any other wa
   `MigrationsTest`, add the script's row to `BASELINED_HISTORY` and what it does to rows already
   there to `afterLaterScripts`. Its database built before migrations is V1 run alone with the history
   dropped (V2 moved it there), since the definitions describe the latest script, and it reads rows
-  with `SELECT *`, since the definitions name columns V1 lacks.
+  with `SELECT *`, from the tables there are, since the definitions name columns and a table V1 lacks.
 - *A script that has shipped never changes*: Flyway refuses to boot on a changed checksum. A script
   whose name Flyway cannot read fails the boot rather than being skipped (`validateMigrationNaming`),
   and clean is refused outright (`cleanDisabled`); the test harness alone turns it on, to wipe the
@@ -626,7 +658,10 @@ seed (`Migrations`, `DatabaseFactory.init`). Nothing builds a table any other wa
   before it can still run on: add before use, drop only once no build a rollback could return to
   reads it. A new `QuestionStatus` is a migration too, although no column changes:
   `questions.status` is read strictly, unlike a category, so no build may write a new status until
-  the build a rollback would return to can read it.
+  the build a rollback would return to can read it. Moving what a table holds is one as well: V4 moved
+  refresh tokens into `sessions` and keeps the `players` columns every build before it refreshes from
+  as a mirror of the session written last (§8a, *Sessions*), so a rollback keeps each player's latest
+  device, and rolling forward folds back whatever the older build wrote there.
 - *Several instances booting at once* (Render starts a deploy's new instance before it stops the old
   one): on PostgreSQL each script runs under Flyway's advisory lock, so one boot migrates while the
   rest wait, up to 50 tries a second apart, and then find nothing to do. Every boot that finds a

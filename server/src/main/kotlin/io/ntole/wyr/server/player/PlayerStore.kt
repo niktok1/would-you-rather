@@ -1,11 +1,10 @@
 package io.ntole.wyr.server.player
 
+import io.ntole.wyr.server.auth.SessionStore
 import io.ntole.wyr.server.db.Players
 import org.jetbrains.exposed.v1.core.ResultRow
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
-import org.jetbrains.exposed.v1.core.greater
-import org.jetbrains.exposed.v1.core.or
 import org.jetbrains.exposed.v1.core.plus
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.select
@@ -21,21 +20,25 @@ object PlayerStore {
         val cycle: Int,
     )
 
+    /**
+     * Mints a guest with a first session, on the refresh token whose hash is [refreshTokenHash], valid
+     * until [refreshExpiresAt] ([SessionStore.open]). Must run inside a transaction.
+     */
     fun createGuest(
         refreshTokenHash: String,
         refreshExpiresAt: Long,
     ): Player {
         val id = UUID.randomUUID().toString()
+        val now = System.currentTimeMillis()
 
         Players.insert { row ->
             row[Players.id] = id
-            row[Players.createdAt] = System.currentTimeMillis()
+            row[Players.createdAt] = now
             row[Players.totalPoints] = 0
             row[Players.answersGiven] = 0
-            row[Players.refreshTokenHash] = refreshTokenHash
-            row[Players.refreshTokenExpiresAt] = refreshExpiresAt
             row[Players.currentCycle] = Players.FIRST_CYCLE
         }
+        SessionStore.open(id, refreshTokenHash, refreshExpiresAt, now)
 
         return Player(id = id, totalPoints = 0, cycle = Players.FIRST_CYCLE)
     }
@@ -47,84 +50,6 @@ object PlayerStore {
             .limit(1)
             .firstOrNull()
             ?.toPlayer()
-
-    /**
-     * Spends the refresh token whose hash is [presentedHash]: swaps it for [newHash], valid until
-     * [expiresAt], and returns its player, or `null` when no refresh may spend it. Must run inside a
-     * transaction.
-     *
-     * A refresh may spend a player's current token until it expires, and the token the last rotation
-     * displaced (CLAUDE.md §8a) until the next rotation displaces it in turn, never past its own expiry.
-     * A [graceMillis] bounds that in time as well, to so long after the rotation that displaced it, and
-     * 0 accepts the current token alone; null, the server's default, sets no time bound. Either way the
-     * swap is the same: the token current until now becomes the previous one, stamped [now], and
-     * [newHash] the current one. So a token works twice at most. Spent while current, it becomes the
-     * previous one, which one more refresh may spend until the new token's first use displaces it;
-     * spent as the previous one, it is displaced by the token current then, which becomes the previous
-     * one in its place, and it never works again. The stamp is written with no bound too: a bound set
-     * later reads it, and so does a rollback to a build that bounds the grace by default. A build from
-     * before V2 rotates without touching the previous columns, so after a rollback to one they are
-     * stale and must be cleared before rolling forward (CLAUDE.md §8a, *The rotation*).
-     *
-     * Returns `null` alike for an unknown, an expired, a spent and a displaced token, and one past a
-     * bound — the caller must not be able to tell them apart, and neither should an attacker probing
-     * the endpoint.
-     *
-     * One `UPDATE` both checks and swaps: a compare-and-set whose `WHERE` holds everything the swap
-     * relies on, with nothing read before it. At READ COMMITTED a second refresh presenting the same
-     * token waits on the first's row lock and then re-checks that `WHERE` against the row the first
-     * committed, so it never swaps from the state the first swapped from. Of two presenting the current
-     * token, the second finds it the previous one by then and still spends it, so both go through and
-     * the first's new token is the previous one; of two presenting the previous token, the second finds
-     * it gone and is refused. An update by id after a read, or with the hash in its `WHERE` and not the
-     * rest, lets both through from one state: two live sessions from one token, one of them never
-     * displaced.
-     */
-    fun rotateRefreshToken(
-        presentedHash: String,
-        newHash: String,
-        expiresAt: Long,
-        graceMillis: Long?,
-        now: Long = System.currentTimeMillis(),
-    ): Player? {
-        val spendableAsCurrent =
-            (Players.refreshTokenHash eq presentedHash) and (Players.refreshTokenExpiresAt greater now)
-        val spendableAsPrevious =
-            (Players.previousRefreshTokenHash eq presentedHash) and (Players.previousRefreshTokenExpiresAt greater now)
-        val spendable =
-            when {
-                graceMillis == null -> {
-                    spendableAsCurrent or spendableAsPrevious
-                }
-
-                graceMillis > 0 -> {
-                    val displacedWithinBound = Players.previousRefreshTokenRotatedAt greater now - graceMillis
-                    spendableAsCurrent or (spendableAsPrevious and displacedWithinBound)
-                }
-
-                else -> {
-                    spendableAsCurrent
-                }
-            }
-
-        val swapped =
-            Players.update({ spendable }) { row ->
-                // The right-hand columns are the row as it stood before this update, on both engines,
-                // so whichever token was presented, the one current until now becomes the previous one.
-                row[previousRefreshTokenHash] = refreshTokenHash
-                row[previousRefreshTokenExpiresAt] = refreshTokenExpiresAt
-                row[previousRefreshTokenRotatedAt] = now
-                row[refreshTokenHash] = newHash
-                row[refreshTokenExpiresAt] = expiresAt
-            }
-        if (swapped == 0) return null
-
-        return Players
-            .selectAll()
-            .where { Players.refreshTokenHash eq newHash }
-            .single()
-            .toPlayer()
-    }
 
     private fun ResultRow.toPlayer(): Player =
         Player(
