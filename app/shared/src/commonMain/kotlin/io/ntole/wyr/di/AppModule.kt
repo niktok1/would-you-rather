@@ -57,17 +57,21 @@ internal val uiModule =
  * [WyrEnvironment.parse]: no name is [WyrEnvironment.LOCAL], and one it does not know stops the app
  * here, before anything has started.
  *
- * Called once per process from each platform's entry point. [appDeclaration] is how Android hands
- * in its `Context`, which the shared code otherwise has no way to obtain — which is also why Koin
- * is an `api` dependency of this module rather than an implementation detail. The environment comes
- * in by name for the same reason: a plain string keeps `:core:network` off the entry points'
- * classpaths.
+ * Called once per process from each platform's entry point, which names the environment it was
+ * built or started for: Android's product flavor, the web build's `-Pwyr.env`, desktop's `WYR_ENV`
+ * variable, the iOS app's Info.plist. The name has no default, so no entry point can leave it out
+ * by accident and end up on LOCAL; `null` is for a build that set none. It is a plain string so
+ * that `:core:network` stays off the entry points' classpaths.
+ *
+ * [appDeclaration] is how Android hands in its `Context`, which the shared code otherwise has no
+ * way to obtain — which is also why Koin is an `api` dependency of this module rather than an
+ * implementation detail.
  *
  * Returns nothing: no entry point needs the `KoinApplication`, and keeping it out of the signature
  * keeps one more Koin type off their classpaths.
  */
 fun initKoin(
-    environmentName: String? = null,
+    environmentName: String?,
     appDeclaration: KoinAppDeclaration = {},
 ) {
     val environment = WyrEnvironment.parse(environmentName)
