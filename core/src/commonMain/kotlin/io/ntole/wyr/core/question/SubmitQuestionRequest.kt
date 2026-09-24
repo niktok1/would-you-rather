@@ -1,0 +1,27 @@
+package io.ntole.wyr.core.question
+
+import kotlinx.serialization.Serializable
+
+/**
+ * Submit a question of the player's own (CLAUDE.md §8d), with a POST to
+ * [io.ntole.wyr.core.api.WyrApi.Paths.QUESTIONS].
+ *
+ * Carries no author, for the reason [io.ntole.wyr.core.vote.VoteRequest] carries no player: the
+ * author is whoever the request's bearer token names.
+ *
+ * The server trims both options, as Kotlin's `trim()` does, and stores them trimmed. Trimmed, each
+ * must be non-blank, at most [io.ntole.wyr.core.api.WyrApi.Limits.MAX_OPTION_LENGTH] long and free
+ * of control characters (an option is one line of text, and PostgreSQL refuses a NUL), and the two
+ * must differ ignoring case. Those are the rules a player can break by what they type.
+ *
+ * [category] is the author's pick, and must be a real one. [QuestionCategory.UNKNOWN], which a
+ * missing category also reads as, is refused as a malformed request: no category picker offers it,
+ * so only a client bug can send it. The default is there for the wire enum rule (CLAUDE.md §5), not
+ * as a value to send.
+ */
+@Serializable
+public data class SubmitQuestionRequest(
+    public val optionA: String,
+    public val optionB: String,
+    public val category: QuestionCategory = QuestionCategory.UNKNOWN,
+)

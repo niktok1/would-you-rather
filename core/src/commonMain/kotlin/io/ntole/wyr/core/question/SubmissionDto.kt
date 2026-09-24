@@ -1,0 +1,30 @@
+package io.ntole.wyr.core.question
+
+import kotlinx.serialization.Serializable
+
+/**
+ * One of the requesting player's own submitted questions, as its author sees it (CLAUDE.md §8d):
+ * what a submission is answered with, and what [io.ntole.wyr.core.api.WyrApi.Paths.MY_QUESTIONS]
+ * lists.
+ *
+ * [id] is the question's id, the one the feed serves it under once it is approved. [optionA] and
+ * [optionB] are as stored, trimmed. [category] is the one the question is filed under, which a
+ * moderator may change when approving it.
+ *
+ * [category] and [status] must keep their defaults for unknown-value coercion to work — see
+ * [QuestionCategory] and [QuestionStatus].
+ *
+ * [rejectionReason] is the moderator's short reason, sent only for a [QuestionStatus.REJECTED]
+ * submission and null for any other. [submittedAt] is when the server stored the submission, in
+ * epoch milliseconds.
+ */
+@Serializable
+public data class SubmissionDto(
+    public val id: String,
+    public val optionA: String,
+    public val optionB: String,
+    public val category: QuestionCategory = QuestionCategory.UNKNOWN,
+    public val status: QuestionStatus = QuestionStatus.UNKNOWN,
+    public val rejectionReason: String? = null,
+    public val submittedAt: Long,
+)

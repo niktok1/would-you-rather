@@ -17,14 +17,21 @@ public object WyrApi {
         public const val AUTH_REFRESH: String = "/$VERSION/auth/refresh"
 
         /**
-         * The next batch of questions for the player the bearer token names. Requires a session,
-         * because the feed is per player (CLAUDE.md §8d): it runs in cycles, serving each question
-         * once per cycle in a new random order, and a batch holds only what the player has neither
-         * answered nor skipped ([SKIPS]) in the current one. The exception is a [Query.CATEGORY] with
-         * nothing in it due this cycle while something outside it is: that category is served again
-         * within the same cycle, `answeredBefore` on what the player has answered. That includes what
-         * the player skipped in it, which is provisional (CLAUDE.md §8b). There is no cursor; asking
-         * again is how to get the next batch.
+         * GET: the next batch of questions for the player the bearer token names. Requires a
+         * session, because the feed is per player (CLAUDE.md §8d): it runs in cycles, serving each
+         * question once per cycle in a new random order, and a batch holds only what the player has
+         * neither answered nor skipped ([SKIPS]) in the current one. The exception is a
+         * [Query.CATEGORY] with nothing in it due this cycle while something outside it is: that
+         * category is served again within the same cycle, `answeredBefore` on what the player has
+         * answered. That includes what the player skipped in it, which is provisional (CLAUDE.md
+         * §8b). There is no cursor; asking again is how to get the next batch.
+         *
+         * POST: submits a question of the session player's own, with a
+         * [io.ntole.wyr.core.question.SubmitQuestionRequest], answered 201 with its
+         * [io.ntole.wyr.core.question.SubmissionDto]. Requires a session, and earns nothing. The
+         * question is stored pending and served to nobody until a moderator approves it, and never to
+         * its author (CLAUDE.md §8d). A player may have at most [Limits.MAX_PENDING_SUBMISSIONS]
+         * pending at once.
          */
         public const val QUESTIONS: String = "/$VERSION/questions"
         public const val VOTES: String = "/$VERSION/votes"
@@ -44,6 +51,13 @@ public object WyrApi {
          * nothing: in particular it never starts the next cycle, which only [QUESTIONS] does.
          */
         public const val ME: String = "/$VERSION/me"
+
+        /**
+         * Every question the player the bearer token names has submitted ([QUESTIONS]), whatever its
+         * status, newest first, as a [io.ntole.wyr.core.question.SubmissionListDto]. Requires a
+         * session. A rejected one carries the moderator's reason.
+         */
+        public const val MY_QUESTIONS: String = "/$VERSION/me/questions"
     }
 
     public object Query {
@@ -63,9 +77,17 @@ public object WyrApi {
 
         /**
          * Longest option a question can have, counted as Kotlin's `String.length` counts, in UTF-16
-         * code units: an emoji can take two. Here rather than on the server so a client can check a
-         * question against the same number the server's option columns are sized by.
+         * code units: an emoji can take two. A submitted option is measured once trimmed
+         * ([io.ntole.wyr.core.question.SubmitQuestionRequest]). Here rather than on the server so a
+         * client can check a question against the same number the server's option columns are sized
+         * by.
          */
         public const val MAX_OPTION_LENGTH: Int = 200
+
+        /**
+         * Most submissions one player may have waiting for a moderator at once (CLAUDE.md §8d).
+         * Approved and rejected ones do not count, so a decision frees a place.
+         */
+        public const val MAX_PENDING_SUBMISSIONS: Int = 20
     }
 }
