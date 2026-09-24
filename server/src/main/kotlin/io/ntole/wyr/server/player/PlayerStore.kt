@@ -137,13 +137,15 @@ object PlayerStore {
 
     /**
      * Adds [points] to the player's total and returns the new total. Must run inside a transaction.
+     * [points] is negative to take points back, as an unlike takes back its like's point
+     * (`LikeStore.setLiked`).
      *
      * The addition happens in SQL (`total_points = total_points + n`) rather than as a read and
      * then a write, so two votes by one player landing together cannot both start from the same
-     * total and lose a point. At the server's READ COMMITTED (`DatabaseFactory`) that alone is
-     * enough, however many awards land at once: each waits for the row lock of the one before,
-     * then adds to the committed total, with no retry. A read-then-write at that level silently
-     * drops the point.
+     * total and lose a point, and nor can a burst of likes for one author. At the server's READ
+     * COMMITTED (`DatabaseFactory`) that alone is enough, however many awards land at once: each
+     * waits for the row lock of the one before, then adds to the committed total, with no retry. A
+     * read-then-write at that level silently drops the point.
      *
      * The total is read back in the same transaction, which holds the row lock from the update,
      * so it is exactly the total this award produced.

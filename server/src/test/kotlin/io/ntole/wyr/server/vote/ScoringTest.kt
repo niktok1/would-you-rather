@@ -10,4 +10,10 @@ class ScoringTest {
         // this is what holds the value to CLAUDE.md §8d. Changing it is a game-rule decision.
         assertEquals(1, Scoring.POINTS_PER_ANSWER)
     }
+
+    @Test
+    fun `a like held is worth exactly one point to the author`() {
+        // As above: the like tests check that a like pays POINTS_PER_LIKE, and this holds its value.
+        assertEquals(1, Scoring.POINTS_PER_LIKE)
+    }
 }

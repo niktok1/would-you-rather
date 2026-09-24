@@ -12,11 +12,16 @@ import org.jetbrains.exposed.v1.core.Table
 object Players : Table("players") {
     val id = varchar("id", 36)
     val createdAt = long("created_at")
+
+    /**
+     * What the player's answers earned, plus a point for each like their questions hold now
+     * (CLAUDE.md §8c). Only ever moves through `PlayerStore.addPoints`.
+     */
     val totalPoints = integer("total_points").default(0)
 
     /**
      * Every paid answer the player has given, re-answers included and replays not (CLAUDE.md §8d).
-     * Kept apart from [totalPoints], which likes are to pay into as well. Only ever moves through
+     * Kept apart from [totalPoints], which likes pay into as well. Only ever moves through
      * `PlayerStore.countAnswer`.
      */
     val answersGiven = integer("answers_given").default(0)
@@ -194,8 +199,33 @@ object Skips : Table("skips") {
 }
 
 /**
+ * The likes players hold on questions (CLAUDE.md §8d): a row while the player likes the question,
+ * and none once they unlike it, so every row is a like held now, and each is a point to the
+ * question's author (`LikeStore.setLiked`). Kept apart from [Votes], since a like is no answer: a
+ * player may like a question they have never answered, and liking one changes nothing that is due.
+ */
+object Likes : Table("likes") {
+    val playerId = varchar("player_id", 36).references(Players.id)
+    val questionId = varchar("question_id", 36).references(Questions.id)
+
+    /**
+     * A player likes a question once. The key is what enforces that, as for a vote: two first likes
+     * racing both find no like, and only the key refuses the second.
+     */
+    override val primaryKey = PrimaryKey(playerId, questionId)
+
+    init {
+        // For the like counts, read for every batch the feed serves, every like, and the stats'
+        // likes on an author's questions. question_id is the key's second column, so the key cannot
+        // find one question's likes, and PostgreSQL does not index a foreign key by itself. With
+        // player_id in it, a count and whether the player is among it need only the index.
+        index(isUnique = false, questionId, playerId)
+    }
+}
+
+/**
  * Every table the server owns. Schema creation and the test harness's clean-slate drop both read
  * this one list, so a new table belongs here rather than in a `SchemaUtils` call — otherwise it
  * is created in production but survives between tests on a shared database.
  */
-val appTables: Array<Table> = arrayOf(Players, Questions, QuestionCategories, Votes, Skips)
+val appTables: Array<Table> = arrayOf(Players, Questions, QuestionCategories, Votes, Skips, Likes)
