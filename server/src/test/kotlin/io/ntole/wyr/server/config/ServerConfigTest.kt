@@ -149,6 +149,36 @@ class ServerConfigTest {
     }
 
     @Test
+    fun `no proxy is trusted unless TRUSTED_PROXY_HOPS says how many`() {
+        assertEquals(0, ServerConfig.fromEnvironment { null }.trustedProxyHops)
+        mapOf("3" to 3, " 2 " to 2, "0" to 0, "" to 0, "   " to 0).forEach { (raw, hops) ->
+            assertEquals(
+                hops,
+                ServerConfig.fromEnvironment(mapOf("TRUSTED_PROXY_HOPS" to raw)::get).trustedProxyHops,
+                raw,
+            )
+        }
+    }
+
+    @Test
+    fun `a proxy count that is not a whole number of at least 0 fails at config load and names its variable`() {
+        listOf("-1", "three", "1.5", "true").forEach { raw ->
+            val failure =
+                assertFailsWith<IllegalArgumentException>("\"$raw\" should be rejected") {
+                    ServerConfig.fromEnvironment(mapOf("TRUSTED_PROXY_HOPS" to raw)::get)
+                }
+            assertContains(failure.message.orEmpty(), "TRUSTED_PROXY_HOPS")
+        }
+    }
+
+    @Test
+    fun `Render is recognised by the RENDER variable it sets to true`() {
+        assertTrue(ServerConfig.fromEnvironment(mapOf("RENDER" to "true")::get).onRender)
+        assertFalse(ServerConfig.fromEnvironment { null }.onRender)
+        assertFalse(ServerConfig.fromEnvironment(mapOf("RENDER" to "false")::get).onRender)
+    }
+
+    @Test
     fun `environment values win over defaults`() {
         val env =
             mapOf(

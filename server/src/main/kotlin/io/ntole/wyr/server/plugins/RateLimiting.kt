@@ -17,6 +17,7 @@ import io.ntole.wyr.server.auth.TokenService
 import io.ntole.wyr.server.auth.verifiedPlayerId
 import io.ntole.wyr.server.config.RateLimits
 import io.ntole.wyr.server.config.RequestBudget
+import io.ntole.wyr.server.config.ServerConfig
 import io.ntole.wyr.server.moderation.AdminToken
 import io.ntole.wyr.server.moderation.admits
 import kotlin.time.Duration
@@ -72,7 +73,8 @@ private sealed interface LimitKey {
 }
 
 /**
- * Installs Ktor's rate limiter, with a budget per [RouteLimit] group from [limits].
+ * Installs Ktor's rate limiter, with a budget per [RouteLimit] group from [ServerConfig.rateLimits],
+ * and client addresses read through [ServerConfig.trustedProxyHops] proxies ([clientAddress]).
  *
  * It counts in memory, per server instance: a second instance would give every client each budget
  * again, so running two needs a shared store first. A key's count is dropped once its period is over,
@@ -84,16 +86,17 @@ private sealed interface LimitKey {
  * `Retry-After` in whole seconds, which `StatusPages` renders as `RATE_LIMITED`, and one INFO line.
  */
 fun Application.installRateLimits(
-    limits: RateLimits,
+    config: ServerConfig,
     tokens: TokenService,
     adminToken: AdminToken?,
 ) {
+    val keys = LimitKeys(tokens, config.trustedProxyHops)
     install(RateLimit) {
         RouteLimit.entries.forEach { limit ->
             register(limit.limitName) {
-                val budget = limit.budgetIn(limits)
+                val budget = limit.budgetIn(config.rateLimits)
                 rateLimiter(limit = budget.requests, refillPeriod = budget.per)
-                requestKey { call -> call.limitKey(limit.keyedBy, tokens) }
+                requestKey { call -> keys.of(call, limit.keyedBy) }
                 if (limit == RouteLimit.ADMIN_TOKEN_FAILURES) {
                     // Checks the token as requireAdmin will, so only a request it will refuse spends from
                     // this, and the moderator's own are neither counted nor refused by it. A weight of 0 is
@@ -103,7 +106,7 @@ fun Application.installRateLimits(
                 // In place of Ktor's default, which also sends X-RateLimit-* headers: on a route in two
                 // groups they would describe whichever was asked first.
                 modifyResponse { call, state ->
-                    if (state is RateLimiter.State.Exhausted) call.refuse(limit, state.toWait, tokens)
+                    if (state is RateLimiter.State.Exhausted) call.refuse(limit, state.toWait, keys)
                 }
             }
         }
@@ -119,18 +122,24 @@ fun Route.rateLimit(
     build: Route.() -> Unit,
 ): Route = rateLimit(limit.limitName, build)
 
-private fun ApplicationCall.limitKey(
-    keyedBy: KeyedBy,
-    tokens: TokenService,
-): LimitKey {
-    if (keyedBy == KeyedBy.PLAYER) tokens.verifiedPlayerId(request)?.let { return LimitKey.Player(it) }
-    return LimitKey.Address(request.local.remoteAddress)
+/** Picks the [LimitKey] a request spends, as its group is [KeyedBy]. */
+private class LimitKeys(
+    private val tokens: TokenService,
+    private val trustedProxyHops: Int,
+) {
+    fun of(
+        call: ApplicationCall,
+        keyedBy: KeyedBy,
+    ): LimitKey {
+        if (keyedBy == KeyedBy.PLAYER) tokens.verifiedPlayerId(call.request)?.let { return LimitKey.Player(it) }
+        return LimitKey.Address(call.request.clientAddress(trustedProxyHops))
+    }
 }
 
 private fun ApplicationCall.refuse(
     limit: RouteLimit,
     wait: Duration,
-    tokens: TokenService,
+    keys: LimitKeys,
 ) {
     val seconds = wait.retryAfterSeconds()
     response.header(HttpHeaders.RetryAfter, seconds)
@@ -138,7 +147,7 @@ private fun ApplicationCall.refuse(
     // Once per refused request, since the limiter stops at the first group that refuses. Never a
     // header's value: not the token, and not the address, which can come from one.
     val whose =
-        when (val key = limitKey(limit.keyedBy, tokens)) {
+        when (val key = keys.of(this, limit.keyedBy)) {
             is LimitKey.Player -> "player ${key.id}"
             is LimitKey.Address -> "a client address"
         }

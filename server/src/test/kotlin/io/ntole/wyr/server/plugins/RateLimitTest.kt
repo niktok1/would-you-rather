@@ -186,22 +186,21 @@ class RateLimitTest {
         }
 
     @Test
-    fun `a refused request is logged once, naming the limit and never a credential`() {
-        val logged = ListAppender<ILoggingEvent>().apply { start() }
-        val root = LoggerFactory.getLogger(org.slf4j.Logger.ROOT_LOGGER_NAME) as Logger
-        root.addAppender(logged)
-        try {
+    fun `a refused request is logged once, naming the limit and never a credential`() =
+        withLogCapture { logged ->
             val limits =
                 NO_PRACTICAL_LIMIT.copy(
                     votes = RequestBudget(1, 1.minutes),
-                    guests = RequestBudget(2, 1.minutes),
+                    guests = RequestBudget(1, 1.minutes),
                 )
-            runServer("logged", limits) { client ->
+            // The mints' address comes from a trusted X-Forwarded-For, a header's value like the token.
+            // The player's own mint came from the socket peer, an address of its own.
+            runServer("logged", limits, trustedProxyHops = 2) { client ->
                 val player = client.guest()
                 client.vote(player)
                 assertRateLimited(client.vote(player), "the second vote")
-                client.guest()
-                assertRateLimited(client.post(WyrApi.Paths.AUTH_GUEST), "the third guest")
+                client.post(WyrApi.Paths.AUTH_GUEST) { forwardedFor(CLIENT, PROXY) }
+                assertRateLimited(client.post(WyrApi.Paths.AUTH_GUEST) { forwardedFor(CLIENT, PROXY) }, "a third guest")
 
                 val events = logged.list.filter { "rate limit" in it.formattedMessage }
                 assertEquals(2, events.size, "one line per refused request: ${events.map { it.formattedMessage }}")
@@ -216,11 +215,69 @@ class RateLimitTest {
                     "rate limit guests reached for a client address: POST ${WyrApi.Paths.AUTH_GUEST}" in guest,
                     guest,
                 )
+                assertFalse(CLIENT in guest, "and so does the address")
             }
-        } finally {
-            root.detachAppender(logged)
         }
-    }
+
+    @Test
+    fun `X-Forwarded-For is ignored unless proxies are trusted`() =
+        runServer("forwarded-untrusted", NO_PRACTICAL_LIMIT.copy(guests = TWO_A_MINUTE)) { client ->
+            // Were it read, each of these would be a client of its own, and none would be refused.
+            repeat(2) { index -> client.post(WyrApi.Paths.AUTH_GUEST) { forwardedFor("203.0.113.$index") } }
+
+            assertRateLimited(client.post(WyrApi.Paths.AUTH_GUEST) { forwardedFor("203.0.113.9") }, "the third mint")
+        }
+
+    @Test
+    fun `behind trusted proxies each client address has a budget of its own`() =
+        runServer(
+            "forwarded-per-address",
+            NO_PRACTICAL_LIMIT.copy(guests = TWO_A_MINUTE),
+            trustedProxyHops = 2,
+        ) { client ->
+            suspend fun mintFrom(address: String) =
+                client.post(WyrApi.Paths.AUTH_GUEST) { forwardedFor(address, PROXY) }
+
+            repeat(2) { assertEquals(HttpStatusCode.OK, mintFrom(CLIENT).status) }
+            assertRateLimited(mintFrom(CLIENT), "the client's third")
+
+            assertEquals(HttpStatusCode.OK, mintFrom(OTHER_CLIENT).status, "another address behind the same proxies")
+        }
+
+    @Test
+    fun `a client's own X-Forwarded-For entries do not change its address`() =
+        runServer("forwarded-spoofed", NO_PRACTICAL_LIMIT.copy(guests = TWO_A_MINUTE), trustedProxyHops = 2) { client ->
+            // The proxies append to what the client sent, so its own entries end up on the left.
+            suspend fun mintClaiming(address: String) =
+                client.post(WyrApi.Paths.AUTH_GUEST) { forwardedFor(address, CLIENT, PROXY) }
+
+            repeat(2) { index -> assertEquals(HttpStatusCode.OK, mintClaiming("198.51.100.$index").status) }
+
+            assertRateLimited(mintClaiming("198.51.100.99"), "a third mint claiming yet another address")
+        }
+
+    @Test
+    fun `on Render with no trusted proxies the server warns at boot`() =
+        withLogCapture { logged ->
+            fun warnings() =
+                logged.list
+                    .filter { it.level.levelStr == "WARN" && "TRUSTED_PROXY_HOPS" in it.formattedMessage }
+                    .map { it.formattedMessage }
+
+            runServer(
+                "render-untrusted",
+                RateLimits.DEFAULT,
+                onRender = true,
+            ) { client -> client.get(WyrApi.Paths.HEALTH) }
+            assertEquals(1, warnings().size, "every client would share each per-address budget")
+
+            logged.list.clear()
+            runServer("render-trusted", RateLimits.DEFAULT, trustedProxyHops = 3, onRender = true) { client ->
+                client.get(WyrApi.Paths.HEALTH)
+            }
+            runServer("laptop", RateLimits.DEFAULT) { client -> client.get(WyrApi.Paths.HEALTH) }
+            assertEquals(emptyList(), warnings())
+        }
 
     /** A group of routes, and a request to it that its budget lets through as [allowed]. */
     private class Group(
@@ -302,6 +359,8 @@ class RateLimitTest {
     private fun runServer(
         databaseName: String,
         limits: RateLimits,
+        trustedProxyHops: Int = 0,
+        onRender: Boolean = false,
         block: suspend (HttpClient) -> Unit,
     ) = testApplication {
         val database = testDatabaseFor("rate-limit-$databaseName")
@@ -319,6 +378,8 @@ class RateLimitTest {
                 allowedWebOrigins = emptyList(),
                 adminToken = ADMIN_TOKEN,
                 rateLimits = limits,
+                trustedProxyHops = trustedProxyHops,
+                onRender = onRender,
             )
 
         application { wyrModule(config) }
@@ -332,7 +393,28 @@ class RateLimitTest {
         const val CONSOLE_MOST_ANSWERS = 50
         val TWO_A_MINUTE = RequestBudget(requests = 2, per = 1.minutes)
 
+        /** A client, and the proxy that reached the server, as two trusted proxies record them. */
+        const val CLIENT = "203.0.113.7"
+        const val OTHER_CLIENT = "203.0.113.8"
+        const val PROXY = "10.0.0.1"
+
         suspend fun HttpClient.guest(): SessionDto = post(WyrApi.Paths.AUTH_GUEST).body()
+
+        fun HttpRequestBuilder.forwardedFor(vararg entries: String) {
+            header(HttpHeaders.XForwardedFor, entries.joinToString(", "))
+        }
+
+        /** Runs [block] with every log event recorded, from any logger. */
+        fun withLogCapture(block: (ListAppender<ILoggingEvent>) -> Unit) {
+            val logged = ListAppender<ILoggingEvent>().apply { start() }
+            val root = LoggerFactory.getLogger(org.slf4j.Logger.ROOT_LOGGER_NAME) as Logger
+            root.addAppender(logged)
+            try {
+                block(logged)
+            } finally {
+                root.detachAppender(logged)
+            }
+        }
 
         /** An access token for [playerId] as the server under test would issue it, but for its secret. */
         fun forgedAccessToken(playerId: String): String {

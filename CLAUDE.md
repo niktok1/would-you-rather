@@ -298,6 +298,17 @@ This project must never be attributed to any employer identity.
   read at boot, so rotating it is changing the variable and restarting the service, and the old
   token is dead from then on. A browser on an `ALLOWED_WEB_ORIGINS` origin may send its header
   (CORS). The dev console's *Moderation* section takes it typed and holds it in memory only.
+- `TRUSTED_PROXY_HOPS` (`render.yaml`: 3) is how many proxies in front of the service append to
+  `X-Forwarded-For`: Cloudflare's edge and two of Render's proxies behind it. The per-address rate
+  limits (§8b) take the client's address as the entry that many from the right (`clientAddress`), so
+  entries a client writes itself, which land on the left, are never read, and a chain shorter than
+  that is not trusted at all. 0, the default, trusts no header and keys by the socket peer, which on
+  a laptop is the client and on Render is the proxy, one budget for everyone: the server warns at
+  boot when `RENDER` is `true` and the count is 0. Render does not document the chain. The 3 is the
+  chain others report on requests reaching live Render services (client, a Cloudflare `172.x`, a
+  Render `10.x`), and is to be checked once deployed (NEXT-SESSION.md). Too high a count lets a client pick
+  its own address; too low gives many clients Cloudflare's. No forwarded-header plugin: Ktor's
+  `XForwardedHeaders` would be a new dependency for the one line this needs.
 - The Docker build sets `WYR_SERVER_ONLY=1`, which makes `settings.gradle.kts` skip the app
   modules. Without it the Android Gradle plugin fails at configuration time for want of an SDK.
 - Free tier caveats to design around: free web services spin down after ~15 min idle (cold
@@ -386,11 +397,12 @@ accounts exist.
   from every other group's. The budgets are `RateLimits.DEFAULT`, each count overridable by its
   `RATE_LIMIT_*` variable (`RateLimits.fromEnvironment`; one that is not a whole number of at least 1
   fails at boot, naming it):
-  - *Per client address*, for a caller with no session to name: guest minting 10 an hour, refreshes
-    30 a minute, the admin routes 60 a minute together, and on top of that, admin requests with a
-    wrong or missing token 10 a minute. A request with the right token neither spends that last
-    budget nor is refused by it, so guessing is bounded without locking the moderator out; it is
-    asked first, so guesses refused by it spend none of the moderator's 60.
+  - *Per client address* (behind Render's proxies, the one `X-Forwarded-For` entry they vouch for:
+    `TRUSTED_PROXY_HOPS`, §8), for a caller with no session to name: guest minting 10 an hour,
+    refreshes 30 a minute, the admin routes 60 a minute together, and on top of that, admin requests
+    with a wrong or missing token 10 a minute. A request with the right token neither spends that
+    last budget nor is refused by it, so guessing is bounded without locking the moderator out; it
+    is asked first, so guesses refused by it spend none of the moderator's 60.
   - *Per player*, so players behind one address do not share a budget: the feed, votes and skips
     120 a minute each (the console's *Answer N* sends at most 50 votes in a row), likes 60 a minute,
     submissions 30 an hour (the 20-pending cap still applies), and `GET /v1/me` and

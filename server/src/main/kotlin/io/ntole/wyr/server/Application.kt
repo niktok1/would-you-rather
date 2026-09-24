@@ -51,7 +51,7 @@ fun Application.wyrModule(config: ServerConfig) {
     val adminToken = config.adminToken?.let { token -> AdminToken(token) }
 
     installPlugins(config, tokens)
-    installRateLimits(config.rateLimits, tokens, adminToken)
+    installRateLimits(config, tokens, adminToken)
 
     routing {
         // Render pings this to decide whether the service is live. In no rate-limit group, so a check
@@ -82,6 +82,13 @@ private fun Application.warnAboutInsecureDefaults(config: ServerConfig) {
         log.warn(
             "DATABASE_URL is unset — running on in-memory H2. All players, votes, and points are " +
                 "discarded on shutdown.",
+        )
+    }
+    if (config.onRender && config.trustedProxyHops == 0) {
+        log.warn(
+            "TRUSTED_PROXY_HOPS is 0 on Render, so every request's address is Render's proxy and every " +
+                "client shares each per-address rate limit, such as ${config.rateLimits.guests.requests} new " +
+                "guests an hour for everyone together. render.yaml sets it to 3.",
         )
     }
     if (config.allowedWebOrigins.isEmpty()) {

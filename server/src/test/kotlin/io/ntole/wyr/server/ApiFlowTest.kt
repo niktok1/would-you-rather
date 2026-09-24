@@ -1471,6 +1471,8 @@ class ApiFlowTest {
                 allowedWebOrigins = emptyList(),
                 adminToken = adminToken,
                 rateLimits = NO_PRACTICAL_LIMIT,
+                trustedProxyHops = 0,
+                onRender = false,
             )
 
         application { wyrModule(config) }
