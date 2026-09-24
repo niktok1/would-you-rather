@@ -41,7 +41,8 @@ internal fun QuestionCategory.toDomain(): Category =
  * Domain to wire, for category filters.
  *
  * [Category.OTHER] has no wire equivalent to ask for — it is a local bucket, not a server-side
- * category — so filtering by it means "no filter".
+ * category — so it maps to `null`. No feed is filtered to it: it is not in [Category.selectable],
+ * and `QuestionRepository.setCategory` refuses it.
  */
 internal fun Category.toWireOrNull(): QuestionCategory? =
     when (this) {
