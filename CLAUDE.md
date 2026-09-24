@@ -192,6 +192,15 @@ three, adding an enum value server-side makes already-installed clients fail des
 outright. Enums that are structurally closed (e.g. `OptionSide` — a question has exactly two
 sides) are exempt and must stay closed.
 
+A **list** of such an enum needs more, because `coerceInputValues` only coerces a property's own
+value, never an element of a list: one unknown element fails the whole payload. So every list
+property of a growable enum MUST be declared with a serializer that decodes an unknown element as
+`UNKNOWN` (`QuestionCategoryListSerializer` in `:core`, applied with `@Serializable(with = ...)`),
+and MUST default to an empty list, which the client reads as it reads `UNKNOWN`. An unknown element
+becomes `UNKNOWN` rather than being dropped: the server decodes with the same serializer, and a
+dropped element would let a request naming a category the server does not know through as if it
+had named only the rest. `WyrJsonTest` pins it.
+
 The client half lives in `WyrJson` (`:core:network`); the server half is `encodeDefaults = true`
 in `ServerJson` (`:server`), because the client can only coerce into a default that is actually
 present in the payload. Both are cross-module obligations: changing either is a contract change.

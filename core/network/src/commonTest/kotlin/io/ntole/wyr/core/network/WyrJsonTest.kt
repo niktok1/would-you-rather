@@ -4,11 +4,14 @@ import io.ntole.wyr.core.error.ErrorCode
 import io.ntole.wyr.core.error.ErrorDto
 import io.ntole.wyr.core.player.PlayerStatsDto
 import io.ntole.wyr.core.question.QuestionCategory
+import io.ntole.wyr.core.question.QuestionCategoryListSerializer
 import io.ntole.wyr.core.question.QuestionDto
 import io.ntole.wyr.core.question.QuestionStatus
 import io.ntole.wyr.core.question.SubmissionDto
+import kotlinx.serialization.SerializationException
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 
 /**
  * Pins the client half of the wire enum rule (CLAUDE.md §5).
@@ -26,6 +29,39 @@ class WyrJsonTest {
 
         assertEquals(QuestionCategory.UNKNOWN, question.category)
         assertEquals("fly", question.optionA)
+    }
+
+    @Test
+    fun `a category this build has never heard of in a list decodes as UNKNOWN and keeps the rest`() {
+        val categories =
+            WyrJson.decodeFromString(
+                QuestionCategoryListSerializer,
+                """["FOOD","CATEGORY_FROM_THE_FUTURE","ETHICS","ANOTHER_FROM_THE_FUTURE"]""",
+            )
+
+        assertEquals(
+            listOf(QuestionCategory.FOOD, QuestionCategory.UNKNOWN, QuestionCategory.ETHICS, QuestionCategory.UNKNOWN),
+            categories,
+        )
+    }
+
+    @Test
+    fun `coercion alone does not reach the elements of a list so categories need a serializer of their own`() {
+        // The premise of QuestionCategoryListSerializer (CLAUDE.md §5): if this ever decodes, the
+        // library has started coercing elements and the serializer can go.
+        assertFailsWith<SerializationException> {
+            WyrJson.decodeFromString<List<QuestionCategory>>("""["FOOD","CATEGORY_FROM_THE_FUTURE"]""")
+        }
+    }
+
+    @Test
+    fun `a list of categories goes on the wire as a plain array of their names`() {
+        val categories = listOf(QuestionCategory.FOOD, QuestionCategory.ETHICS)
+
+        val encoded = WyrJson.encodeToString(QuestionCategoryListSerializer, categories)
+
+        assertEquals("""["FOOD","ETHICS"]""", encoded)
+        assertEquals(categories, WyrJson.decodeFromString(QuestionCategoryListSerializer, encoded))
     }
 
     @Test

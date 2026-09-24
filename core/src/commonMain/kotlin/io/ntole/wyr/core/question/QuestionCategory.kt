@@ -10,8 +10,11 @@ import kotlinx.serialization.Serializable
  * deserialize the question at all.
  *
  * That guarantee has two halves, and both are required:
- *  1. every property of this type declares a default of [UNKNOWN] (see [QuestionDto]), and
+ *  1. every property of this type declares a default of [UNKNOWN], and
  *  2. the client `Json` instance is configured with `coerceInputValues = true`.
+ *
+ * Coercion never reaches the elements of a list, so a list of categories keeps the guarantee
+ * through [QuestionCategoryListSerializer] instead (CLAUDE.md §5).
  *
  * Never send [UNKNOWN] over the wire from the server.
  */
