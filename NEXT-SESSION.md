@@ -233,12 +233,12 @@ automatically from every green commit on `main` (its URL is on its Render page).
 - The refresh-token grace window (`feat/refresh-grace-window`, CLAUDE.md §8a), on H2. V2 adds the
   previous token's three columns; `SchemaDriftTest` holds it to `Tables.kt`, and `MigrationsTest`
   now builds its database from before migrations as V1 alone and pins V2 on it both ways, baselined
-  by this boot and baselined by an earlier one (production's path), rows kept with the new columns
-  NULL. `PlayerStoreTest` pins a displaced token spent within the grace and refused at its end, a
-  token spent twice then dead, the displaced token's own expiry, grace 0, and both races at READ
-  COMMITTED: two refreshes with the current token both through, the first's token then the
-  previous one; two with the previous token, exactly one. `ApiFlowTest` retries a refresh whose
-  answer was lost and keeps the player and their point, and refuses a third use. Dropping the
+  by this boot and baselined by an earlier one (production takes one or the other), rows kept with
+  the new columns NULL. `PlayerStoreTest` pins a displaced token spent within the grace and refused
+  at its end, a token spent twice then dead, the displaced token's own expiry, grace 0, and both
+  races at READ COMMITTED: two refreshes with the current token both through, the first's token
+  then the previous one; two with the previous token, exactly one. `ApiFlowTest` retries a refresh
+  whose answer was lost and keeps the player and their point, and refuses a third use. Dropping the
   previous-token branch, its grace bound or its expiry, making the presented token the previous one,
   reading then updating by id, or the route passing no grace each fails them. On the client,
   `BearerSessionTest` and `SharedSessionStoreTest` pin the settling refresh when another tab's
@@ -280,9 +280,10 @@ automatically from every green commit on `main` (its URL is on its Render page).
 - **V2 on PostgreSQL, and on production.** `SchemaDriftTest` and `MigrationsTest` run V2 on
   PostgreSQL only in the `server-postgres` CI job, which has not seen this branch; the script is
   H2's draft rewritten by hand, the same statements V1 used for its unique constraint. Production
-  (`wyr-postgres`, recorded `1 BASELINE`) runs V2 at its next Manual Deploy: three nullable columns
-  and a unique constraint on a table of a few rows, so no rewrite and a moment's lock. Check its
-  history reads `1 BASELINE`, `2 SQL` afterwards.
+  (`wyr-postgres`, provably V1; nothing here records a migrating build booting on it yet) runs V2 at
+  its next Manual Deploy, baselining it in the same boot if no earlier one did: three nullable
+  columns and a unique constraint on a table of a few rows, so no rewrite and a moment's lock. Check
+  its history reads `1 BASELINE`, `2 SQL` afterwards.
 - **The settling refresh in a real browser or desktop pair.** Two tabs sharing `localStorage`, or
   two desktop instances sharing JVM preferences, have raced a refresh only in
   `SharedSessionStoreTest` on `MockEngine`. JVM preferences sync between processes on their own
@@ -632,10 +633,10 @@ known `PlayViewModel` issues (the Play tab is frozen).
   locally and on PostgreSQL in CI. A database a server built before migrations is recorded at V1 by
   this build's first boot on it, without running V1, so its history shows `1 BASELINE`; a database
   nothing had booted on runs V1 and shows `1 SQL`. The Render production database, built by `4cdc819`
-  at the first deploy with the same table definitions, was recorded `1 BASELINE`, and V2 runs on it
-  at its next deploy. Before a migrating build first boots on any other database it did not build,
-  compare schemas read-only (`pg_dump --schema-only`, CLAUDE.md §8b), since the baseline checks only
-  that V1's tables exist.
+  at the first deploy with the same table definitions, is recorded `1 BASELINE` by the first
+  migrating build that boots on it, and runs V2 in that boot or a later one. Before a migrating
+  build first boots on any other database it did not build, compare schemas read-only
+  (`pg_dump --schema-only`, CLAUDE.md §8b), since the baseline checks only that V1's tables exist.
   Never let `WYR_TEST_JDBC_URL` name the production database: the test suite and `pendingMigration`
   wipe the database it names. V2 moved `MigrationsTest`'s pre-migration database onto V1 (V1 run
   alone, the history dropped) and made it read rows with `SELECT *`, since `Tables.kt` now names

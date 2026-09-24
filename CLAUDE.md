@@ -540,16 +540,18 @@ seed (`Migrations`, `DatabaseFactory.init`). Nothing builds a table any other wa
   already holds exactly V1, and it is recorded at V1 without running it: its history reads
   `1 BASELINE`, where an empty database runs V1 and reads `1 SQL`. The Render production database
   is the first kind: `4cdc819` built it on 2026-09-24, the first deploy, and `Tables.kt` changed no
-  column, key or index between then and V1, so it held exactly V1 and was recorded `1 BASELINE`.
-  V2 (the refresh-token grace window, §8a) runs on it at its next deploy.
+  column, key or index between then and V1, so it holds exactly V1, and the first migrating build to
+  boot on it records `1 BASELINE`. §8 records no such deploy yet, so its next Manual Deploy may
+  baseline it and run V2 (the refresh-token grace window, §8a) in one boot, or run V2 alone on an
+  earlier baseline; either way its history then reads `1 BASELINE`, `2 SQL`.
   `Migrations.migrate` takes the baseline itself (`baselineVersion` 1), and only for a database
   holding every table V1 builds (`TABLES_BEFORE_MIGRATIONS`) and no history table; Flyway's
   `baselineOnMigrate` is off. Any other database with tables and no history fails the boot, rather
   than being recorded at V1 whatever it holds. `MigrationsTest` pins all three, the data kept through
-  every later script, and production's own path (recorded at V1 by an earlier boot, then migrated by
-  a later build). `SchemaDriftTest` pinned, while V1 was the only script, that V1 builds exactly what
-  `SchemaUtils.create` built, every table, column, key, index and constraint name included, on H2 and
-  on PostgreSQL.
+  every later script, and both paths production can take (recorded at V1 by the boot that runs the
+  later scripts, or by an earlier boot, then migrated by a later build). `SchemaDriftTest` pinned,
+  while V1 was the only script, that V1 builds exactly what `SchemaUtils.create` built, every table,
+  column, key, index and constraint name included, on H2 and on PostgreSQL.
 - *Before a migrating build first boots on any other database it did not build*, compare that
   database's schema with one this build migrated, read-only (`pg_dump --schema-only` of each, then a
   diff); the production database needs no such check, being provably V1 (above). The baseline checks

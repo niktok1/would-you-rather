@@ -61,9 +61,9 @@ internal class MigrationsTest(
     }
 
     /**
-     * The path the production database takes (CLAUDE.md §8b): the boot of a build whose only script
-     * was V1 recorded it at V1, and the first boot of a later build runs what came after, on the rows
-     * its players wrote in between.
+     * One path the production database can take (CLAUDE.md §8b), the test above being the other: the
+     * boot of a build whose only script was V1 recorded it at V1, and the first boot of a later build
+     * runs what came after, on the rows its players wrote in between.
      */
     @Test
     fun `a database an earlier boot recorded at V1 takes every later script, its data kept`() {
