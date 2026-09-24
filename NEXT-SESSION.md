@@ -788,16 +788,18 @@ known `PlayViewModel` issues (the Play tab is frozen).
   whose `WHERE` holds the whole check and whose `SET` copies the current columns into the previous
   ones in SQL: a read first, or an update by id, lets two racers with the previous token both
   through (`PlayerStoreTest` races it). Keep stamping the rotation with no bound too: a bound set
-  later reads it, and so does a rollback to a build from before the unbounded grace. A bound, if
-  set, must stay longer than the client's `REFRESH_TIMEOUT` (5 minutes), and nothing but the KDocs
-  on each side ties them, since `:server` cannot see `:core:network`. On the client, a refresh that
-  finds the store moved on to the same player's other session refreshes once more as it
-  (`refreshAs`), since both tabs' refreshes go through and a previous token survives one refresh
-  only. `REFRESH_GRACE_SECONDS` that is not a whole number from 0 to a year fails the boot, naming
-  it. The cost, accepted for guests: a used copy of a refresh token keeps working beside the
+  later reads it, and so does a rollback to a build from before the unbounded grace. A rollback to
+  a build from before V2, such as prod's `4cdc819`, rotates without the previous-token columns and
+  leaves them stale: clear them before rolling forward (the `UPDATE` is in CLAUDE.md §8a, *The
+  rotation*). A bound, if set, must stay longer than the client's `REFRESH_TIMEOUT` (5 minutes), and
+  nothing but the KDocs on each side ties them, since `:server` cannot see `:core:network`. On the
+  client, a refresh that finds the store moved on to the same player's other session refreshes once
+  more as it (`refreshAs`), since both tabs' refreshes go through and a previous token survives one
+  refresh only. `REFRESH_GRACE_SECONDS` that is not a whole number from 0 to a year fails the boot,
+  naming it. The cost, accepted for guests: a used copy of a refresh token keeps working beside the
   original while the two take turns refreshing. What remains, in CLAUDE.md §8b (*Refresh answers
-  lost past the grace*): a refresh that spends the previous token and whose answer is lost too,
-  as a settling refresh's lost answer usually does, leaves a spent token.
+  lost past the grace*): a refresh that spends the previous token and whose answer is lost too, as a
+  settling refresh's lost answer usually does, leaves a spent token.
 - **A session write returns once it is durable, and suspends for it** (`TokenStorage.write`,
   CLAUDE.md §8a). `AndroidTokenStorage` used `apply()`, which returns before the file is written,
   so a kill just after a refresh could come back with the rotated-out token and orphan the guest.

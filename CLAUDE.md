@@ -387,7 +387,15 @@ auth SDK, satisfying §2.
     by then and goes through too, the first's new token becoming the previous one; of two racing with
     the previous token, exactly one goes through. `PlayerStoreTest` races both and pins every rule.
     It stamps every rotation, bound or not: a bound set later reads the stamp, and so does a rollback
-    to a build from before this rule, whose unset `REFRESH_GRACE_SECONDS` means 10 minutes.
+    to a build from before this rule, whose unset `REFRESH_GRACE_SECONDS` means 10 minutes. A build
+    from before V2, `4cdc819` among them (production's until V2 ships), rotates without touching the
+    previous token's columns, so after any time on one they can name a token displaced several
+    rotations back, which with no bound works again once this rule is back, until that player's next
+    refresh or its own expiry. So before rolling forward from such a build, while it still runs,
+    clear them: `UPDATE players SET previous_refresh_token_hash = NULL,
+    previous_refresh_token_expires_at = NULL, previous_refresh_token_rotated_at = NULL`. That costs
+    only a lost answer from before the rollback whose player has not been back since. A bound set for
+    the roll-forward is no substitute: a stale token not yet displaced works again once it is unset.
 - `POST /v1/auth/link` does not exist yet. It is the intended next step and is what will make an
   account survive reinstall and sync across devices.
 - On the client, `SessionStore` is the only copy of the credentials: Ktor's bearer cache is off

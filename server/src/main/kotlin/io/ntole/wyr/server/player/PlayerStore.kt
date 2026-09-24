@@ -62,7 +62,9 @@ object PlayerStore {
      * previous one, which one more refresh may spend until the new token's first use displaces it;
      * spent as the previous one, it is displaced by the token current then, which becomes the previous
      * one in its place, and it never works again. The stamp is written with no bound too: a bound set
-     * later reads it, and so does a rollback to a build that bounds the grace by default.
+     * later reads it, and so does a rollback to a build that bounds the grace by default. A build from
+     * before V2 rotates without touching the previous columns, so after a rollback to one they are
+     * stale and must be cleared before rolling forward (CLAUDE.md §8a, *The rotation*).
      *
      * Returns `null` alike for an unknown, an expired, a spent and a displaced token, and one past a
      * bound — the caller must not be able to tell them apart, and neither should an attacker probing
