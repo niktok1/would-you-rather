@@ -437,10 +437,18 @@ accounts exist.
   re-answering, on average, and up to 240 where two windows meet (*decided 2026-09-23:* a re-answer
   keeps paying every time, inside its cycle or not), and a script gets 10 fresh guests an hour per
   address, 20 where two windows meet, each with budgets of its own, so liking one author's questions
-  is bounded per address and per hour rather than per author. Counts are in memory and per instance:
-  right for the one Render instance, but a second would grant every budget again, so running two
-  needs a shared store first (Render Key Value, say). A restart, which a deploy or a free instance's
-  spin-down is, resets them.
+  is bounded per address and per hour, not per author (*Likes from fresh guests*, below, is still
+  open). Counts are in memory and per instance: right for the one Render instance, but a second
+  would grant every budget again, so running two needs a shared store first (Render Key Value, say).
+  A restart, which a deploy or a free instance's spin-down is, resets them.
+- **Likes from fresh guests** — *provisional — user decision, not yet decided.* A like pays its
+  author once per player (§8d, *Likes*), and guests cost nothing to mint (§8a), so a script minting
+  guests pays one author a point per guest for each question the author has approved. Rate limiting
+  bounds that per address and not per author: 10 guests an hour from one address, 20 where two
+  windows meet, each able to like every one of the author's questions, and without bound across
+  addresses. Built as §8d has it: every like held pays, whoever holds it. The options: accept the
+  per-address bound; pay a like only from a player with some play of their own (answers given,
+  say); or cap what likes pay one author in a window.
 - **Schema migrations** — *interim policy, decided 2026-09-23:* nothing is deployed, so until the
   first Render deploy a schema change ships as a fresh database through `SchemaUtils.create`, and
   `render.yaml` keeps `autoDeployTrigger: "off"` so connecting the blueprint cannot deploy early.
