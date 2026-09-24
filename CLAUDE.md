@@ -508,7 +508,8 @@ production; `SchemaUtils.create` is left to the store tests.
   wait, up to 50 tries a second apart, and then find nothing to do. `MigrationsTest` boots four at
   once, on PostgreSQL only: H2 does not serialize two migrations of one database, and never needs to,
   since the server's H2 is in memory and belongs to one process. The seed runs once the migration
-  has committed, and tolerates a racing boot by itself.
+  has committed, and tolerates a racing boot by itself: the second insert fails on the key and
+  Exposed's rerun finds the seeds (`SeedTest` stages it on H2).
 
 ## 8c. Scoring rules — flat
 

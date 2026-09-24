@@ -21,8 +21,9 @@ object Seed {
      * empty and both insert. The second's insert waits on the first's uncommitted keys and fails on
      * the primary key once they commit. Exposed then rolls back and re-runs the seed's transaction
      * (3 attempts by default), and this check now sees the committed seeds and returns, so both
-     * servers boot. That recovery is Exposed's retry, not anything here, and it has not been run
-     * against Postgres.
+     * servers boot. That recovery is Exposed's retry, not anything here. SeedTest stages it on H2;
+     * on PostgreSQL only MigrationsTest's boots at once reach it, and only when they happen to
+     * collide.
      */
     fun questionsIfEmpty() {
         if (Questions.selectAll().limit(1).any()) return
