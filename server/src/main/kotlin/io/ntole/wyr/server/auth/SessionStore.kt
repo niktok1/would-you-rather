@@ -56,6 +56,38 @@ object SessionStore {
     }
 
     /**
+     * Opens a session for the player whose recovery secret's hash is [secretHash] (CLAUDE.md §8a,
+     * *Recovery*), as [open] does, and returns that player, or `null` when no player holds that secret
+     * now. Must run inside a transaction.
+     *
+     * The secret is not spent: it opens another session each time it is presented, until its player
+     * replaces it (`PlayerStore.replaceRecoverySecret`), since the copy a restored phone has may lag the
+     * last one its player was given. It is looked up by its hash, through the unique index, as a refresh
+     * token is: only hashes are ever compared, and a hash, even one a lookup's timing gave away, does not
+     * give its secret away.
+     *
+     * The player's id is copied from a plain read, the §4 exception: a replacement of the secret that
+     * commits between that read and the session's insert orders the recovery before itself, which it
+     * does not undo, since a new secret closes none of the sessions the old one opened. So the stale
+     * read is harmless, and the player's row is locked only by the mirror's write, after the insert.
+     */
+    fun recover(
+        secretHash: String,
+        refreshTokenHash: String,
+        expiresAt: Long,
+        now: Long = System.currentTimeMillis(),
+    ): String? {
+        val playerId =
+            Players
+                .select(Players.id)
+                .where { Players.recoverySecretHash eq secretHash }
+                .firstOrNull()
+                ?.get(Players.id) ?: return null
+        open(playerId, refreshTokenHash, expiresAt, now)
+        return playerId
+    }
+
+    /**
      * Spends the refresh token whose hash is [presentedHash]: swaps it for [newHash], valid until
      * [expiresAt], in the session it belongs to, and returns that session's player, or `null` when no
      * refresh may spend it. Must run inside a transaction.

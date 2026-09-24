@@ -62,8 +62,11 @@ object Players : Table("players") {
     val mirroredRefreshTokenHash = varchar("mirrored_refresh_token_hash", 64).nullable()
 
     /**
-     * SHA-256 of the player's recovery secret, which V4 adds beside [Sessions] for the routes that
-     * will open a session with it. Nothing writes it yet, so it is null for every player.
+     * SHA-256 of the player's recovery secret (CLAUDE.md §8a, *Recovery*): whoever presents the secret
+     * opens a session of their own for the player (`SessionStore.recover`). The secret itself is never
+     * stored. Written at the mint and replaced only by `PlayerStore.replaceRecoverySecret`. Null for a
+     * player from before V4 until they ask for one, and for every player a build without recovery
+     * minted.
      */
     val recoverySecretHash = varchar("recovery_secret_hash", 64).nullable()
 
@@ -93,8 +96,8 @@ object Players : Table("players") {
 /**
  * Every session a player has (CLAUDE.md §8a, *Sessions*): one refresh-token family per device, each
  * rotating on its own, so a refresh on one device never touches another's tokens. A guest's mint
- * opens the first (`SessionStore.open`), and V4 opened one for every player who held a refresh token
- * then. Each session opened or rotated is copied into its player's row, the
+ * opens the first and each recovery another (`SessionStore.open`), and V4 opened one for every player
+ * who held a refresh token then. Each session opened or rotated is copied into its player's row, the
  * mirror ([Players.refreshTokenHash]). No row is ever deleted: a session whose tokens have expired is
  * dead where it lies, and nothing caps how many a player has.
  */

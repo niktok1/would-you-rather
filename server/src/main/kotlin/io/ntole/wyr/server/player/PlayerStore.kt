@@ -22,11 +22,14 @@ object PlayerStore {
 
     /**
      * Mints a guest with a first session, on the refresh token whose hash is [refreshTokenHash], valid
-     * until [refreshExpiresAt] ([SessionStore.open]). Must run inside a transaction.
+     * until [refreshExpiresAt] ([SessionStore.open]), and the recovery secret whose hash is
+     * [recoverySecretHash] (CLAUDE.md §8a, *Recovery*), which the route always gives. Must run inside
+     * a transaction.
      */
     fun createGuest(
         refreshTokenHash: String,
         refreshExpiresAt: Long,
+        recoverySecretHash: String? = null,
     ): Player {
         val id = UUID.randomUUID().toString()
         val now = System.currentTimeMillis()
@@ -37,11 +40,26 @@ object PlayerStore {
             row[Players.totalPoints] = 0
             row[Players.answersGiven] = 0
             row[Players.currentCycle] = Players.FIRST_CYCLE
+            row[Players.recoverySecretHash] = recoverySecretHash
         }
         SessionStore.open(id, refreshTokenHash, refreshExpiresAt, now)
 
         return Player(id = id, totalPoints = 0, cycle = Players.FIRST_CYCLE)
     }
+
+    /**
+     * Makes [recoverySecretHash] the hash of [playerId]'s recovery secret, in place of whichever they
+     * had, which recovers nobody from then on (CLAUDE.md §8a, *Recovery*). The sessions the old one
+     * opened live on: a secret opens sessions, and replacing it closes none. False when there is no
+     * such player. Must run inside a transaction.
+     *
+     * One `UPDATE` by id, with nothing read first: whatever secret the player had, the new one wins.
+     */
+    fun replaceRecoverySecret(
+        playerId: String,
+        recoverySecretHash: String,
+    ): Boolean =
+        Players.update({ Players.id eq playerId }) { row -> row[Players.recoverySecretHash] = recoverySecretHash } == 1
 
     fun find(id: String): Player? =
         Players

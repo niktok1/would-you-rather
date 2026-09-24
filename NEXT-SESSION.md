@@ -276,6 +276,24 @@ automatically from every green commit on `main` (its URL is on its Render page).
   into the mark's session (opening a new one instead), or V4's backfill or its marks, each fails
   them. `LockRace` now polls again when H2 2.4's `SESSIONS` view throws its NullPointerException,
   which one of the new races hit once.
+- Recovery (`feat/recovery-secret`, server and contract only, CLAUDE.md §8a, *Recovery*), on H2. The
+  contract: `GuestSessionDto`, `RecoverRequest`, `RecoverySecretDto`, `INVALID_RECOVERY_SECRET` and
+  its `DomainError`, `AUTH_RECOVER` and `MY_RECOVERY_SECRET`; `WyrJsonTest` pins a guest session read
+  with its secret and without one, read by a build from before recovery as the session it knew, every
+  session field a guest session's, and the new code as `UNKNOWN` in an older build; `ServerJsonTest`
+  the secret sent with a mint's session and never with a plain one; `ErrorMapperTest` the code never
+  `UNAUTHORIZED`. `SessionStoreTest` pins a secret opening a session each time, unspent, the mirror
+  the one opened last, and one never issued or replaced opening none, while the replaced one's
+  sessions live on. `RecoveryFlowTest` pins the mint's secret (its own per guest, 43 characters, in
+  no refresh's or recovery's answer, which carry a session's four fields alone), a recovery keeping
+  the player and their point, devices refreshing apart, a secret recovering three times, the 401 for
+  a secret never issued, one replaced and a refresh token, the 400s, a new secret killing the old one
+  and not its sessions, a guest from before V4 asking for one, and the new secret's 401s.
+  `RateLimitTest` adds both groups, a right secret spending the address's budget as a wrong one does,
+  and the recovery refusal's log line, with no secret or hash in any line of a whole flow.
+  `ServerConfigTest` the two new variables. Minting with no secret, the recovery route in the refresh
+  group, refusing with `INVALID_REFRESH_TOKEN`, a recovery opening no session, and a log line with a
+  secret's hash each fail them.
 - Client tests: `:core:domain` 34, `:core:data` 120, `:core:network` 58 (64 as Android host tests:
   the common ones and `AndroidTokenStorageTest`), `:app:shared` 122 (the ViewModels, the Koin graph
   and the desktop base URL); `:server` 235, 2 of them skipped. 569 JVM tests in all, those 2
@@ -322,6 +340,10 @@ automatically from every green commit on `main` (its URL is on its Render page).
   Deploy that brings it: a new table filled from a few rows, two columns, three unique constraints.
   Check, read-only, that its history ends `4 SQL`, and that `sessions` has a row for every `players`
   row with a `refresh_token_hash`.
+- **Recovery beyond the server.** No client stores or sends the secret yet: the client half (Block
+  Store on Android, iCloud Keychain on iOS, the session store out of Android's backups, CLAUDE.md §8a
+  *Recovery*) is the next branch. So nothing has yet been restored to a new phone. Guests from before
+  V4 have no secret until their client asks for one.
 - **The settling refresh in a real browser or desktop pair.** Two tabs sharing `localStorage`, or
   two desktop instances sharing JVM preferences, have raced a refresh only in
   `SharedSessionStoreTest` on `MockEngine`. JVM preferences sync between processes on their own
@@ -478,6 +500,25 @@ Raise any budget for a session with its variable, and a refused request says whi
 ```bash
 RATE_LIMIT_GUESTS_PER_HOUR=1000 ./gradlew :server:run
 ```
+
+### Recovering a guest
+
+A mint's answer carries the player's recovery secret (CLAUDE.md §8a, *Recovery*), and a recovery
+with it opens a second session for the same player, each refreshing on its own. No client sends one
+yet, so by hand, against `./gradlew :server:run`:
+
+```bash
+GUEST=$(curl -s -X POST localhost:8080/v1/auth/guest)
+SECRET=$(echo "$GUEST" | python3 -c 'import sys,json; print(json.load(sys.stdin)["recoverySecret"])')
+ACCESS=$(echo "$GUEST" | python3 -c 'import sys,json; print(json.load(sys.stdin)["accessToken"])')
+curl -s -X POST localhost:8080/v1/auth/recover -H 'Content-Type: application/json' \
+  -d "{\"recoverySecret\":\"$SECRET\"}"
+curl -s -X POST localhost:8080/v1/me/recovery-secret -H "Authorization: Bearer $ACCESS"
+```
+
+The recovery answers a session of the same `playerId` with a refresh token of its own, and no
+secret; the last call answers a new secret and kills `$SECRET`, which then recovers nobody (401
+`INVALID_RECOVERY_SECRET`). Recoveries are 10 an hour per address (`RATE_LIMIT_RECOVERIES_PER_HOUR`).
 
 ### Moderating
 
@@ -663,14 +704,19 @@ rules live in CLAUDE.md §8d. Each item is one short-lived branch, in order:
     the refresh-token grace window (`feat/refresh-grace-window`, the first migration after V1:
     prod takes V2 at its next Manual Deploy). Left: the `CF-Connecting-IP` check on dev (*NOT
     verified* above), and moving `wyr-postgres` to a paid instance type by about 2026-10-24.
+12. A guest that survives a reinstall and a new phone *(decided 2026-09-25; CLAUDE.md §8a, §8b
+    *Provider linking*)* — phase 1, `feat/recovery-secret`: sessions per device and the recovery
+    secret on the server and in the contract *(done)*, then the client half (Block Store, iCloud
+    Keychain, the session store out of Android's backups, recovering before minting). Phase 2: a
+    silent Play Games Services v2 link on Android, then Game Center.
 
 **Remote:** `github.com/niktok1/would-you-rather` (private), `origin`, pushed over SSH through the
 `github-wyr` host alias with a deploy key scoped to this repo (CLAUDE.md §7). `gh` is logged in to
 the personal account for reading CI. Render is set up from the blueprint (`wyr` on the personal
 account); its `ADMIN_TOKEN`s are set by hand in each service's Environment tab.
 
-Deferred: provider linking (§8a), SQLDelight, a leaderboard, UI polish and WCAG, and the
-known `PlayViewModel` issues (the Play tab is frozen).
+Deferred: SQLDelight, a leaderboard, UI polish and WCAG, and the known `PlayViewModel` issues (the
+Play tab is frozen).
 
 ## Things worth knowing before you touch the code
 
@@ -836,6 +882,14 @@ known `PlayViewModel` issues (the Play tab is frozen).
   session (`SessionStore.foldMirror`). Every write here locks a session it did not insert itself
   before its player; keep that order, or two can each wait on the other. The server's
   `SessionStore` is not the client's, which keeps the stored session in `:core:network`.
+- **The recovery secret travels once, and never rotates** (CLAUDE.md §8a, *Recovery*). Only the
+  mint's `GuestSessionDto` and `POST /v1/me/recovery-secret`'s `RecoverySecretDto` carry it; a
+  refresh and a recovery answer a plain `SessionDto`, so a response type that could carry it is a
+  contract change. A recovery spends nothing, by the user's decision: whoever holds the secret owns
+  the account until it is replaced, and replacing it closes no session. Never log it or its hash,
+  in a route or anywhere else (`RateLimitTest` scans a flow's log for both), and never put it in an
+  `ApiFailure`'s message. The client must keep it apart from the session: it is the one credential
+  meant to reach a new phone, and the session store is meant to stay behind.
 - **A session write returns once it is durable, and suspends for it** (`TokenStorage.write`,
   CLAUDE.md §8a). `AndroidTokenStorage` used `apply()`, which returns before the file is written,
   so a kill just after a refresh could come back with the rotated-out token and orphan the guest.

@@ -352,7 +352,8 @@ This project must never be attributed to any employer identity.
 auth SDK, satisfying §2.
 
 - `POST /v1/auth/guest` mints the player server-side and returns a signed access JWT plus an
-  opaque refresh token. Nothing is asked of the player.
+  opaque refresh token, and the player's recovery secret (*Recovery*, below). Nothing is asked of the
+  player.
 - Identity is **server-issued**, which is the whole point: a client-supplied device id would be
   forgeable and would let one device stuff the ballot.
 - The access token travels in `Authorization: Bearer`, never in a request body, so `VoteRequest`
@@ -409,9 +410,10 @@ auth SDK, satisfying §2.
 - **Sessions** (*decided 2026-09-25*): a player's refresh tokens live in `sessions`, **one
   refresh-token family per device**, each rotating on its own row by the rules above, so a refresh on
   one device never touches another's tokens, and nothing caps how many a player has. A mint opens a
-  player's first session (`SessionStore.open`). V4 opened one for every player who held a refresh
-  token, under the player's own id and with their previous token and its grace, so every client kept
-  refreshing across the deploy. No row is deleted: an expired session is dead where it lies.
+  player's first session and each recovery another (`SessionStore.open`, *Recovery*, below). V4
+  opened one for every player who held a refresh token, under the player's own id and with their
+  previous token and its grace, so every client kept refreshing across the deploy. No row is deleted:
+  an expired session is dead where it lies.
   - *The mirror.* A build from before sessions (the V2 and V3 builds among them) looks a refresh token
     up in the players row alone, so the players row keeps its refresh-token columns as a copy of the
     session opened or rotated last, previous token and stamp included, marked as this build's copy
@@ -421,7 +423,9 @@ auth SDK, satisfying §2.
     predates sessions; dropping them then is a migration of its own (§8b, *Rollbacks*).
   - *A rollback* to such a build refreshes, for each player, the device that opened or refreshed a
     session last, with the grace this build gave its token, and refuses every other device, whose
-    client replaces its player with a fresh guest. The guests it mints have no session and no mark.
+    client replaces its player with a fresh guest: the build before has no recovery. It never reads
+    or writes the recovery secret either, so once rolled forward a refused device that kept its secret
+    can recover its player. The guests it mints have no session, no mark and no secret.
   - *Rolling forward* needs nothing by hand. A mirror whose current token is not its mark was moved by
     a build without sessions: during a rollback, or while the build before still serves as a deploy's
     new instance starts, which the first deploy of V4 goes through too. A refresh no session takes is
@@ -434,10 +438,40 @@ auth SDK, satisfying §2.
   - *What a rollback still costs:* every device but the one used last, as above; and, for a player
     with more than one session, the chain a build without sessions moved in the mirror, if another of
     their sessions refreshes first once rolled forward, since a session's rotation always rewrites the
-    mirror: that device is refused. A rollback past V2 still needs the mirror's previous token cleared
-    before rolling forward (*The rotation*, above).
-- `POST /v1/auth/link` does not exist yet. It is the intended next step and is what will make an
-  account survive reinstall and sync across devices.
+    mirror: that device is refused, and recovers with its secret. A rollback past V2 still needs the
+    mirror's previous token cleared before rolling forward (*The rotation*, above).
+- **Recovery** (*decided 2026-09-25*, phase 1 of making a guest durable, §8b *Provider linking*): a
+  guest's account survives a reinstall and a phone restore with no click. The mint answers a
+  `GuestSessionDto`, the session's fields with the player's **recovery secret** beside them: 256
+  random bits in base64url, kept as a refresh token is, by its SHA-256 alone
+  (`players.recovery_secret_hash`, unique), and carried by no other answer, since a refresh and a
+  recovery answer a plain `SessionDto`. A client from before recovery reads the mint as the session
+  it always did.
+  - `POST /v1/auth/recover` with a `RecoverRequest` opens a new session for the secret's player
+    (`SessionStore.recover`), answered with that `SessionDto` alone; every other session of the player
+    lives on. A recovery does **not rotate the secret**, since the copy a restored phone holds may lag:
+    it recovers again as often as it is presented, and **whoever holds it owns the account until it is
+    replaced** (the user's decision). A secret no player holds, never issued or replaced since, is 401
+    `INVALID_RECOVERY_SECRET`, alike for every one and never 404; a malformed body or a blank secret is
+    400 `VALIDATION_FAILED`. It is looked up by its hash through the unique index, as a refresh token is.
+  - `POST /v1/me/recovery-secret` (bearer) issues the session player a new one, as a
+    `RecoverySecretDto`, and kills the one before (`PlayerStore.replaceRecoverySecret`); the sessions
+    that one opened live on. For a guest from before V4, who has none, and for a client that could not
+    keep the one it was given. 401 `UNAUTHORIZED` without a session or for a player the server no
+    longer has.
+  - Both are rate-limited (§8b), and neither the secret nor its hash is ever logged: the refusal's
+    line names the limit and a client address, and `RateLimitTest` scans a whole flow's log for both.
+    Each environment's server has its own (§8e): a DEV secret recovers nobody on PROD, and DEV's
+    in-memory database forgets every secret at each restart, where a client meets
+    `INVALID_RECOVERY_SECRET`. `RecoveryFlowTest` pins the routes and `SessionStoreTest` the store.
+  - *The client half* (*decided 2026-09-25*, not built yet): Android keeps the secret in Block Store
+    (§2), its cloud copy only where end-to-end encryption is available and a same-device reinstall
+    alone otherwise, and keeps the session store out of both cloud backup and device-to-device
+    transfer, so a new phone gets only the secret, and recovers with it. iOS keeps it in a Keychain
+    item synced through iCloud Keychain (`kSecAttrSynchronizable`), so one person's iPhones share one
+    account, each with a session of its own. Desktop and web stay guest-only and store no secret.
+- Provider linking (Play Games Services on Android, Game Center on iOS) is phase 2 (§8b, *Provider
+  linking*); recovery alone already carries a phone's guest across a reinstall.
 - On the client, `SessionStore` is the only copy of the credentials: Ktor's bearer cache is off
   (`cacheTokens = false`), so a session change applies to the very next request. A dead session
   is replaced through `withSessionRecovery` in `:core:data`, which mints at most one guest for it.
@@ -475,17 +509,30 @@ auth SDK, satisfying §2.
   cancelled meanwhile. A write that cannot be made durable fails the call as `NETWORK`: the data
   layer writes the session through `runApi`, so no bare storage exception reaches a ViewModel.
 
-**Known limitation, by design for now:** a guest account is bound to one device's storage. Lose
-the device or clear storage and the account — and its points — are gone. Token storage is also
-ordinary preference storage (SharedPreferences / NSUserDefaults / JVM Preferences /
-localStorage), not Keychain or EncryptedSharedPreferences. Both must be addressed before real
-accounts exist.
+**Known limitation, by design for now:** a guest account lives only while some store holds a live
+session of it or its recovery secret. The server half of recovery is built, and until the client
+half is, every guest is still bound to one device's storage: lose the device or clear storage and the
+account — and its points — are gone. Once it is, an Android or iOS guest survives a reinstall and a
+move to a new phone through the secret (*Recovery*), and one whose every copy of the secret is lost
+is gone all the same; a desktop or web guest stays bound to its one storage. A copy of the secret in
+the wrong hands owns the account until it is replaced. Session storage is ordinary preference storage
+(SharedPreferences / NSUserDefaults / JVM Preferences / localStorage), not Keychain or
+EncryptedSharedPreferences. All of it must be revisited before real accounts exist.
 
 ## 8b. Open decisions (resolve before relevant work)
 
-- **Provider linking** (Google / Apple / passkeys) — needed to make accounts durable. Requires
-  OAuth client credentials, and Apple additionally requires a paid developer account. Passkeys
-  have no desktop-JVM story, so desktop would need a browser handoff.
+- **Provider linking** — *decided 2026-09-25: two phases.* Phase 1, free and zero-click, is the
+  recovery secret (§8a, *Recovery*): built on the server, the client half next. Phase 2, next after
+  it, is a silent Play Games Services v2 link on Android, and Game Center on iOS later; either needs
+  OAuth client credentials, and Apple a paid developer account too. Passkeys have no desktop-JVM
+  story, so desktop would need a browser handoff. The decisions of 2026-09-25, every one the
+  research's default: phase 1 now and the store providers' links later; a long-lived recovery secret,
+  whose holder owns the account until it is replaced; a sessions table first, one refresh-token family
+  per device, with no cap per player (§8a, *Sessions*); the session store out of Android's cloud
+  backup and its device-to-device transfer, so only the secret moves between phones; Block Store's
+  cloud copy only where end-to-end encryption is available, else a same-device reinstall only; the
+  iOS Keychain item synced through iCloud Keychain; desktop and web guest-only; and Block Store
+  approved as a library exception (§2).
 - **SQLDelight cache** — see §4. Needs a per-platform split because of web. Lower priority now
   that the endless feed (§8d) makes the server the source of truth for what a player has answered:
   the client keeps no record of what it served, so a persisted queue would only save one fetch
@@ -526,7 +573,9 @@ accounts exist.
   request and refills whole when its period ends, so up to twice a budget can pass in moments where
   one window ends and the next begins, while over any longer span the average holds:
   - *Per client address* (on Render, Cloudflare's `CF-Connecting-IP`: `CLIENT_IP_HEADER`, §8), for
-    a caller with no session to name: guest minting 10 an hour, refreshes 30 a minute, the admin
+    a caller with no session to name: guest minting 10 an hour, refreshes 30 a minute, recoveries 10
+    an hour, right secret or wrong (a restored phone recovers once; no guess at 256 bits comes near,
+    so the budget is what bounds the sessions one secret's holder can open), the admin
     routes 60 a minute together, and on top of that, admin requests with a wrong or missing token 10
     a minute. A request with the right token spends none of that
     last budget, but once an address has spent it, every admin request from the address is refused
@@ -536,8 +585,9 @@ accounts exist.
     first, so guesses refused by it spend none of the moderator's 60.
   - *Per player*, so players behind one address do not share a budget: the feed, votes and skips
     120 a minute each (the console's *Answer N* sends at most 50 votes in a row), likes 60 a minute,
-    submissions 30 an hour (the 20-pending cap still applies), and `GET /v1/me` and
-    `GET /v1/me/questions` 120 a minute each. The key is the player id in the bearer token, which the
+    submissions 30 an hour (the 20-pending cap still applies), `GET /v1/me` and
+    `GET /v1/me/questions` 120 a minute each, and a new recovery secret 10 an hour (a client asks only
+    when it holds none it trusts). The key is the player id in the bearer token, which the
     limiter verifies itself (`verifiedPlayerId`): it runs before authentication, so no principal is
     there yet. A request without a token this server signed spends its address's budget of the group
     instead, and then gets its 401, so a forged token naming a player cannot spend that player's
@@ -961,6 +1011,9 @@ name one too.
   Preferences node, one bundle id's `NSUserDefaults`, one origin's `localStorage`. With one key, a
   build for one server sent the other's tokens to it and, once they were refused, replaced that
   guest, and its points, with a new one (§8a). Android's flavors have storage of their own anyway.
+  The recovery secret (§8a, *Recovery*) is one environment's too, since each server's database holds
+  its own: the client half keeps it under a key per environment the same way, one iCloud Keychain
+  item per environment included, or a DEV secret would be sent to PROD and dropped as unknown.
 ---
 
 ## 9. How to work in this repo

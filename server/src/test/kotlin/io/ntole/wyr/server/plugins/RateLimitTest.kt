@@ -20,6 +20,9 @@ import io.ktor.http.contentType
 import io.ktor.serialization.kotlinx.json.json
 import io.ktor.server.testing.testApplication
 import io.ntole.wyr.core.api.WyrApi
+import io.ntole.wyr.core.auth.GuestSessionDto
+import io.ntole.wyr.core.auth.RecoverRequest
+import io.ntole.wyr.core.auth.RecoverySecretDto
 import io.ntole.wyr.core.auth.RefreshRequest
 import io.ntole.wyr.core.auth.SessionDto
 import io.ntole.wyr.core.error.ErrorCode
@@ -114,6 +117,60 @@ class RateLimitTest {
             val again = client.refresh(refreshed.refreshToken)
             assertEquals(HttpStatusCode.OK, again.status, "the refused refresh left the token live")
             assertEquals(session.playerId, again.body<SessionDto>().playerId)
+        }
+
+    /**
+     * A recovery spends its address's budget whatever secret it carries, since a secret is the caller's
+     * only credential: a right one as a wrong one does, and once the budget is spent the right one is
+     * refused too, opening no session.
+     */
+    @Test
+    fun `a right recovery secret spends its address's budget as a wrong one does`() =
+        runServer("recoveries", NO_PRACTICAL_LIMIT.copy(recoveries = TWO_A_MINUTE)) { client ->
+            val secret = client.guestSecret()
+
+            assertEquals(HttpStatusCode.Unauthorized, client.recover("no-such-secret").status)
+            assertEquals(HttpStatusCode.OK, client.recover(secret).status)
+
+            assertRateLimited(client.recover(secret), "the right secret past the budget")
+        }
+
+    /**
+     * No recovery secret, nor its hash, reaches the log (CLAUDE.md §8a, *Recovery*): not the mint's,
+     * not a new one, not one refused as replaced, and not one refused by the limiter, whose line names
+     * the limit and a client address alone.
+     */
+    @Test
+    fun `a refused recovery is logged naming its limit, and no recovery secret or its hash ever is`() =
+        withLogCapture { logged ->
+            runServer("recovery-logged", NO_PRACTICAL_LIMIT.copy(recoveries = TWO_A_MINUTE)) { client ->
+                val guest: GuestSessionDto = client.post(WyrApi.Paths.AUTH_GUEST).body()
+                val minted = assertNotNull(guest.recoverySecret)
+                assertEquals(HttpStatusCode.OK, client.recover(minted).status)
+                val issued: RecoverySecretDto =
+                    client.post(WyrApi.Paths.MY_RECOVERY_SECRET) { bearerAuth(guest.accessToken) }.body()
+                assertEquals(HttpStatusCode.Unauthorized, client.recover(minted).status, "replaced")
+                assertRateLimited(client.recover(issued.recoverySecret), "the third recovery")
+
+                val refusals = logged.list.map { it.formattedMessage }.filter { "rate limit" in it }
+                assertEquals(1, refusals.size, "one line per refused request: $refusals")
+                assertTrue(
+                    "rate limit recoveries reached for a client address: POST ${WyrApi.Paths.AUTH_RECOVER}" in
+                        refusals.single(),
+                    refusals.single(),
+                )
+                val everything =
+                    logged.list.joinToString("\n") { event ->
+                        event.formattedMessage + event.throwableProxy?.message.orEmpty()
+                    }
+                val hasher = TokenService(ServerConfig.fromEnvironment { null })
+                listOf(minted, issued.recoverySecret)
+                    .flatMap { secret ->
+                        listOf(secret, hasher.hash(secret))
+                    }.forEach {
+                        assertFalse(it in everything, "a recovery secret or its hash was logged")
+                    }
+            }
         }
 
     @Test
@@ -412,6 +469,18 @@ class RateLimitTest {
                     }
                 }
             },
+            // A secret no player holds, so each is refused but spends the budget all the same.
+            Group(
+                "recoveries",
+                { copy(recoveries = it) },
+                allowed = HttpStatusCode.Unauthorized,
+                needsSession = false,
+            ) { caller ->
+                caller.client.recover("no-such-secret")
+            },
+            Group("recovery secrets", { copy(recoverySecrets = it) }) { caller ->
+                caller.client.post(WyrApi.Paths.MY_RECOVERY_SECRET) { bearerAuth(caller.player.accessToken) }
+            },
             Group("feed", { copy(feed = it) }) { caller ->
                 caller.client.get(WyrApi.Paths.QUESTIONS) { bearerAuth(caller.player.accessToken) }
             },
@@ -581,6 +650,16 @@ class RateLimitTest {
             post(WyrApi.Paths.AUTH_REFRESH) {
                 contentType(ContentType.Application.Json)
                 setBody(RefreshRequest(refreshToken))
+            }
+
+        /** A new guest's recovery secret. */
+        suspend fun HttpClient.guestSecret(): String =
+            assertNotNull(post(WyrApi.Paths.AUTH_GUEST).body<GuestSessionDto>().recoverySecret)
+
+        suspend fun HttpClient.recover(secret: String): HttpResponse =
+            post(WyrApi.Paths.AUTH_RECOVER) {
+                contentType(ContentType.Application.Json)
+                setBody(RecoverRequest(secret))
             }
 
         suspend fun HttpClient.vote(
