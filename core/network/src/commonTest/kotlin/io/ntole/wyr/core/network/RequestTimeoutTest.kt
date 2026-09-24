@@ -16,6 +16,7 @@ import io.ntole.wyr.core.network.WyrHttpClient.REFRESH_TIMEOUT
 import io.ntole.wyr.core.network.WyrHttpClient.REQUEST_TIMEOUT
 import io.ntole.wyr.core.network.api.AuthApi
 import io.ntole.wyr.core.network.api.QuestionApi
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
@@ -31,6 +32,7 @@ import kotlin.time.Duration.Companion.seconds
  * How long a call may take. Every engine here runs on the test's scheduler, so the server's delays
  * and HttpTimeout's own timer both run in virtual time, and [currentTime] says when a call gave up.
  */
+@OptIn(ExperimentalCoroutinesApi::class)
 class RequestTimeoutTest {
     @Test
     fun `a call the server never answers fails at the request timeout`() =
