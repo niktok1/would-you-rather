@@ -340,12 +340,18 @@ automatically from every green commit on `main` (its URL is on its Render page).
   SUPERPOWERS, held the other; rejecting it from the list with a padded reason stored it trimmed;
   every question was 20 and then, with Load more, 26; Retire asked, was cancelled and sent nothing,
   then confirmed retired the first, Restore put it back, a second Restore was 409; Lock cleared it
-  all. Counts at the branch head: `:server` 263, 2 skipped; `:core:domain` 37; `:core:data` 133;
+  all. After the review fixes (CORS exposing `Retry-After`, the token field made anew on Lock,
+  nothing read again after a 403 or 429, a moved question put in its row, reads of 100), the fat jar
+  on JDK 21 (`PORT=18092`, no `DATABASE_URL`, a throwaway `ADMIN_TOKEN`,
+  `ALLOWED_WEB_ORIGINS=http://localhost:8081`, `RATE_LIMIT_ADMIN_PER_MINUTE=3`) answered `/health`
+  200, the list at `limit=100` 200, a wrong token 403, the queue 200, and the fourth admin request,
+  from that origin, 429 with `Retry-After: 60` and `Access-Control-Expose-Headers: Retry-After`.
+  Counts at the branch head: `:server` 264, 2 skipped; `:core:domain` 37; `:core:data` 134;
   `:core:network` 77 (83 as Android host tests); `:app:shared` 106, the console's 21 moderation
-  tests gone with the section; `:app:adminApp` 79. Every client target compiles, the moderation
-  app's JVM, JS and wasmJs included, as do the iOS simulator main and test, and
-  `:app:androidApp:assembleDebug` builds; `WYR_SERVER_ONLY=1` still configures `:core` and
-  `:server` alone.
+  tests gone with the section; `:app:adminApp` 87. Every client target compiles, the moderation
+  app's JVM, JS and wasmJs included (its test compiles and development and production executables
+  too), as do the iOS simulator main and test, and `:app:androidApp:assembleDebug` builds;
+  `WYR_SERVER_ONLY=1` still configures `:core` and `:server` alone.
   `DesktopEnvironmentNameTest` pins `WYR_ENV`. Its JVM, JS and wasmJs compiles run.
 - `:app:androidApp:assembleDebug` produces a real APK.
 - `ktlintCheck` clean across every module.
