@@ -20,6 +20,7 @@ import io.ktor.client.request.setBody
 import io.ktor.client.request.url
 import io.ktor.client.statement.HttpResponse
 import io.ktor.http.ContentType
+import io.ktor.http.HttpHeaders
 import io.ktor.http.contentType
 import io.ntole.wyr.core.api.WyrApi
 import io.ntole.wyr.core.auth.RefreshRequest
@@ -263,8 +264,21 @@ private suspend fun ResponseException.toApiException(): ApiException {
         status = response.status.value,
         message = error?.message ?: message,
         cause = this,
+        retryAfter = response.retryAfterOrNull(),
     )
 }
+
+/**
+ * The wait the response's `Retry-After` names, in whole seconds as the server sends it (CLAUDE.md
+ * §8b), or null when there is none. The header's other form, an HTTP date, is null too: nothing this
+ * server sends, and a date on another clock is no measure of how long to wait.
+ */
+private fun HttpResponse.retryAfterOrNull(): Duration? =
+    headers[HttpHeaders.RetryAfter]
+        ?.trim()
+        ?.toLongOrNull()
+        ?.takeIf { it >= 0 }
+        ?.seconds
 
 /** The body as the server's [ErrorDto], or null when it is not one — a proxy's HTML page, say. */
 private suspend fun HttpResponse.errorOrNull(): ErrorDto? =

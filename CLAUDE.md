@@ -542,9 +542,11 @@ accounts exist.
   database and rotates no refresh token. It answers 429 `RATE_LIMITED` (the `ErrorDto`, from
   `StatusPages`) with `Retry-After` in whole seconds, at least 1, and logs one INFO line naming the
   limit and, for a player, their id; never a token or any header's value. `RateLimitTest` pins every
-  group, the keys and the ordering. The client needed no change: a 429 is `DomainError.RATE_LIMITED`,
-  nothing retries it (`withSessionRecovery` retries only after a 401), and the console logs it as an
-  `err` entry.
+  group, the keys and the ordering. On the client a 429 is `DomainError.RATE_LIMITED`, and the wait
+  its `Retry-After` names travels with it, as `ApiException.retryAfter` and then
+  `WyrException.retryAfter` (whole seconds only; an HTTP date or none is null), so a screen can say
+  how long to wait without reading the diagnostic message. Nothing retries it (`withSessionRecovery`
+  retries only after a 401), and the console logs it as an `err` entry.
 
   What remains: farming is bounded, not gone. A player can still earn 120 points a minute by
   re-answering, on average, and up to 240 where two windows meet (*decided 2026-09-23:* a re-answer

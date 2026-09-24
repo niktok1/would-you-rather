@@ -1,14 +1,18 @@
 package io.ntole.wyr.core.network
 
 import io.ktor.client.engine.mock.MockEngine
+import io.ktor.client.engine.mock.MockRequestHandleScope
 import io.ktor.client.engine.mock.respond
 import io.ktor.client.network.sockets.ConnectTimeoutException
+import io.ktor.client.request.HttpResponseData
 import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
+import io.ktor.http.headers
 import io.ktor.http.headersOf
 import io.ntole.wyr.core.api.WyrApi
 import io.ntole.wyr.core.error.ErrorCode
+import io.ntole.wyr.core.error.ErrorDto
 import io.ntole.wyr.core.network.api.QuestionApi
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
@@ -20,6 +24,8 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertIs
+import kotlin.test.assertNull
+import kotlin.time.Duration.Companion.seconds
 
 /**
  * What a failed call throws. The contract: an HTTP error response becomes an [ApiException] with
@@ -53,6 +59,29 @@ class WyrHttpClientTest {
 
             assertEquals(ErrorCode.UNKNOWN, failure.code)
             assertEquals(503, failure.status)
+        }
+
+    @Test
+    fun `a 429 carries the wait its Retry-After names`() =
+        runTest {
+            val limited = MockEngine { rateLimited(retryAfter = " 42 ") }
+
+            val failure = assertFailsWith<ApiException> { questionApi(limited).page() }
+
+            assertEquals(ErrorCode.RATE_LIMITED, failure.code)
+            assertEquals(42.seconds, failure.retryAfter)
+        }
+
+    @Test
+    fun `a response that names no wait in whole seconds carries none`() =
+        runTest {
+            listOf(null, "Wed, 21 Oct 2026 07:28:00 GMT", "soon", "-1", "1.5").forEach { header ->
+                val limited = MockEngine { rateLimited(retryAfter = header) }
+
+                val failure = assertFailsWith<ApiException>("$header") { questionApi(limited).page() }
+
+                assertNull(failure.retryAfter, "$header")
+            }
         }
 
     @Test
@@ -114,6 +143,17 @@ class WyrHttpClientTest {
 
             assertIs<CancellationException>(thrown)
         }
+
+    /** A 429 as the server's rate limiter answers one, with [retryAfter] as its header when there is one. */
+    private fun MockRequestHandleScope.rateLimited(retryAfter: String?): HttpResponseData =
+        respond(
+            WyrJson.encodeToString(ErrorDto(message = "too many requests", code = ErrorCode.RATE_LIMITED)),
+            HttpStatusCode.TooManyRequests,
+            headers {
+                append(HttpHeaders.ContentType, ContentType.Application.Json.toString())
+                retryAfter?.let { append(HttpHeaders.RetryAfter, it) }
+            },
+        )
 
     private fun questionApi(engine: MockEngine): QuestionApi =
         QuestionApi(WyrHttpClient.create(BASE_URL, storeHolding(session("a")), engine))

@@ -1,5 +1,7 @@
 package io.ntole.wyr.core.domain.error
 
+import kotlin.time.Duration
+
 /**
  * Domain-side failure classification.
  *
@@ -50,9 +52,13 @@ public enum class DomainError {
  *
  * [error] is what callers branch on; [message] is diagnostic only and must not be shown to a
  * player.
+ *
+ * [retryAfter] is how long the server asked the caller to wait before trying again, which it names
+ * with every [DomainError.RATE_LIMITED], or null when it named no wait.
  */
 public class WyrException(
     public val error: DomainError,
     message: String? = null,
     cause: Throwable? = null,
+    public val retryAfter: Duration? = null,
 ) : Exception(message ?: error.name, cause)

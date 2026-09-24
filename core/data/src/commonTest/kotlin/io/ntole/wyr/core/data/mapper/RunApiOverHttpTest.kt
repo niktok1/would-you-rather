@@ -28,6 +28,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.time.Duration.Companion.hours
+import kotlin.time.Duration.Companion.seconds
 
 /**
  * runApi against what the real client configuration actually throws, rather than hand-built
@@ -114,7 +115,9 @@ class RunApiOverHttpTest {
                     )
                 }
 
-            assertEquals(DomainError.RATE_LIMITED, errorFrom(limited))
+            val failure = failureFrom(limited)
+            assertEquals(DomainError.RATE_LIMITED, failure.error)
+            assertEquals(42.seconds, failure.retryAfter, "the wait the server named reaches the caller")
             assertEquals(1, sent, "no retry, and no refresh: a 429 says nothing about the session")
         }
 
@@ -167,8 +170,10 @@ class RunApiOverHttpTest {
             assertEquals(DomainError.NETWORK, errorFrom(captivePortal))
         }
 
-    private suspend fun errorFrom(engine: MockEngine): DomainError {
+    private suspend fun errorFrom(engine: MockEngine): DomainError = failureFrom(engine).error
+
+    private suspend fun failureFrom(engine: MockEngine): WyrException {
         val api = QuestionApi(WyrHttpClient.create(BASE_URL, storeHolding(session("a")), engine))
-        return assertFailsWith<WyrException> { runApi { api.page() } }.error
+        return assertFailsWith<WyrException> { runApi { api.page() } }
     }
 }

@@ -21,7 +21,8 @@ internal suspend fun <T> runApi(block: suspend () -> T): T =
         // coroutine look like a failed request and break structured concurrency.
         throw cancellation
     } catch (api: ApiException) {
-        throw WyrException(api.toDomainError(), api.message, api)
+        // The wait the server named goes up with it: nothing above may parse the diagnostic message.
+        throw WyrException(api.toDomainError(), api.message, api, retryAfter = api.retryAfter)
     } catch (other: Throwable) {
         // Nothing came back, or it did not arrive whole. A fault in the program or the VM is
         // neither, and must not be dressed up as one.
