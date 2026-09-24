@@ -17,18 +17,17 @@ import io.ntole.wyr.server.db.appTables
 import io.ntole.wyr.server.db.connectH2
 import io.ntole.wyr.server.db.filedUnder
 import io.ntole.wyr.server.db.h2Url
+import io.ntole.wyr.server.moderation.ModerationStore
 import io.ntole.wyr.server.player.PlayerStore
 import io.ntole.wyr.server.player.StatsStore
 import io.ntole.wyr.server.plugins.ApiFailure
 import io.ntole.wyr.server.vote.Scoring
 import io.ntole.wyr.server.vote.VoteStore
-import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.SchemaUtils
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.select
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
-import org.jetbrains.exposed.v1.jdbc.update
 import java.sql.Connection
 import java.util.UUID
 import kotlin.test.Test
@@ -37,9 +36,10 @@ import kotlin.test.assertFailsWith
 
 /**
  * Which questions a player may be served, answer or skip (`QuestionStore.servable`, CLAUDE.md
- * §8d): only approved ones, and to every player alike, their authors included. Driven through the stores at READ COMMITTED as in
- * QuestionStoreTest, with each submitted question written straight into the table as a submission
- * and a moderator's decision would leave it.
+ * §8d): only approved ones, and to every player alike, their authors included. Driven through the
+ * stores at READ COMMITTED as in QuestionStoreTest, with each submitted question written straight
+ * into the table as a submission and a moderator's decision would leave it, and a later approval
+ * made through ModerationStore.
  */
 class ServableQuestionsTest {
     private val url = h2Url("wyr-servable-${UUID.randomUUID()}")
@@ -168,13 +168,9 @@ class ServableQuestionsTest {
         return id
     }
 
+    /** A moderator's approval, through the store the moderation routes decide with. */
     private fun approve(question: String) {
-        transaction(database) {
-            Questions.update({ Questions.id eq question }) { row ->
-                row[status] = QuestionStatus.APPROVED
-                row[reviewedAt] = System.currentTimeMillis()
-            }
-        }
+        transaction(database) { ModerationStore.approve(question, categories = emptyList()) }
     }
 
     private fun answer(

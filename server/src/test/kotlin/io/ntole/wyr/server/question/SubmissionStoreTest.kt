@@ -13,6 +13,7 @@ import io.ntole.wyr.server.db.connectH2
 import io.ntole.wyr.server.db.h2Url
 import io.ntole.wyr.server.db.raceBehindFirst
 import io.ntole.wyr.server.db.storedCategories
+import io.ntole.wyr.server.moderation.ModerationStore
 import io.ntole.wyr.server.player.PlayerStore
 import io.ntole.wyr.server.plugins.ApiFailure
 import org.jetbrains.exposed.v1.core.and
@@ -30,8 +31,8 @@ import kotlin.test.assertNull
 
 /**
  * Submitting a question through the store at READ COMMITTED, set by hand as in VoteStoreTest, so a
- * race for the last pending place can be staged and a moderator's decision written straight into
- * the table.
+ * race for the last pending place can be staged. A moderator's decision goes through
+ * ModerationStore, as the moderation routes' does.
  */
 class SubmissionStoreTest {
     private val url = h2Url("wyr-submission-store-${UUID.randomUUID()}")
@@ -178,16 +179,16 @@ class SubmissionStoreTest {
         assertEquals(WyrApi.Limits.MAX_PENDING_SUBMISSIONS, pendingBy(author))
     }
 
-    /** A moderator's decision, written as the moderation route will write it. */
+    /** A moderator's decision, through the store the moderation routes decide with. */
     private fun decide(
         question: String,
         status: QuestionStatus,
     ) {
         transaction(database) {
-            Questions.update({ Questions.id eq question }) { row ->
-                row[Questions.status] = status
-                row[reviewedAt] = System.currentTimeMillis()
-                row[rejectionReason] = "not a real dilemma".takeIf { status == QuestionStatus.REJECTED }
+            when (status) {
+                QuestionStatus.APPROVED -> ModerationStore.approve(question, categories = emptyList())
+                QuestionStatus.REJECTED -> ModerationStore.reject(question, reason = "not a real dilemma")
+                else -> error("no moderator decides $status")
             }
         }
     }
