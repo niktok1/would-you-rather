@@ -15,8 +15,8 @@ automatically from every green commit on `main` (its URL is on its Render page).
 
 ### Verified working
 
-- `:server` on H2: 235 tests green (2 more skipped, the PostgreSQL-only boot races), including 68
-  end-to-end flow tests in `ApiFlowTest`. Flat scoring is covered there (every vote pays 1,
+- `:server` on H2: 235 tests, 233 green and 2 skipped (the PostgreSQL-only boot races), including
+  68 end-to-end flow tests in `ApiFlowTest`. Flat scoring is covered there (every vote pays 1,
   majority and minority alike, and the total
   accumulates) and by `PlayerStoreTest`, which races awards for one player and refreshes of one
   token. The endless feed, re-answering and attempt replay are covered there too, and by
@@ -250,8 +250,9 @@ automatically from every green commit on `main` (its URL is on its Render page).
   `INVALID_REFRESH_TOKEN`.
 - Client tests: `:core:domain` 34, `:core:data` 120, `:core:network` 58 (64 as Android host tests:
   the common ones and `AndroidTokenStorageTest`), `:app:shared` 122 (the ViewModels, the Koin graph
-  and the desktop base URL); `:server` 235. 569 JVM tests in all. `:app:shared` compiles for JVM,
-  JS, wasmJs and the iOS simulator (JS and wasmJs not re-run on the grace-window branch).
+  and the desktop base URL); `:server` 235, 2 of them skipped. 569 JVM tests in all, those 2
+  included. `:app:shared` compiles for JVM, JS, wasmJs and the iOS simulator (JS and wasmJs not
+  re-run on the grace-window branch).
 - `:app:androidApp:assembleDebug` produces a real APK.
 - `ktlintCheck` clean across every module.
 
