@@ -31,6 +31,9 @@ object VoteStore {
      * pays nothing, counts as no answer, and it reports the stored side with the current tally and
      * total.
      *
+     * A question the player may not be served is not found ([QuestionStore.isServable]): one a
+     * moderator has not approved, and the player's own.
+     *
      * Ordering matters twice. The player is resolved *before* any write: a validly signed token
      * can outlive its player (an H2 dev server restarted with the constant dev secret still
      * accepts yesterday's tokens), and inserting first would trip the Votes foreign key instead
@@ -52,7 +55,7 @@ object VoteStore {
         attemptId: String,
         now: Long = System.currentTimeMillis(),
     ): VoteResultDto {
-        if (!QuestionStore.exists(questionId)) throw ApiFailure.questionNotFound(questionId)
+        if (!QuestionStore.isServable(questionId, playerId)) throw ApiFailure.questionNotFound(questionId)
 
         if (PlayerStore.find(playerId) == null) throw ApiFailure.unauthorized("unknown player")
 

@@ -1,0 +1,212 @@
+package io.ntole.wyr.server.question
+
+import io.ntole.wyr.core.api.WyrApi
+import io.ntole.wyr.core.error.ErrorCode
+import io.ntole.wyr.core.player.PlayerStatsDto
+import io.ntole.wyr.core.question.QuestionCategory
+import io.ntole.wyr.core.question.QuestionDto
+import io.ntole.wyr.core.question.QuestionStatus
+import io.ntole.wyr.core.vote.OptionSide
+import io.ntole.wyr.core.vote.VoteResultDto
+import io.ntole.wyr.server.db.Questions
+import io.ntole.wyr.server.db.Seed
+import io.ntole.wyr.server.db.Skips
+import io.ntole.wyr.server.db.Votes
+import io.ntole.wyr.server.db.appTables
+import io.ntole.wyr.server.db.connectH2
+import io.ntole.wyr.server.db.h2Url
+import io.ntole.wyr.server.player.PlayerStore
+import io.ntole.wyr.server.player.StatsStore
+import io.ntole.wyr.server.plugins.ApiFailure
+import io.ntole.wyr.server.vote.Scoring
+import io.ntole.wyr.server.vote.VoteStore
+import org.jetbrains.exposed.v1.core.eq
+import org.jetbrains.exposed.v1.jdbc.SchemaUtils
+import org.jetbrains.exposed.v1.jdbc.insert
+import org.jetbrains.exposed.v1.jdbc.select
+import org.jetbrains.exposed.v1.jdbc.selectAll
+import org.jetbrains.exposed.v1.jdbc.transactions.transaction
+import org.jetbrains.exposed.v1.jdbc.update
+import java.sql.Connection
+import java.util.UUID
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+
+/**
+ * Which questions a player may be served, answer or skip (`QuestionStore.servableTo`, CLAUDE.md
+ * §8d): only approved ones, and never their own. Driven through the stores at READ COMMITTED as in
+ * QuestionStoreTest, with each submitted question written straight into the table as a submission
+ * and a moderator's decision would leave it.
+ */
+class ServableQuestionsTest {
+    private val url = h2Url("wyr-servable-${UUID.randomUUID()}")
+    private val database = connectH2(url, Connection.TRANSACTION_READ_COMMITTED)
+
+    private val seeds: List<String> =
+        transaction(database) {
+            SchemaUtils.create(*appTables)
+            Seed.questionsIfEmpty()
+            Questions.select(Questions.id).map { it[Questions.id] }
+        }
+
+    private val foodSeeds: List<String> =
+        transaction(database) {
+            Questions
+                .select(Questions.id)
+                .where { Questions.category eq QuestionCategory.FOOD.name }
+                .map { it[Questions.id] }
+        }
+
+    @Test
+    fun `a question waiting for a moderator or rejected by one is served to nobody`() {
+        val author = newPlayer()
+        val player = newPlayer()
+        submitted(author, QuestionStatus.PENDING)
+        submitted(author, QuestionStatus.REJECTED)
+
+        listOf("the author" to author, "another player" to player).forEach { (who, id) ->
+            assertEquals(seeds.sorted(), feed(id).ids().sorted(), "$who is served only the seeds")
+            assertEquals(seeds.size, statsOf(id).dueThisCycle, "and the due count on the feed's predicate agrees")
+        }
+        // Both are food, and with every food seed answered the feed serves that category again.
+        foodSeeds.forEach { id -> answer(player, id) }
+        assertEquals(foodSeeds.sorted(), feed(player, QuestionCategory.FOOD).ids().sorted(), "even served again")
+    }
+
+    @Test
+    fun `a question that is not approved does not hold the cycle open`() {
+        val player = newPlayer()
+        submitted(newPlayer(), QuestionStatus.PENDING)
+        seeds.forEach { id -> answer(player, id) }
+        assertEquals(0, statsOf(player).dueThisCycle)
+
+        val next = feed(player)
+
+        assertEquals(2, cycleOf(player), "nothing the player may be served was left, so the cycle was finished")
+        assertEquals(seeds.sorted(), next.ids().sorted())
+    }
+
+    @Test
+    fun `nobody can answer or skip a question that is not approved`() {
+        val author = newPlayer()
+        val player = newPlayer()
+
+        listOf(QuestionStatus.PENDING, QuestionStatus.REJECTED).forEach { status ->
+            val question = submitted(author, status)
+            listOf(author, player).forEach { who ->
+                assertNotFound("$status answered") { answer(who, question) }
+                assertNotFound("$status skipped") { skip(who, question) }
+            }
+        }
+
+        assertEquals(0L, transaction(database) { Votes.selectAll().count() + Skips.selectAll().count() })
+        assertEquals(0, statsOf(player).totalPoints)
+    }
+
+    @Test
+    fun `an author is never served their own approved question while every other player is`() {
+        val author = newPlayer()
+        val player = newPlayer()
+        val own = submitted(author, QuestionStatus.APPROVED)
+
+        assertEquals(seeds.sorted(), feed(author).ids().sorted())
+        assertEquals(seeds.size, statsOf(author).dueThisCycle)
+        assertEquals((seeds + own).sorted(), feed(player).ids().sorted())
+        assertEquals(seeds.size + 1, statsOf(player).dueThisCycle)
+    }
+
+    @Test
+    fun `an author cannot answer or skip their own question`() {
+        // Provisional (CLAUDE.md §8b): §8d says only that an author is never served it.
+        val author = newPlayer()
+        val own = submitted(author, QuestionStatus.APPROVED)
+
+        assertNotFound("answered") { answer(author, own) }
+        assertNotFound("skipped") { skip(author, own) }
+        assertEquals(Scoring.POINTS_PER_ANSWER, answer(newPlayer(), own).pointsAwarded, "while anyone else can")
+    }
+
+    @Test
+    fun `an approved question is due at once in every other player's current cycle`() {
+        val player = newPlayer()
+        seeds.forEach { id -> answer(player, id) }
+        val question = submitted(newPlayer(), QuestionStatus.PENDING)
+        assertEquals(0, statsOf(player).dueThisCycle, "the cycle is finished")
+
+        approve(question)
+
+        assertEquals(1, statsOf(player).dueThisCycle, "due in the cycle the player is on")
+        assertEquals(listOf(question), feed(player).ids(), "and served in it, rather than starting the next one")
+        assertEquals(1, cycleOf(player))
+    }
+
+    private fun newPlayer(): String =
+        transaction(database) { PlayerStore.createGuest(UUID.randomUUID().toString(), Long.MAX_VALUE).id }
+
+    /** A food question by [author], stored as a moderator's decision of [status] would leave it. */
+    private fun submitted(
+        author: String,
+        status: QuestionStatus,
+    ): String {
+        val id = UUID.randomUUID().toString()
+        val now = System.currentTimeMillis()
+        transaction(database) {
+            Questions.insert { row ->
+                row[Questions.id] = id
+                row[optionA] = "A of $id"
+                row[optionB] = "B of $id"
+                row[category] = QuestionCategory.FOOD.name
+                row[authorPlayerId] = author
+                row[Questions.status] = status
+                row[submittedAt] = now
+                row[reviewedAt] = now.takeIf { status != QuestionStatus.PENDING }
+                row[rejectionReason] = "not a real dilemma".takeIf { status == QuestionStatus.REJECTED }
+            }
+        }
+        return id
+    }
+
+    private fun approve(question: String) {
+        transaction(database) {
+            Questions.update({ Questions.id eq question }) { row ->
+                row[status] = QuestionStatus.APPROVED
+                row[reviewedAt] = System.currentTimeMillis()
+            }
+        }
+    }
+
+    private fun answer(
+        player: String,
+        questionId: String,
+    ): VoteResultDto =
+        transaction(database) {
+            VoteStore.cast(player, questionId, OptionSide.A, attemptId = UUID.randomUUID().toString())
+        }
+
+    private fun skip(
+        player: String,
+        questionId: String,
+    ) = transaction(database) { SkipStore.skip(player, questionId) }
+
+    private fun feed(
+        player: String,
+        category: QuestionCategory? = null,
+    ): List<QuestionDto> =
+        transaction(database) { QuestionStore.feed(player, WyrApi.Limits.MAX_PAGE_SIZE, category).questions }
+
+    private fun statsOf(player: String): PlayerStatsDto =
+        checkNotNull(transaction(database) { StatsStore.of(player) }) { "player $player has no stats" }
+
+    private fun cycleOf(player: String): Int? = transaction(database) { PlayerStore.find(player)?.cycle }
+
+    private fun assertNotFound(
+        case: String,
+        block: () -> Unit,
+    ) {
+        val failure = assertFailsWith<ApiFailure>(case) { block() }
+        assertEquals(ErrorCode.QUESTION_NOT_FOUND, failure.code, case)
+    }
+
+    private fun List<QuestionDto>.ids(): List<String> = map { it.id }
+}

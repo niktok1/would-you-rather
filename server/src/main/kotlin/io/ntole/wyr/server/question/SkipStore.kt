@@ -18,7 +18,8 @@ object SkipStore {
      * feed compares the cycle kept here with the player's, as it does a vote's ([QuestionStore.feed]).
      * A skip earns nothing and touches no vote, no tally and no count on the player's row. Skipping
      * again in the same cycle writes nothing. Answering after a skip is an ordinary answer, since
-     * `VoteStore.cast` never reads a skip.
+     * `VoteStore.cast` never reads a skip. A question the player may not be served is not found, as
+     * for a vote ([QuestionStore.isServable]): nothing serves it to them, so there is nothing to skip.
      *
      * The player is resolved before the write, as for a vote: a validly signed token can outlive its
      * player, and inserting first would trip the Skips foreign key instead of answering 401.
@@ -40,7 +41,7 @@ object SkipStore {
         playerId: String,
         questionId: String,
     ) {
-        if (!QuestionStore.exists(questionId)) throw ApiFailure.questionNotFound(questionId)
+        if (!QuestionStore.isServable(questionId, playerId)) throw ApiFailure.questionNotFound(questionId)
 
         if (PlayerStore.find(playerId) == null) throw ApiFailure.unauthorized("unknown player")
 

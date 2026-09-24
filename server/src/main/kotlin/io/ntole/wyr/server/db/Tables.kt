@@ -1,6 +1,7 @@
 package io.ntole.wyr.server.db
 
 import io.ntole.wyr.core.api.WyrApi
+import io.ntole.wyr.core.question.QuestionStatus
 import org.jetbrains.exposed.v1.core.Table
 
 /**
@@ -46,9 +47,42 @@ object Questions : Table("questions") {
     val optionA = varchar("option_a", WyrApi.Limits.MAX_OPTION_LENGTH)
     val optionB = varchar("option_b", WyrApi.Limits.MAX_OPTION_LENGTH)
     val category = varchar("category", 32)
-    val createdAt = long("created_at")
+
+    /**
+     * The player who submitted the question (CLAUDE.md §8d), or null for a seed, which nobody wrote.
+     * The author is never served it (`QuestionStore.servableTo`).
+     */
+    val authorPlayerId = varchar("author_player_id", 36).references(Players.id).nullable()
+
+    /**
+     * Where the question stands with the moderator. Only an [QuestionStatus.APPROVED] one is ever
+     * served. A seed is approved from the start, and a submission starts out
+     * [QuestionStatus.PENDING]. Never [QuestionStatus.UNKNOWN], the client's decoding fallback.
+     */
+    val status = enumerationByName<QuestionStatus>("status", 16)
+
+    /**
+     * When the question was stored, submitted or seeded. The one timestamp a question is created
+     * with, so a seed has one too although nobody submitted it.
+     */
+    val submittedAt = long("submitted_at")
+
+    /** When a moderator approved or rejected the question, or null while none has. A seed never was. */
+    val reviewedAt = long("reviewed_at").nullable()
+
+    /** The moderator's short reason for rejecting the question, or null for any other. */
+    val rejectionReason = varchar("rejection_reason", MAX_REJECTION_REASON_LENGTH).nullable()
 
     override val primaryKey = PrimaryKey(id)
+
+    init {
+        // For an author's own questions: the pending ones every submission counts, and the list of
+        // all of them. PostgreSQL does not index a foreign key by itself.
+        index(isUnique = false, authorPlayerId, status)
+    }
+
+    /** Room for the "short reason" of CLAUDE.md §8d. The moderation route decides what it accepts. */
+    const val MAX_REJECTION_REASON_LENGTH: Int = 200
 }
 
 object Votes : Table("votes") {

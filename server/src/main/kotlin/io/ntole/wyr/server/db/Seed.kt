@@ -1,14 +1,16 @@
 package io.ntole.wyr.server.db
 
 import io.ntole.wyr.core.question.QuestionCategory
+import io.ntole.wyr.core.question.QuestionStatus
 import org.jetbrains.exposed.v1.jdbc.batchInsert
 import org.jetbrains.exposed.v1.jdbc.selectAll
 
 /**
  * Starter question set, so a fresh database is playable immediately.
  *
- * Player-submitted questions will land through the submit-question screen; this is only the
- * bootstrap content.
+ * Players submit questions of their own, which wait for a moderator (CLAUDE.md §8d); this is only
+ * the bootstrap content. A seed has no author and is approved from the start, so every player is
+ * served it.
  */
 object Seed {
     /**
@@ -30,7 +32,9 @@ object Seed {
             this[Questions.optionA] = starter.optionA
             this[Questions.optionB] = starter.optionB
             this[Questions.category] = starter.category.name
-            this[Questions.createdAt] = now
+            this[Questions.authorPlayerId] = null
+            this[Questions.status] = QuestionStatus.APPROVED
+            this[Questions.submittedAt] = now
         }
     }
 
