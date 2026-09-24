@@ -1,11 +1,13 @@
 package io.ntole.wyr.di
 
 import io.ntole.wyr.core.data.di.dataModule
+import io.ntole.wyr.core.network.environment.WyrEnvironment
 import io.ntole.wyr.dev.DevConsoleViewModel
 import io.ntole.wyr.dev.moderation.ModerationConsoleViewModel
 import io.ntole.wyr.dev.submission.SubmissionConsoleViewModel
 import io.ntole.wyr.play.PlayViewModel
 import org.koin.core.context.startKoin
+import org.koin.core.module.Module
 import org.koin.core.module.dsl.viewModel
 import org.koin.core.module.dsl.viewModelOf
 import org.koin.core.qualifier.named
@@ -50,25 +52,46 @@ internal val uiModule =
     }
 
 /**
- * Starts Koin.
+ * Starts Koin for the server environment [environmentName] names (CLAUDE.md §8e), by
+ * [WyrEnvironment.parse]: no name is [WyrEnvironment.LOCAL], and one it does not know stops the app
+ * here, before anything has started.
  *
  * Called once per process from each platform's entry point. [appDeclaration] is how Android hands
  * in its `Context`, which the shared code otherwise has no way to obtain — which is also why Koin
- * is an `api` dependency of this module rather than an implementation detail.
+ * is an `api` dependency of this module rather than an implementation detail. The environment comes
+ * in by name for the same reason: a plain string keeps `:core:network` off the entry points'
+ * classpaths.
  *
  * Returns nothing: no entry point needs the `KoinApplication`, and keeping it out of the signature
  * keeps one more Koin type off their classpaths.
  */
-fun initKoin(appDeclaration: KoinAppDeclaration = {}) {
+fun initKoin(
+    environmentName: String? = null,
+    appDeclaration: KoinAppDeclaration = {},
+) {
+    val environment = WyrEnvironment.parse(environmentName)
+    val apiBaseUrl = platformApiBaseUrl(environment)
     startKoin {
         appDeclaration()
-
-        val platform = platformModule()
-        modules(platform)
-
-        // The base URL comes from the platform module, so it has to be resolved after that module
-        // is registered rather than passed in from here.
-        val baseUrl = koin.get<String>(named(API_BASE_URL))
-        modules(dataModule(baseUrl), uiModule)
+        modules(platformModule())
+        modules(appModules(environment, apiBaseUrl))
     }
 }
+
+/**
+ * Every module but the platform's, for [environment] reached at [apiBaseUrl], which is the
+ * environment's own URL unless the platform put another in its place ([platformApiBaseUrl]).
+ * Internal, not private, so a test can load them as [initKoin] does.
+ */
+internal fun appModules(
+    environment: WyrEnvironment,
+    apiBaseUrl: String,
+): List<Module> =
+    listOf(
+        module {
+            single { environment }
+            single(named(API_BASE_URL)) { apiBaseUrl }
+        },
+        dataModule(apiBaseUrl),
+        uiModule,
+    )

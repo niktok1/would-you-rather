@@ -1,8 +1,8 @@
 package io.ntole.wyr.di
 
-import io.ntole.wyr.core.data.di.dataModule
 import io.ntole.wyr.core.network.InMemoryTokenStorage
 import io.ntole.wyr.core.network.TokenStorage
+import io.ntole.wyr.core.network.environment.WyrEnvironment
 import io.ntole.wyr.dev.DevConsoleViewModel
 import io.ntole.wyr.dev.moderation.ModerationConsoleViewModel
 import io.ntole.wyr.dev.submission.SubmissionConsoleViewModel
@@ -12,13 +12,18 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.setMain
+import org.koin.core.Koin
 import org.koin.core.qualifier.named
 import org.koin.dsl.koinApplication
 import org.koin.dsl.module
+import org.koin.mp.KoinPlatform
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 /**
  * The real data and UI modules, with only the platform bindings stood in for. A binding that is
@@ -40,21 +45,53 @@ class AppModuleTest {
 
     @Test
     fun `every ViewModel resolves from the real modules`() {
-        val platform =
-            module {
-                single<TokenStorage> { InMemoryTokenStorage() }
-                single(named(API_BASE_URL)) { BASE_URL }
-            }
-        val koin = koinApplication { modules(platform, dataModule(BASE_URL), uiModule) }.koin
+        val koin = koinFor(WyrEnvironment.LOCAL, WyrEnvironment.LOCAL.apiBaseUrl)
 
         koin.get<PlayViewModel>()
         koin.get<ModerationConsoleViewModel>()
-        val console = koin.get<DevConsoleViewModel>()
-        assertEquals(BASE_URL, console.state.value.apiBaseUrl)
+        koin.get<DevConsoleViewModel>()
         koin.get<SubmissionConsoleViewModel>()
     }
 
+    @Test
+    fun `each environment is wired to its own URL`() {
+        WyrEnvironment.entries.forEach { environment ->
+            val koin = koinFor(environment, environment.apiBaseUrl)
+
+            assertEquals(environment, koin.get<WyrEnvironment>())
+            assertEquals(environment.apiBaseUrl, koin.get<String>(named(API_BASE_URL)), environment.name)
+            val console = koin.get<DevConsoleViewModel>()
+            assertEquals(environment.apiBaseUrl, console.state.value.apiBaseUrl)
+        }
+    }
+
+    @Test
+    fun `a URL the platform puts in the environment's place is the one wired`() {
+        val koin = koinFor(WyrEnvironment.DEV, OVERRIDE)
+
+        assertEquals(WyrEnvironment.DEV, koin.get<WyrEnvironment>())
+        assertEquals(OVERRIDE, koin.get<String>(named(API_BASE_URL)))
+        val console = koin.get<DevConsoleViewModel>()
+        assertEquals(OVERRIDE, console.state.value.apiBaseUrl)
+    }
+
+    @Test
+    fun `an environment name it does not know stops the app before Koin starts`() {
+        val failure = assertFailsWith<IllegalArgumentException> { initKoin(environmentName = "staging") }
+
+        assertTrue("\"staging\"" in failure.message.orEmpty(), failure.message)
+        assertNull(KoinPlatform.getKoinOrNull())
+    }
+
+    private fun koinFor(
+        environment: WyrEnvironment,
+        apiBaseUrl: String,
+    ): Koin {
+        val platform = module { single<TokenStorage> { InMemoryTokenStorage() } }
+        return koinApplication { modules(listOf(platform) + appModules(environment, apiBaseUrl)) }.koin
+    }
+
     private companion object {
-        const val BASE_URL = "http://localhost:8080"
+        const val OVERRIDE = "https://wyr.example.com"
     }
 }

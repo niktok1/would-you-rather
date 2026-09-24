@@ -1,40 +1,49 @@
 package io.ntole.wyr.di
 
-import org.koin.core.qualifier.named
-import org.koin.dsl.koinApplication
+import io.ntole.wyr.core.network.environment.WyrEnvironment
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /** Where the desktop client sends its requests, and what [API_BASE_URL_VARIABLE] may say. */
 class DesktopApiBaseUrlTest {
     @Test
-    fun `the desktop module binds the base URL the variable names`() {
-        val koin = koinApplication { modules(desktopModule(mapOf(API_BASE_URL_VARIABLE to DEPLOYED))) }.koin
-
-        assertEquals(DEPLOYED, koin.get<String>(named(API_BASE_URL)))
+    fun `the variable wins over the environment's own URL`() {
+        WyrEnvironment.entries.forEach { environment ->
+            assertEquals(
+                DEPLOYED,
+                desktopApiBaseUrl(environment, mapOf(API_BASE_URL_VARIABLE to DEPLOYED)),
+                environment.name,
+            )
+        }
     }
 
     @Test
-    fun `without the variable the desktop module binds localhost`() {
-        val koin = koinApplication { modules(desktopModule(emptyMap())) }.koin
-
-        assertEquals(DevApiBaseUrl.LOCALHOST, koin.get<String>(named(API_BASE_URL)))
+    fun `without the variable each environment's own URL is used`() {
+        WyrEnvironment.entries.forEach { environment ->
+            assertEquals(environment.apiBaseUrl, desktopApiBaseUrl(environment, emptyMap()), environment.name)
+        }
+        assertEquals("http://localhost:8080", desktopApiBaseUrl(WyrEnvironment.LOCAL, emptyMap()))
     }
 
     @Test
     fun `a blank value counts as unset`() {
         listOf("", "   ").forEach { blank ->
-            assertEquals(DevApiBaseUrl.LOCALHOST, desktopApiBaseUrl(blank))
+            assertNull(apiBaseUrlOverride(blank))
+            assertEquals(
+                WyrEnvironment.DEV.apiBaseUrl,
+                desktopApiBaseUrl(WyrEnvironment.DEV, mapOf(API_BASE_URL_VARIABLE to blank)),
+            )
         }
     }
 
     @Test
     fun `an http or https URL of a host is used trimmed`() {
-        assertEquals(DEPLOYED, desktopApiBaseUrl(" $DEPLOYED\n"))
-        assertEquals("http://192.168.1.20:8080/", desktopApiBaseUrl("http://192.168.1.20:8080/"))
-        assertEquals("HTTPS://wyr.example.com", desktopApiBaseUrl("HTTPS://wyr.example.com"))
+        assertEquals(DEPLOYED, apiBaseUrlOverride(" $DEPLOYED\n"))
+        assertEquals("http://192.168.1.20:8080/", apiBaseUrlOverride("http://192.168.1.20:8080/"))
+        assertEquals("HTTPS://wyr.example.com", apiBaseUrlOverride("HTTPS://wyr.example.com"))
     }
 
     @Test
@@ -50,7 +59,10 @@ class DesktopApiBaseUrlTest {
             "https://player:secret@wyr.example.com",
             "https://wyr example.com",
         ).forEach { value ->
-            val failure = assertFailsWith<IllegalArgumentException>(value) { desktopApiBaseUrl(value) }
+            val failure =
+                assertFailsWith<IllegalArgumentException>(value) {
+                    desktopApiBaseUrl(WyrEnvironment.LOCAL, mapOf(API_BASE_URL_VARIABLE to value))
+                }
             assertTrue(API_BASE_URL_VARIABLE in failure.message.orEmpty(), failure.message)
         }
     }
