@@ -38,6 +38,12 @@ class ApiFailure(
         fun unauthorized(message: String = "missing or invalid credentials") =
             ApiFailure(HttpStatusCode.Unauthorized, ErrorCode.UNAUTHORIZED, message)
 
+        /**
+         * An admin route called without the server's admin token. Deliberately never [unauthorized]:
+         * see `requireAdmin`.
+         */
+        fun forbidden() = ApiFailure(HttpStatusCode.Forbidden, ErrorCode.FORBIDDEN, "admin token missing or wrong")
+
         fun invalidRefreshToken() =
             ApiFailure(
                 HttpStatusCode.Unauthorized,

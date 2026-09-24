@@ -13,6 +13,8 @@ import io.ntole.wyr.server.auth.authRoutes
 import io.ntole.wyr.server.config.ServerConfig
 import io.ntole.wyr.server.db.DatabaseFactory
 import io.ntole.wyr.server.db.Db
+import io.ntole.wyr.server.moderation.AdminToken
+import io.ntole.wyr.server.moderation.moderationRoutes
 import io.ntole.wyr.server.player.playerRoutes
 import io.ntole.wyr.server.plugins.installPlugins
 import io.ntole.wyr.server.question.questionRoutes
@@ -56,6 +58,8 @@ fun Application.wyrModule(config: ServerConfig) {
         submissionRoutes(db)
         voteRoutes(db)
         playerRoutes(db)
+        // Not registered at all without an admin token, so moderation is off (CLAUDE.md §8d).
+        moderationRoutes(db, config.adminToken?.let { token -> AdminToken(token) })
     }
 }
 
@@ -74,5 +78,17 @@ private fun Application.warnAboutInsecureDefaults(config: ServerConfig) {
     }
     if (config.allowedWebOrigins.isEmpty()) {
         log.info("ALLOWED_WEB_ORIGINS is unset — browser clients will be blocked by CORS.")
+    }
+    if (config.adminToken == null) {
+        log.warn(
+            "ADMIN_TOKEN is unset — moderation is off. The admin routes are not served, so no " +
+                "submission can be approved or rejected and every one stays pending.",
+        )
+    } else if (config.usesShortAdminToken) {
+        log.warn(
+            "ADMIN_TOKEN is shorter than ${ServerConfig.MIN_ADMIN_TOKEN_LENGTH} characters. Whoever " +
+                "guesses it can approve and reject every submission, and nothing limits how fast they " +
+                "may try. Use a random one, such as the output of openssl rand -hex 32.",
+        )
     }
 }

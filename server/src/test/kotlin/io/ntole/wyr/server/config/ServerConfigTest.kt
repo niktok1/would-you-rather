@@ -42,6 +42,49 @@ class ServerConfigTest {
         assertTrue(config.isEphemeralDatabase)
         assertTrue(config.usesDevJwtSecret)
         assertTrue(config.allowedWebOrigins.isEmpty())
+        assertNull(config.adminToken, "moderation is off, rather than on with a token anyone could read")
+    }
+
+    @Test
+    fun `the admin token comes from ADMIN_TOKEN and a blank one is none`() {
+        val token = "0123456789abcdef".repeat(4)
+
+        assertEquals(token, ServerConfig.fromEnvironment(mapOf("ADMIN_TOKEN" to token)::get).adminToken)
+        listOf("", "   ").forEach { blank ->
+            assertNull(ServerConfig.fromEnvironment(mapOf("ADMIN_TOKEN" to blank)::get).adminToken, "\"$blank\"")
+        }
+    }
+
+    @Test
+    fun `an admin token shorter than the minimum boots but is flagged`() {
+        fun configWith(length: Int) = ServerConfig.fromEnvironment(mapOf("ADMIN_TOKEN" to "x".repeat(length))::get)
+
+        assertTrue(configWith(ServerConfig.MIN_ADMIN_TOKEN_LENGTH - 1).usesShortAdminToken)
+        assertFalse(configWith(ServerConfig.MIN_ADMIN_TOKEN_LENGTH).usesShortAdminToken)
+        assertFalse(ServerConfig.fromEnvironment { null }.usesShortAdminToken, "no token is not a short one")
+    }
+
+    @Test
+    fun `an admin token no request header could carry fails at config load without showing it`() {
+        // Configured, it would never match: moderation on in the config and off in effect.
+        val unpresentable =
+            listOf(
+                " leading-space-0123456789abcdef0123456789",
+                "trailing-space-0123456789abcdef0123456789 ",
+                "inner space-0123456789abcdef0123456789",
+                "tab\t0123456789abcdef0123456789abcdef",
+                "newline\n0123456789abcdef0123456789abcdef",
+                "not-ascii-\u00e9-0123456789abcdef0123456789",
+            )
+
+        unpresentable.forEach { raw ->
+            val failure =
+                assertFailsWith<IllegalArgumentException>("\"$raw\" should be rejected") {
+                    ServerConfig.fromEnvironment(mapOf("ADMIN_TOKEN" to raw)::get)
+                }
+            assertContains(failure.message.orEmpty(), "ADMIN_TOKEN")
+            assertFalse(raw.trim() in failure.message.orEmpty(), "the message must not give the secret away")
+        }
     }
 
     @Test

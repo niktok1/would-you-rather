@@ -38,6 +38,13 @@ services:
       # reach the API has to be named here or CORS preflight rejects it.
       - key: ALLOWED_WEB_ORIGINS
         sync: false
+      # The moderator's credential (CLAUDE.md §8d): whoever holds it approves and rejects
+      # submissions, sent in the X-Admin-Token header. Set by hand in the dashboard and never
+      # committed. Unset means moderation is off: the admin routes are 404 and every submission
+      # stays pending. Generate one with openssl rand -hex 32. The server reads it at boot, so a
+      # change applies once the service restarts with it, and the old token is dead from then on.
+      - key: ADMIN_TOKEN
+        sync: false
 
 databases:
   - name: wyr-postgres

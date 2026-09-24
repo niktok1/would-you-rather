@@ -41,5 +41,6 @@ class DatabaseFactoryTest {
             accessTokenTtlSeconds = 300,
             refreshTokenTtlSeconds = 3_600,
             allowedWebOrigins = emptyList(),
+            adminToken = null,
         )
 }

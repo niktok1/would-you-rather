@@ -17,14 +17,29 @@ data class ServerConfig(
     val accessTokenTtlSeconds: Long,
     val refreshTokenTtlSeconds: Long,
     val allowedWebOrigins: List<WebOrigin>,
+    /**
+     * The moderator's credential (CLAUDE.md §8d, *Moderation*), from `ADMIN_TOKEN`, or null when that
+     * is unset or blank, which turns the admin routes off. There is no default: a built-in token would
+     * let anyone with the source moderate, where no token only leaves every submission pending.
+     */
+    val adminToken: String?,
 ) {
     /** True when running against the throwaway in-memory database. */
     val isEphemeralDatabase: Boolean get() = jdbcUrl.startsWith("jdbc:h2:")
 
     val usesDevJwtSecret: Boolean get() = jwtSecret == DEV_JWT_SECRET
 
+    /**
+     * True for an admin token short enough to guess. Nothing limits how fast a caller may try tokens
+     * yet (CLAUDE.md §8b, rate limiting), so its length is all that stands in the way.
+     */
+    val usesShortAdminToken: Boolean get() = adminToken != null && adminToken.length < MIN_ADMIN_TOKEN_LENGTH
+
     companion object {
         const val DEV_JWT_SECRET: String = "dev-only-insecure-secret-do-not-ship"
+
+        /** Shortest admin token the server boots on without a warning. `openssl rand -hex 32` makes 64. */
+        const val MIN_ADMIN_TOKEN_LENGTH: Int = 32
 
         private const val DEFAULT_PORT = 8080
         private const val ACCESS_TTL_SECONDS = 15L * 60L
@@ -60,8 +75,26 @@ data class ServerConfig(
                         ?.filter(String::isNotEmpty)
                         ?.map(::parseWebOrigin)
                         .orEmpty(),
+                adminToken = env("ADMIN_TOKEN")?.takeIf { it.isNotBlank() }?.let(::parseAdminToken),
             )
         }
+
+        /**
+         * Refuses an admin token no request could present, so moderation cannot be configured on and
+         * still be off in effect. A request carries the token in a header, whose value never starts or
+         * ends with whitespace (a server trims it) and which a client sends only visible ASCII in. So
+         * the token must be visible ASCII, 0x21 to 0x7E, with no whitespace anywhere, which every
+         * generated token is. The message never includes the token, which is a secret.
+         */
+        internal fun parseAdminToken(raw: String): String {
+            require(raw.all { it in VISIBLE_ASCII }) {
+                "ADMIN_TOKEN holds a character a request header cannot carry; use visible ASCII only, " +
+                    "with no whitespace, such as the output of openssl rand -hex 32."
+            }
+            return raw
+        }
+
+        private val VISIBLE_ASCII = '!'..'~'
 
         /**
          * Accepts an origin as a browser sends it (`http://` or `https://` plus `host[:port]`),

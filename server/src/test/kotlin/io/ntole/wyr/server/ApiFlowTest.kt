@@ -3,11 +3,14 @@ package io.ntole.wyr.server
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
+import io.ktor.client.request.HttpRequestBuilder
 import io.ktor.client.request.bearerAuth
 import io.ktor.client.request.get
+import io.ktor.client.request.header
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
 import io.ktor.client.statement.HttpResponse
+import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.contentType
@@ -37,6 +40,8 @@ import io.ntole.wyr.server.config.ServerConfig
 import io.ntole.wyr.server.vote.Scoring
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
 import java.util.UUID
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -986,8 +991,126 @@ class ApiFlowTest {
             assertEquals(ErrorCode.UNAUTHORIZED, response.body<ErrorDto>().code)
         }
 
+    @Test
+    fun `the moderator's queue lists every player's pending submissions oldest first and names no author`() =
+        runServer("admin-queue") { client ->
+            val (author, other) = client.guest() to client.guest()
+            val submitted =
+                listOf(author, other, author).mapIndexed { index, session ->
+                    client.submitted(
+                        session,
+                        SubmitQuestionRequest("A $index", "B $index", listOf(QuestionCategory.FOOD)),
+                    )
+                }
+
+            val response = client.moderatorQueue()
+
+            val queue = response.body<SubmissionListDto>().submissions
+            assertEquals(submitted.sortedWith(compareBy({ it.submittedAt }, { it.id })), queue, "as each was answered")
+            assertEquals(queue, client.queue("?${WyrApi.Query.STATUS}=PENDING"), "which is the default")
+            assertEquals(queue.take(2), client.queue("?${WyrApi.Query.LIMIT}=2"), "the head of the queue")
+            assertEquals(
+                setOf("id", "optionA", "optionB", "categories", "status", "rejectionReason", "submittedAt"),
+                response
+                    .body<JsonObject>()
+                    .getValue("submissions")
+                    .jsonArray
+                    .first()
+                    .jsonObject.keys,
+                "as its author sees it, and nothing about who that is",
+            )
+            listOf("APPROVED", "REJECTED").forEach { status ->
+                assertEquals(emptyList(), client.queue("?${WyrApi.Query.STATUS}=$status"), "no seed is a submission")
+            }
+        }
+
+    @Test
+    fun `the moderator's queue refuses a status that is not a real one or more than one`() =
+        runServer("admin-queue-malformed") { client ->
+            val status = WyrApi.Query.STATUS
+
+            listOf(
+                "UNKNOWN" to "?$status=UNKNOWN",
+                "unrecognised" to "?$status=FROM_THE_FUTURE",
+                "lower case" to "?$status=pending",
+                "empty" to "?$status=",
+                "two" to "?$status=PENDING&$status=REJECTED",
+                "comma-separated" to "?$status=PENDING,REJECTED",
+                "a limit that is not a number" to "?${WyrApi.Query.LIMIT}=many",
+            ).forEach { (case, query) ->
+                val response = client.moderatorQueue(query)
+                assertEquals(HttpStatusCode.BadRequest, response.status, case)
+                assertEquals(ErrorCode.VALIDATION_FAILED, response.body<ErrorDto>().code, case)
+            }
+        }
+
+    @Test
+    fun `an admin route without the admin token is forbidden and never unauthorized`() =
+        runServer("admin-forbidden") { client ->
+            val player = client.guest()
+
+            listOf<Pair<String, HttpRequestBuilder.() -> Unit>>(
+                "no token" to {},
+                "an empty token" to { header(WyrApi.Headers.ADMIN_TOKEN, "") },
+                "another token" to { header(WyrApi.Headers.ADMIN_TOKEN, "another-token-0123456789abcdef") },
+                "the token in another case" to { header(WyrApi.Headers.ADMIN_TOKEN, TEST_ADMIN_TOKEN.uppercase()) },
+                "the token cut short" to { header(WyrApi.Headers.ADMIN_TOKEN, TEST_ADMIN_TOKEN.dropLast(1)) },
+                "the token and more" to { header(WyrApi.Headers.ADMIN_TOKEN, TEST_ADMIN_TOKEN + "0") },
+                // Authorization carries the player's bearer token, never the moderator's credential.
+                "the token as a bearer token" to { bearerAuth(TEST_ADMIN_TOKEN) },
+                "a player's live session" to { bearerAuth(player.accessToken) },
+                // A 401 would have the client refresh this session, and then replace it.
+                "a session that does not verify" to { bearerAuth("not-a-token") },
+            ).forEach { (case, credentials) ->
+                client.everyAdminRoute(credentials).forEach { (route, response) ->
+                    assertEquals(HttpStatusCode.Forbidden, response.status, "$case on $route")
+                    assertEquals(ErrorCode.FORBIDDEN, response.body<ErrorDto>().code, "$case on $route")
+                }
+            }
+        }
+
+    @Test
+    fun `the admin token is taken whatever player session travels beside it`() =
+        runServer("admin-beside-session") { client ->
+            val player = client.guest()
+
+            // The client's bearer provider sends the player's token with every request, a stale one too.
+            listOf<Pair<String, HttpRequestBuilder.() -> Unit>>(
+                "no session" to {},
+                "a player's live session" to { bearerAuth(player.accessToken) },
+                "a session that does not verify" to { bearerAuth("not-a-token") },
+                "a session whose player does not exist" to { bearerAuth(signAccessToken("no-such-player")) },
+            ).forEach { (case, session) ->
+                val response =
+                    client.get(WyrApi.Paths.ADMIN_SUBMISSIONS) {
+                        session()
+                        header(WyrApi.Headers.ADMIN_TOKEN, TEST_ADMIN_TOKEN)
+                    }
+                assertEquals(HttpStatusCode.OK, response.status, case)
+            }
+        }
+
+    @Test
+    fun `with no admin token configured the admin routes are not there at all`() =
+        runServer("admin-off", adminToken = null) { client ->
+            val absent = client.get("/${WyrApi.VERSION}/no-such-route")
+            assertEquals(HttpStatusCode.NotFound, absent.status)
+
+            listOf<Pair<String, HttpRequestBuilder.() -> Unit>>(
+                "no token" to {},
+                "a token" to { header(WyrApi.Headers.ADMIN_TOKEN, TEST_ADMIN_TOKEN) },
+            ).forEach { (case, credentials) ->
+                client.everyAdminRoute(credentials).forEach { (route, response) ->
+                    assertEquals(HttpStatusCode.NotFound, response.status, "$case on $route")
+                    assertEquals(absent.bodyAsText(), response.bodyAsText(), "$case on $route, as a path never served")
+                }
+            }
+        }
+
+    /** A server on its own database, moderated with [adminToken], or with moderation off for none. */
     private fun runServer(
         databaseName: String,
+        adminToken: String? = TEST_ADMIN_TOKEN,
         block: suspend ApplicationTestBuilder.(HttpClient) -> Unit,
     ) = testApplication {
         val database = testDatabaseFor(databaseName)
@@ -1004,6 +1127,7 @@ class ApiFlowTest {
                 accessTokenTtlSeconds = 300,
                 refreshTokenTtlSeconds = 3_600,
                 allowedWebOrigins = emptyList(),
+                adminToken = adminToken,
             )
 
         application { wyrModule(config) }
@@ -1084,6 +1208,21 @@ class ApiFlowTest {
             setBody(request)
         }
 
+    /** The moderator's queue, asked for with the test server's admin token. */
+    private suspend fun HttpClient.moderatorQueue(query: String = ""): HttpResponse =
+        get(WyrApi.Paths.ADMIN_SUBMISSIONS + query) { header(WyrApi.Headers.ADMIN_TOKEN, TEST_ADMIN_TOKEN) }
+
+    private suspend fun HttpClient.queue(query: String = ""): List<SubmissionDto> =
+        moderatorQueue(query).body<SubmissionListDto>().submissions
+
+    /** One request to each admin route, carrying no credential but what [credentials] adds. */
+    private suspend fun HttpClient.everyAdminRoute(
+        credentials: HttpRequestBuilder.() -> Unit,
+    ): List<Pair<String, HttpResponse>> =
+        listOf(
+            "the queue" to get(WyrApi.Paths.ADMIN_SUBMISSIONS) { credentials() },
+        )
+
     private suspend fun HttpClient.me(session: SessionDto): HttpResponse =
         get(WyrApi.Paths.ME) { bearerAuth(session.accessToken) }
 
@@ -1126,6 +1265,9 @@ class ApiFlowTest {
     }
 
     private companion object {
+        /** The admin token [runServer]'s server is moderated with, unless a test turns moderation off. */
+        const val TEST_ADMIN_TOKEN = "test-admin-token-0123456789abcdef"
+
         /**
          * Longer than the 36 characters of every id column, so no question has it. Nothing on the
          * wire bounds a questionId, so it reaches the lookup and is simply not found.
