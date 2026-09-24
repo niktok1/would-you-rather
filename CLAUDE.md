@@ -990,10 +990,13 @@ name one too.
   `WYR_API_BASE_URL`, which pointed the desktop client at any server, is retired: left set in a shell,
   it sent a PROD build's requests wherever it named, with nothing on screen to say so, since a PROD
   build has no console. No client can put another URL in its environment's place.
-- *Web*: the Gradle property `wyr.env` (`-Pwyr.env=dev`), local when absent, which `:app:webApp`'s
-  `generateWyrEnv` task writes into a Kotlin constant under `build/generated`; a name it does not know
-  fails the build. A web build against DEV or PROD also needs that server's `ALLOWED_WEB_ORIGINS`
-  (Render dashboard, `sync: false`) to include the page's origin, or every request fails CORS.
+- *Web*: the Gradle property `wyr.env` (`-Pwyr.env=dev`), local when absent, which the
+  `generateWyrEnv` task writes into a Kotlin constant, `WYR_ENV`, under `build/generated`; a name it
+  does not know fails the build. The task is `gradle/wyr-env.gradle.kts`, a script each module with a
+  browser entry point applies after naming the constant's package in `extra["wyrEnvPackage"]`, so no
+  two copies of the rule can drift. A web build against DEV or PROD also needs that server's
+  `ALLOWED_WEB_ORIGINS` (Render dashboard, `sync: false`) to include the page's origin, or every
+  request fails CORS.
 - *iOS*: the `WYR_ENV` build setting in `app/iosApp/Configuration/Config.xcconfig` (`local` by
   default). `Info.plist` carries it as its `WYR_ENV` key (`$(WYR_ENV)`), and `MainViewController`
   reads that from the main bundle; a missing key is LOCAL.
