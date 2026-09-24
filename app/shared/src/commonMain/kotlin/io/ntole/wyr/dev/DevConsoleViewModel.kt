@@ -340,7 +340,8 @@ class DevConsoleViewModel(
     private fun VoteOutcome.summary(): String = "+$pointsAwarded total=$totalPoints" + if (replayed) " replayed" else ""
 
     private fun PlayerStats.summary(): String =
-        "total=$totalPoints answers=$answersGiven questions=$questionsAnswered cycle=$cycle due=$dueThisCycle"
+        "total=$totalPoints answers=$answersGiven questions=$questionsAnswered cycle=$cycle due=$dueThisCycle " +
+            "likes=$likesReceived"
 
     private fun log(entry: LogEntry) {
         _state.update { it.copy(log = (listOf(entry) + it.log).take(LOG_CAPACITY)) }

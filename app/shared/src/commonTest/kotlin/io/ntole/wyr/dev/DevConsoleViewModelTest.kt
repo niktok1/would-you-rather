@@ -861,7 +861,7 @@ class DevConsoleViewModelTest {
     fun `Read stats reads them again as an action of its own`() =
         runTest(dispatcher) {
             val viewModel = openConsole()
-            players.stats = { statsOf("p1").copy(cycle = 3, dueThisCycle = 24) }
+            players.stats = { statsOf("p1").copy(cycle = 3, dueThisCycle = 24, likesReceived = 5) }
 
             viewModel.readStats()
             testScheduler.advanceUntilIdle()
@@ -869,7 +869,7 @@ class DevConsoleViewModelTest {
             val stats = viewModel.state.value.stats
             assertEquals(3, stats?.cycle)
             assertEquals(
-                LogResult.Ok("total=42 answers=42 questions=20 cycle=3 due=24"),
+                LogResult.Ok("total=42 answers=42 questions=20 cycle=3 due=24 likes=5"),
                 viewModel.onlyResult(),
             )
         }

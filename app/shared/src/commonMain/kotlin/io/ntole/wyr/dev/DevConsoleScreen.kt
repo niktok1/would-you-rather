@@ -235,6 +235,7 @@ private fun Stats(state: DevConsoleState) {
         Value("questionsAnswered", stats.questionsAnswered.toString())
         Value("cycle", stats.cycle.toString())
         Value("dueThisCycle", stats.dueThisCycle.toString())
+        Value("likesReceived", stats.likesReceived.toString())
     }
     if (state.statsForAnotherPlayer) {
         Value("lastOutcome", "paid to ${state.lastOutcomePlayerId}, not compared")
