@@ -880,8 +880,8 @@ and every request shows in its HTTP trace (`HttpTrace` in `:core:network`, never
     as the feed is, in a `SubmissionListDto` of `SubmissionDto`s. Never a seed, and no author.
   - `GET /v1/admin/questions` is the list of every question, seeds included, newest first, in an
     `AdminQuestionPageDto` of `AdminQuestionDto`s: options, categories, status, whether it is a seed,
-    when it was stored and reviewed, a rejected one's reason, its tally and its like count, and no
-    author. `?status=` and `?category=` narrow it, each repeated for several and matching any of its
+    when it was stored, reviewed and retired, a rejected one's reason, its tally and its like count,
+    and no author. `?status=` and `?category=` narrow it, each repeated for several and matching any of its
     values, none for all; `UNKNOWN` or a name that is no status or category is 400, as for the feed's
     category (`categoryFilter`). `?limit=` bounds a page as the feed's is. A page is asked for by
     cursor, not offset (`QuestionCursor`, `?cursor=`): `nextCursor` is the last question's place,
