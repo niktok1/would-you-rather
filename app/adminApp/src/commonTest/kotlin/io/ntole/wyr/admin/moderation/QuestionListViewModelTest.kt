@@ -182,10 +182,7 @@ class QuestionListViewModelTest {
             testScheduler.advanceUntilIdle()
 
             assertNull(viewModel.state.value.retiring)
-            assertEquals(
-                listOf("questions [] [] after=null", "retire seed-1", "questions [] [] after=null"),
-                moderation.calls,
-            )
+            assertEquals(listOf("questions [] [] after=null", "retire seed-1"), moderation.calls)
             assertEquals(
                 "Retired \"Cats\" or \"Dogs\": served to nobody until restored.",
                 viewModel.state.value.questions.outcomes.notice,
@@ -211,30 +208,56 @@ class QuestionListViewModelTest {
         }
 
     @Test
-    fun `an action on a question reads the list again as deep as it was shown`() =
+    fun `a decision from the list reads the list again as deep as it was shown`() =
         runTest(dispatcher) {
             val viewModel = openWithList()
             viewModel.loadMore()
             testScheduler.advanceUntilIdle()
-            val retired = LISTED.map { if (it.id == "seed-1") moderation.retire.invoke(it.id) else it }
+            val approved = LISTED.map { if (it.id == "q1") it.copy(status = SubmissionStatus.APPROVED) else it }
             moderation.calls.clear()
-            moderation.questions = { _, after -> pageOf(retired, after) }
+            moderation.questions = { _, after -> pageOf(approved, after) }
+
+            viewModel.approve("q1", Screen.QUESTIONS)
+            testScheduler.advanceUntilIdle()
+
+            // A decision answers as the author sees it, without the list's tally and likes.
+            assertEquals(
+                listOf("approve q1 []", "pending", "questions [] [] after=null", "questions [] [] after=2"),
+                moderation.calls,
+            )
+            val list = viewModel.state.value.questions
+            assertEquals(approved.take(4), list.questions, "the rows as the server holds them now")
+            assertEquals(QuestionCursor("4"), list.next)
+        }
+
+    @Test
+    fun `a retirement shows the question the server answered with in its row and reads nothing again`() =
+        runTest(dispatcher) {
+            val viewModel = openWithList()
+            viewModel.loadMore()
+            testScheduler.advanceUntilIdle()
+            val retired =
+                LISTED.single { it.id == "seed-1" }.copy(
+                    status = SubmissionStatus.RETIRED,
+                    retiredAt = FakeModeration.RETIRED_AT,
+                    likeCount = 9,
+                )
+            moderation.retire = { retired }
+            moderation.calls.clear()
 
             viewModel.askToRetire("seed-1")
             viewModel.confirmRetire()
             testScheduler.advanceUntilIdle()
 
-            assertEquals(
-                listOf("retire seed-1", "questions [] [] after=null", "questions [] [] after=2"),
-                moderation.calls,
-            )
+            // Two pages shown, and the retirement the one request: reading them again would cost two more.
+            assertEquals(listOf("retire seed-1"), moderation.calls)
             val list = viewModel.state.value.questions
-            assertEquals(retired.take(4), list.questions, "the rows as the server holds them now")
+            assertEquals(LISTED.take(4).map { if (it.id == "seed-1") retired else it }, list.questions)
             assertEquals(QuestionCursor("4"), list.next)
         }
 
     @Test
-    fun `Restore sends at once and reads the list again`() =
+    fun `Restore sends at once and shows the question the server answered with in its row`() =
         runTest(dispatcher) {
             val viewModel = openWithList()
             viewModel.loadMore()
@@ -244,13 +267,37 @@ class QuestionListViewModelTest {
             viewModel.restore("q3")
             testScheduler.advanceUntilIdle()
 
+            assertEquals(listOf("restore q3"), moderation.calls)
+            val state = viewModel.state.value
+            val restored = moderation.restore.invoke("q3")
+            assertEquals(LISTED.take(4).map { if (it.id == "q3") restored else it }, state.questions.questions)
+            assertEquals("Restored \"Sea\" or \"Mountains\": served again.", state.questions.outcomes.notice)
+        }
+
+    @Test
+    fun `a moved question the filter no longer picks leaves the list`() =
+        runTest(dispatcher) {
+            moderation.questions = { filter, after -> pageOf(LISTED.filter { it.status in filter.statuses }, after) }
+            val viewModel = open()
+            viewModel.setAdminToken(TOKEN)
+            viewModel.toggleStatusFilter(SubmissionStatus.APPROVED)
+            viewModel.loadQuestions()
+            testScheduler.advanceUntilIdle()
             assertEquals(
-                listOf("restore q3", "questions [] [] after=null", "questions [] [] after=2"),
-                moderation.calls,
+                listOf("seed-1", "q5"),
+                viewModel.state.value.questions.questions
+                    ?.map { it.id },
             )
+
+            viewModel.askToRetire("seed-1")
+            viewModel.confirmRetire()
+            testScheduler.advanceUntilIdle()
+
+            // Retired, it is no longer one of the approved questions this list holds, as a read would say.
             assertEquals(
-                "Restored \"Sea\" or \"Mountains\": served again.",
-                viewModel.state.value.questions.outcomes.notice,
+                listOf("q5"),
+                viewModel.state.value.questions.questions
+                    ?.map { it.id },
             )
         }
 
@@ -408,7 +455,7 @@ class QuestionListViewModelTest {
                 ModeratedQuestionPage(emptyList(), QuestionCursor("more"))
             }
 
-            viewModel.restore("q3")
+            viewModel.approve("q1", Screen.QUESTIONS)
             testScheduler.advanceUntilIdle()
 
             assertEquals(1, reads)

@@ -228,22 +228,20 @@ class ModerationViewModel(
 
     override fun cancelRetire() = _state.update { it.copy(retiring = null) }
 
-    /** Retires the question [askToRetire] asked about, then reads the list again. */
+    /** Retires the question [askToRetire] asked about, and lists it as the server answered it. */
     override fun confirmRetire() {
         val current = _state.value
         val questionId = current.retiring ?: return
         if (!current.canSend) return
         _state.update { it.copy(retiring = null) }
-        move(Action.RETIRE, questionId) { token ->
-            val retired = retireQuestion(token, questionId)
+        move(Action.RETIRE, questionId, send = { token -> retireQuestion(token, questionId) }) { retired ->
             "Retired ${optionsOf(retired.optionA, retired.optionB)}: served to nobody until restored."
         }
     }
 
-    /** Restores the retired question [questionId], then reads the list again. */
+    /** Restores the retired question [questionId], and lists it as the server answered it. */
     override fun restore(questionId: String) =
-        move(Action.RESTORE, questionId) { token ->
-            val restored = restoreQuestion(token, questionId)
+        move(Action.RESTORE, questionId, send = { token -> restoreQuestion(token, questionId) }) { restored ->
             "Restored ${optionsOf(restored.optionA, restored.optionB)}: served again."
         }
 
@@ -272,25 +270,46 @@ class ModerationViewModel(
     }
 
     /**
-     * Retires or restores [questionId], which answers with the line to show once it is done, then
-     * reads the list again, whatever became of it: a question another moderator moved first answers
-     * `WRONG_STATUS`, and the list then shows where it stands. Not after a refusal every request
-     * would meet ([refusesEveryRequest]), which moved nothing.
+     * Retires or restores [questionId] through [send], which answers with the question as the list
+     * now shows it, puts that in the question's row, and says what was done in the line [noticeOf]
+     * makes of it. The server reads the answer as it reads a page's row, in the move's own
+     * transaction, so reading the list again would only spend the admin budget, a request per page
+     * shown. A move that failed reads the list again instead, whatever became of it: a question
+     * another moderator moved first answers `WRONG_STATUS`, and the list then shows where it stands.
+     * Not after a refusal every request would meet ([refusesEveryRequest]), which moved nothing.
      */
     private fun move(
         action: Action,
         questionId: String,
-        send: suspend (AdminToken) -> String,
+        send: suspend (AdminToken) -> ModeratedQuestion,
+        noticeOf: (ModeratedQuestion) -> String,
     ) = acting(Running(action, questionId), Screen.QUESTIONS) { token ->
         val failure =
             failureOf {
-                val notice = send(token)
-                _state.update { it.noticed(Screen.QUESTIONS, notice) }
+                val moved = send(token)
+                _state.update { it.noticed(Screen.QUESTIONS, noticeOf(moved)).listing(moved) }
             }
-        if (failure.refusesEveryRequest) return@acting failure
+        if (failure == null || failure.refusesEveryRequest) return@acting failure
         rereadList(token)
         failure
     }
+
+    /**
+     * The list with [question] in its row, as the server answered it, or without it once the list's
+     * filter no longer picks it (a retired question in a list of approved ones, say), as a read at
+     * that filter would list it. A move keeps a question's place, its time and id, in the order.
+     */
+    private fun ModerationState.listing(question: ModeratedQuestion): ModerationState {
+        val listed = questions.questions ?: return this
+        val picked = questions.filter.picks(question)
+        val rows = listed.mapNotNull { row -> if (row.id != question.id) row else question.takeIf { picked } }
+        return copy(questions = questions.copy(questions = rows))
+    }
+
+    /** Whether the server lists [question] at this filter: any of its statuses, and any of its categories. */
+    private fun QuestionFilter.picks(question: ModeratedQuestion): Boolean =
+        (statuses.isEmpty() || question.status in statuses) &&
+            (categories.isEmpty() || question.categories.any { it in categories })
 
     /**
      * Whether this is a refusal the server gave before doing anything, and would give any admin request

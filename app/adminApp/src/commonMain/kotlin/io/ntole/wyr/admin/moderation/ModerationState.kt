@@ -102,11 +102,12 @@ data class PendingQueue(
 /**
  * The list of every question, seeds included, newest first, at [filter]: the pages read so far, or
  * `null` until one is, and [next], where the page after them starts, `null` on the last. Changing
- * the filter drops what was read for the one before; Load reads the first page, Load more the next,
- * and every action on a question reads again as many pages as were shown, so the list shows what
- * the server holds without losing the moderator's place; all but one refused as a wrong token or by
- * the rate limit, which did nothing. A read that fails keeps what was listed and says why in
- * [failure].
+ * the filter drops what was read for the one before; Load reads the first page, Load more the next.
+ * A retirement or restoration shows the question the server answered with in its row, and a
+ * decision, whose answer lacks what the row shows, reads again as many pages as were shown, as does
+ * a move that failed, so the list shows what the server holds without losing the moderator's place;
+ * nothing is read again after a refusal as a wrong token or by the rate limit, which did nothing. A
+ * read that fails keeps what was listed and says why in [failure].
  */
 data class QuestionList(
     val filter: QuestionFilter = QuestionFilter(),

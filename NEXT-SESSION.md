@@ -312,10 +312,12 @@ automatically from every green commit on `main` (its URL is on its Render page).
   `QuestionListViewModelTest` drives the list: pages read to the last one and no further, Load more
   at the filter the list was read at (ignoring it fails), a filter change dropping what was read and
   refused while a read runs, `OTHER` refused as a filter, Retire only after the dialog is confirmed
-  and only for an approved question, every action reading the list again as deep as it was shown
-  (one page only fails it), a decision from either screen reading the queue and a read list again,
-  a retirement or restoration refused as a wrong token or by the rate limit reading nothing again,
-  drafts kept for a question pending in the list alone, an empty page that claims another ending the
+  and only for an approved question, a decision reading the list again as deep as it was shown
+  (one page only fails it), a retirement or restoration putting the server's answer in its row as
+  its one request with two pages shown (not putting it there fails it) and dropping it from a list
+  whose filter no longer picks it, a decision from either screen reading the queue and a read list
+  again, a retirement or restoration refused as a wrong token or by the rate limit reading nothing
+  again, drafts kept for a question pending in the list alone, an empty page that claims another ending the
   read, and Lock keeping the filter alone. `ModerationOverHttpTest` adds a 409 `WRONG_STATUS` on a
   retirement. `ScreensDrawTest` draws both screens and the Retire dialog off screen (Compose's
   `ImageComposeScene`) in both themes. `DataModuleTest` pins that the game's `dataModule` binds
@@ -651,9 +653,13 @@ of each, none being all; changing them drops what was read, and *Load* reads it 
 Each question shows its options, categories, status, seed or player's, votes and likes, when it was
 stored, reviewed and retired, and a rejection's reason. An approved one has *Retire...*, which asks
 first in a dialog; a retired one has *Restore*; a pending one has the queue's chips, reason and
-buttons, sharing what was picked and typed with the queue. After every action the list is read
-again as deep as it was shown, so the question shows where it now stands without losing your place.
-A question another moderator moved first says `Its status changed first (409)`.
+buttons, sharing what was picked and typed with the queue. A retirement or restoration shows the
+question as the server answered it, in its place, or drops it once the chips no longer pick it; a
+decision, or a move that failed, reads the list again as deep as it was shown, so the question shows
+where it now stands without losing your place. A question another moderator moved first says `Its
+status changed first (409)`. Every admin request spends the address's 60 a minute (CLAUDE.md §8b): a
+retirement or restoration is one; a decision is one, one more for the queue, and one per page of the
+list shown; nothing is read again after a 403 or a 429.
 
 ### The dev console
 
