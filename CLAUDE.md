@@ -101,6 +101,7 @@ mechanism; this table is the rationale.
 |--------------------|------------------------|--------------------------------------------------|
 | UI                 | Compose Multiplatform  | One UI for Android/iOS/desktop/web               |
 | Server             | Ktor (server)          | Kotlin-native server                             |
+| Rate limiting      | Ktor RateLimit plugin  | Official Ktor plugin; in memory, per instance    |
 | HTTP client        | Ktor (client)          | Same family as the server                        |
 | Serialization      | kotlinx.serialization  | Backbone of :core                                |
 | Async              | Coroutines + Flow      | Official                                         |

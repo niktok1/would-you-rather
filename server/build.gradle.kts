@@ -25,6 +25,7 @@ dependencies {
     implementation(libs.ktor.serverStatusPages)
     implementation(libs.ktor.serverCallLogging)
     implementation(libs.ktor.serverCors)
+    implementation(libs.ktor.serverRateLimit)
     implementation(libs.ktor.serializationJson)
 
     implementation(libs.exposed.core)
