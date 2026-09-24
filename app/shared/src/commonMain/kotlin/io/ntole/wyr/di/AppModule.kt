@@ -2,6 +2,7 @@ package io.ntole.wyr.di
 
 import io.ntole.wyr.core.data.di.dataModule
 import io.ntole.wyr.dev.DevConsoleViewModel
+import io.ntole.wyr.dev.moderation.ModerationConsoleViewModel
 import io.ntole.wyr.dev.submission.SubmissionConsoleViewModel
 import io.ntole.wyr.play.PlayViewModel
 import org.koin.core.context.startKoin
@@ -15,6 +16,15 @@ import org.koin.dsl.module
 internal val uiModule =
     module {
         viewModelOf(::PlayViewModel)
+
+        // Not viewModelOf: the time source is a default, not a binding.
+        viewModel {
+            ModerationConsoleViewModel(
+                getPendingSubmissions = get(),
+                approveSubmission = get(),
+                rejectSubmission = get(),
+            )
+        }
 
         // Not viewModelOf: the base URL is a plain String, found only by its qualifier.
         viewModel {
