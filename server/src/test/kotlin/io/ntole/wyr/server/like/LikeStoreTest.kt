@@ -1,9 +1,11 @@
 package io.ntole.wyr.server.like
 
+import io.ntole.wyr.core.api.WyrApi
 import io.ntole.wyr.core.error.ErrorCode
 import io.ntole.wyr.core.like.LikeResultDto
 import io.ntole.wyr.core.player.PlayerStatsDto
 import io.ntole.wyr.core.question.QuestionCategory
+import io.ntole.wyr.core.question.QuestionDto
 import io.ntole.wyr.core.question.QuestionStatus
 import io.ntole.wyr.core.vote.OptionSide
 import io.ntole.wyr.core.vote.VoteResultDto
@@ -21,9 +23,14 @@ import io.ntole.wyr.server.db.raceBehindFirst
 import io.ntole.wyr.server.player.PlayerStore
 import io.ntole.wyr.server.player.StatsStore
 import io.ntole.wyr.server.plugins.ApiFailure
+import io.ntole.wyr.server.question.QuestionStore
 import io.ntole.wyr.server.vote.Scoring
 import io.ntole.wyr.server.vote.VoteStore
+import org.jetbrains.exposed.v1.core.Transaction
 import org.jetbrains.exposed.v1.core.eq
+import org.jetbrains.exposed.v1.core.statements.StatementContext
+import org.jetbrains.exposed.v1.core.statements.StatementInterceptor
+import org.jetbrains.exposed.v1.core.statements.api.PreparedStatementApi
 import org.jetbrains.exposed.v1.jdbc.SchemaUtils
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.select
@@ -31,6 +38,9 @@ import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import java.sql.Connection
 import java.util.UUID
+import java.util.concurrent.Callable
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -165,6 +175,78 @@ class LikeStoreTest {
     }
 
     @Test
+    fun `the feed shows each question's likes and whether the player likes it before they answer`() {
+        val (liker, other) = newPlayer() to newPlayer()
+        val question = submitted(newPlayer())
+        like(liker, question)
+        like(other, question)
+        like(liker, SEED)
+
+        val forLiker = feed(liker).associateBy { it.id }
+        val forOther = feed(other).associateBy { it.id }
+        val forNobody = feed(newPlayer()).associateBy { it.id }
+
+        assertEquals(false, forLiker.getValue(question).answeredBefore, "liked, not answered")
+        assertEquals(listOf(2 to true, 1 to true), listOf(question, SEED).map { forLiker.getValue(it).likes() })
+        assertEquals(listOf(2 to true, 1 to false), listOf(question, SEED).map { forOther.getValue(it).likes() })
+        assertEquals(listOf(2 to false, 1 to false), listOf(question, SEED).map { forNobody.getValue(it).likes() })
+        val rest = forNobody.filterKeys { it != question && it != SEED }.values
+        assertEquals(setOf(0 to false), rest.map { it.likes() }.toSet(), "and every other one is liked by nobody")
+    }
+
+    @Test
+    fun `a batch reads its likes in one statement however many questions it holds`() {
+        val pool = transaction(database) { Questions.select(Questions.id).map { it[Questions.id] } }
+        repeat(2) {
+            val liker = newPlayer()
+            pool.forEach { id -> like(liker, id) }
+        }
+
+        val statements =
+            listOf(1, pool.size).map { limit ->
+                val player = newPlayer()
+                transaction(database) {
+                    val batch = QuestionStore.feed(player, limit, categories = emptySet()).questions
+                    assertEquals(limit, batch.size)
+                    assertEquals(setOf(2 to false), batch.map { it.likes() }.toSet())
+                    statementCount
+                }
+            }
+
+        assertEquals(statements.first(), statements.last(), "one statement per question would grow with the batch")
+    }
+
+    @Test
+    fun `an unlike committed while a batch's likes are read shows in their count and the player's or in neither`() {
+        val player = newPlayer()
+        like(player, SEED)
+        val elsewhere = Executors.newSingleThreadExecutor()
+        try {
+            val served =
+                transaction(database) {
+                    // Commits the player's unlike right after the first statement that reads a like.
+                    // Read one number per statement, the second would disagree with the first.
+                    registerInterceptor(
+                        afterFirstStatementOn(
+                            "LIKES",
+                            action = {
+                                elsewhere
+                                    .submit(Callable { unlike(player, SEED) })
+                                    .get(TIMEOUT_SECONDS, TimeUnit.SECONDS)
+                            },
+                        ),
+                    )
+                    QuestionStore.feed(player, WyrApi.Limits.MAX_PAGE_SIZE, categories = emptySet()).questions
+                }
+
+            assertEquals(1 to true, served.single { it.id == SEED }.likes(), "both from before the unlike")
+            assertEquals(emptyList(), likersOf(SEED), "and the unlike did land")
+        } finally {
+            elsewhere.shutdownNow()
+        }
+    }
+
+    @Test
     fun `a question not approved cannot be liked or unliked by anybody`() {
         val (author, player) = newPlayer() to newPlayer()
 
@@ -276,6 +358,14 @@ class LikeStoreTest {
     ): VoteResultDto =
         transaction(database) { VoteStore.cast(player, questionId, choice, attemptId = UUID.randomUUID().toString()) }
 
+    private fun feed(player: String): List<QuestionDto> =
+        transaction(database) {
+            QuestionStore.feed(player, WyrApi.Limits.MAX_PAGE_SIZE, categories = emptySet()).questions
+        }
+
+    /** A served question's like count and whether the player it was served to likes it. */
+    private fun QuestionDto.likes(): Pair<Int, Boolean> = likeCount to likedByMe
+
     private fun statsOf(player: String): PlayerStatsDto =
         checkNotNull(transaction(database) { StatsStore.of(player) }) { "player $player has no stats" }
 
@@ -307,7 +397,27 @@ class LikeStoreTest {
         assertEquals(ErrorCode.QUESTION_NOT_FOUND, failure.code, case)
     }
 
+    /** Runs [action] once, after the first statement of the transaction whose SQL names [table]. */
+    private fun afterFirstStatementOn(
+        table: String,
+        action: () -> Unit,
+    ): StatementInterceptor =
+        object : StatementInterceptor {
+            private var fired = false
+
+            override fun afterExecution(
+                transaction: Transaction,
+                contexts: List<StatementContext>,
+                executedStatement: PreparedStatementApi,
+            ) {
+                if (fired || contexts.none { table in it.sql(transaction).uppercase() }) return
+                fired = true
+                action()
+            }
+        }
+
     private companion object {
         const val SEED = "seed-1"
+        const val TIMEOUT_SECONDS = 10L
     }
 }

@@ -8,6 +8,7 @@ import io.ntole.wyr.server.db.QuestionCategories
 import io.ntole.wyr.server.db.Questions
 import io.ntole.wyr.server.db.Skips
 import io.ntole.wyr.server.db.Votes
+import io.ntole.wyr.server.like.LikeStore
 import io.ntole.wyr.server.player.PlayerStore
 import org.jetbrains.exposed.v1.core.Column
 import org.jetbrains.exposed.v1.core.Expression
@@ -68,7 +69,10 @@ object QuestionStore {
      * question (the Votes and Skips keys are both player and question), and the categories are an
      * `EXISTS` rather than a join, so no question appears twice, however many of them it has. The
      * random key is rendered `RANDOM()`, which H2 and PostgreSQL both have. The batch's categories
-     * are then read in one more statement ([categoriesOf]).
+     * are then read in one more statement ([categoriesOf]), and its likes in one more
+     * ([LikeStore.likesOf]): how many players like each question and whether this one does, sent
+     * whether or not the player has answered it (CLAUDE.md §8d). A like committed after the batch
+     * was chosen shows in them, which is harmless, since it is then how the question stands.
      */
     fun feed(
         playerId: String,
@@ -78,12 +82,12 @@ object QuestionStore {
         val cycle = checkNotNull(PlayerStore.find(playerId)) { "player $playerId vanished mid-transaction" }.cycle
         val current = intParam(cycle)
 
-        val due = candidates(playerId, categories, dueIn = current).randomBatch(limit)
+        val due = candidates(playerId, categories, dueIn = current).randomBatch(playerId, limit)
         if (due.isNotEmpty()) return QuestionPageDto(questions = due)
 
         // Nothing in the categories is due, so every question in them, if they have any, was answered
         // or skipped in this cycle.
-        val again = candidates(playerId, categories, dueIn = null).randomBatch(limit)
+        val again = candidates(playerId, categories, dueIn = null).randomBatch(playerId, limit)
         val cycleFinished =
             categories.isEmpty() || candidates(playerId, categories = emptySet(), dueIn = current).empty()
         if (again.isNotEmpty() && cycleFinished) PlayerStore.startNextCycle(playerId, from = cycle)
@@ -136,15 +140,22 @@ object QuestionStore {
     private val BATCH_COLUMNS: List<Expression<*>> =
         listOf(Questions.id, Questions.optionA, Questions.optionB, Votes.answeredInCycle)
 
-    private fun Query.randomBatch(limit: Int): List<QuestionDto> {
+    /** At most [limit] of the questions picked, in random order, as [playerId] is served them. */
+    private fun Query.randomBatch(
+        playerId: String,
+        limit: Int,
+    ): List<QuestionDto> {
         val rows = orderBy(Random() to SortOrder.ASC).limit(limit).toList()
         if (rows.isEmpty()) return emptyList()
 
-        val categories = categoriesOf(Questions.id inList rows.map { row -> row[Questions.id] })
+        val ids = rows.map { row -> row[Questions.id] }
+        val categories = categoriesOf(Questions.id inList ids)
+        val likes = LikeStore.likesOf(playerId, ids)
         return rows.map { row ->
             toDto(
                 row,
                 categories = categories[row[Questions.id]].orEmpty(),
+                likes = likes[row[Questions.id]] ?: LikeStore.QuestionLikes.NONE,
                 answeredBefore = row.getOrNull(Votes.answeredInCycle) != null,
             )
         }
@@ -205,6 +216,7 @@ object QuestionStore {
     private fun toDto(
         row: ResultRow,
         categories: List<QuestionCategory>,
+        likes: LikeStore.QuestionLikes,
         answeredBefore: Boolean,
     ): QuestionDto =
         QuestionDto(
@@ -213,6 +225,8 @@ object QuestionStore {
             optionB = row[Questions.optionB],
             categories = categories,
             answeredBefore = answeredBefore,
+            likeCount = likes.count,
+            likedByMe = likes.likedByMe,
         )
 
     /**
