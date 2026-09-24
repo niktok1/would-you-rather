@@ -66,6 +66,18 @@ Repo initialized on `main` with the personal identity and `user.useConfigOnly = 
   now decide through `ModerationStore` rather than writing the table. The whole suite passes against
   one shared database too (`WYR_TEST_JDBC_URL` at a shared H2), so the per-test drop copes with the
   new index.
+  Moderation's client, on the same branch, which merges `feat/submission-client` up to its data layer
+  (5ca5cd7) for the `Submission` domain type and its mapping: `ModerationApiTest` pins the admin header
+  on each admin call and on no other request, the bearer left to the Auth plugin (none without a
+  session), no refresh after a 403, and the token absent from the trace and from a failure's message;
+  `DefaultModerationRepositoryTest` the queue mapped as the author's list is, an approval's categories
+  in declaration order and none keeping the author's, `OTHER` refused before sending, the trimmed
+  reason, each refusal's `DomainError` with its message, `UNKNOWN` for moderation off, and that neither
+  a 403 nor a 401 replaces the player's session or makes one; `AdminTokenTest` and
+  `RejectionReasonTest` the token's and the reason's rules; `ModerationMapperTest` the reason limit
+  against the wire's; `ModerationConsoleViewModelTest` the section: nothing sent without a valid token,
+  Reject off until the reason is valid, the queue read again after every decision, picks for a
+  submission no longer listed dropped, and the token in neither the state's text nor the log.
 - Live curl run of moderation against `ADMIN_TOKEN=... ./gradlew :server:run` on H2, on
   `feat/moderation`: a guest submitted two questions; the queue listed both, oldest first; the queue
   without the token, and with only the player's bearer token, was 403 `FORBIDDEN`; approving one
@@ -74,6 +86,17 @@ Repo initialized on `main` with the personal identity and `user.useConfigOnly = 
   a seed "` stored the reason trimmed, which `GET /v1/me/questions` showed; deciding the approved
   one again was 409 `ALREADY_DECIDED`, an unknown id 404 and a blank reason 400; the queue was then
   empty and `?status=APPROVED` listed the one approved.
+- The console's moderation path against the fat jar on H2 with `ADMIN_TOKEN` set, on
+  `feat/moderation`: a throwaway JVM test, not committed, drove `ModerationConsoleViewModel` from the
+  real Koin graph through the real CIO client. A curl guest had submitted three questions. Load
+  pending listed them oldest first; a wrong token logged `FORBIDDEN`; approving the first under
+  SUPERPOWERS and RANDOM, the second keeping its categories, and rejecting the third with a padded
+  reason each worked, the reason stored trimmed; approving the rejected one again logged
+  `ALREADY_DECIDED`, an unknown id `QUESTION_NOT_FOUND`, and the queue was then empty. The moderator's
+  graph never made a player session, and neither the trace (which showed every request, with
+  `?status=PENDING&limit=20`) nor the section's state held the token. The guest's `GET /v1/me/questions`
+  then showed both approvals and the rejection with its reason, the `?category=RANDOM` feed served the
+  first, and the guest's due count was 26 (the 24 seeds and the two approved).
 - Live curl run against `./gradlew :server:run` confirmed guest auth, paging, voting,
   refresh-token rotation, replay rejection, and the `ErrorDto` envelope on 400/401/404/409. That
   run predates flat scoring, `fix/read-committed` and the endless feed, so the scoring it checked
@@ -102,9 +125,7 @@ Repo initialized on `main` with the personal identity and `user.useConfigOnly = 
   `SubmitQuestionTest` the same refused before a session is ensured,
   `DefaultSubmissionRepositoryTest` recovery after a 401 and the 422 and 409 end to end through
   `MockEngine`, and `SubmissionConsoleViewModelTest` the console section.
-- Client tests: `:core:domain` 17, `:core:data` 88, `:core:network` 35, `:app:shared` 83 (the
-  ViewModels and the Koin graph). `:app:shared` compiles for JVM, JS, wasmJs and the iOS
-  simulator.
+- Client tests: COUNTS_PENDING
 - `:app:androidApp:assembleDebug` produces a real APK.
 - `ktlintCheck` clean across every module.
 
@@ -133,8 +154,9 @@ Repo initialized on `main` with the personal identity and `user.useConfigOnly = 
   on H2 (`ModerationStoreTest` polls H2's `SESSIONS`); on PostgreSQL it is documented READ COMMITTED
   behaviour, as for the refresh rotation, not something a test here has seen. So are the category
   rows' delete and batch insert in the decision's transaction, and the new `(status, submitted_at,
-  id)` index. No client sends a moderation request yet, and no browser has sent `X-Admin-Token`:
-  only `CorsTest` has seen its preflight.
+  id)` index. The client has sent moderation requests only from the JVM (the live run above), and no
+  browser has sent `X-Admin-Token`: only `CorsTest` has seen its preflight. Nobody has looked at the
+  console's *Moderation* section on any platform.
 - **Multiple categories on Postgres, and in the client.** The `EXISTS ... IN` filter, the batch's
   second statement for its categories and the batch insert of a submission's categories have run
   only on H2. On the client, several categories per question and a selection of several have run
@@ -222,7 +244,8 @@ curl -s -X POST localhost:8080/v1/admin/approvals -H "X-Admin-Token: $ADMIN_TOKE
   -H 'Content-Type: application/json' -d '{"questionId":"<id from the queue>","categories":["SUPERPOWERS","RANDOM"]}'
 ```
 
-Leave `categories` out to keep the author's. To reject instead, send
+Or moderate from the dev console's *Moderation* section (below). Leave `categories` out to keep the
+author's. To reject instead, send
 `{"questionId":"<id>","reason":"Too close to a seed"}` to `/v1/admin/rejections`; the reason is
 trimmed and must then be one line of at most 200 characters. `?status=APPROVED` or
 `?status=REJECTED` on the queue lists decided submissions, and `GET /v1/me/questions` with the
@@ -289,6 +312,18 @@ The app opens on the **Console** tab (`io.ntole.wyr.dev`). **Play** is the froze
   selection the server has no questions in logs `OUT_OF_QUESTIONS`, and stays selected. *New guest*
   and *Reset queue* keep the selection. The Play tab draws from the same repository, so it is
   filtered too.
+- **Moderation** (`io.ntole.wyr.dev.moderation`). Type the server's admin token (the one echoed when
+  starting it with `ADMIN_TOKEN`) into *admin token*; it is masked, held in memory only, and gone once
+  the app restarts, and every button stays off until what is typed can be a token. *Load pending*
+  lists the submissions waiting, oldest first, each with its options and categories. Under each, the
+  chips pick the categories *Approve* files it under in place of the author's; none picked keeps the
+  author's. *Reject* stays off until the reason typed is one line of at most 200 characters once
+  trimmed. After every decision the queue is read again, so a decided submission leaves the list. The
+  section's own log shows `loadPending`, `approve(questionId=... categories=keep|<NAMES>)` and
+  `reject(questionId=... reason="...")`, and the server's refusals: `FORBIDDEN` for a wrong token,
+  `ALREADY_DECIDED` for a question decided already (by another moderator too), `QUESTION_NOT_FOUND`.
+  A server without `ADMIN_TOKEN` answers every admin route with a bare 404, which logs as `UNKNOWN`
+  with a hint that moderation is off. Moderating never touches the player's session.
 - **Vote by id.** Sends a vote for whatever id is typed, as a new attempt. An unknown id provokes
   `QUESTION_NOT_FOUND` (404). A known one is simply answered again and pays 1: there is no
   "already voted" any more.

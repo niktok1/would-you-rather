@@ -293,7 +293,8 @@ This project must never be attributed to any employer identity.
   guesses yet (§8b), and one holding whitespace or anything but visible ASCII fails at boot, since no
   request header could carry it. Generate one with `openssl rand -hex 32`. It is read at boot, so
   rotating it is changing the variable and restarting the service, and the old token is dead from
-  then on. A browser on an `ALLOWED_WEB_ORIGINS` origin may send its header (CORS).
+  then on. A browser on an `ALLOWED_WEB_ORIGINS` origin may send its header (CORS). The dev console's
+  *Moderation* section takes it typed and holds it in memory only.
 - The Docker build sets `WYR_SERVER_ONLY=1`, which makes `settings.gradle.kts` skip the app
   modules. Without it the Android Gradle plugin fails at configuration time for want of an SDK.
 - Free tier caveats to design around: free web services spin down after ~15 min idle (cold
@@ -344,7 +345,8 @@ accounts exist.
   player lists only their own. The client and the console submit and list them. The moderation
   contract is settled and built on the server too: the admin routes, `ApproveSubmissionRequest`,
   `RejectSubmissionRequest`, the `X-Admin-Token` header (`WyrApi.Headers`) and the error codes
-  `FORBIDDEN` and `ALREADY_DECIDED`. Left: the client and console for moderating.
+  `FORBIDDEN` and `ALREADY_DECIDED`, and the moderator's client and console section are built on
+  it (§8d, *Moderation*).
 - **A rejection reason is one line** — *provisional — user decision.* §8d asks for a short reason;
   the server also holds it to one line, as it does an option: no control character, nor U+2028 or
   U+2029 (`checkedRejection`). Chosen as the stricter reading, since a reason is shown to its author
@@ -449,7 +451,7 @@ and every request shows in its HTTP trace (`HttpTrace` in `:core:network`, never
     Category row), none for every category; a change drops the queue, and New guest keeps the
     selection.
   - `answeredBefore` means the player has a vote on the question, from any cycle.
-- **Categories** *(decided 2026-09-24; built, but for moderating from a client)*: a
+- **Categories** *(decided 2026-09-24; built)*: a
   question is filed under **any number of categories, at least one**. A player may pick **several**
   categories to play, and a question matches when it is filed under **any** of them; none picked
   means every category. The author picks one or more when submitting, and the moderator may change
@@ -529,7 +531,7 @@ and every request shows in its HTTP trace (`HttpTrace` in `:core:network`, never
   ensures a session, so nothing is sent, not even a guest's mint, and the repository refuses them
   again before building the request; every other rule is the server's. A status this build cannot
   name is `SubmissionStatus.OTHER`. The console's *Submit a question* section drives both.
-- **Moderation** *(server built, client next)*: a moderator approves or rejects each pending
+- **Moderation** *(built)*: a moderator approves or rejects each pending
   submission and **may change its categories** when approving (*Categories*: at least one stays, and
   a change replaces the question's `question_categories` rows in one transaction). A rejection
   carries a **short reason**, and the author sees the status of each of their submissions and, for a
@@ -561,7 +563,22 @@ and every request shows in its HTTP trace (`HttpTrace` in `:core:network`, never
     with it or not at all. An approved question is servable from the commit on: due at once for
     every player in their current cycle, its author included. Nothing moves a decided question on:
     no withdrawing an approval, and no second look at a rejection.
-  - No client moderates yet.
+  - *The client* is `ModerationRepository` in `:core:domain`, behind `GetPendingSubmissions`,
+    `ApproveSubmission` and `RejectSubmission`, none of which ensures a session: the moderator is
+    not a player. `DefaultModerationRepository` calls `ModerationApi` through `runApi` alone, never
+    `withSessionRecovery`, so nothing a moderator does can refresh or replace the player's session
+    (the Auth plugin refreshes only on a 401). Each call sends the `AdminToken` it is given in the
+    header, and only that call; nothing stores it, the HTTP trace records no headers, and
+    `AdminToken.toString` shows none of it. The queue and every decision come back as the author's
+    `Submission`. An approval under `Category.OTHER` is refused before anything is sent, and none
+    keeps the author's categories. `RejectionReason` holds only a reason the server accepts, by
+    `checkedRejection`'s rules, so a rejection's 400 can only be a bug; its `MAX_LENGTH` copies the
+    wire's limit, which `:core:domain` cannot see, and `ModerationMapperTest` pins the two equal.
+  - *The console's section* (`io.ntole.wyr.dev.moderation`) takes the token typed and holds it in its
+    ViewModel, in memory only: never in saved state or storage, masked, and a password to the keyboard.
+    It loads the queue, approves under the categories picked for a submission (none keeps the
+    author's), rejects once the reason typed is a `RejectionReason`, and reads the queue again after
+    every decision, whatever became of it.
 ---
 
 ## 9. How to work in this repo
