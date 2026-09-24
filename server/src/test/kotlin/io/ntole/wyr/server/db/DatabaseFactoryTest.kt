@@ -1,6 +1,7 @@
 package io.ntole.wyr.server.db
 
 import io.ktor.server.testing.testApplication
+import io.ntole.wyr.server.TestDatabaseSettings
 import io.ntole.wyr.server.config.RateLimits
 import io.ntole.wyr.server.config.ServerConfig
 import org.jetbrains.exposed.v1.jdbc.Database
@@ -28,6 +29,21 @@ class DatabaseFactoryTest {
         // refuse this query now is a closed pool.
         val failure = assertFailsWith<SQLException> { transaction(database) { Questions.selectAll().count() } }
         assertContains(failure.message.orEmpty(), "has been closed")
+    }
+
+    /**
+     * The schema comes from the migrations alone. Were anything to build tables before Flyway ran,
+     * Flyway would find a schema with tables and no history, record it at V1 without running V1,
+     * and every database would go on to be whatever that something built.
+     */
+    @Test
+    fun `a boot on an empty database runs every script and then seeds it`() {
+        TestDatabaseSettings(h2Url("wyr-test-boot"), user = null, password = null).serverPool().use { pool ->
+            val database = DatabaseFactory.migrateAndSeed(pool)
+
+            assertRanEveryScript(pool)
+            assertTrue(transaction(database) { Questions.selectAll().count() } > 0, "seeded")
+        }
     }
 
     private val config =

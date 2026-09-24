@@ -224,8 +224,9 @@ object Likes : Table("likes") {
 }
 
 /**
- * Every table the server owns. Schema creation and the test harness's clean-slate drop both read
- * this one list, so a new table belongs here rather than in a `SchemaUtils` call — otherwise it
- * is created in production but survives between tests on a shared database.
+ * Every table the server owns. The migrations build the schema (`Migrations`), and SchemaDriftTest
+ * holds them to this list: a new table belongs here and in a migration, or the build fails. The store
+ * tests build their tables straight from it with `SchemaUtils.create`, which that same test shows
+ * builds what the migrations do.
  */
 val appTables: Array<Table> = arrayOf(Players, Questions, QuestionCategories, Votes, Skips, Likes)

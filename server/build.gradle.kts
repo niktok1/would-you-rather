@@ -33,6 +33,11 @@ dependencies {
     implementation(libs.hikari)
     implementation(libs.postgresql)
 
+    // Schema migrations (CLAUDE.md §8b). H2 support is built into flyway-core; PostgreSQL's lives
+    // in its own module, without which Flyway refuses a PostgreSQL database outright.
+    implementation(libs.flyway.core)
+    implementation(libs.flyway.databasePostgresql)
+
     // Dev/test database so the server runs with no external Postgres. Never used in production.
     implementation(libs.h2)
 
@@ -45,7 +50,9 @@ dependencies {
 // default EXCLUDE strategy keeps only the first copy, so the fat jar knew Postgres and died on H2.
 // Merging needs both halves: INCLUDE lets every copy reach the transformer, and the transformer
 // joins them. Gradle does not track a filesMatching action as a task input, so after changing only
-// that block, rebuild with --rerun.
+// that block, rebuild with --rerun. Flyway finds the databases it supports the same way, flyway-core
+// registering H2 and flyway-database-postgresql PostgreSQL, so a lost copy there would fail only on
+// PostgreSQL, which the H2 boot smoke test never reaches.
 tasks.shadowJar {
     filesMatching("META-INF/services/**") {
         duplicatesStrategy = DuplicatesStrategy.INCLUDE

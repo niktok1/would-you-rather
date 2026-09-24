@@ -1,10 +1,6 @@
 package io.ntole.wyr.server
 
-import io.ntole.wyr.server.db.appTables
-import org.jetbrains.exposed.v1.jdbc.Database
-import org.jetbrains.exposed.v1.jdbc.SchemaUtils
-import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
-import org.jetbrains.exposed.v1.jdbc.transactions.transaction
+import io.ntole.wyr.server.db.Migrations
 
 /**
  * A real database for the API tests to run against instead of H2, chosen by `WYR_TEST_JDBC_URL`
@@ -20,16 +16,20 @@ internal class ExternalTestDatabase(
     val password: String?,
 ) {
     /**
-     * Every test shares this one database, so a clean slate means dropping every app table before
-     * the server starts; the server's own schema creation then rebuilds and reseeds them.
+     * Every test shares this one database, so a clean slate means dropping everything in it before
+     * the server starts, Flyway's history included: the server's migrations then rebuild the schema
+     * from V1 and it reseeds. A history left behind would tell Flyway the dropped tables still exist.
+     *
+     * Flyway's clean drops whatever is there, whichever migration created it, and is turned on only
+     * here: the server refuses it ([Migrations.configuration]).
      */
-    fun dropAppTables() {
-        val database = Database.connect(url = jdbcUrl, user = user.orEmpty(), password = password.orEmpty())
-        try {
-            transaction(database) { SchemaUtils.drop(*appTables) }
-        } finally {
-            TransactionManager.closeAndUnregister(database)
-        }
+    fun clean() {
+        Migrations
+            .configuration()
+            .dataSource(jdbcUrl, user.orEmpty(), password.orEmpty())
+            .cleanDisabled(false)
+            .load()
+            .clean()
     }
 
     companion object {
@@ -66,6 +66,6 @@ internal fun testDatabaseFor(
                 user = null,
                 password = null,
             )
-    external.dropAppTables()
+    external.clean()
     return TestDatabaseSettings(external.jdbcUrl, external.user, external.password)
 }

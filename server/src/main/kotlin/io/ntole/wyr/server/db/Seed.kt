@@ -17,11 +17,12 @@ object Seed {
     /**
      * A check then an insert, and deliberately not a compare-and-set (CLAUDE.md §4): the primary
      * key already makes a second copy of the seeds impossible. Two servers seeding an empty
-     * database at once both find it empty and both insert. The second's insert waits on the
-     * first's uncommitted keys and fails on the primary key once they commit. Exposed then rolls
-     * back and re-runs the whole startup transaction (3 attempts by default), and this check now
-     * sees the committed seeds and returns, so both servers boot. That recovery is Exposed's retry,
-     * not anything here, and it has not been run against Postgres.
+     * database at once, as two boots do once Flyway lets them past the migration, both find it
+     * empty and both insert. The second's insert waits on the first's uncommitted keys and fails on
+     * the primary key once they commit. Exposed then rolls back and re-runs the seed's transaction
+     * (3 attempts by default), and this check now sees the committed seeds and returns, so both
+     * servers boot. That recovery is Exposed's retry, not anything here, and it has not been run
+     * against Postgres.
      */
     fun questionsIfEmpty() {
         if (Questions.selectAll().limit(1).any()) return

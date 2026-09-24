@@ -32,10 +32,11 @@ native, (c) JetBrains-official or the established KMP community standard. Do not
 platform-specific or Java-only library when a multiplatform Kotlin equivalent exists. Do not
 add a new dependency without recording it in §4 and in `gradle/libs.versions.toml`.
 
-Three Java libraries are in the tree by deliberate exception, all server-only where no Kotlin
-equivalent exists: HikariCP (connection pooling), the PostgreSQL JDBC driver, and `java-jwt`
-(pulled in by Ktor's own `ktor-server-auth-jwt`). H2 is a fourth, used only as the local
-development database.
+Four Java libraries are in the tree by deliberate exception, all server-only where no Kotlin
+equivalent exists: HikariCP (connection pooling), the PostgreSQL JDBC driver, `java-jwt`
+(pulled in by Ktor's own `ktor-server-auth-jwt`), and Flyway (schema migrations, §8b; approved
+2026-09-24), with the `flyway-database-postgresql` module Flyway needs to run on PostgreSQL. H2 is
+a fifth, used only as the local development database.
 
 ---
 
@@ -107,6 +108,7 @@ mechanism; this table is the rationale.
 | Async              | Coroutines + Flow      | Official                                         |
 | Local cache        | SQLDelight             | **Declared, not yet wired — see below**          |
 | Server persistence | Exposed                | JetBrains Kotlin SQL framework, pairs with Ktor  |
+| Schema migrations  | Flyway                 | Server-only Java exception (§2); runs at boot    |
 | Dependency inj.    | Koin                   | Pure Kotlin, no codegen, KMP standard            |
 | Date/time          | kotlinx-datetime       | Replaces platform date APIs                      |
 | Connection pool    | HikariCP               | Server-only Java exception (§2)                  |
@@ -449,13 +451,6 @@ accounts exist.
   addresses. Built as §8d has it: every like held pays, whoever holds it. The options: accept the
   per-address bound; pay a like only from a player with some play of their own (answers given,
   say); or cap what likes pay one author in a window.
-- **Schema migrations** — *interim policy, decided 2026-09-23:* nothing is deployed, so until the
-  first Render deploy a schema change ships as a fresh database through `SchemaUtils.create`, and
-  `render.yaml` keeps `autoDeployTrigger: "off"` so connecting the blueprint cannot deploy early.
-  A real migration tool (`exposed-migration-jdbc` plus a runner) must be chosen before the first
-  column change **after** that deploy. A new `QuestionStatus` is a migration too, although no
-  column changes: `questions.status` is read strictly, unlike a category, so no build may write a
-  new status until the build a rollback would return to can read it.
 - **WCAG AA contrast audit** — see §5b. Paused along with UI polish (§8d).
 
 `RANDOM` was an open item and is resolved: it is a content category (the absurd questions), not a
@@ -464,6 +459,39 @@ every category.
 
 Isolation for hot counters was an open item and is resolved: transactions run at READ COMMITTED,
 under the rules in §4.
+
+Schema migrations were an open item and are resolved (*decided 2026-09-24*, with the first deploy,
+which ended the interim policy of shipping a schema change as a fresh database): **Flyway** runs the
+scripts in `server/src/main/resources/db/migration` at every boot, through the server's own pool and
+before the seed (`Migrations`, `DatabaseFactory.init`). Nothing builds a table any other way in
+production; `SchemaUtils.create` is left to the store tests.
+- *One set of scripts* serves H2 and PostgreSQL. Identifiers are unquoted and in lower case, so each
+  engine folds them as Exposed's own statements for it do. Should a change ever need different SQL
+  per engine, split the location by vendor (`classpath:db/migration/{vendor}`) then, not before.
+- *The baseline.* The live database predates Flyway: `SchemaUtils.create(*appTables)` built it, and
+  it has no history. V1 is the statements `SchemaUtils.createStatements(*appTables)` generates for
+  PostgreSQL from the same definitions, only whitespace added, and H2's differ from them only in
+  case. So the live database already holds exactly V1, and Flyway records it at V1 without running
+  it (`baselineOnMigrate`, `baselineVersion` 1). It baselines only a schema that has tables and no
+  history table, and so only once; an empty database runs V1. `MigrationsTest` pins both paths, the
+  data untouched, and `SchemaDriftTest` that V1 builds exactly what `SchemaUtils.create` builds,
+  every table, column, key, index and constraint name included, on H2 and on PostgreSQL.
+- *A script that has shipped never changes*: Flyway refuses to boot on a changed checksum. A script
+  whose name Flyway cannot read fails the boot rather than being skipped (`validateMigrationNaming`),
+  and clean is refused outright (`cleanDisabled`); the test harness alone turns it on, to wipe the
+  external test database, history included (`ExternalTestDatabase.clean`).
+- *Rollbacks.* An older build boots on a database a newer one migrated: Flyway ignores a script it
+  has no copy of (`MigrationConfigurationTest`). So every migration must leave a schema the build
+  before it can still run on: add before use, drop only once no build a rollback could return to
+  reads it. A new `QuestionStatus` is a migration too, although no column changes:
+  `questions.status` is read strictly, unlike a category, so no build may write a new status until
+  the build a rollback would return to can read it.
+- *Several instances booting at once* (Render starts a deploy's new instance before it stops the old
+  one): on PostgreSQL Flyway takes an advisory lock for each step, so one migrates while the rest
+  wait, up to 50 tries a second apart, and then find nothing to do. `MigrationsTest` boots four at
+  once, on PostgreSQL only: H2 does not serialize two migrations of one database, and never needs to,
+  since the server's H2 is in memory and belongs to one process. The seed runs once the migration
+  has committed, and tolerates a racing boot by itself.
 
 ## 8c. Scoring rules — flat
 
@@ -712,8 +740,9 @@ and every request shows in its HTTP trace (`HttpTrace` in `:core:network`, never
   simulator build on macOS). All four passed on their first run, 2026-09-24. None of those three
   can run on this machine: read their results with `gh run list -R niktok1/would-you-rather`,
   through a login to the personal account only (§7). `:server:test` uses H2 unless `WYR_TEST_JDBC_URL` (plus
-  `WYR_TEST_DB_USER` / `WYR_TEST_DB_PASSWORD`) names another database; the suite then drops every
-  app table (`appTables`) before each test.
+  `WYR_TEST_DB_USER` / `WYR_TEST_DB_PASSWORD`) names another database; the suite then wipes it,
+  Flyway's history included, before each test that uses it (`ExternalTestDatabase.clean`), and runs
+  the schema tests (`MigrationsTest`, `SchemaDriftTest`) on it as well as on H2.
 - **iOS cannot be linked, tested, or run on a machine without Xcode** (Command Line Tools alone
   are not enough). The Kotlin compile does not need Xcode, so before pushing iOS-touching code
   run `./gradlew :app:shared:compileKotlinIosSimulatorArm64 :app:shared:compileTestKotlinIosSimulatorArm64`

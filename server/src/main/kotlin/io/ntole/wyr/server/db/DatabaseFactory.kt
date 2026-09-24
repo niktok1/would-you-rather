@@ -6,20 +6,21 @@ import io.ktor.events.Events
 import io.ktor.server.application.ApplicationStopped
 import io.ntole.wyr.server.config.ServerConfig
 import org.jetbrains.exposed.v1.jdbc.Database
-import org.jetbrains.exposed.v1.jdbc.SchemaUtils
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
+import javax.sql.DataSource
 
 object DatabaseFactory {
     /**
-     * Connects, creates any missing tables, and seeds the starter questions.
+     * Connects, migrates the schema to the latest script, and seeds the starter questions.
      *
-     * `SchemaUtils.create` only ever *adds* missing tables — it will not alter or drop an existing
-     * one. That is the right amount of automation for a schema with no deployed history, and it
-     * deliberately avoids `createMissingTablesAndColumns`, which Exposed has deprecated for
-     * leaving the database in an unpredictable state if it fails partway.
+     * The schema is Flyway's ([Migrations]), brought up to date before anything reads a table. It is
+     * never `SchemaUtils.create`, which built it until the first deploy: that can only add a missing
+     * table, never change one, and it keeps no record of what a database already holds (CLAUDE.md
+     * §8b).
      *
-     * The moment a column has to change type, be renamed, or be dropped, this needs a real
-     * migration tool (`exposed-migration-jdbc` plus Flyway). Nothing here will do it for you.
+     * The seed runs once the migration has committed, in a transaction of its own, so it always finds
+     * the finished schema. Several servers booting at once are safe: Flyway lets one migrate while the
+     * rest wait, and the seed tolerates a racing boot by itself ([Seed.questionsIfEmpty]).
      *
      * The pool is closed when [monitor] reports the application stopped. Tests start and stop a
      * whole server per case, and against a real Postgres each abandoned pool would keep holding
@@ -32,12 +33,18 @@ object DatabaseFactory {
         val dataSource = HikariDataSource(poolConfig(config))
         monitor.subscribe(ApplicationStopped) { dataSource.close() }
 
-        val database = Database.connect(dataSource)
+        return migrateAndSeed(dataSource)
+    }
 
-        transaction(database) {
-            SchemaUtils.create(*appTables)
-            Seed.questionsIfEmpty()
-        }
+    /**
+     * What every boot does to the database behind [dataSource], apart from [init] so a test can boot
+     * several servers on one database at once.
+     */
+    internal fun migrateAndSeed(dataSource: DataSource): Database {
+        Migrations.migrate(dataSource)
+
+        val database = Database.connect(dataSource)
+        transaction(database) { Seed.questionsIfEmpty() }
 
         return database
     }

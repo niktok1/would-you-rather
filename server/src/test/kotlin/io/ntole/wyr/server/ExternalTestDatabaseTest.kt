@@ -1,55 +1,47 @@
 package io.ntole.wyr.server
 
-import io.ntole.wyr.server.db.appTables
-import org.jetbrains.exposed.v1.jdbc.Database
-import org.jetbrains.exposed.v1.jdbc.SchemaUtils
-import org.jetbrains.exposed.v1.jdbc.exists
-import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
-import org.jetbrains.exposed.v1.jdbc.transactions.transaction
+import io.ntole.wyr.server.db.DatabaseFactory
+import io.ntole.wyr.server.db.h2Url
+import io.ntole.wyr.server.db.history
+import io.ntole.wyr.server.db.schemaSnapshot
+import io.ntole.wyr.server.db.serverPool
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 
 /**
- * The Postgres CI job is the only thing that exercises the clean-slate drop for real, and it
- * cannot run locally. This pins the drop itself on H2, including the foreign-key ordering that a
- * naive drop in declaration order would trip over, and that the per-test setup actually runs it.
+ * The Postgres CI job is the only thing that exercises the clean slate for real, and it cannot run
+ * locally. This pins the clean itself on H2, Flyway's history included, which dropping the app
+ * tables alone would leave behind for the next server to trust, and that the per-test setup
+ * actually runs it.
  */
 class ExternalTestDatabaseTest {
     @Test
-    fun `dropping the app tables removes every one of them`() {
-        val external = ExternalTestDatabase("jdbc:h2:mem:wyr-test-drop;DB_CLOSE_DELAY=-1", user = null, password = null)
-        val database = Database.connect(external.jdbcUrl)
-        try {
-            transaction(database) { SchemaUtils.create(*appTables) }
+    fun `cleaning drops every app table and the migration history`() {
+        val external = ExternalTestDatabase(h2Url("wyr-test-clean"), user = null, password = null)
+        TestDatabaseSettings(external.jdbcUrl, user = null, password = null).serverPool().use { pool ->
+            DatabaseFactory.migrateAndSeed(pool)
 
-            external.dropAppTables()
+            external.clean()
 
-            transaction(database) {
-                assertEquals(emptyList(), appTables.filter { it.exists() }.map { it.tableName })
-            }
-        } finally {
-            TransactionManager.closeAndUnregister(database)
+            assertEquals(emptyMap(), schemaSnapshot(pool))
+            assertEquals(emptyList(), history(pool))
         }
     }
 
     @Test
-    fun `a test on an external database gets it with the app tables already dropped`() {
-        val url = "jdbc:h2:mem:wyr-test-shared;DB_CLOSE_DELAY=-1"
-        val database = Database.connect(url)
-        try {
+    fun `a test on an external database gets it with nothing left from the last one`() {
+        val url = h2Url("wyr-test-shared")
+        TestDatabaseSettings(url, user = null, password = null).serverPool().use { pool ->
             // What an earlier test on the same shared database would have left behind.
-            transaction(database) { SchemaUtils.create(*appTables) }
+            DatabaseFactory.migrateAndSeed(pool)
 
             val settings = testDatabaseFor("ignored") { if (it == "WYR_TEST_JDBC_URL") url else null }
 
             assertEquals(url, settings.jdbcUrl)
-            transaction(database) {
-                assertEquals(emptyList(), appTables.filter { it.exists() }.map { it.tableName })
-            }
-        } finally {
-            TransactionManager.closeAndUnregister(database)
+            assertEquals(emptyMap(), schemaSnapshot(pool))
+            assertEquals(emptyList(), history(pool))
         }
     }
 
