@@ -21,14 +21,21 @@ import kotlin.test.assertFailsWith
  */
 class WyrJsonTest {
     @Test
-    fun `a category this build has never heard of decodes as UNKNOWN`() {
+    fun `a question filed under a category this build has never heard of still decodes`() {
         val question =
             WyrJson.decodeFromString<QuestionDto>(
-                """{"id":"q1","optionA":"fly","optionB":"swim","category":"CATEGORY_FROM_THE_FUTURE"}""",
+                """{"id":"q1","optionA":"fly","optionB":"swim","categories":["FOOD","CATEGORY_FROM_THE_FUTURE"]}""",
             )
 
-        assertEquals(QuestionCategory.UNKNOWN, question.category)
+        assertEquals(listOf(QuestionCategory.FOOD, QuestionCategory.UNKNOWN), question.categories)
         assertEquals("fly", question.optionA)
+    }
+
+    @Test
+    fun `a question sent without its categories decodes as filed under none`() {
+        val question = WyrJson.decodeFromString<QuestionDto>("""{"id":"q1","optionA":"fly","optionB":"swim"}""")
+
+        assertEquals(emptyList(), question.categories)
     }
 
     @Test
@@ -76,7 +83,7 @@ class WyrJsonTest {
     fun `a submission status or category this build has never heard of decodes as UNKNOWN`() {
         val submission =
             WyrJson.decodeFromString<SubmissionDto>(
-                """{"id":"q1","optionA":"fly","optionB":"swim","category":"CATEGORY_FROM_THE_FUTURE",""" +
+                """{"id":"q1","optionA":"fly","optionB":"swim","categories":["CATEGORY_FROM_THE_FUTURE","ETHICS"],""" +
                     """"status":"STATUS_FROM_THE_FUTURE","submittedAt":5}""",
             )
 
@@ -85,7 +92,7 @@ class WyrJsonTest {
                 id = "q1",
                 optionA = "fly",
                 optionB = "swim",
-                category = QuestionCategory.UNKNOWN,
+                categories = listOf(QuestionCategory.UNKNOWN, QuestionCategory.ETHICS),
                 status = QuestionStatus.UNKNOWN,
                 rejectionReason = null,
                 submittedAt = 5,

@@ -515,7 +515,7 @@ class DefaultQuestionRepositoryTest {
                         id = id,
                         optionA = "$id-a",
                         optionB = "$id-b",
-                        category = category,
+                        categories = listOf(category),
                         answeredBefore = answeredBefore,
                     )
                 },

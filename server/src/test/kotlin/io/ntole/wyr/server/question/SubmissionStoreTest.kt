@@ -12,6 +12,7 @@ import io.ntole.wyr.server.db.appTables
 import io.ntole.wyr.server.db.connectH2
 import io.ntole.wyr.server.db.h2Url
 import io.ntole.wyr.server.db.raceBehindFirst
+import io.ntole.wyr.server.db.storedCategories
 import io.ntole.wyr.server.player.PlayerStore
 import io.ntole.wyr.server.plugins.ApiFailure
 import org.jetbrains.exposed.v1.core.and
@@ -51,7 +52,8 @@ class SubmissionStoreTest {
 
         val row = transaction(database) { Questions.selectAll().where { Questions.id eq submission.id }.single() }
         assertEquals("Fly" to "Swim", row[Questions.optionA] to row[Questions.optionB])
-        assertEquals(QuestionCategory.SUPERPOWERS.name, row[Questions.category])
+        assertEquals(listOf(QuestionCategory.SUPERPOWERS), transaction(database) { storedCategories() }[submission.id])
+        assertEquals(listOf(QuestionCategory.SUPERPOWERS), submission.categories)
         assertEquals(author, row[Questions.authorPlayerId])
         assertEquals(QuestionStatus.PENDING, row[Questions.status])
         assertEquals(1_000L, row[Questions.submittedAt])
@@ -116,6 +118,25 @@ class SubmissionStoreTest {
         )
         assertEquals(listOf(null, null, "not a real dilemma"), listed.map { it.rejectionReason })
         assertEquals(middle, listed[1], "a pending one reads back as its submission was answered")
+    }
+
+    @Test
+    fun `an author's submissions are listed with their categories in as many statements however many there are`() {
+        val (one, five) = newPlayer() to newPlayer()
+        submit(one, question(0))
+        repeat(5) { index -> submit(five, question(index)) }
+
+        val statements =
+            listOf(1 to one, 5 to five).map { (count, author) ->
+                transaction(database) {
+                    val listed = SubmissionStore.byAuthor(author)
+                    assertEquals(count, listed.size)
+                    assertEquals(List(count) { listOf(QuestionCategory.RANDOM) }, listed.map { it.categories })
+                    statementCount
+                }
+            }
+
+        assertEquals(statements.first(), statements.last(), "one statement per submission would grow with the list")
     }
 
     @Test

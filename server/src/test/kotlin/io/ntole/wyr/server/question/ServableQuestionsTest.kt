@@ -8,12 +8,14 @@ import io.ntole.wyr.core.question.QuestionDto
 import io.ntole.wyr.core.question.QuestionStatus
 import io.ntole.wyr.core.vote.OptionSide
 import io.ntole.wyr.core.vote.VoteResultDto
+import io.ntole.wyr.server.db.QuestionCategories
 import io.ntole.wyr.server.db.Questions
 import io.ntole.wyr.server.db.Seed
 import io.ntole.wyr.server.db.Skips
 import io.ntole.wyr.server.db.Votes
 import io.ntole.wyr.server.db.appTables
 import io.ntole.wyr.server.db.connectH2
+import io.ntole.wyr.server.db.filedUnder
 import io.ntole.wyr.server.db.h2Url
 import io.ntole.wyr.server.player.PlayerStore
 import io.ntole.wyr.server.player.StatsStore
@@ -52,10 +54,7 @@ class ServableQuestionsTest {
 
     private val foodSeeds: List<String> =
         transaction(database) {
-            Questions
-                .select(Questions.id)
-                .where { Questions.category eq QuestionCategory.FOOD.name }
-                .map { it[Questions.id] }
+            filedUnder(QuestionCategory.FOOD)
         }
 
     @Test
@@ -155,12 +154,15 @@ class ServableQuestionsTest {
                 row[Questions.id] = id
                 row[optionA] = "A of $id"
                 row[optionB] = "B of $id"
-                row[category] = QuestionCategory.FOOD.name
                 row[authorPlayerId] = author
                 row[Questions.status] = status
                 row[submittedAt] = now
                 row[reviewedAt] = now.takeIf { status != QuestionStatus.PENDING }
                 row[rejectionReason] = "not a real dilemma".takeIf { status == QuestionStatus.REJECTED }
+            }
+            QuestionCategories.insert { row ->
+                row[questionId] = id
+                row[category] = QuestionCategory.FOOD.name
             }
         }
         return id

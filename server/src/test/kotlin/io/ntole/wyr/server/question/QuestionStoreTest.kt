@@ -9,12 +9,13 @@ import io.ntole.wyr.server.db.Questions
 import io.ntole.wyr.server.db.Seed
 import io.ntole.wyr.server.db.appTables
 import io.ntole.wyr.server.db.connectH2
+import io.ntole.wyr.server.db.filedUnder
 import io.ntole.wyr.server.db.h2Url
 import io.ntole.wyr.server.db.raceBehindFirst
+import io.ntole.wyr.server.db.storedCategories
 import io.ntole.wyr.server.player.PlayerStore
 import io.ntole.wyr.server.vote.Scoring
 import io.ntole.wyr.server.vote.VoteStore
-import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.SchemaUtils
 import org.jetbrains.exposed.v1.jdbc.select
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
@@ -43,11 +44,10 @@ class QuestionStoreTest {
 
     private val food: List<String> =
         transaction(database) {
-            Questions
-                .select(Questions.id)
-                .where { Questions.category eq QuestionCategory.FOOD.name }
-                .map { it[Questions.id] }
+            filedUnder(QuestionCategory.FOOD)
         }
+
+    private val stored: Map<String, List<QuestionCategory>> = transaction(database) { storedCategories() }
 
     @Test
     fun `a batch holds only the questions still due, each once`() {
@@ -60,6 +60,47 @@ class QuestionStoreTest {
         assertEquals(due.sorted(), batch.ids().sorted(), "no top-up with questions answered this cycle")
         assertTrue(batch.none { it.answeredBefore })
         assertTrue(feed(player, limit = 3).ids().let { short -> short.size == 3 && due.containsAll(short) })
+    }
+
+    @Test
+    fun `a question filed under several categories is served once with every one of them`() {
+        assertTrue(stored.values.any { it.size > 1 }, "no seed is filed under more than one category")
+
+        val batch = feed(newPlayer())
+
+        assertEquals(pool.sorted(), batch.ids().sorted(), "each question once, however many categories it has")
+        batch.forEach { question -> assertEquals(stored[question.id], question.categories, question.id) }
+        assertEquals(
+            listOf(QuestionCategory.LIFESTYLE, QuestionCategory.ETHICS),
+            batch.single { it.optionA == "Always tell the truth" }.categories,
+            "in declaration order, not by name nor as stored",
+        )
+    }
+
+    @Test
+    fun `a category serves each question filed under it once whatever else it is filed under`() {
+        assertTrue(food.any { id -> stored.getValue(id).size > 1 }, "no food seed is filed under another category too")
+
+        val batch = feed(newPlayer(), category = QuestionCategory.FOOD)
+
+        assertEquals(food.sorted(), batch.ids().sorted())
+        batch.forEach { question -> assertEquals(stored[question.id], question.categories, question.id) }
+    }
+
+    @Test
+    fun `a batch reads its categories in one statement however many questions it holds`() {
+        val (one, all) = newPlayer() to newPlayer()
+
+        val statements =
+            listOf(1 to one, pool.size to all).map { (limit, player) ->
+                transaction(database) {
+                    val served = QuestionStore.feed(player, limit, category = null).questions.size
+                    assertEquals(limit, served)
+                    statementCount
+                }
+            }
+
+        assertEquals(statements.first(), statements.last(), "one statement per question would grow with the batch")
     }
 
     @Test

@@ -392,6 +392,8 @@ class ApiFlowTest {
             val pool = client.wholePool(first)
             assertEquals(pool.size, pool.ids().toSet().size, "a batch must not repeat a question")
             assertTrue(pool.none { it.answeredBefore }, "nothing is answered yet")
+            assertTrue(pool.all { it.categories.isNotEmpty() }, "every question is filed under a category")
+            assertTrue(pool.any { it.categories.size > 1 }, "and a question under several is sent with all of them")
 
             val other = client.wholePool(second)
             assertEquals(pool.ids().toSet(), other.ids().toSet())
@@ -440,7 +442,7 @@ class ApiFlowTest {
             val food = "&${WyrApi.Query.CATEGORY}=${QuestionCategory.FOOD.name}"
             val pool = client.wholePool(player)
             val foodPool = client.wholePool(player, food)
-            assertTrue(foodPool.size >= 2 && foodPool.all { it.category == QuestionCategory.FOOD })
+            assertTrue(foodPool.size >= 2 && foodPool.all { QuestionCategory.FOOD in it.categories })
 
             val last = foodPool.first()
             foodPool.drop(1).forEach { question -> client.vote(player, question.id, OptionSide.A) }
@@ -717,7 +719,7 @@ class ApiFlowTest {
                     id = submission.id,
                     optionA = "Be able to fly",
                     optionB = "Breathe underwater",
-                    category = QuestionCategory.SUPERPOWERS,
+                    categories = listOf(QuestionCategory.SUPERPOWERS),
                     status = QuestionStatus.PENDING,
                     rejectionReason = null,
                     submittedAt = submission.submittedAt,

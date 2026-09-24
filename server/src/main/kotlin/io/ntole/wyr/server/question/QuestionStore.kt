@@ -4,6 +4,7 @@ import io.ntole.wyr.core.question.QuestionCategory
 import io.ntole.wyr.core.question.QuestionDto
 import io.ntole.wyr.core.question.QuestionPageDto
 import io.ntole.wyr.core.question.QuestionStatus
+import io.ntole.wyr.server.db.QuestionCategories
 import io.ntole.wyr.server.db.Questions
 import io.ntole.wyr.server.db.Skips
 import io.ntole.wyr.server.db.Votes
@@ -18,6 +19,8 @@ import org.jetbrains.exposed.v1.core.SortOrder
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.count
 import org.jetbrains.exposed.v1.core.eq
+import org.jetbrains.exposed.v1.core.exists
+import org.jetbrains.exposed.v1.core.inList
 import org.jetbrains.exposed.v1.core.intParam
 import org.jetbrains.exposed.v1.core.isNull
 import org.jetbrains.exposed.v1.core.less
@@ -48,19 +51,23 @@ object QuestionStore {
      * again in the cycle it was just done in. That takes two overlapping requests from one player,
      * and the client sends one at a time (`DefaultQuestionRepository`).
      *
-     * A cycle is per player, not per category. When nothing in [category] is due but something
-     * outside it still is, the player has not finished the cycle, and starting the next one would
-     * cut short their pass over the rest. So the category's questions are served again instead, in
-     * random order, and the cycle stays. Answering one again still pays (§8d, re-answering) and
-     * counts for the same cycle. Those skipped this cycle are served again with the rest, so a skip
-     * does not hold through a category filter; that is provisional (CLAUDE.md §8b).
+     * A question is in [category] when it is filed under it, whatever else it is filed under too
+     * (CLAUDE.md §8d, *Categories*). A cycle is per player, not per category. When nothing in
+     * [category] is due but something outside it still is, the player has not finished the cycle,
+     * and starting the next one would cut short their pass over the rest. So the category's
+     * questions are served again instead, in random order, and the cycle stays. Answering one again
+     * still pays (§8d, re-answering) and counts for the same cycle. Those skipped this cycle are
+     * served again with the rest, so a skip does not hold through a category filter; that is
+     * provisional (CLAUDE.md §8b).
      *
      * [QuestionDto.answeredBefore] means the player has a vote on the question, from any cycle. A
      * skip is no vote, so a question skipped but never answered is not answered before.
      *
      * Each batch comes from one statement. The left joins find at most one vote and one skip per
-     * question (the Votes and Skips keys are both player and question), so no question appears
-     * twice. The random key is rendered `RANDOM()`, which H2 and PostgreSQL both have.
+     * question (the Votes and Skips keys are both player and question), and the category is an
+     * `EXISTS` rather than a join, so no question appears twice, however many categories it has. The
+     * random key is rendered `RANDOM()`, which H2 and PostgreSQL both have. The batch's categories
+     * are then read in one more statement ([categoriesOf]).
      */
     fun feed(
         playerId: String,
@@ -122,15 +129,34 @@ object QuestionStore {
 
     /** What [toDto] reads, and no more: the moderation columns are not the feed's business. */
     private val BATCH_COLUMNS: List<Expression<*>> =
-        listOf(Questions.id, Questions.optionA, Questions.optionB, Questions.category, Votes.answeredInCycle)
+        listOf(Questions.id, Questions.optionA, Questions.optionB, Votes.answeredInCycle)
 
-    private fun Query.randomBatch(limit: Int): List<QuestionDto> =
-        orderBy(Random() to SortOrder.ASC)
-            .limit(limit)
-            .map { row -> toDto(row, answeredBefore = row.getOrNull(Votes.answeredInCycle) != null) }
+    private fun Query.randomBatch(limit: Int): List<QuestionDto> {
+        val rows = orderBy(Random() to SortOrder.ASC).limit(limit).toList()
+        if (rows.isEmpty()) return emptyList()
 
+        val categories = categoriesOf(Questions.id inList rows.map { row -> row[Questions.id] })
+        return rows.map { row ->
+            toDto(
+                row,
+                categories = categories[row[Questions.id]].orEmpty(),
+                answeredBefore = row.getOrNull(Votes.answeredInCycle) != null,
+            )
+        }
+    }
+
+    /** Filed under [category], among others or not. An `EXISTS`, so a question matches once. */
     private fun inCategory(category: QuestionCategory?): Op<Boolean> =
-        category?.let { wanted -> Questions.category eq wanted.name } ?: Op.TRUE
+        category?.let { wanted ->
+            exists(
+                QuestionCategories
+                    .select(QuestionCategories.questionId)
+                    .where {
+                        (QuestionCategories.questionId eq Questions.id) and
+                            (QuestionCategories.category eq wanted.name)
+                    },
+            )
+        } ?: Op.TRUE
 
     /**
      * Neither answered nor skipped in [cycle]: no vote, or one from an earlier cycle, and no skip, or
@@ -169,21 +195,41 @@ object QuestionStore {
 
     private fun toDto(
         row: ResultRow,
+        categories: List<QuestionCategory>,
         answeredBefore: Boolean,
     ): QuestionDto =
         QuestionDto(
             id = row[Questions.id],
             optionA = row[Questions.optionA],
             optionB = row[Questions.optionB],
-            category = categoryOf(row),
+            categories = categories,
             answeredBefore = answeredBefore,
         )
 
     /**
-     * The row's category. One written by an older or newer build than this one still has to read
-     * back, and never as `UNKNOWN`, which the server does not send.
+     * The categories of each question [questions] picks, by question id: each once, in
+     * [QuestionCategory] declaration order, which is the order the wire promises (`QuestionDto`).
+     * Must run inside a transaction.
+     *
+     * One statement for all of them, however many questions, rather than one per question. A batch
+     * reads it after the statement that chose the batch, so a change to a question's categories
+     * committed in between shows here: harmless, since they are then what the question is filed
+     * under. Its rows are written with the question, in one transaction, so none is ever missing.
      */
-    internal fun categoryOf(row: ResultRow): QuestionCategory =
-        runCatching { QuestionCategory.valueOf(row[Questions.category]) }
+    internal fun categoriesOf(questions: Op<Boolean>): Map<String, List<QuestionCategory>> =
+        QuestionCategories
+            .join(Questions, JoinType.INNER, QuestionCategories.questionId, Questions.id)
+            .select(QuestionCategories.questionId, QuestionCategories.category)
+            .where(questions)
+            .map { row -> row[QuestionCategories.questionId] to categoryOf(row[QuestionCategories.category]) }
+            .groupBy(keySelector = { it.first }, valueTransform = { it.second })
+            .mapValues { (_, categories) -> categories.distinct().sorted() }
+
+    /**
+     * The category a stored [name] stands for. One written by an older or newer build than this one
+     * still has to read back, and never as `UNKNOWN`, which the server does not send.
+     */
+    private fun categoryOf(name: String): QuestionCategory =
+        runCatching { QuestionCategory.valueOf(name) }
             .getOrDefault(QuestionCategory.RANDOM)
 }

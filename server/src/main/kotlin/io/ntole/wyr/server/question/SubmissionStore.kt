@@ -5,6 +5,7 @@ import io.ntole.wyr.core.question.QuestionStatus
 import io.ntole.wyr.core.question.SubmissionDto
 import io.ntole.wyr.core.question.SubmitQuestionRequest
 import io.ntole.wyr.server.db.Players
+import io.ntole.wyr.server.db.QuestionCategories
 import io.ntole.wyr.server.db.Questions
 import io.ntole.wyr.server.plugins.ApiFailure
 import org.jetbrains.exposed.v1.core.SortOrder
@@ -48,19 +49,22 @@ object SubmissionStore {
             row[Questions.id] = id
             row[optionA] = submission.optionA
             row[optionB] = submission.optionB
-            row[category] = submission.category.name
             row[authorPlayerId] = authorId
             row[status] = QuestionStatus.PENDING
             row[submittedAt] = now
             row[reviewedAt] = null
             row[rejectionReason] = null
         }
+        QuestionCategories.insert { row ->
+            row[questionId] = id
+            row[category] = submission.category.name
+        }
 
         return SubmissionDto(
             id = id,
             optionA = submission.optionA,
             optionB = submission.optionB,
-            category = submission.category,
+            categories = listOf(submission.category),
             status = QuestionStatus.PENDING,
             rejectionReason = null,
             submittedAt = now,
@@ -74,31 +78,39 @@ object SubmissionStore {
      *
      * A reason goes out only with a rejected question, whatever the column holds, so what the
      * contract promises does not rest on every writer of the column clearing it.
+     *
+     * The categories come from one more statement for all of them ([QuestionStore.categoriesOf]),
+     * picked by author rather than by id, since nothing bounds how many there are. A submission
+     * committed between the two is in the second only, and left out with the rest of it.
      */
-    fun byAuthor(authorId: String): List<SubmissionDto> =
-        Questions
-            .select(SUBMISSION_COLUMNS)
-            .where { Questions.authorPlayerId eq authorId }
-            .orderBy(Questions.submittedAt to SortOrder.DESC, Questions.id to SortOrder.ASC)
-            .map { row ->
-                val status = row[Questions.status]
-                SubmissionDto(
-                    id = row[Questions.id],
-                    optionA = row[Questions.optionA],
-                    optionB = row[Questions.optionB],
-                    category = QuestionStore.categoryOf(row),
-                    status = status,
-                    rejectionReason = row[Questions.rejectionReason].takeIf { status == QuestionStatus.REJECTED },
-                    submittedAt = row[Questions.submittedAt],
-                )
-            }
+    fun byAuthor(authorId: String): List<SubmissionDto> {
+        val rows =
+            Questions
+                .select(SUBMISSION_COLUMNS)
+                .where { Questions.authorPlayerId eq authorId }
+                .orderBy(Questions.submittedAt to SortOrder.DESC, Questions.id to SortOrder.ASC)
+                .toList()
+        val categories = QuestionStore.categoriesOf(Questions.authorPlayerId eq authorId)
+
+        return rows.map { row ->
+            val status = row[Questions.status]
+            SubmissionDto(
+                id = row[Questions.id],
+                optionA = row[Questions.optionA],
+                optionB = row[Questions.optionB],
+                categories = categories[row[Questions.id]].orEmpty(),
+                status = status,
+                rejectionReason = row[Questions.rejectionReason].takeIf { status == QuestionStatus.REJECTED },
+                submittedAt = row[Questions.submittedAt],
+            )
+        }
+    }
 
     private val SUBMISSION_COLUMNS =
         listOf(
             Questions.id,
             Questions.optionA,
             Questions.optionB,
-            Questions.category,
             Questions.status,
             Questions.rejectionReason,
             Questions.submittedAt,

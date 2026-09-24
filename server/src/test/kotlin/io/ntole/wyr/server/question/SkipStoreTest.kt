@@ -13,6 +13,7 @@ import io.ntole.wyr.server.db.Seed
 import io.ntole.wyr.server.db.Skips
 import io.ntole.wyr.server.db.appTables
 import io.ntole.wyr.server.db.connectH2
+import io.ntole.wyr.server.db.filedUnder
 import io.ntole.wyr.server.db.h2Url
 import io.ntole.wyr.server.db.raceBehindFirst
 import io.ntole.wyr.server.player.PlayerStore
@@ -48,10 +49,7 @@ class SkipStoreTest {
 
     private val food: List<String> =
         transaction(database) {
-            Questions
-                .select(Questions.id)
-                .where { Questions.category eq QuestionCategory.FOOD.name }
-                .map { it[Questions.id] }
+            filedUnder(QuestionCategory.FOOD)
         }
 
     @Test

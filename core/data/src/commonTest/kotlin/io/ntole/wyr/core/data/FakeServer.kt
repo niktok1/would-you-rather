@@ -151,7 +151,12 @@ internal class FakeServer {
             QuestionPageDto(
                 questions =
                     listOf(
-                        QuestionDto(id = "q1", optionA = "q1-a", optionB = "q1-b", category = QuestionCategory.FOOD),
+                        QuestionDto(
+                            id = "q1",
+                            optionA = "q1-a",
+                            optionB = "q1-b",
+                            categories = listOf(QuestionCategory.FOOD),
+                        ),
                     ),
             )
 

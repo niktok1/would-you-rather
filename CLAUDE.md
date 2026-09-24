@@ -358,7 +358,7 @@ accounts exist.
   `render.yaml` keeps `autoDeployTrigger: "off"` so connecting the blueprint cannot deploy early.
   A real migration tool (`exposed-migration-jdbc` plus a runner) must be chosen before the first
   column change **after** that deploy. A new `QuestionStatus` is a migration too, although no
-  column changes: `questions.status` is read strictly, unlike the category, so no build may write a
+  column changes: `questions.status` is read strictly, unlike a category, so no build may write a
   new status until the build a rollback would return to can read it.
 - **WCAG AA contrast audit** — see §5b. Paused along with UI polish (§8d).
 
@@ -429,6 +429,18 @@ and every request shows in its HTTP trace (`HttpTrace` in `:core:network`, never
     now select one (`QuestionRepository.setCategory`, from the console's Category row); a switch
     drops the queue, and New guest keeps the selection.
   - `answeredBefore` means the player has a vote on the question, from any cycle.
+- **Categories** *(decided 2026-09-24; filing and serving built on the server, the rest next)*: a
+  question is filed under **any number of categories, at least one**. A player may pick **several**
+  categories to play, and a question matches when it is filed under **any** of them; none picked
+  means every category. The author picks one or more when submitting, and the moderator may change
+  them (*Moderation*). Built in `question_categories`, one row per question and category, written
+  in the question's own transaction: `QuestionDto.categories` and `SubmissionDto.categories` carry
+  every one, each once, in `QuestionCategory` declaration order, and a list's unknown names decode
+  as `UNKNOWN` (§5). A batch reads its questions' categories in one more statement
+  (`QuestionStore.categoriesOf`), never one per question. The feed's filter is an `EXISTS` on that
+  table, never a join, so a question in several categories is served once. Not built yet: a filter
+  of several categories, and submitting under several. Until the client's domain holds every
+  category, it plays a question under the first it can name.
 - **Re-answering** *(built)*: a question can be answered again, whether or not the feed has
   served it again. It earns the point again **every time**, inside its cycle or not (farming is
   left to rate limiting, §8b), and the player may change their pick. Every answer, first or not,
@@ -484,13 +496,15 @@ and every request shows in its HTTP trace (`HttpTrace` in `:core:network`, never
   rejected one with its reason (`SubmissionStore.byAuthor`). The client and the console's section
   come in the next branch.
 - **Moderation** *(not built but for the author's view)*: a moderator approves or rejects each
-  pending submission and **may change its category** when approving. A rejection carries a
+  pending submission and **may change its categories** when approving (*Categories*: at least one
+  stays, and a change replaces the question's `question_categories` rows in one transaction). A
+  rejection carries a
   **short reason**, and the author sees the status of each of their submissions and, for a
   rejected one, that reason. The moderator is whoever holds the server's admin token (an
   environment variable; admin routes are off when it is unset), not a role on a player account.
   The author's view is built on the server (`GET /v1/me/questions`, *Submitting*), and so are the
-  columns a decision writes (`questions.reviewed_at`, `questions.rejection_reason`); nothing writes
-  them yet.
+  columns a decision writes (`questions.reviewed_at`, `questions.rejection_reason`,
+  `question_categories`); nothing writes them yet.
 ---
 
 ## 9. How to work in this repo

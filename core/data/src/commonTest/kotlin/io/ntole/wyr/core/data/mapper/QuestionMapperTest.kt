@@ -16,11 +16,28 @@ class QuestionMapperTest {
                     id = "q1",
                     optionA = "q1-a",
                     optionB = "q1-b",
-                    category = QuestionCategory.FOOD,
+                    categories = listOf(QuestionCategory.FOOD),
                     answeredBefore = answeredBefore,
                 )
 
             assertEquals(answeredBefore, dto.toDomain().answeredBefore)
+        }
+    }
+
+    @Test
+    fun `a question plays under the first of its categories this build can name`() {
+        val cases =
+            listOf(
+                listOf(QuestionCategory.ETHICS, QuestionCategory.SUPERPOWERS) to Category.ETHICS,
+                listOf(QuestionCategory.UNKNOWN, QuestionCategory.RANDOM) to Category.RANDOM,
+                listOf(QuestionCategory.UNKNOWN) to Category.OTHER,
+                emptyList<QuestionCategory>() to Category.OTHER,
+            )
+
+        cases.forEach { (categories, expected) ->
+            val dto = QuestionDto(id = "q1", optionA = "q1-a", optionB = "q1-b", categories = categories)
+
+            assertEquals(expected, dto.toDomain().category, "$categories")
         }
     }
 

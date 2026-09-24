@@ -8,11 +8,12 @@ import kotlinx.serialization.Serializable
  * lists.
  *
  * [id] is the question's id, the one the feed serves it under once it is approved. [optionA] and
- * [optionB] are as stored, trimmed. [category] is the one the question is filed under, which a
- * moderator may change when approving it.
+ * [optionB] are as stored, trimmed. [categories] are the ones the question is filed under, which a
+ * moderator may change when approving it, sent and decoded as [QuestionDto.categories] are.
  *
- * [category] and [status] must keep their defaults for unknown-value coercion to work — see
- * [QuestionCategory] and [QuestionStatus].
+ * [categories] must keep its serializer and its default, and [status] its default, for a value
+ * added server-side to decode on an older client — see [QuestionCategoryListSerializer] and
+ * [QuestionStatus].
  *
  * [rejectionReason] is the moderator's short reason, sent only for a [QuestionStatus.REJECTED]
  * submission and null for any other. [submittedAt] is when the server stored the submission, in
@@ -23,7 +24,8 @@ public data class SubmissionDto(
     public val id: String,
     public val optionA: String,
     public val optionB: String,
-    public val category: QuestionCategory = QuestionCategory.UNKNOWN,
+    @Serializable(with = QuestionCategoryListSerializer::class)
+    public val categories: List<QuestionCategory> = emptyList(),
     public val status: QuestionStatus = QuestionStatus.UNKNOWN,
     public val rejectionReason: String? = null,
     public val submittedAt: Long,

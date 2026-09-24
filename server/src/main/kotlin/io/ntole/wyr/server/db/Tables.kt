@@ -46,7 +46,6 @@ object Questions : Table("questions") {
     val id = varchar("id", 36)
     val optionA = varchar("option_a", WyrApi.Limits.MAX_OPTION_LENGTH)
     val optionB = varchar("option_b", WyrApi.Limits.MAX_OPTION_LENGTH)
-    val category = varchar("category", 32)
 
     /**
      * The player who submitted the question (CLAUDE.md §8d), or null for a seed, which nobody wrote.
@@ -59,7 +58,7 @@ object Questions : Table("questions") {
      * served. A seed is approved from the start, and a submission starts out
      * [QuestionStatus.PENDING]. Never [QuestionStatus.UNKNOWN], the client's decoding fallback.
      *
-     * Read strictly, unlike [category] (`QuestionStore.categoryOf`): a name this build has no
+     * Read strictly, unlike a category ([QuestionCategories.category]): a name this build has no
      * [QuestionStatus] for fails the read, and with it the author's whole list
      * (`SubmissionStore.byAuthor`) as a 500. Everything else, the feed and the pending count
      * included, only compares it in SQL and still works. That is deliberate: no status this build
@@ -91,6 +90,29 @@ object Questions : Table("questions") {
 
     /** Room for the "short reason" of CLAUDE.md §8d. The moderation route decides what it accepts. */
     const val MAX_REJECTION_REASON_LENGTH: Int = 200
+}
+
+/**
+ * The categories each question is filed under (CLAUDE.md §8d): any number, at least one, one row
+ * per question and category. The question and its rows are written in one transaction, so no
+ * committed question is ever filed under nothing.
+ */
+object QuestionCategories : Table("question_categories") {
+    val questionId = varchar("question_id", 36).references(Questions.id)
+
+    /**
+     * A [io.ntole.wyr.core.question.QuestionCategory] name, never `UNKNOWN`, the client's decoding
+     * fallback. Read leniently (`QuestionStore.categoryOf`): a name written by a build that knows a
+     * category this one does not still reads back.
+     */
+    val category = varchar("category", 32)
+
+    /**
+     * A question is filed under a category once. The key also finds a question's categories, and
+     * whether it has one of those asked for, which is all the feed ever looks up: it asks it of each
+     * question it considers, never for every question in a category.
+     */
+    override val primaryKey = PrimaryKey(questionId, category)
 }
 
 object Votes : Table("votes") {
@@ -169,4 +191,4 @@ object Skips : Table("skips") {
  * this one list, so a new table belongs here rather than in a `SchemaUtils` call — otherwise it
  * is created in production but survives between tests on a shared database.
  */
-val appTables: Array<Table> = arrayOf(Players, Questions, Votes, Skips)
+val appTables: Array<Table> = arrayOf(Players, Questions, QuestionCategories, Votes, Skips)

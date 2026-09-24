@@ -16,7 +16,9 @@ internal fun QuestionDto.toDomain(): Question =
         id = id,
         optionA = optionA,
         optionB = optionB,
-        category = category.toDomain(),
+        // Provisional: the domain holds one category until it holds all of them. The first this
+        // build can name, or OTHER when it can name none, as for a lone UNKNOWN.
+        category = categories.firstOrNull { it != QuestionCategory.UNKNOWN }?.toDomain() ?: Category.OTHER,
         answeredBefore = answeredBefore,
     )
 
