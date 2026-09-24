@@ -251,8 +251,8 @@ automatically from every green commit on `main` (its URL is on its Render page).
 - The grace without a time bound (`feat/refresh-grace-unbounded`, CLAUDE.md §8a, §8b), on H2:
   `REFRESH_GRACE_SECONDS` unset is no bound, 0 off, a number a bound in seconds. `PlayerStoreTest`
   spends a displaced token days after its rotation, then never again, kills one at the first use of
-  the token that displaced it, and runs both races and the expiry with no bound, the bounded cases
-  under an explicit 10 minutes. `ApiFlowTest` restamps a rotation 5 hours back and keeps the player
+  the token that displaced it, and runs both races and the expiry with no bound and again under an
+  explicit 10 minutes, as it runs the other bounded cases. `ApiFlowTest` restamps a rotation 5 hours back and keeps the player
   and their point, and at 600 seconds takes a lost answer restamped 9 minutes back and refuses one
   at 11. No bound read as 10 minutes or as none at all, the previous token's expiry dropped, the
   bound ignored, and the route passing no bound or a default of its own each fail them. The fat jar

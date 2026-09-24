@@ -110,52 +110,63 @@ class PlayerStoreTest {
      * refresh whose answer was lost and its retry can, or two clients sharing one store. The second
      * waits on the first's row lock, then finds the token it presented displaced, and spends it as the
      * previous one: both go through, and the first's new token, which the second displaced, is the
-     * previous one in its turn, still good until the next rotation.
+     * previous one in its turn, still good until the next rotation. The same with no time bound and
+     * under one, which adds the stamp to the `WHERE` the second re-checks.
      */
     @Test
     fun `two refreshes racing with the current token both go through, the first's token becoming the previous one`() {
-        val url = h2Url("wyr-player-store-refresh-grace")
-        val database = connectH2(url, Connection.TRANSACTION_READ_COMMITTED)
-        val player = transaction(database) { createPlayer(refreshTokenHash = "shared") }
+        listOf(null, BOUND_MILLIS).forEach { graceMillis ->
+            val url = h2Url("wyr-player-store-refresh-grace-${graceMillis ?: "unbounded"}")
+            val database = connectH2(url, Connection.TRANSACTION_READ_COMMITTED)
+            val player = transaction(database) { createPlayer(refreshTokenHash = "shared") }
 
-        val (first, second) =
-            raceBehindFirst(
-                url,
-                database,
-                { rotate("shared", newHash = "first", now = ROTATED_AT) },
-                { rotate("shared", newHash = "second", now = ROTATED_AT + 1) },
-            )
+            val (first, second) =
+                raceBehindFirst(
+                    url,
+                    database,
+                    { rotate("shared", newHash = "first", now = ROTATED_AT, graceMillis = graceMillis) },
+                    { rotate("shared", newHash = "second", now = ROTATED_AT + 1, graceMillis = graceMillis) },
+                )
 
-        assertEquals(player.id, first?.id)
-        assertEquals(player.id, second?.id, "the second spends the token as the previous one")
-        assertEquals(StoredTokens("second", "first", ROTATED_AT + 1), storedTokens(database, player.id))
-        assertEquals(player.id, transaction(database) { rotate("first", newHash = "third", now = ROTATED_AT + 2) }?.id)
+            assertEquals(player.id, first?.id, "bound $graceMillis")
+            assertEquals(player.id, second?.id, "the second spends the token as the previous one: bound $graceMillis")
+            assertEquals(StoredTokens("second", "first", ROTATED_AT + 1), storedTokens(database, player.id))
+            val third =
+                transaction(database) {
+                    rotate("first", newHash = "third", now = ROTATED_AT + 2, graceMillis = graceMillis)
+                }
+            assertEquals(player.id, third?.id, "bound $graceMillis")
+        }
     }
 
     /**
      * The displaced token works once, however long it waits as the previous one: of two refreshes
      * presenting it at once, the second waits on the first's row lock and then finds it displaced for
      * good. By id, or by the hash alone, both would go through from one state, and it could be spent
-     * again and again.
+     * again and again. The same with no time bound and under one.
      */
     @Test
     fun `two refreshes racing with the previous token let exactly one through`() {
-        val url = h2Url("wyr-player-store-refresh-previous")
-        val database = connectH2(url, Connection.TRANSACTION_READ_COMMITTED)
-        val player = transaction(database) { createPlayer(refreshTokenHash = "displaced") }
-        transaction(database) { rotate("displaced", newHash = "current", now = ROTATED_AT) }
+        listOf(null, BOUND_MILLIS).forEach { graceMillis ->
+            val url = h2Url("wyr-player-store-refresh-previous-${graceMillis ?: "unbounded"}")
+            val database = connectH2(url, Connection.TRANSACTION_READ_COMMITTED)
+            val player = transaction(database) { createPlayer(refreshTokenHash = "displaced") }
+            transaction(database) {
+                rotate("displaced", newHash = "current", now = ROTATED_AT, graceMillis = graceMillis)
+            }
 
-        val (first, second) =
-            raceBehindFirst(
-                url,
-                database,
-                { rotate("displaced", newHash = "first", now = ROTATED_AT + 1) },
-                { rotate("displaced", newHash = "second", now = ROTATED_AT + 1) },
-            )
+            val (first, second) =
+                raceBehindFirst(
+                    url,
+                    database,
+                    { rotate("displaced", newHash = "first", now = ROTATED_AT + 1, graceMillis = graceMillis) },
+                    { rotate("displaced", newHash = "second", now = ROTATED_AT + 1, graceMillis = graceMillis) },
+                )
 
-        assertEquals(player.id, first?.id)
-        assertNull(second, "the previous token was spent by the first refresh")
-        assertEquals(StoredTokens("first", "current", ROTATED_AT + 1), storedTokens(database, player.id))
+            assertEquals(player.id, first?.id, "bound $graceMillis")
+            assertNull(second, "the previous token was spent by the first refresh: bound $graceMillis")
+            assertEquals(StoredTokens("first", "current", ROTATED_AT + 1), storedTokens(database, player.id))
+        }
     }
 
     /**
