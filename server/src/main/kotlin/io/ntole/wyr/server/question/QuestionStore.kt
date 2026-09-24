@@ -220,6 +220,14 @@ object QuestionStore {
      * statements, and the feed serves every player the pool in an order of their own. Only a write
      * to the row, one that references it, or another such read waits on the lock: the feed, the stats
      * and the moderator's lists read the row without it.
+     *
+     * But each transaction waits holding its pooled connection, and the pool is small (5 on
+     * PostgreSQL, `DatabaseFactory`). So as many writes to one question at once as the pool has
+     * connections hold all of them, one working and the rest waiting, and every other request waits
+     * for a connection meanwhile, up to Hikari's 30 s. A question can be answered by id whether or
+     * not the feed served it, and each player may send 120 votes a minute (CLAUDE.md §8b), so a few
+     * scripted guests can bring that about on purpose, and more cheaply than when writes to one
+     * question ran side by side.
      */
     fun lockIfServable(id: String): Boolean =
         Questions

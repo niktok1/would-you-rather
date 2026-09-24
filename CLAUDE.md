@@ -499,17 +499,23 @@ accounts exist.
   nothing it earned is taken back, so its answers' points stay and its likes stay held and paid, and
   nobody can unlike it until it is restored. Restored, it is due for every player who has not
   answered or skipped it in their current cycle. It is stored as `questions.retired_at` beside an
-  `APPROVED` status, and sent as `QuestionStatus.RETIRED`, so a rollback to the build before
-  (§8b, *Rollbacks*) reads every row and only serves retired questions again. Every vote, skip and
-  like locks its question's row (`QuestionStore.lockIfServable`, §4), so nothing lands on a
-  question after its retirement commits, at the cost of one question's votes, skips and likes
-  queueing one at a time. The options: keep it; let an unlike through on a retired question, so a
-  player can still take a like back (and its author's point with it); take back what a retired
-  question earned (every total would move, and §8c's sum would need the retired questions left out
-  on both sides); a plain servability read instead of the lock, so writes to one question never
-  queue, where a vote in flight as the retirement commits may still land, and the retirement's
-  answer not count it; or `RETIRED` stored as a status of its own once no build before this one is
-  a rollback target, which drops the column.
+  `APPROVED` status, and sent as `QuestionStatus.RETIRED`, so a rollback to the build before (§8b,
+  *Rollbacks*) reads every row and only serves retired questions again. Every vote, skip and like
+  locks its question's row (`QuestionStore.lockIfServable`, §4), so nothing lands on a question
+  after its retirement commits, at the cost of one question's votes, skips and likes queueing one at
+  a time. Each waits holding one of the pool's 5 connections (2 on H2), so as many writes to one
+  question at once hold every connection and delay every other request, the feed, stats and
+  refreshes included, for as long as the queue takes, up to Hikari's 30 s wait for a connection; a
+  question is answerable by id whether served or not, so a few scripted guests within their 120
+  votes a minute can do that on purpose. The options: keep it; let an unlike through on a retired
+  question, so a player can still take a like back (and its author's point with it); take back what
+  a retired question earned (every total would move, and §8c's sum would need the retired questions
+  left out on both sides); a plain servability read instead of the lock, so writes to one question
+  never queue, where a vote in flight as the retirement commits may still land, and the retirement's
+  answer not count it; a shared lock on PostgreSQL (`FOR SHARE`), which lets writes to one question
+  run side by side and still holds a retirement back, but needs SQL per engine, since H2 refuses it;
+  or `RETIRED` stored as a status of its own once no build before this one is a rollback target,
+  which drops the column.
 - **Skips under a category filter** — *provisional — user decision.* A request filtered to one
   or more categories with nothing due in any of them, while other questions still are, serves
   those categories again (§8d, *Categories*), and that includes questions skipped this cycle, which

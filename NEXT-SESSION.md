@@ -971,8 +971,10 @@ known `PlayViewModel` issues (the Play tab is frozen).
   skipping, liking or unliking it is 404. A new exclusion belongs there. Since a question can now
   stop being servable, `lockIfServable` takes the question's row `FOR UPDATE`: a retirement waits
   for the votes, skips and likes that found it servable, and one behind a retirement finds it
-  retired. So every vote, skip and like of one question queues on its row, and two first ones by a
-  player never race on their key any more; `VoteStoreTest`, `SkipStoreTest` and `LikeStoreTest`
+  retired. So every vote, skip and like of one question queues on its row, each waiting with a
+  pooled connection held, so enough at once on one question hold the whole pool (5 on PostgreSQL)
+  and stall every other request (weighed in CLAUDE.md §8b, *Retiring a question*); and two first
+  ones by a player never race on their key any more; `VoteStoreTest`, `SkipStoreTest` and `LikeStoreTest`
   race them on the row lock now, and `VoteStoreTest`'s split-tally race moves the other vote
   straight in the table, since no answer can come between. Retirement is a column,
   `questions.retired_at`, beside an `APPROVED` status, and `statusOf` / `standsAt`
