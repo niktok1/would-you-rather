@@ -11,4 +11,5 @@ internal fun PlayerStatsDto.toDomain(): PlayerStats =
         questionsAnswered = questionsAnswered,
         cycle = cycle,
         dueThisCycle = dueThisCycle,
+        likesReceived = likesReceived,
     )

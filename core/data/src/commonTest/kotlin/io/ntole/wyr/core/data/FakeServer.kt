@@ -305,6 +305,7 @@ internal class FakeServer {
                 questionsAnswered = 5,
                 cycle = 2,
                 dueThisCycle = 11,
+                likesReceived = 3,
             )
     }
 }

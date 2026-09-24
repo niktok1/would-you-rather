@@ -934,6 +934,7 @@ class DevConsoleViewModelTest {
                 questionsAnswered = 20,
                 cycle = 2,
                 dueThisCycle = 4,
+                likesReceived = 0,
             )
 
         val QUESTION =

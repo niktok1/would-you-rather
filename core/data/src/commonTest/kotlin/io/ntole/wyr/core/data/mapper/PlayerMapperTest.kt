@@ -17,6 +17,7 @@ class PlayerMapperTest {
                 questionsAnswered = 5,
                 cycle = 2,
                 dueThisCycle = 11,
+                likesReceived = 3,
             )
 
         assertEquals(
@@ -27,6 +28,7 @@ class PlayerMapperTest {
                 questionsAnswered = 5,
                 cycle = 2,
                 dueThisCycle = 11,
+                likesReceived = 3,
             ),
             dto.toDomain(),
         )

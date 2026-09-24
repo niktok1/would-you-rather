@@ -48,6 +48,7 @@ class GetPlayerStatsTest {
                 questionsAnswered = 2,
                 cycle = 1,
                 dueThisCycle = 22,
+                likesReceived = 0,
             )
     }
 }

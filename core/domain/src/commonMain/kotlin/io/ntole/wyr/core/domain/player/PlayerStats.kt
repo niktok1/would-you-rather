@@ -11,6 +11,11 @@ package io.ntole.wyr.core.domain.player
  * [cycle] is the player's current pass over the questions and [dueThisCycle] how many are still
  * due in it. A finished cycle shows as nothing due until the feed is next asked for questions,
  * which is when the next one starts.
+ *
+ * [likesReceived] is how many likes the questions the player submitted hold now, their own likes of
+ * them included. Each is part of [totalPoints] while it is held, so the total can move without an
+ * answer: a like of one of the player's questions, from anyone, adds to it, and an unlike takes that
+ * back (CLAUDE.md §8d).
  */
 public data class PlayerStats(
     public val playerId: String,
@@ -19,4 +24,5 @@ public data class PlayerStats(
     public val questionsAnswered: Int,
     public val cycle: Int,
     public val dueThisCycle: Int,
+    public val likesReceived: Int,
 )
