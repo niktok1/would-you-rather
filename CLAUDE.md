@@ -1011,13 +1011,13 @@ and every request shows in its HTTP trace (`HttpTrace` in `:core:network`, never
     the server holds without losing the moderator's place; a decision reads the queue again too.
     Nothing is read again after a 403 or a 429, which did nothing and would refuse the read too:
     after a wrong token the read would only spend another of the address's ten a minute, past which
-    every admin request from it is refused (§8b). A failure shows where it happened: a read's above its screen, an
-    action's under its question, or at the top of the screen it was started from, named by the
-    question's options, once the read after it no longer lists it. A 403 reads as a wrong token, a
-    409 as a decision or a move made first, a 429 with the wait its `Retry-After` named
-    (`WyrException.retryAfter`, §8b). An answer the data layer cannot name (`UNKNOWN`) claims no
-    status, leaving it to the detail line under it, and says a bare 404 means moderation is off on
-    that server: a proxy's own page or an error code newer than the build reads as `UNKNOWN` too.
+    every admin request from it is refused (§8b). A failure shows where it happened: a read's above
+    its screen, an action's under its question, or at the top of the screen it was started from,
+    named by the question's options, once the read after it no longer lists it. A 403 reads as a
+    wrong token, a 409 as a decision or a move made first, a 429 with the wait its `Retry-After`
+    named (`WyrException.retryAfter`, §8b). An answer the data layer cannot name (`UNKNOWN`) claims
+    no status, leaving it to the detail line under it, and says a bare 404 means moderation is off
+    on that server: a proxy's own page or an error code newer than the build reads as `UNKNOWN` too.
     `ModerationViewModelTest` and `QuestionListViewModelTest` drive it over a scripted repository,
     `ModerationOverHttpTest` over the real client configuration, and `ScreensDrawTest` draws every
     screen off screen at a desktop window's size. The dev console had a *Moderation* section until

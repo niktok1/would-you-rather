@@ -66,8 +66,9 @@ automatically from every green commit on `main` (its URL is on its Render page).
   admin route for a missing, wrong, case-changed or bearer-carried token, and before the body is
   read; 200 beside any player session, live, forged or dead, never 401; and 404 on every one with
   `ADMIN_TOKEN` unset. That was three routes then; `ApiFlowTest.everyAdminRoute` holds all six now,
-  the question list, retirements and restorations (`feat/moderation-app`) among them. `AdminTokenTest` pins the comparison: one `MessageDigest.isEqual` of two
-  32-byte digests per check, whatever is presented. `ServerConfigTest` pins `ADMIN_TOKEN`'s parsing,
+  the question list, retirements and restorations (`feat/moderation-app`) among them.
+  `AdminTokenTest` pins the comparison: one `MessageDigest.isEqual` of two 32-byte digests per
+  check, whatever is presented. `ServerConfigTest` pins `ADMIN_TOKEN`'s parsing,
   `CorsTest` the preflight for `X-Admin-Token`. `SubmissionStoreTest` and `ServableQuestionsTest`
   now decide through `ModerationStore` rather than writing the table. The whole suite passes against
   one shared database too (`WYR_TEST_JDBC_URL` at a shared H2), so the per-test drop copes with the
@@ -110,8 +111,9 @@ automatically from every green commit on `main` (its URL is on its Render page).
   one again was 409 `ALREADY_DECIDED`, an unknown id 404 and a blank reason 400; the queue was then
   empty and `?status=APPROVED` listed the one approved.
 - The console's moderation path against the fat jar on H2 with `ADMIN_TOKEN` set, on
-  `feat/moderation`, before the moderation app replaced that section: a throwaway JVM test, not committed, drove `ModerationConsoleViewModel` from the
-  real Koin graph through the real CIO client. A curl guest had submitted three questions. Load
+  `feat/moderation`, before the moderation app replaced that section: a throwaway JVM test, not
+  committed, drove `ModerationConsoleViewModel` from the real Koin graph through the real CIO
+  client. A curl guest had submitted three questions. Load
   pending listed them oldest first; a wrong token logged `FORBIDDEN`; approving the first under
   SUPERPOWERS and RANDOM, the second keeping its categories, and rejecting the third with a padded
   reason each worked, the reason stored trimmed; approving the rejected one again logged
@@ -321,13 +323,14 @@ automatically from every green commit on `main` (its URL is on its Render page).
   its one request with two pages shown (not putting it there fails it) and dropping it from a list
   whose filter no longer picks it, a decision from either screen reading the queue and a read list
   again, a retirement or restoration refused as a wrong token or by the rate limit reading nothing
-  again, drafts kept for a question pending in the list alone, an empty page that claims another ending the
-  read, and Lock keeping the filter alone. `DefaultModerationRepositoryTest` pins the queue and a page
-  of the list asked for 100 at a time (`ModerationRepository.PAGE_SIZE`, which `ModerationMapperTest`
-  holds to the server's `MAX_PAGE_SIZE`), and `LabelsTest` and `QuestionLabelsTest` a queue that
-  long saying more may be waiting, its tab `Pending (100+)`. `ModerationOverHttpTest` adds a 409
-  `WRONG_STATUS` on a retirement. `ScreensDrawTest` draws both screens and the Retire dialog off screen (Compose's
-  `ImageComposeScene`) in both themes. `DataModuleTest` pins that the game's `dataModule` binds
+  again, drafts kept for a question pending in the list alone, an empty page that claims another
+  ending the read, and Lock keeping the filter alone. `DefaultModerationRepositoryTest` pins the
+  queue and a page of the list asked for 100 at a time (`ModerationRepository.PAGE_SIZE`, which
+  `ModerationMapperTest` holds to the server's `MAX_PAGE_SIZE`), and `LabelsTest` and
+  `QuestionLabelsTest` a queue that long saying more may be waiting, its tab `Pending (100+)`.
+  `ModerationOverHttpTest` adds a 409 `WRONG_STATUS` on a retirement. `ScreensDrawTest` draws both
+  screens and the Retire dialog off screen (Compose's `ImageComposeScene`) in both themes.
+  `DataModuleTest` pins that the game's `dataModule` binds
   nothing of the moderator's (binding the API back fails it), and `WyrHttpClientTest` and
   `RunApiOverHttpTest` a 429's `Retry-After` reaching `WyrException.retryAfter` (dropped at either
   step, they fail), and `CorsTest` a 429 to an allowed origin naming it in
@@ -983,9 +986,9 @@ known `PlayViewModel` issues (the Play tab is frozen).
   retired. So every vote, skip and like of one question queues on its row, each waiting with a
   pooled connection held, so enough at once on one question hold the whole pool (5 on PostgreSQL)
   and stall every other request (weighed in CLAUDE.md §8b, *Retiring a question*); and two first
-  ones by a player never race on their key any more; `VoteStoreTest`, `SkipStoreTest` and `LikeStoreTest`
-  race them on the row lock now, and `VoteStoreTest`'s split-tally race moves the other vote
-  straight in the table, since no answer can come between. Retirement is a column,
+  ones by a player never race on their key any more; `VoteStoreTest`, `SkipStoreTest` and
+  `LikeStoreTest` race them on the row lock now, and `VoteStoreTest`'s split-tally race moves the
+  other vote straight in the table, since no answer can come between. Retirement is a column,
   `questions.retired_at`, beside an `APPROVED` status, and `statusOf` / `standsAt`
   (`io.ntole.wyr.server.question`) read the two as one: read a question's status through them,
   never `Questions.status` alone, or a retired question reads as approved.
