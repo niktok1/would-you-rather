@@ -250,6 +250,9 @@ private fun Stats(state: DevConsoleState) {
     if (state.likesMovedSinceOutcome) {
         Value("lastOutcome", "likesReceived was ${state.likesReceivedAtOutcome} then, not compared")
     }
+    if (state.likesUnmeasuredAtOutcome) {
+        Value("lastOutcome", "a like went out before likesReceived was read, not compared")
+    }
     if (state.pointsMismatch) {
         val outcomeTotal = state.lastOutcome?.totalPoints
         CodeLine("MISMATCH totalPoints: stats=${stats?.totalPoints} lastOutcome=$outcomeTotal", failed = true)

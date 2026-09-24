@@ -1021,6 +1021,100 @@ class DevConsoleViewModelTest {
         }
 
     @Test
+    fun `a like sent before any read after the vote worked is not taken for a mismatch`() =
+        runTest(dispatcher) {
+            val viewModel = openConsole()
+            viewModel.nextQuestion()
+            testScheduler.advanceUntilIdle()
+            // The read after the vote fails, so nothing has counted the likes the player held at it.
+            players.stats = { throw WyrException(DomainError.NETWORK, "read timed out") }
+            viewModel.vote(Side.A)
+            testScheduler.advanceUntilIdle()
+            // The player likes their own question, which pays them a point. The read after the like
+            // is the first to work since the vote, and counts that like already.
+            players.stats = { statsOf("p1").copy(totalPoints = OUTCOME.totalPoints + 1, likesReceived = 1) }
+
+            viewModel.toggleLike()
+            testScheduler.advanceUntilIdle()
+
+            val state = viewModel.state.value
+            assertTrue(state.likesUnmeasuredAtOutcome)
+            assertEquals(null, state.likesReceivedAtOutcome, "a read after the like measures nothing")
+            assertFalse(state.likesMovedSinceOutcome)
+            assertFalse(state.pointsMismatch, "the like paid the point, not a vote the console has no outcome for")
+        }
+
+    @Test
+    fun `a like whose answer was lost before any read after the vote worked is not taken for a mismatch`() =
+        runTest(dispatcher) {
+            val viewModel = openConsole()
+            viewModel.nextQuestion()
+            testScheduler.advanceUntilIdle()
+            players.stats = { throw WyrException(DomainError.NETWORK, "read timed out") }
+            viewModel.vote(Side.A)
+            testScheduler.advanceUntilIdle()
+            // The like lands and pays the player, but its answer never arrives.
+            likes.answer = { _, _ -> throw WyrException(DomainError.NETWORK, "read timed out") }
+            players.stats = { statsOf("p1").copy(totalPoints = OUTCOME.totalPoints + 1, likesReceived = 1) }
+
+            viewModel.toggleLike()
+            testScheduler.advanceUntilIdle()
+
+            val state = viewModel.state.value
+            assertTrue(state.likesUnmeasuredAtOutcome)
+            assertFalse(state.pointsMismatch, "the like may have landed, so it was sent all the same")
+        }
+
+    @Test
+    fun `a like sent once a read after the vote worked is measured from that read`() =
+        runTest(dispatcher) {
+            val viewModel = openConsole()
+            viewModel.nextQuestion()
+            testScheduler.advanceUntilIdle()
+            viewModel.vote(Side.A)
+            testScheduler.advanceUntilIdle()
+            players.stats = { statsOf("p1").copy(totalPoints = OUTCOME.totalPoints + 1, likesReceived = 1) }
+
+            viewModel.toggleLike()
+            testScheduler.advanceUntilIdle()
+
+            val state = viewModel.state.value
+            assertFalse(state.likesUnmeasuredAtOutcome)
+            assertEquals(0, state.likesReceivedAtOutcome)
+            assertTrue(state.likesMovedSinceOutcome)
+            assertFalse(state.pointsMismatch)
+        }
+
+    @Test
+    fun `the next vote measures likes again after a like sent before any read worked`() =
+        runTest(dispatcher) {
+            val viewModel = openConsole()
+            viewModel.nextQuestion()
+            testScheduler.advanceUntilIdle()
+            players.stats = { throw WyrException(DomainError.NETWORK, "read timed out") }
+            viewModel.vote(Side.A)
+            testScheduler.advanceUntilIdle()
+            players.stats = { statsOf("p1").copy(totalPoints = OUTCOME.totalPoints + 1, likesReceived = 1) }
+            viewModel.toggleLike()
+            testScheduler.advanceUntilIdle()
+            assertTrue(viewModel.state.value.likesUnmeasuredAtOutcome)
+
+            // The next vote's total counts the like, and so does the read after it.
+            votes.answer = { questionId, side ->
+                OUTCOME.copy(questionId = questionId, yourSide = side, totalPoints = OUTCOME.totalPoints + 2)
+            }
+            players.stats = { statsOf("p1").copy(totalPoints = OUTCOME.totalPoints + 2, likesReceived = 1) }
+            viewModel.vote(Side.B)
+            testScheduler.advanceUntilIdle()
+
+            val state = viewModel.state.value
+            assertFalse(state.likeSentBeforeMeasure)
+            assertFalse(state.likesUnmeasuredAtOutcome)
+            assertEquals(1, state.likesReceivedAtOutcome)
+            assertFalse(state.pointsMismatch)
+        }
+
+    @Test
     fun `Read stats reads them again as an action of its own`() =
         runTest(dispatcher) {
             val viewModel = openConsole()

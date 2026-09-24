@@ -127,6 +127,13 @@ class DevConsoleViewModel(
         val question = _state.value.question ?: return
         val liked = !question.likedByMe
         perform("setLike", args = "questionId=${question.id} liked=$liked", readsStats = true) {
+            // Before it goes out, since a like whose answer is lost may still have landed. With no
+            // read yet to have measured the likes since the last outcome, the first to work would
+            // count this one too.
+            _state.update {
+                val unmeasured = it.lastOutcome != null && it.likesReceivedAtOutcome == null
+                it.copy(likeSentBeforeMeasure = it.likeSentBeforeMeasure || unmeasured)
+            }
             val likes = setLike(question.id, liked)
             _state.update { state ->
                 val shown = state.question
@@ -241,9 +248,16 @@ class DevConsoleViewModel(
         val paidTo = sessions.currentPlayerId()
         // The stats read before this outcome no longer describe the server, so they go rather than
         // be compared with it, until the read that follows every vote brings them back. The likes
-        // received are measured from that read on, so the previous outcome's measure goes too.
+        // received are measured from that read on, so the previous outcome's measure goes too, and
+        // with it any like sent before one was taken.
         _state.update {
-            it.copy(lastOutcome = outcome, lastOutcomePlayerId = paidTo, stats = null, likesReceivedAtOutcome = null)
+            it.copy(
+                lastOutcome = outcome,
+                lastOutcomePlayerId = paidTo,
+                stats = null,
+                likesReceivedAtOutcome = null,
+                likeSentBeforeMeasure = false,
+            )
         }
         return outcome
     }
@@ -257,8 +271,10 @@ class DevConsoleViewModel(
     private suspend fun loadStats(): PlayerStats {
         val stats = getPlayerStats()
         _state.update {
-            // The first read after an outcome sets the likes later reads are measured against.
-            val atOutcome = it.likesReceivedAtOutcome ?: if (it.lastOutcome != null) stats.likesReceived else null
+            // The first read after an outcome sets the likes later reads are measured against, unless
+            // a like went out before it, which it may count already.
+            val measures = it.lastOutcome != null && !it.likeSentBeforeMeasure
+            val atOutcome = it.likesReceivedAtOutcome ?: if (measures) stats.likesReceived else null
             it.copy(stats = stats, likesReceivedAtOutcome = atOutcome)
         }
         return stats

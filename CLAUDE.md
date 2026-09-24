@@ -551,7 +551,8 @@ and every request shows in its HTTP trace (`HttpTrace` in `:core:network`, never
     after every like, a failed one too, and shows `likesReceived`. Since a like moves its author's
     total without a vote, the console compares its stats with the last vote's total only while they
     count as many likes received as the first read after that vote did (`likesMovedSinceOutcome`),
-    and works out no points itself.
+    and not at all until the next vote once it sent a like before any such read worked
+    (`likesUnmeasuredAtOutcome`). It works out no points itself.
 - **Submitting** *(built; details decided 2026-09-23)*: earns no points
   directly, because authors earn through likes. The author writes both options and **picks one or
   more categories** (each a real one, not `UNKNOWN`; *Categories*). A player may have at most **20

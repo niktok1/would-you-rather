@@ -42,9 +42,17 @@ data class DevConsoleState(
     val stats: PlayerStats? = null,
     /**
      * The likes received that the first stats read to work after [lastOutcome] counted, or `null`
-     * until one has. What [likesMovedSinceOutcome] measures later reads against.
+     * until one has, and until the next vote once [likeSentBeforeMeasure]. What
+     * [likesMovedSinceOutcome] measures later reads against.
      */
     val likesReceivedAtOutcome: Int? = null,
+    /**
+     * True when a like or unlike went out after [lastOutcome] while [likesReceivedAtOutcome] was
+     * still `null`, as it is when the read after a vote failed. The like may pay this player, and the
+     * first read to work after it may count it, so that read is no measure of the likes the
+     * outcome's total held, and none is taken until the next vote.
+     */
+    val likeSentBeforeMeasure: Boolean = false,
     /** The last vote sent, whether or not it got an answer, for Retry last vote to send again. */
     val lastVote: SentVote? = null,
     /** The action in flight, or `null` when idle. Only one runs at a time. */
@@ -79,19 +87,29 @@ data class DevConsoleState(
         }
 
     /**
+     * True when [stats] are not compared with [lastOutcome] because of [likeSentBeforeMeasure]: they
+     * may count a like the outcome's total did not, and no read measured the likes received before
+     * it went out. Never true while [statsForAnotherPlayer] is.
+     */
+    val likesUnmeasuredAtOutcome: Boolean
+        get() = stats != null && lastOutcome != null && likeSentBeforeMeasure && !statsForAnotherPlayer
+
+    /**
      * True when [stats] and [lastOutcome] disagree on the player's total points. Both are the
      * server's word, and the stats were read after the outcome, so they should agree. When they do
      * not, the server paid for something the console has no outcome for: a vote whose answer was
      * lost, which Retry last vote then replays, or one cast from the Play tab. Otherwise it is a bug.
-     * Never true while [statsForAnotherPlayer] or [likesMovedSinceOutcome] is. So a like that lands
-     * between a vote and the first stats read after it, rare but possible from another client, shows
-     * as a mismatch.
+     * Never true while [statsForAnotherPlayer], [likesMovedSinceOutcome] or
+     * [likesUnmeasuredAtOutcome] is. So a like from another client that lands between a vote and the
+     * first stats read to work after it, rare but possible, shows as a mismatch. One from this
+     * console does not.
      */
     val pointsMismatch: Boolean
         get() {
             val stats = stats ?: return false
             val outcome = lastOutcome ?: return false
-            return !statsForAnotherPlayer && !likesMovedSinceOutcome && stats.totalPoints != outcome.totalPoints
+            val notCompared = statsForAnotherPlayer || likesMovedSinceOutcome || likesUnmeasuredAtOutcome
+            return !notCompared && stats.totalPoints != outcome.totalPoints
         }
 }
 

@@ -133,7 +133,7 @@ Repo initialized on `main` with the personal identity and `user.useConfigOnly = 
   first; `DefaultLikeRepositoryTest` the first launch's like going out once, recovery after a 401
   sending the same body, a like lost to `NETWORK` asked for again and held once, and a 404 leaving the
   session alone, all through `MockEngine`; and `DevConsoleViewModelTest` the Like button and the
-  likes-moved comparison.
+  likes-moved comparison, a like sent before any read after the vote worked included.
 - Live curl run against `./gradlew :server:run` confirmed guest auth, paging, voting,
   refresh-token rotation, replay rejection, and the `ErrorDto` envelope on 400/401/404/409. That
   run predates flat scoring, `fix/read-committed` and the endless feed, so the scoring it checked
@@ -337,13 +337,17 @@ The app opens on the **Console** tab (`io.ntole.wyr.dev`). **Play** is the froze
   not. The other reads are logged only when they fail, as `refreshStats`. A read that fails keeps
   what was shown, which after a vote is nothing: a vote's outcome drops the stats it outdated. A red
   `MISMATCH totalPoints` line means the stats and the last outcome disagree: a vote landed whose
-  answer was lost (*Retry last vote* replays it, and the flag goes), a vote from the Play tab, or a
-  bug. The two are compared only for one player. A read the server refused as a dead session (a
-  restarted `:server:run` does that) recovers it, and the stats are then a fresh guest's: instead of
-  the flag, Stats shows `lastOutcome: paid to <id>, not compared`. A like of one of the player's
-  questions, theirs or anyone's, moves the total without a vote, so once `likesReceived` differs from
-  what the first read after the last vote counted, Stats shows `lastOutcome: likesReceived was <n>
-  then, not compared` instead of the flag. **To see the lazy cycle start:**
+  answer was lost (*Retry last vote* replays it, and the flag goes), a vote from the Play tab, a
+  like of one of the player's questions from another client between a vote and the first read to
+  work after it, or a bug. The two are compared only for one player. A read the server refused as a
+  dead session (a restarted `:server:run` does that) recovers it, and the stats are then a fresh
+  guest's: instead of the flag, Stats shows `lastOutcome: paid to <id>, not compared`. A like of one
+  of the player's questions, theirs or anyone's, moves the total without a vote, so once
+  `likesReceived` differs from what the first read after the last vote counted, Stats shows
+  `lastOutcome: likesReceived was <n> then, not compared` instead of the flag. A *Like* sent before
+  any read after the last vote worked leaves nothing to measure from, so until the next vote Stats
+  shows `lastOutcome: a like went out before likesReceived was read, not compared`.
+  **To see the lazy cycle start:**
   once the last due question is answered or skipped, Stats shows the finished cycle with
   `dueThisCycle: 0`. The next cycle starts only when the feed is next asked for questions, which the
   console does when its queue is empty (*Next question*, *Skip*, or the next answer of *Answer N*).
