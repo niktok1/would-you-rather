@@ -1,5 +1,6 @@
 package io.ntole.wyr.server.plugins
 
+import io.ntole.wyr.core.question.ApproveSubmissionRequest
 import io.ntole.wyr.core.question.QuestionCategory
 import io.ntole.wyr.core.question.QuestionDto
 import io.ntole.wyr.core.question.QuestionStatus
@@ -55,6 +56,19 @@ class ServerJsonTest {
             )
 
         assertEquals(listOf(QuestionCategory.FOOD, QuestionCategory.UNKNOWN), request.categories)
+    }
+
+    @Test
+    fun `an approval reads its categories as a submission does and none when it leaves them out`() {
+        // None keeps the author's categories, so a client that leaves the field out asks for exactly that.
+        val keeping = ServerJson.decodeFromString<ApproveSubmissionRequest>("""{"questionId":"q1"}""")
+        val replacing =
+            ServerJson.decodeFromString<ApproveSubmissionRequest>(
+                """{"questionId":"q1","categories":["ETHICS","FROM_THE_FUTURE"]}""",
+            )
+
+        assertEquals(ApproveSubmissionRequest("q1", categories = emptyList()), keeping)
+        assertEquals(listOf(QuestionCategory.ETHICS, QuestionCategory.UNKNOWN), replacing.categories)
     }
 
     private fun fieldOf(

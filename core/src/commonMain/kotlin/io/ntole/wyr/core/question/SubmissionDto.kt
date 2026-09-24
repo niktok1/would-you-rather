@@ -5,7 +5,9 @@ import kotlinx.serialization.Serializable
 /**
  * One of the requesting player's own submitted questions, as its author sees it (CLAUDE.md §8d):
  * what a submission is answered with, and what [io.ntole.wyr.core.api.WyrApi.Paths.MY_QUESTIONS]
- * lists.
+ * lists. A moderator sees a submission the same way: the moderator's queue
+ * ([io.ntole.wyr.core.api.WyrApi.Paths.ADMIN_SUBMISSIONS]) lists them, and a decision is answered
+ * with one. It names no author either way.
  *
  * [id] is the question's id, the one the feed serves it under once it is approved. [optionA] and
  * [optionB] are as stored, trimmed. [categories] are the ones the question is filed under, which a

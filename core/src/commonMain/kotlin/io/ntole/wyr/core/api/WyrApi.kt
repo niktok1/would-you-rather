@@ -72,10 +72,60 @@ public object WyrApi {
          * session. A rejected one carries the moderator's reason.
          */
         public const val MY_QUESTIONS: String = "/$VERSION/me/questions"
+
+        /**
+         * The moderator's queue (CLAUDE.md §8d, *Moderation*): the submissions waiting for a decision,
+         * oldest first, as a [io.ntole.wyr.core.question.SubmissionListDto], so its head is the next
+         * to decide and asking again after deciding it gets the rest. [Query.STATUS] lists those of
+         * another status instead, in the same order, and [Query.LIMIT] bounds how many, within the
+         * feed's bounds. Only players' submissions are listed, never a seed. No author travels: a
+         * moderator decides a question by what it says, not by who wrote it. An admin route: needs
+         * [Headers.ADMIN_TOKEN].
+         */
+        public const val ADMIN_SUBMISSIONS: String = "/$VERSION/admin/submissions"
+
+        /**
+         * Approves a pending submission, with an [io.ntole.wyr.core.question.ApproveSubmissionRequest],
+         * answered with its [io.ntole.wyr.core.question.SubmissionDto] as its author now sees it. From
+         * then on it is due for every player, its author included, in whatever cycle each is on
+         * (CLAUDE.md §8d). An admin route: needs [Headers.ADMIN_TOKEN].
+         *
+         * A question that is not pending, whether decided already (by this moderator or another) or a
+         * seed, is 409 [io.ntole.wyr.core.error.ErrorCode.ALREADY_DECIDED], and of two decisions racing
+         * for one question exactly one is made. An id no question has is 404
+         * [io.ntole.wyr.core.error.ErrorCode.QUESTION_NOT_FOUND]. A malformed body, or one naming a
+         * category that is not real, is 400 [io.ntole.wyr.core.error.ErrorCode.VALIDATION_FAILED].
+         */
+        public const val ADMIN_APPROVALS: String = "/$VERSION/admin/approvals"
+
+        /**
+         * Rejects a pending submission with a short reason its author sees, with an
+         * [io.ntole.wyr.core.question.RejectSubmissionRequest], answered with its
+         * [io.ntole.wyr.core.question.SubmissionDto] as its author now sees it. It is served to nobody,
+         * ever. Refused as [ADMIN_APPROVALS] refuses, and a reason the rules refuse is 400 too. An
+         * admin route: needs [Headers.ADMIN_TOKEN].
+         */
+        public const val ADMIN_REJECTIONS: String = "/$VERSION/admin/rejections"
+    }
+
+    public object Headers {
+        /**
+         * Carries the server's admin token on the admin routes ([Paths.ADMIN_SUBMISSIONS],
+         * [Paths.ADMIN_APPROVALS], [Paths.ADMIN_REJECTIONS]). The moderator is whoever holds it, not a
+         * role on a player account (CLAUDE.md §8d), so the player's bearer token plays no part and may
+         * be sent alongside or not. A header of its own rather than `Authorization`, which carries the
+         * player's bearer token and which the client's bearer provider owns.
+         *
+         * Without it, or with another token, an admin route is 403
+         * [io.ntole.wyr.core.error.ErrorCode.FORBIDDEN], checked before anything else about the request.
+         * Never 401, which would have a client refresh its player session for nothing. A server with no
+         * admin token configured has no admin routes: each is 404, as a path the server does not have.
+         */
+        public const val ADMIN_TOKEN: String = "X-Admin-Token"
     }
 
     public object Query {
-        /** Max questions to return in one batch. */
+        /** Max questions to return in one batch, or submissions in [Paths.ADMIN_SUBMISSIONS]. */
         public const val LIMIT: String = "limit"
 
         /**
@@ -86,6 +136,13 @@ public object WyrApi {
          * [io.ntole.wyr.core.error.ErrorCode.VALIDATION_FAILED], whatever the others name.
          */
         public const val CATEGORY: String = "category"
+
+        /**
+         * Which [io.ntole.wyr.core.question.QuestionStatus] [Paths.ADMIN_SUBMISSIONS] lists, by name,
+         * given at most once: `PENDING` when it is absent. A value that names no real status, `UNKNOWN`
+         * included, or a second value, is 400 [io.ntole.wyr.core.error.ErrorCode.VALIDATION_FAILED].
+         */
+        public const val STATUS: String = "status"
     }
 
     public object Limits {
