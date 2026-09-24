@@ -11,7 +11,7 @@ Repo initialized on `main` with the personal identity and `user.useConfigOnly = 
 
 ### Verified working
 
-- `:server` on H2: 85 tests green, including 33 end-to-end flow tests in `ApiFlowTest`. Flat
+- `:server` on H2: 110 tests green, including 44 end-to-end flow tests in `ApiFlowTest`. Flat
   scoring is covered there (every vote pays 1, majority and minority alike, and the total
   accumulates) and by `PlayerStoreTest`, which races awards for one player and refreshes of one
   token. The endless feed, re-answering and attempt replay are covered there too, and by
@@ -23,6 +23,13 @@ Repo initialized on `main` with the personal identity and `user.useConfigOnly = 
   `POST /v1/skips` is covered in `ApiFlowTest` (out of the cycle and back in the next, a repeat,
   an answer after a skip, 404, 401 and malformed bodies) and by `SkipStoreTest`, which also races
   two first skips of one question, and a skip that waited on another's lock while a cycle started.
+  Question submission (`feat/question-submission`, server and contract only): `POST /v1/questions`
+  and `GET /v1/me/questions` are covered in `ApiFlowTest` (the content rules, malformed bodies, the
+  pending cap, a pending question served to and answerable by nobody, the list's order and owner,
+  401s), by `SubmissionStoreTest`, which races two submissions for the last pending place at 19,
+  and by `ServableQuestionsTest`, which pins what the one servable predicate lets through. The flow
+  tests also pass against one shared database (`WYR_TEST_JDBC_URL` at a shared H2), so the per-test
+  drop copes with the new questions-to-players key.
 - Live curl run against `./gradlew :server:run` confirmed guest auth, paging, voting,
   refresh-token rotation, replay rejection, and the `ErrorDto` envelope on 400/401/404/409. That
   run predates flat scoring, `fix/read-committed` and the endless feed, so the scoring it checked
@@ -38,7 +45,7 @@ Repo initialized on `main` with the personal identity and `user.useConfigOnly = 
   the next batch. That run predates feed cycles (`feat/feed-cycles`): the least-recently-answered
   loop it saw is gone, and cycles have run only in the server tests. It also predates server-side
   skips (`feat/skip-per-cycle`), which keep a skipped question out until the next cycle.
-- Client tests: `:core:domain` 12, `:core:data` 56, `:core:network` 24, `:app:shared` 52 (the
+- Client tests: `:core:domain` 12, `:core:data` 56, `:core:network` 25, `:app:shared` 52 (the
   ViewModels and the Koin graph). `:app:shared` compiles for JVM, JS, wasmJs and the iOS
   simulator.
 - `:app:androidApp:assembleDebug` produces a real APK.
@@ -58,6 +65,12 @@ Repo initialized on `main` with the personal identity and `user.useConfigOnly = 
   statement with a correlated subquery on `players.current_cycle`. That one statement sees one
   committed state at READ COMMITTED is documented PostgreSQL behaviour, not something a test here
   has seen.
+- **Question submission on Postgres, and from any client.** The pending cap locks the author's
+  `players` row (`SELECT ... FOR UPDATE`) and then counts in a later statement, which at READ
+  COMMITTED sees a submission committed while it waited. That has run only on H2
+  (`SubmissionStoreTest` polls H2's `SESSIONS`); on PostgreSQL it is documented behaviour, not
+  something a test here has seen. No client sends a submission yet, so both endpoints have run only
+  in the server's own tests; the client and the console's section are the next branch.
 - **READ COMMITTED and the refresh compare-and-set on Postgres.** Every race and burst in
   `PlayerStoreTest` runs on H2, even in the `server-postgres` job: it hardcodes `jdbc:h2:mem:`,
   because its wait-for-the-lock polling reads H2's `INFORMATION_SCHEMA.SESSIONS`. So the ci.yml
@@ -260,6 +273,13 @@ known `PlayViewModel` issues (the Play tab is frozen).
   cycle is a compare-and-set on the cycle read (`PlayerStore.startNextCycle`), and an answer and a
   skip each read their cycle after their row's lock (`VoteStore.cast`, `SkipStore.skip`). All three
   have races in the store tests.
+- **One predicate decides which questions a player may be served** (`QuestionStore.servableTo`,
+  CLAUDE.md §8d): an approved one, and never their own. The feed, the stats' due count, and votes
+  and skips (`QuestionStore.isServable`) all read it, so a pending or rejected question is served
+  to nobody, due for nobody, and answering or skipping it is 404, as it is for the author's own
+  approved question (provisional, CLAUDE.md §8b). A new exclusion belongs there. `isServable` is a
+  plain read because a question only ever becomes servable; a way to withdraw an approved question
+  would need votes and skips to lock the question's row.
 - **An attempt id is made once per tap and reused only to retry that tap.** `AttemptId.random()`
   is the only way to make one. Making a new one for a retry pays twice; reusing one for a new tap
   turns that answer into a replay that pays nothing. The server stores only the latest attempt per

@@ -320,8 +320,12 @@ accounts exist.
   that the endless feed (§8d) makes the server the source of truth for what a player has answered:
   the client keeps no record of what it served, so a persisted queue would only save one fetch
   after a restart.
-- **Question submission + moderation** — the game rules are settled in §8d; the contract
-  (`QuestionStatus`, author field) and the moderator model are not.
+- **Question submission + moderation** — the game rules are settled in §8d, and so is the
+  moderator model (an admin token). The submission contract is settled and built on the server:
+  `SubmitQuestionRequest`, `SubmissionDto`, `SubmissionListDto` and `QuestionStatus` in `:core`.
+  No author travels on the wire: a submission's author is whoever its bearer token names, and a
+  player lists only their own. Left: the client and console for submitting, and moderation's
+  admin routes.
 - **Skips under a category filter** — *provisional — user decision.* A request filtered to a
   category with nothing due in it, while other questions still are, serves that category again
   (§8d, *Categories*), and that includes questions skipped this cycle, which §8d, *Skipping*, says
