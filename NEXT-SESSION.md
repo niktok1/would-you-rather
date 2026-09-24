@@ -256,7 +256,18 @@ Server first, then a client. The server defaults to in-memory H2 and logs a warn
 
 Android uses `http://10.0.2.2:8080` (the emulator's alias for the host loopback); desktop, iOS
 simulator, and web use `http://localhost:8080`. All four are in
-`io.ntole.wyr.di.DevApiBaseUrl`. For the **web** client the server also needs
+`io.ntole.wyr.di.DevApiBaseUrl`. The **desktop** client takes another server from
+`WYR_API_BASE_URL`, read by its platform module (`PlatformModule.jvm.kt`), so it can be pointed at a
+deployed server or another machine; `./gradlew` passes the variable on to the app:
+
+```bash
+WYR_API_BASE_URL=https://<service>.onrender.com ./gradlew :app:desktopApp:run
+```
+
+It is trimmed, blank counts as unset, and it must be an http or https URL of a host, a port
+allowed, with no path, query or fragment (every route is an absolute path, so a path would be
+dropped silently). Anything else stops the app at start with a message naming the variable. The
+console's header shows the `api` in use. For the **web** client the server also needs
 `ALLOWED_WEB_ORIGINS` set or CORS preflight will reject every request. The page's dev server
 takes the first free port from 8080, so with the API already there it serves on 8081:
 

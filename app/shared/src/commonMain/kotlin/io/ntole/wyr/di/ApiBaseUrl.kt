@@ -9,6 +9,7 @@ const val API_BASE_URL: String = "apiBaseUrl"
  * Android is the odd one out: an emulator cannot see the host's `localhost`, so it needs the
  * host-loopback alias instead. Both are development values — production reads from
  * [io.ntole.wyr.di.platformModule] overrides or a build-time value once there is a deployed URL.
+ * Desktop already takes one from the `WYR_API_BASE_URL` environment variable.
  */
 object DevApiBaseUrl {
     const val LOCALHOST: String = "http://localhost:8080"
