@@ -16,6 +16,23 @@ data class ServerConfig(
     val jwtAudience: String,
     val accessTokenTtlSeconds: Long,
     val refreshTokenTtlSeconds: Long,
+    /**
+     * How long a refresh token a rotation displaced still works (CLAUDE.md §8a), from
+     * `REFRESH_GRACE_SECONDS`, [DEFAULT_REFRESH_GRACE_SECONDS] when unset; 0 turns the grace off, so a
+     * token is dead the moment a refresh has spent it.
+     *
+     * It is what saves a player whose refresh the server ran but whose answer never arrived, from a
+     * dropped connection or the client's own refresh timeout: the client still holds the token the
+     * server rotated out, and sends it again. The client gives up on a refresh after 5 minutes
+     * (`WyrHttpClient.REFRESH_TIMEOUT`), so the default outlasts that, and a refresh abandoned there
+     * can still be sent again. Without the grace, that player's next refresh is refused and the client
+     * replaces them with a fresh guest, their points gone.
+     *
+     * The cost is a stolen token's: presented after its own player's refresh rotated it out, it still
+     * works, for no longer than this after that rotation and once only, since spending it rotates it out
+     * for good. The grace never lengthens a token's own expiry.
+     */
+    val refreshGraceSeconds: Long,
     val allowedWebOrigins: List<WebOrigin>,
     /**
      * The moderator's credential (CLAUDE.md §8d, *Moderation*), from `ADMIN_TOKEN`, or null when that
@@ -54,6 +71,9 @@ data class ServerConfig(
         /** Shortest admin token the server boots on without a warning. `openssl rand -hex 32` makes 64. */
         const val MIN_ADMIN_TOKEN_LENGTH: Int = 32
 
+        /** [refreshGraceSeconds] when `REFRESH_GRACE_SECONDS` is unset: 10 minutes. */
+        const val DEFAULT_REFRESH_GRACE_SECONDS: Long = 10L * 60L
+
         private const val DEFAULT_PORT = 8080
         private const val ACCESS_TTL_SECONDS = 15L * 60L
         private const val REFRESH_TTL_SECONDS = 30L * 24L * 60L * 60L
@@ -81,6 +101,9 @@ data class ServerConfig(
                 refreshTokenTtlSeconds =
                     env("REFRESH_TTL_SECONDS")?.toLongOrNull()
                         ?: REFRESH_TTL_SECONDS,
+                refreshGraceSeconds =
+                    env("REFRESH_GRACE_SECONDS")?.let(::parseRefreshGraceSeconds)
+                        ?: DEFAULT_REFRESH_GRACE_SECONDS,
                 allowedWebOrigins =
                     env("ALLOWED_WEB_ORIGINS")
                         ?.split(',')
@@ -115,6 +138,26 @@ data class ServerConfig(
         }
 
         private val VISIBLE_ASCII = '!'..'~'
+
+        /**
+         * A whole number of seconds from 0 to a year, trimmed, or null for a blank one, which is unset.
+         * Anything else fails at config load, naming the variable, rather than falling back to the
+         * default: 0 is how the grace is turned off, and a mistyped 0 must not leave it on unnoticed.
+         * A year is far past a refresh token's own lifetime, which bounds the grace anyway, and keeps
+         * it in milliseconds clear of overflow.
+         */
+        internal fun parseRefreshGraceSeconds(raw: String): Long? {
+            val trimmed = raw.trim()
+            if (trimmed.isEmpty()) return null
+            val seconds = trimmed.toLongOrNull()
+            require(seconds != null && seconds in 0..MAX_REFRESH_GRACE_SECONDS) {
+                "REFRESH_GRACE_SECONDS is \"$raw\"; expected a whole number of seconds from 0, which turns the " +
+                    "grace off, to $MAX_REFRESH_GRACE_SECONDS, a year."
+            }
+            return seconds
+        }
+
+        private const val MAX_REFRESH_GRACE_SECONDS = 365L * 24L * 60L * 60L
 
         /**
          * A header name, trimmed, or null for a blank one. Anything else fails at config load, naming

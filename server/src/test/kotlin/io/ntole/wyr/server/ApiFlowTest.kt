@@ -216,28 +216,62 @@ class ApiFlowTest {
         }
 
     @Test
-    fun `refresh rotates the token and the old one stops working`() =
-        runServer("refresh-rotation") { client ->
-            val original: SessionDto = client.post(WyrApi.Paths.AUTH_GUEST).body()
+    fun `with the grace window off, refresh rotates the token and the old one stops working`() =
+        runServer("refresh-rotation", refreshGraceSeconds = 0) { client ->
+            val original = client.guest()
 
-            val refreshed: SessionDto =
-                client
-                    .post(WyrApi.Paths.AUTH_REFRESH) {
-                        contentType(ContentType.Application.Json)
-                        setBody(RefreshRequest(original.refreshToken))
-                    }.body()
+            val refreshed: SessionDto = client.refresh(original.refreshToken).body()
 
             assertEquals(original.playerId, refreshed.playerId, "refresh must not change identity")
             assertNotEquals(original.refreshToken, refreshed.refreshToken)
 
             // Replaying the consumed token must fail — that is the point of rotating it.
-            val replay =
-                client.post(WyrApi.Paths.AUTH_REFRESH) {
-                    contentType(ContentType.Application.Json)
-                    setBody(RefreshRequest(original.refreshToken))
-                }
+            val replay = client.refresh(original.refreshToken)
             assertEquals(HttpStatusCode.Unauthorized, replay.status)
             assertEquals(ErrorCode.INVALID_REFRESH_TOKEN, replay.body<ErrorDto>().code)
+        }
+
+    /**
+     * The case the grace window is for (CLAUDE.md §8a): the server rotated the token, the answer never
+     * reached the client, and the client still holds only the token the server rotated out. Without the
+     * grace, its next refresh is refused and the client replaces the player with a fresh guest.
+     */
+    @Test
+    fun `a refresh whose answer was lost can be sent again with the same token, keeping the player and their points`() =
+        runServer("refresh-lost-answer") { client ->
+            val original = client.guest()
+            client.vote(original, "seed-1", OptionSide.A)
+            val lost = client.refresh(original.refreshToken)
+            assertEquals(HttpStatusCode.OK, lost.status, "the server ran the refresh; only its answer is lost")
+
+            val retried = client.refresh(original.refreshToken)
+
+            assertEquals(HttpStatusCode.OK, retried.status)
+            val session: SessionDto = retried.body()
+            assertEquals(original.playerId, session.playerId, "the same player, not a fresh guest")
+            assertEquals(1, client.stats(session).totalPoints, "with the points they had")
+            assertEquals(HttpStatusCode.OK, client.refresh(session.refreshToken).status, "and a session that lives on")
+        }
+
+    /**
+     * The grace lets a displaced token work once more, not for as long as it lasts: spending it
+     * displaces it for good. The token it displaced in turn, the one the lost answer carried, is then
+     * the previous one, and works within the grace, as when two clients sharing one store refresh at once.
+     */
+    @Test
+    fun `a refresh token works once more within the grace window, and never a third time`() =
+        runServer("refresh-grace-once") { client ->
+            val original = client.guest()
+            val first: SessionDto = client.refresh(original.refreshToken).body()
+            assertEquals(HttpStatusCode.OK, client.refresh(original.refreshToken).status, "once more, within the grace")
+
+            val third = client.refresh(original.refreshToken)
+
+            assertEquals(HttpStatusCode.Unauthorized, third.status)
+            assertEquals(ErrorCode.INVALID_REFRESH_TOKEN, third.body<ErrorDto>().code)
+            val displaced = client.refresh(first.refreshToken)
+            assertEquals(HttpStatusCode.OK, displaced.status, "the first refresh's token, displaced by the second")
+            assertEquals(original.playerId, displaced.body<SessionDto>().playerId)
         }
 
     @Test
@@ -1464,10 +1498,14 @@ class ApiFlowTest {
             assertEquals(0, client.wholePool(session).single { it.id == "seed-1" }.likeCount, "and nothing was liked")
         }
 
-    /** A server on its own database, moderated with [adminToken], or with moderation off for none. */
+    /**
+     * A server on its own database, moderated with [adminToken], or with moderation off for none, and
+     * with production's refresh grace unless a test sets another.
+     */
     private fun runServer(
         databaseName: String,
         adminToken: String? = TEST_ADMIN_TOKEN,
+        refreshGraceSeconds: Long = ServerConfig.DEFAULT_REFRESH_GRACE_SECONDS,
         block: suspend ApplicationTestBuilder.(HttpClient) -> Unit,
     ) = testApplication {
         val database = testDatabaseFor(databaseName)
@@ -1483,6 +1521,7 @@ class ApiFlowTest {
                 jwtAudience = "wyr-test-client",
                 accessTokenTtlSeconds = 300,
                 refreshTokenTtlSeconds = 3_600,
+                refreshGraceSeconds = refreshGraceSeconds,
                 allowedWebOrigins = emptyList(),
                 adminToken = adminToken,
                 rateLimits = NO_PRACTICAL_LIMIT,
@@ -1504,6 +1543,12 @@ class ApiFlowTest {
     }
 
     private suspend fun HttpClient.guest(): SessionDto = post(WyrApi.Paths.AUTH_GUEST).body()
+
+    private suspend fun HttpClient.refresh(refreshToken: String): HttpResponse =
+        post(WyrApi.Paths.AUTH_REFRESH) {
+            contentType(ContentType.Application.Json)
+            setBody(RefreshRequest(refreshToken))
+        }
 
     private suspend fun HttpClient.feed(
         session: SessionDto,

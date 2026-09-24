@@ -58,14 +58,16 @@ fun Route.authRoutes(
             val rotated = tokens.issueRefreshToken()
             val expiresAt = System.currentTimeMillis() + config.refreshTokenTtlSeconds * 1_000L
 
-            // Rotate on every use, so a replayed token is dead on arrival — even one replayed while
-            // the first use is still in flight, which the rotation refuses as already rotated.
+            // Rotate on every use. The token a rotation displaces still works once more within the grace
+            // window (CLAUDE.md §8a), so a refresh whose answer was lost can be sent again with it, and
+            // then never again: a token replayed any later, or a second time, is refused.
             val player =
                 db.query {
                     PlayerStore.rotateRefreshToken(
-                        oldHash = tokens.hash(body.refreshToken),
+                        presentedHash = tokens.hash(body.refreshToken),
                         newHash = rotated.hash,
                         expiresAt = expiresAt,
+                        graceMillis = config.refreshGraceSeconds * 1_000L,
                     ) ?: throw ApiFailure.invalidRefreshToken()
                 }
 

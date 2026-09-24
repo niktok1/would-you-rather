@@ -10,6 +10,7 @@ import kotlin.test.assertTrue
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.minutes
+import kotlin.time.Duration.Companion.seconds
 
 class ServerConfigTest {
     @Test
@@ -153,6 +154,34 @@ class ServerConfigTest {
             val limits = ServerConfig.fromEnvironment(mapOf("RATE_LIMIT_VOTES_PER_MINUTE" to blank)::get).rateLimits
             assertEquals(RateLimits.DEFAULT, limits, "blank is unset: \"$blank\"")
         }
+    }
+
+    /**
+     * Past the client's 5-minute refresh timeout (CLAUDE.md §8a), so a refresh the client gave up on
+     * after the server ran it can still be sent again.
+     */
+    @Test
+    fun `the refresh grace is ten minutes unless REFRESH_GRACE_SECONDS sets it, 0 turning it off`() {
+        assertEquals(10.minutes, ServerConfig.fromEnvironment { null }.refreshGraceSeconds.seconds)
+        mapOf("90" to 90L, " 30 " to 30L, "0" to 0L, "" to 600L, "  " to 600L).forEach { (raw, seconds) ->
+            assertEquals(
+                seconds,
+                ServerConfig.fromEnvironment(mapOf("REFRESH_GRACE_SECONDS" to raw)::get).refreshGraceSeconds,
+                "\"$raw\"",
+            )
+        }
+    }
+
+    @Test
+    fun `a REFRESH_GRACE_SECONDS that is not a whole number of seconds up to a year fails at config load`() {
+        listOf("-1", "abc", "1.5", "10m", "O", "31536001").forEach { raw ->
+            val failure =
+                assertFailsWith<IllegalArgumentException>("\"$raw\" should be rejected") {
+                    ServerConfig.fromEnvironment(mapOf("REFRESH_GRACE_SECONDS" to raw)::get)
+                }
+            assertContains(failure.message.orEmpty(), "REFRESH_GRACE_SECONDS")
+        }
+        assertEquals(31_536_000L, ServerConfig.parseRefreshGraceSeconds("31536000"), "a year is the most")
     }
 
     @Test

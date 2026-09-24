@@ -138,8 +138,9 @@ failing:
 - A counter is an SQL increment (`total_points = total_points + n`), never a read then a write.
   A burst on one row then just queues on its lock; `PlayerStoreTest` pins 8 at once.
 - Any other read-then-write is a compare-and-set: the `UPDATE`'s `WHERE` repeats what the read
-  relied on, and 0 rows updated means another transaction won (`PlayerStore.rotateRefreshToken`,
-  `PlayerStore.startNextCycle`, `ModerationStore.decide`).
+  relied on, and 0 rows updated means another transaction won (`PlayerStore.startNextCycle`,
+  `ModerationStore.decide`). Where the `WHERE` can hold the whole check, nothing need be read first
+  (`PlayerStore.rotateRefreshToken`, whose second racer re-checks it against the first's commit).
   Or the read takes the row lock (`SELECT ... FOR UPDATE`), so a concurrent writer waits and then
   reads the row as committed (`VoteStore.cast`, which branches on more than one outcome, and
   `SkipStore.skip`).
@@ -346,9 +347,27 @@ auth SDK, satisfying §2.
   forgeable and would let one device stuff the ballot.
 - The access token travels in `Authorization: Bearer`, never in a request body, so `VoteRequest`
   does not change when auth evolves.
-- Only a SHA-256 hash of the refresh token is stored. Refresh tokens **rotate on every use**, so
-  a replayed token is dead on arrival. The rotation is a compare-and-set on the old hash
-  (`PlayerStore.rotateRefreshToken`), so two refreshes racing with one token let exactly one through.
+- Only a SHA-256 hash of the refresh token is stored. Refresh tokens **rotate on every use**, with a
+  **grace window** (*decided 2026-09-24*). The token a rotation displaces is kept as the player's
+  previous one, with the expiry it had and when it was displaced (V2), and a refresh presenting it
+  within `REFRESH_GRACE_SECONDS` of that rotation still succeeds: 600 (10 minutes) by default, 0 to
+  turn it off, and never past the token's own expiry. It rotates by the same rule, so the token it
+  presented is dead afterwards and the one it displaced becomes the previous one. A token therefore
+  works twice at most, once while current and once more as the previous one; anything else is 401
+  `INVALID_REFRESH_TOKEN`.
+  - *Why:* a refresh the server ran whose answer never arrived (a dropped connection, a Render cold
+    start, the client's 5-minute refresh timeout, which the default outlasts) leaves the client with
+    only the token the server rotated out. Without the grace its next refresh is refused and session
+    recovery replaces the player with a fresh guest, their points gone. With it, the client's next
+    refresh sends that token again and keeps the player.
+  - *The cost* is a stolen token's: presented after its player's own refresh rotated it out, it still
+    works, within the grace and once. `ServerConfig.refreshGraceSeconds` says so.
+  - *The rotation* is one `UPDATE` whose `WHERE` is the whole check, nothing read before it
+    (`PlayerStore.rotateRefreshToken`, §4): the presented hash as the current one and unexpired, or as
+    the previous one, unexpired and within the grace. Of two refreshes racing with the current token,
+    the second waits on the first's row lock, finds the token the previous one by then and goes
+    through too, the first's new token becoming the previous one; of two racing with the previous
+    token, exactly one goes through. `PlayerStoreTest` races both and pins every rule.
 - `POST /v1/auth/link` does not exist yet. It is the intended next step and is what will make an
   account survive reinstall and sync across devices.
 - On the client, `SessionStore` is the only copy of the credentials: Ktor's bearer cache is off

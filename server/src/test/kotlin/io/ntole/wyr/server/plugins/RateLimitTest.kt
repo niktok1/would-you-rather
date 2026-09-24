@@ -472,6 +472,7 @@ class RateLimitTest {
                 jwtAudience = "wyr-test-client",
                 accessTokenTtlSeconds = 300,
                 refreshTokenTtlSeconds = 3_600,
+                refreshGraceSeconds = ServerConfig.DEFAULT_REFRESH_GRACE_SECONDS,
                 allowedWebOrigins = emptyList(),
                 adminToken = ADMIN_TOKEN,
                 rateLimits = limits,

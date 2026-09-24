@@ -1,9 +1,11 @@
 package io.ntole.wyr.server.player
 
 import io.ntole.wyr.server.db.Players
+import org.jetbrains.exposed.v1.core.ResultRow
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.core.greater
+import org.jetbrains.exposed.v1.core.or
 import org.jetbrains.exposed.v1.core.plus
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.select
@@ -44,65 +46,75 @@ object PlayerStore {
             .where { Players.id eq id }
             .limit(1)
             .firstOrNull()
-            ?.let { row ->
-                Player(
-                    id = row[Players.id],
-                    totalPoints = row[Players.totalPoints],
-                    cycle = row[Players.currentCycle],
-                )
-            }
+            ?.toPlayer()
 
     /**
-     * Swaps the refresh token whose hash is [oldHash] for [newHash] and returns its player. Must
-     * run inside a transaction.
+     * Spends the refresh token whose hash is [presentedHash]: swaps it for [newHash], valid until
+     * [expiresAt], and returns its player, or `null` when no refresh may spend it. Must run inside a
+     * transaction.
      *
-     * Returns `null` alike for an unknown, an expired, and an already rotated token — the caller
-     * must not be able to tell them apart, and neither should an attacker probing the endpoint.
+     * A refresh may spend a player's current token until it expires, and the token the last rotation
+     * displaced (CLAUDE.md §8a) for [graceMillis] after that rotation, never past its own expiry; a
+     * [graceMillis] of 0 accepts the current token alone. Either way the swap is the same: the token
+     * current until now becomes the previous one, stamped [now], and [newHash] the current one. So a
+     * token works twice at most. Spent while current, it becomes the previous one, which one more
+     * refresh may spend within the grace; spent as the previous one, it is displaced by the token
+     * current then, which becomes the previous one in its place, and it never works again.
      *
-     * The write is a compare-and-set on [oldHash], not an update by id, so the token stays
-     * single-use when two refreshes present it at once. At READ COMMITTED both find the player,
-     * and the second then waits on the first's row lock and re-checks its `WHERE` against the row
-     * the first committed. By id alone that still matches, and both succeed: two live sessions from
-     * one token. With the old hash in it, nothing matches and the second is refused.
+     * Returns `null` alike for an unknown, an expired, a spent and a displaced token past its grace —
+     * the caller must not be able to tell them apart, and neither should an attacker probing the
+     * endpoint.
+     *
+     * One `UPDATE` both checks and swaps: a compare-and-set whose `WHERE` holds everything the swap
+     * relies on, with nothing read before it. At READ COMMITTED a second refresh presenting the same
+     * token waits on the first's row lock and then re-checks that `WHERE` against the row the first
+     * committed, so it never swaps from the state the first swapped from. Of two presenting the current
+     * token, the second finds it the previous one by then and still spends it within the grace, so both
+     * go through and the first's new token is the previous one; of two presenting the previous token,
+     * the second finds it gone and is refused. An update by id after a read, or with the hash in its
+     * `WHERE` and not the rest, lets both through from one state: two live sessions from one token, one
+     * of them never displaced.
      */
     fun rotateRefreshToken(
-        oldHash: String,
+        presentedHash: String,
         newHash: String,
         expiresAt: Long,
+        graceMillis: Long,
         now: Long = System.currentTimeMillis(),
     ): Player? {
-        val player = findByRefreshHash(oldHash, now) ?: return null
+        val spendableAsCurrent =
+            (Players.refreshTokenHash eq presentedHash) and (Players.refreshTokenExpiresAt greater now)
+        val spendableAsPrevious =
+            (Players.previousRefreshTokenHash eq presentedHash) and
+                (Players.previousRefreshTokenExpiresAt greater now) and
+                (Players.previousRefreshTokenRotatedAt greater now - graceMillis)
+        val spendable = if (graceMillis > 0) spendableAsCurrent or spendableAsPrevious else spendableAsCurrent
 
         val swapped =
-            Players.update({
-                (Players.id eq player.id) and
-                    (Players.refreshTokenHash eq oldHash) and
-                    (Players.refreshTokenExpiresAt greater now)
-            }) { row ->
+            Players.update({ spendable }) { row ->
+                // The right-hand columns are the row as it stood before this update, on both engines,
+                // so whichever token was presented, the one current until now becomes the previous one.
+                row[previousRefreshTokenHash] = refreshTokenHash
+                row[previousRefreshTokenExpiresAt] = refreshTokenExpiresAt
+                row[previousRefreshTokenRotatedAt] = now
                 row[refreshTokenHash] = newHash
                 row[refreshTokenExpiresAt] = expiresAt
             }
+        if (swapped == 0) return null
 
-        return player.takeIf { swapped == 1 }
+        return Players
+            .selectAll()
+            .where { Players.refreshTokenHash eq newHash }
+            .single()
+            .toPlayer()
     }
 
-    private fun findByRefreshHash(
-        hash: String,
-        now: Long,
-    ): Player? =
-        Players
-            .selectAll()
-            .where { Players.refreshTokenHash eq hash }
-            .limit(1)
-            .firstOrNull()
-            ?.takeIf { row -> (row[Players.refreshTokenExpiresAt] ?: 0L) > now }
-            ?.let { row ->
-                Player(
-                    id = row[Players.id],
-                    totalPoints = row[Players.totalPoints],
-                    cycle = row[Players.currentCycle],
-                )
-            }
+    private fun ResultRow.toPlayer(): Player =
+        Player(
+            id = this[Players.id],
+            totalPoints = this[Players.totalPoints],
+            cycle = this[Players.currentCycle],
+        )
 
     /**
      * Starts the player's next cycle, provided they are still on cycle [from]. Must run inside a

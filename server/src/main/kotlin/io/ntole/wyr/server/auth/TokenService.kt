@@ -17,9 +17,9 @@ import java.util.Date
  *  - a long-lived opaque **refresh token**, of which only a SHA-256 hash is stored, so a
  *    database leak does not hand out working sessions.
  *
- * Refresh tokens are rotated on every use: a refreshed session invalidates the token that
- * produced it, which turns a stolen-and-replayed token into a detectable dead end rather than
- * permanent access.
+ * Refresh tokens are rotated on every use: a refreshed session retires the token that produced it,
+ * which works once more within a short grace window (CLAUDE.md §8a, `ServerConfig.refreshGraceSeconds`)
+ * and then never again, so a stolen-and-replayed token is a dead end rather than permanent access.
  */
 class TokenService(
     private val config: ServerConfig,
