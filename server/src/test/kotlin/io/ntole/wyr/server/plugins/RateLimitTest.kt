@@ -93,7 +93,12 @@ class RateLimitTest {
             assertEquals(2, stats.totalPoints, "the refused vote paid nothing")
             assertEquals(2, stats.answersGiven, "and was no answer")
             // Sorted: two submitted in one millisecond are listed in their ids' order, which is random.
-            val submitted = client.mySubmissions(player).submissions.map { it.optionA }.sorted()
+            val submitted =
+                client
+                    .mySubmissions(player)
+                    .submissions
+                    .map { it.optionA }
+                    .sorted()
             assertEquals(listOf("Paid 0", "Paid 1"), submitted, "the refused submission was not stored")
         }
 
