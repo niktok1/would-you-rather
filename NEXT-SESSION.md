@@ -314,7 +314,23 @@ automatically from every green commit on `main` (its URL is on its Render page).
   drafts kept for a question pending in the list alone, an empty page that claims another ending the
   read, and Lock keeping the filter alone. `ModerationOverHttpTest` adds a 409 `WRONG_STATUS` on a
   retirement. `ScreensDrawTest` draws both screens and the Retire dialog off screen (Compose's
-  `ImageComposeScene`) in both themes.
+  `ImageComposeScene`) in both themes. `DataModuleTest` pins that the game's `dataModule` binds
+  nothing of the moderator's (binding the API back fails it), and `WyrHttpClientTest` and
+  `RunApiOverHttpTest` a 429's `Retry-After` reaching `WyrException.retryAfter` (dropped at either
+  step, they fail). Against the fat jar on JDK 21 (`PORT=18092`, no `DATABASE_URL`, a throwaway
+  `ADMIN_TOKEN`), a throwaway JVM test, not committed, drove `ModerationViewModel` through the real
+  CIO client, after a curl guest submitted two questions: a wrong token read `FORBIDDEN`; the queue
+  listed both oldest first; approving the first under SUPERPOWERS and RANDOM worked and read the
+  queue again; approving it again was `ALREADY_DECIDED`; the list at pending and approved, FOOD and
+  SUPERPOWERS, held the other; rejecting it from the list with a padded reason stored it trimmed;
+  every question was 20 and then, with Load more, 26; Retire asked, was cancelled and sent nothing,
+  then confirmed retired the first, Restore put it back, a second Restore was 409; Lock cleared it
+  all. Counts at the branch head: `:server` 263, 2 skipped; `:core:domain` 37; `:core:data` 133;
+  `:core:network` 77 (83 as Android host tests); `:app:shared` 106, the console's 21 moderation
+  tests gone with the section; `:app:adminApp` 79. Every client target compiles, the moderation
+  app's JVM, JS and wasmJs included, as do the iOS simulator main and test, and
+  `:app:androidApp:assembleDebug` builds; `WYR_SERVER_ONLY=1` still configures `:core` and
+  `:server` alone.
   `DesktopEnvironmentNameTest` pins `WYR_ENV`. Its JVM, JS and wasmJs compiles run.
 - `:app:androidApp:assembleDebug` produces a real APK.
 - `ktlintCheck` clean across every module.
@@ -435,10 +451,11 @@ automatically from every green commit on `main` (its URL is on its Render page).
   only in the server's own tests. The *Submit a question* section has not been opened either: its
   ViewModel and line helpers are tested, and its use cases ran live, but it has never been drawn.
 - **The moderation app has not been opened.** No window has been shown and no page served: its
-  screens were drawn off screen by `ScreensDrawTest` and looked at as images once, and its requests
-  have gone only to a mock engine. The webpack build of its page has not run, so neither has the
-  check of `kotlin-js-store`'s lock against it. `ScreensDrawTest` draws with the host's Skia, which
-  CI's Linux runner has yet to run.
+  screens were drawn off screen by `ScreensDrawTest` and looked at as images once, and its
+  ViewModel has run against a local fat jar from the JVM only (*Verified*, above), never against
+  dev or prod, and never from a browser, so no page has sent `X-Admin-Token` across CORS. The
+  webpack build of its page has not run, so neither has the check of `kotlin-js-store`'s lock
+  against it. `ScreensDrawTest` draws with the host's Skia, which CI's Linux runner has yet to run.
 
 ## Running it locally
 

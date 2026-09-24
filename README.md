@@ -31,6 +31,9 @@ Use the run configurations provided by the run widget in your IDE's toolbar. You
   - Wasm target (faster, modern browsers): `./gradlew :app:webApp:wasmJsBrowserDevelopmentRun`
   - JS target (slower, supports older browsers): `./gradlew :app:webApp:jsBrowserDevelopmentRun`
 - iOS app: open the [/app/iosApp](./app/iosApp) directory in Xcode and run it from there.
+- Moderation app (needs the server's `ADMIN_TOKEN`, typed in; see `NEXT-SESSION.md`):
+  - Desktop: `./gradlew :app:adminApp:run`, with `WYR_ENV=dev` or `WYR_ENV=prod` for a deployed server
+  - Web: `./gradlew :app:adminApp:wasmJsBrowserDevelopmentRun`, with `-Pwyr.env=dev` or `-Pwyr.env=prod`
 
 ### Running tests
 
@@ -38,6 +41,7 @@ Use the run button in your IDE's editor gutter, or run tests using Gradle tasks:
 
 - Android tests: `./gradlew :app:shared:testAndroidHostTest`
 - Desktop tests: `./gradlew :app:shared:jvmTest`
+- Moderation app tests: `./gradlew :app:adminApp:jvmTest`
 - Server tests: `./gradlew :server:test`
 - Web tests:
   - Wasm target: `./gradlew :app:shared:wasmJsTest`
