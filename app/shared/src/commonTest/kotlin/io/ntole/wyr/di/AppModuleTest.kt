@@ -6,7 +6,6 @@ import io.ntole.wyr.core.network.SessionStore
 import io.ntole.wyr.core.network.TokenStorage
 import io.ntole.wyr.core.network.environment.WyrEnvironment
 import io.ntole.wyr.dev.DevConsoleViewModel
-import io.ntole.wyr.dev.moderation.ModerationConsoleViewModel
 import io.ntole.wyr.dev.submission.SubmissionConsoleViewModel
 import io.ntole.wyr.play.PlayViewModel
 import kotlinx.coroutines.Dispatchers
@@ -53,7 +52,6 @@ class AppModuleTest {
         val koin = koinFor(WyrEnvironment.LOCAL)
 
         koin.get<PlayViewModel>()
-        koin.get<ModerationConsoleViewModel>()
         koin.get<DevConsoleViewModel>()
         koin.get<SubmissionConsoleViewModel>()
     }

@@ -7,6 +7,7 @@ import io.ntole.wyr.core.api.WyrApi
 import io.ntole.wyr.core.domain.moderation.ApproveSubmission
 import io.ntole.wyr.core.domain.moderation.GetPendingSubmissions
 import io.ntole.wyr.core.domain.moderation.GetQuestions
+import io.ntole.wyr.core.domain.moderation.ModerationRepository
 import io.ntole.wyr.core.domain.moderation.RejectSubmission
 import io.ntole.wyr.core.domain.moderation.RestoreQuestion
 import io.ntole.wyr.core.domain.moderation.RetireQuestion
@@ -49,6 +50,25 @@ class DataModuleTest {
                 koin.close()
             }
         }
+
+    @Test
+    fun `the game's data module binds nothing of the moderator's`() {
+        val koin =
+            koinApplication {
+                modules(module { single<TokenStorage> { InMemoryTokenStorage() } }, dataModule(WyrEnvironment.LOCAL))
+            }.koin
+
+        // Moderating is the moderation app's alone (CLAUDE.md §8d, Moderation).
+        assertNull(koin.getOrNull<ModerationApi>())
+        assertNull(koin.getOrNull<ModerationRepository>())
+        assertNull(koin.getOrNull<GetPendingSubmissions>())
+        assertNull(koin.getOrNull<ApproveSubmission>())
+        assertNull(koin.getOrNull<RejectSubmission>())
+        assertNull(koin.getOrNull<GetQuestions>())
+        assertNull(koin.getOrNull<RetireQuestion>())
+        assertNull(koin.getOrNull<RestoreQuestion>())
+        koin.close()
+    }
 
     @Test
     fun `a client that only moderates needs no storage, binds no session, and sends to its own server`() =

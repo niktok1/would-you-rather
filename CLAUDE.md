@@ -336,8 +336,8 @@ This project must never be attributed to any employer identity.
   or anything but visible ASCII fails at boot, since no request header could carry it. Generate one
   with `openssl rand -hex 32`. It is read at boot, so rotating it is changing the variable and
   restarting the service, and the old token is dead from then on. A browser on an
-  `ALLOWED_WEB_ORIGINS` origin may send its header (CORS). The moderation app and the dev console's
-  *Moderation* section take it typed and hold it in memory only.
+  `ALLOWED_WEB_ORIGINS` origin may send its header (CORS). The moderation app (§8d) takes it typed
+  and holds it in memory only.
 - `CLIENT_IP_HEADER` (`render.yaml`: `CF-Connecting-IP`) names the request header the per-address
   rate limits (§8b) take the client's address from (`clientAddress`). Every request to a Render web
   service passes through Cloudflare, which sets `CF-Connecting-IP` to the address that reached it
@@ -486,8 +486,7 @@ accounts exist.
   (paged by `WyrApi.Query.CURSOR`), `RetireQuestionRequest` and `RestoreQuestionRequest`, the
   `X-Admin-Token` header (`WyrApi.Headers`), `QuestionStatus.RETIRED` and the error codes `FORBIDDEN`,
   `ALREADY_DECIDED` and `WRONG_STATUS`. The moderator's client (`ModerationApi` calls every admin
-  route) and the console's section are built on it (§8d, *Moderation*); the console decides the
-  queue only.
+  route) and the moderation app are built on it (§8d, *Moderation*).
 - **A rejection reason is one line** — *provisional — user decision.* §8d asks for a short reason;
   the server also holds it to one line, as it does an option: no control character, nor U+2028 or
   U+2029 (`checkedRejection`). Chosen as the stricter reading, since a reason is shown to its author
@@ -966,10 +965,11 @@ and every request shows in its HTTP trace (`HttpTrace` in `:core:network`, never
     `SubmissionStatus` (`RETIRED`, or `OTHER` for one this build cannot name), whether it is a seed,
     its times as instants, its `Tally` and its like count. A filter by `SubmissionStatus.OTHER` or
     `Category.OTHER` is refused before anything is sent. `WRONG_STATUS` is
-    `DomainError.WRONG_STATUS`. `dataModule` binds all of it beside the player's, for the console;
-    `moderationDataModule(environment)` binds it alone, for a client that only moderates: an HTTP
-    client of its own over an in-memory session store nothing writes, no `TokenStorage` needed, no
-    session repository, so no bearer token goes out and no guest can be minted (`DataModuleTest`).
+    `DomainError.WRONG_STATUS`. `moderationDataModule(environment)` binds it, and only there, for a
+    client that only moderates: an HTTP client of its own over an in-memory session store nothing
+    writes, no `TokenStorage` needed, no session repository, so no bearer token goes out and no guest
+    can be minted. The game's `dataModule` binds none of it, so the game cannot moderate
+    (`DataModuleTest` pins both).
   - *The moderation app* (`:app:adminApp`, `io.ntole.wyr.admin`, §3) is where a moderator works: a
     desktop window and a browser page on `moderationDataModule` (`adminModules`), so it never has a
     player session, sends no bearer token and mints no guest (`AdminModuleTest`). Its header always
@@ -981,7 +981,7 @@ and every request shows in its HTTP trace (`HttpTrace` in `:core:network`, never
     action runs at a time. *Pending* lists the queue, oldest first, each submission with its options,
     categories and age: Approve files it under the categories picked for it, none keeping the
     author's, and Reject sends the reason typed once it is a `RejectionReason`. The queue is read
-    again after every decision, whatever became of it, as the console's is. *All questions* is the
+    again after every decision, whatever became of it. *All questions* is the
     list, seeds included, newest first, filtered by any statuses (`RETIRED` among them; never
     `OTHER`) and any categories, none being every one: Load reads its first page and Load more the
     next, at the filter the list was read at, with the cursor the page before gave, and changing the
@@ -998,12 +998,8 @@ and every request shows in its HTTP trace (`HttpTrace` in `:core:network`, never
     a 429 with the wait its `Retry-After` named (`WyrException.retryAfter`, §8b).
     `ModerationViewModelTest` and `QuestionListViewModelTest` drive it over a scripted repository,
     `ModerationOverHttpTest` over the real client configuration, and `ScreensDrawTest` draws every
-    screen off screen at a desktop window's size.
-  - *The console's section* (`io.ntole.wyr.dev.moderation`) takes the token typed and holds it in its
-    ViewModel, in memory only: never in saved state or storage, masked, and a password to the keyboard.
-    It loads the queue, approves under the categories picked for a submission (none keeps the
-    author's), rejects once the reason typed is a `RejectionReason`, and reads the queue again after
-    every decision, whatever became of it.
+    screen off screen at a desktop window's size. The dev console had a *Moderation* section until
+    the app replaced it (`feat/moderation-app`): the game's builds no longer moderate at all.
 
 ## 8e. Client environments — decided 2026-09-24
 

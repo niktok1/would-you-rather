@@ -107,7 +107,7 @@ automatically from every green commit on `main` (its URL is on its Render page).
   one again was 409 `ALREADY_DECIDED`, an unknown id 404 and a blank reason 400; the queue was then
   empty and `?status=APPROVED` listed the one approved.
 - The console's moderation path against the fat jar on H2 with `ADMIN_TOKEN` set, on
-  `feat/moderation`: a throwaway JVM test, not committed, drove `ModerationConsoleViewModel` from the
+  `feat/moderation`, before the moderation app replaced that section: a throwaway JVM test, not committed, drove `ModerationConsoleViewModel` from the
   real Koin graph through the real CIO client. A curl guest had submitted three questions. Load
   pending listed them oldest first; a wrong token logged `FORBIDDEN`; approving the first under
   SUPERPOWERS and RANDOM, the second keeping its categories, and rejecting the third with a padded
@@ -377,8 +377,8 @@ automatically from every green commit on `main` (its URL is on its Render page).
   behaviour, as for the refresh rotation, not something a test here has seen. So are the category
   rows' delete and batch insert in the decision's transaction, and the new `(status, submitted_at,
   id)` index. The client has sent moderation requests only from the JVM (the live run above), and no
-  browser has sent `X-Admin-Token`: only `CorsTest` has seen its preflight. Nobody has looked at the
-  console's *Moderation* section on any platform. The question list (`GET /v1/admin/questions`,
+  browser has sent `X-Admin-Token`: only `CorsTest` has seen its preflight. Nobody has opened the
+  moderation app on any platform (below). The question list (`GET /v1/admin/questions`,
   `feat/moderation-app`) has run on H2 only: its counts are correlated subqueries and its pages a
   keyset on `(submitted_at, id)` compared in the database's collation, which `ApiFlowTest` runs on
   PostgreSQL only in the `server-postgres` job, which has not seen the branch. So has retirement:
@@ -542,8 +542,8 @@ curl -s -X POST localhost:8080/v1/admin/approvals -H "X-Admin-Token: $ADMIN_TOKE
   -H 'Content-Type: application/json' -d '{"questionId":"<id from the queue>","categories":["SUPERPOWERS","RANDOM"]}'
 ```
 
-Or moderate from the moderation app (*The moderation app*, below), or the dev console's *Moderation*
-section. Leave `categories` out to keep the author's. To reject instead, send
+Or moderate from the moderation app (*The moderation app*, below). Leave `categories` out to keep
+the author's. To reject instead, send
 `{"questionId":"<id>","reason":"Too close to a seed"}` to `/v1/admin/rejections`; the reason is
 trimmed and must then be one line of at most 200 characters. `?status=APPROVED` or
 `?status=REJECTED` on the queue lists decided submissions, and `GET /v1/me/questions` with the
@@ -703,18 +703,6 @@ The app opens on the **Console** tab (`io.ntole.wyr.dev`). **Play** is the froze
   selection the server has no questions in logs `OUT_OF_QUESTIONS`, and stays selected. *New guest*
   and *Reset queue* keep the selection. The Play tab draws from the same repository, so it is
   filtered too.
-- **Moderation** (`io.ntole.wyr.dev.moderation`). Type the server's admin token (the one echoed when
-  starting it with `ADMIN_TOKEN`) into *admin token*; it is masked, held in memory only, and gone once
-  the app restarts, and every button stays off until what is typed can be a token. *Load pending*
-  lists the submissions waiting, oldest first, each with its options and categories. Under each, the
-  chips pick the categories *Approve* files it under in place of the author's; none picked keeps the
-  author's. *Reject* stays off until the reason typed is one line of at most 200 characters once
-  trimmed. After every decision the queue is read again, so a decided submission leaves the list. The
-  section's own log shows `loadPending`, `approve(questionId=... categories=keep|<NAMES>)` and
-  `reject(questionId=... reason="...")`, and the server's refusals: `FORBIDDEN` for a wrong token,
-  `ALREADY_DECIDED` for a question decided already (by another moderator too), `QUESTION_NOT_FOUND`.
-  A server without `ADMIN_TOKEN` answers every admin route with a bare 404, which logs as `UNKNOWN`
-  with a hint that moderation is off. Moderating never touches the player's session.
 - **Vote by id.** Sends a vote for whatever id is typed, as a new attempt. An unknown id provokes
   `QUESTION_NOT_FOUND` (404). A known one is simply answered again and pays 1: there is no
   "already voted" any more.
@@ -734,8 +722,9 @@ The app opens on the **Console** tab (`io.ntole.wyr.dev`). **Play** is the froze
   previous one until it is read again. The section has its own log, below the list, and runs one
   action at a time of its own; its requests show in the HTTP trace with the rest. That is not the
   console's, so *New guest* pressed while a read is in flight can mislabel the list it returns, as
-  "not read" or as the new guest's. Nothing approves a submission until moderation is built, so
-  every one stays `PENDING`.
+  "not read" or as the new guest's. A submission stays `PENDING` until it is decided in the
+  moderation app (*The moderation app*, above), and *Refresh my submissions* then shows the
+  decision.
 - **Action log.** Every action, newest first: `ok`, `err` (the `DomainError` and its diagnostic
   message) or `crash` (anything else thrown), with how long it took. One action runs at a time.
 - **HTTP trace.** Every request that went out, with status and time. A refreshed call shows as
@@ -784,8 +773,8 @@ rules live in CLAUDE.md §8d. Each item is one short-lived branch, in order:
 12. `feat/moderation-app` *(in progress)* — moderation moves out of the player app's console into
     an app of its own. Built: the server and client half, the list of every question and retiring
     and restoring (V3; provisional, CLAUDE.md §8b), and the app, `:app:adminApp`, with its pending
-    queue and the list of every question (*The moderation app*, above). Next: the console's section
-    goes.
+    queue and the list of every question (*The moderation app*, above), which replaced the dev
+    console's *Moderation* section. Left: CI on the branch, then merging it.
 
 **For the moderation app.** Everything it needs is in `io.ntole.wyr.core.domain.moderation`, and
 none of it needs or makes a player session:
@@ -812,7 +801,8 @@ none of it needs or makes a player session:
   `ALREADY_DECIDED` for a question another moderator moved first, `QUESTION_NOT_FOUND`, `NETWORK`,
   `RATE_LIMITED`, and `UNKNOWN` for a server with moderation off (a bare 404).
 - *Built on it:* `:app:adminApp`, with its pending queue and the list of every question (*The
-  moderation app*, above). The dev console's *Moderation* section still decides the queue too.
+  moderation app*, above). The dev console's *Moderation* section is gone, and the game's
+  `dataModule` binds nothing of the moderator's: the game no longer moderates.
 
 **Remote:** `github.com/niktok1/would-you-rather` (private), `origin`, pushed over SSH through the
 `github-wyr` host alias with a deploy key scoped to this repo (CLAUDE.md §7). `gh` is logged in to

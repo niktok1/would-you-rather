@@ -49,7 +49,8 @@ import org.koin.core.module.Module
 import org.koin.dsl.module
 
 /**
- * Wiring for the network + data layers.
+ * Wiring for the network + data layers of the game: the player's, and nothing of the moderator's,
+ * which is [moderationDataModule]'s alone (CLAUDE.md §8d, *Moderation*).
  *
  * Expects a [TokenStorage] to already be registered — that is the one binding only a platform
  * can supply, so it comes from `:app:shared`'s platform module.
@@ -74,10 +75,6 @@ public fun dataModule(environment: WyrEnvironment): Module =
         single { LikeApi(get()) }
 
         single<QuestionCache> { InMemoryQuestionCache() }
-
-        // The moderator's, beside the player's rather than on top of them: no session, so no
-        // recovery and no use case that ensures one (CLAUDE.md §8d, Moderation).
-        moderation()
 
         // Bound as the concrete type as well: repositories recover a dead session through
         // withSessionRecovery, which is recovery machinery and deliberately not on the domain
@@ -109,7 +106,9 @@ public fun dataModule(environment: WyrEnvironment): Module =
  * Needs no [TokenStorage]: the client's session store is in memory and nothing ever writes to it, so
  * no request carries a bearer token, the Auth plugin has nothing to refresh, and nothing is written
  * to a platform's storage. No session repository is bound either, so nothing can mint a guest. The
- * admin token goes on each call as it is handed to the use case, as in [dataModule].
+ * admin token goes on each call as it is handed to the use case.
+ *
+ * The only moderation wiring there is: the game's [dataModule] binds none of it.
  */
 public fun moderationDataModule(environment: WyrEnvironment): Module =
     module {
@@ -121,17 +120,12 @@ public fun moderationDataModule(environment: WyrEnvironment): Module =
                 trace = get(),
             )
         }
-        moderation()
+        single { ModerationApi(get()) }
+        single<ModerationRepository> { DefaultModerationRepository(api = get()) }
+        factory { GetPendingSubmissions(moderation = get()) }
+        factory { ApproveSubmission(moderation = get()) }
+        factory { RejectSubmission(moderation = get()) }
+        factory { GetQuestions(moderation = get()) }
+        factory { RetireQuestion(moderation = get()) }
+        factory { RestoreQuestion(moderation = get()) }
     }
-
-/** The moderator's API, repository and use cases, over whatever [HttpClient] the module binds. */
-private fun Module.moderation() {
-    single { ModerationApi(get()) }
-    single<ModerationRepository> { DefaultModerationRepository(api = get()) }
-    factory { GetPendingSubmissions(moderation = get()) }
-    factory { ApproveSubmission(moderation = get()) }
-    factory { RejectSubmission(moderation = get()) }
-    factory { GetQuestions(moderation = get()) }
-    factory { RetireQuestion(moderation = get()) }
-    factory { RestoreQuestion(moderation = get()) }
-}

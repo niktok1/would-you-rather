@@ -44,9 +44,8 @@ import kotlin.time.Instant
  * including the diagnostic messages a player must never see.
  *
  * [submitSection] is the *Submit a question* section, which keeps a ViewModel of its own
- * (`io.ntole.wyr.dev.submission`).
- * [moderationSection] is the *Moderation* section, which keeps a ViewModel of its own
- * (`io.ntole.wyr.dev.moderation`).
+ * (`io.ntole.wyr.dev.submission`). Moderating is not the game's: it is the moderation app's
+ * (`:app:adminApp`, CLAUDE.md §8d).
  */
 @Composable
 fun DevConsoleScreen(
@@ -67,7 +66,6 @@ fun DevConsoleScreen(
     onSelectAllCategories: () -> Unit,
     modifier: Modifier = Modifier,
     submitSection: @Composable () -> Unit = {},
-    moderationSection: @Composable () -> Unit = {},
 ) {
     val dimens = WyrThemeAccessors.dimens
     val idle = !state.isBusy
@@ -177,8 +175,6 @@ fun DevConsoleScreen(
                     }
                 }
             }
-
-            moderationSection()
 
             Section("Vote by id") {
                 var questionId by rememberSaveable { mutableStateOf("") }

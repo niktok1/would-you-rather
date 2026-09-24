@@ -19,7 +19,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.ntole.wyr.core.network.environment.WyrEnvironment
 import io.ntole.wyr.dev.DevConsoleScreen
 import io.ntole.wyr.dev.DevConsoleViewModel
-import io.ntole.wyr.dev.moderation.ModerationConsole
 import io.ntole.wyr.dev.submission.SubmissionConsole
 import io.ntole.wyr.play.PlayScreen
 import io.ntole.wyr.play.PlayViewModel
@@ -111,7 +110,6 @@ private fun DevConsole() {
         onToggleCategory = viewModel::toggleCategory,
         onSelectAllCategories = viewModel::selectAllCategories,
         submitSection = { SubmissionConsole() },
-        moderationSection = { ModerationConsole() },
     )
 }
 
