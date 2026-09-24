@@ -333,8 +333,8 @@ accounts exist.
   moderator model (an admin token). The submission contract is settled and built on the server:
   `SubmitQuestionRequest`, `SubmissionDto`, `SubmissionListDto` and `QuestionStatus` in `:core`.
   No author travels on the wire: a submission's author is whoever its bearer token names, and a
-  player lists only their own. Left: the client and console for submitting, and moderation's
-  admin routes.
+  player lists only their own. The client and the console submit and list them. Left:
+  moderation's admin routes.
 - **Skips under a category filter** — *provisional — user decision.* A request filtered to one
   or more categories with nothing due in any of them, while other questions still are, serves
   those categories again (§8d, *Categories*), and that includes questions skipped this cycle, which
@@ -432,7 +432,7 @@ and every request shows in its HTTP trace (`HttpTrace` in `:core:network`, never
     Category row), none for every category; a change drops the queue, and New guest keeps the
     selection.
   - `answeredBefore` means the player has a vote on the question, from any cycle.
-- **Categories** *(decided 2026-09-24; built, but for submitting from a client and moderation)*: a
+- **Categories** *(decided 2026-09-24; built, but for moderation)*: a
   question is filed under **any number of categories, at least one**. A player may pick **several**
   categories to play, and a question matches when it is filed under **any** of them; none picked
   means every category. The author picks one or more when submitting, and the moderator may change
@@ -450,7 +450,8 @@ and every request shows in its HTTP trace (`HttpTrace` in `:core:network`, never
   selection is a set too (`QuestionRepository.categories`, empty for every category, never `OTHER`),
   and every refill sends all of it; the console's Category row toggles each category, and *All*
   empties it. Selecting all of `Category.selectable` is not selecting none: a question filed only
-  under categories this build cannot name is in none of them. No client submits yet.
+  under categories this build cannot name is in none of them. A client submits under a set of one
+  or more, never `OTHER` (*Submitting*).
 - **Re-answering** *(built)*: a question can be answered again, whether or not the feed has
   served it again. It earns the point again **every time**, inside its cycle or not (farming is
   left to rate limiting, §8b), and the player may change their pick. Every answer, first or not,
@@ -488,7 +489,7 @@ and every request shows in its HTTP trace (`HttpTrace` in `:core:network`, never
   time (before or after answering), once each, and may unlike it. Each like currently held is **+1
   point to the author**, and unliking takes that point back. The like count is visible before
   answering. For now likes do nothing else; serving questions by quality is a later idea.
-- **Submitting** *(server built, client next; details decided 2026-09-23)*: earns no points
+- **Submitting** *(built; details decided 2026-09-23)*: earns no points
   directly, because authors earn through likes. The author writes both options and **picks one or
   more categories** (each a real one, not `UNKNOWN`; *Categories*). A player may have at most **20
   submissions pending** moderation at once. A submitted question is served only after a moderator
@@ -505,8 +506,11 @@ and every request shows in its HTTP trace (`HttpTrace` in `:core:network`, never
   and nothing approves one until *Moderation* is built. Questions carry an author and a
   `QuestionStatus`, and `QuestionStore.servable` serves only approved ones, due at once in whatever
   cycle each player is on. `GET /v1/me/questions` lists the author's submissions of every status,
-  newest first, a rejected one with its reason (`SubmissionStore.byAuthor`). The client and the
-  console's section come in the next branch.
+  newest first, a rejected one with its reason (`SubmissionStore.byAuthor`). On the client,
+  `SubmitQuestion` and `GetMySubmissions` go through `withSessionRecovery`
+  (`DefaultSubmissionRepository`), which refuses no category, or `OTHER`, before anything is sent
+  and leaves every other rule to the server; a status this build cannot name is
+  `SubmissionStatus.OTHER`. The console's *Submit a question* section drives both.
 - **Moderation** *(not built but for the author's view)*: a moderator approves or rejects each
   pending submission and **may change its categories** when approving (*Categories*: at least one
   stays, and a change replaces the question's `question_categories` rows in one transaction). A

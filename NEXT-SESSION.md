@@ -215,6 +215,22 @@ The app opens on the **Console** tab (`io.ntole.wyr.dev`). **Play** is the froze
 - **Vote by id.** Sends a vote for whatever id is typed, as a new attempt. An unknown id provokes
   `QUESTION_NOT_FOUND` (404). A known one is simply answered again and pays 1: there is no
   "already voted" any more.
+- **Submit a question** (`io.ntole.wyr.dev.submission`, a ViewModel of its own). Type option A
+  and B, and pick one or more category chips (every category but `OTHER`). *Submit* stays off until
+  both options hold more than whitespace and a category is picked. The options go as typed, and the
+  entry shows them quoted, then the submission as the server stored it: trimmed, categories in
+  declaration order, `PENDING`. A stored one clears both options, unless they were changed while it
+  was in flight, and keeps the categories. A refusal keeps everything and logs `err` with the
+  server's own message: `INVALID_SUBMISSION` for what the options say (422; the fields are not
+  single-line, so a line break can be typed to provoke it), `SUBMISSION_LIMIT` for the 21st pending
+  (409). **My submissions** lists the player's own, newest first: status, categories, and for a
+  rejected one the reason (`OTHER` is a status this build cannot name). Read when the console opens,
+  after every *Submit*, a failed one too, and on *Refresh my submissions*, which logs
+  `listSubmissions` whether it works or not; the other reads log only a failure, as
+  `refreshSubmissions`. "listed for" is the player it was read as, which after *New guest* is the
+  previous one until it is read again. The section has its own log, below the list, and runs one
+  action at a time of its own; its requests show in the HTTP trace with the rest. Nothing approves a
+  submission until moderation is built, so every one stays `PENDING`.
 - **Action log.** Every action, newest first: `ok`, `err` (the `DomainError` and its diagnostic
   message) or `crash` (anything else thrown), with how long it took. One action runs at a time.
 - **HTTP trace.** Every request that went out, with status and time. A refreshed call shows as

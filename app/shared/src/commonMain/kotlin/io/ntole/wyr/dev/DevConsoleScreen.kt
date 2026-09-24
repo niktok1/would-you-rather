@@ -41,6 +41,9 @@ import kotlin.time.Instant
  *
  * Deliberately unpolished (CLAUDE.md §8d). Its job is to show exactly what the domain returned,
  * including the diagnostic messages a player must never see.
+ *
+ * [submitSection] is the *Submit a question* section, which keeps a ViewModel of its own
+ * (`io.ntole.wyr.dev.submission`).
  */
 @Composable
 fun DevConsoleScreen(
@@ -59,6 +62,7 @@ fun DevConsoleScreen(
     onToggleCategory: (Category) -> Unit,
     onSelectAllCategories: () -> Unit,
     modifier: Modifier = Modifier,
+    submitSection: @Composable () -> Unit = {},
 ) {
     val dimens = WyrThemeAccessors.dimens
     val idle = !state.isBusy
@@ -178,6 +182,8 @@ fun DevConsoleScreen(
                     Button(onClick = { onVoteById(questionId, Side.B) }, enabled = idle) { Text("Vote B") }
                 }
             }
+
+            submitSection()
 
             Section("Action log") {
                 if (state.log.isEmpty()) Value("log", "empty")

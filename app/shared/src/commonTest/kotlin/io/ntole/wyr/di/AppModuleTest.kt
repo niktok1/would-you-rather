@@ -4,6 +4,7 @@ import io.ntole.wyr.core.data.di.dataModule
 import io.ntole.wyr.core.network.InMemoryTokenStorage
 import io.ntole.wyr.core.network.TokenStorage
 import io.ntole.wyr.dev.DevConsoleViewModel
+import io.ntole.wyr.dev.submission.SubmissionConsoleViewModel
 import io.ntole.wyr.play.PlayViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -48,6 +49,7 @@ class AppModuleTest {
         koin.get<PlayViewModel>()
         val console = koin.get<DevConsoleViewModel>()
         assertEquals(BASE_URL, console.state.value.apiBaseUrl)
+        koin.get<SubmissionConsoleViewModel>()
     }
 
     private companion object {

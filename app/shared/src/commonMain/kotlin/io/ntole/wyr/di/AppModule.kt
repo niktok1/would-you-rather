@@ -2,6 +2,7 @@ package io.ntole.wyr.di
 
 import io.ntole.wyr.core.data.di.dataModule
 import io.ntole.wyr.dev.DevConsoleViewModel
+import io.ntole.wyr.dev.submission.SubmissionConsoleViewModel
 import io.ntole.wyr.play.PlayViewModel
 import org.koin.core.context.startKoin
 import org.koin.core.module.dsl.viewModel
@@ -29,6 +30,11 @@ internal val uiModule =
                 getPlayerStats = get(),
                 httpTrace = get(),
             )
+        }
+
+        // Not viewModelOf: the time source is a default, not a binding.
+        viewModel {
+            SubmissionConsoleViewModel(submitQuestion = get(), getMySubmissions = get(), sessions = get())
         }
     }
 
