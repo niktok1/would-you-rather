@@ -472,7 +472,9 @@ class RateLimitTest {
                 jwtAudience = "wyr-test-client",
                 accessTokenTtlSeconds = 300,
                 refreshTokenTtlSeconds = 3_600,
-                refreshGraceSeconds = ServerConfig.DEFAULT_REFRESH_GRACE_SECONDS,
+                // Off: no limit depends on it, and with it on a refused refresh that rotated the token
+                // anyway would go unseen, its token spent once more as the previous one.
+                refreshGraceSeconds = 0,
                 allowedWebOrigins = emptyList(),
                 adminToken = ADMIN_TOKEN,
                 rateLimits = limits,
