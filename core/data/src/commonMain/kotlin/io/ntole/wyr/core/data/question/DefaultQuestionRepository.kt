@@ -27,12 +27,13 @@ import kotlinx.coroutines.sync.withLock
  *
  * The server knows what the player has answered, so nothing here remembers what was served beyond
  * the refill in flight. A batch holds only questions still due in the player's cycle when the
- * server read it (CLAUDE.md §8d), and those include the ones still queued and the one on screen.
- * The cache drops the queued ones. The one on screen is dropped here, or a refill while the player
- * looks at it would queue it again, and show it twice in a row when nothing else is queued. So is
- * every question handed out while the batch was in flight: the player may have answered it since,
- * and queued again it would come back a few questions later, in the cycle it was just answered in,
- * rather than in the next one.
+ * server read it, or, filtered to a category with nothing due in it, that category's questions
+ * again (CLAUDE.md §8d, *Categories*). Either way it can hold the ones still queued and the one on
+ * screen. The cache drops the queued ones. The one on screen is dropped here, or a refill while
+ * the player looks at it would queue it again, and show it twice in a row when nothing else is
+ * queued. So is every question handed out while the batch was in flight: the player may have
+ * answered it since, and queued again it would come back a few questions later, in the cycle it
+ * was just answered in, rather than in the next one.
  *
  * Every fetch asks for the selected [category], read under the refill lock. A switch takes that lock
  * too, as [reset] does, so no batch fetched for the selection before can land after it.
