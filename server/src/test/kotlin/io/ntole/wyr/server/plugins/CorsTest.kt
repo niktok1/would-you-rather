@@ -3,6 +3,7 @@ package io.ntole.wyr.server.plugins
 import io.ktor.client.request.get
 import io.ktor.client.request.header
 import io.ktor.client.request.options
+import io.ktor.client.statement.HttpResponse
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.response.respondText
@@ -11,12 +12,18 @@ import io.ktor.server.routing.post
 import io.ktor.server.routing.routing
 import io.ktor.server.testing.testApplication
 import io.ntole.wyr.core.api.WyrApi
+import io.ntole.wyr.server.NO_PRACTICAL_LIMIT
 import io.ntole.wyr.server.auth.TokenService
+import io.ntole.wyr.server.config.RequestBudget
 import io.ntole.wyr.server.config.ServerConfig
+import io.ntole.wyr.server.testDatabaseFor
+import io.ntole.wyr.server.wyrModule
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
+import kotlin.test.assertNotNull
 import kotlin.test.assertNull
+import kotlin.time.Duration.Companion.minutes
 
 class CorsTest {
     @Test
@@ -77,6 +84,44 @@ class CorsTest {
             assertContains(
                 preflight.headers[HttpHeaders.AccessControlAllowHeaders].orEmpty().lowercase(),
                 WyrApi.Headers.ADMIN_TOKEN.lowercase(),
+            )
+        }
+
+    @Test
+    fun `a browser on an allowed origin may read how long a 429 asks it to wait`() =
+        testApplication {
+            val origin = "https://app.example.com"
+            val adminToken = "test-admin-token-0123456789abcdef"
+            val database = testDatabaseFor("cors-retry-after")
+            val config =
+                ServerConfig
+                    .fromEnvironment(mapOf("ALLOWED_WEB_ORIGINS" to origin, "ADMIN_TOKEN" to adminToken)::get)
+                    .copy(
+                        jdbcUrl = database.jdbcUrl,
+                        dbUser = database.user,
+                        dbPassword = database.password,
+                        rateLimits = NO_PRACTICAL_LIMIT.copy(admin = RequestBudget(requests = 1, per = 1.minutes)),
+                    )
+
+            application { wyrModule(config) }
+
+            suspend fun queue(): HttpResponse =
+                client.get(WyrApi.Paths.ADMIN_SUBMISSIONS) {
+                    header(HttpHeaders.Origin, origin)
+                    header(WyrApi.Headers.ADMIN_TOKEN, adminToken)
+                }
+
+            assertEquals(HttpStatusCode.OK, queue().status)
+            val refused = queue()
+
+            // A script reads only the safelisted headers and those the response names, and Retry-After is
+            // not safelisted: unnamed, the moderation app's page could never say how long to wait.
+            assertEquals(HttpStatusCode.TooManyRequests, refused.status)
+            assertNotNull(refused.headers[HttpHeaders.RetryAfter])
+            assertEquals(origin, refused.headers[HttpHeaders.AccessControlAllowOrigin])
+            assertContains(
+                refused.headers[HttpHeaders.AccessControlExposeHeaders].orEmpty().lowercase(),
+                HttpHeaders.RetryAfter.lowercase(),
             )
         }
 }

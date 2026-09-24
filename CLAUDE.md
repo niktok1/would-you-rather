@@ -561,8 +561,10 @@ accounts exist.
   group, the keys and the ordering. On the client a 429 is `DomainError.RATE_LIMITED`, and the wait
   its `Retry-After` names travels with it, as `ApiException.retryAfter` and then
   `WyrException.retryAfter` (whole seconds only; an HTTP date or none is null), so a screen can say
-  how long to wait without reading the diagnostic message. Nothing retries it (`withSessionRecovery`
-  retries only after a 401), and the console logs it as an `err` entry.
+  how long to wait without reading the diagnostic message. CORS exposes the header
+  (`Access-Control-Expose-Headers`), without which a browser page's script could never read it
+  (`CorsTest`). Nothing retries it (`withSessionRecovery` retries only after a 401), and the console
+  logs it as an `err` entry.
 
   What remains: farming is bounded, not gone. A player can still earn 120 points a minute by
   re-answering, on average, and up to 240 where two windows meet (*decided 2026-09-23:* a re-answer

@@ -317,7 +317,9 @@ automatically from every green commit on `main` (its URL is on its Render page).
   `ImageComposeScene`) in both themes. `DataModuleTest` pins that the game's `dataModule` binds
   nothing of the moderator's (binding the API back fails it), and `WyrHttpClientTest` and
   `RunApiOverHttpTest` a 429's `Retry-After` reaching `WyrException.retryAfter` (dropped at either
-  step, they fail). Against the fat jar on JDK 21 (`PORT=18092`, no `DATABASE_URL`, a throwaway
+  step, they fail), and `CorsTest` a 429 to an allowed origin naming it in
+  `Access-Control-Expose-Headers`, which a page's script needs to read it (without `exposeHeader`, it
+  fails). Against the fat jar on JDK 21 (`PORT=18092`, no `DATABASE_URL`, a throwaway
   `ADMIN_TOKEN`), a throwaway JVM test, not committed, drove `ModerationViewModel` through the real
   CIO client, after a curl guest submitted two questions: a wrong token read `FORBIDDEN`; the queue
   listed both oldest first; approving the first under SUPERPOWERS and RANDOM worked and read the
@@ -351,9 +353,10 @@ automatically from every green commit on `main` (its URL is on its Render page).
 - **The limits against real traffic.** The budgets are starting points nobody has watched: a
   household or a mobile carrier's shared address (CGNAT) shares 10 new guests an hour, and an IPv6
   client can rotate through its prefix for fresh per-address budgets. Every count is overridable
-  without a build (`RATE_LIMIT_*`). A browser cannot read `Retry-After`, which CORS does not expose;
-  nothing reads it yet. Counts live in one instance's memory and reset with every restart, a deploy
-  or a free-tier spin-down included.
+  without a build (`RATE_LIMIT_*`). CORS exposes `Retry-After` to a page on an allowed origin, so the
+  moderation app's page can say how long to wait (`CorsTest` pins the header), but no browser has
+  read it yet. Counts live in one instance's memory and reset with every restart, a deploy or a
+  free-tier spin-down included.
 - **The refresh rotation on a live server.** The grace window has run against the fat jar on H2
   (above), never on Render, so its races are proven by tests only. The 1-point rule has been seen
   live, in the client run above.

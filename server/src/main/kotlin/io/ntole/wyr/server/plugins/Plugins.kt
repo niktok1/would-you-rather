@@ -63,6 +63,9 @@ fun Application.installPlugins(
         allowHeader(WyrApi.Headers.ADMIN_TOKEN)
         allowMethod(HttpMethod.Get)
         allowMethod(HttpMethod.Post)
+        // A page's script reads only the safelisted response headers and those named here, so without
+        // it a browser client could never say how long a 429 asks it to wait (CLAUDE.md §8b).
+        exposeHeader(HttpHeaders.RetryAfter)
     }
 
     install(Authentication) {
