@@ -1,5 +1,6 @@
 package io.ntole.wyr.server.db
 
+import org.h2.jdbc.JdbcSQLNonTransientException
 import org.jetbrains.exposed.v1.core.DatabaseConfig
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
@@ -85,21 +86,33 @@ internal fun <T> raceBehindFirst(
  * Returns once [count] sessions match [queued]: every later transaction waiting on the first.
  * Releasing the first any sooner could let one start after the first had committed, and then the
  * race the test is for would never happen.
+ *
+ * H2 2.4 fails a read of the view with a NullPointerException, as a general error, when it meets a
+ * session between two transactions, as it now and then does while another session opens or ends one.
+ * Such a read only polls again.
  */
 private fun awaitQueuedSessions(
     url: String,
     count: Int,
     queued: String,
 ) {
+    val query = "SELECT COUNT(*) FROM INFORMATION_SCHEMA.SESSIONS WHERE $queued"
     DriverManager.getConnection(url).use { connection ->
         val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(TIMEOUT_SECONDS)
         while (System.nanoTime() < deadline) {
-            connection.createStatement().use { statement ->
-                statement.executeQuery("SELECT COUNT(*) FROM INFORMATION_SCHEMA.SESSIONS WHERE $queued").use { rows ->
-                    rows.next()
-                    if (rows.getInt(1) >= count) return
+            val waiting =
+                try {
+                    connection.createStatement().use { statement ->
+                        statement.executeQuery(query).use { rows ->
+                            rows.next()
+                            rows.getInt(1)
+                        }
+                    }
+                } catch (caughtBetweenTransactions: JdbcSQLNonTransientException) {
+                    if (caughtBetweenTransactions.cause !is NullPointerException) throw caughtBetweenTransactions
+                    0
                 }
-            }
+            if (waiting >= count) return
             Thread.sleep(POLL_MILLIS)
         }
     }
