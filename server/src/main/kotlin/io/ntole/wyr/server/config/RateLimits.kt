@@ -42,7 +42,9 @@ data class RateLimits(
     val admin: RequestBudget,
     /**
      * Admin requests whose token is missing or wrong, per address, on top of [admin]: what bounds
-     * guessing the admin token. A request with the right one spends none of it, and is not refused by it.
+     * guessing the admin token. A request with the right one spends none of it, but while it is spent
+     * the address is locked out and that one is refused too, or its status would tell a right guess from
+     * a wrong one.
      */
     val adminTokenFailures: RequestBudget,
 ) {

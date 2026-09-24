@@ -148,20 +148,35 @@ class RateLimitTest {
             repeat(2) { assertEquals(HttpStatusCode.Forbidden, client.queue("wrong-token").status) }
             assertRateLimited(client.queue("wrong-token"), "a third wrong token")
             assertRateLimited(client.queue(token = null), "no token at all counts as wrong")
+        }
 
-            assertEquals(HttpStatusCode.OK, client.queue(ADMIN_TOKEN).status, "the right token is still let in")
+    @Test
+    fun `once the failed-token budget is spent the right token is refused as a wrong one is`() =
+        runServer("admin-lockout", NO_PRACTICAL_LIMIT.copy(adminTokenFailures = LOCKOUT)) { client ->
+            repeat(LOCKOUT.requests) { client.queue("wrong-token") }
+
+            // Were the right token let in, the one 200 among the 429s would pick it out of any number of
+            // guesses sent past the budget.
+            val guesses = listOf("wrong-token", ADMIN_TOKEN, "another-guess", null).map { token -> client.queue(token) }
+            guesses.forEachIndexed { index, guess -> assertRateLimited(guess, "guess ${index + 1} past the budget") }
+            val answers = guesses.map { guess -> guess.status to guess.body<ErrorDto>().code }
+            assertEquals(1, answers.distinct().size, "every guess is answered alike: $answers")
+
+            delay(LOCKOUT.per + 200.milliseconds)
+            assertEquals(HttpStatusCode.OK, client.queue(ADMIN_TOKEN).status, "the lockout ends with its period")
         }
 
     @Test
     fun `wrong admin tokens refused for their own budget spend none of the moderator's`() =
         runServer(
             "admin-order",
-            NO_PRACTICAL_LIMIT.copy(admin = RequestBudget(5, 1.minutes), adminTokenFailures = TWO_A_MINUTE),
+            NO_PRACTICAL_LIMIT.copy(admin = RequestBudget(5, 1.minutes), adminTokenFailures = LOCKOUT),
         ) { client ->
             // Two of the admin budget's five go on wrong tokens, which also spend the failure budget.
             repeat(2) { assertEquals(HttpStatusCode.Forbidden, client.queue("wrong-token").status) }
             // Refused by the failure budget first, so these leave the admin budget's three alone.
             repeat(3) { assertRateLimited(client.queue("wrong-token"), "wrong token ${it + 3}") }
+            delay(LOCKOUT.per + 200.milliseconds)
 
             repeat(3) { assertEquals(HttpStatusCode.OK, client.queue(ADMIN_TOKEN).status, "the moderator's ${it + 1}") }
             assertRateLimited(client.queue(ADMIN_TOKEN), "past the admin budget itself")
@@ -392,6 +407,9 @@ class RateLimitTest {
         const val SEED = "seed-1"
         const val CONSOLE_MOST_ANSWERS = 50
         val TWO_A_MINUTE = RequestBudget(requests = 2, per = 1.minutes)
+
+        /** A failed-token budget whose lockout a test can wait out. */
+        val LOCKOUT = RequestBudget(requests = 2, per = 2.seconds)
 
         /** A client, and the proxy that reached the server, as two trusted proxies record them. */
         const val CLIENT = "203.0.113.7"

@@ -13,6 +13,7 @@ import io.ktor.server.request.httpMethod
 import io.ktor.server.request.path
 import io.ktor.server.response.header
 import io.ktor.server.routing.Route
+import io.ktor.util.date.getTimeMillis
 import io.ntole.wyr.server.auth.TokenService
 import io.ntole.wyr.server.auth.verifiedPlayerId
 import io.ntole.wyr.server.config.RateLimits
@@ -21,6 +22,7 @@ import io.ntole.wyr.server.config.ServerConfig
 import io.ntole.wyr.server.moderation.AdminToken
 import io.ntole.wyr.server.moderation.admits
 import kotlin.time.Duration
+import kotlin.time.Duration.Companion.milliseconds
 
 /**
  * Each group of routes with a budget of its own in [RateLimits] (CLAUDE.md §8b, *Rate limiting*). A
@@ -41,7 +43,10 @@ enum class RouteLimit(
     MY_SUBMISSIONS(RateLimits::mySubmissions, KeyedBy.PLAYER),
     ADMIN(RateLimits::admin, KeyedBy.ADDRESS),
 
-    /** Spent only by a request [installRateLimits] finds without the right admin token. */
+    /**
+     * Spent only by a request [installRateLimits] finds without the right admin token, but once spent it
+     * refuses every admin request from the address, the right token's included ([LockingOut]).
+     */
     ADMIN_TOKEN_FAILURES(RateLimits::adminTokenFailures, KeyedBy.ADDRESS),
     ;
 
@@ -95,13 +100,16 @@ fun Application.installRateLimits(
         RouteLimit.entries.forEach { limit ->
             register(limit.limitName) {
                 val budget = limit.budgetIn(config.rateLimits)
-                rateLimiter(limit = budget.requests, refillPeriod = budget.per)
                 requestKey { call -> keys.of(call, limit.keyedBy) }
                 if (limit == RouteLimit.ADMIN_TOKEN_FAILURES) {
                     // Checks the token as requireAdmin will, so only a request it will refuse spends from
-                    // this, and the moderator's own are neither counted nor refused by it. A weight of 0 is
-                    // let through even once the budget is spent.
+                    // this. Once it is spent, though, every request from the address is refused, the right
+                    // token's too: were that one let in, 429 would mean wrong and 200 right, and a guesser
+                    // past the budget would still learn the token at whatever speed they could send.
+                    rateLimiter { _, _ -> LockingOut(RateLimiter.default(budget.requests, budget.per)) }
                     requestWeight { call, _ -> if (adminToken != null && adminToken.admits(call)) 0 else 1 }
+                } else {
+                    rateLimiter(limit = budget.requests, refillPeriod = budget.per)
                 }
                 // In place of Ktor's default, which also sends X-RateLimit-* headers: on a route in two
                 // groups they would describe whichever was asked first.
@@ -121,6 +129,22 @@ fun Route.rateLimit(
     limit: RouteLimit,
     build: Route.() -> Unit,
 ): Route = rateLimit(limit.limitName, build)
+
+/**
+ * [budget], but a request that weighs nothing is refused once it is spent. Ktor's own limiter lets
+ * one through whatever is left, as it spends nothing, and that would let the moderator's token past a
+ * lockout ([RouteLimit.ADMIN_TOKEN_FAILURES]). What it refuses spends nothing either.
+ */
+private class LockingOut(
+    private val budget: RateLimiter,
+) : RateLimiter {
+    override suspend fun tryConsume(tokens: Int): RateLimiter.State {
+        val state = budget.tryConsume(tokens)
+        if (tokens > 0 || state !is RateLimiter.State.Available || state.remainingTokens > 0) return state
+        // Ktor's limiter tells the time the same way, so the wait is what it would have said.
+        return RateLimiter.State.Exhausted((state.refillAtTimeMillis - getTimeMillis()).coerceAtLeast(0).milliseconds)
+    }
+}
 
 /** Picks the [LimitKey] a request spends, as its group is [KeyedBy]. */
 private class LimitKeys(

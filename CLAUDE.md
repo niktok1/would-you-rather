@@ -292,12 +292,12 @@ This project must never be attributed to any employer identity.
 - `ADMIN_TOKEN` is the moderator's credential (§8d, *Moderation*), declared `sync: false` in
   `render.yaml` and set by hand in the dashboard, never committed. It has **no default**: unset or
   blank turns moderation off, so the admin routes are 404, every submission stays pending, and the
-  boot log warns. A token shorter than 32 characters boots with a warning, since wrong guesses are
-  limited only per address (§8b), and one holding whitespace or anything but visible ASCII fails at
-  boot, since no request header could carry it. Generate one with `openssl rand -hex 32`. It is
-  read at boot, so rotating it is changing the variable and restarting the service, and the old
-  token is dead from then on. A browser on an `ALLOWED_WEB_ORIGINS` origin may send its header
-  (CORS). The dev console's *Moderation* section takes it typed and holds it in memory only.
+  boot log warns. A token shorter than 32 characters boots with a warning, since guesses are limited
+  only per address (§8b), so a caller with many addresses gets many more, and one holding whitespace
+  or anything but visible ASCII fails at boot, since no request header could carry it. Generate one
+  with `openssl rand -hex 32`. It is read at boot, so rotating it is changing the variable and
+  restarting the service, and the old token is dead from then on. A browser on an
+  `ALLOWED_WEB_ORIGINS` origin may send its header (CORS). The dev console's *Moderation* section takes it typed and holds it in memory only.
 - `TRUSTED_PROXY_HOPS` (`render.yaml`: 3) is how many proxies in front of the service append to
   `X-Forwarded-For`: Cloudflare's edge and two of Render's proxies behind it. The per-address rate
   limits (§8b) take the client's address as the entry that many from the right (`clientAddress`), so
@@ -400,9 +400,12 @@ accounts exist.
   - *Per client address* (behind Render's proxies, the one `X-Forwarded-For` entry they vouch for:
     `TRUSTED_PROXY_HOPS`, §8), for a caller with no session to name: guest minting 10 an hour,
     refreshes 30 a minute, the admin routes 60 a minute together, and on top of that, admin requests
-    with a wrong or missing token 10 a minute. A request with the right token neither spends that
-    last budget nor is refused by it, so guessing is bounded without locking the moderator out; it
-    is asked first, so guesses refused by it spend none of the moderator's 60.
+    with a wrong or missing token 10 a minute. A request with the right token spends none of that
+    last budget, but once an address has spent it, every admin request from the address is refused
+    until the budget is back, the right token's too (`LockingOut`): were that one let in, its 200
+    among the 429s would give it away, and guessing would be bounded by nothing. So a guesser
+    behind the moderator's address can lock the moderator out, a minute at a time. It is asked
+    first, so guesses refused by it spend none of the moderator's 60.
   - *Per player*, so players behind one address do not share a budget: the feed, votes and skips
     120 a minute each (the console's *Answer N* sends at most 50 votes in a row), likes 60 a minute,
     submissions 30 an hour (the 20-pending cap still applies), and `GET /v1/me` and

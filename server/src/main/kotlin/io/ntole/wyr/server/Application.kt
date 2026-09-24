@@ -102,8 +102,9 @@ private fun Application.warnAboutInsecureDefaults(config: ServerConfig) {
     } else if (config.usesShortAdminToken) {
         log.warn(
             "ADMIN_TOKEN is shorter than ${ServerConfig.MIN_ADMIN_TOKEN_LENGTH} characters. Whoever " +
-                "guesses it can approve and reject every submission, and wrong guesses are limited only " +
-                "per address. Use a random one, such as the output of openssl rand -hex 32.",
+                "guesses it can approve and reject every submission, and guesses are limited only per " +
+                "address, ${config.rateLimits.adminTokenFailures.requests} a minute, so a caller with many " +
+                "addresses gets many more. Use a random one, such as the output of openssl rand -hex 32.",
         )
     }
 }
