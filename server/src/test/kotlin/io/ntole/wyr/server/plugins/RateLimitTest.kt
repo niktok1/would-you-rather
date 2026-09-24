@@ -515,6 +515,9 @@ class RateLimitTest {
                         admin(token, RejectSubmissionRequest(NO_SUBMISSION, reason = "Not a question"))
                     }
                 },
+                AdminRoute("the question list", HttpStatusCode.OK) { client, token ->
+                    client.get(WyrApi.Paths.ADMIN_QUESTIONS) { token?.let { header(WyrApi.Headers.ADMIN_TOKEN, it) } }
+                },
             )
         val ADMIN_ROUTE_BUDGET = RequestBudget(requests = ADMIN_ROUTES.size, per = 1.minutes)
         const val NO_SUBMISSION = "no-such-submission"

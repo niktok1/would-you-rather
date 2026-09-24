@@ -325,7 +325,10 @@ automatically from every green commit on `main` (its URL is on its Render page).
   rows' delete and batch insert in the decision's transaction, and the new `(status, submitted_at,
   id)` index. The client has sent moderation requests only from the JVM (the live run above), and no
   browser has sent `X-Admin-Token`: only `CorsTest` has seen its preflight. Nobody has looked at the
-  console's *Moderation* section on any platform.
+  console's *Moderation* section on any platform. The question list (`GET /v1/admin/questions`,
+  `feat/moderation-app`) has run on H2 only: its counts are correlated subqueries and its pages a
+  keyset on `(submitted_at, id)` compared in the database's collation, which `ApiFlowTest` runs on
+  PostgreSQL only in the `server-postgres` job, which has not seen the branch.
 - **Likes on Postgres, and in any client but the JVM.** Two first likes racing on the key (the 23505
   aborts the transaction and Exposed reruns it), two unlikes queuing on one row, the grouped count
   with its `COUNT(CASE ...)` and the stats' subquery have run only on H2 (`LikeStoreTest` polls H2's
@@ -482,6 +485,15 @@ author's. To reject instead, send
 trimmed and must then be one line of at most 200 characters. `?status=APPROVED` or
 `?status=REJECTED` on the queue lists decided submissions, and `GET /v1/me/questions` with the
 guest's bearer token shows the author's view. Deciding a question twice is 409 `ALREADY_DECIDED`.
+
+Every question, seeds included (`"seed":true`), newest first with its tally and like count, is
+`/v1/admin/questions`, narrowed by `?status=` and `?category=`, each repeatable and matching any.
+A page ends with `nextCursor` while more follow; send it back as `?cursor=` for the next:
+
+```bash
+curl -s 'localhost:8080/v1/admin/questions?status=PENDING&status=APPROVED&category=FOOD&limit=5' \
+  -H "X-Admin-Token: $ADMIN_TOKEN"
+```
 
 ### The dev console
 

@@ -122,15 +122,26 @@ public object WyrApi {
          * admin route: needs [Headers.ADMIN_TOKEN].
          */
         public const val ADMIN_REJECTIONS: String = "/$VERSION/admin/rejections"
+
+        /**
+         * Every question, whatever its status, seeds included, newest first, as the moderator sees each
+         * one: an [io.ntole.wyr.core.question.AdminQuestionPageDto] of
+         * [io.ntole.wyr.core.question.AdminQuestionDto]s, with its tally and like count (CLAUDE.md §8d,
+         * *Moderation*). [Query.STATUS] and [Query.CATEGORY] narrow it, each repeated for several and
+         * each matching any of its values, none for all; [Query.LIMIT] bounds a page within the feed's
+         * bounds, and [Query.CURSOR] asks for the page after the one that sent it. No author travels.
+         * An admin route: needs [Headers.ADMIN_TOKEN].
+         */
+        public const val ADMIN_QUESTIONS: String = "/$VERSION/admin/questions"
     }
 
     public object Headers {
         /**
-         * Carries the server's admin token on the admin routes ([Paths.ADMIN_SUBMISSIONS],
-         * [Paths.ADMIN_APPROVALS], [Paths.ADMIN_REJECTIONS]). The moderator is whoever holds it, not a
-         * role on a player account (CLAUDE.md §8d), so the player's bearer token plays no part and may
-         * be sent alongside or not. A header of its own rather than `Authorization`, which carries the
-         * player's bearer token and which the client's bearer provider owns.
+         * Carries the server's admin token on the admin routes, every path under `/v1/admin/`
+         * ([Paths.ADMIN_SUBMISSIONS] and the rest). The moderator is whoever holds it, not a role on a
+         * player account (CLAUDE.md §8d), so the player's bearer token plays no part and may be sent
+         * alongside or not. A header of its own rather than `Authorization`, which carries the player's
+         * bearer token and which the client's bearer provider owns.
          *
          * Without it, or with another token, an admin route is 403
          * [io.ntole.wyr.core.error.ErrorCode.FORBIDDEN], checked before anything else about the request.
@@ -141,24 +152,39 @@ public object WyrApi {
     }
 
     public object Query {
-        /** Max questions to return in one batch, or submissions in [Paths.ADMIN_SUBMISSIONS]. */
+        /**
+         * Max questions to return in one batch, or submissions in [Paths.ADMIN_SUBMISSIONS], or
+         * questions in a page of [Paths.ADMIN_QUESTIONS].
+         */
         public const val LIMIT: String = "limit"
 
         /**
-         * Optional [io.ntole.wyr.core.question.QuestionCategory] name filter on the feed, repeated for
-         * several: `?category=FOOD&category=ETHICS` serves the questions filed under any of them, each
-         * once, and none is every category (CLAUDE.md §8d). Each value is one name, never a
-         * comma-separated list. A value that names no real category, `UNKNOWN` included, is 400
-         * [io.ntole.wyr.core.error.ErrorCode.VALIDATION_FAILED], whatever the others name.
+         * Optional [io.ntole.wyr.core.question.QuestionCategory] name filter on the feed and on
+         * [Paths.ADMIN_QUESTIONS], repeated for several: `?category=FOOD&category=ETHICS` serves the
+         * questions filed under any of them, each once, and none is every category (CLAUDE.md §8d).
+         * Each value is one name, never a comma-separated list. A value that names no real category,
+         * `UNKNOWN` included, is 400 [io.ntole.wyr.core.error.ErrorCode.VALIDATION_FAILED], whatever
+         * the others name.
          */
         public const val CATEGORY: String = "category"
 
         /**
-         * Which [io.ntole.wyr.core.question.QuestionStatus] [Paths.ADMIN_SUBMISSIONS] lists, by name,
-         * given at most once: `PENDING` when it is absent. A value that names no real status, `UNKNOWN`
-         * included, or a second value, is 400 [io.ntole.wyr.core.error.ErrorCode.VALIDATION_FAILED].
+         * A [io.ntole.wyr.core.question.QuestionStatus] name. [Paths.ADMIN_SUBMISSIONS] lists the
+         * submissions at the one it names, given at most once, `PENDING` when it is absent.
+         * [Paths.ADMIN_QUESTIONS] takes it repeated, `?status=PENDING&status=REJECTED`, and lists the
+         * questions at any of them, every question for none. Either way a value that names no real
+         * status, `UNKNOWN` included, is 400 [io.ntole.wyr.core.error.ErrorCode.VALIDATION_FAILED], and
+         * so is a second value on [Paths.ADMIN_SUBMISSIONS].
          */
         public const val STATUS: String = "status"
+
+        /**
+         * Where a page of [Paths.ADMIN_QUESTIONS] starts: the
+         * [io.ntole.wyr.core.question.AdminQuestionPageDto.nextCursor] the page before it sent, as it
+         * was sent, given at most once. Absent for the first page. One the server did not make, or a
+         * second value, is 400 [io.ntole.wyr.core.error.ErrorCode.VALIDATION_FAILED].
+         */
+        public const val CURSOR: String = "cursor"
     }
 
     public object Limits {

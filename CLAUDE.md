@@ -457,7 +457,8 @@ accounts exist.
   No author travels on the wire: a submission's author is whoever its bearer token names, and a
   player lists only their own. The client and the console submit and list them. The moderation
   contract is settled and built on the server too: the admin routes, `ApproveSubmissionRequest`,
-  `RejectSubmissionRequest`, the `X-Admin-Token` header (`WyrApi.Headers`) and the error codes
+  `RejectSubmissionRequest`, the question list's `AdminQuestionPageDto` and `AdminQuestionDto`
+  (paged by `WyrApi.Query.CURSOR`), the `X-Admin-Token` header (`WyrApi.Headers`) and the error codes
   `FORBIDDEN` and `ALREADY_DECIDED`, and the moderator's client and console section are built on
   it (§8d, *Moderation*).
 - **A rejection reason is one line** — *provisional — user decision.* §8d asks for a short reason;
@@ -837,6 +838,21 @@ and every request shows in its HTTP trace (`HttpTrace` in `:core:network`, never
   - `GET /v1/admin/submissions` is the queue: the players' submissions at `?status=` (`PENDING` when
     absent; `UNKNOWN`, an unknown name or a second value is 400), oldest first, bounded by `?limit=`
     as the feed is, in a `SubmissionListDto` of `SubmissionDto`s. Never a seed, and no author.
+  - `GET /v1/admin/questions` is the list of every question, seeds included, newest first, in an
+    `AdminQuestionPageDto` of `AdminQuestionDto`s: options, categories, status, whether it is a seed,
+    when it was stored and reviewed, a rejected one's reason, its tally and its like count, and no
+    author. `?status=` and `?category=` narrow it, each repeated for several and matching any of its
+    values, none for all; `UNKNOWN` or a name that is no status or category is 400, as for the feed's
+    category (`categoryFilter`). `?limit=` bounds a page as the feed's is. A page is asked for by
+    cursor, not offset (`QuestionCursor`, `?cursor=`): `nextCursor` is the last question's place,
+    its `submitted_at` and then its id, and null on the last page, which is read as one row more than
+    the limit. A question stored meanwhile is newer than every one listed and lands before the first
+    page, where an offset would push one already listed onto the next page and list it twice. A page
+    is two statements whatever its length (`ModerationStore.questions`): its rows with both vote
+    counts and the like count as subqueries in one statement, so a question's numbers are one
+    moment's (§4), and their categories in one more. No index orders every question by time: the
+    list is the moderator's alone and the table small; `(submitted_at, id)` is the index once it is
+    not.
   - `POST /v1/admin/approvals` takes an `ApproveSubmissionRequest`: the id, and categories that, when
     there are any, replace the author's (each real, each once, in declaration order); none keeps the
     author's. `POST /v1/admin/rejections` takes a `RejectSubmissionRequest`: the id and a reason,

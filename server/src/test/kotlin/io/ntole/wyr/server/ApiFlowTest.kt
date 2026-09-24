@@ -26,6 +26,7 @@ import io.ntole.wyr.core.error.ErrorDto
 import io.ntole.wyr.core.like.LikeRequest
 import io.ntole.wyr.core.like.LikeResultDto
 import io.ntole.wyr.core.player.PlayerStatsDto
+import io.ntole.wyr.core.question.AdminQuestionPageDto
 import io.ntole.wyr.core.question.ApproveSubmissionRequest
 import io.ntole.wyr.core.question.QuestionCategory
 import io.ntole.wyr.core.question.QuestionDto
@@ -1442,6 +1443,96 @@ class ApiFlowTest {
         }
 
     @Test
+    fun `the moderator's list holds every question with its numbers, pages through them, and names no author`() =
+        runServer("admin-questions") { client ->
+            val (author, player) = client.guest() to client.guest()
+            val pending = client.submitted(author, question("Pending"))
+            val approved = client.approvedQuestion(author, "Approved")
+            client.vote(player, approved.id, OptionSide.B)
+            client.liked(player, approved.id, liked = true)
+            val seeds = client.wholePool(author).ids().filterNot { it == approved.id }
+
+            val response = client.adminQuestions("?${WyrApi.Query.LIMIT}=${WyrApi.Limits.MAX_PAGE_SIZE}")
+
+            assertEquals(HttpStatusCode.OK, response.status)
+            val listed = response.body<AdminQuestionPageDto>()
+            assertEquals(null, listed.nextCursor, "all of them on one page")
+            val byId = listed.questions.associateBy { it.id }
+            assertEquals((seeds + pending.id + approved.id).toSet(), byId.keys)
+            assertEquals(
+                seeds.toSet(),
+                listed.questions
+                    .filter { it.seed }
+                    .map { it.id }
+                    .toSet(),
+            )
+            assertEquals(
+                listed.questions.sortedByDescending { it.submittedAt },
+                listed.questions,
+                "newest first; the order of a tie is the database's",
+            )
+            assertEquals(QuestionStatus.PENDING, byId.getValue(pending.id).status)
+            val numbers = byId.getValue(approved.id).let { it.status to (it.tally to it.likeCount) }
+            assertEquals(QuestionStatus.APPROVED to (VoteTallyDto(votesA = 0, votesB = 1) to 1), numbers)
+            assertEquals(
+                ADMIN_QUESTION_FIELDS,
+                response
+                    .body<JsonObject>()
+                    .getValue("questions")
+                    .jsonArray
+                    .first()
+                    .jsonObject.keys,
+                "nothing about who wrote it",
+            )
+
+            val paged = mutableListOf(client.adminQuestionPage("?${WyrApi.Query.LIMIT}=5"))
+            while (true) {
+                val cursor = paged.last().nextCursor ?: break
+                paged += client.adminQuestionPage("?${WyrApi.Query.LIMIT}=5&${WyrApi.Query.CURSOR}=$cursor")
+            }
+            assertEquals(listed.questions, paged.flatMap { it.questions }, "the same list, five at a time")
+
+            val status = WyrApi.Query.STATUS
+            assertEquals(listOf(pending.id), client.adminQuestionIds("?$status=PENDING"))
+            assertEquals(
+                (seeds + approved.id).toSet(),
+                client.adminQuestionIds("?$status=APPROVED&$status=REJECTED").toSet(),
+            )
+            assertEquals(
+                listOf(approved.id, pending.id).toSet(),
+                client.adminQuestionIds("?$status=PENDING&$status=APPROVED&${WyrApi.Query.CATEGORY}=FOOD").toSet() -
+                    seeds.toSet(),
+                "a category filter as well",
+            )
+        }
+
+    @Test
+    fun `the moderator's list refuses a filter, a cursor or a limit it cannot use`() =
+        runServer("admin-questions-malformed") { client ->
+            val (status, category, cursor) = Triple(WyrApi.Query.STATUS, WyrApi.Query.CATEGORY, WyrApi.Query.CURSOR)
+
+            listOf(
+                "the status UNKNOWN" to "?$status=UNKNOWN",
+                "an unrecognised status" to "?$status=FROM_THE_FUTURE",
+                "a status in lower case" to "?$status=pending",
+                "an empty status" to "?$status=",
+                "comma-separated statuses" to "?$status=PENDING,REJECTED",
+                "the category UNKNOWN" to "?$category=UNKNOWN",
+                "an unrecognised category" to "?$category=FROM_THE_FUTURE",
+                "a cursor the server did not make" to "?$cursor=not-a-cursor",
+                "a cursor with no time" to "?$cursor=:seed-1",
+                "a cursor with no id" to "?$cursor=1790000000000:",
+                "a cursor with a blank id" to "?$cursor=1790000000000:%20",
+                "two cursors" to "?$cursor=1790000000000:seed-1&$cursor=1790000000000:seed-2",
+                "a limit that is not a number" to "?${WyrApi.Query.LIMIT}=many",
+            ).forEach { (case, query) ->
+                val response = client.adminQuestions(query)
+                assertEquals(HttpStatusCode.BadRequest, response.status, case)
+                assertEquals(ErrorCode.VALIDATION_FAILED, response.body<ErrorDto>().code, case)
+            }
+        }
+
+    @Test
     fun `a like is set rather than toggled and pays the author a point for as long as it is held`() =
         runServer("like") { client ->
             val (author, fan) = client.guest() to client.guest()
@@ -1714,6 +1805,20 @@ class ApiFlowTest {
     private suspend fun HttpClient.queue(query: String = ""): List<SubmissionDto> =
         moderatorQueue(query).body<SubmissionListDto>().submissions
 
+    /** The moderator's list of every question, asked for with the test server's admin token. */
+    private suspend fun HttpClient.adminQuestions(query: String = ""): HttpResponse =
+        get(WyrApi.Paths.ADMIN_QUESTIONS + query) { header(WyrApi.Headers.ADMIN_TOKEN, TEST_ADMIN_TOKEN) }
+
+    private suspend fun HttpClient.adminQuestionPage(query: String = ""): AdminQuestionPageDto =
+        adminQuestions(query).body()
+
+    /** The ids on one page of the moderator's list, the largest there is, which holds every question here. */
+    private suspend fun HttpClient.adminQuestionIds(query: String): List<String> {
+        val page = adminQuestionPage("$query&${WyrApi.Query.LIMIT}=${WyrApi.Limits.MAX_PAGE_SIZE}")
+        assertEquals(null, page.nextCursor, "the list no longer fits in one page")
+        return page.questions.map { it.id }
+    }
+
     /**
      * One request to each admin route, carrying no credential but what [credentials] adds. A decision
      * names a question that does not exist, so none of them can decide anything.
@@ -1735,6 +1840,7 @@ class ApiFlowTest {
                     contentType(ContentType.Application.Json)
                     setBody(RejectSubmissionRequest("no-such-question", reason = "No"))
                 },
+            "the question list" to get(WyrApi.Paths.ADMIN_QUESTIONS) { credentials() },
         )
 
     /** Approves [questionId] with the test server's admin token, filing it under [categories] if any. */
@@ -1855,5 +1961,21 @@ class ApiFlowTest {
          * wire bounds a questionId, so it reaches the lookup and is simply not found.
          */
         const val LONGER_THAN_ANY_ID = "seed-1-and-then-far-more-characters-than-any-question-id-can-hold"
+
+        /** Every field of a question in the moderator's list, as `encodeDefaults` sends each one. */
+        val ADMIN_QUESTION_FIELDS =
+            setOf(
+                "id",
+                "optionA",
+                "optionB",
+                "categories",
+                "status",
+                "seed",
+                "submittedAt",
+                "reviewedAt",
+                "rejectionReason",
+                "tally",
+                "likeCount",
+            )
     }
 }

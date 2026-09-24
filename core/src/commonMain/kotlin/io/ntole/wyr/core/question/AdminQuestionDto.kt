@@ -1,0 +1,43 @@
+package io.ntole.wyr.core.question
+
+import io.ntole.wyr.core.vote.VoteTallyDto
+import kotlinx.serialization.Serializable
+
+/**
+ * A question as the moderator sees it in their list of every question
+ * ([io.ntole.wyr.core.api.WyrApi.Paths.ADMIN_QUESTIONS], CLAUDE.md §8d, *Moderation*): whatever its
+ * status, a seed or a player's submission.
+ *
+ * [id], [optionA], [optionB] and [categories] are as in a [SubmissionDto], and [categories] is sent
+ * and decoded as [QuestionDto.categories] is. [status] is where the question stands with the
+ * moderator. [seed] is true for one of the server's starter questions, which nobody wrote and which is
+ * approved from the start, and false for a player's submission. No author travels, for a submission
+ * either: a moderator judges a question by what it says, not by who wrote it (CLAUDE.md §8b).
+ *
+ * [submittedAt] is when the server stored the question, submitted or seeded, and [reviewedAt] when a
+ * moderator approved or rejected it, or null while none has, as for a seed. Both are epoch
+ * milliseconds. [rejectionReason] is the moderator's short reason, sent only for a
+ * [QuestionStatus.REJECTED] question and null for any other.
+ *
+ * [tally] is every player's latest answer to it, one vote per player, and [likeCount] how many
+ * players like it. The server reads both in one statement, so they are one moment's numbers.
+ *
+ * [categories] must keep its serializer and its default, and [status] its default, for a value added
+ * server-side to decode on an older client — see [QuestionCategoryListSerializer] and
+ * [QuestionStatus].
+ */
+@Serializable
+public data class AdminQuestionDto(
+    public val id: String,
+    public val optionA: String,
+    public val optionB: String,
+    @Serializable(with = QuestionCategoryListSerializer::class)
+    public val categories: List<QuestionCategory> = emptyList(),
+    public val status: QuestionStatus = QuestionStatus.UNKNOWN,
+    public val seed: Boolean = false,
+    public val submittedAt: Long,
+    public val reviewedAt: Long? = null,
+    public val rejectionReason: String? = null,
+    public val tally: VoteTallyDto,
+    public val likeCount: Int = 0,
+)

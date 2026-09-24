@@ -164,9 +164,9 @@ object QuestionStore {
     /**
      * Filed under any of [categories], among others or not, or anything for none. An `EXISTS`, so a
      * question filed under several of them still matches once, where a join would list it once for
-     * each.
+     * each. The feed's filter, and the moderator's list's (`ModerationStore.questions`).
      */
-    private fun inCategories(categories: Set<QuestionCategory>): Op<Boolean> {
+    internal fun inCategories(categories: Set<QuestionCategory>): Op<Boolean> {
         if (categories.isEmpty()) return Op.TRUE
         val names = categories.map { it.name }
         return exists(

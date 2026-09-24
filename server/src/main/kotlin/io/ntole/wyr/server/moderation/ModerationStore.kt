@@ -1,18 +1,33 @@
 package io.ntole.wyr.server.moderation
 
+import io.ntole.wyr.core.question.AdminQuestionDto
+import io.ntole.wyr.core.question.AdminQuestionPageDto
 import io.ntole.wyr.core.question.QuestionCategory
 import io.ntole.wyr.core.question.QuestionStatus
 import io.ntole.wyr.core.question.SubmissionDto
+import io.ntole.wyr.core.vote.OptionSide
+import io.ntole.wyr.core.vote.VoteTallyDto
+import io.ntole.wyr.server.db.Likes
 import io.ntole.wyr.server.db.QuestionCategories
 import io.ntole.wyr.server.db.Questions
+import io.ntole.wyr.server.db.Votes
 import io.ntole.wyr.server.plugins.ApiFailure
 import io.ntole.wyr.server.question.QuestionStore
 import io.ntole.wyr.server.question.SubmissionStore
+import org.jetbrains.exposed.v1.core.Expression
+import org.jetbrains.exposed.v1.core.Op
+import org.jetbrains.exposed.v1.core.ResultRow
 import org.jetbrains.exposed.v1.core.SortOrder
 import org.jetbrains.exposed.v1.core.and
+import org.jetbrains.exposed.v1.core.count
 import org.jetbrains.exposed.v1.core.eq
+import org.jetbrains.exposed.v1.core.greater
 import org.jetbrains.exposed.v1.core.inList
 import org.jetbrains.exposed.v1.core.isNotNull
+import org.jetbrains.exposed.v1.core.less
+import org.jetbrains.exposed.v1.core.or
+import org.jetbrains.exposed.v1.core.wrapAsExpression
+import org.jetbrains.exposed.v1.jdbc.Query
 import org.jetbrains.exposed.v1.jdbc.batchInsert
 import org.jetbrains.exposed.v1.jdbc.deleteWhere
 import org.jetbrains.exposed.v1.jdbc.select
@@ -144,5 +159,124 @@ object ModerationStore {
                 .single()
         val categories = QuestionStore.categoriesOf(Questions.id eq questionId)[questionId].orEmpty()
         return SubmissionStore.toSubmission(row, categories)
+    }
+
+    /**
+     * One page of every question, seeds included, as the moderator sees each (CLAUDE.md §8d,
+     * *Moderation*): newest first, starting after [after] when there is one, at most [limit]. Must run
+     * inside a transaction.
+     *
+     * A question is listed when it stands at any of [statuses] and is filed under any of [categories],
+     * either set empty for every one, the categories matched as the feed matches them
+     * ([QuestionStore.inCategories]). Two stored in the same millisecond, as every seed is, come in id
+     * order, as in the author's list. [AdminQuestionPageDto.nextCursor] is the last one's place when
+     * more follow it, read as one more row than [limit] asks for, and null when none does, so the last
+     * page says it is the last.
+     *
+     * Two statements a page, however long it is ([Listing]).
+     */
+    fun questions(
+        statuses: Set<QuestionStatus>,
+        categories: Set<QuestionCategory>,
+        after: QuestionCursor?,
+        limit: Int,
+    ): AdminQuestionPageDto {
+        val statusFilter = if (statuses.isEmpty()) Op.TRUE else Questions.status inList statuses
+        val listing = Listing(statusFilter and QuestionStore.inCategories(categories) and placedAfter(after))
+        val rows =
+            listing.query
+                .orderBy(Questions.submittedAt to SortOrder.DESC, Questions.id to SortOrder.ASC)
+                .limit(limit + 1)
+                .toList()
+
+        val page = rows.take(limit)
+        val next =
+            page.lastOrNull()?.takeIf { rows.size > limit }?.let { last ->
+                QuestionCursor(last[Questions.submittedAt], last[Questions.id])
+            }
+        return AdminQuestionPageDto(questions = listing.toAdminQuestions(page), nextCursor = next?.encode())
+    }
+
+    /**
+     * After [cursor] in the list's order: stored before it, or in the same millisecond with a later
+     * id. Everything for none.
+     */
+    private fun placedAfter(cursor: QuestionCursor?): Op<Boolean> {
+        if (cursor == null) return Op.TRUE
+        return (Questions.submittedAt less cursor.submittedAt) or
+            ((Questions.submittedAt eq cursor.submittedAt) and (Questions.id greater cursor.id))
+    }
+
+    /**
+     * The questions [where] picks, as [query] reads them: their own columns, both sides' vote counts
+     * and their like count, in this one statement. So the numbers of a question are one committed
+     * moment's, as the tally's two counts are in a vote's answer (CLAUDE.md §4): read apart, a
+     * re-answer committing in between could count one player's vote on both sides, or on neither.
+     *
+     * The counts are subqueries on the row's own id, each found through an index: the vote counts
+     * through `votes (question_id, side)` and the like count through `likes (question_id, player_id)`.
+     * The categories take one more statement for every row read ([toAdminQuestions]), so a page is two
+     * statements whatever its length, never one per question.
+     */
+    private class Listing(
+        where: Op<Boolean>,
+    ) {
+        private val votesForA = votesFor(OptionSide.A)
+        private val votesForB = votesFor(OptionSide.B)
+        private val likes: Expression<Long?> =
+            wrapAsExpression(Likes.select(Likes.playerId.count()).where { Likes.questionId eq Questions.id })
+
+        val query: Query = Questions.select(ADMIN_COLUMNS + listOf(votesForA, votesForB, likes)).where(where)
+
+        /** [rows], read by [query], with their categories. */
+        fun toAdminQuestions(rows: List<ResultRow>): List<AdminQuestionDto> {
+            if (rows.isEmpty()) return emptyList()
+
+            val categories = QuestionStore.categoriesOf(Questions.id inList rows.map { row -> row[Questions.id] })
+            return rows.map { row ->
+                val status = row[Questions.status]
+                AdminQuestionDto(
+                    id = row[Questions.id],
+                    optionA = row[Questions.optionA],
+                    optionB = row[Questions.optionB],
+                    categories = categories[row[Questions.id]].orEmpty(),
+                    status = status,
+                    seed = row[Questions.authorPlayerId] == null,
+                    submittedAt = row[Questions.submittedAt],
+                    reviewedAt = row[Questions.reviewedAt],
+                    // As in a submission: only with a rejected question, whatever the column holds.
+                    rejectionReason = row[Questions.rejectionReason].takeIf { status == QuestionStatus.REJECTED },
+                    tally = VoteTallyDto(votesA = row.countOf(votesForA), votesB = row.countOf(votesForB)),
+                    likeCount = row.countOf(likes).toInt(),
+                )
+            }
+        }
+
+        /** How many players' latest answer to the row's question is [side]. */
+        private fun votesFor(side: OptionSide): Expression<Long?> =
+            wrapAsExpression(
+                Votes
+                    .select(Votes.playerId.count())
+                    .where { (Votes.questionId eq Questions.id) and (Votes.side eq side.name) },
+            )
+
+        /** A `COUNT` subquery's value. It always yields one row, so it is never null. */
+        private fun ResultRow.countOf(expression: Expression<Long?>): Long =
+            checkNotNull(this[expression]) { "a COUNT subquery came back null" }
+
+        private companion object {
+            /** What [toAdminQuestions] reads of a question's own row. */
+            val ADMIN_COLUMNS: List<Expression<*>> =
+                listOf(
+                    Questions.id,
+                    Questions.optionA,
+                    Questions.optionB,
+                    Questions.authorPlayerId,
+                    Questions.status,
+                    Questions.submittedAt,
+                    Questions.reviewedAt,
+                    Questions.rejectionReason,
+                )
+        }
     }
 }

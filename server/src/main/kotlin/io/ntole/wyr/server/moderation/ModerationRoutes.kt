@@ -16,6 +16,7 @@ import io.ntole.wyr.server.plugins.RouteLimit
 import io.ntole.wyr.server.plugins.pageLimit
 import io.ntole.wyr.server.plugins.rateLimit
 import io.ntole.wyr.server.plugins.receiveOrReject
+import io.ntole.wyr.server.question.categoryFilter
 
 /**
  * The moderator's routes (CLAUDE.md §8d, *Moderation*). The moderator is whoever holds the server's
@@ -62,20 +63,49 @@ fun Route.moderationRoutes(
 
                 call.respond(db.query { ModerationStore.reject(rejection.questionId, rejection.reason) })
             }
+
+            get(WyrApi.Paths.ADMIN_QUESTIONS) {
+                call.requireAdmin(adminToken)
+                val params = call.request.queryParameters
+
+                val statuses = params.statuses()
+                val categories = params.categoryFilter()
+                val after = params.cursor()
+                val limit = params.pageLimit()
+
+                call.respond(db.query { ModerationStore.questions(statuses, categories, after, limit) })
+            }
         }
     }
 }
 
 /**
- * The status the queue is asked for, [QuestionStatus.PENDING] when none is. [QuestionStatus.UNKNOWN]
- * is the client's decoding fallback and never stored, so listing it would always answer an empty
- * list, and it is refused as a status that is not a status at all is, as for the feed's category.
- * So is a second value, rather than one of the two picked.
+ * The status the queue is asked for, [QuestionStatus.PENDING] when none is, refused as [statusNamed]
+ * refuses one. So is a second value, rather than one of the two picked.
  */
 private fun Parameters.status(): QuestionStatus {
     val named = getAll(WyrApi.Query.STATUS).orEmpty()
     if (named.size > 1) throw ApiFailure.validation("one status at a time: $named")
     val raw = named.singleOrNull() ?: return QuestionStatus.PENDING
-    return QuestionStatus.entries.firstOrNull { it.name == raw && it != QuestionStatus.UNKNOWN }
+    return statusNamed(raw)
+}
+
+/** The statuses the question list is asked for, one per repeat of the parameter, none for every one. */
+private fun Parameters.statuses(): Set<QuestionStatus> =
+    getAll(WyrApi.Query.STATUS).orEmpty().map(::statusNamed).toSet()
+
+/**
+ * The status [raw] names. [QuestionStatus.UNKNOWN] is the client's decoding fallback and never stored,
+ * so listing it would always answer an empty list, and it is refused as a status that is not a status
+ * at all is, as for the feed's category.
+ */
+private fun statusNamed(raw: String): QuestionStatus =
+    QuestionStatus.entries.firstOrNull { it.name == raw && it != QuestionStatus.UNKNOWN }
         ?: throw ApiFailure.validation("unknown status: $raw")
+
+/** Where the page asked for starts, if not at the first question: given at most once, as it was sent. */
+private fun Parameters.cursor(): QuestionCursor? {
+    val sent = getAll(WyrApi.Query.CURSOR).orEmpty()
+    if (sent.size > 1) throw ApiFailure.validation("one cursor at a time")
+    return sent.singleOrNull()?.let(QuestionCursor::parse)
 }
