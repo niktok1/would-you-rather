@@ -6,33 +6,42 @@ import io.ktor.client.engine.mock.respond
 import io.ktor.client.engine.mock.toByteArray
 import io.ktor.client.request.HttpRequestData
 import io.ktor.client.request.HttpResponseData
+import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
+import io.ktor.http.HttpMethod
 import io.ktor.http.HttpStatusCode
+import io.ktor.http.headersOf
 import io.ntole.wyr.core.api.WyrApi
 import io.ntole.wyr.core.auth.RefreshRequest
 import io.ntole.wyr.core.auth.SessionDto
 import io.ntole.wyr.core.error.ErrorCode
+import io.ntole.wyr.core.error.ErrorDto
 import io.ntole.wyr.core.network.WyrJson
 import io.ntole.wyr.core.player.PlayerStatsDto
 import io.ntole.wyr.core.question.QuestionCategory
 import io.ntole.wyr.core.question.QuestionDto
 import io.ntole.wyr.core.question.QuestionPageDto
+import io.ntole.wyr.core.question.QuestionStatus
 import io.ntole.wyr.core.question.SkipRequest
+import io.ntole.wyr.core.question.SubmissionDto
+import io.ntole.wyr.core.question.SubmissionListDto
+import io.ntole.wyr.core.question.SubmitQuestionRequest
 import io.ntole.wyr.core.vote.VoteRequest
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
 /**
  * Just enough of the server, behind a [MockEngine], to put session recovery through the real
- * client: it mints guests, rotates refresh tokens, and rejects a feed request, a vote, a skip or a
- * stats read from a player it does not know — the state after a dev server restarts with an empty
- * database.
+ * client: it mints guests, rotates refresh tokens, and rejects a feed request, a vote, a skip, a
+ * stats read, a submission or a read of the author's submissions from a player it does not know —
+ * the state after a dev server restarts with an empty database.
  */
 internal class FakeServer {
     private val lock = Mutex()
     private val players = mutableSetOf<String>()
     private val liveRefreshTokens = mutableMapOf<String, String>()
     private var rotations = 0
+    private var submissionsAnswered = 0
 
     /** When set, every vote is refused with this status and code, whoever sends it. */
     var refuseVotesWith: Pair<HttpStatusCode, ErrorCode>? = null
@@ -58,6 +67,15 @@ internal class FakeServer {
     /** The `Authorization` header and question id of every skip, in arrival order. */
     val skipsSentAs = mutableListOf<Pair<String?, String>>()
 
+    /** When set, every submission is refused with this status and error, whoever sends it. */
+    var refuseSubmissionsWith: Pair<HttpStatusCode, ErrorDto>? = null
+
+    /** The `Authorization` header and body of every submission, in arrival order. */
+    val submissionsSentAs = mutableListOf<Pair<String?, SubmitQuestionRequest>>()
+
+    /** The `Authorization` header of every read of the author's submissions, in arrival order. */
+    val submissionListsSentAs = mutableListOf<String?>()
+
     val engine = MockEngine { request -> lock.withLock { handle(request) } }
 
     private suspend fun MockRequestHandleScope.handle(request: HttpRequestData): HttpResponseData =
@@ -79,10 +97,24 @@ internal class FakeServer {
             }
 
             WyrApi.Paths.QUESTIONS -> {
+                if (request.method == HttpMethod.Post) {
+                    submit(request)
+                } else {
+                    val authorization = request.headers[HttpHeaders.Authorization]
+                    feedsSentAs += authorization
+                    if (authorization?.removePrefix("Bearer access-") in players) {
+                        respondJson(WyrJson.encodeToString(BATCH))
+                    } else {
+                        respondErrorDto(HttpStatusCode.Unauthorized, ErrorCode.UNAUTHORIZED)
+                    }
+                }
+            }
+
+            WyrApi.Paths.MY_QUESTIONS -> {
                 val authorization = request.headers[HttpHeaders.Authorization]
-                feedsSentAs += authorization
+                submissionListsSentAs += authorization
                 if (authorization?.removePrefix("Bearer access-") in players) {
-                    respondJson(WyrJson.encodeToString(BATCH))
+                    respondJson(WyrJson.encodeToString(SUBMISSIONS))
                 } else {
                     respondErrorDto(HttpStatusCode.Unauthorized, ErrorCode.UNAUTHORIZED)
                 }
@@ -131,6 +163,37 @@ internal class FakeServer {
             }
         }
 
+    /** Stores nothing: answers a known player's submission as pending, exactly as it was sent. */
+    private suspend fun MockRequestHandleScope.submit(request: HttpRequestData): HttpResponseData {
+        val authorization = request.headers[HttpHeaders.Authorization]
+        val submission = WyrJson.decodeFromString<SubmitQuestionRequest>(request.body.toByteArray().decodeToString())
+        submissionsSentAs += authorization to submission
+        val refusal = refuseSubmissionsWith
+        return when {
+            refusal != null -> {
+                respond(WyrJson.encodeToString(refusal.second), refusal.first, JSON_HEADERS)
+            }
+
+            authorization?.removePrefix("Bearer access-") !in players -> {
+                respondErrorDto(HttpStatusCode.Unauthorized, ErrorCode.UNAUTHORIZED)
+            }
+
+            else -> {
+                submissionsAnswered++
+                val stored =
+                    SubmissionDto(
+                        id = "s$submissionsAnswered",
+                        optionA = submission.optionA,
+                        optionB = submission.optionB,
+                        categories = submission.categories,
+                        status = QuestionStatus.PENDING,
+                        submittedAt = SUBMITTED_AT,
+                    )
+                respond(WyrJson.encodeToString(stored), HttpStatusCode.Created, JSON_HEADERS)
+            }
+        }
+    }
+
     private fun MockRequestHandleScope.issueSession(playerId: String): HttpResponseData {
         players += playerId
         val refreshToken = "refresh-$playerId-${rotations++}"
@@ -146,6 +209,35 @@ internal class FakeServer {
     }
 
     companion object {
+        private val JSON_HEADERS = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString())
+
+        /** When the server says it stored every submission, in epoch milliseconds. */
+        const val SUBMITTED_AT = 1_790_000_000_000L
+
+        /** What a read of the author's submissions answers every known player, newest first. */
+        val SUBMISSIONS =
+            SubmissionListDto(
+                listOf(
+                    SubmissionDto(
+                        id = "s2",
+                        optionA = "s2-a",
+                        optionB = "s2-b",
+                        categories = listOf(QuestionCategory.ETHICS),
+                        status = QuestionStatus.REJECTED,
+                        rejectionReason = "a duplicate",
+                        submittedAt = SUBMITTED_AT + 1,
+                    ),
+                    SubmissionDto(
+                        id = "s1",
+                        optionA = "s1-a",
+                        optionB = "s1-b",
+                        categories = listOf(QuestionCategory.FOOD, QuestionCategory.RANDOM),
+                        status = QuestionStatus.PENDING,
+                        submittedAt = SUBMITTED_AT,
+                    ),
+                ),
+            )
+
         /** What the feed serves every known player. */
         val BATCH =
             QuestionPageDto(
