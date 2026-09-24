@@ -341,6 +341,14 @@ accounts exist.
   The other option is to allow both by id, paying as any answer does, although the feed never
   serves the question to its author. Only a vote by id can reach it (the console's *Vote by id*).
   `ServableQuestionsTest` pins what is built.
+- **Retrying a submission** — *user decision, before the client can resend one.* A vote carries an
+  attempt id (§8d, *Retry safety*); a submission does not. So one sent again after its response
+  was lost is stored twice, both pending, and the copy holds one of the author's 20 places until a
+  moderator decides it. Nothing resends a submission today: `withSessionRecovery` retries only
+  after a 401, which stored nothing. The options: keep it, leaving duplicates to moderation; add an
+  optional client-made `attemptId` to `SubmitQuestionRequest`, unique per author, with a repeat
+  answered as the stored submission; or refuse a submission whose options match one of the
+  author's pending ones. An `attemptId` can be added later with a default, so no client breaks.
 - **Rate limiting** — `ErrorCode.RATE_LIMITED` exists on the wire and nothing emits it yet.
   Until something limits votes, points can be farmed: the server pays a new attempt on an answered
   question at once, without checking that it is due again (§8d, re-answering), so a script
