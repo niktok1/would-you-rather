@@ -38,7 +38,6 @@ import kotlin.time.TimeSource
  */
 class DevConsoleViewModel(
     environment: WyrEnvironment,
-    apiBaseUrl: String,
     private val sessions: SessionRepository,
     private val diagnostics: SessionDiagnostics,
     private val questions: QuestionRepository,
@@ -51,7 +50,7 @@ class DevConsoleViewModel(
     httpTrace: HttpTrace,
     private val timeSource: TimeSource = TimeSource.Monotonic,
 ) : ViewModel() {
-    private val _state = MutableStateFlow(DevConsoleState(environment = environment, apiBaseUrl = apiBaseUrl))
+    private val _state = MutableStateFlow(DevConsoleState(environment = environment))
     val state: StateFlow<DevConsoleState> = _state.asStateFlow()
 
     /** Plain data from the network layer, never a DTO, so it is passed through untouched. */

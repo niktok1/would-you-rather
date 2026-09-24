@@ -10,7 +10,6 @@ import org.koin.core.context.startKoin
 import org.koin.core.module.Module
 import org.koin.core.module.dsl.viewModel
 import org.koin.core.module.dsl.viewModelOf
-import org.koin.core.qualifier.named
 import org.koin.dsl.KoinAppDeclaration
 import org.koin.dsl.module
 
@@ -28,11 +27,10 @@ internal val uiModule =
             )
         }
 
-        // Not viewModelOf: the base URL is a plain String, found only by its qualifier.
+        // Not viewModelOf: the time source is a default, not a binding.
         viewModel {
             DevConsoleViewModel(
                 environment = get(),
-                apiBaseUrl = get(named(API_BASE_URL)),
                 sessions = get(),
                 diagnostics = get(),
                 questions = get(),
@@ -75,28 +73,22 @@ fun initKoin(
     appDeclaration: KoinAppDeclaration = {},
 ) {
     val environment = WyrEnvironment.parse(environmentName)
-    val apiBaseUrl = platformApiBaseUrl(environment)
     startKoin {
         appDeclaration()
         modules(platformModule())
-        modules(appModules(environment, apiBaseUrl))
+        modules(appModules(environment))
     }
 }
 
 /**
- * Every module but the platform's, for [environment] reached at [apiBaseUrl], which is the
- * environment's own URL unless the platform put another in its place ([platformApiBaseUrl]).
- * Internal, not private, so a test can load them as [initKoin] does.
+ * Every module but the platform's, for [environment]: the data module sends every request to its
+ * URL, and the environment is bound for the screens that show it. Nothing can put another URL in its
+ * place, so what the console shows is where requests go. Internal, not private, so a test can load
+ * them as [initKoin] does.
  */
-internal fun appModules(
-    environment: WyrEnvironment,
-    apiBaseUrl: String,
-): List<Module> =
+internal fun appModules(environment: WyrEnvironment): List<Module> =
     listOf(
-        module {
-            single { environment }
-            single(named(API_BASE_URL)) { apiBaseUrl }
-        },
-        dataModule(environment, apiBaseUrl),
+        module { single { environment } },
+        dataModule(environment),
         uiModule,
     )

@@ -50,18 +50,17 @@ import org.koin.dsl.module
  * Expects a [TokenStorage] to already be registered — that is the one binding only a platform
  * can supply, so it comes from `:app:shared`'s platform module.
  *
- * @param environment the server environment the build targets, whose session is kept apart from
- *   every other environment's in that storage ([SessionStore]).
- * @param baseUrl root URL of the API, including scheme.
+ * @param environment the server environment the build targets: every request goes to its
+ *   [WyrEnvironment.apiBaseUrl], and its session is kept apart from every other environment's in
+ *   that storage ([SessionStore]).
  */
-public fun dataModule(
-    environment: WyrEnvironment,
-    baseUrl: String,
-): Module =
+public fun dataModule(environment: WyrEnvironment): Module =
     module {
         single { SessionStore(get<TokenStorage>(), environment) }
         single { HttpTrace() }
-        single<HttpClient> { WyrHttpClient.create(baseUrl = baseUrl, sessionStore = get(), trace = get()) }
+        single<HttpClient> {
+            WyrHttpClient.create(baseUrl = environment.apiBaseUrl, sessionStore = get(), trace = get())
+        }
 
         single { AuthApi(get()) }
         single { QuestionApi(get()) }

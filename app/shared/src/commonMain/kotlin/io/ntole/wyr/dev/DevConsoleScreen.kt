@@ -216,7 +216,7 @@ private fun Header(state: DevConsoleState) {
         Text("Dev console", style = MaterialTheme.typography.headlineSmall)
         // First, so which server this build talks to is never in doubt (CLAUDE.md §8e).
         Value("environment", state.environment.displayName)
-        Value("api", state.apiBaseUrl)
+        Value("api", state.environment.apiBaseUrl)
         Value("player", state.session?.playerId ?: "no session")
         Value("token expires", tokenExpiry(state.session))
         Value("total points", state.lastOutcome?.totalPoints?.toString() ?: "no vote yet")

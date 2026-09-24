@@ -870,7 +870,9 @@ name one too.
   `dev` and `prod` are https only. `dev` is Android Studio's default variant, since a physical phone
   cannot reach LOCAL. `assembleDebug` builds all three.
 - *Desktop*: the `WYR_ENV` environment variable, read by `Main.kt`; unset is LOCAL.
-  `WYR_API_BASE_URL` still wins over the environment's URL, validated as before (`desktopApiBaseUrl`).
+  `WYR_API_BASE_URL`, which pointed the desktop client at any server, is retired: left set in a shell,
+  it sent a PROD build's requests wherever it named, with nothing on screen to say so, since a PROD
+  build has no console. No client can put another URL in its environment's place.
 - *Web*: the Gradle property `wyr.env` (`-Pwyr.env=dev`), local when absent, which `:app:webApp`'s
   `generateWyrEnv` task writes into a Kotlin constant under `build/generated`; a name it does not know
   fails the build. A web build against DEV or PROD also needs that server's `ALLOWED_WEB_ORIGINS`
@@ -878,8 +880,9 @@ name one too.
 - *iOS*: the `WYR_ENV` build setting in `app/iosApp/Configuration/Config.xcconfig` (`local` by
   default). `Info.plist` carries it as its `WYR_ENV` key (`$(WYR_ENV)`), and `MainViewController`
   reads that from the main bundle; a missing key is LOCAL.
-- *In the app.* Koin binds the environment beside the base URL in use (`appModules`), and the dev
-  console's header shows both. The console tab is shown only where the environment shows developer
+- *In the app.* Koin binds the environment (`appModules`), and `dataModule` sends every request to
+  that same environment's URL, so the dev console's header, which shows its name and URL, always says
+  where requests go. The console tab is shown only where the environment shows developer
   tools (`rootScreensFor`): a PROD build shows the Play screen alone, with no tab to reach the console.
 - *A session per environment.* Each environment's guest session is stored under a key of its own
   (`SessionStore.keyFor`: `wyr.session.local`, `wyr.session.dev`, and `wyr.session` for PROD, the key

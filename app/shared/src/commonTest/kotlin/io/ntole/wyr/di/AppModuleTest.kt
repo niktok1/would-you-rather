@@ -16,7 +16,6 @@ import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.koin.core.Koin
-import org.koin.core.qualifier.named
 import org.koin.dsl.koinApplication
 import org.koin.dsl.module
 import org.koin.mp.KoinPlatform
@@ -48,7 +47,7 @@ class AppModuleTest {
 
     @Test
     fun `every ViewModel resolves from the real modules`() {
-        val koin = koinFor(WyrEnvironment.LOCAL, WyrEnvironment.LOCAL.apiBaseUrl)
+        val koin = koinFor(WyrEnvironment.LOCAL)
 
         koin.get<PlayViewModel>()
         koin.get<ModerationConsoleViewModel>()
@@ -57,35 +56,22 @@ class AppModuleTest {
     }
 
     @Test
-    fun `each environment is wired to its own URL`() {
+    fun `each environment is the one the console shows`() {
         WyrEnvironment.entries.forEach { environment ->
-            val koin = koinFor(environment, environment.apiBaseUrl)
+            val koin = koinFor(environment)
 
             assertEquals(environment, koin.get<WyrEnvironment>())
-            assertEquals(environment.apiBaseUrl, koin.get<String>(named(API_BASE_URL)), environment.name)
             val console = koin.get<DevConsoleViewModel>().state.value
             assertEquals(environment, console.environment)
-            assertEquals(environment.apiBaseUrl, console.apiBaseUrl)
         }
-    }
-
-    @Test
-    fun `a URL the platform puts in the environment's place is the one wired`() {
-        val koin = koinFor(WyrEnvironment.DEV, OVERRIDE)
-
-        assertEquals(WyrEnvironment.DEV, koin.get<WyrEnvironment>())
-        assertEquals(OVERRIDE, koin.get<String>(named(API_BASE_URL)))
-        val console = koin.get<DevConsoleViewModel>().state.value
-        assertEquals(WyrEnvironment.DEV, console.environment)
-        assertEquals(OVERRIDE, console.apiBaseUrl)
     }
 
     @Test
     fun `each environment keeps its own session in the storage the platform shares between them`() =
         runTest {
             val storage = InMemoryTokenStorage()
-            val dev = koinFor(WyrEnvironment.DEV, WyrEnvironment.DEV.apiBaseUrl, storage).get<SessionStore>()
-            val prod = koinFor(WyrEnvironment.PROD, WyrEnvironment.PROD.apiBaseUrl, storage).get<SessionStore>()
+            val dev = koinFor(WyrEnvironment.DEV, storage).get<SessionStore>()
+            val prod = koinFor(WyrEnvironment.PROD, storage).get<SessionStore>()
 
             dev.write(DEV_SESSION)
 
@@ -103,16 +89,13 @@ class AppModuleTest {
 
     private fun koinFor(
         environment: WyrEnvironment,
-        apiBaseUrl: String,
         storage: TokenStorage = InMemoryTokenStorage(),
     ): Koin {
         val platform = module { single<TokenStorage> { storage } }
-        return koinApplication { modules(listOf(platform) + appModules(environment, apiBaseUrl)) }.koin
+        return koinApplication { modules(listOf(platform) + appModules(environment)) }.koin
     }
 
     private companion object {
-        const val OVERRIDE = "https://wyr.example.com"
-
         val DEV_SESSION =
             SessionDto(
                 playerId = "dev-player",

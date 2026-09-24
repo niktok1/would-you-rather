@@ -67,11 +67,8 @@ class DevConsoleViewModelTest {
     }
 
     @Test
-    fun `the header names the environment and the URL it is reached at`() {
-        val state = viewModel().state.value
-
-        assertEquals(WyrEnvironment.DEV, state.environment)
-        assertEquals(WyrEnvironment.DEV.apiBaseUrl, state.apiBaseUrl)
+    fun `the header names the environment it is given`() {
+        assertEquals(WyrEnvironment.DEV, viewModel().state.value.environment)
     }
 
     @Test
@@ -1168,7 +1165,6 @@ class DevConsoleViewModelTest {
     private fun viewModel() =
         DevConsoleViewModel(
             environment = WyrEnvironment.DEV,
-            apiBaseUrl = WyrEnvironment.DEV.apiBaseUrl,
             sessions = sessions,
             diagnostics = diagnostics,
             questions = questions,

@@ -377,20 +377,11 @@ Server first, then a client. The server defaults to in-memory H2 and logs a warn
 Android uses `http://10.0.2.2:8080` (the emulator's alias for the host loopback); desktop, iOS
 simulator, and web use `http://localhost:8080`. All four are `WyrEnvironment.LOCAL`'s, which a build
 targets unless it names another environment (below); on Android that is the `localDebug` variant, not
-the default. The **desktop** client takes another server from
-`WYR_API_BASE_URL`, read by its platform module (`PlatformModule.jvm.kt`), so it can be pointed at a
-deployed server or another machine; `./gradlew` passes the variable on to the app:
-
-```bash
-WYR_API_BASE_URL=https://<service>.onrender.com ./gradlew :app:desktopApp:run
-```
-
-It is trimmed, blank counts as unset, and it must be an http or https URL of a host, a port
-allowed, with no path, query or fragment (every route is an absolute path, so a path would be
-dropped silently). Anything else stops the app at start with a message naming the variable. The
-console's header shows the `api` in use. For the **web** client the server also needs
-`ALLOWED_WEB_ORIGINS` set or CORS preflight will reject every request. The page's dev server
-takes the first free port from 8080, so with the API already there it serves on 8081:
+the default. The console's header shows the environment and the `api` in use. `WYR_API_BASE_URL`,
+which pointed the desktop client at any server, is retired (CLAUDE.md §8e): name an environment
+instead (below). For the **web** client the server also needs `ALLOWED_WEB_ORIGINS` set or CORS
+preflight will reject every request. The page's dev server takes the first free port from 8080, so
+with the API already there it serves on 8081:
 
 ```bash
 ALLOWED_WEB_ORIGINS=localhost:8081 ./gradlew :server:run
@@ -413,7 +404,7 @@ loses neither.
   phone can reach dev and not the developer's machine. `localDebug` is for the emulator against
   `./gradlew :server:run`, `prodDebug` for production. They install side by side as *WYR Local*,
   *WYR Dev* and *WYR*. From the command line: `./gradlew :app:androidApp:installDevDebug`.
-- **Desktop**: the `WYR_ENV` variable (`WYR_API_BASE_URL` still wins over it):
+- **Desktop**: the `WYR_ENV` variable, which `./gradlew` passes on to the app:
 
   ```bash
   WYR_ENV=dev ./gradlew :app:desktopApp:run

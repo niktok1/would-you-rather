@@ -24,10 +24,8 @@ import io.ntole.wyr.core.network.environment.WyrEnvironment
  * only when they fail, as a `refreshStats` entry.
  */
 data class DevConsoleState(
-    /** The server environment this build was made for (CLAUDE.md §8e). */
+    /** The server environment this build was made for, whose URL every request goes to (CLAUDE.md §8e). */
     val environment: WyrEnvironment,
-    /** Where requests go: [environment]'s own URL, unless the platform put another in its place. */
-    val apiBaseUrl: String,
     val session: SessionInfo? = null,
     val queueSize: Int? = null,
     /**

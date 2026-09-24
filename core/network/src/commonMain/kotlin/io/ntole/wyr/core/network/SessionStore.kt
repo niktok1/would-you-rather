@@ -40,7 +40,7 @@ public class SessionStore(
     internal companion object {
         /**
          * The key [environment]'s session is stored under. PROD keeps the one every build used before
-         * there were environments, so a production guest a desktop saved then, through
+         * there were environments, so a production guest a desktop saved then, through the retired
          * `WYR_API_BASE_URL`, is found where it was; the others each get their own.
          */
         fun keyFor(environment: WyrEnvironment): String =
