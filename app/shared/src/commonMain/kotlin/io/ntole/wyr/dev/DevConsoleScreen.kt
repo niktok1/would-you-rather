@@ -11,6 +11,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.LocalContentColor
@@ -26,6 +27,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
+import io.ntole.wyr.core.domain.question.Category
 import io.ntole.wyr.core.domain.session.SessionInfo
 import io.ntole.wyr.core.domain.vote.Side
 import io.ntole.wyr.core.domain.vote.VoteOutcome
@@ -54,6 +56,7 @@ fun DevConsoleScreen(
     onRetryLastVote: () -> Unit,
     onAnswerMany: (count: Int) -> Unit,
     onReadStats: () -> Unit,
+    onSelectCategory: (Category?) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val dimens = WyrThemeAccessors.dimens
@@ -136,6 +139,20 @@ fun DevConsoleScreen(
                 Buttons {
                     Button(onClick = onNextQuestion, enabled = idle) { Text("Next question") }
                     OutlinedButton(onClick = onResetQueue, enabled = idle) { Text("Reset queue") }
+                }
+            }
+
+            Section("Category") {
+                Value("feed filtered to", state.category?.name ?: "every category")
+                Buttons {
+                    DevConsoleViewModel.CATEGORY_CHOICES.forEach { category ->
+                        FilterChip(
+                            selected = category == state.category,
+                            onClick = { onSelectCategory(category) },
+                            label = { Text(category?.name ?: "All") },
+                            enabled = idle,
+                        )
+                    }
                 }
             }
 

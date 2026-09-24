@@ -2,6 +2,7 @@ package io.ntole.wyr.dev
 
 import io.ntole.wyr.core.domain.error.DomainError
 import io.ntole.wyr.core.domain.player.PlayerStats
+import io.ntole.wyr.core.domain.question.Category
 import io.ntole.wyr.core.domain.question.Question
 import io.ntole.wyr.core.domain.session.SessionInfo
 import io.ntole.wyr.core.domain.vote.AttemptId
@@ -25,6 +26,11 @@ data class DevConsoleState(
     val apiBaseUrl: String,
     val session: SessionInfo? = null,
     val queueSize: Int? = null,
+    /**
+     * The category the feed is filtered to, `null` for every category. Followed as the repository
+     * holds it rather than taken as a snapshot, so it always says what the next fetch asks for.
+     */
+    val category: Category? = null,
     val question: Question? = null,
     val lastOutcome: VoteOutcome? = null,
     /**

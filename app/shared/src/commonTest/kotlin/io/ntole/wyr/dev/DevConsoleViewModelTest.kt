@@ -195,6 +195,94 @@ class DevConsoleViewModelTest {
         }
 
     @Test
+    fun `the Category row offers every category and then each one but OTHER`() {
+        assertEquals(
+            listOf(null, Category.FOOD, Category.LIFESTYLE, Category.ETHICS, Category.SUPERPOWERS, Category.RANDOM),
+            DevConsoleViewModel.CATEGORY_CHOICES,
+        )
+    }
+
+    @Test
+    fun `selecting a category switches the feed then loads a question from it`() =
+        runTest(dispatcher) {
+            val viewModel = openConsole()
+            questions.next = { QUESTION.copy(id = "f1", category = Category.FOOD) }
+
+            viewModel.selectCategory(Category.FOOD)
+            testScheduler.advanceUntilIdle()
+
+            // Switched first, so the question loaded is the new selection's.
+            assertEquals(listOf("setCategory FOOD", "ensure", "next"), calls)
+            val state = viewModel.state.value
+            assertEquals(Category.FOOD, state.category)
+            assertEquals("f1", state.question?.id)
+            val entry = LogEntry("selectCategory", "category=FOOD", 0, LogResult.Ok("question=f1"))
+            assertEquals(entry, state.log.single())
+        }
+
+    @Test
+    fun `selecting All lifts the filter`() =
+        runTest(dispatcher) {
+            val viewModel = openConsole()
+            viewModel.selectCategory(Category.FOOD)
+            testScheduler.advanceUntilIdle()
+            calls.clear()
+
+            viewModel.selectCategory(null)
+            testScheduler.advanceUntilIdle()
+
+            assertEquals(listOf("setCategory null", "ensure", "next"), calls)
+            assertEquals(null, viewModel.state.value.category)
+            assertEquals("category=all", viewModel.log.first().args)
+        }
+
+    @Test
+    fun `the Category row shows the selection the repository holds`() =
+        runTest(dispatcher) {
+            // The repository outlives the console, so it can open on a feed already filtered.
+            questions.category.value = Category.ETHICS
+            val viewModel = openConsole()
+            assertEquals(Category.ETHICS, viewModel.state.value.category)
+
+            questions.category.value = Category.RANDOM
+            testScheduler.advanceUntilIdle()
+
+            assertEquals(Category.RANDOM, viewModel.state.value.category)
+        }
+
+    @Test
+    fun `New guest keeps the category selected`() =
+        runTest(dispatcher) {
+            val viewModel = openConsole()
+            viewModel.selectCategory(Category.FOOD)
+            testScheduler.advanceUntilIdle()
+            calls.clear()
+
+            viewModel.newGuest()
+            testScheduler.advanceUntilIdle()
+
+            assertEquals(emptyList(), calls.filter { it.startsWith("setCategory") })
+            assertEquals(Category.FOOD, viewModel.state.value.category)
+        }
+
+    @Test
+    fun `a category with nothing to serve is still selected and its failure logged`() =
+        runTest(dispatcher) {
+            val viewModel = openConsole()
+            questions.next = { throw WyrException(DomainError.OUT_OF_QUESTIONS, "server returned no questions") }
+
+            viewModel.selectCategory(Category.RANDOM)
+            testScheduler.advanceUntilIdle()
+
+            assertEquals(Category.RANDOM, viewModel.state.value.category)
+            assertEquals(
+                LogResult.Err(DomainError.OUT_OF_QUESTIONS, "server returned no questions"),
+                viewModel.onlyResult(),
+            )
+            assertFalse(viewModel.state.value.isBusy)
+        }
+
+    @Test
     fun `Skip records the skip then loads the next question then reads the stats`() =
         runTest(dispatcher) {
             val viewModel = openConsole()
