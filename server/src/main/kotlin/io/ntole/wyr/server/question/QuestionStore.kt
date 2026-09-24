@@ -192,7 +192,7 @@ object QuestionStore {
      *
      * A plain read that a vote or a skip then writes after, and safe without a lock because a
      * question only ever becomes servable, never stops being so: nothing deletes a question, and a
-     * moderator decides only a pending one (§8d). A way to withdraw an
+     * moderator decides only a pending one (§8d, `ModerationStore.decide`). A way to withdraw an
      * approved question would end that, and the read would then have to lock the question's row.
      */
     fun isServable(id: String): Boolean =

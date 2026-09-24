@@ -31,6 +31,10 @@ class ApiFailure(
         fun submissionLimit(limit: Int) =
             ApiFailure(HttpStatusCode.Conflict, ErrorCode.SUBMISSION_LIMIT, "already $limit submissions pending")
 
+        /** A moderator's decision on a question that is no longer, or never was, pending. */
+        fun alreadyDecided(id: String) =
+            ApiFailure(HttpStatusCode.Conflict, ErrorCode.ALREADY_DECIDED, "question $id is not pending")
+
         fun unauthorized(message: String = "missing or invalid credentials") =
             ApiFailure(HttpStatusCode.Unauthorized, ErrorCode.UNAUTHORIZED, message)
 

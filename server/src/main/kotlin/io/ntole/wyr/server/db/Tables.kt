@@ -60,8 +60,9 @@ object Questions : Table("questions") {
      *
      * Read strictly, unlike a category ([QuestionCategories.category]): a name this build has no
      * [QuestionStatus] for fails the read, and with it the author's whole list
-     * (`SubmissionStore.byAuthor`) as a 500. Everything else, the feed and the pending count
-     * included, only compares it in SQL and still works. That is deliberate: no status this build
+     * (`SubmissionStore.byAuthor`) as a 500. Everything else, the feed, the pending count and the
+     * moderator's queue included, only compares it in SQL and still works: the queue reads only rows
+     * at the status it asks for (`ModerationStore.queue`). That is deliberate: no status this build
      * knows could stand in truthfully for one it does not, as RANDOM does for a category, and UNKNOWN
      * is never sent. So a new status is a migration (CLAUDE.md §8b), although no column changes: no
      * build may write it until the build a rollback would return to can read it.
@@ -74,10 +75,16 @@ object Questions : Table("questions") {
      */
     val submittedAt = long("submitted_at")
 
-    /** When a moderator approved or rejected the question, or null while none has. A seed never was. */
+    /**
+     * When a moderator approved or rejected the question, or null while none has. A seed never was.
+     * Only a decision ever sets it (`ModerationStore.decide`).
+     */
     val reviewedAt = long("reviewed_at").nullable()
 
-    /** The moderator's short reason for rejecting the question, or null for any other. */
+    /**
+     * The moderator's short reason for rejecting the question, or null for any other. Only a
+     * rejection ever sets it (`ModerationStore.decide`), and an approval clears it.
+     */
     val rejectionReason = varchar("rejection_reason", WyrApi.Limits.MAX_REJECTION_REASON_LENGTH).nullable()
 
     override val primaryKey = PrimaryKey(id)
@@ -86,6 +93,9 @@ object Questions : Table("questions") {
         // For an author's own questions: the pending ones every submission counts, and the list of
         // all of them. PostgreSQL does not index a foreign key by itself.
         index(isUnique = false, authorPlayerId, status)
+        // For the moderator's queue: the questions at one status, oldest first, which is every
+        // player's, so the index above cannot find them in order.
+        index(isUnique = false, status, submittedAt, id)
     }
 }
 
