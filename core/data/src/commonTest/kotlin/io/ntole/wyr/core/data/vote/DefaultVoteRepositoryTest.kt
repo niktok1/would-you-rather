@@ -79,6 +79,35 @@ class DefaultVoteRepositoryTest {
         }
 
     @Test
+    fun `a rate-limited vote is sent once and leaves the session alone`() =
+        runTest {
+            server.refuseVotesWith = HttpStatusCode.TooManyRequests to ErrorCode.RATE_LIMITED
+
+            val failure = assertFailsWith<WyrException> { votes.cast("q1", Side.A, AttemptId.random()) }
+
+            assertEquals(DomainError.RATE_LIMITED, failure.error)
+            assertEquals(1, server.votesSentAs.size, "nothing resends a refused vote")
+            assertEquals(0, server.guestsMinted)
+            assertEquals(session("a"), store.read())
+        }
+
+    @Test
+    fun `a rate-limited refresh keeps the session and mints no guest in its place`() =
+        runTest {
+            // The vote is refused as a dead access token, and the refresh it sets off is refused for
+            // the rate. That is no verdict on the session: minting a guest would orphan the player.
+            server.refuseRefreshesWith = HttpStatusCode.TooManyRequests to ErrorCode.RATE_LIMITED
+
+            val failure = assertFailsWith<WyrException> { votes.cast("q1", Side.A, AttemptId.random()) }
+
+            assertEquals(DomainError.RATE_LIMITED, failure.error)
+            assertEquals(1, server.refreshesSent)
+            assertEquals(1, server.votesSentAs.size, "the vote is not retried")
+            assertEquals(0, server.guestsMinted)
+            assertEquals(session("a"), store.read(), "the refresh token the server did not rotate is kept")
+        }
+
+    @Test
     fun `any other failure leaves the session alone`() =
         runTest {
             server.refuseVotesWith = HttpStatusCode.Conflict to ErrorCode.ALREADY_VOTED

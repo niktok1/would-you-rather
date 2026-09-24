@@ -55,6 +55,13 @@ internal class FakeServer {
     var guestsMinted = 0
         private set
 
+    /** When set, every refresh is refused with this status and code, and rotates nothing. */
+    var refuseRefreshesWith: Pair<HttpStatusCode, ErrorCode>? = null
+
+    /** How many refreshes arrived, refused or not. */
+    var refreshesSent = 0
+        private set
+
     /** The `Authorization` header of every vote, in arrival order. */
     val votesSentAs = mutableListOf<String?>()
 
@@ -104,13 +111,15 @@ internal class FakeServer {
             }
 
             WyrApi.Paths.AUTH_REFRESH -> {
+                refreshesSent++
                 val token = WyrJson.decodeFromString<RefreshRequest>(request.body.toByteArray().decodeToString())
+                val refusal = refuseRefreshesWith
                 // Rotation: a refresh token works once.
-                val player = liveRefreshTokens.remove(token.refreshToken)
-                if (player == null) {
-                    respondErrorDto(HttpStatusCode.Unauthorized, ErrorCode.INVALID_REFRESH_TOKEN)
-                } else {
-                    issueSession(player)
+                val player = if (refusal == null) liveRefreshTokens.remove(token.refreshToken) else null
+                when {
+                    refusal != null -> respondErrorDto(refusal.first, refusal.second)
+                    player == null -> respondErrorDto(HttpStatusCode.Unauthorized, ErrorCode.INVALID_REFRESH_TOKEN)
+                    else -> issueSession(player)
                 }
             }
 

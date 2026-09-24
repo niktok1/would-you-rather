@@ -17,7 +17,9 @@ import io.ntole.wyr.core.data.storeHolding
 import io.ntole.wyr.core.domain.error.DomainError
 import io.ntole.wyr.core.domain.error.WyrException
 import io.ntole.wyr.core.error.ErrorCode
+import io.ntole.wyr.core.error.ErrorDto
 import io.ntole.wyr.core.network.WyrHttpClient
+import io.ntole.wyr.core.network.WyrJson
 import io.ntole.wyr.core.network.api.QuestionApi
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -91,6 +93,45 @@ class RunApiOverHttpTest {
                 }
 
             assertEquals(DomainError.UNAUTHORIZED, errorFrom(deadSession))
+        }
+
+    @Test
+    fun `the server's 429 is RATE_LIMITED and is sent once`() =
+        runTest {
+            var sent = 0
+            val limited =
+                MockEngine {
+                    sent++
+                    respond(
+                        WyrJson.encodeToString(
+                            ErrorDto(message = "too many requests; retry in 42 s", code = ErrorCode.RATE_LIMITED),
+                        ),
+                        HttpStatusCode.TooManyRequests,
+                        headersOf(
+                            HttpHeaders.ContentType to listOf(ContentType.Application.Json.toString()),
+                            HttpHeaders.RetryAfter to listOf("42"),
+                        ),
+                    )
+                }
+
+            assertEquals(DomainError.RATE_LIMITED, errorFrom(limited))
+            assertEquals(1, sent, "no retry, and no refresh: a 429 says nothing about the session")
+        }
+
+    @Test
+    fun `a proxy's own 429 page is RATE_LIMITED too`() =
+        runTest {
+            // As Cloudflare, in front of Render, would answer one: HTML, no ErrorDto.
+            val proxyLimit =
+                MockEngine {
+                    respond(
+                        "<html><body>429 Too Many Requests</body></html>",
+                        HttpStatusCode.TooManyRequests,
+                        headersOf(HttpHeaders.ContentType, ContentType.Text.Html.toString()),
+                    )
+                }
+
+            assertEquals(DomainError.RATE_LIMITED, errorFrom(proxyLimit))
         }
 
     @Test
