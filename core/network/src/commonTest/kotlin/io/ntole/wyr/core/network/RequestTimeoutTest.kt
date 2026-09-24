@@ -91,8 +91,8 @@ class RequestTimeoutTest {
     fun `a refresh slower than the request timeout still lands`() =
         runTest {
             // The server rotates the refresh token as it answers (CLAUDE.md §8a). Cut short at the
-            // ordinary bound, this refresh would leave the dead token stored, and the next 401
-            // would cost the player their guest account.
+            // ordinary bound, this refresh would leave the rotated-out token stored, and a 401 after
+            // the server's grace window would cost the player their guest account.
             val store = storeHolding(session("a"))
             val engine =
                 engine(

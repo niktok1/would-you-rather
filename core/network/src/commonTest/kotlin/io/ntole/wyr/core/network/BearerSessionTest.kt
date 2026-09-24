@@ -111,7 +111,7 @@ class BearerSessionTest {
     fun `a refresh outlives the cancelled call that started it`() =
         runTest {
             // The server rotates the refresh token the moment it answers. Abandoning the refresh
-            // then would leave a dead refresh token in the store.
+            // then would leave in the store a refresh token that dies with the server's grace window.
             val store = storeHolding(session("a"))
             val refreshArrived = CompletableDeferred<Unit>()
             val answerRefresh = CompletableDeferred<Unit>()
