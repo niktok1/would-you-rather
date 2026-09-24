@@ -187,13 +187,10 @@ jobs:
       # The Swift app on top of the framework, built through the project's own "Compile Kotlin
       # Framework" phase (embedAndSignAppleFrameworkForXcode). -target rather than -scheme because
       # no shared scheme is committed; the target already pins ARCHS to arm64. The runner has no
-      # signing identity and a simulator build does not need one.
-      # Provisional: this has never run, and the project relies on embedAndSign putting Shared on
-      # the default framework search path. Until it has passed once it must not turn the Gradle
-      # link/test signal above red, so a failure here is only a warning. Remove continue-on-error
-      # once it has gone green (NEXT-SESSION.md).
+      # signing identity and a simulator build does not need one. It relies on embedAndSign
+      # putting Shared on the default framework search path. It passed on the first run
+      # (2026-09-24), so it now gates like the rest.
       - name: Build iOS app for the simulator
-        continue-on-error: true
         run: |
           xcodebuild build \
             -project app/iosApp/iosApp.xcodeproj \

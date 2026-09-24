@@ -242,23 +242,15 @@ Repo initialized on `main` with the personal identity and `user.useConfigOnly = 
   where, against a stand-in; that Android's `commit()` then survives a kill is its documented
   behaviour, not something seen here. Whether `NSUserDefaults` keeps a change the app is killed
   straight after (`IosTokenStorage`) is unchecked too.
-- **iOS.** This machine has Command Line Tools but no Xcode. The Kotlin compile does not need
-  Xcode: `iosArm64` and `iosSimulatorArm64` main sources and the simulator test sources now
-  compile. That check caught `MainViewController` using `GlobalContext`, which Koin's native
-  artifact does not expose; it now uses `KoinPlatform.getKoinOrNull()`. Framework linking, the
-  simulator tests and the Xcode project do need Xcode (`linkDebugFramework*` fails here with
-  `MissingXcodeException`), so the app itself is still unproven. **Build it first on a machine
-  with Xcode**, or let the `ios` CI job do it.
-- **`Dockerfile` and `render.yaml`.** Docker is not installed here, so the image has never been
-  built and nothing has been deployed. What the image runs *is* verified: the fat jar, built with
-  `WYR_SERVER_ONLY=1 ./gradlew :server:buildFatJar`, now registers both JDBC drivers, boots on H2
-  with no `DATABASE_URL`, and answers `/health`. The image build around it is still unproven.
-- **The three new CI jobs** — `server-postgres`, `docker-smoke`, `ios` — are written but have
-  never run, and cannot until a GitHub remote exists. The Postgres harness was exercised locally
-  by pointing `WYR_TEST_JDBC_URL` at a shared H2 database, which proves the per-test drop but
-  not the Postgres dialect. The `xcodebuild` step in `ios` is `continue-on-error` because it is
-  the least certain of them; **once it has gone green, delete that line** so it gates like the
-  rest.
+- **What CI's first run proved, and what it did not.** All four jobs passed on the first push,
+  2026-09-24 (run 36007354550). `ios` linked the framework, ran the simulator tests and built the
+  Swift app with `xcodebuild`, so the iOS app compiles and links, but nobody has launched it on a
+  simulator or a device. `docker-smoke` built the Render image and saw it answer `/health`; nothing
+  is deployed. `server-postgres` ran the server suite against PostgreSQL 16, so every flow through
+  `runServer` (`ApiFlowTest`) has passed on the real dialect; the store-level race tests
+  (`PlayerStoreTest`, `VoteStoreTest`, `SkipStoreTest`, `LikeStoreTest`, `ModerationStoreTest`,
+  `SubmissionStoreTest`) poll H2's `SESSIONS` and still run on H2 only, which is what the
+  "on Postgres" bullets above still mean.
 - **The UI has never been looked at.** It compiles and its ViewModel is tested, but no
   screenshot of the play screen or the reveal state has been taken on any platform. Treat the
   layout and the §5b palette in practice as unreviewed. The dev console has not been opened
@@ -483,13 +475,12 @@ rules live in CLAUDE.md §8d. Each item is one short-lived branch, in order:
     Also done: `feat/skip-per-cycle` (a skip returns next cycle) and `fix/client-resilience`
     (request timeouts, durable Android session writes, `WYR_API_BASE_URL` on desktop).
 11. Pre-deploy hardening and the first Render deploy, which sets `autoDeployTrigger: checksPass`
-    in `render.yaml` (CLAUDE.md §8). Left before it: a GitHub remote so CI runs (Postgres, Docker
-    and iOS jobs have never run), rate limiting (§8b), a migration tool before the first column
-    change after the deploy, and the refresh-token grace window.
+    in `render.yaml` (CLAUDE.md §8). Left before it: rate limiting (§8b), a migration tool before
+    the first column change after the deploy, and the refresh-token grace window.
 
-**Blocked on the user:** no git remote exists yet, so `.github/workflows/ci.yml` has never run.
-It needs a GitHub repo on the personal account (§7). Render and iOS verification both depend on
-CI running.
+**Remote:** `github.com/niktok1/would-you-rather` (private), `origin`, pushed over SSH through the
+`github-wyr` host alias with a deploy key scoped to this repo (CLAUDE.md §7). `gh` is logged in to
+the personal account for reading CI. The next step that needs the user is a Render account.
 
 Deferred: provider linking (§8a), SQLDelight, a leaderboard, UI polish and WCAG, and the
 known `PlayViewModel` issues (the Play tab is frozen).
