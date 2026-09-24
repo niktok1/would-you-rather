@@ -32,6 +32,7 @@ import io.ntole.wyr.core.domain.submission.SubmissionRepository
 import io.ntole.wyr.core.domain.submission.SubmitQuestion
 import io.ntole.wyr.core.domain.vote.CastVote
 import io.ntole.wyr.core.domain.vote.VoteRepository
+import io.ntole.wyr.core.network.InMemoryTokenStorage
 import io.ntole.wyr.core.network.SessionStore
 import io.ntole.wyr.core.network.TokenStorage
 import io.ntole.wyr.core.network.WyrHttpClient
@@ -76,14 +77,7 @@ public fun dataModule(environment: WyrEnvironment): Module =
 
         // The moderator's, beside the player's rather than on top of them: no session, so no
         // recovery and no use case that ensures one (CLAUDE.md §8d, Moderation).
-        single { ModerationApi(get()) }
-        single<ModerationRepository> { DefaultModerationRepository(api = get()) }
-        factory { GetPendingSubmissions(moderation = get()) }
-        factory { ApproveSubmission(moderation = get()) }
-        factory { RejectSubmission(moderation = get()) }
-        factory { GetQuestions(moderation = get()) }
-        factory { RetireQuestion(moderation = get()) }
-        factory { RestoreQuestion(moderation = get()) }
+        moderation()
 
         // Bound as the concrete type as well: repositories recover a dead session through
         // withSessionRecovery, which is recovery machinery and deliberately not on the domain
@@ -106,3 +100,38 @@ public fun dataModule(environment: WyrEnvironment): Module =
         factory { GetMySubmissions(submissions = get(), session = get()) }
         factory { SetLike(likes = get(), session = get()) }
     }
+
+/**
+ * Wiring for a client that only moderates (CLAUDE.md §8d, *Moderation*): the moderator's repository
+ * and use cases, over an HTTP client of its own, and nothing of the player's. Every request goes to
+ * [environment]'s [WyrEnvironment.apiBaseUrl].
+ *
+ * Needs no [TokenStorage]: the client's session store is in memory and nothing ever writes to it, so
+ * no request carries a bearer token, the Auth plugin has nothing to refresh, and nothing is written
+ * to a platform's storage. No session repository is bound either, so nothing can mint a guest. The
+ * admin token goes on each call as it is handed to the use case, as in [dataModule].
+ */
+public fun moderationDataModule(environment: WyrEnvironment): Module =
+    module {
+        single { HttpTrace() }
+        single<HttpClient> {
+            WyrHttpClient.create(
+                baseUrl = environment.apiBaseUrl,
+                sessionStore = SessionStore(InMemoryTokenStorage(), environment),
+                trace = get(),
+            )
+        }
+        moderation()
+    }
+
+/** The moderator's API, repository and use cases, over whatever [HttpClient] the module binds. */
+private fun Module.moderation() {
+    single { ModerationApi(get()) }
+    single<ModerationRepository> { DefaultModerationRepository(api = get()) }
+    factory { GetPendingSubmissions(moderation = get()) }
+    factory { ApproveSubmission(moderation = get()) }
+    factory { RejectSubmission(moderation = get()) }
+    factory { GetQuestions(moderation = get()) }
+    factory { RetireQuestion(moderation = get()) }
+    factory { RestoreQuestion(moderation = get()) }
+}

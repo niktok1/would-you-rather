@@ -947,7 +947,10 @@ and every request shows in its HTTP trace (`HttpTrace` in `:core:network`, never
     `SubmissionStatus` (`RETIRED`, or `OTHER` for one this build cannot name), whether it is a seed,
     its times as instants, its `Tally` and its like count. A filter by `SubmissionStatus.OTHER` or
     `Category.OTHER` is refused before anything is sent. `WRONG_STATUS` is
-    `DomainError.WRONG_STATUS`.
+    `DomainError.WRONG_STATUS`. `dataModule` binds all of it beside the player's, for the console;
+    `moderationDataModule(environment)` binds it alone, for a client that only moderates: an HTTP
+    client of its own over an in-memory session store nothing writes, no `TokenStorage` needed, no
+    session repository, so no bearer token goes out and no guest can be minted (`DataModuleTest`).
   - *The console's section* (`io.ntole.wyr.dev.moderation`) takes the token typed and holds it in its
     ViewModel, in memory only: never in saved state or storage, masked, and a password to the keyboard.
     It loads the queue, approves under the categories picked for a submission (none keeps the
