@@ -252,14 +252,14 @@ automatically from every green commit on `main` (its URL is on its Render page).
   `REFRESH_GRACE_SECONDS` unset is no bound, 0 off, a number a bound in seconds. `PlayerStoreTest`
   spends a displaced token days after its rotation, then never again, kills one at the first use of
   the token that displaced it, and runs both races and the expiry with no bound and again under an
-  explicit 10 minutes, as it runs the other bounded cases. `ApiFlowTest` restamps a rotation 5 hours back and keeps the player
-  and their point, and at 600 seconds takes a lost answer restamped 9 minutes back and refuses one
-  at 11. No bound read as 10 minutes or as none at all, the previous token's expiry dropped, the
-  bound ignored, and the route passing no bound or a default of its own each fail them. The fat jar
-  (JDK 21, `PORT=18093`, no `DATABASE_URL`) answered `/health` 200 and a guest's first refresh token
-  200, 200 as the same player, then 401. The client changed in comments only. Counts on the branch:
-  `:server` 240 (2 skipped), `:core:domain` 34, `:core:data` 121, `:core:network` 70 (76 as Android
-  host tests), `:app:shared` 127.
+  explicit 10 minutes, as it runs the other bounded cases. `ApiFlowTest` restamps a rotation 5 hours
+  back and keeps the player and their point, and at 600 seconds takes a lost answer restamped 9
+  minutes back and refuses one at 11. No bound read as 10 minutes or as none at all, the previous
+  token's expiry dropped, the bound ignored, and the route passing no bound or a default of its own
+  each fail them. The fat jar (JDK 21, `PORT=18093`, no `DATABASE_URL`) answered `/health` 200 and a
+  guest's first refresh token 200, 200 as the same player, then 401. The client changed in comments
+  only. Counts on the branch: `:server` 240 (2 skipped), `:core:domain` 34, `:core:data` 121,
+  `:core:network` 70 (76 as Android host tests), `:app:shared` 127.
 - Client tests: `:core:domain` 34, `:core:data` 120, `:core:network` 58 (64 as Android host tests:
   the common ones and `AndroidTokenStorageTest`), `:app:shared` 122 (the ViewModels, the Koin graph
   and the desktop base URL); `:server` 235, 2 of them skipped. 569 JVM tests in all, those 2
@@ -776,10 +776,10 @@ known `PlayViewModel` issues (the Play tab is frozen).
   Render's free tier. A request that spends the refresh token gets `refreshTimeout()`, 5 minutes,
   because a refresh abandoned after the server rotated the token leaves a token the server takes
   once more at most, and not at all if it was already the previous one (a time bound on the grace,
-  if one is set, must outlast this); any new request that rotates a credential needs it too. A call stuck behind a refresh gives up only once the refresh ends. A
-  timeout reaches `runApi` as the engine's or Ktor's own exception, so it is `NETWORK`.
-  `RequestTimeoutTest` runs every case in virtual time, on a `MockEngine` given the test's
-  dispatcher.
+  if one is set, must outlast this); any new request that rotates a credential needs it too. A
+  call stuck behind a refresh gives up only once the refresh ends. A timeout reaches `runApi` as
+  the engine's or Ktor's own exception, so it is `NETWORK`. `RequestTimeoutTest` runs every case
+  in virtual time, on a `MockEngine` given the test's dispatcher.
 - **A refresh token works twice at most: once current, once more as the previous one until the
   next rotation** (CLAUDE.md §8a, `REFRESH_GRACE_SECONDS`: unset no time bound, 0 off, a number a
   bound in seconds). Every rotation, whichever token it spent, makes the token current until then
