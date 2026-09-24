@@ -12,6 +12,7 @@ import io.ktor.client.request.setBody
 import io.ktor.client.statement.HttpResponse
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
+import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.contentType
 import io.ktor.serialization.kotlinx.json.json
@@ -313,6 +314,20 @@ class ApiFlowTest {
 
             assertEquals(HttpStatusCode.Unauthorized, response.status)
             assertEquals(ErrorCode.UNAUTHORIZED, response.body<ErrorDto>().code)
+        }
+
+    @Test
+    fun `an Authorization header that cannot be parsed is unauthorized, not an internal error`() =
+        runServer("malformed-authorization") { client ->
+            listOf("Bearer a b", "Bearer", "Bearer =").forEach { header ->
+                val response =
+                    client.get(WyrApi.Paths.QUESTIONS) {
+                        headers.append(HttpHeaders.Authorization, header)
+                    }
+
+                assertEquals(HttpStatusCode.Unauthorized, response.status, "\"$header\"")
+                assertEquals(ErrorCode.UNAUTHORIZED, response.body<ErrorDto>().code, "\"$header\"")
+            }
         }
 
     @Test

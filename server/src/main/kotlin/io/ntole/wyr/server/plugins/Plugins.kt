@@ -10,6 +10,8 @@ import io.ktor.server.application.log
 import io.ktor.server.auth.Authentication
 import io.ktor.server.auth.jwt.JWTPrincipal
 import io.ktor.server.auth.jwt.jwt
+import io.ktor.server.auth.parseAuthorizationHeader
+import io.ktor.server.plugins.BadRequestException
 import io.ktor.server.plugins.calllogging.CallLogging
 import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.server.plugins.cors.routing.CORS
@@ -66,6 +68,16 @@ fun Application.installPlugins(
     install(Authentication) {
         jwt(JWT_AUTH) {
             realm = "wyr"
+            // A header Ktor cannot parse ("Bearer a b") throws BadRequestException out of the default
+            // authHeader, which the JWT provider does not catch, so it surfaced as a 500. Read it as no
+            // credentials instead, which the challenge below answers with the usual 401.
+            authHeader { call ->
+                try {
+                    call.request.parseAuthorizationHeader()
+                } catch (_: BadRequestException) {
+                    null
+                }
+            }
             verifier(tokens.verifier)
             validate { credential -> credential.payload.playerId()?.let { JWTPrincipal(credential.payload) } }
             challenge { _, _ ->
