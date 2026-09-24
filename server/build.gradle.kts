@@ -74,7 +74,8 @@ tasks.register<JavaExec>("pendingMigration") {
 }
 
 tasks.test {
-    // ApiFlowTest switches from H2 to this database when it is set. Declared as an input so a
-    // Postgres run is never satisfied by an up-to-date or cached H2 result.
+    // ApiFlowTest switches from H2 to this database when it is set, and the schema tests run on it
+    // as well as on H2. Declared as an input so a Postgres run is never satisfied by an up-to-date or
+    // cached H2 result.
     inputs.property("testJdbcUrl", providers.environmentVariable("WYR_TEST_JDBC_URL").orElse(""))
 }

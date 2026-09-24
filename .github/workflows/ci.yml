@@ -55,7 +55,10 @@ jobs:
 
   # The same server suite against the engine production runs on. H2 only approximates Postgres,
   # so dialect differences (types, constraint errors, isolation) surface here and nowhere else.
-  # ApiFlowTest switches to WYR_TEST_JDBC_URL when it is set and wipes the app tables per test.
+  # ApiFlowTest switches to WYR_TEST_JDBC_URL when it is set and wipes it, Flyway's history
+  # included, per test. The schema tests (MigrationsTest, SchemaDriftTest) run on it as well as on
+  # H2, so this job is where the migrations are checked against PostgreSQL and where several boots
+  # racing on one database are (CLAUDE.md §8b).
   server-postgres:
     runs-on: ubuntu-latest
     # Backstop for a hang (a stuck connection, a test that never returns). GitHub's default is 6h.
