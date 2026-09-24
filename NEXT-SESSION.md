@@ -11,7 +11,7 @@ Repo initialized on `main` with the personal identity and `user.useConfigOnly = 
 
 ### Verified working
 
-- `:server` on H2: 205 tests green, including 65 end-to-end flow tests in `ApiFlowTest`. Flat
+- `:server` on H2: 206 tests green, including 65 end-to-end flow tests in `ApiFlowTest`. Flat
   scoring is covered there (every vote pays 1, majority and minority alike, and the total
   accumulates) and by `PlayerStoreTest`, which races awards for one player and refreshes of one
   token. The endless feed, re-answering and attempt replay are covered there too, and by
@@ -178,23 +178,31 @@ Repo initialized on `main` with the personal identity and `user.useConfigOnly = 
   trimmed, and every malformed value refused with the variable named. By hand: an invalid value run
   through `./gradlew :app:desktopApp:run` stopped the app at start naming it, and a second run, on a
   reused configuration cache, named the new value.
-- Rate limiting (`feat/rate-limiting`, no contract change; `:server` 205 tests with it):
+- Rate limiting (`feat/rate-limiting`, no contract change; `:server` 206 tests with it):
   `RateLimitTest` runs every group of routes to its budget and past it, each refusal 429 with
   `RATE_LIMITED` and a `Retry-After` of 1 to 60 s; a refused vote paying nothing, a refused
   submission not stored, and a refused refresh leaving its token live once the budget is back; two
   players behind one address with budgets of their own; a token forged for a player spending the
-  address's budget and never the player's; `/health` never refused; the right admin token neither
-  spending the failed-token budget nor refused by it, and guesses refused by that budget spending
-  none of the admin one; the defaults letting *Answer N*'s 50 through; one INFO line per refusal,
-  naming the limit and the player and neither the token nor a forwarded address; `X-Forwarded-For`
-  ignored with no proxy trusted, and with two trusted, one budget per client address, a client's own
-  leftmost entries changing nothing; and a boot warning on Render with no proxy trusted.
-  `ClientAddressTest` pins the entry read, `ServerConfigTest` the defaults and every `RATE_LIMIT_*`
-  and `TRUSTED_PROXY_HOPS` value refused. Weighting the right admin token like a wrong one, keying
-  votes by address, reading the token unverified, dropping the 429 handler, the `Retry-After` or the
-  log line, swapping the admin groups, leaving a guest mint or `/health` ungrouped, reading the
-  leftmost entry, trusting the header with no proxy, trusting a short chain, sharing one key or
-  keying by the socket peer behind the proxies, each fails them. On the client, `RunApiOverHttpTest`
+  address's budget and never the player's, and an expired one this server signed spending its
+  player's, so it still gets its 401 once the address's is spent, while one expired past a refresh
+  token's lifetime spends the address's; `/health` never refused; the right admin token not
+  spending the failed-token budget, and once that is spent, refused exactly as every wrong guess
+  and no token are until the budget is back; guesses refused by that budget spending none of the
+  admin one; each of the queue, an approval and a rejection spending both admin budgets and refused
+  by each; the defaults letting *Answer N*'s 50 through; one INFO line per refusal, naming the
+  limit and the player and neither the token nor a client address; no header read with none
+  trusted, and behind `CF-Connecting-IP` one budget per address it names, a forged
+  `X-Forwarded-For` changing nothing and a request without it keyed by the socket peer; and a boot
+  warning on Render with no header trusted. `ClientAddressTest` pins the value read and the
+  fallbacks, `ServerConfigTest` the defaults and every `RATE_LIMIT_*` and `CLIENT_IP_HEADER` value
+  refused, `X-Forwarded-For` and `Forwarded` included. Letting the right admin token past a spent
+  failed-token budget (Ktor's own limiter lets a weight of 0 through), weighting it like a wrong
+  one, moving an approval out of both admin groups or a rejection out of the admin one, keying an
+  expired token by address or keeping it for longer than a refresh token lives, keying votes by
+  address, reading the token unverified, dropping the 429 handler, the `Retry-After` or the log
+  line, swapping the admin groups, leaving a guest mint or `/health` ungrouped, reading the header
+  with none trusted, ignoring the trusted one, taking a list or the first of several values, or
+  allowing `X-Forwarded-For` as the header, each fails them. On the client, `RunApiOverHttpTest`
   pins the server's 429 and a proxy's HTML 429 as `RATE_LIMITED`, sent once, and
   `DefaultVoteRepositoryTest` a rate-limited vote not resent and a rate-limited refresh keeping the
   session and minting no guest; recovering on `RATE_LIMITED` fails them. The console needed nothing:
@@ -202,31 +210,41 @@ Repo initialized on `main` with the personal identity and `user.useConfigOnly = 
   it.
 - Live run of the rate limits against the fat jar on Netty, `PORT=18433` with `ADMIN_TOKEN`,
   `TRUSTED_PROXY_HOPS=2` and budgets of 2 guests, 3 votes and 2 wrong admin tokens, by curl:
-  `/health` five times, 200 each; three mints from one address behind the proxies, each claiming
-  another leftmost address, 200, 200 and 429, with `Retry-After: 3600` and the `ErrorDto`; a mint
-  from another address 200, and one with a chain shorter than two 200 (the socket peer, a budget of
-  its own); four votes 200, 200, 200 and 429, with the stats then at 3 points and 3 answers; and the
-  admin queue with the right, right, wrong, wrong, wrong and right token, 200, 200, 403, 403, 429
-  and 200. The log had one `rate limit ... reached` line per refusal and no address or token
-  anywhere. A boot with `RENDER=true` and no `TRUSTED_PROXY_HOPS` warned, and one with
-  `RATE_LIMIT_VOTES_PER_MINUTE=abc` stopped at start, naming it.
+  `/health` five times, 200 each; three mints from one address behind the proxies, 200, 200 and
+  429, with `Retry-After: 3600` and the `ErrorDto`; four votes 200, 200, 200 and 429, with the stats
+  then at 3 points and 3 answers. The log had one `rate limit ... reached` line per refusal and no
+  address or token anywhere, and a boot with `RATE_LIMIT_VOTES_PER_MINUTE=abc` stopped at start,
+  naming it. Its hop count and its admin results (the right token let in past a spent failed-token
+  budget) are what the review fixes below replaced.
+- Live run of the review fixes against the fat jar on Netty (JDK 21), `PORT=18434` with
+  `ADMIN_TOKEN`, `CLIENT_IP_HEADER=CF-Connecting-IP` and budgets of 2 guests and 2 wrong admin
+  tokens, by curl: three mints naming one address, the last two with a forged `X-Forwarded-For`
+  each, 200, 200 and 429; one naming another address 200; three with no header or a list in it,
+  keyed by the socket peer, 200, 200 and 429; and from one address the admin queue with the right,
+  wrong, wrong, wrong and right token and none, 200, 403, 403, 429, 429 and 429, the right one's
+  429 identical to a guess's (`Retry-After: 60`, `RATE_LIMITED`), while the right token from
+  another address was 200. The log had one line per refusal and no address or token anywhere. A
+  boot with `CLIENT_IP_HEADER=X-Forwarded-For` stopped at start, naming it.
 - Client tests: `:core:domain` 34, `:core:data` 119, `:core:network` 56 (62 as Android host tests:
   the common ones and `AndroidTokenStorageTest`), `:app:shared` 122 (the ViewModels, the Koin graph
-  and the desktop base URL); `:server` 205. 598 in all. `:app:shared` compiles for JVM, JS, wasmJs
+  and the desktop base URL); `:server` 206. 599 in all. `:app:shared` compiles for JVM, JS, wasmJs
   and the iOS simulator.
 - `:app:androidApp:assembleDebug` produces a real APK.
 - `ktlintCheck` clean across every module.
 
 ### NOT verified
 
-- **Render's `X-Forwarded-For` chain.** `TRUSTED_PROXY_HOPS=3` in `render.yaml` rests on what others
-  report of requests reaching live Render services (client, a Cloudflare `172.x`, a Render `10.x`,
-  and one more entry for each the client forged), not on Render's docs or anything seen here. Check
-  it once deployed, with `RATE_LIMIT_GUESTS_PER_HOUR=3` set for the check and then removed: from one
-  machine the fourth mint must be 429; a fifth sent with `X-Forwarded-For: 198.51.100.1` must still
-  be 429 (200 means the count is too high and a client picks its own address); and a mint from
-  another network, a phone's hotspot say, must be 200 (429 means it is too low, and clients share
-  Cloudflare's addresses). The server's log names no address, so the check is by status alone.
+- **`CF-Connecting-IP` on a live Render service.** `CLIENT_IP_HEADER=CF-Connecting-IP` in
+  `render.yaml` rests on Render's docs (every request to a web service passes through Cloudflare)
+  and on others' reports of requests reaching live Render services, all of which carried it, set to
+  the client, beside `X-Forwarded-For` chains of two and of three entries. Nothing here has seen
+  it. Check it once deployed, with `RATE_LIMIT_GUESTS_PER_HOUR=3` set for the check and then
+  removed: from one machine the fourth mint must be 429; a fifth sent with its own
+  `CF-Connecting-IP: 198.51.100.1` must still be 429 (200 means the value a client sends gets
+  through, and a client picks its own address); and a mint from another network, a phone's
+  hotspot say, must be 200 (429 means the header is missing, and every client shares the proxy's
+  address). The server's log names no address, so the check is by status alone. Until it passes,
+  the per-address budgets are not to be relied on.
 - **The limits against real traffic.** The budgets are starting points nobody has watched: a
   household or a mobile carrier's shared address (CGNAT) shares 10 new guests an hour, and an IPv6
   client can rotate through its prefix for fresh per-address budgets. Every count is overridable
@@ -532,8 +550,10 @@ rules live in CLAUDE.md §8d. Each item is one short-lived branch, in order:
     Also done: `feat/skip-per-cycle` (a skip returns next cycle) and `fix/client-resilience`
     (request timeouts, durable Android session writes, `WYR_API_BASE_URL` on desktop).
 11. Pre-deploy hardening and the first Render deploy, which sets `autoDeployTrigger: checksPass`
-    in `render.yaml` (CLAUDE.md §8). Left before it: rate limiting (§8b), a migration tool before
-    the first column change after the deploy, and the refresh-token grace window.
+    in `render.yaml` (CLAUDE.md §8). Rate limiting (§8b) is built on `feat/rate-limiting`, with
+    its `CF-Connecting-IP` check left for once deployed (*NOT verified* above). Left before the
+    deploy: a migration tool before the first column change after it, and the refresh-token grace
+    window.
 
 **Remote:** `github.com/niktok1/would-you-rather` (private), `origin`, pushed over SSH through the
 `github-wyr` host alias with a deploy key scoped to this repo (CLAUDE.md §7). `gh` is logged in to
@@ -604,11 +624,17 @@ known `PlayViewModel` issues (the Play tab is frozen).
   budget. `/health` stays in none. A server under test for anything else takes `NO_PRACTICAL_LIMIT`,
   so a flow never fails on a budget it is not about. The admin routes are in two groups, the
   failed-token one asked first; it weighs a request with the right token at 0, so keep that check
-  the same as `requireAdmin` (`AdminToken.admits`, shared by both).
-- **A client address is never the leftmost `X-Forwarded-For` entry** (CLAUDE.md §8,
-  `TRUSTED_PROXY_HOPS`). The client writes that one. With no proxy trusted the header is ignored;
-  behind N trusted proxies the address is the entry N from the right (`clientAddress`), and a chain
-  shorter than N is not trusted at all. Log no address: in production it comes from a header.
+  the same as `requireAdmin` (`AdminToken.admits`, shared by both). Ktor's own limiter lets a
+  weight of 0 through whatever is left, so that group's limiter is wrapped in `LockingOut`, which
+  refuses it once the budget is spent: without it, 200 among the 429s would tell a guesser which
+  guess was right.
+- **A client address comes only from a header the proxy in front overwrites** (CLAUDE.md §8,
+  `CLIENT_IP_HEADER`), on Render Cloudflare's `CF-Connecting-IP`. Never `X-Forwarded-For`: every
+  proxy appends to it, the client writes its leftmost entry, and how many of Render's proxies stand
+  behind Cloudflare has been reported both ways, so no count of entries from the right holds. With
+  no header trusted the socket peer is the address; a request without the trusted header, or with
+  more than one value, keys by the peer too (`clientAddress`). Log no address: in production it
+  comes from a header.
 - **Admin routes answer 403, never 401, and are absent without `ADMIN_TOKEN`** (CLAUDE.md §8d).
   The client answers any 401 by refreshing and then replacing the player's session, so an admin
   route must never send one: none sits inside `authenticate(JWT_AUTH)` or reads the bearer token,
