@@ -63,7 +63,19 @@ Repo initialized on `main` with the personal identity and `user.useConfigOnly = 
   the next batch. That run predates feed cycles (`feat/feed-cycles`): the least-recently-answered
   loop it saw is gone, and cycles have run only in the server tests. It also predates server-side
   skips (`feat/skip-per-cycle`), which keep a skipped question out until the next cycle.
-- Client tests: `:core:domain` 13, `:core:data` 73, `:core:network` 32, `:app:shared` 64 (the
+- The submission client (`feat/submission-client`) against a live `:server:run` on H2: a
+  throwaway JVM test, not committed, drove `SubmitQuestion` and `GetMySubmissions` through the real
+  CIO client. A fresh guest listed nothing; `"  Fly  "` came back stored as `Fly`, `PENDING`, its
+  categories in declaration order; an option of 200 characters was stored. A blank option, the two
+  options the same but for case, a newline, 201 characters and a U+2028 were each
+  `INVALID_SUBMISSION` with the server's own message. The 21st pending was `SUBMISSION_LIMIT`, and
+  the list held all 20, newest first. A session the server did not know was recovered as one fresh
+  guest, who then owned the submission and listed only their own. In the tests, `SubmissionApiTest`
+  pins the request and the reads, `SubmissionMapperTest` an unknown status as `OTHER` and a
+  submission's categories mapped as a question's, with none or `OTHER` refused before sending,
+  `DefaultSubmissionRepositoryTest` recovery after a 401 and the 422 and 409 end to end through
+  `MockEngine`, and `SubmissionConsoleViewModelTest` the console section.
+- Client tests: `:core:domain` 16, `:core:data` 88, `:core:network` 35, `:app:shared` 83 (the
   ViewModels and the Koin graph). `:app:shared` compiles for JVM, JS, wasmJs and the iOS
   simulator.
 - `:app:androidApp:assembleDebug` produces a real APK.
@@ -83,12 +95,11 @@ Repo initialized on `main` with the personal identity and `user.useConfigOnly = 
   statement with a correlated subquery on `players.current_cycle`. That one statement sees one
   committed state at READ COMMITTED is documented PostgreSQL behaviour, not something a test here
   has seen.
-- **Question submission on Postgres, and from any client.** The pending cap locks the author's
-  `players` row (`SELECT ... FOR UPDATE`) and then counts in a later statement, which at READ
-  COMMITTED sees a submission committed while it waited. That has run only on H2
-  (`SubmissionStoreTest` polls H2's `SESSIONS`); on PostgreSQL it is documented behaviour, not
-  something a test here has seen. No client sends a submission yet, so both endpoints have run only
-  in the server's own tests; the client and the console's section are the next branch.
+- **Question submission on Postgres.** The pending cap locks the author's `players` row
+  (`SELECT ... FOR UPDATE`) and then counts in a later statement, which at READ COMMITTED sees a
+  submission committed while it waited. That has run only on H2 (`SubmissionStoreTest` polls H2's
+  `SESSIONS`); on PostgreSQL it is documented behaviour, not something a test here has seen. The
+  client has run against a live `:server:run` on H2 only, and the console's section never.
 - **Multiple categories on Postgres, and in the client.** The `EXISTS ... IN` filter, the batch's
   second statement for its categories and the batch insert of a submission's categories have run
   only on H2. On the client, several categories per question and a selection of several have run
@@ -122,7 +133,9 @@ Repo initialized on `main` with the personal identity and `user.useConfigOnly = 
   screenshot of the play screen or the reveal state has been taken on any platform. Treat the
   layout and the §5b palette in practice as unreviewed. The dev console has not been opened
   either: its actions are tested through its ViewModel, and the use cases behind them ran live,
-  all but `SkipQuestion`, which has run only against `FakeServer`. `POST /v1/skips` itself has run
+  all but `SkipQuestion`, which has run only against `FakeServer`. The *Submit a question* section
+  is the same: its ViewModel and line helpers are tested, and its use cases ran live, but it has
+  never been drawn. `POST /v1/skips` itself has run
   only in the server's own tests.
 
 ## Running it locally
