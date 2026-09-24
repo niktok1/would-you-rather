@@ -26,10 +26,16 @@ fun MainViewController() =
 
 /**
  * The app's `WYR_ENV` Info.plist key, which the `WYR_ENV` build setting in `Config.xcconfig` fills in
- * (CLAUDE.md §8e), or `null` when the bundle has none, which [initKoin] reads as local. A value that
- * is not a string is handed on as its text, for [initKoin] to refuse by name.
+ * (CLAUDE.md §8e), read from the main bundle by [environmentNameFrom].
  */
 internal fun bundledEnvironmentName(): String? =
-    NSBundle.mainBundle.objectForInfoDictionaryKey(ENVIRONMENT_KEY)?.toString()
+    environmentNameFrom { key -> NSBundle.mainBundle.objectForInfoDictionaryKey(key) }
+
+/**
+ * The name [lookup] gives for the `WYR_ENV` key, or `null` when it gives none, which [initKoin] reads
+ * as local. A value that is not a string is handed on as its text, for [initKoin] to refuse by name.
+ * Apart from the bundle so a test can give the key a value: the test binary's bundle has none.
+ */
+internal fun environmentNameFrom(lookup: (String) -> Any?): String? = lookup(ENVIRONMENT_KEY)?.toString()
 
 private const val ENVIRONMENT_KEY = "WYR_ENV"
