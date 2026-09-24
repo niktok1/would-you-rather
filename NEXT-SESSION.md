@@ -248,6 +248,18 @@ automatically from every green commit on `main` (its URL is on its Render page).
   `DATABASE_URL`: Flyway applied V1 and V2 to the in-memory H2, `/health` was 200, and a guest's
   first refresh token refreshed 200, again 200 as the same player, and a third time 401
   `INVALID_REFRESH_TOKEN`.
+- The grace without a time bound (`feat/refresh-grace-unbounded`, CLAUDE.md §8a, §8b), on H2:
+  `REFRESH_GRACE_SECONDS` unset is no bound, 0 off, a number a bound in seconds. `PlayerStoreTest`
+  spends a displaced token days after its rotation, then never again, kills one at the first use of
+  the token that displaced it, and runs both races and the expiry with no bound, the bounded cases
+  under an explicit 10 minutes. `ApiFlowTest` restamps a rotation 5 hours back and keeps the player
+  and their point, and at 600 seconds takes a lost answer restamped 9 minutes back and refuses one
+  at 11. No bound read as 10 minutes or as none at all, the previous token's expiry dropped, the
+  bound ignored, and the route passing no bound or a default of its own each fail them. The fat jar
+  (JDK 21, `PORT=18093`, no `DATABASE_URL`) answered `/health` 200 and a guest's first refresh token
+  200, 200 as the same player, then 401. The client changed in comments only. Counts on the branch:
+  `:server` 240 (2 skipped), `:core:domain` 34, `:core:data` 121, `:core:network` 70 (76 as Android
+  host tests), `:app:shared` 127.
 - Client tests: `:core:domain` 34, `:core:data` 120, `:core:network` 58 (64 as Android host tests:
   the common ones and `AndroidTokenStorageTest`), `:app:shared` 122 (the ViewModels, the Koin graph
   and the desktop base URL); `:server` 235, 2 of them skipped. 569 JVM tests in all, those 2
@@ -763,27 +775,29 @@ known `PlayViewModel` issues (the Play tab is frozen).
   timeout, which overrides OkHttp's 10 s read timeout: that alone would fail a cold start on
   Render's free tier. A request that spends the refresh token gets `refreshTimeout()`, 5 minutes,
   because a refresh abandoned after the server rotated the token leaves a token the server takes
-  only within its grace window, 10 minutes, which must outlast this; any new request that rotates a
-  credential needs it too. A call stuck behind a refresh gives up only once the refresh ends. A
+  once more at most, and not at all if it was already the previous one (a time bound on the grace,
+  if one is set, must outlast this); any new request that rotates a credential needs it too. A call stuck behind a refresh gives up only once the refresh ends. A
   timeout reaches `runApi` as the engine's or Ktor's own exception, so it is `NETWORK`.
   `RequestTimeoutTest` runs every case in virtual time, on a `MockEngine` given the test's
   dispatcher.
-- **A refresh token works twice at most: once current, once more as the previous one within the
-  grace** (CLAUDE.md §8a, `REFRESH_GRACE_SECONDS`, 600 by default, 0 off). Every rotation, whichever
-  token it spent, makes the token current until then the previous one, stamped now, so a token
-  spent as the previous one is gone and the one it displaced gets a grace of its own. Keep
-  `PlayerStore.rotateRefreshToken` one `UPDATE` whose `WHERE` holds the whole check and whose `SET`
-  copies the current columns into the previous ones in SQL: a read first, or an update by id, lets
-  two racers with the previous token both through (`PlayerStoreTest` races it). The grace must stay
-  longer than the client's `REFRESH_TIMEOUT` (5 minutes), and nothing but the KDocs on each side
-  ties them, since `:server` cannot see `:core:network`. On the client, a refresh that finds the
-  store moved on to the same player's other session refreshes once more as it (`refreshAs`), since
-  within the grace both tabs' refreshes go through and only the later one's token outlives it.
-  `REFRESH_GRACE_SECONDS` that is not a whole number from 0 to a year fails the boot, naming it.
-  The grace saves a lost refresh answer only if the next refresh comes within it, and a lost answer
-  to the settling refresh leaves a demoted token beside a fresh access token, refreshed only past
-  the grace: both are open, with the options, in CLAUDE.md §8b (*Refresh answers lost past the
-  grace*).
+- **A refresh token works twice at most: once current, once more as the previous one until the
+  next rotation** (CLAUDE.md §8a, `REFRESH_GRACE_SECONDS`: unset no time bound, 0 off, a number a
+  bound in seconds). Every rotation, whichever token it spent, makes the token current until then
+  the previous one, stamped now, so a token spent as the previous one is gone and the one it
+  displaced is the previous one in its place. Keep `PlayerStore.rotateRefreshToken` one `UPDATE`
+  whose `WHERE` holds the whole check and whose `SET` copies the current columns into the previous
+  ones in SQL: a read first, or an update by id, lets two racers with the previous token both
+  through (`PlayerStoreTest` races it). Keep stamping the rotation with no bound too: a bound set
+  later reads it, and so does a rollback to a build from before the unbounded grace. A bound, if
+  set, must stay longer than the client's `REFRESH_TIMEOUT` (5 minutes), and nothing but the KDocs
+  on each side ties them, since `:server` cannot see `:core:network`. On the client, a refresh that
+  finds the store moved on to the same player's other session refreshes once more as it
+  (`refreshAs`), since both tabs' refreshes go through and a previous token survives one refresh
+  only. `REFRESH_GRACE_SECONDS` that is not a whole number from 0 to a year fails the boot, naming
+  it. The cost, accepted for guests: a used copy of a refresh token keeps working beside the
+  original while the two take turns refreshing. What remains, in CLAUDE.md §8b (*Refresh answers
+  lost past the grace*): a refresh that spends the previous token and whose answer is lost too,
+  as a settling refresh's lost answer usually does, leaves a spent token.
 - **A session write returns once it is durable, and suspends for it** (`TokenStorage.write`,
   CLAUDE.md §8a). `AndroidTokenStorage` used `apply()`, which returns before the file is written,
   so a kill just after a refresh could come back with the rotated-out token and orphan the guest.
