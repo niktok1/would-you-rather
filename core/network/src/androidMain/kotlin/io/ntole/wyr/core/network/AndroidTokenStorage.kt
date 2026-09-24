@@ -48,7 +48,8 @@ public class AndroidTokenStorage internal constructor(
                 prefs.edit().also(change).commit()
             }
         // commit() reports a failed write, which apply() never did. The change is already in
-        // memory, so this process carries on with it; it is the next start that would not have it.
+        // memory, so this process still reads it; it is the next start that would not have it. The
+        // caller hears of it all the same, and the data layer reports it as NETWORK.
         if (!written) throw IOException("SharedPreferences could not write the change to disk")
     }
 }

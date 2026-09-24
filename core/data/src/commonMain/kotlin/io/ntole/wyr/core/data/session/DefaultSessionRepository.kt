@@ -28,7 +28,7 @@ public class DefaultSessionRepository(
 
     override suspend fun currentPlayerId(): String? = sessionStore.read()?.playerId
 
-    override suspend fun clear(): Unit = mutex.withLock { sessionStore.clear() }
+    override suspend fun clear(): Unit = mutex.withLock { persist { sessionStore.clear() } }
 
     /** The session as stored right now, for [withSessionRecovery] to capture before a call. */
     internal fun storedSession(): SessionDto? = sessionStore.read()
@@ -63,13 +63,22 @@ public class DefaultSessionRepository(
             val stored = sessionStore.read()
             if (stored != null && stored != sentWith) return@withLock stored.playerId
 
-            sessionStore.clear()
+            persist { sessionStore.clear() }
             mintGuest()
         }
 
     private suspend fun mintGuest(): String {
         val session = runApi { authApi.guest() }
-        sessionStore.write(session)
+        persist { sessionStore.write(session) }
         return session.playerId
     }
+
+    /**
+     * Changes the stored session through [runApi], so a change the platform could not make durable
+     * (Android's `commit()` on a full disk, the JVM's `flush()`) fails the call as a `WyrException`
+     * rather than escaping the data layer. It is NETWORK, as the same write already is when it
+     * fails inside a token refresh. Both platforms keep the change in memory, so the next call
+     * carries on with it; it is the next start that would not have it.
+     */
+    private suspend fun persist(change: suspend () -> Unit): Unit = runApi(change)
 }

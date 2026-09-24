@@ -171,12 +171,14 @@ Repo initialized on `main` with the personal identity and `user.useConfigOnly = 
   session kept. `RunApiOverHttpTest` pins a timeout as `NETWORK`, `HttpTraceTest` a timeout traced as
   one and a cancellation still as a cancellation. `AndroidTokenStorageTest`, an Android host test,
   pins `commit()` over `apply()`, off the caller's thread, one commit at a time in order, a failed
-  commit thrown, and a write whose caller was cancelled landing. `DesktopApiBaseUrlTest` pins
-  `WYR_API_BASE_URL`: bound by the desktop module, blank as unset, trimmed, and every malformed value
-  refused with the variable named. By hand: an invalid value run through
-  `./gradlew :app:desktopApp:run` stopped the app at start naming it, and a second run, on a reused
-  configuration cache, named the new value.
-- Client tests: `:core:domain` 32, `:core:data` 104, `:core:network` 52 (58 as Android host tests:
+  commit thrown, and a write whose caller was cancelled landing. `SessionStorageFailureTest` pins a
+  session the store could not make durable, as a guest is minted, on a clear and in recovery,
+  failing the call as `NETWORK` rather than as a bare exception, with no guest minted twice for it.
+  `DesktopApiBaseUrlTest` pins `WYR_API_BASE_URL`: bound by the desktop module, blank as unset,
+  trimmed, and every malformed value refused with the variable named. By hand: an invalid value run
+  through `./gradlew :app:desktopApp:run` stopped the app at start naming it, and a second run, on a
+  reused configuration cache, named the new value.
+- Client tests: `:core:domain` 32, `:core:data` 107, `:core:network` 52 (58 as Android host tests:
   the common ones and `AndroidTokenStorageTest`), `:app:shared` 109 (the ViewModels, the Koin graph
   and the desktop base URL); `:server` 156. `:app:shared` compiles for JVM, JS, wasmJs and the iOS
   simulator.
@@ -578,7 +580,10 @@ known `PlayViewModel` issues (the Play tab is frozen).
   data layer closes. `AndroidTokenStorageTest` is an Android host test
   (`:core:network:testAndroidHostTest`, now in CI): it pins `commit()` over `apply()`, the thread,
   the order, the failure and the cancellation against a recording `SharedPreferences`, since the
-  host has no real one.
+  host has no real one. A failed commit leaves the data layer as `NETWORK`, never as the bare
+  `IOException`, which the ViewModels do not catch, so the Play tab would crash on it:
+  `DefaultSessionRepository` writes and clears the session through `runApi`, as the refresh's write
+  already was. The change stays in memory, so the next call carries on with it.
 - `Tally.percentB` is defined as `100 - percentA` rather than rounded independently, so the two
   always sum to 100. There is a property test over every split up to 40/40.
 - `:server` must not depend on `:core:domain` (§3). That is why scoring lives in `:server`.
