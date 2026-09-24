@@ -507,11 +507,11 @@ known `PlayViewModel` issues (the Play tab is frozen).
   first.
 - **One predicate decides which questions a player may be served** (`QuestionStore.servable`,
   CLAUDE.md §8d): an approved one, to every player alike, its author included. The feed, the
-  stats' due count, and votes and skips (`QuestionStore.isServable`) all read it, so a pending or
-  rejected question is served to nobody, due for nobody, and answering or skipping it is 404. A
-  new exclusion belongs there. `isServable` is a plain read because a question only ever becomes
-  servable; a way to withdraw an approved question would need votes and skips to lock the
-  question's row.
+  stats' due count, and votes, skips and likes (`QuestionStore.isServable`) all read it, so a
+  pending or rejected question is served to nobody, due for nobody, and answering, skipping or
+  liking it is 404. A new exclusion belongs there. `isServable` is a plain read because a question
+  only ever becomes servable; a way to withdraw an approved question would need votes, skips and
+  likes to lock the question's row.
 - **An attempt id is made once per tap and reused only to retry that tap.** `AttemptId.random()`
   is the only way to make one. Making a new one for a retry pays twice; reusing one for a new tap
   turns that answer into a replay that pays nothing. The server stores only the latest attempt per
