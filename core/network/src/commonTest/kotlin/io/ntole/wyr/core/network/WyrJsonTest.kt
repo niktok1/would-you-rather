@@ -1,5 +1,7 @@
 package io.ntole.wyr.core.network
 
+import io.ntole.wyr.core.auth.GuestSessionDto
+import io.ntole.wyr.core.auth.SessionDto
 import io.ntole.wyr.core.error.ErrorCode
 import io.ntole.wyr.core.error.ErrorDto
 import io.ntole.wyr.core.player.PlayerStatsDto
@@ -8,10 +10,13 @@ import io.ntole.wyr.core.question.QuestionCategoryListSerializer
 import io.ntole.wyr.core.question.QuestionDto
 import io.ntole.wyr.core.question.QuestionStatus
 import io.ntole.wyr.core.question.SubmissionDto
+import kotlinx.serialization.Serializable
 import kotlinx.serialization.SerializationException
+import kotlinx.serialization.descriptors.SerialDescriptor
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertNull
 
 /**
  * Pins the client half of the wire enum rule (CLAUDE.md §5).
@@ -132,5 +137,63 @@ class WyrJsonTest {
         val error = WyrJson.decodeFromString<ErrorDto>("""{"code":"ALREADY_VOTED","retryAfterSeconds":30}""")
 
         assertEquals(ErrorCode.ALREADY_VOTED, error.code)
+    }
+
+    @Test
+    fun `a guest session decodes with its recovery secret, and without one from a server that has no recovery`() {
+        val guest = WyrJson.decodeFromString<GuestSessionDto>(GUEST_SESSION)
+        val fromBeforeRecovery = WyrJson.decodeFromString<GuestSessionDto>(SESSION)
+
+        assertEquals("secret", guest.recoverySecret)
+        assertEquals(SessionDto("p1", "access", "refresh", 900), guest.session())
+        assertNull(fromBeforeRecovery.recoverySecret)
+        assertEquals(guest.session(), fromBeforeRecovery.session())
+    }
+
+    /**
+     * What a build from before recovery makes of a guest session: the session it always read, the
+     * secret ignored. That build's [SessionDto] is this one's, which recovery left as it was.
+     */
+    @Test
+    fun `a build from before recovery reads a guest session as the session it knew`() {
+        assertEquals(SessionDto("p1", "access", "refresh", 900), WyrJson.decodeFromString<SessionDto>(GUEST_SESSION))
+    }
+
+    /** What makes the test above hold for every field a session will ever have. */
+    @Test
+    fun `a guest session holds every field a session does, under the same name, and the secret`() {
+        fun SerialDescriptor.names(): List<String> = (0 until elementsCount).map(::getElementName)
+
+        assertEquals(
+            SessionDto.serializer().descriptor.names() + "recoverySecret",
+            GuestSessionDto.serializer().descriptor.names(),
+        )
+    }
+
+    @Test
+    fun `a refused recovery decodes as itself, and as UNKNOWN in a build from before recovery`() {
+        val refused = """{"code":"INVALID_RECOVERY_SECRET","message":"m"}"""
+
+        assertEquals(ErrorCode.INVALID_RECOVERY_SECRET, WyrJson.decodeFromString<ErrorDto>(refused).code)
+        assertEquals(CodeBeforeRecovery.UNKNOWN, WyrJson.decodeFromString<ErrorBeforeRecovery>(refused).code)
+    }
+
+    /** Some of the error codes a build from before recovery knew, with its `UNKNOWN` default. */
+    @Serializable
+    private enum class CodeBeforeRecovery { UNAUTHORIZED, INVALID_REFRESH_TOKEN, RATE_LIMITED, UNKNOWN }
+
+    @Serializable
+    private data class ErrorBeforeRecovery(
+        val message: String? = null,
+        val code: CodeBeforeRecovery = CodeBeforeRecovery.UNKNOWN,
+    )
+
+    private companion object {
+        const val SESSION =
+            """{"playerId":"p1","accessToken":"access","refreshToken":"refresh",""" +
+                """"accessTokenExpiresInSeconds":900}"""
+        const val GUEST_SESSION =
+            """{"playerId":"p1","accessToken":"access","refreshToken":"refresh",""" +
+                """"accessTokenExpiresInSeconds":900,"recoverySecret":"secret"}"""
     }
 }
