@@ -143,10 +143,10 @@ public class DefaultQuestionRepository(
             lastHandedOut?.let { handedOutSinceFetch += it }
         }
 
-        val category = selectedCategory.value?.toWireOrNull()
+        val categories = setOfNotNull(selectedCategory.value?.toWireOrNull())
         val batch =
             session
-                .withSessionRecovery { api.page(limit = WyrApi.Limits.DEFAULT_PAGE_SIZE, category = category) }
+                .withSessionRecovery { api.page(limit = WyrApi.Limits.DEFAULT_PAGE_SIZE, categories = categories) }
                 .questions
                 .map { it.toDomain() }
 

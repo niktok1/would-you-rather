@@ -31,7 +31,7 @@ class HttpTraceTest {
     @Test
     fun `an answered request is recorded with its method path and status`() =
         runTest {
-            questionApi(MockEngine { respondEmptyPage() }).page(category = QuestionCategory.FOOD)
+            questionApi(MockEngine { respondEmptyPage() }).page(categories = setOf(QuestionCategory.FOOD))
 
             val exchange = trace.exchanges.value.single()
             assertEquals("GET", exchange.method)
