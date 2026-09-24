@@ -134,10 +134,9 @@ Repo initialized on `main` with the personal identity and `user.useConfigOnly = 
   screenshot of the play screen or the reveal state has been taken on any platform. Treat the
   layout and the §5b palette in practice as unreviewed. The dev console has not been opened
   either: its actions are tested through its ViewModel, and the use cases behind them ran live,
-  all but `SkipQuestion`, which has run only against `FakeServer`. The *Submit a question* section
-  is the same: its ViewModel and line helpers are tested, and its use cases ran live, but it has
-  never been drawn. `POST /v1/skips` itself has run
-  only in the server's own tests.
+  all but `SkipQuestion`, which has run only against `FakeServer`. `POST /v1/skips` itself has run
+  only in the server's own tests. The *Submit a question* section has not been opened either: its
+  ViewModel and line helpers are tested, and its use cases ran live, but it has never been drawn.
 
 ## Running it locally
 
