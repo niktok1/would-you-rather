@@ -68,6 +68,22 @@ own copy stays English for the branches that redesign them. The client alone cha
 tests; `RootScreensTest` went with the tabs). Not seen on a device: Android's back, and any screen of
 it on a phone; nor whether the web build's default font draws Cyrillic.
 
+**On `feat/play-redesign`** (from 4821c05; not merged, nothing pushed): the user's **Play screen**
+redesign (CLAUDE.md §8d, *The Play screen*). Two cards and one row between them: the categories
+played (*Све*, a chevron, the picker dialog as before), the points (*123 П*, read each time the
+screen is shown and moved by each vote's answer, `PlayViewModel.points`) and the heart with the like
+count. A card answers; in the reveal the percentages count up over 2.5 s and either card goes on
+(`PlayViewModel.next`, now from the reveal only). The title, *OR*, Like and Next question buttons,
+vote counts, *+1* and the verdict are gone; Skip is an icon in the middle of the top bar while a
+question is asked. The screen's words are translated (`PlayStrings`); the picker and the category
+names stay English, and `CategoryPicker`, `CategoryOption` and `categoryName` are byte for byte
+untouched, for `feat/server-categories` (only `categoriesPlayed` takes the *All* text now). The client
+alone changed. Tests: `:app:shared` 190 (171 before). Ask the user: Skip in the bar's middle, the
+vote counts gone with the verdict, the title and *OR* gone, a failed like in the points' place, and
+no re-read of the points after a like (a like of one's own question shows from the next vote or
+visit). The count-up plays again when Play is shown again on a revealed question. Not seen on a
+device.
+
 ### Verified working
 
 - `:server` on H2: 311 tests, 309 green and 2 skipped (the PostgreSQL-only boot races), including
