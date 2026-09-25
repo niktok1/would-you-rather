@@ -92,8 +92,8 @@ automatically from every green commit on `main` (its URL is on its Render page).
   repeat of either writing and paying nothing, likedByMe being each player's own, a self-like paid,
   a seed's likes paying nobody, a like being no answer, the author's total as their answers plus
   the likes their questions hold, 404 for a pending or rejected question and 401 for an unknown
-  player; two first likes racing pay once (then on the key, through Exposed's rerun; on the question's
-  row lock since `feat/moderation-app`) and two unlikes
+  player; two first likes racing pay once (on the key, through Exposed's rerun; on the question's
+  row lock from `feat/moderation-app` until `feat/simple-accounts`) and two unlikes
   racing take back once; the feed's likes before answering, in the same number of statements for a
   batch of one as for the pool, and an unlike committed mid-read showing in neither number; and
   `likesReceived` against likes added, removed and given. `StatsStoreTest` commits a like mid-read
@@ -390,8 +390,9 @@ automatically from every green commit on `main` (its URL is on its Render page).
   like and unlike, every number but what is due unchanged (§8c's sum included), the author's
   `RETIRED`, the queue's and the list's `RETIRED` apart from `APPROVED`, 409 `WRONG_STATUS` for
   every wrong status and 404, a seed, two retirements and two restorations racing (exactly one
-  each), a retirement waiting for a vote that holds the question and counting it, and a vote,
-  skip, like and unlike waiting on a retirement and then 404. `SeedTest` pins a retired seed
+  each), and, until `feat/simple-accounts` dropped the question's lock, a retirement waiting for a
+  vote that held the question and a vote, skip, like and unlike waiting on a retirement and then
+  404. `SeedTest` pins a retired seed
   through a second boot, `MigrationsTest` V3 on the pre-migration database and a database each
   build migrated in turn (`1 BASELINE`, `2 SQL`, `3 SQL`, rows kept), `SchemaDriftTest` V3 against
   `Tables.kt`, `ApiFlowTest` the four routes end to end (403, 404 with moderation off, 409, 400s),
@@ -555,11 +556,11 @@ automatically from every green commit on `main` (its URL is on its Render page).
   edge `WyrHttpClient` notes remains: both clients checking the store before either writes can
   still leave the displaced token there, until a lock shared across processes exists.
 - **The endless feed and vote replay on Postgres.** `RANDOM()` in the feed, the compare-and-set
-  that starts a cycle, a first answer racing another (queued on the question's row lock since
-  `feat/moderation-app`; before it, the 23505 aborted the transaction and Exposed reran it), and the
-  `SELECT ... FOR UPDATE` that makes a retry wait and replay have only run on H2. So has the skip,
-  locked and then written as a vote is, with a first skip racing another on the question's row. The store races in `QuestionStoreTest`, `VoteStoreTest` and `SkipStoreTest`
-  poll H2's `SESSIONS`, like `PlayerStoreTest`. The stats read has run only on H2 too: one
+  that starts a cycle, a first answer racing another (the 23505 aborts the transaction and Exposed
+  reruns it), and the `SELECT ... FOR UPDATE` that makes a retry wait and replay have only run on
+  H2. So has the skip, locked and then written as a vote is, with a first skip racing another on its
+  key. The store races in `QuestionStoreTest`, `VoteStoreTest` and `SkipStoreTest` poll H2's
+  `SESSIONS`, like `PlayerStoreTest`. The stats read has run only on H2 too: one
   statement with a correlated subquery on `players.current_cycle`. That one statement sees one
   committed state at READ COMMITTED is documented PostgreSQL behaviour, not something a test here
   has seen.
@@ -581,14 +582,10 @@ automatically from every green commit on `main` (its URL is on its Render page).
   `(submitted_at, id)` compared in the database's collation, and retirement and restoration have
   passed on PostgreSQL in `ApiFlowTest`'s flows, in `main`'s `server-postgres` job at 9a7902f (run
   36074122336). Only the races are still H2's alone: `RetirementTest`'s poll H2's `SESSIONS`, as
-  `ModerationStoreTest`'s do, and on PostgreSQL a `SELECT ... FOR UPDATE` that waited on a retirement
-  re-checks its `WHERE` against the committed row, and finds nothing, only as documented behaviour
-  (EvalPlanQual), as for the refresh rotation. H2 does the same, which the races show; that a locking
-  read there re-checks rather than returning the row it first matched was first seen in a standalone
-  check against H2 2.4.240.
-- **Likes on Postgres, and in any client but the JVM.** Two first likes racing, and two unlikes,
-  now each queued on the question's row lock (`feat/moderation-app`), the grouped count
-  with its `COUNT(CASE ...)` and the stats' subquery have run only on H2 (`LikeStoreTest` polls H2's
+  `ModerationStoreTest`'s do.
+- **Likes on Postgres, and in any client but the JVM.** Two first likes racing on their key, and two
+  unlikes on the like's row, the grouped count with its `COUNT(CASE ...)` and the stats' subquery
+  have run only on H2 (`LikeStoreTest` polls H2's
   `SESSIONS`). The client has sent likes only from the JVM (the live run above), and nobody has
   looked at the console's Like button or its likes lines on any platform.
 - **Multiple categories on Postgres, and in the client.** The `EXISTS ... IN` filter, the batch's
@@ -1197,17 +1194,13 @@ Play tab is frozen).
   alone would let a second moderator overwrite the first.
 - **One predicate decides which questions a player may be served** (`QuestionStore.servable`,
   CLAUDE.md §8d): an approved one not retired, to every player alike, its author included. The feed,
-  the stats' due count, and votes, skips and likes (`QuestionStore.lockIfServable`) all read it, so
+  the stats' due count, and votes, skips and likes (`QuestionStore.isServable`) all read it, so
   a pending, rejected or retired question is served to nobody, due for nobody, and answering,
-  skipping, liking or unliking it is 404. A new exclusion belongs there. Since a question can now
-  stop being servable, `lockIfServable` takes the question's row `FOR UPDATE`: a retirement waits
-  for the votes, skips and likes that found it servable, and one behind a retirement finds it
-  retired. So every vote, skip and like of one question queues on its row, each waiting with a
-  pooled connection held, so enough at once on one question hold the whole pool (5 on PostgreSQL)
-  and stall every other request (weighed in CLAUDE.md §8b, *Retiring a question*); and two first
-  ones by a player never race on their key any more; `VoteStoreTest`, `SkipStoreTest` and
-  `LikeStoreTest` race them on the row lock now, and `VoteStoreTest`'s split-tally race moves the
-  other vote straight in the table, since no answer can come between. Retirement is a column,
+  skipping, liking or unliking it is 404. A new exclusion belongs there. `isServable` is a plain
+  read, with no lock on the question (*decided 2026-09-25*; `feat/simple-accounts` dropped
+  `lockIfServable`): one question's votes, skips and likes never queue on its row, two first ones by
+  a player race on their key, and one in flight as a retirement commits may still land
+  (`RetirementTest` pins it). Retirement is a column,
   `questions.retired_at`, beside an `APPROVED` status, and `statusOf` / `standsAt`
   (`io.ntole.wyr.server.question`) read the two as one: read a question's status through them,
   never `Questions.status` alone, or a retired question reads as approved.

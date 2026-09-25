@@ -10,6 +10,7 @@ import io.ntole.wyr.core.question.QuestionStatus
 import io.ntole.wyr.core.vote.OptionSide
 import io.ntole.wyr.core.vote.VoteResultDto
 import io.ntole.wyr.core.vote.VoteTallyDto
+import io.ntole.wyr.server.db.INSERTING_INTO_LIKES
 import io.ntole.wyr.server.db.Likes
 import io.ntole.wyr.server.db.Players
 import io.ntole.wyr.server.db.QuestionCategories
@@ -300,17 +301,19 @@ class LikeStoreTest {
         val (author, liker) = newPlayer() to newPlayer()
         val question = submitted(author)
 
-        // The second waits on the question's lock, which the first holds, and then finds its like.
+        // The second finds no like either, inserts, waits on the first's key and fails on it once
+        // the first commits. Only Exposed rerunning its whole transaction turns it into a repeat.
         val (first, second) =
             raceBehindFirst(
                 url,
                 database,
                 { LikeStore.setLiked(liker, question, liked = true) },
                 { LikeStore.setLiked(liker, question, liked = true) },
+                queued = INSERTING_INTO_LIKES,
             )
 
         assertEquals(LikeResultDto(question, likeCount = 1, likedByMe = true), first)
-        assertEquals(LikeResultDto(question, likeCount = 1, likedByMe = true), second, "the second found the like")
+        assertEquals(LikeResultDto(question, likeCount = 1, likedByMe = true), second, "the rerun found the like")
         assertEquals(listOf(liker), likersOf(question))
         assertEquals(Scoring.POINTS_PER_LIKE, pointsOf(author), "paid once")
     }
@@ -321,7 +324,7 @@ class LikeStoreTest {
         val question = submitted(author)
         like(liker, question)
 
-        // The second waits on the question's lock, which the first holds, and then finds the like gone.
+        // The second's delete waits on the row the first's holds, and then finds it gone.
         val (first, second) =
             raceBehindFirst(
                 url,

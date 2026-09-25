@@ -111,7 +111,7 @@ object QuestionStore {
     /**
      * Which questions [playerId] may be served at all, whether answered or not (CLAUDE.md §8d). This
      * is the one place that decides it, so the feed, anything that counts what a player has left,
-     * and what a player may answer, skip or like ([lockIfServable]) all agree.
+     * and what a player may answer, skip or like ([isServable]) all agree.
      *
      * A question is servable while it stands at approved ([standsAt]): once a moderator has approved
      * it, and for as long as no moderator has retired it (CLAUDE.md §8d, *Moderation*), to every player
@@ -201,40 +201,19 @@ object QuestionStore {
      * Whether a player may answer, skip or like the question [id]: it exists and is [servable], due
      * or not. Any other question is not found, as far as they are concerned: one still waiting for a
      * moderator, a rejected one, or a retired one. An author answers, skips and likes their own like
-     * any other. Must run inside a transaction, and when the question is servable, its row stays
-     * locked until the transaction ends.
+     * any other. Must run inside a transaction.
      *
-     * Locked, because a question can stop being servable: a moderator may retire it
-     * (`ModerationStore.retire`). A vote, skip or like writes after this read, and at READ COMMITTED
-     * a plain read could find the question servable just before a retirement commits, and then write
-     * to a question the moderator had already been told was retired (CLAUDE.md §4). `FOR UPDATE`
-     * orders the two. A retirement's update waits for every transaction that found the question
-     * servable to commit first, so what it answers the moderator with holds all of them. And a read
-     * that comes after the retirement's update waits for it, then reads the row as committed, finds
-     * it retired, and is not found. A read before a restoration commits finds the question retired,
-     * locks nothing and is not found, so a restored question is servable from the commit on.
-     *
-     * The cost is that writes to one question queue for its row one at a time, where before only the
-     * key of the one row each writes held back another (two first answers of one player, say). That
-     * is one question's answers, skips and likes, from every player, each transaction a few short
-     * statements, and the feed serves every player the pool in an order of their own. Only a write
-     * to the row, one that references it, or another such read waits on the lock: the feed, the stats
-     * and the moderator's lists read the row without it.
-     *
-     * But each transaction waits holding its pooled connection, and the pool is small (5 on
-     * PostgreSQL, `DatabaseFactory`). So as many writes to one question at once as the pool has
-     * connections hold all of them, one working and the rest waiting, and every other request waits
-     * for a connection meanwhile, up to Hikari's 30 s. A question can be answered by id whether or
-     * not the feed served it, and each player may send 120 votes a minute (CLAUDE.md §8b), so a few
-     * scripted guests can bring that about on purpose, and more cheaply than when writes to one
-     * question ran side by side.
+     * A plain read, with no lock on the question's row, so votes, skips and likes of one question
+     * never queue behind one another. A question can stop being servable (`ModerationStore.retire`),
+     * so a vote, skip or like that read it servable just before a retirement commits still lands,
+     * after it: accepted (CLAUDE.md §8b, *Retiring a question*).
      */
-    fun lockIfServable(id: String): Boolean =
+    fun isServable(id: String): Boolean =
         Questions
             .select(Questions.id)
             .where { (Questions.id eq id) and servable() }
-            .forUpdate()
-            .singleOrNull() != null
+            .limit(1)
+            .any()
 
     private fun toDto(
         row: ResultRow,

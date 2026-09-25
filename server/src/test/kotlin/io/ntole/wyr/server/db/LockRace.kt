@@ -37,9 +37,8 @@ internal fun connectH2(
  *
  * [queued] is the `INFORMATION_SCHEMA.SESSIONS` condition that picks out a session waiting on the
  * first. H2 names the blocker of a session waiting on a row lock, but not of one inserting a key
- * the first holds uncommitted ([INSERTING_INTO_QUESTIONS]); that one shows only by what it executes.
- * Two votes, skips or likes of one question never race on a key: the second waits on the question's
- * row lock (`QuestionStore.lockIfServable`).
+ * the first holds uncommitted ([INSERTING_INTO_VOTES], [INSERTING_INTO_SKIPS],
+ * [INSERTING_INTO_LIKES], [INSERTING_INTO_QUESTIONS]); that one shows only by what it executes.
  *
  * [whileQueued] runs once they all are, before the first is let go, so whatever it commits lands
  * after the first's work and before the rest of theirs.
@@ -124,10 +123,18 @@ private fun awaitQueuedSessions(
 internal const val WAITING_ON_A_ROW_LOCK = "BLOCKER_ID IS NOT NULL"
 
 /**
- * A session inside an insert into `questions`, such as the seed's. An insert of a key another
- * transaction holds uncommitted waits for that transaction to end, so once the first has inserted,
- * one seen here is queued on it.
+ * A session inside an insert into `votes`. An insert of a key another transaction holds uncommitted
+ * waits for that transaction to end, so once the first has inserted, one seen here is queued on it.
  */
+internal const val INSERTING_INTO_VOTES = "UPPER(EXECUTING_STATEMENT) LIKE 'INSERT INTO VOTES%'"
+
+/** As [INSERTING_INTO_VOTES], for an insert into `skips`. */
+internal const val INSERTING_INTO_SKIPS = "UPPER(EXECUTING_STATEMENT) LIKE 'INSERT INTO SKIPS%'"
+
+/** As [INSERTING_INTO_VOTES], for an insert into `likes`. */
+internal const val INSERTING_INTO_LIKES = "UPPER(EXECUTING_STATEMENT) LIKE 'INSERT INTO LIKES%'"
+
+/** As [INSERTING_INTO_VOTES], for an insert into `questions`, such as the seed's. */
 internal const val INSERTING_INTO_QUESTIONS = "UPPER(EXECUTING_STATEMENT) LIKE 'INSERT INTO QUESTIONS%'"
 
 private const val TIMEOUT_SECONDS = 10L

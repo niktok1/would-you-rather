@@ -7,6 +7,7 @@ import io.ntole.wyr.core.question.QuestionDto
 import io.ntole.wyr.core.vote.OptionSide
 import io.ntole.wyr.core.vote.VoteResultDto
 import io.ntole.wyr.core.vote.VoteTallyDto
+import io.ntole.wyr.server.db.INSERTING_INTO_SKIPS
 import io.ntole.wyr.server.db.Questions
 import io.ntole.wyr.server.db.Seed
 import io.ntole.wyr.server.db.Skips
@@ -190,12 +191,14 @@ class SkipStoreTest {
     fun `two first skips racing on one question leave one skip`() {
         val player = newPlayer()
 
-        // The second waits on the question's lock, which the first holds, and then finds its skip.
+        // The second finds no skip either, inserts, waits on the first's key and fails on it once
+        // the first commits. Only Exposed rerunning its whole transaction turns it into a repeat.
         raceBehindFirst(
             url,
             database,
             { SkipStore.skip(player, QUESTION) },
             { SkipStore.skip(player, QUESTION) },
+            queued = INSERTING_INTO_SKIPS,
         )
 
         assertEquals(listOf(QUESTION to 1), skipsOf(player))

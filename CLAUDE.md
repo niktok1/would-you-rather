@@ -169,11 +169,7 @@ failing:
   racer re-checks it against the first's commit).
   Or the read takes the row lock (`SELECT ... FOR UPDATE`), so a concurrent writer waits and then
   reads the row as committed (`VoteStore.cast`, which branches on more than one outcome, and
-  `SkipStore.skip`). A write that rests on a row it does not write locks that row the same way:
-  every vote, skip and like first locks its question's row if servable
-  (`QuestionStore.lockIfServable`), so a retirement's update waits for them to commit, and one
-  waiting behind a retirement re-reads the row and finds it retired. That orders every vote, skip
-  and like of one question, one at a time.
+  `SkipStore.skip`).
   A read of rows a racing writer is about to add has no row to lock, so it locks a parent row that
   every such writer locks first (`SubmissionStore.submit` counts an author's pending questions
   under the author's `players` row).
@@ -183,11 +179,9 @@ failing:
 - Uniqueness is a constraint (the `Votes`, `Skips` and `Likes` primary keys), never a prior
   `SELECT`. A violation is never caught and carried on from: PostgreSQL aborts a transaction at its
   first error. It propagates, and Exposed rolls back and reruns the whole transaction, which then
-  sees the committed row (`Seed.questionsIfEmpty`, which `SeedTest` races). Two first votes, skips
-  or likes of one question no longer reach their key together, since the question's lock orders
-  them (above), but the key is still what holds one per player, and a violation there would take
-  the same path. A plain read before such an insert only spares a certain violation, and needs no
-  lock when finding the row writes nothing (a like already held).
+  sees the committed row (`VoteStore.cast`, `SkipStore.skip`, `LikeStore.setLiked`, and
+  `Seed.questionsIfEmpty`, which `SeedTest` races). A plain read before such an insert only spares
+  a certain violation, and needs no lock when finding the row writes nothing (a like already held).
 - Numbers that must agree with one another are read in one statement, which sees one committed
   state; two statements can straddle another transaction's commit (the tally in `VoteStore`,
   `StatsStore.of`, a question's like count beside `likedByMe` in `LikeStore.likesOf`, a question's
@@ -673,22 +667,14 @@ EncryptedSharedPreferences. All of it must be revisited before real accounts exi
   nobody can unlike it until it is restored. Restored, it is due for every player who has not
   answered or skipped it in their current cycle. It is stored as `questions.retired_at` beside an
   `APPROVED` status, and sent as `QuestionStatus.RETIRED`, so a rollback to the build before (§8b,
-  *Rollbacks*) reads every row and only serves retired questions again. Every vote, skip and like
-  locks its question's row (`QuestionStore.lockIfServable`, §4), so nothing lands on a question
-  after its retirement commits, at the cost of one question's votes, skips and likes queueing one at
-  a time. Each waits holding one of the pool's 5 connections (2 on H2), so as many writes to one
-  question at once hold every connection and delay every other request, the feed, stats and
-  refreshes included, for as long as the queue takes, up to Hikari's 30 s wait for a connection; a
-  question is answerable by id whether served or not, so a few scripted guests within their 120
-  votes a minute can do that on purpose. The options: keep it; let an unlike through on a retired
-  question, so a player can still take a like back (and its author's point with it); take back what
-  a retired question earned (every total would move, and §8c's sum would need the retired questions
-  left out on both sides); a plain servability read instead of the lock, so writes to one question
-  never queue, where a vote in flight as the retirement commits may still land, and the retirement's
-  answer not count it; a shared lock on PostgreSQL (`FOR SHARE`), which lets writes to one question
-  run side by side and still holds a retirement back, but needs SQL per engine, since H2 refuses it;
-  or `RETIRED` stored as a status of its own once no build before this one is a rollback target,
-  which drops the column.
+  *Rollbacks*) reads every row and only serves retired questions again. A vote, skip or like reads
+  servability plainly (`QuestionStore.isServable`, no lock on the question; *decided 2026-09-25*),
+  so one in flight as a retirement commits may still land, uncounted in the retirement's answer.
+  The options: keep it; let an unlike through on a retired question, so a player can still take a
+  like back (and its author's point with it); take back what a retired question earned (every
+  total would move, and §8c's sum would need the retired questions left out on both sides); or
+  `RETIRED` stored as a status of its own once no build before this one is a rollback target, which
+  drops the column.
 - **Skips under a category filter** — *provisional — user decision.* A request filtered to one
   or more categories with nothing due in any of them, while other questions still are, serves
   those categories again (§8d, *Categories*), and that includes questions skipped this cycle, which
@@ -1006,8 +992,8 @@ and every request shows in its HTTP trace (`HttpTrace` in `:core:network`, never
 - **Own questions** *(built; decided 2026-09-24)*: an author is served their own questions
   **like any other player** and may answer, skip and like them; the user chose the simpler logic.
   `QuestionStore.servable` is the one predicate the feed, the due count and votes, skips and likes
-  (`QuestionStore.lockIfServable`) read, and it asks only that a moderator approved the question and
-  has not retired it (*Moderation*).
+  (`QuestionStore.isServable`) read, and it asks only that a moderator approved the question and has
+  not retired it (*Moderation*).
 - **Likes** *(built)*: any player may like any question, **their own
   included**, at any time (before or after answering), once each, and may unlike it. Each like
   currently held is **+1 point to the author**, and unliking takes that point back. The like count
@@ -1023,9 +1009,9 @@ and every request shows in its HTTP trace (`HttpTrace` in `:core:network`, never
     retired question's likes stay held and paid until it is restored (*Moderation*).
   - Only a row actually inserted pays the author (`Scoring.POINTS_PER_LIKE`, an SQL increment) and
     only one actually deleted takes the point back, in the same transaction. A like reads whether the
-    row is there and inserts only if not, and an unlike is one delete. Two likes or two unlikes of one
-    question queue on its row's lock (§4), so the second finds what the first left, and the key
-    still holds one like per player. `LikeStoreTest` races both.
+    row is there and inserts only if not, and two first likes racing fail on the key, which Exposed's
+    rerun turns into a repeat (§4); an unlike is one delete, so of two racing only one deletes.
+    `LikeStoreTest` races both.
   - Every feed batch carries each question's `likeCount` and `likedByMe` (`QuestionDto`), answered
     or not, read in one more grouped statement per batch (`LikeStore.likesOf`), never one per
     question, and the two numbers in that one statement so they agree. `GET /v1/me` reports
@@ -1130,13 +1116,11 @@ and every request shows in its HTTP trace (`HttpTrace` in `:core:network`, never
     it in their current cycle. Each is a compare-and-set (`ModerationStore.move`, §4): retire only a
     question standing at approved, restore only one standing at retired, anything else 409
     `WRONG_STATUS` and changes nothing, an unknown id 404, a malformed body 400; of two moderators
-    racing exactly one wins. Every vote, skip and like locks its question's row first
-    (`QuestionStore.lockIfServable`), so a retirement waits for those that found it servable, and
-    answers with them counted, and one that comes after it finds it retired. Stored as
-    `questions.retired_at` (V3) beside an `APPROVED` status, never as a status: `statusOf` and
-    `standsAt` read the two columns as one status, so a rollback to the build before reads every row.
-    The seed writes only into a database with no question, so a retired seed stays retired through
-    every boot. `RetirementTest` pins it, the races included.
+    racing exactly one wins. A vote, skip or like in flight as it commits may still land (§8b,
+    *Retiring a question*). Stored as `questions.retired_at` (V3) beside an `APPROVED` status, never
+    as a status: `statusOf` and `standsAt` read the two columns as one status, so a rollback to the
+    build before reads every row. The seed writes only into a database with no question, so a
+    retired seed stays retired through every boot. `RetirementTest` pins it, the races included.
   - *The client* is `ModerationRepository` in `:core:domain`, behind `GetPendingSubmissions`,
     `ApproveSubmission` and `RejectSubmission`, none of which ensures a session: the moderator is
     not a player. `DefaultModerationRepository` calls `ModerationApi` through `runApi` alone, never

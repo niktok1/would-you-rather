@@ -10,11 +10,11 @@ import io.ntole.wyr.core.question.QuestionStatus
 import io.ntole.wyr.core.question.SubmissionDto
 import io.ntole.wyr.core.question.SubmitQuestionRequest
 import io.ntole.wyr.core.vote.OptionSide
-import io.ntole.wyr.core.vote.VoteResultDto
 import io.ntole.wyr.core.vote.VoteTallyDto
 import io.ntole.wyr.server.db.Likes
 import io.ntole.wyr.server.db.Questions
 import io.ntole.wyr.server.db.Seed
+import io.ntole.wyr.server.db.Skips
 import io.ntole.wyr.server.db.appTables
 import io.ntole.wyr.server.db.connectH2
 import io.ntole.wyr.server.db.h2Url
@@ -28,17 +28,23 @@ import io.ntole.wyr.server.question.SkipStore
 import io.ntole.wyr.server.question.SubmissionStore
 import io.ntole.wyr.server.vote.Scoring
 import io.ntole.wyr.server.vote.VoteStore
+import org.jetbrains.exposed.v1.core.Transaction
 import org.jetbrains.exposed.v1.core.eq
+import org.jetbrains.exposed.v1.core.statements.StatementContext
+import org.jetbrains.exposed.v1.core.statements.StatementInterceptor
+import org.jetbrains.exposed.v1.core.statements.api.PreparedStatementApi
 import org.jetbrains.exposed.v1.jdbc.SchemaUtils
 import org.jetbrains.exposed.v1.jdbc.select
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import java.sql.Connection
 import java.util.UUID
+import java.util.concurrent.Callable
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
-import kotlin.test.assertTrue
 
 /**
  * Retiring and restoring approved questions (CLAUDE.md §8d, *Moderation*) through the stores at READ
@@ -243,54 +249,21 @@ class RetirementTest {
     }
 
     @Test
-    fun `a retirement waits for a vote that found the question servable, and answers with it counted`() {
+    fun `a vote, skip or like in flight as a retirement commits still lands`() {
         val player = newPlayer()
-        val question = approved(newPlayer())
+        val (voted, skipped, liked) = List(3) { approved(newPlayer()) }
 
-        // The vote holds the question's row. Read without a lock, the retirement would not wait, and
-        // the vote would land on a question the moderator had been told was retired.
-        val (vote, retired) =
-            raceBehindFirst(
-                url,
-                database,
-                { runCatching { VoteStore.cast(player, question, OptionSide.B, attemptId = "in-flight") } },
-                { runCatching { ModerationStore.retire(question) } },
-            )
+        // Each reads its question as servable with no lock, so the retirement committed right after
+        // that read does not wait for it, and the write lands on a question already retired
+        // (CLAUDE.md §8b, *Retiring a question*). Locked, the retirement would wait, and time out here.
+        retiredMidway(voted) { VoteStore.cast(player, voted, OptionSide.B, attemptId = "in-flight") }
+        retiredMidway(skipped) { SkipStore.skip(player, skipped) }
+        retiredMidway(liked) { LikeStore.setLiked(player, liked, liked = true) }
 
-        assertEquals(Scoring.POINTS_PER_ANSWER, (vote.getOrThrow() as VoteResultDto).pointsAwarded, "the vote landed")
-        val listed = retired.getOrThrow() as AdminQuestionDto
-        assertEquals(QuestionStatus.RETIRED to VoteTallyDto(votesA = 0, votesB = 1), listed.status to listed.tally)
-    }
-
-    @Test
-    fun `a vote, skip, like or unlike waiting on a retirement is not found once it commits`() {
-        val player = newPlayer()
-        val actions: List<Pair<String, (String) -> Unit>> =
-            listOf(
-                "a vote" to { id -> answer(player, id) },
-                "a skip" to { id -> SkipStore.skip(player, id) },
-                "a like" to { id -> LikeStore.setLiked(player, id, liked = true) },
-                "an unlike" to { id -> LikeStore.setLiked(player, id, liked = false) },
-            )
-
-        actions.forEach { (what, action) ->
-            val question = approved(newPlayer())
-            if (what == "an unlike") like(player, question, liked = true)
-
-            // The retirement's update holds the question's row, and the action's read waits on it. Read
-            // without a lock, it would find the question approved, as the last commit left it.
-            val (retired, acted) =
-                raceBehindFirst(
-                    url,
-                    database,
-                    { runCatching { ModerationStore.retire(question) } },
-                    { runCatching { action(question) } },
-                )
-
-            assertTrue(retired.isSuccess, what)
-            assertEquals(ErrorCode.QUESTION_NOT_FOUND, (acted.exceptionOrNull() as? ApiFailure)?.code, what)
-        }
-        assertEquals(0, statsOf(player).answersGiven, "no answer landed")
+        listOf(voted, skipped, liked).forEach { id -> assertEquals(QuestionStatus.RETIRED, listed(id).status) }
+        assertEquals(VoteTallyDto(votesA = 0, votesB = 1), listed(voted).tally, "the vote landed")
+        assertEquals(listOf(player), skippersOf(skipped), "the skip landed")
+        assertEquals(listOf(player), likersOf(liked), "the like landed")
     }
 
     private fun newPlayer(): String =
@@ -331,6 +304,50 @@ class RetirementTest {
     ) {
         transaction(database) { LikeStore.setLiked(player, questionId, liked) }
     }
+
+    /**
+     * Runs [write] in a transaction of its own, and retires [question] in another as soon as [write]
+     * has read the question, before it writes anything.
+     */
+    private fun retiredMidway(
+        question: String,
+        write: () -> Unit,
+    ) {
+        val elsewhere = Executors.newSingleThreadExecutor()
+        try {
+            transaction(database) {
+                registerInterceptor(
+                    afterFirstReadOfQuestions {
+                        elsewhere.submit(Callable { retire(question) }).get(TIMEOUT_SECONDS, TimeUnit.SECONDS)
+                    },
+                )
+                write()
+            }
+        } finally {
+            elsewhere.shutdownNow()
+        }
+    }
+
+    /** Runs [action] once, after the transaction's first statement that reads `questions`. */
+    private fun afterFirstReadOfQuestions(action: () -> Unit): StatementInterceptor =
+        object : StatementInterceptor {
+            private var fired = false
+
+            override fun afterExecution(
+                transaction: Transaction,
+                contexts: List<StatementContext>,
+                executedStatement: PreparedStatementApi,
+            ) {
+                if (fired || contexts.none { "FROM QUESTIONS" in it.sql(transaction).uppercase() }) return
+                fired = true
+                action()
+            }
+        }
+
+    private fun skippersOf(questionId: String): List<String> =
+        transaction(database) {
+            Skips.select(Skips.playerId).where { Skips.questionId eq questionId }.map { it[Skips.playerId] }
+        }
 
     private fun likersOf(questionId: String): List<String> =
         transaction(database) {
@@ -393,5 +410,6 @@ class RetirementTest {
 
     private companion object {
         const val SEED = "seed-1"
+        const val TIMEOUT_SECONDS = 10L
     }
 }

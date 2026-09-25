@@ -3,6 +3,7 @@ package io.ntole.wyr.server.vote
 import io.ntole.wyr.core.vote.OptionSide
 import io.ntole.wyr.core.vote.VoteResultDto
 import io.ntole.wyr.core.vote.VoteTallyDto
+import io.ntole.wyr.server.db.INSERTING_INTO_VOTES
 import io.ntole.wyr.server.db.Players
 import io.ntole.wyr.server.db.Questions
 import io.ntole.wyr.server.db.Seed
@@ -24,7 +25,6 @@ import org.jetbrains.exposed.v1.jdbc.SchemaUtils
 import org.jetbrains.exposed.v1.jdbc.select
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
-import org.jetbrains.exposed.v1.jdbc.update
 import java.sql.Connection
 import java.util.UUID
 import java.util.concurrent.Callable
@@ -95,14 +95,15 @@ class VoteStoreTest {
     fun `two first answers racing on one question are both paid and leave one vote`() {
         val player = newPlayer()
 
-        // The second waits on the question's lock, which the first holds, and then finds its vote and
-        // moves it.
+        // The second inserts too, waits on the first's key, fails on it once the first commits,
+        // and only Exposed rerunning its whole transaction turns it into a re-answer.
         val (first, second) =
             raceBehindFirst(
                 url,
                 database,
                 { VoteStore.cast(player, QUESTION, OptionSide.A, attemptId = "first") },
                 { VoteStore.cast(player, QUESTION, OptionSide.B, attemptId = "second") },
+                queued = INSERTING_INTO_VOTES,
             )
 
         assertEquals(Scoring.POINTS_PER_ANSWER, first.totalPoints)
@@ -123,6 +124,7 @@ class VoteStoreTest {
                 database,
                 { VoteStore.cast(player, QUESTION, OptionSide.A, attemptId = "only") },
                 { VoteStore.cast(player, QUESTION, OptionSide.A, attemptId = "only") },
+                queued = INSERTING_INTO_VOTES,
             )
 
         assertEquals(false, first.replayed)
@@ -174,23 +176,6 @@ class VoteStoreTest {
     }
 
     @Test
-    fun `another player's answer to the question waits for this one and both are counted`() {
-        val (caster, other) = newPlayer() to newPlayer()
-
-        // The second waits on the question's lock, which the first holds until it commits.
-        val (first, second) =
-            raceBehindFirst(
-                url,
-                database,
-                { VoteStore.cast(caster, QUESTION, OptionSide.A, attemptId = "caster") },
-                { VoteStore.cast(other, QUESTION, OptionSide.B, attemptId = "other") },
-            )
-
-        assertEquals(VoteTallyDto(votesA = 1, votesB = 0), first.tally, "counted before the other answer")
-        assertEquals(VoteTallyDto(votesA = 1, votesB = 1), second.tally, "and the other answer after it")
-    }
-
-    @Test
     fun `another player switching sides while the tally is counted is counted once`() {
         val switcher = newPlayer()
         val caster = newPlayer()
@@ -200,14 +185,11 @@ class VoteStoreTest {
             val result =
                 transaction(database) {
                     // Commits the switch right after this transaction's first count. Counted a side
-                    // per statement, the second count would see the switcher's vote again. An answer
-                    // could not do it now, since it would wait on the question's lock this one holds,
-                    // so the switch writes the vote's row as nothing else does: it stands for any
-                    // change that lock does not hold back.
+                    // per statement, the second count would see the switcher's vote again.
                     registerInterceptor(
                         afterFirstCount {
                             elsewhere
-                                .submit(Callable { switchWithoutTheQuestionsLock(switcher) })
+                                .submit(Callable { switch(switcher) })
                                 .get(TIMEOUT_SECONDS, TimeUnit.SECONDS)
                         },
                     )
@@ -231,14 +213,7 @@ class VoteStoreTest {
         at: Long = System.currentTimeMillis(),
     ): VoteResultDto = transaction(database) { VoteStore.cast(player, QUESTION, choice, attempt, now = at) }
 
-    /** Moves [player]'s vote on [QUESTION] to B, straight in the table. */
-    private fun switchWithoutTheQuestionsLock(player: String) {
-        transaction(database) {
-            Votes.update({ (Votes.playerId eq player) and (Votes.questionId eq QUESTION) }) { row ->
-                row[side] = OptionSide.B.name
-            }
-        }
-    }
+    private fun switch(player: String): VoteResultDto = cast(player, OptionSide.B, attempt = "after")
 
     private fun storedVotes(): List<ResultRow> =
         transaction(database) { Votes.selectAll().where { Votes.questionId eq QUESTION }.toList() }

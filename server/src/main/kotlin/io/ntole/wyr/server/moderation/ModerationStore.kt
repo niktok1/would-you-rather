@@ -177,10 +177,9 @@ object ModerationStore {
      *
      * A compare-and-set (CLAUDE.md §4): the update's `WHERE` is standing at approved, so of two
      * retirements racing, the second waits on the first's row lock, finds the row retired and is
-     * refused. Its update also waits for every vote, skip and like that found the question servable
-     * and holds its row ([QuestionStore.lockIfServable]), so the numbers it answers with hold each of
-     * them, and none can come after: the row stays locked until this transaction ends, and a read
-     * waiting on it finds the question retired.
+     * refused. A vote, skip or like that read the question servable just before this commits takes no
+     * lock ([QuestionStore.isServable]), so it still lands after it, and the numbers answered here may
+     * not count it (CLAUDE.md §8b, *Retiring a question*).
      */
     fun retire(
         questionId: String,
