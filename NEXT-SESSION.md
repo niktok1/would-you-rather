@@ -826,7 +826,7 @@ life, so a launch plays every category again.
 **To try it on a phone** (`devDebug`, as for *Skip and Like on Play*; the server needs nothing new):
 
 1. `./gradlew :app:androidApp:installDevDebug`, open *WYR Dev*, and go to the **Play** tab. Under the
-   title: **All** over *categories*.
+   title: **All** over *change categories*, which should read as something to tap.
 2. Tap it: a dialog of *All categories* (ticked) and the five categories. Tick *Food* and *Ethics*:
    nothing changes behind the dialog yet. **Play**: the question on screen goes, and the next is filed
    under Food or Ethics; the header reads *Food, Ethics*, beside the points once you answer. The

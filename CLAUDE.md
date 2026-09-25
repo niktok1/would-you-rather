@@ -821,7 +821,9 @@ The third to move is the **category picker**, onto the Play screen (*Categories*
 - Under the title, in every state, the categories played: *All*, or their names in declaration
   order, cut short on one line. A value over its label, as the reveal's points are, and in the same
   row beside them, so the reveal is no taller for it (on this Mac it still needs 569 of the 599; a
-  question not answered yet needs 56 more than before, from the height its cards had to spare).
+  question not answered yet needs 56 more than before, from the height its cards had to spare). The
+  label is *change categories*: the value's accent colour is the title's too, and nothing else
+  marks it as something to tap.
 - Tapping it opens a small dialog (`CategoryPicker`): *All categories* and every category but
   `OTHER`, ticked or not, then *Cancel* and *Play*. Nothing changes until Play, so ticking several is
   one change and one reload. A new selection drops the question on screen, answered or not, and
