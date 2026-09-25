@@ -486,7 +486,7 @@ class SubmitViewModelTest {
     /**
      * The server and this device's session in one. Every call that reaches it is in [calls], a
      * submission with its options quoted as sent and its categories in declaration order. A question
-     * stored costs [SubmissionRules.COST], as the server takes it.
+     * stored costs [SubmissionRules.COST], as a server that charges it takes it.
      */
     private class FakeServer :
         SubmissionRepository,
