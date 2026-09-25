@@ -57,7 +57,7 @@ class AccountViewModel(
 
     /**
      * Not read on creation: the screen asks every time it is shown, since the stats move on the Play
-     * tab meanwhile, and a guest's points are what a login would leave behind.
+     * screen meanwhile, and a guest's points are what a login would leave behind.
      */
     override fun refresh() = perform(AccountAction.LOAD) {}
 

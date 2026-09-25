@@ -63,7 +63,7 @@ class SubmitScreenDrawTest {
         const val WIDTH = 400
         const val HEIGHT = 900
 
-        /** An iPhone SE (667 high) less its status bar (20) and the tab row above the screen (48). */
+        /** An iPhone SE (667 high) less its status bar (20) and the top bar above the screen (48). */
         const val SHORT_PHONE_WIDTH = 375
         const val SHORT_PHONE_HEIGHT = 599
 

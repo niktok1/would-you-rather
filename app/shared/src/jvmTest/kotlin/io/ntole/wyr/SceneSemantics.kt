@@ -1,0 +1,82 @@
+package io.ntole.wyr
+
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.snapshots.Snapshot
+import androidx.compose.ui.ExperimentalComposeUiApi
+import androidx.compose.ui.ImageComposeScene
+import androidx.compose.ui.layout.Layout
+import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.semantics.SemanticsNode
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.semantics.getAllSemanticsNodes
+import androidx.compose.ui.semantics.getOrNull
+import androidx.compose.ui.unit.Density
+import kotlin.test.assertNotNull
+import kotlin.test.assertTrue
+
+// What a screen drawn off screen shows and does, read through its semantics as a screen reader
+// reads them, since there is no Compose UI test library in the tree.
+
+/** Every node the scene holds, each button's text and name merged into it, from the top down. */
+@OptIn(ExperimentalComposeUiApi::class)
+internal fun ImageComposeScene.nodes(): List<SemanticsNode> =
+    semanticsOwners
+        .flatMap { owner -> owner.getAllSemanticsNodes(mergingEnabled = true) }
+        .sortedWith(compareBy({ it.positionInRoot.y }, { it.positionInRoot.x }))
+
+/** Every text the scene shows, from the top down. */
+internal fun ImageComposeScene.texts(): List<String> = nodes().flatMap { it.texts }
+
+/** Every name the scene gives a screen reader for what has no text, an icon's, from the top down. */
+internal fun ImageComposeScene.descriptions(): List<String> = nodes().flatMap { it.descriptions }
+
+internal val SemanticsNode.texts: List<String>
+    get() = config.getOrNull(SemanticsProperties.Text).orEmpty().map { it.text }
+
+internal val SemanticsNode.descriptions: List<String>
+    get() = config.getOrNull(SemanticsProperties.ContentDescription).orEmpty()
+
+/** Taps the one node showing [text] or named [text], as a finger or a screen reader would, and draws again. */
+internal fun ImageComposeScene.tap(text: String) {
+    val node = nodes().singleOrNull { text in it.texts || text in it.descriptions }
+    val tap = assertNotNull(node?.config?.getOrNull(SemanticsActions.OnClick)?.action, "nothing to tap shows \"$text\"")
+    tap()
+    settle()
+}
+
+/** Draws the scene again once what the last action changed has reached it. */
+internal fun ImageComposeScene.settle() {
+    repeat(2) {
+        Snapshot.sendApplyNotifications()
+        render()
+    }
+}
+
+/**
+ * The least height [content] needs at [width] for nothing in it to be squeezed, and the width it
+ * needs for nothing to be cut short, at one pixel a dp.
+ */
+internal fun sizeNeeded(
+    width: Int,
+    height: Int,
+    content: @Composable () -> Unit,
+): Pair<Int, Int> {
+    var needed = -1 to -1
+    val scene =
+        ImageComposeScene(width = width, height = height, density = Density(1f)) {
+            Layout(content = content) { measurables, constraints ->
+                val measurable = measurables.single()
+                needed = measurable.maxIntrinsicWidth(constraints.maxHeight) to
+                    measurable.minIntrinsicHeight(constraints.maxWidth)
+                val placeable = measurable.measure(constraints)
+                layout(placeable.width, placeable.height) { placeable.place(0, 0) }
+            }
+        }
+    try {
+        scene.render()
+    } finally {
+        scene.close()
+    }
+    assertTrue(needed.first > 0 && needed.second > 0, "the content was never measured")
+    return needed
+}

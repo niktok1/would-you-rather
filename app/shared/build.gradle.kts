@@ -61,6 +61,8 @@ kotlin {
         androidMain.dependencies {
             implementation(libs.compose.uiToolingPreview)
             implementation(libs.compose.uiTooling)
+            // BackHandler, which binds Android's back to the back stack (SystemBack.android.kt).
+            implementation(libs.androidx.activity.compose)
             // api, not implementation: WyrApplication calls androidContext() when starting DI, so
             // this is part of what the Android entry point compiles against.
             api(libs.koin.android)

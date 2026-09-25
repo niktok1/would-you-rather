@@ -14,6 +14,18 @@ import io.ntole.wyr.core.domain.language.SerbianScript
  * missing one being a constructor that does not compile rather than a key that fails at run time.
  */
 data class Strings(
+    /** The game's name, on the Home screen. */
+    val gameName: String,
+    /** The Home screen's one button, into the game. */
+    val play: String,
+    /** The home icon's name, for a screen reader: back to the Home screen. */
+    val home: String,
+    /** The account icon's name, for a screen reader: to the Account screen. */
+    val account: String,
+    /** The back arrow's name, for a screen reader: to the screen before. */
+    val back: String,
+    /** The Account screen's way to the Submit screen. */
+    val submitQuestion: String,
     /** The label of the language switch on the Account screen, for a screen reader. */
     val language: String,
 ) {
@@ -24,6 +36,12 @@ data class Strings(
      */
     internal fun map(transform: (String) -> String): Strings =
         Strings(
+            gameName = transform(gameName),
+            play = transform(play),
+            home = transform(home),
+            account = transform(account),
+            back = transform(back),
+            submitQuestion = transform(submitQuestion),
             language = transform(language),
         )
 }
@@ -31,6 +49,12 @@ data class Strings(
 /** The source text, written by hand. */
 val SerbianCyrillicStrings: Strings =
     Strings(
+        gameName = "Шта би радије?",
+        play = "Играј",
+        home = "Почетна",
+        account = "Налог",
+        back = "Назад",
+        submitQuestion = "Пошаљи питање",
         language = "Језик",
     )
 
@@ -39,6 +63,12 @@ val SerbianLatinStrings: Strings = SerbianCyrillicStrings.map(SerbianScript::toL
 
 val EnglishStrings: Strings =
     Strings(
+        gameName = "Would You Rather?",
+        play = "Play",
+        home = "Home",
+        account = "Account",
+        back = "Back",
+        submitQuestion = "Submit a question",
         language = "Language",
     )
 

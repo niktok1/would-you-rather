@@ -125,7 +125,7 @@ class AccountViewModelTest {
             val viewModel = open()
             assertEquals("Cycle 1: 0 questions left", statLines(viewModel.state.value.shown())[2])
 
-            // Played on the Play tab meanwhile: the last question of cycle 1 answered, then more asked for.
+            // Played on the Play screen meanwhile: the last question of cycle 1 answered, then more asked for.
             game.cycle = 2
             game.dueThisCycle = 24
             viewModel.refresh()

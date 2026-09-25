@@ -22,7 +22,7 @@ import kotlin.time.Duration.Companion.seconds
 /**
  * The Account screen drawn off screen at two phones' sizes, in each theme and each language, from
  * every state it can be in. Compose measures and draws it all, so a layout that cannot be measured
- * fails here rather than when the tab opens. Whether what it draws fits is asked separately: the
+ * fails here rather than when the screen opens. Whether what it draws fits is asked separately: the
  * screen scrolls, so it draws whatever its height. It is drawn for DEV, whose server line is the
  * longest, unless a test names another environment.
  */
@@ -192,7 +192,7 @@ class AccountScreenDrawTest {
         const val WIDTH = 400
         const val HEIGHT = 900
 
-        /** An iPhone SE (667 high) less its status bar (20) and the tab row above the tab (48). */
+        /** An iPhone SE (667 high) less its status bar (20) and the top bar above the screen (48). */
         const val SHORT_PHONE_WIDTH = 375
         const val SHORT_PHONE_HEIGHT = 599
 
