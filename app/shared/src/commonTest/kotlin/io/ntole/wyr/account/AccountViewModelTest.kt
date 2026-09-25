@@ -21,6 +21,7 @@ import io.ntole.wyr.core.domain.submission.SubmissionStatus
 import io.ntole.wyr.language.EnglishStrings
 import io.ntole.wyr.language.SerbianCyrillicStrings
 import io.ntole.wyr.language.SerbianLatinStrings
+import io.ntole.wyr.language.pointsText
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -136,14 +137,15 @@ class AccountViewModelTest {
         }
 
     @Test
-    fun `a guest reads as playing as guest with their points`() =
+    fun `a guest reads as a guest with their points`() =
         runTest(dispatcher) {
             game.points = 12
 
             val state = open().state.value
 
-            assertEquals("Playing as guest", playingAs(state.shown()))
-            assertEquals("12 points", pointsOf(state.shown()))
+            assertEquals("Guest", nameOf(state.shown(), ENGLISH))
+            assertEquals("Гост", nameOf(state.shown(), CYRILLIC))
+            assertEquals("12 P", pointsText(state.shown().totalPoints))
             assertNull(state.failure)
         }
 
@@ -159,15 +161,25 @@ class AccountViewModelTest {
 
             val state = open().state.value
 
-            assertEquals("Playing as guest", playingAs(state.shown()))
+            assertEquals("Guest", nameOf(state.shown(), ENGLISH))
+            assertEquals(12, state.shown().totalPoints)
             assertEquals(
                 listOf(
-                    "12 points",
-                    "15 answers to 10 questions",
-                    "Cycle 2: 4 questions left",
-                    "3 likes on questions you submitted",
+                    StatCell("15", "Answers"),
+                    StatCell("10", "Questions"),
+                    StatCell("2", "Cycle", "4 left"),
+                    StatCell("3", "Likes"),
                 ),
-                statLines(state.shown()),
+                statCells(state.shown(), ENGLISH),
+            )
+            assertEquals(
+                listOf(
+                    StatCell("15", "Одговори"),
+                    StatCell("10", "Питања"),
+                    StatCell("2", "Циклус", "још 4"),
+                    StatCell("3", "Лајкови"),
+                ),
+                statCells(state.shown(), CYRILLIC),
             )
         }
 
@@ -184,15 +196,16 @@ class AccountViewModelTest {
 
             val state = open().state.value
 
-            assertEquals("Logged in as bob_1", playingAs(state.shown()))
+            assertEquals("bob_1", nameOf(state.shown(), ENGLISH))
+            assertEquals("1 P", pointsText(state.shown().totalPoints))
             assertEquals(
                 listOf(
-                    "1 point",
-                    "1 answer to 1 question",
-                    "Cycle 1: 1 question left",
-                    "1 like on questions you submitted",
+                    StatCell("1", "Answers"),
+                    StatCell("1", "Questions"),
+                    StatCell("1", "Cycle", "1 left"),
+                    StatCell("1", "Likes"),
                 ),
-                statLines(state.shown()),
+                statCells(state.shown(), ENGLISH),
             )
         }
 
@@ -200,7 +213,7 @@ class AccountViewModelTest {
     fun `each showing reads the stats again`() =
         runTest(dispatcher) {
             val viewModel = open()
-            assertEquals("Cycle 1: 0 questions left", statLines(viewModel.state.value.shown())[2])
+            assertEquals(StatCell("1", "Cycle", "0 left"), statCells(viewModel.state.value.shown(), ENGLISH)[2])
 
             // Played on the Play screen meanwhile: the last question of cycle 1 answered, then more asked for.
             game.cycle = 2
@@ -208,7 +221,7 @@ class AccountViewModelTest {
             viewModel.refresh()
             testScheduler.advanceUntilIdle()
 
-            assertEquals("Cycle 2: 24 questions left", statLines(viewModel.state.value.shown())[2])
+            assertEquals(StatCell("2", "Cycle", "24 left"), statCells(viewModel.state.value.shown(), ENGLISH)[2])
         }
 
     @Test
@@ -223,7 +236,7 @@ class AccountViewModelTest {
             testScheduler.advanceUntilIdle()
 
             val state = viewModel.state.value
-            assertEquals("Logged in as bob_1", playingAs(state.shown()))
+            assertEquals("bob_1", nameOf(state.shown(), ENGLISH))
             assertEquals(12, state.stats?.totalPoints)
             assertEquals("guest1", game.player, "the same player")
             // A registered player sees no form, so nothing typed is kept; only the Auth page's cue to go back.
@@ -274,7 +287,7 @@ class AccountViewModelTest {
             assertEquals("That name is taken.", failureMessage(assertNotNull(state.failure), ENGLISH))
             assertEquals("Bob_1", state.registerUsername)
             assertEquals("correct horse", state.registerPassword)
-            assertEquals("Playing as guest", playingAs(state.shown()))
+            assertEquals("Guest", nameOf(state.shown(), ENGLISH))
         }
 
     @Test
@@ -299,7 +312,7 @@ class AccountViewModelTest {
             val state = viewModel.state.value
             assertTrue("logIn bob_1" in game.calls)
             assertEquals("bob-player", game.player)
-            assertEquals("Logged in as bob_1", playingAs(state.shown()))
+            assertEquals("bob_1", nameOf(state.shown(), ENGLISH))
             assertNull(state.guestPointsWarning)
             assertEquals("", state.loginPassword)
         }
@@ -317,7 +330,7 @@ class AccountViewModelTest {
 
             val state = viewModel.state.value
             assertEquals("bob-player", game.player)
-            assertEquals("Logged in as bob_1", playingAs(state.shown()))
+            assertEquals("bob_1", nameOf(state.shown(), ENGLISH))
             assertNull(state.guestPointsWarning)
         }
 
@@ -352,7 +365,7 @@ class AccountViewModelTest {
             val state = viewModel.state.value
             assertEquals(AccountFailure(AccountAction.LOG_IN, DomainError.INVALID_LOGIN), state.failure)
             assertEquals("guest1", game.player)
-            assertEquals("Playing as guest", playingAs(state.shown()))
+            assertEquals("Guest", nameOf(state.shown(), ENGLISH))
             assertEquals("wrong horse", state.loginPassword, "kept, to put right")
         }
 
@@ -361,13 +374,13 @@ class AccountViewModelTest {
         runTest(dispatcher) {
             game.accounts["bob_1"] = "correct horse" to "guest1"
             val viewModel = open()
-            assertEquals("Logged in as bob_1", playingAs(viewModel.state.value.shown()))
+            assertEquals("bob_1", nameOf(viewModel.state.value.shown(), ENGLISH))
 
             viewModel.logOut()
             testScheduler.advanceUntilIdle()
 
             val stats = viewModel.state.value.shown()
-            assertEquals("Playing as guest", playingAs(stats))
+            assertEquals("Guest", nameOf(stats, ENGLISH))
             assertEquals("guest2", game.player)
         }
 
@@ -385,7 +398,7 @@ class AccountViewModelTest {
             testScheduler.advanceUntilIdle()
 
             val state = viewModel.state.value
-            assertEquals("Playing as guest", playingAs(state.shown()))
+            assertEquals("Guest", nameOf(state.shown(), ENGLISH))
             assertNull(state.failure)
         }
 
@@ -528,7 +541,7 @@ class AccountViewModelTest {
 
             // Up through the read after it, which empties the forms of a registered player.
             assertTrue(viewModel.state.value.signedIn)
-            assertEquals("Logged in as bob_1", playingAs(viewModel.state.value.shown()))
+            assertEquals("bob_1", nameOf(viewModel.state.value.shown(), ENGLISH))
 
             viewModel.leftAuth()
             assertFalse(viewModel.state.value.signedIn)
@@ -592,7 +605,7 @@ class AccountViewModelTest {
             viewModel.authShown()
             testScheduler.advanceUntilIdle()
             assertEquals(listOf("stats", "mine"), game.calls)
-            assertEquals("Playing as guest", playingAs(viewModel.state.value.shown()))
+            assertEquals("Guest", nameOf(viewModel.state.value.shown(), ENGLISH))
 
             viewModel.authShown()
             testScheduler.advanceUntilIdle()

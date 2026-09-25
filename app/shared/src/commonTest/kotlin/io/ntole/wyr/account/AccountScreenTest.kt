@@ -5,8 +5,10 @@ import io.ntole.wyr.core.domain.submission.Submission
 import io.ntole.wyr.core.domain.submission.SubmissionStatus
 import io.ntole.wyr.core.network.environment.WyrEnvironment
 import io.ntole.wyr.language.EnglishStrings
+import io.ntole.wyr.language.Language
 import io.ntole.wyr.language.SerbianCyrillicStrings
 import io.ntole.wyr.language.SerbianLatinStrings
+import io.ntole.wyr.language.stringsOf
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
@@ -39,18 +41,30 @@ class AccountScreenTest {
     }
 
     @Test
-    fun `a dev build names the dev server and its URL`() {
-        assertEquals("Server: Dev (https://wyr-server-dev.onrender.com)", serverLine(WyrEnvironment.DEV))
+    fun `a dev build names the dev server and its URL in the language shown`() {
+        assertEquals(
+            "Server: Dev (https://wyr-server-dev.onrender.com)",
+            serverLine(WyrEnvironment.DEV, EnglishStrings.accountScreens),
+        )
+        assertEquals(
+            "Сервер: Dev (https://wyr-server-dev.onrender.com)",
+            serverLine(WyrEnvironment.DEV, SerbianCyrillicStrings.accountScreens),
+        )
     }
 
     @Test
     fun `a local build names the local server and the URL this platform reaches it at`() {
-        assertEquals("Server: Local (${WyrEnvironment.LOCAL.apiBaseUrl})", serverLine(WyrEnvironment.LOCAL))
+        assertEquals(
+            "Server: Local (${WyrEnvironment.LOCAL.apiBaseUrl})",
+            serverLine(WyrEnvironment.LOCAL, EnglishStrings.accountScreens),
+        )
     }
 
     @Test
     fun `a prod build names no server`() {
-        assertNull(serverLine(WyrEnvironment.PROD))
+        Language.entries.forEach { language ->
+            assertNull(serverLine(WyrEnvironment.PROD, stringsOf(language).accountScreens), "$language")
+        }
     }
 
     private companion object {

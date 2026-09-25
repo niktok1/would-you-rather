@@ -67,7 +67,9 @@ internal fun MyQuestions(
                 submissions.forEach { QuestionCard(it, strings) }
             }
         }
-        if (failure != null) {
+        // When the stats could not be read either, the one failure above them says so, and its Try
+        // again reads both.
+        if (failure != null && state.failure?.action != AccountAction.LOAD) {
             FailureText(failure)
             OutlinedButton(onClick = actions::refresh, enabled = !state.isBusy) { Text(strings.tryAgain) }
         }

@@ -491,8 +491,8 @@ decided in §8b).
     (`QuestionRepository.reset`), which the player before filled. The session is kept as a guest's
     is, so a logged-in player stays logged in across launches while the device refreshes within a
     refresh token's 30 days; one idle longer plays on as a fresh guest, and logs in again. No
-    password is stored, anywhere: the phone's password manager may keep it (§8d, *The Account
-    screen*).
+    password is stored, anywhere: the phone's password manager may keep it, offered as the Auth page,
+    where the game's client registers and logs in, leaves the screen (§8d, *The Account screen*).
 
 **Known limitation, by design for now:** a guest account is bound to one device's storage. Lose
 the device, reinstall the app or clear its storage, and the account — and its points — are gone,
@@ -835,21 +835,25 @@ game's, or a place on one, theme tokens only (§5b), and its words in `Strings` 
   texts and one icon.
 
 **The Account screen** (`io.ntole.wyr.account`; §8a *Accounts*, *Stats* below):
-- First, the language switch (§8f, `LanguageSwitch`), where the screen's *Account* heading stood
-  (*provisional — user decision*: the user asked only for a switch on this screen): on top, it is
-  the first thing a player who cannot read the language shown finds, a guest's forms included, and
-  a registered player's screen still fits 599 high with it (572 of it on this Mac, where it was 557
-  with the heading). The options: keep it; or keep the heading too, above the switch, which takes
-  that screen past 599 (the heading and its gap come back on top of the 572), so it scrolls unless
-  something else leaves it.
-- It shows *Playing as guest* or *Logged in as* the username, and the player's points, read through
-  `GetPlayerStats` each time the screen is shown, since the points move on Play meanwhile. A guest gets
-  **one button**, *Региструј се или се пријави*, to the Auth page (below), instead of the forms; a
-  registered player gets **Log out**, after which the device plays on as a fresh guest.
-- Under the points, a line each for the answers given and the questions they went to, the cycle and
-  the questions left in it, and the likes received. `AccountScreenDrawTest` holds every state, a
-  guest's and a registered player's among them, to 599 high, measured 400 wide as
-  `PlayScreenDrawTest` measures, since no state has a form.
+- *Its order* (*decided 2026-09-25*, the user's redesign, with less text overall): the player on a
+  card, with a guest's one button to the Auth page; **My questions**; the **language switch** (§8f,
+  `LanguageSwitch`); **Log out**, for a registered player; and the server line, outside PROD. The
+  switch was on top before, in the heading's place (provisional), and is where the user put it now:
+  a player who cannot read the language shown still finds it by its three names, each in itself,
+  under the list when the list is long.
+- *The card*: the username, or *Гост*, and the points as **123 P** (`pointsText`), read through
+  `GetPlayerStats` each time the screen is shown, since the points move on Play meanwhile; under them
+  the stats, four numbers each over a word (`statCells`): *Одговори*, the answers given, re-answers
+  included; *Питања*, the questions they went to; *Циклус*, with *још 4* under it, the questions
+  still due in it; and *Лајкови*, the likes received. A screen reader reads each number with its
+  word. A guest gets **one button** on the card, *Региструј се или се пријави*, to the Auth page
+  (below), instead of the forms; a registered player gets **Log out** further down, after which the
+  device plays on as a fresh guest. A read that fails says so under the card, or in its place before
+  any read worked, with *Покушај поново*; a read that failed whole, the list's too, says so once.
+- `AccountScreenDrawTest` holds every state with no question listed to 599 high in every language,
+  measured 400 wide as `PlayScreenDrawTest` measures and for DEV, whose server line is the longest
+  (569 on this Mac at the tallest, a registered player whose read again failed), and New question
+  above 599 however long the list (401 at most); a list scrolls with the screen.
 - **The Auth page** (`AuthScreen`, *decided 2026-09-25*), on the Account screen's ViewModel, shows
   **Register** only (username, and password with a show/hide toggle), which keeps the points, and a
   link, *Већ имаш налог? Пријави се*, that switches the same page to **Log in** (username, password),
@@ -883,12 +887,11 @@ game's, or a place on one, theme tokens only (§5b), and its words in `Strings` 
   each time the screen is shown and after every action, a login's and a logout's included, since the
   list is the player's (`AccountState.submissions`). Its heading holds **Ново питање**, which opens
   the Submit screen's form (*Submitting*). A list that cannot be read says so under it, with Try
-  again, apart from the stats (`AccountState.listFailure`). The list scrolls with the screen, and
-  `AccountScreenDrawTest` holds New question above 599 in every state and language.
-- Its last line, in a LOCAL or DEV build, names the server the build talks to and its URL, *Server:
-  Dev (https://wyr-server-dev.onrender.com)* (`serverLine`, §8e); a PROD build shows none.
-  `AccountScreenDrawTest` finds it under everything else in every state, and holds a registered
-  player's screen with it to 599 high.
+  again, apart from the stats (`AccountState.listFailure`).
+- Its last line, in a LOCAL or DEV build, names the server the build talks to and its URL, in the
+  language shown, *Сервер: Dev (https://wyr-server-dev.onrender.com)* (`serverLine`, §8e); a PROD
+  build shows none. `AccountScreenDrawTest` finds it under everything else in every state and
+  language.
 
 **The Play screen** (`io.ntole.wyr.play`) asks a question and reveals its tally, and holds Skip and
 Like (*Skipping* and *Likes*, below) and the category picker (*Categories*, below):
@@ -1332,10 +1335,9 @@ hand, so the two cannot say different things; and **English** stands beside them
   Latin is the Cyrillic transliterated, every Serbian text is in Cyrillic, and no Latin or English
   one has a Cyrillic letter. Translated so far: the Home screen, the game's name (*Шта би радије?*,
   *Would You Rather?*) and *Играј*; the top bars and the icons' names (*Почетна*, *Налог*, *Назад*);
-  the switch's name, *Језик*; the Auth page, whole, with the Account screen's button to it, its *Покушај
-  поново* and its failures; My questions; and the Submit screen's form but its categories' names
-  (`Strings.accountScreens`, an `AccountStrings` of the Account screen's words and those of the pages
-  opened from it).
+  the switch's name, *Језик*; the Account screen, whole, with My questions and the server line; the
+  Auth page, whole; and the Submit screen's form but its categories' names (`Strings.accountScreens`,
+  an `AccountStrings` of the Account screen's words and those of the pages opened from it).
 - **Numbers and symbols** *(built)*: a text holding a number or a name is a template, `{0}` and on,
   filled in by `fill` (`Templates.kt`), so each language puts it where its grammar wants it, and
   `StringsTest` holds every language's copy of a template to the same placeholders. The points'
@@ -1345,7 +1347,7 @@ hand, so the two cannot say different things; and **English** stands beside them
 - **The default** *(built)*: Serbian Cyrillic on a first launch, whatever the device's language:
   nothing reads the device's locale (`Language.DEFAULT`; `LanguageSwitchTest` sets an English, a
   German and a Serbian Latin locale on the JVM and still opens in Cyrillic).
-- **The switch** *(built)*: first on the Account screen (§8d; provisional), a segmented row of the
+- **The switch** *(built)*: on the Account screen, under My questions (§8d), a segmented row of the
   three, **Ћирилица**, **Latinica** and **English**, each named in itself whatever the language
   shown, so a player who picked one they cannot read finds their own (`Language.ownName`, which is
   why the names are not `Strings`). No label on screen; a screen reader hears it named
@@ -1360,9 +1362,9 @@ hand, so the two cannot say different things; and **English** stands beside them
   pin it, the sessions beside it in one storage untouched.
 - **Not translated yet**: question texts stay as their authors wrote them (server data; a later
   change may put Serbian ones through `SerbianScript.toLatin`); the moderation app (`:app:adminApp`)
-  stays English; and the Play screen's own copy, the categories' names (`categoryName`, which the
-  Submit form's chips call as they did), and the Account screen's stats, Log out and server line stay
-  English until the branches that redesign them translate them.
+  stays English; and the Play screen's own copy and the categories' names (`categoryName`, which the
+  Submit form's chips call as they did) stay English until the branches that redesign them translate
+  them.
 ---
 
 ## 9. How to work in this repo

@@ -10,6 +10,21 @@ package io.ntole.wyr.language
  * fills in.
  */
 data class AccountStrings(
+    /** Who is playing, when they have no username. */
+    val guest: String,
+    /** The stat of the answers given, re-answers included. */
+    val answers: String,
+    /** The stat of the questions those answers went to. */
+    val questions: String,
+    /** The stat of the player's current cycle. */
+    val cycle: String,
+    /** Under the cycle: the `{0}` questions still due in it. */
+    val cycleLeft: String,
+    /** The stat of the likes the player's questions hold. */
+    val likes: String,
+    val logOut: String,
+    /** A LOCAL or DEV build's server: its name, `{0}`, and its URL, `{1}`. */
+    val serverLine: String,
     /** A guest's one way to register or log in, on the Account screen. */
     val openAuth: String,
     val username: String,
@@ -85,6 +100,14 @@ data class AccountStrings(
     /** These strings with [transform] applied to every one of them, as [Strings.map] asks. */
     internal fun map(transform: (String) -> String): AccountStrings =
         AccountStrings(
+            guest = transform(guest),
+            answers = transform(answers),
+            questions = transform(questions),
+            cycle = transform(cycle),
+            cycleLeft = transform(cycleLeft),
+            likes = transform(likes),
+            logOut = transform(logOut),
+            serverLine = transform(serverLine),
             openAuth = transform(openAuth),
             username = transform(username),
             password = transform(password),
@@ -139,6 +162,14 @@ data class AccountStrings(
 /** The source text, written by hand. */
 internal val SerbianCyrillicAccountStrings: AccountStrings =
     AccountStrings(
+        guest = "Гост",
+        answers = "Одговори",
+        questions = "Питања",
+        cycle = "Циклус",
+        cycleLeft = "још {0}",
+        likes = "Лајкови",
+        logOut = "Одјави се",
+        serverLine = "Сервер: {0} ({1})",
         openAuth = "Региструј се или се пријави",
         username = "Корисничко име",
         password = "Лозинка",
@@ -191,6 +222,14 @@ internal val SerbianCyrillicAccountStrings: AccountStrings =
 
 internal val EnglishAccountStrings: AccountStrings =
     AccountStrings(
+        guest = "Guest",
+        answers = "Answers",
+        questions = "Questions",
+        cycle = "Cycle",
+        cycleLeft = "{0} left",
+        likes = "Likes",
+        logOut = "Log out",
+        serverLine = "Server: {0} ({1})",
         openAuth = "Register or log in",
         username = "Username",
         password = "Password",
