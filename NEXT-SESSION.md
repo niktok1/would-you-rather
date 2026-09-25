@@ -708,10 +708,11 @@ Registering answers `{"username":"bob_1"}`, the name lower-cased, and `/v1/me` t
 must be 3 to 20 of `a`-`z`, `0`-`9` and `_` once lower-cased, nothing trimmed, and a password 6 to 128
 characters of any kind, or it is 422 `INVALID_USERNAME` or `INVALID_PASSWORD`; a name another player
 has is 409 `USERNAME_TAKEN`, and registering twice 409 `ALREADY_REGISTERED`. The login answers a
-`SessionDto` for a new session of the same player; a wrong password and a name with no account are
-the same 401 `INVALID_LOGIN`. The logout answers 204 and ends only the session `$ACCESS` was issued
-for: that session's refresh token is 401 from then on, and the login's session lives on. Logins are
-20 a minute per address (`RATE_LIMIT_LOGINS_PER_MINUTE`), registrations 20 an hour per player.
+`SessionDto` for a new session of the same player, the name trimmed and in any case; a wrong
+password and a name with no account are the same 401 `INVALID_LOGIN`. The logout answers 204 and
+ends only the session `$ACCESS` was issued for: that session's refresh token is 401 from then on, and
+the login's session lives on. Logins are 20 a minute per address (`RATE_LIMIT_LOGINS_PER_MINUTE`),
+registrations 20 an hour per player.
 
 ### Moderating
 

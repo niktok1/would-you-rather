@@ -8,7 +8,8 @@ import io.ntole.wyr.server.plugins.ApiFailure
  * [raw] as an account keeps its username, lower-cased, or null for one that breaks a rule of
  * [RegisterRequest] (CLAUDE.md §8a, *Accounts*): lower-cased, and nothing trimmed, it must be
  * [WyrApi.Limits.MIN_USERNAME_LENGTH] to [WyrApi.Limits.MAX_USERNAME_LENGTH] of `a` to `z`, `0` to `9`
- * and `_`, so a space anywhere is refused. A login refuses such a name as it refuses any unknown one.
+ * and `_`, so a space anywhere is refused. A login trims the name before asking, and refuses a name
+ * this refuses as it refuses any unknown one.
  */
 internal fun usernameOrNull(raw: String): String? =
     raw.lowercase().takeIf { username -> username.length in USERNAME_LENGTHS && username.all(::isUsernameChar) }

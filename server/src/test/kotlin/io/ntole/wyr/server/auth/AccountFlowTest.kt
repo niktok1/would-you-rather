@@ -235,6 +235,28 @@ class AccountFlowTest {
             }
         }
 
+    /** A keyboard's suggestion leaves a space after the word, and no username holds one. */
+    @Test
+    fun `a login trims the username but not the password`() =
+        runServer("login-trimmed") { client ->
+            val account = client.guest()
+            client.register(account, "bob", PASSWORD)
+
+            listOf("bob ", " bob", "\tBoB\n").forEach { username ->
+                val loggedIn = client.login(username, PASSWORD)
+                assertEquals(HttpStatusCode.OK, loggedIn.status, "'$username'")
+                assertEquals(account.playerId, loggedIn.body<SessionDto>().playerId, "'$username'")
+            }
+            listOf("b ob" to PASSWORD, "bob" to "$PASSWORD ", "bob" to " $PASSWORD").forEach { (username, password) ->
+                assertRefused(
+                    client.login(username, password),
+                    HttpStatusCode.Unauthorized,
+                    ErrorCode.INVALID_LOGIN,
+                    "'$username' '$password'",
+                )
+            }
+        }
+
     @Test
     fun `logging out one device leaves the other logged in`() =
         runServer("login-logout") { client ->

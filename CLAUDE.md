@@ -451,14 +451,15 @@ decided in §8b).
   - *Logging in* is `POST /v1/auth/login` with a `LoginRequest`, no bearer needed, answered with a
     `SessionDto` for a new session of that player (`SessionStore.open`), this device's own, so the
     player's other devices stay logged in. A bearer token sent beside it plays no part, and the session
-    it names is left alone. The username is compared lower-cased. A name with no account, a wrong
-    password, and a name or password no account can have (refused at once, unhashed: the rules are
-    public) are one and the same 401 `INVALID_LOGIN`, and a name with no account is checked against
-    `Passwords.UNMATCHABLE`, so it is refused only after a hash's time, as a wrong password is. A
-    client must send a login so that this 401 is never taken for an expired access token, which would
-    refresh the session it holds and send the login again: `AuthApi.logIn` sends it past the Auth
-    plugin (`AuthCircuitBreaker`, as the plugin's own refresh goes), so no bearer goes with it either
-    (`AuthApiTest`). Limited per address (§8b).
+    it names is left alone. The username is trimmed (a keyboard's suggestion leaves a space after it,
+    and no username holds one) and compared lower-cased; the password is taken exactly as sent. A
+    name with no account, a wrong password, and a name or password no account can have (refused at
+    once, unhashed: the rules are public) are one and the same 401 `INVALID_LOGIN`, and a name with no
+    account is checked against `Passwords.UNMATCHABLE`, so it is refused only after a hash's time, as a
+    wrong password is. A client must send a login so that this 401 is never taken for an expired
+    access token, which would refresh the session it holds and send the login again: `AuthApi.logIn`
+    sends it past the Auth plugin (`AuthCircuitBreaker`, as the plugin's own refresh goes), so no
+    bearer goes with it either (`AuthApiTest`). Limited per address (§8b).
   - `GET /v1/me` names the username (`PlayerStatsDto.username`), null for a guest; a client from
     before accounts ignores it (§8d, *Stats*).
   - Not built, by design for now: a password reset (no email is collected), a rename, a password

@@ -86,8 +86,10 @@ fun Route.authRoutes(
         post(WyrApi.Paths.AUTH_LOGIN) {
             val body = call.receiveOrReject<LoginRequest>("login")
             // A name or a password no registration could have set names no account, and the rules are
-            // public, so refusing it at once, unhashed, gives nothing away.
-            val username = usernameOrNull(body.username)
+            // public, so refusing it at once, unhashed, gives nothing away. The name is trimmed first: a
+            // keyboard's suggestion leaves a space after it, and no username holds whitespace, so the
+            // trim can name no other account. The password is taken exactly as sent.
+            val username = usernameOrNull(body.username.trim())
             if (username == null || !isPassword(body.password)) throw ApiFailure.invalidLogin()
 
             val account = db.query { AccountStore.credentialsOf(username) }
