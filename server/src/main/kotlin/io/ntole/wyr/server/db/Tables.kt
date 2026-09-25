@@ -148,14 +148,13 @@ object Questions : Table("questions") {
      * is reported retired from [retiredAt] (`statusOf`), which is what keeps a rollback to a build from
      * before retirement reading every row.
      *
-     * Read strictly, unlike a category ([QuestionCategories.category]): a name this build has no
-     * [QuestionStatus] for fails the read, and with it the author's whole list
-     * (`SubmissionStore.byAuthor`) as a 500. Everything else, the feed, the pending count and the
-     * moderator's queue included, only compares it in SQL and still works: the queue reads only rows
-     * at the status it asks for (`ModerationStore.queue`). That is deliberate: no status this build
-     * knows could stand in truthfully for one it does not, as RANDOM does for a category, and UNKNOWN
-     * is never sent. So a new status is a migration (CLAUDE.md §8b), although no column changes: no
-     * build may write it until the build a rollback would return to can read it.
+     * Read strictly: a name this build has no [QuestionStatus] for fails the read, and with it the
+     * author's whole list (`SubmissionStore.byAuthor`) as a 500. Everything else, the feed, the
+     * pending count and the moderator's queue included, only compares it in SQL and still works: the
+     * queue reads only rows at the status it asks for (`ModerationStore.queue`). That is deliberate:
+     * no status this build knows could stand in truthfully for one it does not, and UNKNOWN is never
+     * sent. So a new status is a migration (CLAUDE.md §8b), although no column changes: no build may
+     * write it until the build a rollback would return to can read it.
      */
     val status = enumerationByName<QuestionStatus>("status", 16)
 
@@ -186,6 +185,23 @@ object Questions : Table("questions") {
      */
     val retiredAt = long("retired_at").nullable()
 
+    /**
+     * The points the author paid to submit the question (CLAUDE.md §8c), 0 for a seed and for every
+     * question submitted before submitting cost anything (V7). A rejection pays it back
+     * (`ModerationStore.reject`) and leaves it here, so what a player's questions cost them is this
+     * over those not rejected.
+     */
+    val submissionCost = integer("submission_cost").default(0)
+
+    /**
+     * Made-up votes for each side, which every tally the server reports adds to the players' own
+     * (CLAUDE.md §8d, *Seeds*): a seed starts with some (V8, `Seed`), so its split looks like a crowd's
+     * from the first answer, and every other question with none. Nothing writes them after that, and
+     * they are no player's: a player still holds one vote per question, their latest.
+     */
+    val baseVotesA = integer("base_votes_a").default(0)
+    val baseVotesB = integer("base_votes_b").default(0)
+
     override val primaryKey = PrimaryKey(id)
 
     init {
@@ -199,6 +215,36 @@ object Questions : Table("questions") {
 }
 
 /**
+ * Every category a question can be filed under (CLAUDE.md §8d, *Categories*): server data, not an
+ * enum, so a moderator adds one without a build. V6 wrote the first ones (`Seed.CATEGORIES`), and the
+ * seed writes them into a database with none, as the store tests build. Nothing deletes a category,
+ * so an id read once stays a category's.
+ */
+object Categories : Table("categories") {
+    /**
+     * What the wire names the category by, forever: 1 to [WyrApi.Limits.MAX_CATEGORY_ID_LENGTH] of
+     * `A`-`Z`, `0`-`9` and `_`. The first ones keep the names the enum they replace had on the wire
+     * (V6), so a client built before still reads them.
+     */
+    val id = varchar("id", WyrApi.Limits.MAX_CATEGORY_ID_LENGTH)
+
+    /** The category's name in Serbian, in Cyrillic. */
+    val nameSr = varchar("name_sr", WyrApi.Limits.MAX_CATEGORY_NAME_LENGTH)
+
+    /** The category's name in English. */
+    val nameEn = varchar("name_en", WyrApi.Limits.MAX_CATEGORY_NAME_LENGTH)
+
+    /**
+     * When it was added, which orders the categories, then [id]: every list of them, a question's
+     * own included, is oldest first. V6 gave the first ones one millisecond apart, in the order the
+     * enum declared them.
+     */
+    val createdAt = long("created_at")
+
+    override val primaryKey = PrimaryKey(id)
+}
+
+/**
  * The categories each question is filed under (CLAUDE.md §8d): any number, at least one, one row
  * per question and category. The question and its rows are written in one transaction, so no
  * committed question is ever filed under nothing.
@@ -207,11 +253,10 @@ object QuestionCategories : Table("question_categories") {
     val questionId = varchar("question_id", 36).references(Questions.id)
 
     /**
-     * A [io.ntole.wyr.core.question.QuestionCategory] name, never `UNKNOWN`, the client's decoding
-     * fallback. Read leniently (`QuestionStore.categoryOf`): a name written by a build that knows a
-     * category this one does not still reads back.
+     * A [Categories.id]. The foreign key (V6) holds every row to a category the server has, and
+     * nothing deletes one, so a row always reads back as one.
      */
-    val category = varchar("category", 32)
+    val category = varchar("category", WyrApi.Limits.MAX_CATEGORY_ID_LENGTH).references(Categories.id)
 
     /**
      * A question is filed under a category once. The key also finds a question's categories, and
@@ -323,4 +368,5 @@ object Likes : Table("likes") {
  * tests build their tables straight from it with `SchemaUtils.create`, which that same test shows
  * builds what the migrations do.
  */
-val appTables: Array<Table> = arrayOf(Players, Sessions, Questions, QuestionCategories, Votes, Skips, Likes)
+val appTables: Array<Table> =
+    arrayOf(Players, Sessions, Questions, Categories, QuestionCategories, Votes, Skips, Likes)

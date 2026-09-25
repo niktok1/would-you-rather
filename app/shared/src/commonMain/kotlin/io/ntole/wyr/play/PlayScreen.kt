@@ -48,12 +48,16 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.window.Dialog
+import io.ntole.wyr.core.domain.category.Category
 import io.ntole.wyr.core.domain.error.DomainError
-import io.ntole.wyr.core.domain.question.Category
 import io.ntole.wyr.core.domain.question.Question
 import io.ntole.wyr.core.domain.vote.Side
+import io.ntole.wyr.language.Language
+import io.ntole.wyr.language.LocalLanguage
 import io.ntole.wyr.language.LocalStrings
 import io.ntole.wyr.language.PlayStrings
+import io.ntole.wyr.language.Strings
+import io.ntole.wyr.language.categoryName
 import io.ntole.wyr.theme.WyrIcons
 import io.ntole.wyr.theme.WyrThemeAccessors
 import io.ntole.wyr.theme.WyrTypeScale
@@ -65,24 +69,24 @@ import kotlin.math.roundToInt
  * Skip ([onSkip]) goes past a question not answered yet; once the answer is revealed, tapping either
  * card goes on to the next question ([onNext]).
  *
- * [categories] are the categories played, none for every category, and tapping them opens the
- * category picker ([onOpenCategories]), a dialog over the screen while [picking], what it has
- * ticked, is not `null`. [points] are the player's as the server last reported them, `null` until
- * it has.
+ * [categories] are the categories played, none for every category, beside every category as last
+ * read from the server, which names them; tapping them opens the category picker
+ * ([onOpenCategories]), a dialog over the screen while [picking], the open picker, is not `null`.
+ * [points] are the player's as the server last reported them, `null` until it has.
  */
 @Composable
 fun PlayScreen(
     state: PlayUiState,
-    categories: Set<Category>,
+    categories: PlayedCategories,
     points: Int?,
-    picking: Set<Category>?,
+    picking: CategoryPicking?,
     onChoose: (Side) -> Unit,
     onSkip: () -> Unit,
     onNext: () -> Unit,
     onToggleLike: () -> Unit,
     onRetry: () -> Unit,
     onOpenCategories: () -> Unit,
-    onToggleCategory: (Category) -> Unit,
+    onToggleCategory: (String) -> Unit,
     onSelectAllCategories: () -> Unit,
     onApplyCategories: () -> Unit,
     onCloseCategories: () -> Unit,
@@ -127,7 +131,8 @@ fun PlayScreen(
         if (picking != null) {
             Dialog(onDismissRequest = onCloseCategories) {
                 CategoryPicker(
-                    ticked = picking,
+                    categories = categories.known,
+                    picking = picking,
                     canApply = state.canChangeCategories,
                     onToggle = onToggleCategory,
                     onSelectAll = onSelectAllCategories,
@@ -147,7 +152,7 @@ fun PlayScreen(
 @Composable
 private fun QuestionBody(
     state: PlayUiState.OnQuestion,
-    categories: Set<Category>,
+    categories: PlayedCategories,
     points: Int?,
     onChoose: (Side) -> Unit,
     onSkip: () -> Unit,
@@ -175,7 +180,12 @@ private fun QuestionBody(
 
         MiddleRow(
             question = state.question,
-            categoriesPlayed = categoriesPlayed(categories, all = LocalStrings.current.playScreen.allCategories),
+            categoriesPlayed =
+                categoriesPlayed(
+                    categories,
+                    all = LocalStrings.current.playScreen.allCategories,
+                    language = LocalLanguage.current,
+                ),
             points = points,
             likeError = state.likeError,
             canChangeCategories = state.canChangeCategories,
@@ -338,48 +348,47 @@ private fun CategoriesPlayed(
     }
 }
 
-/** The categories played, as the Play screen names them: [all] while none is selected. */
+/**
+ * The categories played, as the Play screen names them: [all] while none is selected, or their names
+ * in [language] ([categoryName]), in the order the picker lists them, the server's, and after them
+ * any the app has not read, by id.
+ */
 internal fun categoriesPlayed(
-    categories: Set<Category>,
+    categories: PlayedCategories,
     all: String,
-): String =
-    if (categories.isEmpty()) {
-        all
-    } else {
-        // In declaration order, as the picker lists them, whatever order the set holds them in.
-        Category.entries.filter { it in categories }.joinToString(", ", transform = ::categoryName)
-    }
-
-/** A category in the player's words, never its wire name. */
-internal fun categoryName(category: Category): String =
-    when (category) {
-        Category.FOOD -> "Food"
-        Category.LIFESTYLE -> "Lifestyle"
-        Category.ETHICS -> "Ethics"
-        Category.SUPERPOWERS -> "Superpowers"
-        Category.RANDOM -> "Random"
-        Category.OTHER -> "Other"
-    }
+    language: Language,
+): String {
+    val selected = categories.selected
+    if (selected.isEmpty()) return all
+    val listed = categories.known.map { it.id }.filter { it in selected }
+    val unread = (selected - listed.toSet()).sorted()
+    return (listed + unread).joinToString(", ") { categoryName(it, categories.known, language) }
+}
 
 /**
- * The category picker's card, in a dialog over the screen: every category the feed can be filtered
- * to, ticked or not, and All categories, ticked while none is. Nothing is played until Play, and
- * Play is off while the screen cannot take a change ([canApply]), one action at a time.
+ * The category picker's card, in a dialog over the screen: every one of [categories], the server's,
+ * named in the language shown ([categoryName]), ticked or not, and *Све категорије*, ticked while none
+ * is. A line under them says the list is being read, while nothing was read before, or that the read
+ * failed. Nothing is played until Play, and Play is off while the screen cannot take a change
+ * ([canApply]), one action at a time. Every word from [LocalStrings] (CLAUDE.md §8f).
  *
  * The list scrolls, so a window shorter than the card keeps Play on screen. Internal, not private,
  * so a test can measure it.
  */
 @Composable
 internal fun CategoryPicker(
-    ticked: Set<Category>,
+    categories: List<Category>,
+    picking: CategoryPicking,
     canApply: Boolean,
-    onToggle: (Category) -> Unit,
+    onToggle: (String) -> Unit,
     onSelectAll: () -> Unit,
     onApply: () -> Unit,
     onClose: () -> Unit,
 ) {
     val colors = WyrThemeAccessors.colors
     val dimens = WyrThemeAccessors.dimens
+    val strings = LocalStrings.current
+    val language = LocalLanguage.current
 
     Surface(
         shape = RoundedCornerShape(dimens.radiusCard),
@@ -388,7 +397,7 @@ internal fun CategoryPicker(
     ) {
         Column(modifier = Modifier.padding(dimens.spaceLg)) {
             Text(
-                text = "Play these categories",
+                text = strings.playScreen.pickerTitle,
                 color = colors.headingAccent,
                 fontSize = WyrTypeScale.sectionTitle,
                 fontWeight = FontWeight.Bold,
@@ -396,14 +405,19 @@ internal fun CategoryPicker(
             Spacer(Modifier.size(dimens.spaceSm))
 
             Column(modifier = Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState())) {
-                CategoryOption(label = "All categories", ticked = ticked.isEmpty(), onClick = onSelectAll)
-                Category.selectable.forEach { category ->
+                val ticked = picking.ticked
+                CategoryOption(label = strings.playScreen.pickerAll, ticked = ticked.isEmpty(), onClick = onSelectAll)
+                categories.forEach { category ->
                     CategoryOption(
-                        label = categoryName(category),
-                        ticked = category in ticked,
-                        onClick = { onToggle(category) },
+                        label = categoryName(category, language),
+                        ticked = category.id in ticked,
+                        onClick = { onToggle(category.id) },
                     )
                 }
+            }
+            pickerNote(picking, listed = categories.isNotEmpty(), strings)?.let { note ->
+                Spacer(Modifier.size(dimens.spaceSm))
+                Text(text = note, color = colors.muted, fontSize = WyrTypeScale.statLabel)
             }
 
             Spacer(Modifier.size(dimens.spaceMd))
@@ -411,12 +425,29 @@ internal fun CategoryPicker(
                 horizontalArrangement = Arrangement.spacedBy(dimens.spaceSm, Alignment.End),
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                TextButton(onClick = onClose) { Text("Cancel") }
-                Button(onClick = onApply, enabled = canApply) { Text("Play") }
+                TextButton(onClick = onClose) { Text(strings.cancel) }
+                Button(onClick = onApply, enabled = canApply) { Text(strings.play) }
             }
         }
     }
 }
+
+/**
+ * What the picker says under its list, if anything, in one short line: that the categories are being
+ * read while none was read before, or that the read failed, which leaves the ones read before listed;
+ * opening the picker again reads them again.
+ */
+internal fun pickerNote(
+    picking: CategoryPicking,
+    listed: Boolean,
+    strings: Strings,
+): String? =
+    when {
+        picking.failure == DomainError.NETWORK -> strings.playScreen.cannotReach
+        picking.failure != null -> strings.categoriesUnread
+        picking.isLoading && !listed -> strings.playScreen.pickerLoading
+        else -> null
+    }
 
 /**
  * One line of the picker, ticked or not; the whole line toggles it, and is at least as tall as a
@@ -552,7 +583,7 @@ private fun LoadingBody() {
 @Composable
 private fun FailureBody(
     error: DomainError,
-    categories: Set<Category>,
+    categories: PlayedCategories,
     onRetry: () -> Unit,
     onOpenCategories: () -> Unit,
 ) {
@@ -573,7 +604,7 @@ private fun FailureBody(
             )
             Button(onClick = onRetry) { Text(LocalStrings.current.tryAgain) }
             CategoriesPlayed(
-                text = categoriesPlayed(categories, all = strings.allCategories),
+                text = categoriesPlayed(categories, all = strings.allCategories, language = LocalLanguage.current),
                 enabled = true,
                 onClick = onOpenCategories,
             )

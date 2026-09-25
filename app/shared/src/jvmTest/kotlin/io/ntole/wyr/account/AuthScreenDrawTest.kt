@@ -153,7 +153,7 @@ class AuthScreenDrawTest {
             assertFalse(strings.logIn in shown, "$language: $shown")
             tapping(warned, language, actions) {
                 it.tap(strings.logInAnyway)
-                it.tap(strings.cancel)
+                it.tap(stringsOf(language).cancel)
             }
 
             assertEquals(listOf("log in", "cancel"), actions.calls, "$language")

@@ -16,7 +16,6 @@ import io.ntole.wyr.core.network.respondEmptyPage
 import io.ntole.wyr.core.network.respondErrorDto
 import io.ntole.wyr.core.network.session
 import io.ntole.wyr.core.network.storeHolding
-import io.ntole.wyr.core.question.QuestionCategory
 import io.ntole.wyr.core.question.SkipRequest
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
@@ -26,16 +25,15 @@ import kotlin.test.assertFailsWith
 /** What a feed request asks for, what a skip sends, and that its empty answer is enough. */
 class QuestionApiTest {
     @Test
-    fun `a feed of several categories asks for each once in declaration order`() =
+    fun `a feed of several categories asks for each in the order given`() =
         runTest {
             val engine = MockEngine { respondEmptyPage() }
-            val categories = setOf(QuestionCategory.RANDOM, QuestionCategory.FOOD, QuestionCategory.ETHICS)
+            val categories = listOf("FOOD", "ETHICS", "ABSURD")
 
             questionApi(engine).page(categories = categories)
 
-            // Not the order the set was built in: one selection is one request.
             val url = engine.requestHistory.single().url
-            assertEquals(listOf("FOOD", "ETHICS", "RANDOM"), url.parameters.getAll(WyrApi.Query.CATEGORY))
+            assertEquals(categories, url.parameters.getAll(WyrApi.Query.CATEGORY))
         }
 
     @Test
@@ -47,18 +45,6 @@ class QuestionApiTest {
 
             val url = engine.requestHistory.single().url
             assertEquals(null, url.parameters.getAll(WyrApi.Query.CATEGORY))
-        }
-
-    @Test
-    fun `UNKNOWN is never asked for`() =
-        runTest {
-            val engine = MockEngine { respondEmptyPage() }
-
-            questionApi(engine).page(categories = setOf(QuestionCategory.UNKNOWN, QuestionCategory.SUPERPOWERS))
-
-            // The server refuses it: it is what this build cannot read, not a category to ask for.
-            val url = engine.requestHistory.single().url
-            assertEquals(listOf("SUPERPOWERS"), url.parameters.getAll(WyrApi.Query.CATEGORY))
         }
 
     @Test

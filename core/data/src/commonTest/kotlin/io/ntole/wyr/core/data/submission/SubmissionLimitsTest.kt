@@ -11,5 +11,6 @@ class SubmissionLimitsTest {
         // The domain cannot see :core, so it keeps its own copy of each number, checked here.
         assertEquals(WyrApi.Limits.MAX_OPTION_LENGTH, SubmissionRules.MAX_OPTION_LENGTH)
         assertEquals(WyrApi.Limits.MAX_PENDING_SUBMISSIONS, SubmissionRules.MAX_PENDING_SUBMISSIONS)
+        assertEquals(WyrApi.Limits.SUBMISSION_COST, SubmissionRules.SUBMISSION_COST)
     }
 }

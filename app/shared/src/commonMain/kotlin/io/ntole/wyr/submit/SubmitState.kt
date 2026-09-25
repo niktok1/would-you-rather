@@ -1,15 +1,16 @@
 package io.ntole.wyr.submit
 
+import io.ntole.wyr.core.domain.category.Category
 import io.ntole.wyr.core.domain.error.DomainError
-import io.ntole.wyr.core.domain.question.Category
 import io.ntole.wyr.core.domain.submission.OptionProblem
 import io.ntole.wyr.core.domain.submission.SubmissionRules
 import kotlin.time.Duration
 
 /**
- * What the Submit screen's form shows (CLAUDE.md §8d, *Submitting*): the question being written, and
- * the player's points, since sending it costs [SubmissionRules.COST]. The player's own submissions
- * are on the Account screen, My questions, which opens the form.
+ * What the Submit screen's form shows (CLAUDE.md §8d, *Submitting*): the question being written, the
+ * categories it can be filed under, as the server lists them, and the player's points, since sending
+ * it costs [SubmissionRules.SUBMISSION_COST]. The player's own submissions are on the Account screen,
+ * My questions, which opens the form.
  *
  * What is typed lives here, in memory, as typed: trimming is the server's, and [SubmissionRules]
  * says what it would refuse.
@@ -17,8 +18,15 @@ import kotlin.time.Duration
 data class SubmitState(
     val optionA: String = "",
     val optionB: String = "",
-    /** The categories the question is to be filed under, never [Category.OTHER]. */
-    val categories: Set<Category> = emptySet(),
+    /** The ids of the categories the question is to be filed under, picked from [categoryOptions]. */
+    val categories: Set<String> = emptySet(),
+    /** Every category a question can be filed under, as last read from the server, oldest first. */
+    val categoryOptions: List<Category> = emptyList(),
+    /**
+     * Why the last read of the categories failed, until one works. It shows under them, with Try
+     * again, and the categories read before, if any, stay to pick from.
+     */
+    val categoriesFailure: SubmitFailure? = null,
     /** The player's points as last read, or null until a read works. */
     val points: Int? = null,
     /**
@@ -54,7 +62,7 @@ data class SubmitState(
                 SubmissionRules.sameOptions(optionA, optionB)
 
     /** Whether the points last read are fewer than a question costs, which the form says: not while none are read. */
-    val tooFewPoints: Boolean get() = points != null && points < SubmissionRules.COST
+    val tooFewPoints: Boolean get() = points != null && points < SubmissionRules.SUBMISSION_COST
 
     /**
      * Whether Submit can go: both options pass the rules, a category is picked, the points last read
@@ -71,7 +79,7 @@ data class SubmitState(
 
 /** What the Submit screen can be busy doing. */
 enum class SubmitAction {
-    /** Reading the player's points. */
+    /** Reading the categories and the player's points. */
     LOAD,
     SUBMIT,
 }

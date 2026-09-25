@@ -3,13 +3,13 @@ package io.ntole.wyr.server.vote
 import io.ntole.wyr.core.vote.OptionSide
 import io.ntole.wyr.core.vote.VoteResultDto
 import io.ntole.wyr.core.vote.VoteTallyDto
+import io.ntole.wyr.server.db.Questions
 import io.ntole.wyr.server.db.Votes
 import io.ntole.wyr.server.player.PlayerStore
 import io.ntole.wyr.server.plugins.ApiFailure
 import io.ntole.wyr.server.question.QuestionStore
 import org.jetbrains.exposed.v1.core.ResultRow
 import org.jetbrains.exposed.v1.core.and
-import org.jetbrains.exposed.v1.core.count
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.select
@@ -180,19 +180,13 @@ object VoteStore {
     }
 
     /**
-     * Both sides' counts, in one statement. At READ COMMITTED each statement sees the votes
-     * committed before it began, so two counts could straddle another player's re-answer and count
-     * their one vote on both sides, or on neither.
+     * Both sides of the question's tally, its made-up votes included, in one statement
+     * ([QuestionTally]). At READ COMMITTED each statement sees the votes committed before it began,
+     * so two counts could straddle another player's re-answer and count their one vote on both sides,
+     * or on neither.
      */
     private fun tally(questionId: String): VoteTallyDto {
-        val votes = Votes.side.count()
-        val counts =
-            Votes
-                .select(Votes.side, votes)
-                .where { Votes.questionId eq questionId }
-                .groupBy(Votes.side)
-                .associate { row -> row[Votes.side] to row[votes] }
-
-        return VoteTallyDto(votesA = counts[OptionSide.A.name] ?: 0L, votesB = counts[OptionSide.B.name] ?: 0L)
+        val tally = QuestionTally()
+        return tally.of(Questions.select(tally.columns).where { Questions.id eq questionId }.single())
     }
 }

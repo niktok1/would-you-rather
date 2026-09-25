@@ -24,22 +24,23 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import io.ntole.wyr.core.domain.error.DomainError
-import io.ntole.wyr.core.domain.question.Category
 import io.ntole.wyr.core.domain.submission.OptionProblem
 import io.ntole.wyr.core.domain.submission.SubmissionRules
 import io.ntole.wyr.language.AccountStrings
+import io.ntole.wyr.language.LocalLanguage
 import io.ntole.wyr.language.LocalStrings
 import io.ntole.wyr.language.Strings
+import io.ntole.wyr.language.categoryName
 import io.ntole.wyr.language.fill
-import io.ntole.wyr.play.categoryName
 import io.ntole.wyr.theme.WyrThemeAccessors
 import io.ntole.wyr.theme.WyrTypeScale
 
 /**
  * The Submit screen (CLAUDE.md §8d, *Submitting*), opened from My questions on the Account screen: a
  * question of the player's own, its two options and the categories it is filed under, sent for a
- * moderator to review. Send names what it costs, [SubmissionRules.COST], and stays off while the
- * player has fewer points; once a question is stored the app goes back to My questions.
+ * moderator to review. The categories are the server's, read each time the form is shown and named
+ * in the language shown. Send names what it costs, [SubmissionRules.SUBMISSION_COST], and stays off
+ * while the player has fewer points; once a question is stored the app goes back to My questions.
  *
  * Plain on purpose while UI polish is paused, every colour, space and size from the theme (§5b) and
  * every word from [LocalStrings] (§8f). Each option says what [SubmissionRules] refuses in it as it is
@@ -75,6 +76,7 @@ private fun Form(
     val colors = WyrThemeAccessors.colors
     val dimens = WyrThemeAccessors.dimens
     val strings = LocalStrings.current.accountScreens
+    val language = LocalLanguage.current
     // What is typed is not to change while it is being sent: it is cleared once it is stored.
     val editable = !state.isSubmitting
 
@@ -107,11 +109,11 @@ private fun Form(
         SectionTitle(strings.categories)
         // No vertical spacing: each chip's touch target already stands clear of the row below.
         FlowRow(horizontalArrangement = Arrangement.spacedBy(dimens.spaceSm)) {
-            Category.selectable.forEach { category ->
+            state.categoryOptions.forEach { category ->
                 FilterChip(
-                    selected = category in state.categories,
-                    onClick = { actions.toggleCategory(category) },
-                    label = { Text(categoryName(category)) },
+                    selected = category.id in state.categories,
+                    onClick = { actions.toggleCategory(category.id) },
+                    label = { Text(categoryName(category, language)) },
                     enabled = editable,
                     // The theme's primary, which is the palette's: it maps nothing to the container
                     // Material picks for a picked chip by default, which is Material's own lavender.
@@ -124,8 +126,17 @@ private fun Form(
             }
         }
         Text(text = strings.pickCategories, color = colors.muted, fontSize = WyrTypeScale.statLabel)
+        // When the points could not be read either, the one failure under Send says so, and its Try
+        // again reads both.
+        state.categoriesFailure?.takeIf { state.pointsFailure == null }?.let { failure ->
+            Text(text = categoriesFailureText(failure, LocalStrings.current), color = MaterialTheme.colorScheme.error)
+            OutlinedButton(onClick = actions::refresh, enabled = !state.isBusy) { Text(LocalStrings.current.tryAgain) }
+        }
 
-        state.submitFailure?.let { FailureText(it) }
+        // The server's refusal for points says what the line under it would: one line of it, not two.
+        state.submitFailure
+            ?.takeUnless { it.error == DomainError.NOT_ENOUGH_POINTS && state.tooFewPoints }
+            ?.let { FailureText(it) }
         if (state.tooFewPoints) Text(text = strings.notEnoughPoints, color = colors.primaryText)
         Button(onClick = actions::submit, enabled = state.canSubmit, modifier = Modifier.fillMaxWidth()) {
             Text(sendText(LocalStrings.current))
@@ -183,7 +194,8 @@ private fun FailureText(failure: SubmitFailure) {
 }
 
 /** Send, and what sending costs, in the points' one unit: *Пошаљи · 1 П*. */
-internal fun sendText(strings: Strings): String = strings.accountScreens.send.fill(strings.points(SubmissionRules.COST))
+internal fun sendText(strings: Strings): String =
+    strings.accountScreens.send.fill(strings.points(SubmissionRules.SUBMISSION_COST))
 
 /** The rule an option is held to, what is wrong with the one typed by it, or that the two are the same. */
 internal fun optionHint(
@@ -197,6 +209,19 @@ internal fun optionHint(
         problem == OptionProblem.NOT_ONE_LINE -> strings.optionNotOneLine
         same -> strings.optionsSame
         else -> strings.optionRule.fill(SubmissionRules.MAX_OPTION_LENGTH)
+    }
+
+/**
+ * Why the categories could not be read, in one short line, the categories read before staying to pick
+ * from: offline, in the words of the form's other failures, or anything else.
+ */
+internal fun categoriesFailureText(
+    failure: SubmitFailure,
+    strings: Strings,
+): String =
+    when (failure.error) {
+        DomainError.NETWORK -> strings.accountScreens.offline
+        else -> strings.categoriesUnread
     }
 
 /**
@@ -214,6 +239,10 @@ internal fun failureMessage(
 
         DomainError.SUBMISSION_LIMIT -> {
             strings.submissionLimit.fill(SubmissionRules.MAX_PENDING_SUBMISSIONS)
+        }
+
+        DomainError.NOT_ENOUGH_POINTS -> {
+            strings.notEnoughPoints
         }
 
         DomainError.RATE_LIMITED -> {

@@ -2,7 +2,6 @@ package io.ntole.wyr.server.question
 
 import io.ntole.wyr.core.api.WyrApi
 import io.ntole.wyr.core.error.ErrorCode
-import io.ntole.wyr.core.question.QuestionCategory
 import io.ntole.wyr.core.question.QuestionStatus
 import io.ntole.wyr.core.question.SubmissionDto
 import io.ntole.wyr.core.question.SubmitQuestionRequest
@@ -16,6 +15,7 @@ import io.ntole.wyr.server.db.storedCategories
 import io.ntole.wyr.server.moderation.ModerationStore
 import io.ntole.wyr.server.player.PlayerStore
 import io.ntole.wyr.server.plugins.ApiFailure
+import io.ntole.wyr.server.vote.Scoring
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.SchemaUtils
@@ -49,7 +49,7 @@ class SubmissionStoreTest {
     fun `a submission is stored under its author waiting for a moderator`() {
         val author = newPlayer()
 
-        val categories = listOf(QuestionCategory.FOOD, QuestionCategory.SUPERPOWERS)
+        val categories = listOf("FOOD", "SUPERPOWERS")
 
         val submission = submit(author, SubmitQuestionRequest("Fly", "Swim", categories), at = 1_000L)
 
@@ -70,6 +70,8 @@ class SubmissionStoreTest {
     fun `two submissions racing for the last pending place let only one in`() {
         val author = newPlayer()
         repeat(WyrApi.Limits.MAX_PENDING_SUBMISSIONS - 1) { index -> submit(author, question(index)) }
+        // Enough for both, so only the pending cap can refuse one.
+        transaction(database) { PlayerStore.addPoints(author, points = 2 * Scoring.SUBMISSION_COST) }
 
         // The second counts while the first holds its insert of the last place uncommitted. Counted
         // without waiting for it, the second would find a place free too, and both would get in.
@@ -135,7 +137,7 @@ class SubmissionStoreTest {
                 transaction(database) {
                     val listed = SubmissionStore.byAuthor(author)
                     assertEquals(count, listed.size)
-                    assertEquals(List(count) { listOf(QuestionCategory.RANDOM) }, listed.map { it.categories })
+                    assertEquals(List(count) { listOf("ABSURD") }, listed.map { it.categories })
                     statementCount
                 }
             }
@@ -155,11 +157,64 @@ class SubmissionStoreTest {
     fun `a submission by a player that does not exist is unauthorized and stores nothing`() {
         val before = transaction(database) { Questions.selectAll().count() }
 
-        val failure = assertFailsWith<ApiFailure> { submit("no-such-player", question(0)) }
+        val failure =
+            assertFailsWith<ApiFailure> {
+                transaction(
+                    database,
+                ) { SubmissionStore.submit("no-such-player", question(0)) }
+            }
 
         assertEquals(ErrorCode.UNAUTHORIZED, failure.code)
         assertEquals(before, transaction(database) { Questions.selectAll().count() })
     }
+
+    @Test
+    fun `a submission costs its author the submission cost and keeps what it cost on the question`() {
+        val author = newPlayer()
+        transaction(database) { PlayerStore.addPoints(author, points = 3) }
+
+        val submission = transaction(database) { SubmissionStore.submit(author, question(0)) }
+
+        assertEquals(3 - Scoring.SUBMISSION_COST, totalOf(author))
+        val cost = transaction(database) { Questions.selectAll().where { Questions.id eq submission.id }.single() }
+        assertEquals(Scoring.SUBMISSION_COST, cost[Questions.submissionCost])
+    }
+
+    @Test
+    fun `an author without the points to submit is refused and nothing is stored or taken`() {
+        val author = newPlayer()
+        val before = transaction(database) { Questions.selectAll().count() }
+
+        val failure =
+            assertFailsWith<ApiFailure> { transaction(database) { SubmissionStore.submit(author, question(0)) } }
+
+        assertEquals(ErrorCode.NOT_ENOUGH_POINTS, failure.code)
+        assertEquals(0, totalOf(author), "nothing taken")
+        assertEquals(before, transaction(database) { Questions.selectAll().count() }, "nothing stored")
+    }
+
+    @Test
+    fun `two submissions racing for an author's last point let only one in`() {
+        val author = newPlayer()
+        transaction(database) { PlayerStore.addPoints(author, points = Scoring.SUBMISSION_COST) }
+
+        // The second waits on the author's row lock the first holds, then finds the point spent: taken
+        // without the WHERE on the total, it would be paid a second time, from a total of none.
+        val (first, second) =
+            raceBehindFirst(
+                url,
+                database,
+                { runCatching { SubmissionStore.submit(author, question(1)) } },
+                { runCatching { SubmissionStore.submit(author, question(2)) } },
+            )
+
+        assertEquals(true, first.isSuccess, "the first pays the last point")
+        assertEquals(ErrorCode.NOT_ENOUGH_POINTS, (second.exceptionOrNull() as? ApiFailure)?.code)
+        assertEquals(0, totalOf(author))
+        assertEquals(1, pendingBy(author))
+    }
+
+    private fun totalOf(player: String): Int? = transaction(database) { PlayerStore.find(player)?.totalPoints }
 
     private fun newPlayer(): String = transaction(database) { PlayerStore.createGuest().id }
 
@@ -167,10 +222,9 @@ class SubmissionStoreTest {
         author: String,
         request: SubmitQuestionRequest,
         at: Long = System.currentTimeMillis(),
-    ): SubmissionDto = transaction(database) { SubmissionStore.submit(author, request, now = at) }
+    ): SubmissionDto = transaction(database) { paidSubmission(author, request, now = at) }
 
-    private fun question(index: Int) =
-        SubmitQuestionRequest("Option $index", "Other $index", listOf(QuestionCategory.RANDOM))
+    private fun question(index: Int) = SubmitQuestionRequest("Option $index", "Other $index", listOf("ABSURD"))
 
     private fun assertLimitReached(author: String) {
         val refused = assertFailsWith<ApiFailure> { submit(author, question(REFUSED)) }

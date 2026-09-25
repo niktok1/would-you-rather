@@ -1,6 +1,5 @@
 package io.ntole.wyr.account
 
-import io.ntole.wyr.core.domain.question.Category
 import io.ntole.wyr.core.domain.submission.Submission
 import io.ntole.wyr.core.domain.submission.SubmissionStatus
 import io.ntole.wyr.core.network.environment.WyrEnvironment
@@ -73,7 +72,7 @@ class AccountScreenTest {
                 id = "q1",
                 optionA = "Fly",
                 optionB = "Swim",
-                categories = setOf(Category.SUPERPOWERS),
+                categories = setOf("SUPERPOWERS"),
                 status = SubmissionStatus.PENDING,
                 rejectionReason = null,
                 submittedAt = Instant.parse("2026-09-25T12:00:00Z"),

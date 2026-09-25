@@ -5,37 +5,25 @@ import io.ntole.wyr.core.domain.moderation.ModeratedQuestionPage
 import io.ntole.wyr.core.domain.moderation.QuestionCursor
 import io.ntole.wyr.core.domain.moderation.QuestionFilter
 import io.ntole.wyr.core.domain.moderation.RejectionReason
-import io.ntole.wyr.core.domain.question.Category
 import io.ntole.wyr.core.domain.submission.SubmissionStatus
 import io.ntole.wyr.core.domain.vote.Tally
 import io.ntole.wyr.core.question.AdminQuestionDto
 import io.ntole.wyr.core.question.AdminQuestionPageDto
 import io.ntole.wyr.core.question.ApproveSubmissionRequest
-import io.ntole.wyr.core.question.QuestionCategory
 import io.ntole.wyr.core.question.QuestionStatus
 import io.ntole.wyr.core.question.RejectSubmissionRequest
 import kotlin.time.Instant
 
 /**
  * Domain to wire, for a moderator's approval of [questionId] (CLAUDE.md §8d, *Moderation*): filed
- * under [categories] by their wire names in declaration order, so one selection is always one
- * request, and none names none, which keeps the author's categories. The queue and every decision
- * are answered with `SubmissionDto`s, which map as the author's own list does (`SubmissionMapper`).
- *
- * @throws IllegalArgumentException when [categories] holds [Category.OTHER], which has no wire
- *   category to file a question under.
+ * under [categories], ids, in id order, as a submission's are (`submitQuestionRequest`), and none
+ * names none, which keeps the author's categories. The queue and every decision are answered with
+ * `SubmissionDto`s, which map as the author's own list does (`SubmissionMapper`).
  */
 internal fun approveSubmissionRequest(
     questionId: String,
-    categories: Set<Category>,
-): ApproveSubmissionRequest =
-    ApproveSubmissionRequest(
-        questionId = questionId,
-        categories =
-            categories.sorted().map { category ->
-                requireNotNull(category.toWireOrNull()) { "no question can be filed under $category" }
-            },
-    )
+    categories: Set<String>,
+): ApproveSubmissionRequest = ApproveSubmissionRequest(questionId = questionId, categories = categories.sorted())
 
 /** A rejection of [questionId], with [reason] as it was checked: trimmed, as the server stores it. */
 internal fun rejectSubmissionRequest(
@@ -84,12 +72,5 @@ internal fun QuestionFilter.wireStatuses(): List<QuestionStatus> =
         }
     }
 
-/**
- * The categories [QuestionFilter.categories] asks for, by their wire names in declaration order.
- *
- * @throws IllegalArgumentException for [Category.OTHER], which has no wire category to ask by.
- */
-internal fun QuestionFilter.wireCategories(): List<QuestionCategory> =
-    categories.sorted().map { category ->
-        requireNotNull(category.toWireOrNull()) { "no question can be listed under $category" }
-    }
+/** The categories [QuestionFilter.categories] asks for, ids, in id order, so one filter is always one request. */
+internal fun QuestionFilter.wireCategories(): List<String> = categories.sorted()

@@ -24,9 +24,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import io.ntole.wyr.admin.theme.AdminDimens
 import io.ntole.wyr.admin.theme.AdminType
+import io.ntole.wyr.core.domain.category.Category
 import io.ntole.wyr.core.domain.moderation.ModeratedQuestion
 import io.ntole.wyr.core.domain.moderation.QuestionFilter
-import io.ntole.wyr.core.domain.question.Category
 import io.ntole.wyr.core.domain.submission.SubmissionStatus
 import kotlin.time.Clock
 import kotlin.time.Instant
@@ -55,7 +55,7 @@ fun QuestionsScreen(
     ) {
         item {
             Column(verticalArrangement = Arrangement.spacedBy(AdminDimens.spaceSm)) {
-                FilterRows(list.filter, enabled = !state.isBusy, actions)
+                FilterRows(list.filter, state.categories.categories, enabled = !state.isBusy, actions)
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(AdminDimens.spaceMd),
                     verticalAlignment = Alignment.CenterVertically,
@@ -65,6 +65,7 @@ fun QuestionsScreen(
                     }
                     Text(text = listSummaryOf(list), style = MaterialTheme.typography.bodyMedium)
                 }
+                state.categories.failure?.let { CategoriesFailure(it) }
                 list.failure?.let { FailureLine(it) }
                 list.outcomes.notice?.let { NoticeLine(it) }
                 UnlistedFailures(list.outcomes.failures, questions.orEmpty().map { it.id }.toSet())
@@ -87,10 +88,14 @@ fun QuestionsScreen(
     }
 }
 
-/** The statuses and categories to list, each chip adding its value, none picked being every one. */
+/**
+ * The statuses and categories to list, each chip adding its value, none picked being every one. The
+ * categories are [known], every one the server listed.
+ */
 @Composable
 private fun FilterRows(
     filter: QuestionFilter,
+    known: List<Category>?,
     enabled: Boolean,
     actions: ModerationActions,
 ) {
@@ -106,13 +111,13 @@ private fun FilterRows(
                 )
             }
         }
-        Text(text = "Category: ${categoryFilterOf(filter)}", style = MaterialTheme.typography.labelLarge)
+        Text(text = "Category: ${categoryFilterOf(filter, known)}", style = MaterialTheme.typography.labelLarge)
         FlowRow(horizontalArrangement = Arrangement.spacedBy(AdminDimens.spaceSm)) {
-            Category.selectable.forEach { category ->
+            known.orEmpty().forEach { category ->
                 FilterChip(
-                    selected = category in filter.categories,
-                    onClick = { actions.toggleCategoryFilter(category) },
-                    label = { Text(category.name) },
+                    selected = category.id in filter.categories,
+                    onClick = { actions.toggleCategoryFilter(category.id) },
+                    label = { Text(nameOf(category.id, known)) },
                     enabled = enabled,
                 )
             }
@@ -147,7 +152,10 @@ private fun QuestionCard(
             }
             Text(text = "A: ${question.optionA}", style = MaterialTheme.typography.titleMedium)
             Text(text = "B: ${question.optionB}", style = MaterialTheme.typography.titleMedium)
-            Text(text = "Categories: ${namesOf(question.categories)}", style = MaterialTheme.typography.bodyMedium)
+            Text(
+                text = "Categories: ${namesOf(question.categories, state.categories.categories)}",
+                style = MaterialTheme.typography.bodyMedium,
+            )
             Text(
                 text = "${tallyOf(question)} · ${likesOf(question.likeCount)}",
                 style = MaterialTheme.typography.bodyMedium,
@@ -227,9 +235,11 @@ fun statusLabelOf(status: SubmissionStatus): String =
 fun statusFilterOf(filter: QuestionFilter): String =
     if (filter.statuses.isEmpty()) "every status" else filter.statuses.joinToString(", ") { statusLabelOf(it) }
 
-/** The categories [filter] lists, or that it lists every one. */
-fun categoryFilterOf(filter: QuestionFilter): String =
-    if (filter.categories.isEmpty()) "every category" else namesOf(filter.categories)
+/** The categories [filter] lists, each named as [known] lists it, or that it lists every one. */
+fun categoryFilterOf(
+    filter: QuestionFilter,
+    known: List<Category>?,
+): String = if (filter.categories.isEmpty()) "every category" else namesOf(filter.categories, known)
 
 /** How many are listed, whether more follow, or that nothing was read at this filter yet. */
 fun listSummaryOf(list: QuestionList): String {

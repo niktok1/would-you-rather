@@ -2,7 +2,7 @@ package io.ntole.wyr.core.domain.submission
 
 /**
  * The server's rules for a submitted question's options (CLAUDE.md §8d, *Submitting*), so a form can
- * say what is wrong as it is typed, before anything is sent.
+ * say what is wrong as it is typed, before anything is sent, and what submitting costs.
  *
  * An option is trimmed, then must be non-blank, at most [MAX_OPTION_LENGTH] long, counted as
  * `String.length` counts, in UTF-16 code units, and one line: no control character, nor U+2028 or
@@ -20,12 +20,12 @@ public object SubmissionRules {
     public const val MAX_PENDING_SUBMISSIONS: Int = 20
 
     /**
-     * The points submitting a question costs its author, 1 until the game is released (CLAUDE.md §8d,
-     * *Submitting*): the client's one copy, which the Submit screen shows on its button and holds the
-     * button off by while the player has fewer. It binds nothing on the server: what the server
-     * charges, if anything, is the server's own, and §8d says whether it charges yet.
+     * What submitting a question costs, in points, and so the fewest a player needs to submit
+     * (CLAUDE.md §8c), 1 until the game is released: the client's one copy, which the Submit screen
+     * shows on its button and holds the button off by while the player has fewer. The server charges
+     * it, and refuses too few as `NOT_ENOUGH_POINTS`.
      */
-    public const val COST: Int = 1
+    public const val SUBMISSION_COST: Int = 1
 
     /** What is wrong with [option] by the server's rules, or null when a question can have it. */
     public fun optionProblem(option: String): OptionProblem? {

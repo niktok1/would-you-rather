@@ -3,6 +3,7 @@ package io.ntole.wyr.core.data.di
 import io.ktor.client.HttpClient
 import io.ntole.wyr.core.data.account.DefaultAccountRepository
 import io.ntole.wyr.core.data.cache.InMemoryQuestionCache
+import io.ntole.wyr.core.data.category.DefaultCategoryRepository
 import io.ntole.wyr.core.data.like.DefaultLikeRepository
 import io.ntole.wyr.core.data.moderation.DefaultModerationRepository
 import io.ntole.wyr.core.data.player.DefaultPlayerRepository
@@ -14,13 +15,17 @@ import io.ntole.wyr.core.domain.account.AccountRepository
 import io.ntole.wyr.core.domain.account.LogIn
 import io.ntole.wyr.core.domain.account.LogOut
 import io.ntole.wyr.core.domain.account.RegisterAccount
+import io.ntole.wyr.core.domain.category.CategoryRepository
+import io.ntole.wyr.core.domain.category.GetCategories
 import io.ntole.wyr.core.domain.like.LikeRepository
 import io.ntole.wyr.core.domain.like.SetLike
+import io.ntole.wyr.core.domain.moderation.AddCategory
 import io.ntole.wyr.core.domain.moderation.ApproveSubmission
 import io.ntole.wyr.core.domain.moderation.GetPendingSubmissions
 import io.ntole.wyr.core.domain.moderation.GetQuestions
 import io.ntole.wyr.core.domain.moderation.ModerationRepository
 import io.ntole.wyr.core.domain.moderation.RejectSubmission
+import io.ntole.wyr.core.domain.moderation.RenameCategory
 import io.ntole.wyr.core.domain.moderation.RestoreQuestion
 import io.ntole.wyr.core.domain.moderation.RetireQuestion
 import io.ntole.wyr.core.domain.player.GetPlayerStats
@@ -40,6 +45,7 @@ import io.ntole.wyr.core.network.SessionStore
 import io.ntole.wyr.core.network.TokenStorage
 import io.ntole.wyr.core.network.WyrHttpClient
 import io.ntole.wyr.core.network.api.AuthApi
+import io.ntole.wyr.core.network.api.CategoryApi
 import io.ntole.wyr.core.network.api.LikeApi
 import io.ntole.wyr.core.network.api.ModerationApi
 import io.ntole.wyr.core.network.api.PlayerApi
@@ -72,6 +78,7 @@ public fun dataModule(environment: WyrEnvironment): Module =
         single { PlayerApi(get()) }
         single { SubmissionApi(get()) }
         single { LikeApi(get()) }
+        single { CategoryApi(get()) }
 
         single<QuestionCache> { InMemoryQuestionCache() }
 
@@ -87,6 +94,7 @@ public fun dataModule(environment: WyrEnvironment): Module =
         single<SubmissionRepository> { DefaultSubmissionRepository(api = get(), session = get()) }
         single<LikeRepository> { DefaultLikeRepository(api = get(), session = get()) }
         single<AccountRepository> { DefaultAccountRepository(api = get(), session = get()) }
+        single<CategoryRepository> { DefaultCategoryRepository(api = get()) }
 
         factory { GetNextQuestion(questions = get(), session = get()) }
         factory { SkipQuestion(questions = get(), session = get()) }
@@ -98,12 +106,13 @@ public fun dataModule(environment: WyrEnvironment): Module =
         factory { RegisterAccount(accounts = get(), session = get()) }
         factory { LogIn(accounts = get(), questions = get()) }
         factory { LogOut(accounts = get(), questions = get()) }
+        factory { GetCategories(categories = get()) }
     }
 
 /**
  * Wiring for a client that only moderates (CLAUDE.md §8d, *Moderation*): the moderator's repository
- * and use cases, over an HTTP client of its own, and nothing of the player's. Every request goes to
- * [environment]'s [WyrEnvironment.apiBaseUrl].
+ * and use cases, and the categories, which need no session either, over an HTTP client of its own,
+ * and nothing of the player's. Every request goes to [environment]'s [WyrEnvironment.apiBaseUrl].
  *
  * Needs no [TokenStorage]: the client's session store is in memory and nothing ever writes to it, so
  * no request carries a bearer token, the Auth plugin has nothing to refresh, and nothing is written
@@ -121,11 +130,16 @@ public fun moderationDataModule(environment: WyrEnvironment): Module =
             )
         }
         single { ModerationApi(get()) }
+        single { CategoryApi(get()) }
         single<ModerationRepository> { DefaultModerationRepository(api = get()) }
+        single<CategoryRepository> { DefaultCategoryRepository(api = get()) }
         factory { GetPendingSubmissions(moderation = get()) }
         factory { ApproveSubmission(moderation = get()) }
         factory { RejectSubmission(moderation = get()) }
         factory { GetQuestions(moderation = get()) }
         factory { RetireQuestion(moderation = get()) }
         factory { RestoreQuestion(moderation = get()) }
+        factory { AddCategory(moderation = get()) }
+        factory { RenameCategory(moderation = get()) }
+        factory { GetCategories(categories = get()) }
     }

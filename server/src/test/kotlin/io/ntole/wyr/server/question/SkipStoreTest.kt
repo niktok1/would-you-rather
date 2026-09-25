@@ -2,11 +2,9 @@ package io.ntole.wyr.server.question
 
 import io.ntole.wyr.core.api.WyrApi
 import io.ntole.wyr.core.player.PlayerStatsDto
-import io.ntole.wyr.core.question.QuestionCategory
 import io.ntole.wyr.core.question.QuestionDto
 import io.ntole.wyr.core.vote.OptionSide
 import io.ntole.wyr.core.vote.VoteResultDto
-import io.ntole.wyr.core.vote.VoteTallyDto
 import io.ntole.wyr.server.db.INSERTING_INTO_SKIPS
 import io.ntole.wyr.server.db.Questions
 import io.ntole.wyr.server.db.Seed
@@ -16,6 +14,7 @@ import io.ntole.wyr.server.db.connectH2
 import io.ntole.wyr.server.db.filedUnder
 import io.ntole.wyr.server.db.h2Url
 import io.ntole.wyr.server.db.raceBehindFirst
+import io.ntole.wyr.server.db.tallyOf
 import io.ntole.wyr.server.player.PlayerStore
 import io.ntole.wyr.server.player.StatsStore
 import io.ntole.wyr.server.vote.Scoring
@@ -49,10 +48,10 @@ class SkipStoreTest {
 
     private val food: List<String> =
         transaction(database) {
-            filedUnder(QuestionCategory.FOOD)
+            filedUnder("FOOD")
         }
 
-    private val ethics: List<String> = transaction(database) { filedUnder(QuestionCategory.ETHICS) }
+    private val ethics: List<String> = transaction(database) { filedUnder("ETHICS") }
 
     @Test
     fun `a skipped question is not due for the rest of the cycle`() {
@@ -137,7 +136,11 @@ class SkipStoreTest {
             statsOf(player),
             "only the unanswered one stops being due; the answered one already was not",
         )
-        assertEquals(VoteTallyDto(votesA = 3, votesB = 0), answer(newPlayer(), answered).tally, "two votes, no skip")
+        assertEquals(
+            tallyOf(answered, votesA = 3, votesB = 0),
+            answer(newPlayer(), answered).tally,
+            "two votes, no skip",
+        )
         (pool - answered - unanswered).forEach { id -> answer(player, id) }
         val nextCycle = feed(player).associateBy { it.id }
         assertEquals(true, nextCycle[answered]?.answeredBefore, "its vote is still the player's")
@@ -153,7 +156,7 @@ class SkipStoreTest {
 
         assertEquals(Scoring.POINTS_PER_ANSWER, answered.pointsAwarded)
         assertEquals(false, answered.replayed)
-        assertEquals(VoteTallyDto(votesA = 1, votesB = 0), answered.tally)
+        assertEquals(tallyOf(QUESTION, votesA = 1, votesB = 0), answered.tally)
         val stats = statsOf(player)
         assertEquals(1, stats.answersGiven)
         assertEquals(1, stats.questionsAnswered)
@@ -169,7 +172,7 @@ class SkipStoreTest {
         chosen.drop(1).forEach { id -> answer(player, id) }
         skip(player, skipped)
 
-        val batch = feed(player, categories = setOf(QuestionCategory.FOOD, QuestionCategory.ETHICS))
+        val batch = feed(player, categories = setOf("FOOD", "ETHICS"))
 
         assertEquals(chosen.sorted(), batch.ids().sorted(), "all of those categories again, as when all is answered")
         assertEquals(listOf(skipped), batch.filterNot { it.answeredBefore }.ids())
@@ -241,7 +244,7 @@ class SkipStoreTest {
 
     private fun feed(
         player: String,
-        categories: Set<QuestionCategory> = emptySet(),
+        categories: Set<String> = emptySet(),
     ): List<QuestionDto> =
         transaction(database) { QuestionStore.feed(player, WyrApi.Limits.MAX_PAGE_SIZE, categories).questions }
 

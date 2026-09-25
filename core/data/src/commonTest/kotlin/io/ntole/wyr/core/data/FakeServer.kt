@@ -18,13 +18,14 @@ import io.ntole.wyr.core.auth.LoginRequest
 import io.ntole.wyr.core.auth.RefreshRequest
 import io.ntole.wyr.core.auth.RegisterRequest
 import io.ntole.wyr.core.auth.SessionDto
+import io.ntole.wyr.core.category.CategoryDto
+import io.ntole.wyr.core.category.CategoryListDto
 import io.ntole.wyr.core.error.ErrorCode
 import io.ntole.wyr.core.error.ErrorDto
 import io.ntole.wyr.core.like.LikeRequest
 import io.ntole.wyr.core.like.LikeResultDto
 import io.ntole.wyr.core.network.WyrJson
 import io.ntole.wyr.core.player.PlayerStatsDto
-import io.ntole.wyr.core.question.QuestionCategory
 import io.ntole.wyr.core.question.QuestionDto
 import io.ntole.wyr.core.question.QuestionPageDto
 import io.ntole.wyr.core.question.QuestionStatus
@@ -42,6 +43,7 @@ import kotlinx.coroutines.sync.withLock
  * like, a stats read, a submission, a read of the author's submissions, a registration or a logout
  * from a player it does not know — the state after a dev server restarts with an empty database. It
  * registers a guest as an account and logs one in, a new session of the account's player each time.
+ * It lists the categories to anybody, a session or none.
  */
 internal class FakeServer {
     private val lock = Mutex()
@@ -120,6 +122,15 @@ internal class FakeServer {
     /** When set, every logout is refused with this status and code, whoever sends it. */
     var refuseLogoutsWith: Pair<HttpStatusCode, ErrorCode>? = null
 
+    /** What a read of the categories answers, whoever sends it: [CATEGORIES] unless a test says otherwise. */
+    var categories: CategoryListDto = CATEGORIES
+
+    /** When set, every read of the categories is refused with this status and code. */
+    var refuseCategoriesWith: Pair<HttpStatusCode, ErrorCode>? = null
+
+    /** The `Authorization` header of every read of the categories, in arrival order. */
+    val categoriesSentAs = mutableListOf<String?>()
+
     val engine = MockEngine { request -> lock.withLock { handle(request) } }
 
     private suspend fun MockRequestHandleScope.handle(request: HttpRequestData): HttpResponseData =
@@ -195,6 +206,17 @@ internal class FakeServer {
 
             WyrApi.Paths.LIKES -> {
                 like(request)
+            }
+
+            // To anybody, with or without a session, as the server's does.
+            WyrApi.Paths.CATEGORIES -> {
+                categoriesSentAs += request.headers[HttpHeaders.Authorization]
+                val refusal = refuseCategoriesWith
+                if (refusal != null) {
+                    respondErrorDto(refusal.first, refusal.second)
+                } else {
+                    respondJson(WyrJson.encodeToString(categories))
+                }
             }
 
             WyrApi.Paths.AUTH_REGISTER -> {
@@ -341,6 +363,18 @@ internal class FakeServer {
         /** When the server says it stored every submission, in epoch milliseconds. */
         const val SUBMITTED_AT = 1_790_000_000_000L
 
+        /** The first categories, in the order of categories, as V6 wrote them. */
+        val CATEGORIES =
+            CategoryListDto(
+                listOf(
+                    CategoryDto(id = "FOOD", nameSr = "Храна", nameEn = "Food"),
+                    CategoryDto(id = "LIFESTYLE", nameSr = "Начин живота", nameEn = "Lifestyle"),
+                    CategoryDto(id = "ETHICS", nameSr = "Етика", nameEn = "Ethics"),
+                    CategoryDto(id = "SUPERPOWERS", nameSr = "Супермоћи", nameEn = "Superpowers"),
+                    CategoryDto(id = "ABSURD", nameSr = "Апсурдно", nameEn = "Absurd"),
+                ),
+            )
+
         /** What a read of the author's submissions answers every known player, newest first. */
         val SUBMISSIONS =
             SubmissionListDto(
@@ -349,7 +383,7 @@ internal class FakeServer {
                         id = "s2",
                         optionA = "s2-a",
                         optionB = "s2-b",
-                        categories = listOf(QuestionCategory.ETHICS),
+                        categories = listOf("ETHICS"),
                         status = QuestionStatus.REJECTED,
                         rejectionReason = "a duplicate",
                         submittedAt = SUBMITTED_AT + 1,
@@ -358,7 +392,7 @@ internal class FakeServer {
                         id = "s1",
                         optionA = "s1-a",
                         optionB = "s1-b",
-                        categories = listOf(QuestionCategory.FOOD, QuestionCategory.RANDOM),
+                        categories = listOf("FOOD", "ABSURD"),
                         status = QuestionStatus.PENDING,
                         submittedAt = SUBMITTED_AT,
                     ),
@@ -374,7 +408,7 @@ internal class FakeServer {
                             id = "q1",
                             optionA = "q1-a",
                             optionB = "q1-b",
-                            categories = listOf(QuestionCategory.FOOD),
+                            categories = listOf("FOOD"),
                         ),
                     ),
             )

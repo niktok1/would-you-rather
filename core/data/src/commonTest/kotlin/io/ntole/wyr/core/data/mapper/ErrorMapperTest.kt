@@ -22,8 +22,13 @@ class ErrorMapperTest {
                     ApiException(ErrorCode.VALIDATION_FAILED, status = 400) to DomainError.SERVER,
                     ApiException(ErrorCode.INVALID_SUBMISSION, status = 422) to DomainError.INVALID_SUBMISSION,
                     ApiException(ErrorCode.SUBMISSION_LIMIT, status = 409) to DomainError.SUBMISSION_LIMIT,
+                    // A 409 of its own: never SUBMISSION_LIMIT, which would say 20 are pending.
+                    ApiException(ErrorCode.NOT_ENOUGH_POINTS, status = 409) to DomainError.NOT_ENOUGH_POINTS,
                     ApiException(ErrorCode.ALREADY_DECIDED, status = 409) to DomainError.ALREADY_DECIDED,
                     ApiException(ErrorCode.WRONG_STATUS, status = 409) to DomainError.WRONG_STATUS,
+                    // A moderator's, adding or renaming a category: never ALREADY_DECIDED or QUESTION_NOT_FOUND.
+                    ApiException(ErrorCode.CATEGORY_EXISTS, status = 409) to DomainError.CATEGORY_EXISTS,
+                    ApiException(ErrorCode.CATEGORY_NOT_FOUND, status = 404) to DomainError.CATEGORY_NOT_FOUND,
                     ApiException(ErrorCode.FORBIDDEN, status = 403) to DomainError.FORBIDDEN,
                     ApiException(ErrorCode.UNAUTHORIZED, status = 401) to DomainError.UNAUTHORIZED,
                     ApiException(ErrorCode.INVALID_REFRESH_TOKEN, status = 401) to DomainError.UNAUTHORIZED,

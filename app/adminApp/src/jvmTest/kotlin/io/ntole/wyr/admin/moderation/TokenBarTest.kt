@@ -14,10 +14,13 @@ import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.unit.Density
 import io.ntole.wyr.admin.moderation.FakeModeration.Companion.TOKEN
 import io.ntole.wyr.admin.theme.AdminTheme
+import io.ntole.wyr.core.domain.category.GetCategories
+import io.ntole.wyr.core.domain.moderation.AddCategory
 import io.ntole.wyr.core.domain.moderation.ApproveSubmission
 import io.ntole.wyr.core.domain.moderation.GetPendingSubmissions
 import io.ntole.wyr.core.domain.moderation.GetQuestions
 import io.ntole.wyr.core.domain.moderation.RejectSubmission
+import io.ntole.wyr.core.domain.moderation.RenameCategory
 import io.ntole.wyr.core.domain.moderation.RestoreQuestion
 import io.ntole.wyr.core.domain.moderation.RetireQuestion
 import kotlin.test.Test
@@ -36,6 +39,9 @@ class TokenBarTest {
             getQuestions = GetQuestions(moderation),
             retireQuestion = RetireQuestion(moderation),
             restoreQuestion = RestoreQuestion(moderation),
+            getCategories = GetCategories(FakeCategories()),
+            addCategory = AddCategory(moderation),
+            renameCategory = RenameCategory(moderation),
         )
 
     @Test

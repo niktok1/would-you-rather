@@ -14,6 +14,9 @@ import io.ntole.wyr.core.domain.account.AccountRepository
 import io.ntole.wyr.core.domain.account.LogIn
 import io.ntole.wyr.core.domain.account.LogOut
 import io.ntole.wyr.core.domain.account.RegisterAccount
+import io.ntole.wyr.core.domain.category.Category
+import io.ntole.wyr.core.domain.category.CategoryRepository
+import io.ntole.wyr.core.domain.category.GetCategories
 import io.ntole.wyr.core.domain.error.DomainError
 import io.ntole.wyr.core.domain.error.WyrException
 import io.ntole.wyr.core.domain.like.LikeRepository
@@ -22,7 +25,6 @@ import io.ntole.wyr.core.domain.like.SetLike
 import io.ntole.wyr.core.domain.player.GetPlayerStats
 import io.ntole.wyr.core.domain.player.PlayerRepository
 import io.ntole.wyr.core.domain.player.PlayerStats
-import io.ntole.wyr.core.domain.question.Category
 import io.ntole.wyr.core.domain.question.GetNextQuestion
 import io.ntole.wyr.core.domain.question.Question
 import io.ntole.wyr.core.domain.question.QuestionRepository
@@ -46,7 +48,7 @@ import io.ntole.wyr.language.EnglishStrings
 import io.ntole.wyr.language.Language
 import io.ntole.wyr.language.LanguageViewModel
 import io.ntole.wyr.language.SerbianCyrillicStrings
-import io.ntole.wyr.play.categoryName
+import io.ntole.wyr.language.categoryName
 import io.ntole.wyr.submit.sendText
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
@@ -209,7 +211,7 @@ class AppNavigationTest {
             scene.tap(CYRILLIC.accountScreens.newQuestion)
             scene.type(0, "Fly")
             scene.type(1, "Swim")
-            scene.tap(categoryName(Category.FOOD))
+            scene.tap(categoryName(FOOD, Language.SERBIAN_CYRILLIC))
 
             scene.tap(sendText(CYRILLIC))
             scene.settle()
@@ -231,7 +233,7 @@ class AppNavigationTest {
             scene.tap(CYRILLIC.accountScreens.newQuestion)
             scene.type(0, "Fly")
             scene.type(1, "Swim")
-            scene.tap(categoryName(Category.FOOD))
+            scene.tap(categoryName(FOOD, Language.SERBIAN_CYRILLIC))
             scene.tap(sendText(CYRILLIC))
 
             scene.tap(CYRILLIC.back)
@@ -362,6 +364,7 @@ class AppNavigationTest {
             single<PlayerRepository> { game }
             single<AccountRepository> { game }
             single<SubmissionRepository> { game }
+            single<CategoryRepository> { ServerCategories }
             factory { GetNextQuestion(questions = get(), session = get()) }
             factory { SkipQuestion(questions = get(), session = get()) }
             factory { CastVote(votes = get(), session = get()) }
@@ -372,7 +375,15 @@ class AppNavigationTest {
             factory { LogOut(accounts = get(), questions = get()) }
             factory { SubmitQuestion(submissions = get(), session = get()) }
             factory { GetMySubmissions(submissions = get(), session = get()) }
+            factory { GetCategories(categories = get()) }
         }
+
+    /** The server's one category, [FOOD], listed once read: the Submit form's one chip. */
+    private object ServerCategories : CategoryRepository {
+        override val categories = MutableStateFlow<List<Category>>(emptyList())
+
+        override suspend fun refresh(): List<Category> = listOf(FOOD).also { categories.value = it }
+    }
 
     /** A resumed lifecycle and a ViewModel store, as an activity or a window gives the app. */
     private class TestOwner :
@@ -418,7 +429,7 @@ class AppNavigationTest {
         /** When set, a submission waits for it before it is stored. */
         var submitWaitsFor: CompletableDeferred<Unit>? = null
 
-        override val categories: StateFlow<Set<Category>> = MutableStateFlow(emptySet())
+        override val categories: StateFlow<Set<String>> = MutableStateFlow(emptySet())
 
         override suspend fun next(): Question {
             questionsAsked++
@@ -427,7 +438,7 @@ class AppNavigationTest {
 
         override suspend fun prefetch() = Unit
 
-        override suspend fun setCategories(categories: Set<Category>) = Unit
+        override suspend fun setCategories(categories: Set<String>) = Unit
 
         override suspend fun skip(questionId: String) {
             skipped += questionId
@@ -472,7 +483,7 @@ class AppNavigationTest {
         override suspend fun submit(
             optionA: String,
             optionB: String,
-            categories: Set<Category>,
+            categories: Set<String>,
         ): Submission {
             submitWaitsFor?.await()
             return Submission(
@@ -496,6 +507,8 @@ class AppNavigationTest {
         val CYRILLIC = SerbianCyrillicStrings
         val ENGLISH = EnglishStrings
 
-        val QUESTION = Question(id = "q1", optionA = "Fly", optionB = "Swim", categories = setOf(Category.FOOD))
+        val FOOD = Category(id = "FOOD", nameSr = "Храна", nameEn = "Food")
+
+        val QUESTION = Question(id = "q1", optionA = "Fly", optionB = "Swim", categories = setOf(FOOD.id))
     }
 }

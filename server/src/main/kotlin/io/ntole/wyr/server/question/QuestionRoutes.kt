@@ -10,6 +10,7 @@ import io.ntole.wyr.core.api.WyrApi
 import io.ntole.wyr.core.question.SkipRequest
 import io.ntole.wyr.server.auth.JWT_AUTH
 import io.ntole.wyr.server.auth.authenticatedPlayerId
+import io.ntole.wyr.server.category.CategoryStore
 import io.ntole.wyr.server.db.Db
 import io.ntole.wyr.server.player.PlayerStore
 import io.ntole.wyr.server.plugins.ApiFailure
@@ -32,16 +33,17 @@ fun Route.questionRoutes(db: Db) {
 
                 val limit = params.pageLimit()
 
-                // Filtering by UNKNOWN would always answer an empty batch, which the feed otherwise never
-                // does while it has questions, so it is refused with every other value that is no category.
                 val categories = params.categoryFilter()
 
                 val batch =
                     db.query {
+                        // Filtering by an id no category has would always answer an empty batch, which the
+                        // feed otherwise never does while it has questions, so it is refused.
+                        val filter = CategoryStore.checked(categories).toSet()
                         // As for a vote: a validly signed token can outlive its player. Serving it the feed
                         // of a player with no answers would only put the 401 off until its first vote.
                         if (PlayerStore.find(playerId) == null) throw ApiFailure.unauthorized("unknown player")
-                        QuestionStore.feed(playerId, limit, categories)
+                        QuestionStore.feed(playerId, limit, filter)
                     }
 
                 call.respond(batch)

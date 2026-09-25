@@ -13,11 +13,14 @@ import io.ktor.http.headers
 import io.ktor.http.headersOf
 import io.ntole.wyr.core.api.WyrApi
 import io.ntole.wyr.core.data.moderation.DefaultModerationRepository
+import io.ntole.wyr.core.domain.category.GetCategories
 import io.ntole.wyr.core.domain.error.DomainError
+import io.ntole.wyr.core.domain.moderation.AddCategory
 import io.ntole.wyr.core.domain.moderation.ApproveSubmission
 import io.ntole.wyr.core.domain.moderation.GetPendingSubmissions
 import io.ntole.wyr.core.domain.moderation.GetQuestions
 import io.ntole.wyr.core.domain.moderation.RejectSubmission
+import io.ntole.wyr.core.domain.moderation.RenameCategory
 import io.ntole.wyr.core.domain.moderation.RestoreQuestion
 import io.ntole.wyr.core.domain.moderation.RetireQuestion
 import io.ntole.wyr.core.error.ErrorCode
@@ -30,7 +33,6 @@ import io.ntole.wyr.core.network.api.ModerationApi
 import io.ntole.wyr.core.network.environment.WyrEnvironment
 import io.ntole.wyr.core.question.AdminQuestionDto
 import io.ntole.wyr.core.question.AdminQuestionPageDto
-import io.ntole.wyr.core.question.QuestionCategory
 import io.ntole.wyr.core.question.QuestionStatus
 import io.ntole.wyr.core.question.SubmissionDto
 import io.ntole.wyr.core.question.SubmissionListDto
@@ -241,6 +243,10 @@ class ModerationOverHttpTest {
             getQuestions = GetQuestions(repository),
             retireQuestion = RetireQuestion(repository),
             restoreQuestion = RestoreQuestion(repository),
+            // Not over the engine: this is about the admin routes, and the categories are none.
+            getCategories = GetCategories(FakeCategories()),
+            addCategory = AddCategory(repository),
+            renameCategory = RenameCategory(repository),
         ).also {
             it.setAdminToken(FakeModeration.TOKEN)
             testScheduler.advanceUntilIdle()
@@ -265,7 +271,7 @@ class ModerationOverHttpTest {
                 id = "q1",
                 optionA = "Fly",
                 optionB = "Swim",
-                categories = listOf(QuestionCategory.SUPERPOWERS),
+                categories = listOf("SUPERPOWERS"),
                 status = QuestionStatus.PENDING,
                 submittedAt = 1_790_000_000_000L,
             )
@@ -278,7 +284,7 @@ class ModerationOverHttpTest {
                 id = "seed-1",
                 optionA = "Cats",
                 optionB = "Dogs",
-                categories = listOf(QuestionCategory.RANDOM),
+                categories = listOf("ABSURD"),
                 status = QuestionStatus.APPROVED,
                 seed = true,
                 submittedAt = 1_790_000_000_000L,

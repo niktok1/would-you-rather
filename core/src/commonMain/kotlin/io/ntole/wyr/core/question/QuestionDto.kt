@@ -10,12 +10,11 @@ import kotlinx.serialization.Serializable
  *
  * [id] is a [String] to leave room for UUIDs.
  *
- * [categories] is every category the question is filed under (CLAUDE.md §8d): at least one, each
- * once, in [QuestionCategory] declaration order, as the server sends them. It must keep its
- * [QuestionCategoryListSerializer] and its empty default, the wire enum rule for a list (CLAUDE.md
- * §5): on a build older than a category, each name it does not know decodes as
- * [QuestionCategory.UNKNOWN], and a missing list as an empty one. A client reads an empty list as it
- * reads one of nothing but [QuestionCategory.UNKNOWN]: a question filed under nothing it can name.
+ * [categories] is every category the question is filed under (CLAUDE.md §8d, *Categories*): at least
+ * one, each once, by id, in the server's order of categories, oldest first. A category is server data,
+ * not an enum (CLAUDE.md §5): an id is a plain string, so one added after a client was built is only
+ * an id that client has no name for, never one it fails to decode. The list defaults to empty, which
+ * a client reads as a question filed under nothing it can name.
  *
  * [answeredBefore] is true when the requesting player has answered this question already and the
  * feed has looped back to it (CLAUDE.md §8d). No client reads it since the dev console, which
@@ -31,8 +30,7 @@ public data class QuestionDto(
     public val id: String,
     public val optionA: String,
     public val optionB: String,
-    @Serializable(with = QuestionCategoryListSerializer::class)
-    public val categories: List<QuestionCategory> = emptyList(),
+    public val categories: List<String> = emptyList(),
     public val answeredBefore: Boolean = false,
     public val likeCount: Int = 0,
     public val likedByMe: Boolean = false,

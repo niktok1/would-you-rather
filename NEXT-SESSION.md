@@ -38,7 +38,8 @@ to try it on a phone is under *Categories on Play*.
 the console's *Submit a question* section onto a **Submit** tab of the game's own, in every build,
 the fifth feature moved (CLAUDE.md §8d, *The Submit screen*, *Submitting*). The client alone
 changed, with `SubmissionRules` in `:core:domain` so the form checks the options as they are typed;
-the server and the contract did not. How to try it on a phone is under *Submit on its own tab*.
+the server and the contract did not. How to try it on a phone is under *Submit from My questions*,
+rewritten since for the form under Account.
 
 **On `chore/remove-console`** (from 61bfcad; not merged, nothing pushed): the dev console is gone
 (the user, 2026-09-25: "console is not needed"). Every build, LOCAL, DEV and PROD alike, shows Play,
@@ -52,7 +53,7 @@ which only it showed; and `PlayerStats.playerId` and `VoteOutcome.questionId`, w
 (the wire's `QuestionDto`, `PlayerStatsDto` and `VoteResultDto` still carry all three). The client
 alone changed; the server only in a comment and a test's name.
 
-**On `feat/app-foundation`** (from 40550e9; not merged, nothing pushed): the foundation of the
+**On `feat/app-foundation`** (from 40550e9; merged into main as 4821c05): the foundation of the
 user's redesign (2026-09-25), which the Play, Account and category screens' redesigns build on. **No
 tabs**: the app opens on **Home**, the game's name, a big Play and the account icon; Play and
 Account each show under a top bar of icon buttons, and Submit is reached from Account's bar for now,
@@ -67,6 +68,34 @@ own copy stays English for the branches that redesign them. The client alone cha
 `AppNavigationTest`, `HomeScreenDrawTest`, `TopBarsDrawTest`, `WyrIconsDrawTest`, the language
 tests; `RootScreensTest` went with the tabs). Not seen on a device: Android's back, and any screen of
 it on a phone; nor whether the web build's default font draws Cyrillic.
+
+**On `merge/redesign`, `main` merged in** (60b0d7f, `feat/server-categories` with its clients;
+one `--no-ff` merge, nothing pushed): the redesign's screens on main's server categories and cost.
+Categories are main's data everywhere, ids and the server's names, with the redesign's UI: the row's
+categories, and the picker **dialog** as main has it (it reads the list on opening, a line while it
+loads with none, one if the read fails), its words translated (`PlayStrings.pickerTitle`,
+`pickerAll`, `pickerLoading`; its buttons are `Strings.cancel`, lifted out of `AccountStrings` for the
+Auth page and the picker alike, and `Strings.play`), for the parallel branch that replaces it with a
+screen to build on. **Category names by language**, through one function, `categoryName(category,
+language)` in `io.ntole.wyr.language` (it was `io.ntole.wyr.play`): `nameSr` in Cyrillic,
+`SerbianScript.toLatin(nameSr)` in Latinica, `nameEn` in English, the language read from
+`LocalLanguage`, which `WyrStrings` now provides beside `LocalStrings`. **The cost** has one copy,
+main's `SubmissionRules.SUBMISSION_COST`, pinned to `WyrApi.Limits.SUBMISSION_COST` by
+`SubmissionLimitsTest`; the redesign's `COST` is gone, overruling the Account paragraph's merge note
+below (the task asked for main's), and so are main's `POINTS_NOTE`, `SENT_NOTE`, the form's list of
+submissions (My questions on Account has it) and the English refusal for points. Send shows the cost
+in `Strings.pointsUnit`, *Пошаљи · 1 П*, off while the points are fewer; the server's
+`NOT_ENOUGH_POINTS` is the same short line, *Немаш довољно поена.*, said once. The Submit form reads
+the categories and then the points each time it is shown; a failed read of the categories says
+*Категорије нису учитане.* (`Strings.categoriesUnread`, the picker's too), or offline, under the chips
+with Try again, unless the points failed too. **`pointsSpent`** is not shown: the Account card keeps
+its four counts, none of them a term of a sum (CLAUDE.md §8b, *What submitting cost, on the Account
+screen*: ask the user; the other option is a fifth number). Every string translated; no English
+literal left from main's side in `:app:shared`. The moderation app stays English (§8f).
+Verified here at the merge (*Verified working*): lint, the verify job's tests and client compiles,
+and the iOS Kotlin compiles. Tests: `:app:shared` 267 (250 on the redesign, 128 on main), `:server`
+346 (2 skipped), `:core:domain` 72, `:core:data` 142, `:core:network` 72 and 78 Android host,
+`:app:adminApp` 106. Not seen on a device.
 
 **On `merge/redesign`** (from 4821c05; not on `main`, nothing pushed): `feat/play-redesign`, then
 `feat/account-redesign`, each merged whole with `--no-ff`; the two paragraphs below say what each
@@ -125,7 +154,8 @@ Submit screen is only the form now, opened from My questions and back there once
 stored (one stored after the player went back is read again if Account is shown then); Send shows
 the cost, *Пошаљи · 1 P* (`SubmissionRules.COST`, 1 until release), and is off with *Немаш довољно
 поена.* while the points are fewer. The client alone changed: the server here charges nothing.
-*Accounts* and *Submit on its own tab* below still walk the flows as they were before it. For the
+*Accounts* below still walks the flows as they were before it (*Submit from My questions* is
+rewritten for the merge with `main`). For the
 merge: `SubmitScreen.kt` and `SubmitScreenTest.kt` conflict with `feat/server-categories`' 4ceb426,
 which adds `SUBMISSION_COST = 1`, a cost `POINTS_NOTE` and an English `NOT_ENOUGH_POINTS` line; keep
 `SubmissionRules.COST` as the only copy, drop `SUBMISSION_COST` and `POINTS_NOTE` (this branch has
@@ -139,8 +169,123 @@ Tests: `:app:shared` 225 (`AuthScreenDrawTest` 9, `TemplatesTest` 4 new; `Accoun
 14). Android's back is covered only by `NavigatorTest`: on the JVM `SystemBack` binds nothing. Not
 seen on a device: any of it on a phone, autofill on the Auth page and Android's back included.
 
+**On `feat/server-categories`** (from 40550e9, merged into main after ; the server and the
+contract first, then the clients): categories are **server data** (CLAUDE.md
+§8d, *Categories*, decided 2026-09-25). V6 adds `categories` (id, Serbian and English names, when
+added), writes the first five, `FOOD`, `LIFESTYLE`, `ETHICS`, `SUPERPOWERS` and `ABSURD`, moves
+everything filed under RANDOM to ABSURD and holds `question_categories` to it with a foreign key.
+RANDOM is no category any more (§8b: *All* is no filter). Every categories field on the wire is
+plain ids, `QuestionCategory` and its list serializer are gone (§5), and the JSON for the first ids
+is what it was. `GET /v1/categories` lists every category, with its id and both names,
+oldest first, to anybody (no bearer), limited per address. The moderator adds a category
+(`POST /v1/admin/categories`, the id given or derived from the English name, 409 `CATEGORY_EXISTS`)
+and renames one (`POST /v1/admin/category-renames`, 404 `CATEGORY_NOT_FOUND`); no delete.
+Submitting costs `Scoring.SUBMISSION_COST`, 1 point until release (CLAUDE.md §8c): too few is 409
+`NOT_ENOUGH_POINTS`, a rejection pays back what the question cost (V7 keeps it on the question,
+`submission_cost`), and `GET /v1/me` reports `pointsSpent`, so the total is what the answers and likes
+earned less that. For the user to decide: an author's own like pays them, so liking their approved
+question gives its cost back (CLAUDE.md §8c, *provisional*); keep it, or let an own like pay
+nothing. Every seed comes with made-up votes (V8, `questions.base_votes_a`/`_b`, CLAUDE.md §8d *Seeds*), which every
+tally the server reports adds to the players' own, and the seeds are in Serbian Cyrillic (V9 rewrote
+production's English ones by id; a new database is seeded in Serbian).
+
+The clients on the same branch (four commits after the server's): categories are **server data on
+the client too** (CLAUDE.md §8d, *Categories*, *The client*). `GET /v1/categories` is read through
+`CategoryApi` behind `CategoryRepository` and `GetCategories` (`runApi` alone: no session ensured,
+recovered or minted), kept in memory and read again when asked. The domain's `Category` enum, its
+`OTHER` and the interim ABSURD-as-RANDOM mapping are gone: a question, a submission, a moderated
+question, a selection and a filter hold category ids, sent in id order, and a screen names each by
+the list last read, in Serbian for now (`categoryName` in `io.ntole.wyr.play`, one place for the
+translations branch to choose the language), one not read yet by its id. The **Play** screen's
+picker reads the list each time it opens; the **Submit** screen's chips are the list, read each time
+the tab is shown; `NOT_ENOUGH_POINTS` is a `DomainError` of its own, and the Submit screen says that a
+question costs 1 point, paid back if it is rejected (the 1 is `SubmissionRules.SUBMISSION_COST`,
+pinned by `SubmissionLimitsTest` to `WyrApi.Limits.SUBMISSION_COST`, which `Scoring` charges). The
+**moderation app** reads the categories before every Load, for its chips, and has a third tab,
+**Categories**, which lists them and adds one (id typed or left to the
+server) and puts one's names right (`AddCategory`, `RenameCategory`, `CategoryRules`,
+`CATEGORY_EXISTS` and `CATEGORY_NOT_FOUND` as `DomainError`s). No client reads `pointsSpent` yet:
+the Account screen's lines of answers and likes no longer add up to its points once a question is
+pending or approved, which the Account redesign can show. `App.kt` is untouched: the Play screen's
+two category values changed type under the same names (`PlayedCategories`, `CategoryPicking`).
+
 ### Verified working
 
+- **`merge/redesign` with `main` merged in** (60b0d7f merged `--no-ff`), on this machine, the merge
+  commit's tree: the verify job's lists exactly, `ktlintCheck`; `:server:test :core:domain:jvmTest
+  :core:data:jvmTest :core:network:jvmTest :core:network:testAndroidHostTest :app:shared:jvmTest
+  :app:adminApp:jvmTest`, each with `--rerun`, so none came from the build cache; the client
+  compiles, `:app:androidApp:assembleDebug` and both web targets of `:app:shared` and
+  `:app:adminApp` included; and the ios job's Kotlin compiles (`:app:shared:compileKotlinIosSimulatorArm64`
+  and the `compileTestKotlinIosSimulatorArm64` of `:app:shared` and the three `:core` modules), each
+  Gradle's own exit code 0. Test counts from `build/test-results`: `:server:test` 346 (344 green, 2
+  skipped: the PostgreSQL-only boot races), `:core:domain:jvmTest` 72, `:core:data:jvmTest` 142,
+  `:core:network:jvmTest` 72, `:core:network:testAndroidHostTest` 78, `:app:shared:jvmTest` 267,
+  `:app:adminApp:jvmTest` 106, no failure anywhere. New or changed: `CategoryNamesTest` (each
+  language's name, one not read by its id); `PlayScreenTest` (the categories played in each
+  language, the picker's lines in each); `PlayScreenDrawTest` (the picker's words and the categories
+  in each language and the server's order, its card within 599 in every language, its loading and
+  failure lines in both themes and every language, the row's names in each language);
+  `SubmitScreenTest` and `SubmitScreenDrawTest` (the chips in each language, a failed read of the
+  categories with Try again, the refusal for points as one line, said once); `SubmitViewModelTest`
+  (the categories read before the points, a refusal for points reading the points again);
+  `AppNavigationTest` submits under a category the fake server lists. `:server`, `:core` and
+  `:app:adminApp` are main's byte for byte, but for `SubmissionRules`' KDoc.
+- **`feat/server-categories`, the clients** (4ceb426, 4a009e4, a4c05fb, c48aa95), on this machine. At
+  the last, the verify job's lists exactly: `ktlintCheck`; `:server:test :core:domain:jvmTest
+  :core:data:jvmTest :core:network:jvmTest :core:network:testAndroidHostTest :app:shared:jvmTest
+  :app:adminApp:jvmTest`; the client compiles, `:app:androidApp:assembleDebug` and both web targets
+  of `:app:shared` and `:app:adminApp` included; and the ios job's Kotlin compiles
+  (`:app:shared:compileKotlinIosSimulatorArm64` and the `compileTestKotlinIosSimulatorArm64` of
+  `:app:shared` and the three `:core` modules), each Gradle's own exit code 0. Test counts from
+  `build/test-results`: `:server:test` 346 (344 green, 2 skipped), `:core:domain:jvmTest` 56,
+  `:core:data:jvmTest` 142, `:core:network:jvmTest` 72, `:core:network:testAndroidHostTest` 78,
+  `:app:shared:jvmTest` 128, `:app:adminApp:jvmTest` 106, no failure anywhere. At a4c05fb the same
+  compiles and every client suite; at 4ceb426 lint and the JVM client suites; at 4a009e4 lint, the
+  core suites and, built from `git archive` in the scratchpad, every client compile and suite above.
+  New: `DefaultCategoryRepositoryTest` (the server's order, no session sent or minted, a read again
+  that shows a category added meanwhile, a failed read keeping the list), `CategoryApiTest`,
+  `GetCategoriesTest`, `DataModuleTest` (both modules read the categories from their own server),
+  `CategoryRulesTest` and `CategoryLimitsTest`; `QuestionMapperTest` now pins ids kept in the
+  server's order, ABSURD as itself and RANDOM an id like any other; `PlayViewModelTest` the picker's
+  read on opening, its failure, and every category ticked; `SubmitViewModelTest` the chips' read and
+  its failure; `CategoriesViewModelTest` the moderation app's add and rename; the refusal for points
+  in `ErrorMapperTest`, `DefaultSubmissionRepositoryTest` and `SubmitScreenTest`. The fat jar
+  (`WYR_SERVER_ONLY=1 ./gradlew :server:buildFatJar`) booted on JDK 21, port 18097, in-memory H2, a
+  throwaway `ADMIN_TOKEN`: `/health`; the five categories in Serbian; a guest minted; a submission
+  with 0 points 409 `NOT_ENOUGH_POINTS`; `seed-1` served under `FOOD`, and a vote on it answered
+  213/158 (its made-up 212/158 and the vote) with 1 point; a submission 201, the total 0 and
+  `pointsSpent` 1; a second one 409 for points; the moderator's queue listing it, a rejection, and the
+  total back to 1 with `pointsSpent` 0; `FAST_FOOD` added from "Fast food", `FOOD` 409
+  `CATEGORY_EXISTS`, a rename, and the list ending with it; `?category=RANDOM` 400; an admin route
+  with no token 403. Stopped; nothing listens on 18097. No app ran against it: the clients' side of
+  the wire is the tests' MockEngine and `FakeServer`, with the same DTOs.
+- **`feat/server-categories`**, on this machine, at its last code commit: `ktlintCheck`, the verify
+  job's tests and client compiles (`:app:androidApp:assembleDebug` and both web targets included)
+  and the ios job's Kotlin compiles, all green; at each commit before it, lint, the server suite,
+  `:core:data:jvmTest` and the same compiles. Test counts from `build/test-results`: `:server:test` 346 (344
+  green, 2 skipped: the PostgreSQL-only boot races), `:core:domain:jvmTest` 54, `:core:data:jvmTest`
+  139, `:core:network:jvmTest` 70, `:core:network:testAndroidHostTest` 76, `:app:shared:jvmTest`
+  119, `:app:adminApp:jvmTest` 87. New: `CategoryStoreTest` (the order of categories, an id no
+  category has refused, two creations racing for one id), `CategoryRulesTest` (names, ids, the
+  derived id), `CategoryFlowTest` (the list to anybody, create, rename, 409, 404, 400, a new
+  category submitted, approved and played under); the cost in `SubmissionStoreTest` (charged, too
+  few refused with nothing stored, two submissions racing for a last point), `ModerationStoreTest`
+  (a rejection pays back what was paid, a question that cost nothing pays back nothing, two
+  rejections racing pay once), `StatsStoreTest` (`pointsSpent`, and a submission committed mid-read
+  in both numbers or neither) and `ApiFlowTest`; the made-up votes in every tally test and
+  `SeedTest`; `MigrationsTest` holds V6 to V9 to `Seed` on a database seeded as before
+  (`seedAsBefore`). The fat jar (`WYR_SERVER_ONLY=1 ./gradlew :server:buildFatJar`) booted on JDK 21,
+  port 18097, in-memory H2: `/health`, the five categories with Cyrillic names, a submission refused
+  for points, one paid by a vote, the next refused, a rejection's refund in `GET /v1/me`, seed-1's
+  tally with its made-up votes (212/158 plus the vote), a category created (409 the second time),
+  renamed and listed last, RANDOM 400, 403 without the token. **Rollback, by hand:** `40550e9`'s fat
+  jar seeded a file H2 database (V1 to V5, English, RANDOM, a submission under FOOD and RANDOM); this
+  branch's jar migrated it (V6 to V9: the submission and five seeds under ABSURD, Serbian seeds,
+  made-up votes, the old pending one's rejection paying nothing back); `40550e9` booted on it again
+  and served: ABSURD shown as RANDOM, its RANDOM filter an empty batch, tallies without the made-up
+  votes, the Serbian texts, a submission under FOOD stored and one under RANDOM a 500 (the foreign
+  key), as CLAUDE.md §8b, *Rollbacks*, says.
 - `:server` on H2: 311 tests, 309 green and 2 skipped (the PostgreSQL-only boot races), including
   78 end-to-end flow tests in `ApiFlowTest`. Flat scoring is covered there (every vote pays 1,
   majority and minority alike, and the total accumulates) and by `PlayerStoreTest`, which races
@@ -166,20 +311,21 @@ seen on a device: any of it on a phone, autofill on the Auth page and Android's 
   one or two categories serving each matching question once (an `EXISTS`, and a join mutation fails
   it), the two as one pool, served again only once nothing in it is due, the due count over a set,
   that a batch reads its categories in the same number of statements whatever its size, and that a
-  stored name this build does not know reads as `RANDOM`, sent once however many read as it, in
-  the feed and in the author's list.
-  `ApiFlowTest` covers the repeated `?category=`, the 400s for `UNKNOWN`, an unknown name, a
+  question's categories go out oldest first whatever their ids (`feat/server-categories`, which
+  also added `CategoryStoreTest`: the order of categories, and an id no category has refused).
+  `ApiFlowTest` covers the repeated `?category=`, the 400s for RANDOM, `UNKNOWN`, an unknown id, a
   comma-separated list and an empty value, and submitting under several (deduplicated and ordered,
-  and listed back the same) with the 400s for none and for `UNKNOWN`. `SubmissionStoreTest` pins
+  and listed back the same) with the 400s for none, RANDOM and `UNKNOWN`. `SubmissionStoreTest` pins
   the rows, and the author's list in the same number of statements whatever its length.
-  `WyrJsonTest` and `ServerJsonTest` pin an unknown name in a list decoding as `UNKNOWN` on both
-  sides. On the client, `QuestionMapperTest` pins a question's categories as a set, each once in
-  declaration order, with an unknown name as `OTHER` beside the rest and an empty or missing list as
-  `OTHER` alone; `QuestionApiTest`, one `?category=` per category, in declaration order;
-  `DefaultQuestionRepositoryTest`, a selection of several sent whole with every refill, any change to
-  it dropping the queue (a refill in flight included), the same set keeping it, and `OTHER` refused;
+  `WyrJsonTest` and `ServerJsonTest` pin categories as plain ids on both sides, the first ones'
+  JSON as the enum sent it. On the client, `QuestionMapperTest` pins a question's categories as a
+  set of ids, each once in the server's order, one no build names kept as it came, and an empty or
+  missing list as none; `QuestionApiTest`, one `?category=` per category, in the order given;
+  `DefaultQuestionRepositoryTest`, a selection of several sent whole, in id order, with every refill,
+  any change to it dropping the queue (a refill in flight included), the same set keeping it, and a
+  category added after the build asked for by its id;
   and `PlayViewModelTest`, the Play screen's category picker: ticking, *All categories*, every
-  category ticked played as all five and never as none (`PlayScreenTest` names them, not *All*), the
+  category ticked played as all of them and never as none (`PlayScreenTest` names them, not *All*), the
   selection sent to the repository before the next fetch, the question on screen dropped for one
   from it, the same selection keeping it, a vote lost to `NETWORK` never sent again once the
   categories change from its failure, and no change while anything is in flight
@@ -648,6 +794,20 @@ seen on a device: any of it on a phone, autofill on the Auth page and Android's 
   nothing here has read its history. Check, read-only, that it reads `1 BASELINE`, `2 SQL`,
   `3 SQL`, `4 SQL`, and that `sessions` has a row for every `players` row with a
   `refresh_token_hash`. The next script after V4 runs there at the next Manual Deploy.
+- **The clients' categories on a device** (`feat/server-categories`). No build with them has been
+  installed or run: the Play picker, the Submit chips and the moderation app's Categories tab are
+  drawn off screen (`PlayScreenDrawTest`, `SubmitScreenDrawTest`, `ScreensDrawTest`) and driven over
+  fakes, and no app has read `GET /v1/categories` from a real server. Serbian names on a phone's
+  fonts, the names in Latinica and English, a picker of many more than five categories, and the
+  Account card once a question has cost a point (its answers and likes then count more than its
+  points; `pointsSpent` is shown nowhere, CLAUDE.md §8b), are unseen. Installed builds from before this branch against a server from it: a filter or a
+  submission under RANDOM is 400, ABSURD and every new category show as `OTHER`, and a refusal for
+  points reads as `UNKNOWN`, as the server's handoff says; not tried on a phone.
+- **V6 to V9 on PostgreSQL, and on production** (`feat/server-categories`). They have run only on
+  H2, here; `SchemaDriftTest` and `MigrationsTest` take them to PostgreSQL in the `server-postgres`
+  job, not yet run on the branch. The next Manual Deploy runs V5 to V9 there in one boot: after it,
+  read-only, the history should end `9 SQL`, `categories` hold five rows, no `question_categories`
+  row name RANDOM, and `seed-1`'s options be Serbian with 212 and 158 made-up votes.
 - **Accounts on PostgreSQL, and on production.** V5 has run only on H2; `SchemaDriftTest` and
   `MigrationsTest` take it to PostgreSQL in the `server-postgres` job, not yet run on the branch.
   The race for one username is H2's alone (`AccountStoreTest` polls H2's `SESSIONS`): on PostgreSQL
@@ -936,35 +1096,36 @@ ends only the session `$ACCESS` was issued for: that session's refresh token is 
 the login's session lives on. Logins are 20 a minute per address (`RATE_LIMIT_LOGINS_PER_MINUTE`),
 registrations 20 an hour per player.
 
-### Submit on its own tab
+### Submit from My questions
 
-The game's **Submit** tab writes a question and lists your own (CLAUDE.md §8d, *Submitting*), in every
-build, PROD's included. Submitting earns no points;
-once approved, each like the question holds pays you 1.
+The game's **Submit** form, opened from *Ново питање* under *Моја питања* on the Account screen,
+writes a question (CLAUDE.md §8d, *Submitting*), and My questions lists your own, in every build,
+PROD's included. Submitting costs 1 point, paid back if the question is rejected; once approved,
+each like the question holds pays you 1.
 
 **To try it on a phone** (`devDebug`, against the dev server, whose in-memory H2 forgets everything on
-a deploy or a spin-down; the server needs nothing new):
+a deploy or a spin-down):
 
-1. `./gradlew :app:androidApp:installDevDebug`, open *WYR Dev*, and go to the **Submit** tab, between
-   Play and Account. *My submissions* reads *None yet* for a fresh guest.
-2. Type option A and B and tap one or more categories. Each option says what is wrong as it is
-   typed: nothing but spaces is *Write something here*, a line break *One line, with no line breaks
-   or tabs*, over 200 characters *At most 200 characters*, and B the same as A, ignoring case and the
-   spaces at either end, *The two options must be different*. **Submit** stays off until nothing is
-   wrong and a category is picked.
-3. **Submit**: the form clears, *Sent* shows above the button, and the question tops *My
-   submissions*, trimmed, as *Pending: waiting for a moderator*, with its categories.
+1. `./gradlew :app:androidApp:installDevDebug`, open *WYR Dev*, and tap the account icon: *Моја
+   питања* reads *Још ниједно.* for a fresh guest. Tap **Ново питање**.
+2. Under *Шта би радије…*, type option A and B and tap one or more categories: the server's, read
+   each time the form opens, and named in the language shown (*Храна*; *Hrana* in Latinica, *Food*
+   in English). Each option says what is wrong as it is typed: nothing but spaces *Напиши нешто.*,
+   a line break *Један ред, без прелома.*, over 200 characters *Највише 200 знакова.*, and B the
+   same as A, ignoring case and the spaces at either end, *Опције морају да се разликују.* **Пошаљи ·
+   1 П** stays off until nothing is wrong and a category is picked.
+3. A fresh guest has no points: Send is off, with *Немаш довољно поена.* over it. Answer one on
+   **Play**, then open the form again: Send is on. **Пошаљи**: the app goes back to My questions,
+   the question on top, trimmed, *На чекању*, and the points 1 lower.
 4. Approve it in the moderation app (*The moderation app*, below): `WYR_ENV=dev ./gradlew
    :app:adminApp:run`, type dev's `ADMIN_TOKEN` (its Environment tab on Render), *Load pending*,
-   pick categories in place of yours if you like, and **Approve**. On the phone, leave the Submit tab
-   and come back: *Approved: in the game*, and **Play** serves it in the current cycle. A rejection
-   shows as *Rejected:* and the reason typed, and a question retired under *All questions* as
-   *Retired: out of the game for now*.
-5. The 21st question pending shows *You have 20 questions waiting for review already* and keeps the
-   form. Airplane mode, then **Submit**: *Can't reach the game. Check your connection.*, the form
-   kept to send again, and the same under *My submissions*, with **Try again**. Still in airplane
-   mode, leave the tab and open it again, then **Submit** once more: *My submissions* shows no list,
-   only the failure and **Try again**, never a spinner. Back online, **Try again** lists them.
+   pick categories in place of yours if you like, and **Approve**. On the phone, leave the Account
+   screen and come back: *Одобрено*, and **Play** serves it in the current cycle. A rejection shows
+   as *Одбијено:* and the reason typed, and a question retired under *All questions* as *Повучено*.
+5. The 21st question pending shows *Већ имаш 20 питања на чекању.* and keeps the form. Airplane mode,
+   then **Пошаљи**: *Нема интернет везе.*, the form kept to send again. Open the form offline: the
+   points and the categories both fail, and one *Нема интернет везе.* under Send says so, with
+   **Покушај поново**, which reads both once back online.
 
 Locally the same works against `ADMIN_TOKEN=... ./gradlew :server:run` (*Moderating*, below), with
 `./gradlew :app:desktopApp:run` for the game and `./gradlew :app:adminApp:run` to approve.
@@ -1005,23 +1166,30 @@ a deploy or a spin-down; the server needs nothing new):
 
 The game's **Play** screen picks the categories played (CLAUDE.md §8d, *The Play screen* and
 *Categories*), in every build, PROD's included. The selection lives in memory for the app's life, so
-a launch plays every category again.
+a launch plays every category again. The categories are the server's, read each time the picker
+opens, and named in the language shown: Serbian in Cyrillic, the same made Latin in Latinica, and
+the English name in English (§8f).
 
-**To try it on a phone** (`devDebug`, as for *Skip and Like on Play*; the server needs nothing new):
+**To try it on a phone** (`devDebug`, as for *Skip and Like on Play*; a server from
+`feat/server-categories` or later, which `main` is):
 
 1. `./gradlew :app:androidApp:installDevDebug`, open *WYR Dev*, and tap **Играј**. On the left of the
    row between the cards: **Све** and a small chevron, which should read as something to tap.
-2. Tap it: a dialog, in English for now, of *All categories* (ticked) and the five categories. Tick
-   *Food* and *Ethics*: nothing changes behind the dialog yet. **Play**: the question on screen goes,
-   and the next is filed under Food or Ethics; the row reads *Food, Ethics*.
+2. Tap it: a dialog, *Изабери категорије*, of *Све категорије* (ticked) and the server's categories,
+   *Храна* to *Апсурдно* on a fresh server, then *Откажи* and *Играј*. Tick *Храна* and *Етика*:
+   nothing changes behind the dialog yet. **Играј**: the question on screen goes, and the next is
+   filed under either; the row reads *Храна, Етика*. Switch to Latinica on the Account screen: the
+   row reads *Hrana, Etika*, and in English *Food, Ethics*. A category the moderation app adds shows
+   the next time the picker opens. Opened offline, it says *Игра није доступна.* under the ones read
+   before.
 3. Open it again and **Cancel**, or tap outside it: nothing changes. **Play** with what is already
    played: the question stays.
 4. Tick every category: the names are cut short on their one line, and the points move right of the
    middle only as far as the names need; the points, the like count and Skip stay whole. That is the
    arrangement to judge (CLAUDE.md §8b, *The Play row's arrangement*): keep it, or the points always
    in the middle and the names cut shorter.
-5. While a vote or a like is in flight the categories do nothing when tapped. *All categories*, then
-   **Play**, goes back to the whole feed. Categories the server has no questions in would show *Нема
+5. While a vote or a like is in flight the categories do nothing when tapped. *Све категорије*, then
+   **Играј**, goes back to the whole feed. Categories the server has no questions in would show *Нема
    више питања.* with **Покушај поново** and the categories as the way out; every category has seeds,
    so only a server without them shows it.
 
@@ -1046,7 +1214,7 @@ curl -s -X POST localhost:8080/v1/questions -H "Authorization: Bearer $ACCESS" \
   -H 'Content-Type: application/json' -d '{"optionA":"Fly","optionB":"Swim","categories":["SUPERPOWERS"]}'
 curl -s localhost:8080/v1/admin/submissions -H "X-Admin-Token: $ADMIN_TOKEN"
 curl -s -X POST localhost:8080/v1/admin/approvals -H "X-Admin-Token: $ADMIN_TOKEN" \
-  -H 'Content-Type: application/json' -d '{"questionId":"<id from the queue>","categories":["SUPERPOWERS","RANDOM"]}'
+  -H 'Content-Type: application/json' -d '{"questionId":"<id from the queue>","categories":["SUPERPOWERS","ABSURD"]}'
 ```
 
 Or moderate from the moderation app (*The moderation app*, below). Leave `categories` out to keep
@@ -1074,6 +1242,17 @@ curl -s -X POST localhost:8080/v1/admin/retirements -H "X-Admin-Token: $ADMIN_TO
   -H 'Content-Type: application/json' -d '{"questionId":"seed-1"}'
 curl -s -X POST localhost:8080/v1/admin/restorations -H "X-Admin-Token: $ADMIN_TOKEN" \
   -H 'Content-Type: application/json' -d '{"questionId":"seed-1"}'
+```
+
+To add a category, its id made from the English name when none is given (409 `CATEGORY_EXISTS` for
+one a category has), and to put its names right; `GET /v1/categories` lists them to anybody:
+
+```bash
+curl -s -X POST localhost:8080/v1/admin/categories -H "X-Admin-Token: $ADMIN_TOKEN" \
+  -H 'Content-Type: application/json' -d '{"nameSr":"Брза храна","nameEn":"Fast food"}'
+curl -s -X POST localhost:8080/v1/admin/category-renames -H "X-Admin-Token: $ADMIN_TOKEN" \
+  -H 'Content-Type: application/json' -d '{"id":"FAST_FOOD","nameSr":"Брза клопа","nameEn":"Fast food"}'
+curl -s localhost:8080/v1/categories
 ```
 
 ### The moderation app
@@ -1140,6 +1319,17 @@ where it now stands without losing your place. A question another moderator move
 status changed first (409)`. Every admin request spends the address's 60 a minute (CLAUDE.md §8b): a
 retirement or restoration is one; a decision is one, one more for the queue, and one per 100
 questions the list shows; nothing is read again after a 403 or a 429.
+
+Every *Load*, on any tab, reads the categories first (`GET /v1/categories`, no admin request and no
+token spent): they are the chips, named in Serbian, and a category not listed shows by its id.
+**Categories** (`feat/server-categories`) lists them, oldest first, each with its id and both names.
+*Add a category* takes a Serbian name, an English name and an id, which the server makes from the
+English name when left blank (*Fast food* is `FAST_FOOD`; a name of no Latin letter or digit needs
+one typed); *Add* stays off until the names are one line of at most 40 and the id, if typed, is 1 to
+32 of `A`-`Z`, `0`-`9` and `_`. *Rename...* opens a category's names in its card, its id fixed, and
+*Save names* sends them. After an add or a rename the list is read again whatever became of it; an
+id a category has already says `A category has that id already (409)` under the form. *Lock* forgets
+what was typed there and keeps the categories read.
 
 ### Trying a change
 
@@ -1268,20 +1458,21 @@ Deferred: SQLDelight, a leaderboard, UI polish and WCAG. The game's tabs are the
 
 ## Things worth knowing before you touch the code
 
-- **The wire enum rule (§5) is load-bearing and easy to break silently.** It only works because
-  `WyrJson` sets `coerceInputValues = true` *and* `ServerJson` sets `encodeDefaults = true`.
-  Remove either and the `UNKNOWN` defaults become decorative. `WyrJsonTest` in `:core:network`
-  pins the client half. The server's `encodeDefaults` is pinned by `ApiFlowTest`'s fresh-guest
-  stats test, which checks every stats field is sent at its default, and by `ServerJsonTest`, which
-  checks an empty list of categories is sent too; a server-side slip only breaks client builds older
-  than the server. A **list** of categories needs `QuestionCategoryListSerializer` on top, because
-  coercion never reaches a list's elements: drop it from a property and one new category fails a
-  whole batch on every older client. It decodes an unknown name as `UNKNOWN`, never dropping it,
-  since the server decodes submissions with it too and a dropped name would let `[FOOD, NEWCAT]`
-  through as `[FOOD]`; a missing list decodes as an empty one. The client then maps each `UNKNOWN`
-  to `Category.OTHER`, beside the categories it can name, and an empty list to `OTHER` alone
-  (`QuestionMapper`), because `Question.categories` is never empty. `WyrJsonTest` and
-  `QuestionMapperTest` pin the two halves.
+- **The wire enum rule (§5) is load-bearing and easy to break silently.** It covers the growable
+  enums on the wire, `QuestionStatus` and `ErrorCode`, and only works because `WyrJson` sets
+  `coerceInputValues = true` *and* `ServerJson` sets `encodeDefaults = true`. Remove either and the
+  `UNKNOWN` defaults become decorative. `WyrJsonTest` in `:core:network` pins the client half. The
+  server's `encodeDefaults` is pinned by `ApiFlowTest`'s fresh-guest stats test, which checks every
+  stats field is sent at its default, and by `ServerJsonTest`, which checks an empty list of
+  categories is sent too; a server-side slip only breaks client builds older than the server.
+  Categories are no enum on the wire since `feat/server-categories` (§5): every categories field is
+  a list of plain string ids, empty by default, so a category added server-side is an id an
+  installed client has no name for, never a payload it fails to decode, and needs no serializer of
+  its own. The client keeps the ids as sent, in the server's order (`QuestionMapper`), and a payload
+  without them reads as filed under none; a screen names each id by the list `GET /v1/categories`
+  last gave, and one not in it by its id. `WyrJsonTest` and `QuestionMapperTest` pin the decoding
+  and the mapping. Should a list of a growable enum ever go on the wire, it needs a serializer that
+  decodes an unknown element as `UNKNOWN` (§5), since coercion never reaches a list's elements.
 - **Exposed 1.x renamed everything.** Packages are `org.jetbrains.exposed.v1.*`, and
   `SqlExpressionBuilder.eq` is deprecated *as an error* — import the top-level `eq` instead.
   Expect to hit this again the first time you write a new query.

@@ -10,6 +10,7 @@ import io.ktor.server.routing.routing
 import io.ntole.wyr.core.api.WyrApi
 import io.ntole.wyr.server.auth.TokenService
 import io.ntole.wyr.server.auth.authRoutes
+import io.ntole.wyr.server.category.categoryRoutes
 import io.ntole.wyr.server.config.ServerConfig
 import io.ntole.wyr.server.db.DatabaseFactory
 import io.ntole.wyr.server.db.Db
@@ -61,6 +62,7 @@ fun Application.wyrModule(config: ServerConfig) {
         }
 
         authRoutes(db, tokens, config)
+        categoryRoutes(db)
         questionRoutes(db)
         submissionRoutes(db)
         voteRoutes(db)

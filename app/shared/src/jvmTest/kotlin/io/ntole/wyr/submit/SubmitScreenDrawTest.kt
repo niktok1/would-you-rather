@@ -4,12 +4,13 @@ import androidx.compose.ui.ImageComposeScene
 import androidx.compose.ui.semantics.SemanticsNode
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.unit.Density
+import io.ntole.wyr.core.domain.category.Category
 import io.ntole.wyr.core.domain.error.DomainError
-import io.ntole.wyr.core.domain.question.Category
 import io.ntole.wyr.core.domain.submission.SubmissionRules
 import io.ntole.wyr.everyText
 import io.ntole.wyr.language.Language
 import io.ntole.wyr.language.WyrStrings
+import io.ntole.wyr.language.categoryName
 import io.ntole.wyr.language.stringsOf
 import io.ntole.wyr.nodes
 import io.ntole.wyr.sizeNeeded
@@ -89,7 +90,7 @@ class SubmitScreenDrawTest {
     fun `Send is off with a note while the points are too few`() {
         Language.entries.forEach { language ->
             val strings = stringsOf(language).accountScreens
-            val scene = scene(WRITTEN.copy(points = SubmissionRules.COST - 1), language)
+            val scene = scene(WRITTEN.copy(points = SubmissionRules.SUBMISSION_COST - 1), language)
             try {
                 assertTrue(sendButton(scene, sendText(stringsOf(language))).isOff, "$language")
                 assertTrue(strings.notEnoughPoints in scene.texts(), "$language: ${scene.texts()}")
@@ -126,6 +127,60 @@ class SubmitScreenDrawTest {
                 assertEquals(listOf("refresh"), actions.calls, "$language")
             } finally {
                 scene.close()
+            }
+        }
+    }
+
+    /** The chips are the server's categories, each named in the language shown, in the server's order. */
+    @Test
+    fun `the categories are the server's named in the language shown`() {
+        Language.entries.forEach { language ->
+            val scene = scene(WRITTEN, language)
+            try {
+                val chips = KNOWN.map { categoryName(it, language) }
+                assertEquals(chips, scene.texts().filter { it in chips }, "$language")
+            } finally {
+                scene.close()
+            }
+        }
+        val latin = scene(WRITTEN, Language.SERBIAN_LATIN)
+        try {
+            assertTrue("Način života" in latin.texts(), "${latin.texts()}")
+        } finally {
+            latin.close()
+        }
+    }
+
+    /** A read that failed says so under the chips in one line, and Try again reads them again. */
+    @Test
+    fun `categories that cannot be read say so and offer to try again`() {
+        Language.entries.forEach { language ->
+            val strings = stringsOf(language)
+            val actions = Recorder()
+            val scene = scene(WRITTEN.copy(categoriesFailure = SubmitFailure(DomainError.SERVER)), language, actions)
+            try {
+                assertTrue(strings.categoriesUnread in scene.everyText(), "$language")
+                scene.tap(strings.tryAgain)
+                assertEquals(listOf("refresh"), actions.calls, "$language")
+            } finally {
+                scene.close()
+            }
+        }
+    }
+
+    /** The server's refusal for points and the points read after it say it once, not twice. */
+    @Test
+    fun `a refusal for points is one line`() {
+        Language.entries.forEach { language ->
+            val strings = stringsOf(language).accountScreens
+            val refused = WRITTEN.copy(submitFailure = SubmitFailure(DomainError.NOT_ENOUGH_POINTS))
+            listOf(refused.copy(points = 0), refused).forEach { state ->
+                val scene = scene(state, language)
+                try {
+                    assertEquals(1, scene.everyText().count { it == strings.notEnoughPoints }, "$language: $state")
+                } finally {
+                    scene.close()
+                }
             }
         }
     }
@@ -167,7 +222,7 @@ class SubmitScreenDrawTest {
 
         override fun setOptionB(text: String) = Unit
 
-        override fun toggleCategory(category: Category) = Unit
+        override fun toggleCategory(id: String) = Unit
 
         override fun submit() {
             calls += "submit"
@@ -184,11 +239,22 @@ class SubmitScreenDrawTest {
 
         val LONGEST = "Be able to fly ".repeat(20).take(SubmissionRules.MAX_OPTION_LENGTH)
 
+        /** The server's first five categories, as V6 wrote them, in the order of categories. */
+        val KNOWN =
+            listOf(
+                Category(id = "FOOD", nameSr = "Храна", nameEn = "Food"),
+                Category(id = "LIFESTYLE", nameSr = "Начин живота", nameEn = "Lifestyle"),
+                Category(id = "ETHICS", nameSr = "Етика", nameEn = "Ethics"),
+                Category(id = "SUPERPOWERS", nameSr = "Супермоћи", nameEn = "Superpowers"),
+                Category(id = "ABSURD", nameSr = "Апсурдно", nameEn = "Absurd"),
+            )
+
         val WRITTEN =
             SubmitState(
                 optionA = "Fly",
                 optionB = "Swim",
-                categories = setOf(Category.SUPERPOWERS, Category.RANDOM),
+                categories = setOf("SUPERPOWERS", "ABSURD"),
+                categoryOptions = KNOWN,
                 points = 12,
             )
 
@@ -202,9 +268,11 @@ class SubmitScreenDrawTest {
                 SubmitState(
                     optionA = "Fly",
                     optionB = "Swim",
-                    categories = setOf(Category.FOOD),
+                    categories = setOf("FOOD"),
                     submitFailure = SubmitFailure(DomainError.NETWORK),
                     pointsFailure = SubmitFailure(DomainError.NETWORK),
+                    // Nor the categories: none to pick from, and the one failure under Send says so.
+                    categoriesFailure = SubmitFailure(DomainError.NETWORK),
                 ),
                 WRITTEN,
                 WRITTEN.copy(points = 0),
@@ -214,6 +282,10 @@ class SubmitScreenDrawTest {
                 WRITTEN.copy(optionB = "FLY"),
                 WRITTEN.copy(running = SubmitAction.SUBMIT),
                 WRITTEN.copy(submitFailure = SubmitFailure(DomainError.SUBMISSION_LIMIT)),
+                WRITTEN.copy(categoriesFailure = SubmitFailure(DomainError.SERVER)),
+                WRITTEN.copy(categoriesFailure = SubmitFailure(DomainError.NETWORK), categoryOptions = emptyList()),
+                WRITTEN.copy(submitFailure = SubmitFailure(DomainError.NOT_ENOUGH_POINTS), points = 0),
+                WRITTEN.copy(submitFailure = SubmitFailure(DomainError.NOT_ENOUGH_POINTS)),
                 WRITTEN.copy(submitFailure = SubmitFailure(DomainError.RATE_LIMITED, 42.seconds)),
                 WRITTEN.copy(
                     submitFailure = SubmitFailure(DomainError.SUBMISSION_LIMIT),

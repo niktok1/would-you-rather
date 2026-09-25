@@ -28,6 +28,16 @@ data class Strings(
      * My questions, the Auth page and the Submit form. One text, so the game says it one way.
      */
     val tryAgain: String,
+    /**
+     * The button that closes without doing anything, on the Auth page's guest-points warning and the
+     * Play screen's category picker. One text, so the game says it one way.
+     */
+    val cancel: String,
+    /**
+     * Why the categories could not be read from the server, for any reason but being offline: under
+     * the Play screen's category picker and the Submit form's categories alike.
+     */
+    val categoriesUnread: String,
     /** The Play screen's words. */
     val playScreen: PlayStrings,
     /** The home icon's name, for a screen reader: back to the Home screen. */
@@ -52,6 +62,8 @@ data class Strings(
             play = transform(play),
             pointsUnit = transform(pointsUnit),
             tryAgain = transform(tryAgain),
+            cancel = transform(cancel),
+            categoriesUnread = transform(categoriesUnread),
             playScreen = playScreen.map(transform),
             home = transform(home),
             account = transform(account),
@@ -74,6 +86,8 @@ val SerbianCyrillicStrings: Strings =
         play = "Играј",
         pointsUnit = "П",
         tryAgain = "Покушај поново",
+        cancel = "Откажи",
+        categoriesUnread = "Категорије нису учитане.",
         playScreen = SerbianCyrillicPlayStrings,
         home = "Почетна",
         account = "Налог",
@@ -91,6 +105,8 @@ val EnglishStrings: Strings =
         play = "Play",
         pointsUnit = "P",
         tryAgain = "Try again",
+        cancel = "Cancel",
+        categoriesUnread = "Couldn't load the categories.",
         playScreen = EnglishPlayStrings,
         home = "Home",
         account = "Account",
@@ -110,11 +126,24 @@ fun stringsOf(language: Language): Strings =
 /** The strings of the language the game is shown in; Serbian Cyrillic, the default, until one is provided. */
 val LocalStrings = staticCompositionLocalOf { stringsOf(Language.DEFAULT) }
 
-/** Shows [content] in [language]: everything under it reads [LocalStrings] in that language. */
+/**
+ * The language the game is shown in, for the words that are not [Strings] but the server's: a
+ * category's name ([categoryName]). Serbian Cyrillic, the default, until one is provided.
+ */
+val LocalLanguage = staticCompositionLocalOf { Language.DEFAULT }
+
+/**
+ * Shows [content] in [language]: everything under it reads [LocalStrings] in that language, and
+ * [LocalLanguage] names it.
+ */
 @Composable
 fun WyrStrings(
     language: Language,
     content: @Composable () -> Unit,
 ) {
-    CompositionLocalProvider(LocalStrings provides stringsOf(language), content = content)
+    CompositionLocalProvider(
+        LocalStrings provides stringsOf(language),
+        LocalLanguage provides language,
+        content = content,
+    )
 }

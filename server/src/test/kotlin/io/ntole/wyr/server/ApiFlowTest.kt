@@ -21,6 +21,8 @@ import io.ktor.server.testing.testApplication
 import io.ntole.wyr.core.api.WyrApi
 import io.ntole.wyr.core.auth.RefreshRequest
 import io.ntole.wyr.core.auth.SessionDto
+import io.ntole.wyr.core.category.CreateCategoryRequest
+import io.ntole.wyr.core.category.RenameCategoryRequest
 import io.ntole.wyr.core.error.ErrorCode
 import io.ntole.wyr.core.error.ErrorDto
 import io.ntole.wyr.core.like.LikeRequest
@@ -29,7 +31,6 @@ import io.ntole.wyr.core.player.PlayerStatsDto
 import io.ntole.wyr.core.question.AdminQuestionDto
 import io.ntole.wyr.core.question.AdminQuestionPageDto
 import io.ntole.wyr.core.question.ApproveSubmissionRequest
-import io.ntole.wyr.core.question.QuestionCategory
 import io.ntole.wyr.core.question.QuestionDto
 import io.ntole.wyr.core.question.QuestionPageDto
 import io.ntole.wyr.core.question.QuestionStatus
@@ -49,6 +50,8 @@ import io.ntole.wyr.server.config.ServerConfig
 import io.ntole.wyr.server.db.Sessions
 import io.ntole.wyr.server.db.inTransaction
 import io.ntole.wyr.server.db.serverPool
+import io.ntole.wyr.server.db.tallyOf
+import io.ntole.wyr.server.player.PlayerStore
 import io.ntole.wyr.server.vote.Scoring
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonNull
@@ -75,6 +78,9 @@ import kotlin.time.Duration.Companion.minutes
  * bleed into another's tally assertions.
  */
 class ApiFlowTest {
+    /** The database of the server [runServer] started for this test. */
+    private var serverDatabase: TestDatabaseSettings? = null
+
     @Test
     fun `guest session, question fetch, and vote all work with no player interaction`() =
         runServer("happy-path") { client ->
@@ -97,9 +103,8 @@ class ApiFlowTest {
 
             assertEquals(question.id, result.questionId)
             assertEquals(OptionSide.A, result.yourChoice)
-            // The voter's own vote is included in the tally they are shown.
-            assertEquals(1L, result.tally.votesA)
-            assertEquals(0L, result.tally.votesB)
+            // The voter's own vote is included in the tally they are shown, beside a seed's made-up votes.
+            assertEquals(tallyOf(question.id, votesA = 1, votesB = 0), result.tally)
             // A first answer earns the flat point, and that point is the whole running total.
             assertEquals(Scoring.POINTS_PER_ANSWER, result.pointsAwarded)
             assertEquals(Scoring.POINTS_PER_ANSWER, result.totalPoints)
@@ -170,8 +175,8 @@ class ApiFlowTest {
 
             val majority = client.vote(player, opened.id, OptionSide.A)
             val minority = client.vote(player, contested.id, OptionSide.B)
-            assertEquals(VoteTallyDto(votesA = 1, votesB = 0), majority.tally)
-            assertEquals(VoteTallyDto(votesA = 2, votesB = 1), minority.tally)
+            assertEquals(tallyOf(opened.id, votesA = 1, votesB = 0), majority.tally)
+            assertEquals(tallyOf(contested.id, votesA = 2, votesB = 1), minority.tally)
 
             assertEquals(Scoring.POINTS_PER_ANSWER, majority.pointsAwarded)
             assertEquals(Scoring.POINTS_PER_ANSWER, minority.pointsAwarded)
@@ -189,10 +194,10 @@ class ApiFlowTest {
             val first = client.vote(player, question.id, OptionSide.A)
             val again = client.vote(player, question.id, OptionSide.B)
 
-            assertEquals(VoteTallyDto(votesA = 2, votesB = 0), first.tally)
+            assertEquals(tallyOf(question.id, votesA = 2, votesB = 0), first.tally)
             assertEquals(OptionSide.B, again.yourChoice, "the pick may change")
             assertEquals(
-                VoteTallyDto(votesA = 1, votesB = 1),
+                tallyOf(question.id, votesA = 1, votesB = 1),
                 again.tally,
                 "the player's vote moved rather than doubled",
             )
@@ -223,7 +228,7 @@ class ApiFlowTest {
             val replayOfSwitch = client.vote(player, question.id, OptionSide.A, attemptId = "attempt-2")
             assertTrue(replayOfSwitch.replayed)
             assertEquals(OptionSide.B, replayOfSwitch.yourChoice)
-            assertEquals(VoteTallyDto(votesA = 0, votesB = 1), replayOfSwitch.tally)
+            assertEquals(tallyOf(question.id, votesA = 0, votesB = 1), replayOfSwitch.tally)
             assertEquals(switched.totalPoints, replayOfSwitch.totalPoints)
         }
 
@@ -545,8 +550,10 @@ class ApiFlowTest {
             val category = WyrApi.Query.CATEGORY
 
             listOf(
-                "UNKNOWN" to "?$category=${QuestionCategory.UNKNOWN.name}",
-                "UNKNOWN beside a real one" to "?$category=FOOD&$category=${QuestionCategory.UNKNOWN.name}",
+                // RANDOM went away with V6: an installed build that still asks for it gets this.
+                "RANDOM" to "?$category=RANDOM",
+                "RANDOM beside a real one" to "?$category=FOOD&$category=RANDOM",
+                "UNKNOWN" to "?$category=UNKNOWN",
                 "no category at all beside a real one" to "?$category=FOOD&$category=FROM_THE_FUTURE",
                 "a comma-separated list" to "?$category=FOOD,ETHICS",
                 "an empty name" to "?$category=",
@@ -637,10 +644,10 @@ class ApiFlowTest {
     fun `a category with nothing due is served again until the whole cycle is done`() =
         runServer("feed-category") { client ->
             val player = client.guest()
-            val food = "&${WyrApi.Query.CATEGORY}=${QuestionCategory.FOOD.name}"
+            val food = "&${WyrApi.Query.CATEGORY}=${"FOOD"}"
             val pool = client.wholePool(player)
             val foodPool = client.wholePool(player, food)
-            assertTrue(foodPool.size >= 2 && foodPool.all { QuestionCategory.FOOD in it.categories })
+            assertTrue(foodPool.size >= 2 && foodPool.all { "FOOD" in it.categories })
 
             val last = foodPool.first()
             foodPool.drop(1).forEach { question -> client.vote(player, question.id, OptionSide.A) }
@@ -662,14 +669,14 @@ class ApiFlowTest {
         runServer("feed-categories") { client ->
             val player = client.guest()
             val category = WyrApi.Query.CATEGORY
-            val food = client.wholePool(player, "&$category=${QuestionCategory.FOOD.name}").ids()
-            val lifestyle = client.wholePool(player, "&$category=${QuestionCategory.LIFESTYLE.name}").ids()
+            val food = client.wholePool(player, "&$category=${"FOOD"}").ids()
+            val lifestyle = client.wholePool(player, "&$category=${"LIFESTYLE"}").ids()
             assertTrue(food.any { it in lifestyle }, "no question is filed under both")
 
             val either =
                 client.wholePool(
                     player,
-                    "&$category=${QuestionCategory.FOOD.name}&$category=${QuestionCategory.LIFESTYLE.name}",
+                    "&$category=${"FOOD"}&$category=${"LIFESTYLE"}",
                 )
 
             assertEquals((food + lifestyle).toSet(), either.ids().toSet())
@@ -737,7 +744,11 @@ class ApiFlowTest {
             val answered = client.vote(player, question.id, OptionSide.B)
 
             assertEquals(Scoring.POINTS_PER_ANSWER, answered.pointsAwarded)
-            assertEquals(VoteTallyDto(votesA = 0, votesB = 1), answered.tally, "the vote, and nothing for the skips")
+            assertEquals(
+                tallyOf(question.id, votesA = 0, votesB = 1),
+                answered.tally,
+                "the vote, and nothing for the skips",
+            )
             val stats = client.stats(player)
             assertEquals(Scoring.POINTS_PER_ANSWER, stats.totalPoints)
             assertEquals(1, stats.answersGiven)
@@ -826,6 +837,7 @@ class ApiFlowTest {
                     cycle = 1,
                     dueThisCycle = pool.size,
                     likesReceived = 0,
+                    pointsSpent = 0,
                 ),
                 response.body<PlayerStatsDto>(),
             )
@@ -842,6 +854,7 @@ class ApiFlowTest {
                     "cycle",
                     "dueThisCycle",
                     "likesReceived",
+                    "pointsSpent",
                     "username",
                 ),
                 sent.keys,
@@ -934,7 +947,7 @@ class ApiFlowTest {
                     optionA = "  Be able to fly ",
                     // A line separator is whitespace too, so it is trimmed at an end, not refused.
                     optionB = "\tBreathe underwater\n\u2028",
-                    categories = listOf(QuestionCategory.SUPERPOWERS),
+                    categories = listOf("SUPERPOWERS"),
                 )
             val before = System.currentTimeMillis()
 
@@ -949,7 +962,7 @@ class ApiFlowTest {
                     id = submission.id,
                     optionA = "Be able to fly",
                     optionB = "Breathe underwater",
-                    categories = listOf(QuestionCategory.SUPERPOWERS),
+                    categories = listOf("SUPERPOWERS"),
                     status = QuestionStatus.PENDING,
                     rejectionReason = null,
                     submittedAt = submission.submittedAt,
@@ -965,7 +978,7 @@ class ApiFlowTest {
         runServer("submit-pending") { client ->
             val author = client.guest()
             val player = client.guest()
-            val pending = client.submitted(author, SubmitQuestionRequest("Fly", "Swim", listOf(QuestionCategory.FOOD)))
+            val pending = client.submitted(author, SubmitQuestionRequest("Fly", "Swim", listOf("FOOD")))
 
             listOf("the author" to author, "another player" to player).forEach { (who, session) ->
                 val pool = client.wholePool(session)
@@ -988,24 +1001,24 @@ class ApiFlowTest {
             val tooLong = "x".repeat(WyrApi.Limits.MAX_OPTION_LENGTH + 1)
 
             listOf(
-                "blank optionA" to SubmitQuestionRequest("   ", "Swim", listOf(QuestionCategory.FOOD)),
-                "empty optionB" to SubmitQuestionRequest("Fly", "", listOf(QuestionCategory.FOOD)),
-                "optionA too long" to SubmitQuestionRequest(tooLong, "Swim", listOf(QuestionCategory.FOOD)),
-                "optionB too long" to SubmitQuestionRequest("Fly", tooLong, listOf(QuestionCategory.FOOD)),
-                "the same options ignoring case" to SubmitQuestionRequest("Fly", "fLY", listOf(QuestionCategory.FOOD)),
+                "blank optionA" to SubmitQuestionRequest("   ", "Swim", listOf("FOOD")),
+                "empty optionB" to SubmitQuestionRequest("Fly", "", listOf("FOOD")),
+                "optionA too long" to SubmitQuestionRequest(tooLong, "Swim", listOf("FOOD")),
+                "optionB too long" to SubmitQuestionRequest("Fly", tooLong, listOf("FOOD")),
+                "the same options ignoring case" to SubmitQuestionRequest("Fly", "fLY", listOf("FOOD")),
                 "the same options once trimmed" to
-                    SubmitQuestionRequest("  Fly ", "fly\n", listOf(QuestionCategory.FOOD)),
+                    SubmitQuestionRequest("  Fly ", "fly\n", listOf("FOOD")),
                 // PostgreSQL refuses a NUL in text, which H2 stores, so only the check can catch it. Neither
                 // a NUL nor a DEL is whitespace, so trimming leaves one at either end for the check.
-                "trailing NUL in optionA" to SubmitQuestionRequest("Fly\u0000", "Swim", listOf(QuestionCategory.FOOD)),
-                "leading DEL in optionB" to SubmitQuestionRequest("Fly", "\u007FSwim", listOf(QuestionCategory.FOOD)),
-                "newline inside optionB" to SubmitQuestionRequest("Fly", "Swim\nfast", listOf(QuestionCategory.FOOD)),
-                "tab inside optionA" to SubmitQuestionRequest("Fly\thigh", "Swim", listOf(QuestionCategory.FOOD)),
+                "trailing NUL in optionA" to SubmitQuestionRequest("Fly\u0000", "Swim", listOf("FOOD")),
+                "leading DEL in optionB" to SubmitQuestionRequest("Fly", "\u007FSwim", listOf("FOOD")),
+                "newline inside optionB" to SubmitQuestionRequest("Fly", "Swim\nfast", listOf("FOOD")),
+                "tab inside optionA" to SubmitQuestionRequest("Fly\thigh", "Swim", listOf("FOOD")),
                 // Line breaks that are not control characters: text layout still breaks the line at each.
                 "line separator inside optionA" to
-                    SubmitQuestionRequest("Fly\u2028high", "Swim", listOf(QuestionCategory.FOOD)),
+                    SubmitQuestionRequest("Fly\u2028high", "Swim", listOf("FOOD")),
                 "paragraph separator inside optionB" to
-                    SubmitQuestionRequest("Fly", "Swim\u2029fast", listOf(QuestionCategory.FOOD)),
+                    SubmitQuestionRequest("Fly", "Swim\u2029fast", listOf("FOOD")),
             ).forEach { (case, request) ->
                 val response = client.submit(author, request)
                 assertEquals(HttpStatusCode.UnprocessableEntity, response.status, case)
@@ -1022,8 +1035,8 @@ class ApiFlowTest {
             val padded = "  ${"y".repeat(longest.length)}  "
 
             listOf(
-                "at the limit" to SubmitQuestionRequest(longest, "Swim", listOf(QuestionCategory.FOOD)),
-                "at the limit once trimmed" to SubmitQuestionRequest("Fly", padded, listOf(QuestionCategory.FOOD)),
+                "at the limit" to SubmitQuestionRequest(longest, "Swim", listOf("FOOD")),
+                "at the limit once trimmed" to SubmitQuestionRequest("Fly", padded, listOf("FOOD")),
             ).forEach { (case, request) ->
                 val response = client.submit(author, request)
                 assertEquals(HttpStatusCode.Created, response.status, case)
@@ -1046,7 +1059,9 @@ class ApiFlowTest {
                 "UNKNOWN beside a real category" to
                     """{"optionA":"Fly","optionB":"Swim","categories":["FOOD","UNKNOWN"]}""",
                 "unrecognised category" to """{"optionA":"Fly","optionB":"Swim","categories":["FROM_THE_FUTURE"]}""",
-                // Decoded as UNKNOWN beside FOOD rather than dropped, so it is not filed under FOOD alone.
+                // What an installed build still offers: RANDOM went away with V6.
+                "RANDOM" to """{"optionA":"Fly","optionB":"Swim","categories":["RANDOM"]}""",
+                // Refused whole rather than filed under FOOD alone.
                 "unrecognised category beside a real one" to
                     """{"optionA":"Fly","optionB":"Swim","categories":["FOOD","FROM_THE_FUTURE"]}""",
                 "no optionB" to """{"optionA":"Fly","categories":["FOOD"]}""",
@@ -1070,15 +1085,42 @@ class ApiFlowTest {
         }
 
     @Test
-    fun `a submission is filed under every category it names once each and in declaration order`() =
+    fun `a submission is filed under every category it names once each and in the order of categories`() =
         runServer("submit-categories") { client ->
             val author = client.guest()
-            val named = listOf(QuestionCategory.SUPERPOWERS, QuestionCategory.FOOD, QuestionCategory.SUPERPOWERS)
+            val named = listOf("SUPERPOWERS", "FOOD", "SUPERPOWERS")
 
             val submission = client.submitted(author, SubmitQuestionRequest("Fly", "Swim", named))
 
-            assertEquals(listOf(QuestionCategory.FOOD, QuestionCategory.SUPERPOWERS), submission.categories)
+            assertEquals(listOf("FOOD", "SUPERPOWERS"), submission.categories)
             assertEquals(listOf(submission), client.mySubmissions(author), "and listed as it was answered")
+        }
+
+    @Test
+    fun `submitting costs a point which a rejection pays back and an approval keeps`() =
+        runServer("submit-cost") { client ->
+            val author = client.guest()
+            // Straight with the token, so nothing gives the author the points first.
+            val refused = client.submit(author.accessToken, question("Broke"))
+            assertEquals(HttpStatusCode.Conflict, refused.status)
+            assertEquals(ErrorCode.NOT_ENOUGH_POINTS, refused.body<ErrorDto>().code)
+            assertEquals(emptyList(), client.mySubmissions(author), "nothing stored")
+
+            repeat(2) { client.vote(author, "seed-1", OptionSide.A) }
+            val (kept, paidBack) =
+                listOf("Kept", "Paid back").map { text ->
+                    client.submit(author.accessToken, question(text)).body<SubmissionDto>()
+                }
+            assertEquals(0, client.stats(author).totalPoints, "two answers paid for two submissions")
+            assertEquals(2 * Scoring.SUBMISSION_COST, client.stats(author).pointsSpent)
+            assertEquals(HttpStatusCode.Conflict, client.submit(author.accessToken, question("Broke again")).status)
+
+            client.approve(kept.id)
+            client.reject(paidBack.id, "No")
+
+            val stats = client.stats(author)
+            assertEquals(Scoring.SUBMISSION_COST, stats.totalPoints, "the rejected one's cost is back")
+            assertEquals(Scoring.SUBMISSION_COST, stats.pointsSpent, "the approved one's is kept")
         }
 
     @Test
@@ -1086,14 +1128,14 @@ class ApiFlowTest {
         runServer("submit-limit") { client ->
             val author = client.guest()
             repeat(WyrApi.Limits.MAX_PENDING_SUBMISSIONS) { index ->
-                val request = SubmitQuestionRequest("Option $index", "Other $index", listOf(QuestionCategory.RANDOM))
+                val request = SubmitQuestionRequest("Option $index", "Other $index", listOf("ABSURD"))
                 assertEquals(HttpStatusCode.Created, client.submit(author, request).status, "submission ${index + 1}")
             }
 
             val refused =
                 client.submit(
                     author,
-                    SubmitQuestionRequest("One", "Too many", listOf(QuestionCategory.RANDOM)),
+                    SubmitQuestionRequest("One", "Too many", listOf("ABSURD")),
                 )
 
             assertEquals(HttpStatusCode.Conflict, refused.status)
@@ -1104,7 +1146,7 @@ class ApiFlowTest {
                 client
                     .submit(
                         client.guest(),
-                        SubmitQuestionRequest("One", "Too many", listOf(QuestionCategory.RANDOM)),
+                        SubmitQuestionRequest("One", "Too many", listOf("ABSURD")),
                     ).status,
                 "the limit is per author",
             )
@@ -1119,13 +1161,13 @@ class ApiFlowTest {
                 List(3) { index ->
                     client.submitted(
                         author,
-                        SubmitQuestionRequest("A $index", "B $index", listOf(QuestionCategory.FOOD)),
+                        SubmitQuestionRequest("A $index", "B $index", listOf("FOOD")),
                     )
                 }
             val theirs =
                 client.submitted(
                     other,
-                    SubmitQuestionRequest("Theirs", "Not ours", listOf(QuestionCategory.ETHICS)),
+                    SubmitQuestionRequest("Theirs", "Not ours", listOf("ETHICS")),
                 )
 
             val listed = client.mySubmissions(author)
@@ -1165,7 +1207,7 @@ class ApiFlowTest {
             val response =
                 client.post(WyrApi.Paths.QUESTIONS) {
                     contentType(ContentType.Application.Json)
-                    setBody(SubmitQuestionRequest("Fly", "Swim", listOf(QuestionCategory.FOOD)))
+                    setBody(SubmitQuestionRequest("Fly", "Swim", listOf("FOOD")))
                 }
 
             assertEquals(HttpStatusCode.Unauthorized, response.status)
@@ -1177,7 +1219,8 @@ class ApiFlowTest {
         runServer("submit-ghost-player") { client ->
             // As for the ghost-player vote, the helper's token for a real player has to pass first.
             val real = client.guest()
-            val request = SubmitQuestionRequest("Fly", "Swim", listOf(QuestionCategory.FOOD))
+            val request = SubmitQuestionRequest("Fly", "Swim", listOf("FOOD"))
+            grantPoints(real.playerId, Scoring.SUBMISSION_COST)
             assertEquals(HttpStatusCode.Created, client.submit(signAccessToken(real.playerId), request).status)
 
             val response = client.submit(signAccessToken("no-such-player"), request)
@@ -1194,7 +1237,7 @@ class ApiFlowTest {
                 listOf(author, other, author).mapIndexed { index, session ->
                     client.submitted(
                         session,
-                        SubmitQuestionRequest("A $index", "B $index", listOf(QuestionCategory.FOOD)),
+                        SubmitQuestionRequest("A $index", "B $index", listOf("FOOD")),
                     )
                 }
 
@@ -1306,7 +1349,7 @@ class ApiFlowTest {
     fun `an approved submission is due at once for every player in their current cycle its author included`() =
         runServer("admin-approve") { client ->
             val (author, midway, finished) = Triple(client.guest(), client.guest(), client.guest())
-            val pending = client.submitted(author, SubmitQuestionRequest("Fly", "Swim", listOf(QuestionCategory.FOOD)))
+            val pending = client.submitted(author, SubmitQuestionRequest("Fly", "Swim", listOf("FOOD")))
             val seeds = client.wholePool(finished)
             seeds.forEach { seed -> client.vote(finished, seed.id, OptionSide.A) }
             client.vote(midway, seeds.first().id, OptionSide.A)
@@ -1337,7 +1380,7 @@ class ApiFlowTest {
     fun `a rejected submission is served to nobody and its author sees why`() =
         runServer("admin-reject") { client ->
             val (author, player) = client.guest() to client.guest()
-            val pending = client.submitted(author, SubmitQuestionRequest("Fly", "Swim", listOf(QuestionCategory.FOOD)))
+            val pending = client.submitted(author, SubmitQuestionRequest("Fly", "Swim", listOf("FOOD")))
 
             val response = client.reject(pending.id, "  Not really a dilemma ")
 
@@ -1365,13 +1408,13 @@ class ApiFlowTest {
     fun `an approval naming categories changes what a category filter finds`() =
         runServer("admin-recategorize") { client ->
             val (author, player) = client.guest() to client.guest()
-            val pending = client.submitted(author, SubmitQuestionRequest("Fly", "Swim", listOf(QuestionCategory.FOOD)))
-            val named = listOf(QuestionCategory.SUPERPOWERS, QuestionCategory.ETHICS, QuestionCategory.SUPERPOWERS)
+            val pending = client.submitted(author, SubmitQuestionRequest("Fly", "Swim", listOf("FOOD")))
+            val named = listOf("SUPERPOWERS", "ETHICS", "SUPERPOWERS")
 
             val approved = client.approve(pending.id, named).body<SubmissionDto>()
 
-            val chosen = listOf(QuestionCategory.ETHICS, QuestionCategory.SUPERPOWERS)
-            assertEquals(chosen, approved.categories, "each once, in declaration order")
+            val chosen = listOf("ETHICS", "SUPERPOWERS")
+            assertEquals(chosen, approved.categories, "each once, in the order of categories")
             assertEquals(listOf(approved), client.mySubmissions(author), "and its author sees them")
             assertEquals(chosen, client.wholePool(player).single { it.id == pending.id }.categories)
             assertFalse(pending.id in client.wholePool(player, "&category=FOOD").ids(), "no longer filed under food")
@@ -1380,8 +1423,8 @@ class ApiFlowTest {
             }
 
             // Naming none keeps the author's.
-            val kept = client.submitted(author, SubmitQuestionRequest("Run", "Walk", listOf(QuestionCategory.RANDOM)))
-            assertEquals(listOf(QuestionCategory.RANDOM), client.approve(kept.id).body<SubmissionDto>().categories)
+            val kept = client.submitted(author, SubmitQuestionRequest("Run", "Walk", listOf("ABSURD")))
+            assertEquals(listOf("ABSURD"), client.approve(kept.id).body<SubmissionDto>().categories)
         }
 
     @Test
@@ -1393,7 +1436,7 @@ class ApiFlowTest {
 
             listOf("approved" to approved.id, "rejected" to rejected.id, "a seed" to "seed-1").forEach { (case, id) ->
                 listOf(
-                    "approving" to client.approve(id, listOf(QuestionCategory.ETHICS)),
+                    "approving" to client.approve(id, listOf("ETHICS")),
                     "rejecting" to client.reject(id, "Changed my mind"),
                 ).forEach { (decision, response) ->
                     assertEquals(HttpStatusCode.Conflict, response.status, "$decision $case")
@@ -1403,7 +1446,7 @@ class ApiFlowTest {
 
             assertEquals(setOf(approved, rejected), client.mySubmissions(author).toSet(), "as first decided")
             val seed = client.wholePool(author).single { it.id == "seed-1" }
-            assertFalse(QuestionCategory.ETHICS in seed.categories, "a seed's categories kept too")
+            assertFalse("ETHICS" in seed.categories, "a seed's categories kept too")
         }
 
     @Test
@@ -1436,7 +1479,8 @@ class ApiFlowTest {
                 "an approval of a blank id" to (approvals to """{"questionId":"  "}"""),
                 "an approval of an id with a NUL" to (approvals to """{"questionId":"$id\u0000"}"""),
                 "an approval naming UNKNOWN" to (approvals to """{"questionId":"$id","categories":["UNKNOWN"]}"""),
-                // Decoded as UNKNOWN beside FOOD rather than dropped, so it is not filed under FOOD alone.
+                "an approval naming RANDOM" to (approvals to """{"questionId":"$id","categories":["RANDOM"]}"""),
+                // Refused whole rather than filed under FOOD alone.
                 "an approval naming an unrecognised category beside a real one" to
                     (approvals to """{"questionId":"$id","categories":["FOOD","FROM_THE_FUTURE"]}"""),
                 "an approval whose categories are not a list" to
@@ -1769,6 +1813,7 @@ class ApiFlowTest {
             val pending = client.submitted(author, question("Pending"))
             val rejected = client.submitted(author, question("Rejected"))
             assertEquals(HttpStatusCode.OK, client.reject(rejected.id, "No").status)
+            val before = client.stats(author).totalPoints
 
             listOf("no-such-question", LONGER_THAN_ANY_ID, pending.id, rejected.id).forEach { questionId ->
                 listOf(author, player).forEach { session ->
@@ -1780,7 +1825,7 @@ class ApiFlowTest {
                     }
                 }
             }
-            assertEquals(0, client.stats(author).totalPoints)
+            assertEquals(before, client.stats(author).totalPoints, "none of them paid the author")
         }
 
     @Test
@@ -1850,6 +1895,7 @@ class ApiFlowTest {
         database: TestDatabaseSettings = testDatabaseFor(databaseName),
         block: suspend ApplicationTestBuilder.(HttpClient) -> Unit,
     ) = testApplication {
+        serverDatabase = database
         val config =
             ServerConfig(
                 port = 0,
@@ -1973,10 +2019,25 @@ class ApiFlowTest {
             setBody(SkipRequest(questionId))
         }
 
+    /**
+     * Submits [request] as [session]'s player, given the points it costs first (CLAUDE.md §8c), so the
+     * player's total ends where it began: what a test submits for when it is not about the cost.
+     */
     private suspend fun HttpClient.submit(
         session: SessionDto,
         request: SubmitQuestionRequest,
-    ): HttpResponse = submit(session.accessToken, request)
+    ): HttpResponse {
+        grantPoints(session.playerId, Scoring.SUBMISSION_COST)
+        return submit(session.accessToken, request)
+    }
+
+    /** Adds [points] to [playerId]'s total straight in the database of the server under test. */
+    private fun grantPoints(
+        playerId: String,
+        points: Int,
+    ) = checkNotNull(serverDatabase) { "no server is running" }.serverPool().use { pool ->
+        pool.inTransaction { PlayerStore.addPoints(playerId, points) }
+    }
 
     private suspend fun HttpClient.mySubmissions(session: SessionDto): List<SubmissionDto> =
         get(WyrApi.Paths.MY_QUESTIONS) { bearerAuth(session.accessToken) }.body<SubmissionListDto>().submissions
@@ -2051,12 +2112,24 @@ class ApiFlowTest {
                     contentType(ContentType.Application.Json)
                     setBody(RestoreQuestionRequest("no-such-question"))
                 },
+            "a new category" to
+                post(WyrApi.Paths.ADMIN_CATEGORIES) {
+                    credentials()
+                    contentType(ContentType.Application.Json)
+                    setBody(CreateCategoryRequest(nameSr = "Животиње", nameEn = "Animals"))
+                },
+            "a category's names" to
+                post(WyrApi.Paths.ADMIN_CATEGORY_RENAMES) {
+                    credentials()
+                    contentType(ContentType.Application.Json)
+                    setBody(RenameCategoryRequest("FOOD", nameSr = "Јело", nameEn = "Meals"))
+                },
         )
 
     /** Approves [questionId] with the test server's admin token, filing it under [categories] if any. */
     private suspend fun HttpClient.approve(
         questionId: String,
-        categories: List<QuestionCategory> = emptyList(),
+        categories: List<String> = emptyList(),
     ): HttpResponse =
         post(WyrApi.Paths.ADMIN_APPROVALS) {
             header(WyrApi.Headers.ADMIN_TOKEN, TEST_ADMIN_TOKEN)
@@ -2100,7 +2173,7 @@ class ApiFlowTest {
         }
 
     /** A food question to submit, set against its own negation. */
-    private fun question(text: String) = SubmitQuestionRequest(text, "Not $text", listOf(QuestionCategory.FOOD))
+    private fun question(text: String) = SubmitQuestionRequest(text, "Not $text", listOf("FOOD"))
 
     /** A question by [author], submitted and then approved with the test server's admin token. */
     private suspend fun HttpClient.approvedQuestion(

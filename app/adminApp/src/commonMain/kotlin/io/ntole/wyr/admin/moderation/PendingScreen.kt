@@ -56,6 +56,7 @@ fun PendingScreen(
                     }
                     Text(text = queueSummaryOf(submissions), style = MaterialTheme.typography.bodyMedium)
                 }
+                state.categories.failure?.let { CategoriesFailure(it) }
                 queue.failure?.let { FailureLine(it) }
                 queue.outcomes.notice?.let { NoticeLine(it) }
                 UnlistedFailures(queue.outcomes.failures, submissions.orEmpty().map { it.id }.toSet())
@@ -85,7 +86,10 @@ private fun PendingCard(
             )
             Text(text = "A: ${submission.optionA}", style = MaterialTheme.typography.titleMedium)
             Text(text = "B: ${submission.optionB}", style = MaterialTheme.typography.titleMedium)
-            Text(text = "Categories: ${namesOf(submission.categories)}", style = MaterialTheme.typography.bodyMedium)
+            Text(
+                text = "Categories: ${namesOf(submission.categories, state.categories.categories)}",
+                style = MaterialTheme.typography.bodyMedium,
+            )
             Text(text = submission.id, style = AdminType.code, color = MaterialTheme.colorScheme.onSurfaceVariant)
             DecisionControls(submission.id, submission.categories, Screen.PENDING, state, actions)
             state.pending.outcomes.failures[submission.id]

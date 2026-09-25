@@ -6,13 +6,11 @@ import io.ntole.wyr.core.domain.moderation.ModerationRepository
 import io.ntole.wyr.core.domain.moderation.QuestionCursor
 import io.ntole.wyr.core.domain.moderation.QuestionFilter
 import io.ntole.wyr.core.domain.moderation.RejectionReason
-import io.ntole.wyr.core.domain.question.Category
 import io.ntole.wyr.core.domain.submission.SubmissionStatus
 import io.ntole.wyr.core.domain.vote.Tally
 import io.ntole.wyr.core.question.AdminQuestionDto
 import io.ntole.wyr.core.question.AdminQuestionPageDto
 import io.ntole.wyr.core.question.ApproveSubmissionRequest
-import io.ntole.wyr.core.question.QuestionCategory
 import io.ntole.wyr.core.question.QuestionStatus
 import io.ntole.wyr.core.question.RejectSubmissionRequest
 import io.ntole.wyr.core.vote.VoteTallyDto
@@ -24,23 +22,16 @@ import kotlin.time.Instant
 
 class ModerationMapperTest {
     @Test
-    fun `an approval names its categories by their wire names in declaration order`() {
+    fun `an approval names its categories by their ids in id order`() {
         assertEquals(
-            ApproveSubmissionRequest("q1", listOf(QuestionCategory.FOOD, QuestionCategory.RANDOM)),
-            approveSubmissionRequest("q1", setOf(Category.RANDOM, Category.FOOD)),
+            ApproveSubmissionRequest("q1", listOf("ABSURD", "ANIMALS", "FOOD")),
+            approveSubmissionRequest("q1", setOf("FOOD", "ANIMALS", "ABSURD")),
         )
     }
 
     @Test
     fun `an approval under no categories names none and so keeps the author's`() {
         assertEquals(ApproveSubmissionRequest("q1", emptyList()), approveSubmissionRequest("q1", emptySet()))
-    }
-
-    @Test
-    fun `an approval under OTHER is refused`() {
-        listOf(setOf(Category.OTHER), setOf(Category.FOOD, Category.OTHER)).forEach { categories ->
-            assertFailsWith<IllegalArgumentException>("$categories") { approveSubmissionRequest("q1", categories) }
-        }
     }
 
     @Test
@@ -57,7 +48,7 @@ class ModerationMapperTest {
                 id = "q1",
                 optionA = "Fly",
                 optionB = "Swim",
-                categories = listOf(QuestionCategory.ETHICS, QuestionCategory.UNKNOWN),
+                categories = listOf("ETHICS", "FROM_THE_FUTURE"),
                 status = QuestionStatus.RETIRED,
                 seed = true,
                 submittedAt = 1_000L,
@@ -73,7 +64,7 @@ class ModerationMapperTest {
                 id = "q1",
                 optionA = "Fly",
                 optionB = "Swim",
-                categories = setOf(Category.ETHICS, Category.OTHER),
+                categories = setOf("ETHICS", "FROM_THE_FUTURE"),
                 status = SubmissionStatus.RETIRED,
                 isSeed = true,
                 submittedAt = Instant.fromEpochMilliseconds(1_000L),
@@ -100,7 +91,7 @@ class ModerationMapperTest {
             ).toDomain()
 
         assertEquals(SubmissionStatus.OTHER, listed.status)
-        assertEquals(setOf(Category.OTHER), listed.categories, "filed under nothing this build can name")
+        assertEquals(emptySet(), listed.categories, "sent under none, which no server does, and filed under none")
         assertEquals(null to null, listed.reviewedAt to listed.retiredAt)
     }
 
@@ -116,15 +107,15 @@ class ModerationMapperTest {
     }
 
     @Test
-    fun `a filter names its statuses and categories by their wire names in declaration order`() {
+    fun `a filter names its statuses in declaration order and its categories in id order`() {
         val filter =
             QuestionFilter(
                 statuses = setOf(SubmissionStatus.RETIRED, SubmissionStatus.PENDING),
-                categories = setOf(Category.RANDOM, Category.FOOD),
+                categories = setOf("FOOD", "ABSURD"),
             )
 
         assertEquals(listOf(QuestionStatus.PENDING, QuestionStatus.RETIRED), filter.wireStatuses())
-        assertEquals(listOf(QuestionCategory.FOOD, QuestionCategory.RANDOM), filter.wireCategories())
+        assertEquals(listOf("ABSURD", "FOOD"), filter.wireCategories())
         assertEquals(
             SubmissionStatus.entries.filter { it != SubmissionStatus.OTHER }.map { it.name },
             QuestionFilter(statuses = SubmissionStatus.entries.toSet() - SubmissionStatus.OTHER)
@@ -135,16 +126,11 @@ class ModerationMapperTest {
     }
 
     @Test
-    fun `a filter by what this build cannot name is refused`() {
+    fun `a filter by a status this build cannot name is refused`() {
         assertFailsWith<IllegalArgumentException> {
             QuestionFilter(
                 statuses = setOf(SubmissionStatus.OTHER),
             ).wireStatuses()
-        }
-        assertFailsWith<IllegalArgumentException> {
-            QuestionFilter(
-                categories = setOf(Category.OTHER),
-            ).wireCategories()
         }
     }
 

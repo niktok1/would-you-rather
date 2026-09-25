@@ -132,6 +132,7 @@ class ServerConfigTest {
                 Triple("RATE_LIMIT_SUBMISSIONS_PER_HOUR", RateLimits::submissions, 1.hours),
                 Triple("RATE_LIMIT_STATS_PER_MINUTE", RateLimits::stats, 1.minutes),
                 Triple("RATE_LIMIT_MY_SUBMISSIONS_PER_MINUTE", RateLimits::mySubmissions, 1.minutes),
+                Triple("RATE_LIMIT_CATEGORIES_PER_MINUTE", RateLimits::categories, 1.minutes),
                 Triple("RATE_LIMIT_ADMIN_PER_MINUTE", RateLimits::admin, 1.minutes),
                 Triple("RATE_LIMIT_ADMIN_TOKEN_FAILURES_PER_MINUTE", RateLimits::adminTokenFailures, 1.minutes),
             )

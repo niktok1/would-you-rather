@@ -1,21 +1,20 @@
 package io.ntole.wyr.server.question
 
 import io.ntole.wyr.core.api.WyrApi
-import io.ntole.wyr.core.question.QuestionCategory
 import io.ntole.wyr.core.question.SubmitQuestionRequest
 import io.ntole.wyr.server.plugins.ApiFailure
 
 /**
- * [request] as it is stored, both options trimmed and its categories each once in declaration
- * order, or an [ApiFailure] for one that breaks a rule of [SubmitQuestionRequest] (CLAUDE.md §8d).
+ * [request] as it is stored, both options trimmed and its categories each once, or an [ApiFailure]
+ * for one that breaks a rule of [SubmitQuestionRequest] (CLAUDE.md §8d).
  *
  * Two kinds of refusal, so the client can tell the player apart from a bug. What a player can get
  * wrong by typing is [ApiFailure.invalidSubmission]: an option blank, too long or holding a control
- * character or a line separator, or the two options the same ignoring case. No category, or one
- * that is not a real one, is [ApiFailure.validation], as a malformed body is: a picker sends none
- * only by a bug, and [QuestionCategory.UNKNOWN] is the client's decoding fallback, never stored (as
- * for the feed's filter), which no picker offers. A category named twice is filed once, not
- * refused. A request with both kinds of fault is malformed first.
+ * character or a line separator, or the two options the same ignoring case. No category is
+ * [ApiFailure.validation], as a malformed body is: a picker sends none only by a bug. So is an id no
+ * category has, which the route refuses in its transaction before this runs
+ * (`CategoryStore.checked`, which also puts them in the order of categories), so a request with both
+ * kinds of fault is malformed first. A category named twice is filed once, not refused.
  *
  * Control characters are all refused, not only the NUL PostgreSQL rejects, because an option is one
  * line of text: a newline or tab inside one is pasted by accident, not meant. So are the two line
@@ -27,7 +26,6 @@ import io.ntole.wyr.server.plugins.ApiFailure
  */
 internal fun checkedSubmission(request: SubmitQuestionRequest): SubmitQuestionRequest {
     if (request.categories.isEmpty()) throw ApiFailure.validation("no category")
-    if (QuestionCategory.UNKNOWN in request.categories) throw ApiFailure.validation("a category is not a real one")
 
     val optionA = checkedOption("optionA", request.optionA)
     val optionB = checkedOption("optionB", request.optionB)
@@ -36,7 +34,7 @@ internal fun checkedSubmission(request: SubmitQuestionRequest): SubmitQuestionRe
     return SubmitQuestionRequest(
         optionA = optionA,
         optionB = optionB,
-        categories = request.categories.distinct().sorted(),
+        categories = request.categories.distinct(),
     )
 }
 

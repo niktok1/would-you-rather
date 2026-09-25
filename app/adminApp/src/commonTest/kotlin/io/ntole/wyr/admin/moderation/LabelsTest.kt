@@ -3,7 +3,6 @@ package io.ntole.wyr.admin.moderation
 import io.ntole.wyr.admin.serverLineOf
 import io.ntole.wyr.admin.windowTitleOf
 import io.ntole.wyr.core.domain.moderation.ModerationRepository
-import io.ntole.wyr.core.domain.question.Category
 import io.ntole.wyr.core.network.environment.WyrEnvironment
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -53,13 +52,25 @@ class LabelsTest {
 
     @Test
     fun `nothing picked approves under the author's categories`() {
-        val authors = setOf(Category.FOOD, Category.OTHER)
+        val authors = setOf("FOOD", "FROM_THE_FUTURE")
+        val known = FakeCategories.LISTED
 
-        assertEquals("Approve under the author's categories: FOOD, OTHER", approvalOf(emptySet(), authors))
         assertEquals(
-            "Approve under ETHICS, RANDOM, in place of the author's",
-            approvalOf(setOf(Category.ETHICS, Category.RANDOM), authors),
+            "Approve under the author's categories: Храна, FROM_THE_FUTURE",
+            approvalOf(emptySet(), authors, known),
         )
+        assertEquals(
+            "Approve under Етика, Апсурдно, in place of the author's",
+            approvalOf(setOf("ETHICS", "ABSURD"), authors, known),
+        )
+    }
+
+    @Test
+    fun `a category is named in Serbian as the server lists it and by its id until it is read`() {
+        assertEquals("Храна, Етика", namesOf(listOf("FOOD", "ETHICS"), FakeCategories.LISTED))
+        // One added after the list was read, and a list never read at all.
+        assertEquals("Храна, ANIMALS", namesOf(listOf("FOOD", "ANIMALS"), FakeCategories.LISTED))
+        assertEquals("FOOD, ETHICS", namesOf(listOf("FOOD", "ETHICS"), known = null))
     }
 
     @Test

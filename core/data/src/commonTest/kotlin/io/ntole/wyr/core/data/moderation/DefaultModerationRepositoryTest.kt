@@ -11,10 +11,14 @@ import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.headersOf
 import io.ntole.wyr.core.api.WyrApi
+import io.ntole.wyr.core.category.CategoryDto
+import io.ntole.wyr.core.category.CreateCategoryRequest
+import io.ntole.wyr.core.category.RenameCategoryRequest
 import io.ntole.wyr.core.data.BASE_URL
 import io.ntole.wyr.core.data.respondJson
 import io.ntole.wyr.core.data.session
 import io.ntole.wyr.core.data.storeHolding
+import io.ntole.wyr.core.domain.category.Category
 import io.ntole.wyr.core.domain.error.DomainError
 import io.ntole.wyr.core.domain.error.WyrException
 import io.ntole.wyr.core.domain.moderation.AdminToken
@@ -24,7 +28,6 @@ import io.ntole.wyr.core.domain.moderation.ModerationRepository
 import io.ntole.wyr.core.domain.moderation.QuestionCursor
 import io.ntole.wyr.core.domain.moderation.QuestionFilter
 import io.ntole.wyr.core.domain.moderation.RejectionReason
-import io.ntole.wyr.core.domain.question.Category
 import io.ntole.wyr.core.domain.submission.Submission
 import io.ntole.wyr.core.domain.submission.SubmissionStatus
 import io.ntole.wyr.core.domain.vote.Tally
@@ -36,7 +39,6 @@ import io.ntole.wyr.core.network.WyrJson
 import io.ntole.wyr.core.network.api.ModerationApi
 import io.ntole.wyr.core.question.AdminQuestionDto
 import io.ntole.wyr.core.question.ApproveSubmissionRequest
-import io.ntole.wyr.core.question.QuestionCategory
 import io.ntole.wyr.core.question.QuestionStatus
 import io.ntole.wyr.core.question.RejectSubmissionRequest
 import io.ntole.wyr.core.question.RestoreQuestionRequest
@@ -70,17 +72,17 @@ class DefaultModerationRepositoryTest {
                         id = "q1",
                         optionA = "Fly",
                         optionB = "Swim",
-                        categories = setOf(Category.SUPERPOWERS),
+                        categories = setOf("SUPERPOWERS"),
                         status = SubmissionStatus.PENDING,
                         rejectionReason = null,
                         submittedAt = Instant.fromEpochMilliseconds(SUBMITTED_AT),
                     ),
-                    // A category this build cannot name, beside one it can, as for the author's own list.
+                    // A category added after this build, kept by its id, as for the author's own list.
                     Submission(
                         id = "q2",
                         optionA = "Tea",
                         optionB = "Coffee",
-                        categories = setOf(Category.FOOD, Category.OTHER),
+                        categories = setOf("CATEGORY_FROM_THE_FUTURE", "FOOD"),
                         status = SubmissionStatus.PENDING,
                         rejectionReason = null,
                         submittedAt = Instant.fromEpochMilliseconds(SUBMITTED_AT + 1),
@@ -99,16 +101,16 @@ class DefaultModerationRepositoryTest {
         }
 
     @Test
-    fun `an approval sends its categories in declaration order and comes back filed under them`() =
+    fun `an approval sends its categories in id order and comes back filed under them`() =
         runTest {
             val approved =
                 repositoryOver(storeHolding(session("a")))
-                    .approve(token, "q1", setOf(Category.RANDOM, Category.FOOD))
+                    .approve(token, "q1", setOf("FOOD", "ABSURD"))
 
             assertEquals(SubmissionStatus.APPROVED, approved.status)
-            assertEquals(setOf(Category.FOOD, Category.RANDOM), approved.categories)
+            assertEquals(setOf("ABSURD", "FOOD"), approved.categories)
             assertEquals(
-                ApproveSubmissionRequest("q1", listOf(QuestionCategory.FOOD, QuestionCategory.RANDOM)),
+                ApproveSubmissionRequest("q1", listOf("ABSURD", "FOOD")),
                 decode<ApproveSubmissionRequest>(engine.requestHistory.single()),
             )
             assertEquals(listOf(token.value), adminTokensSent())
@@ -119,19 +121,9 @@ class DefaultModerationRepositoryTest {
         runTest {
             val approved = repositoryOver(storeHolding(session("a"))).approve(token, "q1", emptySet())
 
-            assertEquals(setOf(Category.SUPERPOWERS), approved.categories)
+            assertEquals(setOf("SUPERPOWERS"), approved.categories)
             val sent = decode<ApproveSubmissionRequest>(engine.requestHistory.single())
             assertEquals(ApproveSubmissionRequest("q1"), sent)
-        }
-
-    @Test
-    fun `an approval under OTHER sends nothing`() =
-        runTest {
-            val moderation = repositoryOver(storeHolding(session("a")))
-
-            assertFailsWith<IllegalArgumentException> { moderation.approve(token, "q1", setOf(Category.OTHER)) }
-
-            assertEquals(emptyList(), engine.requestHistory)
         }
 
     @Test
@@ -255,12 +247,12 @@ class DefaultModerationRepositoryTest {
         }
 
     @Test
-    fun `every question is read a page at a time with the filter by its wire names and the cursor as given`() =
+    fun `every question is read a page at a time with the filter by its ids and the cursor as given`() =
         runTest {
             val filter =
                 QuestionFilter(
                     statuses = setOf(SubmissionStatus.RETIRED, SubmissionStatus.PENDING),
-                    categories = setOf(Category.RANDOM, Category.FOOD),
+                    categories = setOf("FOOD", "ABSURD"),
                 )
 
             val page = repositoryOver(storeHolding(session("a"))).questions(token, filter, QuestionCursor("c1"))
@@ -268,7 +260,7 @@ class DefaultModerationRepositoryTest {
             val sent = engine.requestHistory.single()
             assertEquals(WyrApi.Paths.ADMIN_QUESTIONS, sent.url.encodedPath)
             assertEquals(listOf("PENDING", "RETIRED"), sent.url.parameters.getAll(WyrApi.Query.STATUS))
-            assertEquals(listOf("FOOD", "RANDOM"), sent.url.parameters.getAll(WyrApi.Query.CATEGORY))
+            assertEquals(listOf("ABSURD", "FOOD"), sent.url.parameters.getAll(WyrApi.Query.CATEGORY))
             assertEquals("c1", sent.url.parameters[WyrApi.Query.CURSOR])
             assertEquals("${ModerationRepository.PAGE_SIZE}", sent.url.parameters[WyrApi.Query.LIMIT])
             assertEquals(listOf(token.value), adminTokensSent())
@@ -277,11 +269,11 @@ class DefaultModerationRepositoryTest {
                     questions =
                         listOf(
                             LISTED_RETIRED,
-                            // A seed, filed under a category this build cannot name and at a status it
-                            // cannot name either: still listed, as OTHER.
+                            // A seed, filed under a category added after this build and at a status it
+                            // cannot name: still listed, the category by its id and the status as OTHER.
                             LISTED_RETIRED.copy(
                                 id = "seed-1",
-                                categories = setOf(Category.FOOD, Category.OTHER),
+                                categories = setOf("CATEGORY_FROM_THE_FUTURE", "FOOD"),
                                 status = SubmissionStatus.OTHER,
                                 isSeed = true,
                                 reviewedAt = null,
@@ -307,18 +299,12 @@ class DefaultModerationRepositoryTest {
         }
 
     @Test
-    fun `a filter by what this build cannot name sends nothing`() =
+    fun `a filter by a status this build cannot name sends nothing`() =
         runTest {
             val moderation = repositoryOver(storeHolding(session("a")))
+            val filter = QuestionFilter(statuses = setOf(SubmissionStatus.APPROVED, SubmissionStatus.OTHER))
 
-            listOf(
-                QuestionFilter(statuses = setOf(SubmissionStatus.APPROVED, SubmissionStatus.OTHER)),
-                QuestionFilter(categories = setOf(Category.FOOD, Category.OTHER)),
-            ).forEach { filter ->
-                assertFailsWith<IllegalArgumentException>(
-                    "$filter",
-                ) { moderation.questions(token, filter, after = null) }
-            }
+            assertFailsWith<IllegalArgumentException> { moderation.questions(token, filter, after = null) }
 
             assertEquals(emptyList(), engine.requestHistory)
         }
@@ -355,6 +341,45 @@ class DefaultModerationRepositoryTest {
                     assertEquals(DomainError.WRONG_STATUS, failure.error)
                     assertEquals("not approved", failure.message)
                 }
+        }
+
+    @Test
+    fun `a category is added with the token and comes back as the server stored it`() =
+        runTest {
+            val added = repositoryOver(storeHolding(null)).addCategory(token, null, " Брза храна ", "Fast food")
+
+            // Stored as the server's CategoryRules have it: trimmed, the id made from the English name.
+            assertEquals(Category(id = "FAST_FOOD", nameSr = "Брза храна", nameEn = "Fast food"), added)
+            val sent = engine.requestHistory.single()
+            assertEquals(WyrApi.Paths.ADMIN_CATEGORIES, sent.url.encodedPath)
+            assertEquals(CreateCategoryRequest(nameSr = " Брза храна ", nameEn = "Fast food"), decode(sent))
+            assertEquals(listOf(token.value), adminTokensSent())
+        }
+
+    @Test
+    fun `a category's names are put right by its id with the token`() =
+        runTest {
+            val renamed = repositoryOver(storeHolding(null)).renameCategory(token, "FOOD", "Јело", "Meals")
+
+            assertEquals(Category(id = "FOOD", nameSr = "Јело", nameEn = "Meals"), renamed)
+            val sent = engine.requestHistory.single()
+            assertEquals(WyrApi.Paths.ADMIN_CATEGORY_RENAMES, sent.url.encodedPath)
+            assertEquals(RenameCategoryRequest("FOOD", "Јело", "Meals"), decode(sent))
+            assertEquals(listOf(token.value), adminTokensSent())
+        }
+
+    @Test
+    fun `an id a category has already and an id none has read as their own DomainErrors`() =
+        runTest {
+            val moderation = repositoryOver(storeHolding(null))
+
+            refuseWith = { respondError(HttpStatusCode.Conflict, ErrorDto("FOOD exists", ErrorCode.CATEGORY_EXISTS)) }
+            val exists = assertFailsWith<WyrException> { moderation.addCategory(token, "FOOD", "Храна", "Food") }
+            refuseWith = { respondError(HttpStatusCode.NotFound, ErrorDto("no GONE", ErrorCode.CATEGORY_NOT_FOUND)) }
+            val missing = assertFailsWith<WyrException> { moderation.renameCategory(token, "GONE", "Нема", "Gone") }
+
+            assertEquals(DomainError.CATEGORY_EXISTS, exists.error)
+            assertEquals(DomainError.CATEGORY_NOT_FOUND, missing.error)
         }
 
     private suspend fun MockRequestHandleScope.answer(request: HttpRequestData): HttpResponseData {
@@ -396,6 +421,18 @@ class DefaultModerationRepositoryTest {
                 respondJson(WyrJson.encodeToString(RETIRED.copy(status = QuestionStatus.APPROVED, retiredAt = null)))
             }
 
+            request.url.encodedPath == WyrApi.Paths.ADMIN_CATEGORIES -> {
+                // As the server stores it; the id it makes from the English name.
+                val creation = decode<CreateCategoryRequest>(request)
+                val stored = CategoryDto(creation.id ?: "FAST_FOOD", creation.nameSr.trim(), creation.nameEn.trim())
+                respond(WyrJson.encodeToString(stored), HttpStatusCode.Created, JSON)
+            }
+
+            request.url.encodedPath == WyrApi.Paths.ADMIN_CATEGORY_RENAMES -> {
+                val renaming = decode<RenameCategoryRequest>(request)
+                respondJson(WyrJson.encodeToString(CategoryDto(renaming.id, renaming.nameSr, renaming.nameEn)))
+            }
+
             request.url.encodedPath == WyrApi.Paths.ADMIN_REJECTIONS -> {
                 // Echoed as sent, so a reason sent untrimmed would come back untrimmed.
                 val rejection = decode<RejectSubmissionRequest>(request)
@@ -433,6 +470,8 @@ class DefaultModerationRepositoryTest {
     private companion object {
         const val SUBMITTED_AT = 1_790_000_000_000L
 
+        val JSON = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString())
+
         /** A refresh of "a"'s session, as the server rotates it: still player "a". */
         val ROTATED = session("a").copy(accessToken = "access-a-rotated", refreshToken = "refresh-a-rotated")
 
@@ -441,7 +480,7 @@ class DefaultModerationRepositoryTest {
                 id = "q1",
                 optionA = "Fly",
                 optionB = "Swim",
-                categories = listOf(QuestionCategory.SUPERPOWERS),
+                categories = listOf("SUPERPOWERS"),
                 status = QuestionStatus.PENDING,
                 submittedAt = SUBMITTED_AT,
             )
@@ -451,7 +490,7 @@ class DefaultModerationRepositoryTest {
                 id = "q1",
                 optionA = "Fly",
                 optionB = "Swim",
-                categories = listOf(QuestionCategory.SUPERPOWERS),
+                categories = listOf("SUPERPOWERS"),
                 status = QuestionStatus.RETIRED,
                 seed = false,
                 submittedAt = SUBMITTED_AT,
@@ -467,7 +506,7 @@ class DefaultModerationRepositoryTest {
                 id = "q1",
                 optionA = "Fly",
                 optionB = "Swim",
-                categories = setOf(Category.SUPERPOWERS),
+                categories = setOf("SUPERPOWERS"),
                 status = SubmissionStatus.RETIRED,
                 isSeed = false,
                 submittedAt = Instant.fromEpochMilliseconds(SUBMITTED_AT),

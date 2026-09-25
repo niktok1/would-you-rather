@@ -4,7 +4,6 @@ import io.ntole.wyr.core.api.WyrApi
 import io.ntole.wyr.core.error.ErrorCode
 import io.ntole.wyr.core.like.LikeResultDto
 import io.ntole.wyr.core.player.PlayerStatsDto
-import io.ntole.wyr.core.question.QuestionCategory
 import io.ntole.wyr.core.question.QuestionDto
 import io.ntole.wyr.core.question.QuestionStatus
 import io.ntole.wyr.core.vote.OptionSide
@@ -360,7 +359,7 @@ class LikeStoreTest {
             }
             QuestionCategories.insert { row ->
                 row[questionId] = id
-                row[category] = QuestionCategory.FOOD.name
+                row[category] = "FOOD"
             }
         }
         return id

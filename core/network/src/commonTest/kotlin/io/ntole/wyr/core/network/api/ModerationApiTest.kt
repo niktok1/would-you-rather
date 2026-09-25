@@ -9,6 +9,9 @@ import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpMethod
 import io.ktor.http.HttpStatusCode
 import io.ntole.wyr.core.api.WyrApi
+import io.ntole.wyr.core.category.CategoryDto
+import io.ntole.wyr.core.category.CreateCategoryRequest
+import io.ntole.wyr.core.category.RenameCategoryRequest
 import io.ntole.wyr.core.error.ErrorCode
 import io.ntole.wyr.core.network.ApiException
 import io.ntole.wyr.core.network.BASE_URL
@@ -24,7 +27,6 @@ import io.ntole.wyr.core.network.storeHolding
 import io.ntole.wyr.core.question.AdminQuestionDto
 import io.ntole.wyr.core.question.AdminQuestionPageDto
 import io.ntole.wyr.core.question.ApproveSubmissionRequest
-import io.ntole.wyr.core.question.QuestionCategory
 import io.ntole.wyr.core.question.QuestionStatus
 import io.ntole.wyr.core.question.RejectSubmissionRequest
 import io.ntole.wyr.core.question.RestoreQuestionRequest
@@ -77,7 +79,7 @@ class ModerationApiTest {
     fun `an approval is posted with the admin token and the categories to file it under`() =
         runTest {
             val engine = MockEngine { respondOk(APPROVED) }
-            val request = ApproveSubmissionRequest("q1", listOf(QuestionCategory.FOOD, QuestionCategory.RANDOM))
+            val request = ApproveSubmissionRequest("q1", listOf("FOOD", "ABSURD"))
 
             val approved = moderationApi(engine, storeHolding(session("a"))).approve(ADMIN_TOKEN, request)
 
@@ -87,7 +89,7 @@ class ModerationApiTest {
             assertEquals(WyrApi.Paths.ADMIN_APPROVALS, sent.url.encodedPath)
             assertEquals(ADMIN_TOKEN, sent.headers[WyrApi.Headers.ADMIN_TOKEN])
             assertEquals(
-                """{"questionId":"q1","categories":["FOOD","RANDOM"]}""",
+                """{"questionId":"q1","categories":["FOOD","ABSURD"]}""",
                 sent.body.toByteArray().decodeToString(),
             )
         }
@@ -133,7 +135,7 @@ class ModerationApiTest {
                 moderationApi(engine, storeHolding(session("a"))).questions(
                     ADMIN_TOKEN,
                     statuses = listOf(QuestionStatus.PENDING, QuestionStatus.RETIRED),
-                    categories = listOf(QuestionCategory.FOOD, QuestionCategory.ETHICS),
+                    categories = listOf("FOOD", "ETHICS"),
                     cursor = "1790000000000:q1",
                     limit = 50,
                 )
@@ -185,6 +187,45 @@ class ModerationApiTest {
                 assertEquals(ADMIN_TOKEN, sent.headers[WyrApi.Headers.ADMIN_TOKEN])
                 assertEquals("""{"questionId":"q1"}""", sent.body.toByteArray().decodeToString())
             }
+        }
+
+    @Test
+    fun `a category is added and renamed with the admin token and its names`() =
+        runTest {
+            val engine =
+                MockEngine { request ->
+                    val added = CategoryDto(id = "FAST_FOOD", nameSr = "Брза храна", nameEn = "Fast food")
+                    if (request.url.encodedPath == WyrApi.Paths.ADMIN_CATEGORIES) {
+                        respond(WyrJson.encodeToString(added), HttpStatusCode.Created, jsonHeaders)
+                    } else {
+                        respondOk(added.copy(nameSr = "Брза клопа"))
+                    }
+                }
+            val api = moderationApi(engine, storeHolding(session("a")))
+
+            val added = api.addCategory(ADMIN_TOKEN, CreateCategoryRequest(nameSr = "Брза храна", nameEn = "Fast food"))
+            val renamed =
+                api.renameCategory(ADMIN_TOKEN, RenameCategoryRequest("FAST_FOOD", "Брза клопа", "Fast food"))
+
+            assertEquals("FAST_FOOD", added.id)
+            assertEquals("Брза клопа", renamed.nameSr)
+            assertEquals(
+                listOf(WyrApi.Paths.ADMIN_CATEGORIES, WyrApi.Paths.ADMIN_CATEGORY_RENAMES),
+                engine.requestHistory.map { it.url.encodedPath },
+            )
+            engine.requestHistory.forEach { sent ->
+                assertEquals(HttpMethod.Post, sent.method)
+                assertEquals(ADMIN_TOKEN, sent.headers[WyrApi.Headers.ADMIN_TOKEN])
+            }
+            // No id: the server makes it from the English name.
+            assertEquals(
+                """{"nameSr":"Брза храна","nameEn":"Fast food"}""",
+                engine.requestHistory
+                    .first()
+                    .body
+                    .toByteArray()
+                    .decodeToString(),
+            )
         }
 
     @Test
@@ -284,7 +325,7 @@ class ModerationApiTest {
                 id = "q1",
                 optionA = "Fly",
                 optionB = "Swim",
-                categories = listOf(QuestionCategory.SUPERPOWERS),
+                categories = listOf("SUPERPOWERS"),
                 status = QuestionStatus.PENDING,
                 submittedAt = 1_790_000_000_000L,
             )
@@ -293,7 +334,7 @@ class ModerationApiTest {
 
         val APPROVED =
             PENDING.copy(
-                categories = listOf(QuestionCategory.FOOD, QuestionCategory.RANDOM),
+                categories = listOf("FOOD", "ABSURD"),
                 status = QuestionStatus.APPROVED,
             )
 
@@ -304,7 +345,7 @@ class ModerationApiTest {
                 id = "q1",
                 optionA = "Fly",
                 optionB = "Swim",
-                categories = listOf(QuestionCategory.SUPERPOWERS),
+                categories = listOf("SUPERPOWERS"),
                 status = QuestionStatus.APPROVED,
                 seed = false,
                 submittedAt = 1_790_000_000_000L,

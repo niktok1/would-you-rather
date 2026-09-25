@@ -1,7 +1,7 @@
 package io.ntole.wyr.play
 
+import io.ntole.wyr.core.domain.category.Category
 import io.ntole.wyr.core.domain.error.DomainError
-import io.ntole.wyr.core.domain.question.Category
 import io.ntole.wyr.core.domain.question.Question
 import io.ntole.wyr.core.domain.vote.Side
 import io.ntole.wyr.core.domain.vote.Tally
@@ -13,6 +13,7 @@ import io.ntole.wyr.language.stringsOf
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class PlayScreenTest {
@@ -53,32 +54,58 @@ class PlayScreenTest {
 
     @Test
     fun `no category selected is all of them in the language shown`() {
-        assertEquals("Све", categoriesPlayed(emptySet(), all = SerbianCyrillicStrings.playScreen.allCategories))
-        assertEquals("All", categoriesPlayed(emptySet(), all = EnglishStrings.playScreen.allCategories))
+        val none = PlayedCategories(known = KNOWN)
+        assertEquals("Све", categoriesPlayed(none, SerbianCyrillicStrings.playScreen.allCategories, CYRILLIC))
+        assertEquals("All", categoriesPlayed(none, EnglishStrings.playScreen.allCategories, Language.ENGLISH))
     }
 
     @Test
-    fun `the categories played are named in the picker's order`() {
-        // Not in the order the set holds them: in declaration order, as the picker lists them.
-        assertEquals("Food, Ethics", categoriesPlayed(linkedSetOf(Category.ETHICS, Category.FOOD), all = ALL))
-        assertEquals("Superpowers", categoriesPlayed(setOf(Category.SUPERPOWERS), all = ALL))
+    fun `the categories played are named in the language shown in the order the server lists them`() {
+        // Not in the order the set holds them: in the server's, as the picker lists them.
+        val played = PlayedCategories(linkedSetOf("ETHICS", "FOOD"), KNOWN)
+        assertEquals("Храна, Етика", categoriesPlayed(played, ALL, CYRILLIC))
+        assertEquals("Hrana, Etika", categoriesPlayed(played, ALL, Language.SERBIAN_LATIN))
+        assertEquals("Food, Ethics", categoriesPlayed(played, ALL, Language.ENGLISH))
+        assertEquals("Апсурдно", categoriesPlayed(PlayedCategories(setOf("ABSURD"), KNOWN), ALL, CYRILLIC))
+    }
+
+    @Test
+    fun `a category not read yet is named by its id after the rest`() {
+        // Added after the list was read, or played before any read landed.
+        val added = PlayedCategories(linkedSetOf("ANIMALS", "FOOD"), KNOWN)
+        assertEquals("Храна, ANIMALS", categoriesPlayed(added, ALL, CYRILLIC))
+        Language.entries.forEach { language ->
+            assertEquals("FOOD", categoriesPlayed(PlayedCategories(setOf("FOOD")), ALL, language))
+        }
     }
 
     @Test
     fun `every category selected is named and not called All`() {
-        // Not none: a question filed only under categories this build cannot name is in none of them.
-        assertEquals(
-            "Food, Lifestyle, Ethics, Superpowers, Random",
-            categoriesPlayed(Category.selectable.toSet(), all = ALL),
-        )
+        // Not none: a category a moderator adds later is in none, and not in these.
+        val every = PlayedCategories(KNOWN.map { it.id }.toSet(), KNOWN)
+        assertEquals("Храна, Етика, Апсурдно", categoriesPlayed(every, ALL, CYRILLIC))
+        assertEquals("Food, Ethics, Absurd", categoriesPlayed(every, ALL, Language.ENGLISH))
     }
 
     @Test
-    fun `every category has a name in the player's words`() {
-        assertEquals(
-            listOf("Food", "Lifestyle", "Ethics", "Superpowers", "Random", "Other"),
-            Category.entries.map(::categoryName),
-        )
+    fun `the picker says it is reading the categories only while it has none to list`() {
+        val loading = CategoryPicking(emptySet(), isLoading = true)
+        assertEquals("Учитавање категорија…", pickerNote(loading, listed = false, SerbianCyrillicStrings))
+        assertEquals("Loading categories…", pickerNote(loading, listed = false, EnglishStrings))
+        assertNull(pickerNote(loading, listed = true, EnglishStrings))
+        assertNull(pickerNote(CategoryPicking(emptySet()), listed = true, EnglishStrings))
+    }
+
+    @Test
+    fun `a picker whose read failed says so in one line in every language`() {
+        Language.entries.map(::stringsOf).forEach { strings ->
+            val offline = CategoryPicking(emptySet(), failure = DomainError.NETWORK)
+            assertEquals(strings.playScreen.cannotReach, pickerNote(offline, listed = true, strings))
+            val failed = CategoryPicking(emptySet(), failure = DomainError.SERVER)
+            assertEquals(strings.categoriesUnread, pickerNote(failed, listed = false, strings))
+        }
+        val failed = CategoryPicking(emptySet(), failure = DomainError.SERVER)
+        assertEquals("Категорије нису учитане.", pickerNote(failed, listed = true, SerbianCyrillicStrings))
     }
 
     @Test
@@ -97,7 +124,17 @@ class PlayScreenTest {
     private companion object {
         const val ALL = "All"
 
-        val QUESTION = Question(id = "q1", optionA = "Fly", optionB = "Swim", categories = setOf(Category.FOOD))
+        val CYRILLIC = Language.SERBIAN_CYRILLIC
+
+        val QUESTION = Question(id = "q1", optionA = "Fly", optionB = "Swim", categories = setOf("FOOD"))
+
+        /** As the server lists them: oldest first. */
+        val KNOWN =
+            listOf(
+                Category(id = "FOOD", nameSr = "Храна", nameEn = "Food"),
+                Category(id = "ETHICS", nameSr = "Етика", nameEn = "Ethics"),
+                Category(id = "ABSURD", nameSr = "Апсурдно", nameEn = "Absurd"),
+            )
 
         val OUTCOME =
             VoteOutcome(

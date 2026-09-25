@@ -21,12 +21,13 @@ import io.ntole.wyr.core.auth.LoginRequest
 import io.ntole.wyr.core.auth.RefreshRequest
 import io.ntole.wyr.core.auth.RegisterRequest
 import io.ntole.wyr.core.auth.SessionDto
+import io.ntole.wyr.core.category.CreateCategoryRequest
+import io.ntole.wyr.core.category.RenameCategoryRequest
 import io.ntole.wyr.core.error.ErrorCode
 import io.ntole.wyr.core.error.ErrorDto
 import io.ntole.wyr.core.like.LikeRequest
 import io.ntole.wyr.core.player.PlayerStatsDto
 import io.ntole.wyr.core.question.ApproveSubmissionRequest
-import io.ntole.wyr.core.question.QuestionCategory
 import io.ntole.wyr.core.question.QuestionPageDto
 import io.ntole.wyr.core.question.RejectSubmissionRequest
 import io.ntole.wyr.core.question.RestoreQuestionRequest
@@ -87,12 +88,14 @@ class RateLimitTest {
 
             repeat(2) { assertEquals(HttpStatusCode.OK, client.vote(player).status) }
             assertRateLimited(client.vote(player), "the third vote")
+            // The two votes' points pay for the two submissions.
             repeat(2) { index -> assertEquals(HttpStatusCode.Created, client.submit(player, "Paid $index").status) }
             assertRateLimited(client.submit(player, "Refused"), "the third submission")
 
             val stats = client.stats(player)
-            assertEquals(2, stats.totalPoints, "the refused vote paid nothing")
-            assertEquals(2, stats.answersGiven, "and was no answer")
+            assertEquals(2, stats.answersGiven, "the refused vote was no answer")
+            assertEquals(2, stats.pointsSpent, "the refused submission cost nothing")
+            assertEquals(0, stats.totalPoints, "and the refused vote paid nothing")
             // Sorted: two submitted in one millisecond are listed in their ids' order, which is random.
             val submitted =
                 client
@@ -456,7 +459,9 @@ class RateLimitTest {
             Group("likes", { copy(likes = it) }) { caller ->
                 caller.client.post(WyrApi.Paths.LIKES) { json(caller.player, LikeRequest(SEED, liked = true)) }
             },
+            // A vote first, outside this group, earns the point each submission costs.
             Group("submissions", { copy(submissions = it) }, allowed = HttpStatusCode.Created) {
+                it.client.vote(it.player)
                 it.client.submit(it.player, "Question ${it.sent++}")
             },
             Group("stats", { copy(stats = it) }) { caller ->
@@ -464,6 +469,9 @@ class RateLimitTest {
             },
             Group("my submissions", { copy(mySubmissions = it) }) { caller ->
                 caller.client.get(WyrApi.Paths.MY_QUESTIONS) { bearerAuth(caller.player.accessToken) }
+            },
+            Group("categories", { copy(categories = it) }, needsSession = false) { caller ->
+                caller.client.get(WyrApi.Paths.CATEGORIES)
             },
             Group("admin", { copy(admin = it) }, needsSession = false) { caller ->
                 caller.client.queue(ADMIN_TOKEN)
@@ -558,9 +566,22 @@ class RateLimitTest {
                 AdminRoute("a restoration", HttpStatusCode.NotFound) { client, token ->
                     client.post(WyrApi.Paths.ADMIN_RESTORATIONS) { admin(token, RestoreQuestionRequest(NO_SUBMISSION)) }
                 },
+                // An id no category has, so it changes nothing that the next test's server would see.
+                AdminRoute("a category's names", HttpStatusCode.NotFound) { client, token ->
+                    client.post(WyrApi.Paths.ADMIN_CATEGORY_RENAMES) {
+                        admin(token, RenameCategoryRequest(NO_CATEGORY, nameSr = "Ништа", nameEn = "Nothing"))
+                    }
+                },
+                // One a category has, answered alike by every one.
+                AdminRoute("a new category", HttpStatusCode.Conflict) { client, token ->
+                    client.post(WyrApi.Paths.ADMIN_CATEGORIES) {
+                        admin(token, CreateCategoryRequest(id = "FOOD", nameSr = "Храна", nameEn = "Food"))
+                    }
+                },
             )
         val ADMIN_ROUTE_BUDGET = RequestBudget(requests = ADMIN_ROUTES.size, per = 1.minutes)
         const val NO_SUBMISSION = "no-such-submission"
+        const val NO_CATEGORY = "NO_SUCH_CATEGORY"
 
         /** The header Render's proxy, Cloudflare, sets to the client's address, and two clients' addresses. */
         const val CLIENT_IP_HEADER = "CF-Connecting-IP"
@@ -644,7 +665,7 @@ class RateLimitTest {
             text: String,
         ): HttpResponse =
             post(WyrApi.Paths.QUESTIONS) {
-                json(session, SubmitQuestionRequest(text, "Not $text", listOf(QuestionCategory.FOOD)))
+                json(session, SubmitQuestionRequest(text, "Not $text", listOf("FOOD")))
             }
 
         suspend fun HttpClient.stats(session: SessionDto): PlayerStatsDto =

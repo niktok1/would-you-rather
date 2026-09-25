@@ -20,6 +20,18 @@ fun FailureLine(failure: Failure) {
     }
 }
 
+/**
+ * Why the categories could not be read, above a screen whose chips and names they are: the categories
+ * read before, if any, stay listed, and a category not read shows by its id.
+ */
+@Composable
+fun CategoriesFailure(failure: Failure) {
+    Column(verticalArrangement = Arrangement.spacedBy(AdminDimens.spaceXs)) {
+        Text(text = "The categories could not be read:", style = MaterialTheme.typography.labelLarge)
+        FailureLine(failure)
+    }
+}
+
 /** What the last action that worked did. */
 @Composable
 fun NoticeLine(notice: String) {

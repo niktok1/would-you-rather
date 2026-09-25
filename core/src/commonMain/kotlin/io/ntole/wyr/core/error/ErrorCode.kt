@@ -6,7 +6,7 @@ import kotlinx.serialization.Serializable
  * Machine-readable cause of a failed request. The client branches on this, never on
  * [ErrorDto.message].
  *
- * Same forward-compatibility contract as [io.ntole.wyr.core.question.QuestionCategory]:
+ * Same forward-compatibility contract as [io.ntole.wyr.core.question.QuestionStatus] (CLAUDE.md §5):
  * [UNKNOWN] is the default so that a code added server-side later degrades instead of failing
  * to deserialize. Never sent by the server.
  */
@@ -46,6 +46,13 @@ public enum class ErrorCode {
     SUBMISSION_LIMIT,
 
     /**
+     * The player has fewer points than submitting a question costs
+     * ([io.ntole.wyr.core.api.WyrApi.Limits.SUBMISSION_COST], CLAUDE.md §8c), so it is refused and
+     * costs nothing. Answering questions earns more. Sent with 409.
+     */
+    NOT_ENOUGH_POINTS,
+
+    /**
      * A moderator tried to approve or reject a submission that is not pending: a moderator decided
      * it already, or it is a seed, approved from the start. Sent with 409.
      */
@@ -58,6 +65,16 @@ public enum class ErrorCode {
      * 409.
      */
     WRONG_STATUS,
+
+    /**
+     * A moderator tried to add a category under an id a category has already, given or derived from
+     * its English name ([io.ntole.wyr.core.category.CreateCategoryRequest]). Nothing changed. Sent with
+     * 409.
+     */
+    CATEGORY_EXISTS,
+
+    /** A moderator tried to rename a category no category has the id of. Sent with 404. */
+    CATEGORY_NOT_FOUND,
 
     /**
      * A registration's username breaks the rules of [io.ntole.wyr.core.auth.RegisterRequest]: lower-cased,

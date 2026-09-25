@@ -22,7 +22,7 @@ class GetNextQuestionTest {
     private class RecordingQuestions(
         private val calls: MutableList<String>,
     ) : QuestionRepository {
-        override val categories: StateFlow<Set<Category>> = MutableStateFlow(emptySet())
+        override val categories: StateFlow<Set<String>> = MutableStateFlow(emptySet())
 
         override suspend fun next(): Question {
             calls += "next"
@@ -31,7 +31,7 @@ class GetNextQuestionTest {
 
         override suspend fun prefetch() = Unit
 
-        override suspend fun setCategories(categories: Set<Category>) = Unit
+        override suspend fun setCategories(categories: Set<String>) = Unit
 
         override suspend fun skip(questionId: String) = Unit
 
@@ -49,6 +49,6 @@ class GetNextQuestionTest {
 
     private companion object {
         val QUESTION =
-            Question(id = "q1", optionA = "Fly", optionB = "Turn invisible", categories = setOf(Category.SUPERPOWERS))
+            Question(id = "q1", optionA = "Fly", optionB = "Turn invisible", categories = setOf("SUPERPOWERS"))
     }
 }

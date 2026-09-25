@@ -5,7 +5,6 @@ import androidx.compose.ui.ImageComposeScene
 import androidx.compose.ui.unit.Density
 import io.ntole.wyr.core.domain.error.DomainError
 import io.ntole.wyr.core.domain.player.PlayerStats
-import io.ntole.wyr.core.domain.question.Category
 import io.ntole.wyr.core.domain.submission.Submission
 import io.ntole.wyr.core.domain.submission.SubmissionRules
 import io.ntole.wyr.core.domain.submission.SubmissionStatus
@@ -405,7 +404,7 @@ class AccountScreenDrawTest {
                 id = "q1",
                 optionA = "Fly",
                 optionB = "Swim",
-                categories = setOf(Category.SUPERPOWERS),
+                categories = setOf("SUPERPOWERS"),
                 status = SubmissionStatus.PENDING,
                 rejectionReason = null,
                 submittedAt = Instant.parse("2026-09-25T12:00:00Z"),

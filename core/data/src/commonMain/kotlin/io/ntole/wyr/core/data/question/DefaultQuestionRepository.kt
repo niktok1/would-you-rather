@@ -2,12 +2,10 @@ package io.ntole.wyr.core.data.question
 
 import io.ntole.wyr.core.api.WyrApi
 import io.ntole.wyr.core.data.mapper.toDomain
-import io.ntole.wyr.core.data.mapper.toWireOrNull
 import io.ntole.wyr.core.data.session.DefaultSessionRepository
 import io.ntole.wyr.core.data.session.withSessionRecovery
 import io.ntole.wyr.core.domain.error.DomainError
 import io.ntole.wyr.core.domain.error.WyrException
-import io.ntole.wyr.core.domain.question.Category
 import io.ntole.wyr.core.domain.question.Question
 import io.ntole.wyr.core.domain.question.QuestionCache
 import io.ntole.wyr.core.domain.question.QuestionRepository
@@ -65,9 +63,9 @@ public class DefaultQuestionRepository(
     private val handedOutSinceFetch = mutableSetOf<String>()
 
     /** Written only under [refillMutex], so a fetch asks for the selection it queues its batch under. */
-    private val selectedCategories = MutableStateFlow<Set<Category>>(emptySet())
+    private val selectedCategories = MutableStateFlow<Set<String>>(emptySet())
 
-    override val categories: StateFlow<Set<Category>> = selectedCategories.asStateFlow()
+    override val categories: StateFlow<Set<String>> = selectedCategories.asStateFlow()
 
     override suspend fun next(): Question {
         takeNext()?.let { return it }
@@ -98,11 +96,9 @@ public class DefaultQuestionRepository(
     // batch before the queue is cleared, rather than after it. Cleared before the new selection shows,
     // so nothing is handed out from the old one's queue once it does. The question on screen stays
     // excluded from the next batch, whichever selection it came from.
-    override suspend fun setCategories(categories: Set<Category>) {
+    override suspend fun setCategories(categories: Set<String>) {
         // A copy, so a caller that goes on to change its own set changes nothing here.
         val selection = categories.toSet()
-        val unselectable = selection - Category.selectable
-        require(unselectable.isEmpty()) { "no feed can be filtered to $unselectable" }
         refillMutex.withLock {
             if (selection == selectedCategories.value) return
             cache.clear()
@@ -146,7 +142,8 @@ public class DefaultQuestionRepository(
             lastHandedOut?.let { handedOutSinceFetch += it }
         }
 
-        val categories = selectedCategories.value.mapNotNull { it.toWireOrNull() }.toSet()
+        // In id order, so one selection is always one request, however it was put together.
+        val categories = selectedCategories.value.sorted()
         val batch =
             session
                 .withSessionRecovery { api.page(limit = WyrApi.Limits.DEFAULT_PAGE_SIZE, categories = categories) }

@@ -2,9 +2,10 @@ package io.ntole.wyr.submit
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import io.ntole.wyr.core.domain.category.CategoryRepository
+import io.ntole.wyr.core.domain.category.GetCategories
 import io.ntole.wyr.core.domain.error.WyrException
 import io.ntole.wyr.core.domain.player.GetPlayerStats
-import io.ntole.wyr.core.domain.question.Category
 import io.ntole.wyr.core.domain.submission.SubmitQuestion
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -14,7 +15,7 @@ import kotlinx.coroutines.launch
 
 /** What the Submit screen can ask for, so the screen takes one argument for all of it. */
 interface SubmitActions {
-    /** Reads the player's points again. */
+    /** Reads the categories and the player's points again. */
     fun refresh()
 
     /** The form went back to My questions for [SubmitState.sent]: takes it down. */
@@ -24,16 +25,17 @@ interface SubmitActions {
 
     fun setOptionB(text: String)
 
-    /** Picks [category] for the question, or unpicks it if it is picked. */
-    fun toggleCategory(category: Category)
+    /** Picks the category [id] for the question, or unpicks it if it is picked. */
+    fun toggleCategory(id: String)
 
     fun submit()
 }
 
 /**
  * Drives the Submit screen's form (CLAUDE.md §8d, *Submitting*): a question written and filed under
- * the categories picked, sent through [SubmitQuestion], and the player's points read through
- * [GetPlayerStats], since a question costs [io.ntole.wyr.core.domain.submission.SubmissionRules.COST].
+ * the categories picked from the server's, read through [GetCategories], sent through
+ * [SubmitQuestion], and the player's points read through [GetPlayerStats], since a question costs
+ * [io.ntole.wyr.core.domain.submission.SubmissionRules.SUBMISSION_COST].
  *
  * One action at a time, and the points read again after every submit, a failed one too: a submission
  * whose answer was lost may have been stored, and paid for.
@@ -41,16 +43,26 @@ interface SubmitActions {
 class SubmitViewModel(
     private val submitQuestion: SubmitQuestion,
     private val getPlayerStats: GetPlayerStats,
+    private val getCategories: GetCategories,
+    categoryList: CategoryRepository,
 ) : ViewModel(),
     SubmitActions {
-    private val _state = MutableStateFlow(SubmitState())
+    private val _state = MutableStateFlow(SubmitState(categoryOptions = categoryList.categories.value))
     val state: StateFlow<SubmitState> = _state.asStateFlow()
 
+    init {
+        // Whoever read them last, this screen or another: the chips are the repository's list.
+        viewModelScope.launch {
+            categoryList.categories.collect { listed -> _state.update { it.copy(categoryOptions = listed) } }
+        }
+    }
+
     /**
-     * Not read on creation: the form asks every time it is shown, since the points move meanwhile.
-     * Like every action, it takes down a [SubmitState.sent] left from a showing before.
+     * Not read on creation: the form asks every time it is shown, since the points move meanwhile and a
+     * moderator adds categories. The categories first, then the points. Like every action, it takes
+     * down a [SubmitState.sent] left from a showing before.
      */
-    override fun refresh() = perform(SubmitAction.LOAD) {}
+    override fun refresh() = perform(SubmitAction.LOAD) { readCategories() }
 
     override fun leftForm() = _state.update { it.copy(sent = false) }
 
@@ -58,11 +70,8 @@ class SubmitViewModel(
 
     override fun setOptionB(text: String) = edit { copy(optionB = text) }
 
-    /** [Category.OTHER] names nothing a question can be filed under, so it is never picked. */
-    override fun toggleCategory(category: Category) {
-        if (category !in Category.selectable) return
-        edit { copy(categories = if (category in categories) categories - category else categories + category) }
-    }
+    override fun toggleCategory(id: String) =
+        edit { copy(categories = if (id in categories) categories - id else categories + id) }
 
     /**
      * Sends the question as typed, then reads the points again. Nothing happens until
@@ -105,6 +114,18 @@ class SubmitViewModel(
                 _state.update { it.copy(running = null) }
             }
         }
+    }
+
+    /** Reads every category again; a read that fails keeps those read before and says so under them. */
+    private suspend fun readCategories() {
+        val failure =
+            try {
+                getCategories()
+                null
+            } catch (unread: WyrException) {
+                unread.toSubmitFailure()
+            }
+        _state.update { it.copy(categoriesFailure = failure) }
     }
 
     /**

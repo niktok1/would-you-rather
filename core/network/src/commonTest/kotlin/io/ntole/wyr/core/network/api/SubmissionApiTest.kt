@@ -16,7 +16,6 @@ import io.ntole.wyr.core.network.jsonHeaders
 import io.ntole.wyr.core.network.respondErrorDto
 import io.ntole.wyr.core.network.session
 import io.ntole.wyr.core.network.storeHolding
-import io.ntole.wyr.core.question.QuestionCategory
 import io.ntole.wyr.core.question.QuestionStatus
 import io.ntole.wyr.core.question.SubmissionDto
 import io.ntole.wyr.core.question.SubmissionListDto
@@ -36,7 +35,7 @@ class SubmissionApiTest {
                 SubmitQuestionRequest(
                     optionA = " fly ",
                     optionB = "swim",
-                    categories = listOf(QuestionCategory.SUPERPOWERS, QuestionCategory.FOOD),
+                    categories = listOf("SUPERPOWERS", "FOOD"),
                 )
 
             val stored = submissionApi(engine).submit(request)
@@ -88,14 +87,14 @@ class SubmissionApiTest {
 
     private companion object {
         val STORED_REQUEST =
-            SubmitQuestionRequest(optionA = "fly", optionB = "swim", categories = listOf(QuestionCategory.FOOD))
+            SubmitQuestionRequest(optionA = "fly", optionB = "swim", categories = listOf("FOOD"))
 
         val STORED =
             SubmissionDto(
                 id = "q1",
                 optionA = "fly",
                 optionB = "swim",
-                categories = listOf(QuestionCategory.FOOD, QuestionCategory.SUPERPOWERS),
+                categories = listOf("FOOD", "SUPERPOWERS"),
                 status = QuestionStatus.PENDING,
                 submittedAt = 1_790_000_000_000L,
             )

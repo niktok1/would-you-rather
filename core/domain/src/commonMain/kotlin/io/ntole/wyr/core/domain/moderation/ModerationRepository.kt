@@ -1,12 +1,13 @@
 package io.ntole.wyr.core.domain.moderation
 
-import io.ntole.wyr.core.domain.question.Category
+import io.ntole.wyr.core.domain.category.Category
 import io.ntole.wyr.core.domain.submission.Submission
 import io.ntole.wyr.core.domain.submission.SubmissionStatus
 
 /**
- * The players' submissions as the moderator decides them, and every question as the moderator
- * retires and restores it (CLAUDE.md §8d, *Moderation*). Implemented in `:core:data`.
+ * The players' submissions as the moderator decides them, every question as the moderator retires
+ * and restores it, and the categories as the moderator adds and renames them (CLAUDE.md §8d,
+ * *Moderation*). Implemented in `:core:data`.
  *
  * Every call sends the [AdminToken] it is given, and nothing here keeps it. None needs a player
  * session or touches the one there is: the moderator is whoever holds the token, not a player. A
@@ -27,12 +28,10 @@ public interface ModerationRepository {
 
     /**
      * Approves the pending submission [questionId] and returns it as its author now sees it. It is
-     * filed under [categories] in place of the ones its author picked, or under the author's when
-     * [categories] is empty, and served from then on to every player, its author included.
+     * filed under [categories], by id, in place of the ones its author picked, or under the author's
+     * when [categories] is empty, and served from then on to every player, its author included.
      *
-     * @throws IllegalArgumentException when [categories] holds [Category.OTHER], which names nothing
-     *   the server can file a question under, having sent nothing.
-     * @throws io.ntole.wyr.core.domain.error.WyrException on any other failure, with
+     * @throws io.ntole.wyr.core.domain.error.WyrException on any failure, with
      *   [io.ntole.wyr.core.domain.error.DomainError.ALREADY_DECIDED] for a submission that is not
      *   pending (decided already, by this moderator or another, or a seed) and
      *   [io.ntole.wyr.core.domain.error.DomainError.QUESTION_NOT_FOUND] for an id no question has.
@@ -40,7 +39,7 @@ public interface ModerationRepository {
     public suspend fun approve(
         token: AdminToken,
         questionId: String,
-        categories: Set<Category>,
+        categories: Set<String>,
     ): Submission
 
     /**
@@ -61,8 +60,8 @@ public interface ModerationRepository {
      * must be asked for with the same [filter]. At most [PAGE_SIZE] questions, read from the server
      * every time.
      *
-     * @throws IllegalArgumentException when [filter] holds [SubmissionStatus.OTHER] or
-     *   [Category.OTHER], which name nothing the server can filter by, having sent nothing.
+     * @throws IllegalArgumentException when [filter] holds [SubmissionStatus.OTHER], which names no
+     *   status the server can filter by, having sent nothing.
      * @throws io.ntole.wyr.core.domain.error.WyrException on any other failure, as [pending] does.
      */
     public suspend fun questions(
@@ -97,6 +96,38 @@ public interface ModerationRepository {
         token: AdminToken,
         questionId: String,
     ): ModeratedQuestion
+
+    /**
+     * Adds a category (CLAUDE.md §8d, *Categories*) named [nameSr] in Serbian and [nameEn] in English,
+     * each sent as typed, for the server to trim, under [id], or under the id the server makes from
+     * [nameEn] when [id] is null. Returns it as the server stored it, the last in the order of
+     * categories. The names and the id must pass [io.ntole.wyr.core.domain.category.CategoryRules],
+     * or the server refuses them as a malformed request.
+     *
+     * @throws io.ntole.wyr.core.domain.error.WyrException on any failure, with
+     *   [io.ntole.wyr.core.domain.error.DomainError.CATEGORY_EXISTS] for an id a category has
+     *   already, given or made.
+     */
+    public suspend fun addCategory(
+        token: AdminToken,
+        id: String?,
+        nameSr: String,
+        nameEn: String,
+    ): Category
+
+    /**
+     * Sets both names of the category [id], its id never changing, and returns it as it now stands.
+     * The names must pass [io.ntole.wyr.core.domain.category.CategoryRules], as for [addCategory].
+     *
+     * @throws io.ntole.wyr.core.domain.error.WyrException on any failure, with
+     *   [io.ntole.wyr.core.domain.error.DomainError.CATEGORY_NOT_FOUND] for an id no category has.
+     */
+    public suspend fun renameCategory(
+        token: AdminToken,
+        id: String,
+        nameSr: String,
+        nameEn: String,
+    ): Category
 
     public companion object {
         /**

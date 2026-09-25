@@ -2,24 +2,22 @@ package io.ntole.wyr.server.moderation
 
 import io.ntole.wyr.core.api.WyrApi
 import io.ntole.wyr.core.question.ApproveSubmissionRequest
-import io.ntole.wyr.core.question.QuestionCategory
 import io.ntole.wyr.core.question.RejectSubmissionRequest
 import io.ntole.wyr.server.plugins.ApiFailure
 import io.ntole.wyr.server.plugins.requireValidId
 import io.ntole.wyr.server.question.LINE_SEPARATORS
 
 /**
- * [request] as a decision uses it, its categories each once in declaration order, or an
- * [ApiFailure.validation] for what no correct client sends (CLAUDE.md §8d, *Moderation*): an id that
- * is blank or holds a control character, or a category that is not a real one.
- * [QuestionCategory.UNKNOWN] is the decoding fallback for a name the server does not know, never
- * stored, as for a submission. None is not refused: it keeps the author's categories.
+ * [request] as a decision uses it, its categories each once, or an [ApiFailure.validation] for what no
+ * correct client sends (CLAUDE.md §8d, *Moderation*): an id that is blank or holds a control
+ * character. A category id no category has is refused too, by the route, once it reads the
+ * categories in its transaction (`CategoryStore.checked`), as for a submission. None is not refused:
+ * it keeps the author's categories.
  */
 internal fun checkedApproval(request: ApproveSubmissionRequest): ApproveSubmissionRequest {
     requireValidId("questionId", request.questionId)
-    if (QuestionCategory.UNKNOWN in request.categories) throw ApiFailure.validation("a category is not a real one")
 
-    return request.copy(categories = request.categories.distinct().sorted())
+    return request.copy(categories = request.categories.distinct())
 }
 
 /**

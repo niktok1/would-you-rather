@@ -9,10 +9,12 @@ import io.ktor.client.request.parameter
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
 import io.ntole.wyr.core.api.WyrApi
+import io.ntole.wyr.core.category.CategoryDto
+import io.ntole.wyr.core.category.CreateCategoryRequest
+import io.ntole.wyr.core.category.RenameCategoryRequest
 import io.ntole.wyr.core.question.AdminQuestionDto
 import io.ntole.wyr.core.question.AdminQuestionPageDto
 import io.ntole.wyr.core.question.ApproveSubmissionRequest
-import io.ntole.wyr.core.question.QuestionCategory
 import io.ntole.wyr.core.question.QuestionStatus
 import io.ntole.wyr.core.question.RejectSubmissionRequest
 import io.ntole.wyr.core.question.RestoreQuestionRequest
@@ -21,8 +23,8 @@ import io.ntole.wyr.core.question.SubmissionDto
 import io.ntole.wyr.core.question.SubmissionListDto
 
 /**
- * The moderator's routes (CLAUDE.md §8d, *Moderation*): the queue and its decisions, and the list of
- * every question with its retirement and restoration. Each call carries [adminToken] in
+ * The moderator's routes (CLAUDE.md §8d, *Moderation*): the queue and its decisions, the list of
+ * every question with its retirement and restoration, and adding and renaming a category. Each call carries [adminToken] in
  * [WyrApi.Headers.ADMIN_TOKEN], and only that call: the token is the caller's to hold, in memory,
  * and is never set on the client or stored.
  *
@@ -74,14 +76,14 @@ public class ModerationApi(
 
     /**
      * One page of every question, seeds included, newest first: those at any of [statuses] and filed
-     * under any of [categories], either empty for all, one query parameter per value in the order
-     * given. [cursor] is the [AdminQuestionPageDto.nextCursor] of the page before, sent as it came,
+     * under any of [categories], by category id, either empty for all, one query parameter per value
+     * in the order given. [cursor] is the [AdminQuestionPageDto.nextCursor] of the page before, sent as it came,
      * or null for the first page. At most [limit] questions.
      */
     public suspend fun questions(
         adminToken: String,
         statuses: List<QuestionStatus> = emptyList(),
-        categories: List<QuestionCategory> = emptyList(),
+        categories: List<String> = emptyList(),
         cursor: String? = null,
         limit: Int = WyrApi.Limits.DEFAULT_PAGE_SIZE,
     ): AdminQuestionPageDto =
@@ -89,7 +91,7 @@ public class ModerationApi(
             .get(WyrApi.Paths.ADMIN_QUESTIONS) {
                 admin(adminToken)
                 statuses.forEach { status -> parameter(WyrApi.Query.STATUS, status.name) }
-                categories.forEach { category -> parameter(WyrApi.Query.CATEGORY, category.name) }
+                categories.forEach { category -> parameter(WyrApi.Query.CATEGORY, category) }
                 cursor?.let { parameter(WyrApi.Query.CURSOR, it) }
                 parameter(WyrApi.Query.LIMIT, limit)
             }.body()
@@ -112,6 +114,28 @@ public class ModerationApi(
     ): AdminQuestionDto =
         client
             .post(WyrApi.Paths.ADMIN_RESTORATIONS) {
+                admin(adminToken)
+                setBody(request)
+            }.body()
+
+    /** Adds a category, answered 201 with it as the server stored it. */
+    public suspend fun addCategory(
+        adminToken: String,
+        request: CreateCategoryRequest,
+    ): CategoryDto =
+        client
+            .post(WyrApi.Paths.ADMIN_CATEGORIES) {
+                admin(adminToken)
+                setBody(request)
+            }.body()
+
+    /** Sets both names of a category, answered with it as it now stands. */
+    public suspend fun renameCategory(
+        adminToken: String,
+        request: RenameCategoryRequest,
+    ): CategoryDto =
+        client
+            .post(WyrApi.Paths.ADMIN_CATEGORY_RENAMES) {
                 admin(adminToken)
                 setBody(request)
             }.body()

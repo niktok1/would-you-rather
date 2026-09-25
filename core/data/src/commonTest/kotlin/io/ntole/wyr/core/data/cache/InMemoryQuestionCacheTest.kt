@@ -1,6 +1,5 @@
 package io.ntole.wyr.core.data.cache
 
-import io.ntole.wyr.core.domain.question.Category
 import io.ntole.wyr.core.domain.question.Question
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
@@ -36,5 +35,5 @@ class InMemoryQuestionCacheTest {
     }
 
     private fun questions(vararg ids: String): List<Question> =
-        ids.map { id -> Question(id = id, optionA = "$id-a", optionB = "$id-b", categories = setOf(Category.FOOD)) }
+        ids.map { id -> Question(id = id, optionA = "$id-a", optionB = "$id-b", categories = setOf("FOOD")) }
 }

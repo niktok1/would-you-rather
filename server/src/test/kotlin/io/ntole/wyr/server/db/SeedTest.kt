@@ -4,6 +4,7 @@ import io.ntole.wyr.server.TestDatabaseSettings
 import io.ntole.wyr.server.moderation.ModerationStore
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.Database
+import org.jetbrains.exposed.v1.jdbc.SchemaUtils
 import org.jetbrains.exposed.v1.jdbc.select
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
@@ -11,6 +12,7 @@ import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import java.util.UUID
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 
 class SeedTest {
     /**
@@ -67,6 +69,70 @@ class SeedTest {
             }
     }
 
+    /**
+     * The store tests build their tables from the definitions, which hold no category, so the seed
+     * writes the first ones there, as V6 writes them into a migrated database, where it writes none.
+     */
+    @Test
+    fun `the seed writes the categories V6 writes into a database that has none`() {
+        val migrated =
+            TestDatabaseSettings(h2Url("wyr-seed-migrated-${UUID.randomUUID()}"), user = null, password = null)
+                .serverPool()
+                .use { pool ->
+                    DatabaseFactory.migrateAndSeed(pool).also { TransactionManager.closeAndUnregister(it) }
+                    pool.inTransaction { categories() }
+                }
+        val built =
+            TestDatabaseSettings(h2Url("wyr-seed-built-${UUID.randomUUID()}"), user = null, password = null)
+                .serverPool()
+                .use { pool ->
+                    pool.inTransaction {
+                        SchemaUtils.create(*appTables)
+                        Seed.questionsIfEmpty()
+                        categories()
+                    }
+                }
+
+        assertEquals(Seed.CATEGORIES.size, migrated.size)
+        assertEquals(migrated, built)
+    }
+
+    private fun categories(): List<List<Any>> =
+        Categories.selectAll().orderBy(Categories.id).map { row ->
+            listOf(row[Categories.id], row[Categories.nameSr], row[Categories.nameEn], row[Categories.createdAt])
+        }
+
+    /**
+     * Every seed starts with made-up votes, so its split looks like a crowd's from the first answer,
+     * and no two alike: a different total and a different split each.
+     */
+    @Test
+    fun `every seed has made-up votes of its own`() {
+        val votes = Seed.SEEDS.map { (_, seed) -> seed.votes }
+
+        assertTrue(votes.all { (a, b) -> a > 0 && b > 0 }, "both sides of every seed")
+        assertEquals(votes.size, votes.map { (a, b) -> a + b }.toSet().size, "no two totals alike")
+        assertEquals(votes.size, votes.map { (a, b) -> a * 1_000 / (a + b) }.toSet().size, "no two splits alike")
+    }
+
+    /**
+     * The seeds are in Serbian, in Cyrillic: every letter of every option is one of the Serbian
+     * Cyrillic alphabet's thirty, so neither a Latin lookalike nor a Russian letter slips in.
+     */
+    @Test
+    fun `every seed is written in Serbian Cyrillic`() {
+        val letters = SERBIAN_CYRILLIC + SERBIAN_CYRILLIC.uppercase()
+
+        Seed.SEEDS.forEach { (id, seed) ->
+            listOf(seed.optionA, seed.optionB).forEach { option ->
+                assertEquals("", option.filter { it.isLetter() && it !in letters }, "$id: $option")
+            }
+        }
+        Seed.CATEGORIES.forEach { category ->
+            assertEquals("", category.nameSr.filter { it.isLetter() && it !in letters }, category.id)
+        }
+    }
+
     /** What one seed writes, on a database of its own. */
     private fun seededOnce(): Map<String, Long> =
         TestDatabaseSettings(h2Url("wyr-seed-once-${UUID.randomUUID()}"), user = null, password = null)
@@ -88,5 +154,6 @@ class SeedTest {
     private companion object {
         const val RETIRED_SEED = "seed-1"
         const val RETIRED_AT = 5_000L
+        const val SERBIAN_CYRILLIC = "абвгдђежзијклљмнњопрстћуфхцчџш"
     }
 }

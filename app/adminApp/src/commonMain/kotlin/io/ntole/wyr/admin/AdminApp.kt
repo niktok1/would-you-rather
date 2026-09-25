@@ -25,6 +25,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import io.ntole.wyr.admin.moderation.CategoriesScreen
 import io.ntole.wyr.admin.moderation.ModerationActions
 import io.ntole.wyr.admin.moderation.ModerationState
 import io.ntole.wyr.admin.moderation.ModerationViewModel
@@ -62,7 +63,7 @@ fun AdminApp() {
 }
 
 /**
- * The server the app talks to, always on top, then the admin token, and [screen], one of the two tabs.
+ * The server the app talks to, always on top, then the admin token, and [screen], one of the tabs.
  * Stateless, so what it shows is [state] alone, in the system's light or dark scheme unless
  * [darkTheme] says. The question waiting for Retire to be confirmed asks over it.
  */
@@ -93,6 +94,7 @@ fun ModerationApp(
                     when (screen) {
                         Screen.PENDING -> PendingScreen(state, actions, modifier = Modifier.weight(1f))
                         Screen.QUESTIONS -> QuestionsScreen(state, actions, modifier = Modifier.weight(1f))
+                        Screen.CATEGORIES -> CategoriesScreen(state, actions, modifier = Modifier.weight(1f))
                     }
                 }
             }
@@ -130,6 +132,7 @@ fun tabLabelOf(
         when (screen) {
             Screen.PENDING -> state.pending.submissions?.let { if (isFull(it)) "${it.size}+" else "${it.size}" }
             Screen.QUESTIONS -> state.questions.questions?.let { "${it.size}" }
+            Screen.CATEGORIES -> state.categories.categories?.let { "${it.size}" }
         }
     return screen.label + count?.let { " ($it)" }.orEmpty()
 }

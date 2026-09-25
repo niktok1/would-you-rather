@@ -1,10 +1,8 @@
 package io.ntole.wyr.core.data.mapper
 
-import io.ntole.wyr.core.domain.question.Category
 import io.ntole.wyr.core.domain.submission.Submission
 import io.ntole.wyr.core.domain.submission.SubmissionStatus
 import io.ntole.wyr.core.network.WyrJson
-import io.ntole.wyr.core.question.QuestionCategory
 import io.ntole.wyr.core.question.QuestionStatus
 import io.ntole.wyr.core.question.SubmissionDto
 import io.ntole.wyr.core.question.SubmitQuestionRequest
@@ -22,7 +20,7 @@ class SubmissionMapperTest {
                 id = "q1",
                 optionA = "Fly",
                 optionB = "Swim",
-                categories = listOf(QuestionCategory.ETHICS),
+                categories = listOf("ETHICS"),
                 status = QuestionStatus.REJECTED,
                 rejectionReason = "a duplicate",
                 submittedAt = 1_790_000_000_123L,
@@ -33,7 +31,7 @@ class SubmissionMapperTest {
                 id = "q1",
                 optionA = "Fly",
                 optionB = "Swim",
-                categories = setOf(Category.ETHICS),
+                categories = setOf("ETHICS"),
                 status = SubmissionStatus.REJECTED,
                 rejectionReason = "a duplicate",
                 submittedAt = Instant.fromEpochMilliseconds(1_790_000_000_123L),
@@ -64,19 +62,18 @@ class SubmissionMapperTest {
         val submission = dto.toDomain()
 
         assertEquals(SubmissionStatus.OTHER, submission.status)
-        // As a list, so the order is checked too: a question's rule, OTHER beside the rest.
-        assertEquals(listOf(Category.ETHICS, Category.OTHER), submission.categories.toList())
+        // As a list, so the order is checked too: a question's rule, every id kept as the server sent it.
+        assertEquals(listOf("CATEGORY_FROM_THE_FUTURE", "ETHICS"), submission.categories.toList())
     }
 
     @Test
     fun `a submission's categories map as a question's do`() {
         val cases =
             listOf(
-                listOf(QuestionCategory.RANDOM, QuestionCategory.FOOD) to listOf(Category.FOOD, Category.RANDOM),
-                listOf(QuestionCategory.UNKNOWN, QuestionCategory.SUPERPOWERS, QuestionCategory.UNKNOWN) to
-                    listOf(Category.SUPERPOWERS, Category.OTHER),
-                // Never empty: a submission is filed under at least one.
-                emptyList<QuestionCategory>() to listOf(Category.OTHER),
+                listOf("ABSURD", "FOOD") to listOf("ABSURD", "FOOD"),
+                listOf("FROM_THE_FUTURE", "SUPERPOWERS", "FROM_THE_FUTURE") to listOf("FROM_THE_FUTURE", "SUPERPOWERS"),
+                // Which no server sends: a submission is filed under at least one.
+                emptyList<String>() to emptyList(),
             )
 
         cases.forEach { (categories, expected) ->
@@ -87,27 +84,26 @@ class SubmissionMapperTest {
     }
 
     @Test
-    fun `a submission goes on the wire with its options as given and its categories in declaration order`() {
-        val request = submitQuestionRequest(" Fly ", "Swim", setOf(Category.RANDOM, Category.FOOD, Category.ETHICS))
+    fun `a submission goes on the wire with its options as given and its categories in id order`() {
+        val request = submitQuestionRequest(" Fly ", "Swim", setOf("SUPERPOWERS", "FOOD", "ETHICS"))
 
         // Trimming, like every rule about the options, is the server's.
         assertEquals(
             SubmitQuestionRequest(
                 optionA = " Fly ",
                 optionB = "Swim",
-                categories = listOf(QuestionCategory.FOOD, QuestionCategory.ETHICS, QuestionCategory.RANDOM),
+                categories = listOf("ETHICS", "FOOD", "SUPERPOWERS"),
             ),
             request,
         )
     }
 
     @Test
-    fun `every category a question can be submitted under goes on the wire as itself`() {
-        Category.selectable.forEach { category ->
-            val request = submitQuestionRequest("Fly", "Swim", setOf(category))
+    fun `a category added after this build goes on the wire as its id`() {
+        // Categories are server data: any id the server listed can be submitted under, as it is.
+        val request = submitQuestionRequest("Fly", "Swim", setOf("ANIMALS"))
 
-            assertEquals(listOf(QuestionCategory.valueOf(category.name)), request.categories, "$category")
-        }
+        assertEquals(listOf("ANIMALS"), request.categories)
     }
 
     @Test
@@ -116,23 +112,13 @@ class SubmissionMapperTest {
         assertFailsWith<IllegalArgumentException> { submitQuestionRequest("Fly", "Swim", emptySet()) }
     }
 
-    @Test
-    fun `a submission under OTHER is refused whatever else it names`() {
-        // Not dropped: sent as the rest alone it would be filed under less than the author picked.
-        listOf(setOf(Category.OTHER), setOf(Category.FOOD, Category.OTHER)).forEach { categories ->
-            assertFailsWith<IllegalArgumentException>("$categories") {
-                submitQuestionRequest("Fly", "Swim", categories)
-            }
-        }
-    }
-
     private companion object {
         val SUBMITTED =
             SubmissionDto(
                 id = "q1",
                 optionA = "Fly",
                 optionB = "Swim",
-                categories = listOf(QuestionCategory.FOOD),
+                categories = listOf("FOOD"),
                 status = QuestionStatus.PENDING,
                 submittedAt = 0,
             )

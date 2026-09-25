@@ -24,17 +24,15 @@ import kotlinx.serialization.Serializable
  * players like it. The server reads both in one statement, so they are one moment's numbers. A
  * retired question keeps both, and no vote or like reaches it until it is restored.
  *
- * [categories] must keep its serializer and its default, and [status] its default, for a value added
- * server-side to decode on an older client — see [QuestionCategoryListSerializer] and
- * [QuestionStatus].
+ * [categories] must keep its default, and [status] its default, for a value added server-side to
+ * decode on an older client — see [QuestionDto.categories] and [QuestionStatus].
  */
 @Serializable
 public data class AdminQuestionDto(
     public val id: String,
     public val optionA: String,
     public val optionB: String,
-    @Serializable(with = QuestionCategoryListSerializer::class)
-    public val categories: List<QuestionCategory> = emptyList(),
+    public val categories: List<String> = emptyList(),
     public val status: QuestionStatus = QuestionStatus.UNKNOWN,
     public val seed: Boolean = false,
     public val submittedAt: Long,

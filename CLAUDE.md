@@ -153,8 +153,10 @@ failing:
   A burst on one row then just queues on its lock; `PlayerStoreTest` pins 8 at once.
 - Any other read-then-write is a compare-and-set: the `UPDATE`'s `WHERE` repeats what the read
   relied on, and 0 rows updated means another transaction won (`PlayerStore.startNextCycle`,
-  `ModerationStore.decide`, a retirement or restoration, `ModerationStore.move`, and a registration
-  naming a player who has no username, `AccountStore.register`). Where the
+  `ModerationStore.decide`, a retirement or restoration, `ModerationStore.move`, a registration
+  naming a player who has no username, `AccountStore.register`, and a submission's cost,
+  `PlayerStore.spend`, whose `WHERE total_points >= cost` holds even an author's last point to one
+  submission). Where the
   `WHERE` can hold the whole check, nothing need be read first (`SessionStore.rotate`, whose second
   racer re-checks it against the first's commit).
   Or the read takes the row lock (`SELECT ... FOR UPDATE`), so a concurrent writer waits and then
@@ -166,12 +168,13 @@ failing:
   The one exception is a value copied from another row, which may be a plain read where a stale
   copy is provably harmless, with the proof at the read (`VoteStore.currentCycle`: the feed moves
   the cycle on only once the answer's question is already answered or skipped in the one read).
-- Uniqueness is a constraint (the `Votes`, `Skips` and `Likes` primary keys, `players.username`'s
-  unique constraint), never a prior `SELECT`. A violation is never caught and carried on from:
-  PostgreSQL aborts a transaction at its first error. It propagates, and Exposed rolls back and reruns
-  the whole transaction, which then sees the committed row (`VoteStore.cast`, `SkipStore.skip`,
-  `LikeStore.setLiked`, `AccountStore.register`, which `AccountStoreTest` races, and
-  `Seed.questionsIfEmpty`, which `SeedTest` races). A plain read before such an insert only spares
+- Uniqueness is a constraint (the `Votes`, `Skips`, `Likes` and `Categories` primary keys,
+  `players.username`'s unique constraint), never a prior `SELECT`. A violation is never caught and
+  carried on from: PostgreSQL aborts a transaction at its first error. It propagates, and Exposed
+  rolls back and reruns the whole transaction, which then sees the committed row (`VoteStore.cast`,
+  `SkipStore.skip`, `LikeStore.setLiked`, `AccountStore.register`, which `AccountStoreTest` races,
+  `CategoryStore.create`, which `CategoryStoreTest` races, and `Seed.questionsIfEmpty`, which
+  `SeedTest` races). A plain read before such an insert only spares
   a certain violation, and needs no lock when finding the row writes nothing (a like already held).
 - Numbers that must agree with one another are read in one statement, which sees one committed
   state; two statements can straddle another transaction's commit (the tally in `VoteStore`,
@@ -217,14 +220,19 @@ three, adding an enum value server-side makes already-installed clients fail des
 outright. Enums that are structurally closed (e.g. `OptionSide` — a question has exactly two
 sides) are exempt and must stay closed.
 
-A **list** of such an enum needs more, because `coerceInputValues` only coerces a property's own
-value, never an element of a list: one unknown element fails the whole payload. So every list
+A **list** of such an enum would need more, because `coerceInputValues` only coerces a property's
+own value, never an element of a list: one unknown element fails the whole payload. So a list
 property of a growable enum MUST be declared with a serializer that decodes an unknown element as
-`UNKNOWN` (`QuestionCategoryListSerializer` in `:core`, applied with `@Serializable(with = ...)`),
-and MUST default to an empty list, which the client reads as it reads `UNKNOWN`. An unknown element
-becomes `UNKNOWN` rather than being dropped: the server decodes with the same serializer, and a
-dropped element would let a request naming a category the server does not know through as if it
-had named only the rest. `WyrJsonTest` pins it.
+`UNKNOWN`, and MUST default to an empty list. None is on the wire today.
+
+**Categories are not an enum on the wire** (*decided 2026-09-25*): they are server data (§8d,
+*Categories*), and every categories field and parameter carries plain category ids, strings, each
+list defaulting to empty. A category added server-side is then only an id an installed client has
+no name for, never a payload it fails to decode, so the rule above does not apply to them.
+`QuestionCategory` and its list serializer are gone; the first ids are the enum's own names, so the
+JSON for them is byte for byte what it was (`WyrJsonTest`, `ServerJsonTest`). Nor is a category an
+enum on the client: the domain holds category ids, named from the list the server sends (§8d,
+*Categories*, *The client*), so there is no `OTHER` to land an unknown one in.
 
 The client half lives in `WyrJson` (`:core:network`); the server half is `encodeDefaults = true`
 in `ServerJson` (`:server`), because the client can only coerce into a default that is actually
@@ -534,11 +542,12 @@ EncryptedSharedPreferences: enough for a game that stores nothing personal.
   player lists only their own. The game's Submit form submits them, and the Account screen's My
   questions lists them. The moderation contract is settled and built on the server too: the admin
   routes, `ApproveSubmissionRequest`, `RejectSubmissionRequest`, the question list's
-  `AdminQuestionPageDto` and `AdminQuestionDto`
-  (paged by `WyrApi.Query.CURSOR`), `RetireQuestionRequest` and `RestoreQuestionRequest`, the
-  `X-Admin-Token` header (`WyrApi.Headers`), `QuestionStatus.RETIRED` and the error codes `FORBIDDEN`,
-  `ALREADY_DECIDED` and `WRONG_STATUS`. The moderator's client (`ModerationApi` calls every admin
-  route) and the moderation app are built on it (§8d, *Moderation*).
+  `AdminQuestionPageDto` and `AdminQuestionDto` (paged by `WyrApi.Query.CURSOR`),
+  `RetireQuestionRequest` and `RestoreQuestionRequest`, `CreateCategoryRequest` and
+  `RenameCategoryRequest`, the `X-Admin-Token` header (`WyrApi.Headers`), `QuestionStatus.RETIRED`
+  and the error codes `FORBIDDEN`, `ALREADY_DECIDED`, `WRONG_STATUS`, `CATEGORY_EXISTS` and
+  `CATEGORY_NOT_FOUND`. The moderator's client (`ModerationApi` calls every admin route) and the
+  moderation app are built on it (§8d, *Moderation*).
 - **A rejection reason is one line** — *provisional — user decision.* §8d asks for a short reason;
   the server also holds it to one line, as it does an option: no control character, nor U+2028 or
   U+2029 (`checkedRejection`). Chosen as the stricter reading, since a reason is shown to its author
@@ -582,6 +591,11 @@ EncryptedSharedPreferences: enough for a game that stores nothing personal.
   *Покушај поново*, which four of the five screens and the Account screens' *Нешто није у реду.
   Покушај поново.* already used. The options: keep it; or *Пробај опет*, a little shorter, in
   `Strings.tryAgain` and that sentence both.
+- **What submitting cost, on the Account screen** — *provisional — user decision.* Since submitting
+  costs a point (§8c), a player's answers and likes can count more than their points. The Account
+  card shows the points and its four counts and not `pointsSpent` (§8d, *Stats*), for less text: no
+  number on it is a term of a sum, and the cost shows on the Submit form's button. The options: keep
+  it; or a fifth number on the card, what was spent.
 - **Retrying a submission** — *decided 2026-09-24: keep it simple.* A submission carries no
   attempt id, so one sent again after its response was lost is stored twice, both pending; the
   moderator rejects the copy, and the 20-pending cap bounds how many there can be. Nothing resends
@@ -596,8 +610,8 @@ EncryptedSharedPreferences: enough for a game that stores nothing personal.
   one window ends and the next begins, while over any longer span the average holds:
   - *Per client address* (on Render, Cloudflare's `CF-Connecting-IP`: `CLIENT_IP_HEADER`, §8), for a
     caller with no session to name: guest minting 10 an hour, refreshes 30 a minute, logins 20 a
-    minute (what bounds guessing a password, as each costs a hash), the admin routes 60 a minute
-    together, and on top of that, admin requests with a wrong or missing token 10 a minute. A
+    minute (what bounds guessing a password, as each costs a hash), the categories list 120 a minute
+    (it needs no session), the admin routes 60 a minute together, and on top of that, admin requests with a wrong or missing token 10 a minute. A
     request with the right token spends none of that last budget, but once an address has spent it,
     every admin request from the address is refused until the budget is back, the right token's too
     (`LockingOut`): were that one let in, its 200 among the 429s would give it away, and guessing
@@ -650,9 +664,12 @@ EncryptedSharedPreferences: enough for a game that stores nothing personal.
   previous one.
 - **WCAG AA contrast audit** — see §5b. Paused along with UI polish (§8d).
 
-`RANDOM` was an open item and is resolved: it is a content category (the absurd questions), not a
-"surprise me" filter, and it stays in `QuestionCategory` as-is. The unfiltered feed already mixes
-every category.
+`RANDOM` was an open item, resolved twice. First as a content category (the absurd questions), not a
+"surprise me" filter. Then, *decided 2026-09-25*: "RANDOM is actually all", so RANDOM is no category
+any more. Picking none, *All*, is the unfiltered feed, which mixes every category, and the absurd
+questions filed under RANDOM moved to a new category, **ABSURD** (sr *Апсурдно*, en *Absurd*; V6,
+§8d *Categories*). An installed build that still asks for RANDOM, as a filter or to submit under, is
+400 `VALIDATION_FAILED`.
 
 Isolation for hot counters was an open item and is resolved: transactions run at READ COMMITTED,
 under the rules in §4.
@@ -678,7 +695,8 @@ seed (`Migrations`, `DatabaseFactory.init`). Nothing builds a table any other wa
   refresh-token grace window, §8a), V3 (a question's `retired_at`, §8d *Moderation*) and V4
   (sessions and the recovery secret, since dropped) there; the next Manual Deploy runs V5 there
   (a player's username and password hash, *Accounts*, above), which every player already there takes
-  as a guest.
+  as a guest, and every later script: V6 (the categories table, §8d *Categories*), V7 (what a
+  question cost, §8c), V8 (the seeds' made-up votes) and V9 (the seeds in Serbian, §8d *Seeds*).
   `Migrations.migrate` takes the baseline itself (`baselineVersion` 1), and only for a database
   holding every table V1 builds (`TABLES_BEFORE_MIGRATIONS`) and no history table; Flyway's
   `baselineOnMigrate` is off. Any other database with tables and no history fails the boot, rather
@@ -722,7 +740,8 @@ seed (`Migrations`, `DatabaseFactory.init`). Nothing builds a table any other wa
   through the stores only where what they run there names V1's columns alone: a `selectAll` of a
   table a later script changed fails on V1 (V3 moved the seed's check to the id alone), and a mint
   now opens a session, in a table V1 lacks, so its player is inserted as a build before sessions
-  minted one (`playerAsMintedBefore`, V4).
+  minted one (`playerAsMintedBefore`, V4). The seeds go in as the builds before V6 wrote them, in
+  plain SQL (`seedAsBefore`), since the seed now needs the categories table.
 - *A script that has shipped never changes*: Flyway refuses to boot on a changed checksum. A script
   whose name Flyway cannot read fails the boot rather than being skipped (`validateMigrationNaming`),
   and clean is refused outright (`cleanDisabled`); the test harness alone turns it on, to wipe the
@@ -745,6 +764,15 @@ seed (`Migrations`, `DatabaseFactory.init`). Nothing builds a table any other wa
   drops them leaves a schema this build runs on (`ApiFlowTest`). V5 only adds two nullable columns and
   a unique constraint on one, which `d4a9dbf` never names: after a rollback a registered player plays
   on through their sessions as a guest would, and cannot log in anywhere new until the roll forward.
+  V6 adds `categories`, which no build before names, moves what was filed under RANDOM to ABSURD
+  and holds `question_categories` to `categories` with a foreign key. A build before it (`d4a9dbf`,
+  `40550e9`) boots and serves on that: it reads a stored name it has no enum member for as RANDOM,
+  so it shows an ABSURD question, or one under a category added later, as RANDOM, and its RANDOM
+  filter, which compares the stored names, finds none of them. A submission or an approval it files
+  under RANDOM fails the foreign key, a 500, until the roll forward. V7 and V8 only add NOT NULL
+  columns with a default, which a build before never names, so it charges nothing for a submission
+  and pays nothing back for a rejection, and its tallies leave out the made-up votes; V9 only
+  rewrites the seeds' text.
 - *Several instances booting at once* (Render starts a deploy's new instance before it stops the old
   one): on PostgreSQL each script runs under Flyway's advisory lock, so one boot migrates while the
   rest wait, up to 50 tries a second apart, and then find nothing to do. Every boot that finds a
@@ -770,14 +798,33 @@ returns and never recomputes points, so the two cannot disagree.
   (§8d). There is no majority bonus and no streak.
 - Every like a question holds earns its author `Scoring.POINTS_PER_LIKE`, which is **1 point**,
   their own likes included, paid when the like is added and taken back when it is removed (§8d,
-  *Likes*). A seed has no author and pays nobody. So a player's total is always what their answers
-  earned plus a point for each like their questions hold, which `GET /v1/me` reports in one read.
-  Retiring a question takes nothing back (§8d, *Moderation*): its answers' points stay, and so do
-  its likes, held and paid and counted in its author's likes received, so the sum holds over every
-  question, retired or not.
+  *Likes*). A seed has no author and pays nobody.
+- Submitting a question **costs** its author `Scoring.SUBMISSION_COST`, **1 point** until the game is
+  released (*decided 2026-09-25*), taken in the submission's own transaction (§8d, *Submitting*). The
+  number is the wire's, `WyrApi.Limits.SUBMISSION_COST`, so a client can say what it is (the game's
+  one copy, `SubmissionRules.SUBMISSION_COST`, is on the Submit form's button, §8d); only the server
+  charges it. A player needs at least that many points to submit, or it is 409
+  `NOT_ENOUGH_POINTS` and costs nothing. A rejection pays the cost back, in the decision's
+  transaction; an approval keeps it, and so does a retirement. Each question keeps what it cost (`questions.submission_cost`, V7), and a
+  rejection pays back that, not the constant, so a question submitted before submitting cost
+  anything (V7 gave every question there 0) pays back nothing, and one submitted at 1 pays back 1
+  whatever the cost is by then. A seed costs nothing and pays nobody.
+- So a player's total is always what their answers earned, plus a point for each like their
+  questions hold, less what their questions not rejected cost them (`PlayerStatsDto.pointsSpent`),
+  which `GET /v1/me` reports in one read. Retiring a question takes nothing back (§8d,
+  *Moderation*): its answers' points stay, and so do its likes, held and paid and counted in its
+  author's likes received, so the sum holds over every question, retired or not. Two edge cases,
+  accepted: an unlike can take an author who spent their points below 0, and a submission can then
+  wait until they earn it back; and after a rollback to a build before V7, a rejection made there
+  pays nothing back, so its author is short that point for good. One more, *provisional — user
+  decision*, where two rules decided apart meet: an author is paid for their own like (§8d,
+  *Likes*), so liking their approved question gives its cost back, and an approval keeps the cost
+  only until then. The options: keep it, or let an author's like of their own question pay nothing,
+  which reopens *Likes*.
 - `PlayerStore.addPoints` adds in SQL (`total_points = total_points + n`), never as a read then a
   write, so two votes by one player landing together cannot lose a point, nor a burst of likes for
-  one author.
+  one author. `PlayerStore.spend` takes a cost the same way, as a compare-and-set on having it
+  (§4).
 - The "with the crowd" verdict is `VoteOutcome.agreedWithMajority` on the client (an exact tie
   counts as agreeing). No points depend on it, so the server keeps no copy of the rule, and since
   the Play screen's redesign nothing shows it (§8d, *The Play screen*).
@@ -844,10 +891,11 @@ only (§5b), and its words in `Strings` (§8f).
   `GetPlayerStats` each time the screen is shown, since the points move on Play meanwhile; under them
   the stats, four numbers each over a word (`statCells`): *Одговори*, the answers given, re-answers
   included; *Питања*, the questions they went to; *Циклус*, with *још 4* under it, the questions
-  still due in it; and *Лајкови*, the likes received. A screen reader reads each number with its
-  word. A guest gets **one button** on the card, *Региструј се или се пријави*, to the Auth page
-  (below), instead of the forms; a registered player gets **Log out** further down, after which the
-  device plays on as a fresh guest. A read that fails says so under the card, or in its place before
+  still due in it; and *Лајкови*, the likes received; not what the player's questions cost
+  (`pointsSpent`, *Stats*, provisional). A screen reader reads each number with its word. A guest
+  gets **one button** on the card, *Региструј се или се пријави*, to the Auth page (below), instead
+  of the forms; a registered player gets **Log out** further down, after which the device plays on
+  as a fresh guest. A read that fails says so under the card, or in its place before
   any read worked, with *Покушај поново*; a read that failed whole, the list's too, says so once.
 - `AccountScreenDrawTest` holds every state with no question listed to 599 high in every language,
   measured 400 wide as `PlayScreenDrawTest` measures and for DEV, whose server line is the longest
@@ -905,6 +953,9 @@ and reveals its tally, and holds Skip, Like and the category picker (*Skipping*,
   likes the question, beside its like count, before answering and after, and **Skip** while the
   question is not answered yet (*Skipping*), its place kept empty in the reveal so nothing in the
   row moves. No title, no *OR*, and nothing on the top bar but home and the account icon.
+- *The categories' names* are the server's, in the language shown (`categoryName` in
+  `io.ntole.wyr.language`, §8f), in the order the server lists them, and one not read yet by its id,
+  after the rest (`categoriesPlayed`).
 - *The row's arrangement* (`CentredRow`; the user asked for Skip in the row, not on the top bar,
   readable at 375 wide with long Cyrillic category names, and left the arrangement open): the heart,
   its count and Skip get their whole width first, then the points, no wider than
@@ -912,11 +963,11 @@ and reveals its tally, and holds Skip, Like and the category picker (*Skipping*,
   the middle of the screen while the categories leave them room, and move right only as far as a
   longer selection needs. A plain row keeping the points in the middle gives the categories the same
   room as the heart, its count and Skip: on this Mac at 375 wide, 115 for the text beside the
-  chevron, where *Начин живота*, the longest of the server's names (`feat/server-categories`), needs
-  125. As built, with *42 П* and 12 likes, it shows whole, the points 10 right of the middle, as do
-  *Супермоћи* and *Храна, Етика*, the points in the middle; *Храна, Начин живота* is cut short, and
-  so is *Начин живота* beside *12345 П*. *Provisional — user decision*: the other option is the
-  points always in the middle and a long name cut short.
+  chevron, where *Начин живота*, the longest of the server's names, needs 125. As built, with *42 П*
+  and 12 likes, it shows whole, the points 10 right of the middle, as do *Супермоћи* and *Храна,
+  Етика*, the points in the middle; *Храна, Начин живота* is cut short, and so is *Начин живота*
+  beside *12345 П*. *Provisional — user decision*: the other option is the points always in the
+  middle and a long name cut short.
 - The points are the server's (`PlayViewModel.points`, §8c): read through `GetPlayerStats` each time
   the screen is shown, and moved to a vote's total when its answer arrives, which drops a read still
   in flight; none until the first.
@@ -936,22 +987,34 @@ and reveals its tally, and holds Skip, Like and the category picker (*Skipping*,
 - Loading is a spinner; a failure is one short sentence, *Покушај поново* (`Strings.tryAgain`, §8f)
   and the categories played, the way out of a selection with nothing to serve. The words are
   `PlayStrings` (§8f).
-- The picker (`CategoryPicker`) is the dialog it was: nothing changes until Play, a new selection
-  drops the question on screen and shows the next from it (`PlayViewModel.applyCategories`), a change
-  refused keeps it open, and a change from a vote lost to `NETWORK` never sends it again (*Retry
-  safety*). The selection lives in the repository, in memory for the app's life.
-- `PlayViewModelTest` drives it over fakes. `PlayScreenDrawTest` draws every state in both themes and
-  every language at 400x900 and 375x599 (an iPhone SE less its status bar and the top bar), holds
-  each to 599 high (376 on this Mac), measured 400 wide rather than 375 since CI's Linux fonts wrap
-  wider than a phone's, reads each state's texts and nothing else and what a screen reader hears a
-  tap does, taps the cards before and after the reveal, steps the scene's clock through the count
-  up, holds the row to 335 wide with only the categories cut, asked with Skip and answered with its
+- The picker (`CategoryPicker`) is the dialog it was, its words in the language shown: *Изабери
+  категорије*, *Све категорије* and every category the server lists, ticked or not, then *Откажи* and
+  *Играј* (`Strings.cancel`, `Strings.play`). Opening it reads the categories again (`GetCategories`,
+  *Categories*): it lists those read before meanwhile, one line says it is loading while there are
+  none (*Учитавање категорија…*), and one says so if the read fails (*Игра није доступна.* offline,
+  *Категорије нису учитане.* otherwise), when those read before stay to tick. Nothing changes until
+  Play, a new selection drops the question on screen and shows the next from it
+  (`PlayViewModel.applyCategories`), a change refused keeps it open, and a change from a vote lost
+  to `NETWORK` never sends it again (*Retry safety*). The selection lives in the repository, in
+  memory for the app's life: a launch plays every category again, and a login or a logout keeps it.
+- `PlayViewModelTest` drives it over fakes, the picker's read on opening and its failure included.
+  `PlayScreenDrawTest` draws every state in both themes and every language at 400x900 and 375x599
+  (an iPhone SE less its status bar and the top bar), with none, one and every one of the server's
+  first five categories played, and with the picker open; holds each state to 599 high with each
+  selection (376 on this Mac), measured 400 wide rather than 375 since CI's Linux fonts wrap wider
+  than a phone's, reads each state's texts and nothing else and what a screen reader hears a tap
+  does, taps the cards before and after the reveal, steps the scene's clock through the count up,
+  holds the row to 335 wide with only the categories cut, asked with Skip and answered with its
   place kept, and to one height with a like's failure or without at font scales 1, 1.3 and 2, finds
   Skip after the heart only while a question is asked, off and drawn muted while anything is in
   flight (by its pixels' colours, in both themes and every language), and nothing in the row moved
   by the reveal, shows *Начин живота*, *Супермоћи* and *Храна, Етика* whole beside the points and
-  the like (400 wide), and holds `CentredRow` to its rule on boxes of known widths, which no font
-  changes; `AppNavigationTest` skips through it, under a bar of home and the account icon alone.
+  the like (400 wide), names the categories played in each language, and holds `CentredRow` to its
+  rule on boxes of known widths, which no font changes. The picker: its words and the categories in
+  each language and in the server's order, its card within 599 in every language, its loading and
+  failure lines in every language and both themes, and, with no Compose UI test library in the tree,
+  the dialog by pixels (every state draws differently with it open, and again with a category
+  ticked). `AppNavigationTest` skips through it, under a bar of home and the account icon alone.
 
 **The Submit screen** (`io.ntole.wyr.submit`), opened from My questions on the Account screen
 (*Navigation*), is the form a question is written in (*Submitting*, below); the player's own are
@@ -989,32 +1052,96 @@ listed on the Account screen.
     logout keeps the selection.
   - `answeredBefore` (`QuestionDto`) means the player has a vote on the question, from any cycle. No
     client reads it: the domain's `Question` has no such field since the dev console went.
-- **Categories** *(decided 2026-09-24; built)*: a
+- **Categories** *(decided 2026-09-24; server data since 2026-09-25; built)*: a
   question is filed under **any number of categories, at least one**. A player may pick **several**
   categories to play, and a question matches when it is filed under **any** of them; none picked
   means every category. The author picks one or more when submitting, and the moderator may change
-  them (*Moderation*). Built in `question_categories`, one row per question and category, written
-  in the question's own transaction: `QuestionDto.categories` and `SubmissionDto.categories` carry
-  every one, each once, in `QuestionCategory` declaration order, and a list's unknown names decode
-  as `UNKNOWN` (§5). A batch reads its questions' categories in one more statement
-  (`QuestionStore.categoriesOf`), never one per question. The feed takes a filter of any number of
-  categories, `?category=` repeated, and none is every category; one that names no real category is
-  400. The filter, and the due count beside it (`QuestionStore.dueCount`), is an `EXISTS` on that
-  table, never a join, so a question in several of the categories asked for is served and counted
-  once. A submission names one or more (*Submitting*). On the client a question holds every one
-  (`Question.categories`, a set that is never empty, mapped in `QuestionMapper`): a name this build
-  cannot read is `Category.OTHER` beside the rest, and an empty list is `OTHER` alone. A player's
-  selection is a set too (`QuestionRepository.categories`, empty for every category, never `OTHER`),
-  and every refill sends all of it; the Play screen's category picker ticks each category, and *All
-  categories* empties it (*The Play screen*). Selecting all of `Category.selectable` is not selecting
-  none: a question filed only under categories this build cannot name is in none of them. A client
-  submits under a set of one or more, never `OTHER` (*Submitting*).
+  them (*Moderation*).
+  - *Server data* (*decided 2026-09-25*: there will be hundreds): each category is a row of
+    `categories` (V6), a **stable id** (1 to `WyrApi.Limits.MAX_CATEGORY_ID_LENGTH`, 32, of `A`-`Z`,
+    `0`-`9` and `_`), a name in **Serbian** (Cyrillic, `name_sr`) and one in **English**
+    (`name_en`), each at most `MAX_CATEGORY_NAME_LENGTH` (40), and when it was added. The **order of
+    categories** is when each was added, then its id (`CategoryStore.ids`): every list of them the
+    server sends, a question's own included, is in it. V6 wrote the first five, `Seed.CATEGORIES`:
+    `FOOD`, `LIFESTYLE`, `ETHICS` and `SUPERPOWERS` under the names the enum sent, so an installed
+    client reads every one as before, a millisecond apart in its declaration order, then `ABSURD`
+    (*Апсурдно*, *Absurd*), which took every question filed under RANDOM (§8b: RANDOM is no category
+    now, *All* is no filter). Nothing deletes a category. On the wire a category is its id, a plain
+    string (§5).
+  - *The moderator* adds a category with `POST /v1/admin/categories` (`CreateCategoryRequest`,
+    answered 201 with its `CategoryDto`) and sets both its names with
+    `POST /v1/admin/category-renames` (`RenameCategoryRequest`, answered with it as it now stands),
+    both admin routes (*Moderation*: the admin token, the admin rate limits). Each name is trimmed,
+    then 1 to 40 and one line, as an option is. The id is given, or derived from the English name:
+    accents off, upper-cased, every run of anything but `A`-`Z` and `0`-`9` one `_`, none at either
+    end, cut to 32 (`categoryIdFor`: *Fast food* is `FAST_FOOD`); a name of no Latin letter or digit
+    needs one given. Anything the rules refuse is 400 `VALIDATION_FAILED`, as a rejection's reason is,
+    since the moderation app checks first; an id a category has already, given or derived, 409
+    `CATEGORY_EXISTS`, the primary key deciding two creations racing (§4); a rename of an id no
+    category has 404 `CATEGORY_NOT_FOUND`. A rename never changes the id, so what is filed under it
+    stays. No delete, for now. `CategoryRules`, `CategoryStore.create` and `rename`,
+    `CategoryRulesTest`, `CategoryStoreTest`, `CategoryFlowTest`. On the client, `ModerationApi`
+    `addCategory` and `renameCategory`, behind `AddCategory` and `RenameCategory` (`:core:domain`,
+    through `runApi` alone, as every moderator's call), answered with the `Category` as stored;
+    `CATEGORY_EXISTS` and `CATEGORY_NOT_FOUND` are `DomainError`s of their own. `CategoryRules`
+    (`:core:domain`) copies the id's and the names' rules, so the moderation app checks before it
+    sends (`CategoryLimitsTest` pins its numbers to `WyrApi.Limits`), but not the derivation, whose
+    accent stripping needs Java's `Normalizer`: an id left blank is sent as none, and the server's
+    answer names the id it made. An English name that derives nothing, sent with no id, is the
+    server's 400, which the moderation app shows as a server failure; the id field's hint says to
+    type one then.
+  - *The list*: `GET /v1/categories` (`WyrApi.Paths.CATEGORIES`) answers every category, a
+    `CategoryListDto` of `CategoryDto`s (`id`, `nameSr`, `nameEn`), in the order of categories. It
+    needs no session and reads none, so a client can have it before it has a player, and it is
+    limited per address (§8b). *Decided*: ordered by when each was added, not by Serbian name, which
+    would sort differently on H2 and PostgreSQL and by each database's collation; a client sorts by
+    the name it shows, in the player's language, if it sorts at all. `CategoryStore.all`,
+    `CategoryFlowTest`. On the client it is `CategoryApi.all`, behind `CategoryRepository`
+    (`:core:domain`, `DefaultCategoryRepository`) and `GetCategories`, a `Category` each (its id and
+    both names): read through `runApi` alone, never `withSessionRecovery`, so no read ensures,
+    recovers or mints a session, kept in memory for the app's life (`CategoryRepository.categories`,
+    empty until a read works, left as it was by one that fails) and read again whenever
+    `GetCategories` is asked, as a picker does when it opens. Both `dataModule` and
+    `moderationDataModule` bind it (`DataModuleTest`).
+  - Built in `question_categories`, one row per question and category, written in the question's
+    own transaction, each row held to a category by a foreign key (V6): `QuestionDto.categories`,
+    `SubmissionDto.categories` and `AdminQuestionDto.categories` carry every one, each once, in the
+    order of categories. A batch reads its questions' categories in one more statement
+    (`QuestionStore.categoriesOf`), never one per question. The feed takes a filter of any number of
+    categories, `?category=` repeated, and none is every category; an id no category has is 400,
+    RANDOM included. Every filter, submission and approval is checked against the categories in its
+    own transaction (`CategoryStore.checked`, which reads every category, so what a request names
+    never sizes the statement). The filter, and the due count beside it (`QuestionStore.dueCount`),
+    is an `EXISTS` on that table, never a join, so a question in several of the categories asked for
+    is served and counted once. A submission names one or more (*Submitting*).
+  - *The client* lists the categories from the server (*The list*, above) and names nothing itself:
+    the enum is gone, and so is `OTHER`, the bucket for what a build could not name. A question, a
+    submission and a moderated question hold the ids of their categories (`categories`, a set, in the
+    order the server sent them, mapped in `QuestionMapper`), whether or not a category of that id has
+    been read; a screen names each by the list last read (`CategoryRepository.categories`) and shows
+    one it has not read by its id. The server files every question under at least one; a payload
+    without them, which no server sends, reads as none rather than failing. A player's selection is a
+    set of ids too (`QuestionRepository.categories`, empty for every category), and every refill sends
+    all of it, in id order, so one selection is always one request; the Play screen's category picker
+    ticks each category the server lists, and *Све категорије* empties it (*The Play screen*).
+    Ticking every category is not selecting none: a category a moderator adds later is in none and
+    not in those ticked. Nothing checks an id against the list before sending it: an id no category
+    has is the server's 400, which only a stale client could send, since ids never change and no
+    category is deleted. A client submits under a set of one or more (*Submitting*). The game names
+    a category in the language shown (§8f), through one function, `categoryName` in
+    `io.ntole.wyr.language`, the one place the language is chosen: the Serbian name as the server
+    keeps it in Serbian Cyrillic, that name through `SerbianScript.toLatin` in Serbian Latin, and the
+    English name in English. The moderation app names it in Serbian (`nameOf`).
+  - *A known limit:* every picker shows every category, a chip or a row each. The Play picker
+    scrolls inside its dialog, but the Submit form, the moderation app's category filter and each
+    pending card lay out every chip in place, to be scrolled past, which suits tens of categories,
+    not the hundreds planned; a searchable or collapsible picker comes with UI polish.
 - **Re-answering** *(built)*: a question can be answered again, whether or not the feed has
   served it again. It earns the point again **every time**, inside its cycle or not (farming is
   bounded by rate limiting, 120 votes a minute per player on average, §8b), and the player may
   change their pick. Every answer, first or not, counts for the player's current cycle. The tally
-  always holds **one vote per player per question**, their latest. Built in `VoteStore.cast`, which
-  moves the player's vote.
+  always holds **one vote per player per question**, their latest, beside a seed's made-up votes
+  (*Seeds*). Built in `VoteStore.cast`, which moves the player's vote.
 - **Retry safety** *(built)*: every vote carries a client-generated idempotency key. A repeat
   of the key last recorded for that question is replayed: nothing is written, it pays nothing, and
   it reports the stored side with the current tally and total, not the result first returned. Any
@@ -1022,8 +1149,8 @@ listed on the Account screen.
   after a newer answer is a fresh answer too: it pays again and moves the vote back to its side.
   The app never resends an older attempt after a newer one, so only a duplicate from the network
   or a modified client can do that. Built in `VoteStore.cast` and in `AttemptId`, made once per
-  tap: the Play tab resends a vote lost to `NETWORK` as the same attempt, as `withSessionRecovery`
-  does its retry, when the player taps *Try again*. Changing the categories from that failure moves
+  tap: the Play screen resends a vote lost to `NETWORK` as the same attempt, as `withSessionRecovery`
+  does its retry, when the player taps *Покушај поново*. Changing the categories from that failure moves
   on instead (*The Play screen*) and abandons the attempt: the vote counts only if the first send
   landed, and nothing pays twice.
 - **Stats** *(built)*: `GET /v1/me` reports the session player's total points, answers given
@@ -1031,14 +1158,20 @@ listed on the Account screen.
   increment beside the points), distinct questions answered, current cycle, and how many questions
   are still due in it, counted by the feed's own predicate (`QuestionStore.dueCount`), and the
   likes received: how many likes the questions the player submitted hold now, their own included
-  (`LikeStore.receivedBy`, *Likes*), and the player's username, null for a guest (§8a, *Accounts*;
-  `PlayerStats.username` on the client, so a screen reads the name with the points). Built in
-  `StatsStore.of`, as one statement, so the total always agrees with the answers given and
-  the likes received (§8c). It only reads, and the cycle starts lazily on the next feed request, so
-  between the answer that finishes a cycle and that request it reports the finished cycle with
-  nothing due. The Account screen shows every number (above). No client reads the player id
-  (`PlayerStatsDto.playerId`): the domain's `PlayerStats` has no such field since the dev console
-  went.
+  (`LikeStore.receivedBy`, *Likes*), the points spent: what the player's questions not rejected
+  cost them (`pointsSpent`, *Submitting*), and the player's username, null for a guest (§8a,
+  *Accounts*; `PlayerStats.username` on the client, so a screen reads the name with the points).
+  Built in `StatsStore.of`, as one statement, so the total always agrees with the answers given, the
+  likes received and the points spent (§8c). It only reads, and the cycle starts lazily on the next
+  feed request, so between the answer that finishes a cycle and that request it reports the finished
+  cycle with nothing due. The Account screen shows the points and four counts, the answers given,
+  the questions they went to, the cycle and the likes received (*The Account screen*), and not
+  `pointsSpent`, for less text (*provisional — user decision*, §8b). The four are counts of what the
+  player did, each over its word, not the terms of a sum, and nothing on the card adds them up, so
+  none of them disagrees with the points once a question has cost one: the answers and likes then
+  count more than the points, and the cost shows where it is paid, on the Submit form's button. No
+  client reads `pointsSpent`, nor the player id (`PlayerStatsDto.playerId`): the domain's
+  `PlayerStats` has neither field.
 - **Skipping** *(built; decided 2026-09-23)*: allowed, earns nothing, and never touches the
   tally. The server **records the skip for the player's current cycle only**, so the question is
   no longer due in that cycle and comes back in the **next** one, except through a category filter
@@ -1056,6 +1189,20 @@ listed on the Account screen.
   `QuestionStore.servable` is the one predicate the feed, the due count and votes, skips and likes
   (`QuestionStore.isServable`) read, and it asks only that a moderator approved the question and has
   not retired it (*Moderation*).
+- **Seeds** *(decided 2026-09-25; built)*: the server's starter questions (`Seed`), approved from
+  the start, authored by nobody. Each comes with **made-up votes**, a count for each side
+  (`questions.base_votes_a` and `base_votes_b`, V8), so its split looks like a crowd's from the first
+  answer: a different total and split for each (`SeedTest`), 105 to 523 votes. **Every tally the
+  server reports adds them** to the players' votes, a vote's answer and the moderator's list alike,
+  read in the tally's one statement (`QuestionTally`, §4); every other question has none. They are
+  no player's: a player still holds one vote per question, and nothing writes them after V8 and the
+  seed. V8 gives the seeds of a database seeded before theirs by id, the same counts `Seed` writes
+  into a new one (`MigrationsTest` holds the two equal). No client can tell them from real votes.
+  The seeds are in **Serbian**, in Cyrillic (*decided 2026-09-25*), written for Serbian and keeping
+  the fun rather than put word for word from the English they began in (`SeedTest` holds every letter
+  to the Serbian Cyrillic alphabet). V9 rewrote the English seeds a database seeded before holds, by
+  id, into the same texts, leaving their categories, votes and likes alone. A player's own question
+  stays exactly as typed; putting questions into other languages is a later, bigger topic.
 - **Likes** *(built)*: any player may like any question, **their own
   included**, at any time (before or after answering), once each, and may unlike it. Each like
   currently held is **+1 point to the author**, and unliking takes that point back. The like count
@@ -1095,58 +1242,72 @@ listed on the Account screen.
     like again. It works out no points itself: a like of the player's own question moves their total
     without a vote, so the points between the cards show it from the next vote on, or from the next
     time the Play screen is shown, which reads them again.
-- **Submitting** *(built; details decided 2026-09-23)*: earns no points
-  directly, because authors earn through likes. The author writes both options and **picks one or
-  more categories** (each a real one, not `UNKNOWN`; *Categories*). A player may have at most **20
-  submissions pending** moderation at once. A submitted question is served only after a moderator
+- **Submitting** *(built; details decided 2026-09-23; the cost 2026-09-25)*: **costs a point**
+  (§8c) and earns no points directly, because authors earn through likes. The author writes both
+  options and **picks one or more categories** (each a category's id; *Categories*). A player may
+  have at most **20 submissions pending** moderation at once. A submitted question is served only after a moderator
   approves it; once approved it is due for every player in their current cycle. Built as
   `POST /v1/questions`, in `SubmissionStore.submit` after `checkedSubmission`. Both options are
   trimmed, then each must be non-blank, at most `WyrApi.Limits.MAX_OPTION_LENGTH` (200, UTF-16
   units) and one line (no control character, nor U+2028 or U+2029, the line and paragraph
   separators), and the two must differ ignoring case: otherwise 422 `INVALID_SUBMISSION`, which the
-  player can put right. No category, or one that is not a real one, is 400 `VALIDATION_FAILED`,
-  since no correct client sends either: a picker must have one picked before it lets the player
-  submit. A category named twice is filed once, and the question's categories are stored in
-  declaration order, in the submission's own transaction. The 21st pending submission is 409
-  `SUBMISSION_LIMIT`, counted under the author's row lock (§4). A submission is stored `PENDING`
+  player can put right. No category, or an id no category has, is 400 `VALIDATION_FAILED`, and
+  comes before any of those, since no correct client sends either: a picker must have one picked
+  before it lets the player submit, and offers only categories the server has. A category named
+  twice is filed once, and the question's categories are stored in the submission's own
+  transaction. The 21st pending submission is 409
+  `SUBMISSION_LIMIT`, counted under the author's row lock (§4). Then the cost is taken, under the same
+  lock and as a compare-and-set (`PlayerStore.spend`, §4): an author with fewer points is 409
+  `NOT_ENOUGH_POINTS`, and nothing is stored or taken; the question keeps what it cost. A rejection
+  pays it back (*Moderation*). A submission is stored `PENDING`
   until a moderator decides it (*Moderation*). Questions carry an author and a
   `QuestionStatus`, and `QuestionStore.servable` serves only approved ones, due at once in whatever
   cycle each player is on. `GET /v1/me/questions` lists the author's submissions of every status,
   newest first, a rejected one with its reason and a retired one as `RETIRED`
   (`SubmissionStore.byAuthor`; `SubmissionStatus.RETIRED` on the client). On the client,
   `SubmitQuestion` and `GetMySubmissions` go through `withSessionRecovery`
-  (`DefaultSubmissionRepository`). `SubmitQuestion` refuses no category, or `OTHER`, before it
-  ensures a session, so nothing is sent, not even a guest's mint, and the repository refuses them
-  again before building the request; every other rule is the server's to enforce, and
+  (`DefaultSubmissionRepository`). `SubmitQuestion` refuses no category before it ensures a
+  session, so nothing is sent, not even a guest's mint, and the repository refuses it again before
+  building the request; every other rule is the server's to enforce, and
   `SubmissionRules` (`:core:domain`) copies the options' rules so a form can check what is typed, as
   `AccountRules` does for accounts (`SubmissionLimitsTest` pins its numbers to `WyrApi.Limits`). A
   status this build cannot name is `SubmissionStatus.OTHER`. The game lists the player's own on the
   Account screen, *My questions* (*The Account screen*), and writes one on the **Submit** screen's
   form, opened from there (`SubmitViewModel`, *decided 2026-09-25*): under *Шта би радије…*, two
-  options and one or more categories of `Category.selectable`, what `SubmissionRules` refuses in each
-  option shown under it as it is typed, and Send off until nothing is refused and a category is
-  picked. **Submitting costs points** (*decided 2026-09-25*): the client keeps the cost in one place,
-  `SubmissionRules.COST`, 1 until release, shows it on the button, *Пошаљи · 1 П*, and holds the
+  options and one or more of the categories the server lists, read (`GetCategories`) each time the
+  form is shown, before the points, and named in the language shown as on Play (`categoryName`,
+  §8f), what `SubmissionRules` refuses in each option shown under it as it is typed, and Send off
+  until nothing is refused and a category is picked. A read of the categories that fails says so
+  under them in one line, *Категорије нису учитане.* (*Нема интернет везе.* offline), with Try
+  again, and those read before stay to pick from; when the points could not be read either, the one
+  failure under Send says so, and its Try again reads both. **The cost** has one copy on the client,
+  `SubmissionRules.SUBMISSION_COST`, the domain's copy of `WyrApi.Limits.SUBMISSION_COST`, which is
+  what `Scoring.SUBMISSION_COST` charges, so a change to the cost fails `SubmissionLimitsTest` until
+  the copy changes too (an installed build shows the cost it was built with). The form shows it on
+  the button, in the points' one unit, *Пошаљи · 1 П* (`Strings.pointsUnit`, §8f), and holds the
   button off while the player's points, read through `GetPlayerStats` each time the form is shown
-  and after every submit, are fewer, with one line saying so, *Немаш довољно поена.* The client
-  alone is built: the server here charges nothing, and §8c still counts a total as answers
-  and likes. The charge, and the server's refusal of a question its author cannot pay for
-  (`NOT_ENOUGH_POINTS`), come with `feat/server-categories`. A stored question clears the form and
+  and after every submit, are fewer, with one short line saying so, *Немаш довољно поена.* The
+  server's own refusal, `NOT_ENOUGH_POINTS` (`DomainError.NOT_ENOUGH_POINTS`, points spent
+  meanwhile), is that same line, shown once: the points read after it hold the button off again. No
+  other line explains the cost, the user asking for less text. A stored question clears the form and
   goes back to My questions, which reads the list again (`SubmitState.sent`, which the form takes
   down as it goes and the next action takes down too), and one stored once the player had gone back
   is read again by the Account screen if it is shown then, which takes `sent` down; a refusal keeps
   it and says why under it, `INVALID_SUBMISSION`, `SUBMISSION_LIMIT` with the 20, a rate limit
   with its wait, or offline. Points that cannot be read say so under Send, with Try again, apart
-  from a refusal (`SubmitState.submitFailure`, `pointsFailure`). One action at a time, and the form
-  cannot change while it is sent. `SubmitViewModelTest` drives it over fakes, `SubmitScreenDrawTest`
-  draws every state in both themes and every language at 400x900 and 375x599, and holds a written
-  question to 599 whole; a longer state scrolls. `AppNavigationTest` sends one and lands back on My
-  questions, and sends one whose answer comes after the player went back, which My questions then
-  lists.
+  from a refusal (`SubmitState.submitFailure`, `pointsFailure`, `categoriesFailure`). One action at
+  a time, and the form cannot change while it is sent. `SubmitViewModelTest` drives it over fakes,
+  the categories' read and its failure and a refusal for points included; `SubmitScreenDrawTest`
+  draws every state in both themes and every language at 400x900 and 375x599, holds a written
+  question under the server's first five categories to 599 whole (a longer state scrolls), names the
+  chips in each language, and finds the refusal for points said once. `AppNavigationTest` sends one
+  and lands back on My questions, and sends one whose answer comes after the player went back, which
+  My questions then lists.
 - **Moderation** *(built)*: a moderator approves or rejects each pending submission, **may change
   its categories** when approving (*Categories*: at least one stays, and a change replaces the
   question's `question_categories` rows in one transaction), and **may retire an approved question
-  and restore it** (*Retiring*, below; provisional, §8b), and sees every question (the list). A
+  and restore it** (*Retiring*, below; provisional, §8b), sees every question (the list), and **adds
+  categories and puts their names right** (*Categories*). A
   rejection carries a **short reason**, and the author sees the status of each of their submissions
   and, for a rejected one, that reason (`GET /v1/me/questions`, *Submitting*). The moderator is
   whoever holds the server's admin token (`ADMIN_TOKEN`, §8), not a role on a player account. Built
@@ -1164,9 +1325,9 @@ listed on the Account screen.
   - `GET /v1/admin/questions` is the list of every question, seeds included, newest first, in an
     `AdminQuestionPageDto` of `AdminQuestionDto`s: options, categories, status, whether it is a seed,
     when it was stored, reviewed and retired, a rejected one's reason, its tally and its like count,
-    and no author. `?status=` and `?category=` narrow it, each repeated for several and matching any of its
-    values, none for all; `UNKNOWN` or a name that is no status or category is 400, as for the feed's
-    category (`categoryFilter`). `?limit=` bounds a page as the feed's is. A page is asked for by
+    and no author. `?status=` and `?category=` narrow it, each repeated for several and matching any
+    of its values, none for all; `UNKNOWN` or a name that is no status, and an id no category has,
+    is 400, as for the feed's category (`categoryFilter`, `CategoryStore.checked`). `?limit=` bounds a page as the feed's is. A page is asked for by
     cursor, not offset (`QuestionCursor`, `?cursor=`): `nextCursor` is the last question's place,
     its `submitted_at` and then its id, and null on the last page, which is read as one row more than
     the limit. A question stored meanwhile is newer than every one listed and lands before the first
@@ -1177,8 +1338,8 @@ listed on the Account screen.
     list is the moderator's alone and the table small; `(submitted_at, id)` is the index once it is
     not.
   - `POST /v1/admin/approvals` takes an `ApproveSubmissionRequest`: the id, and categories that, when
-    there are any, replace the author's (each real, each once, in declaration order); none keeps the
-    author's. `POST /v1/admin/rejections` takes a `RejectSubmissionRequest`: the id and a reason,
+    there are any, replace the author's (each a category's id, each once, in the order of
+    categories; any other is 400 before anything is decided); none keeps the author's. `POST /v1/admin/rejections` takes a `RejectSubmissionRequest`: the id and a reason,
     trimmed, then non-blank, at most `WyrApi.Limits.MAX_REJECTION_REASON_LENGTH` (200) and one line
     as an option is (provisional, §8b). A reason that breaks a rule is 400 `VALIDATION_FAILED`, not
     422: the moderator's client checks it against the same rules before it lets them send. Both
@@ -1187,8 +1348,9 @@ listed on the Account screen.
     not pending, a seed included, is 409 `ALREADY_DECIDED` and changes nothing, an unknown id is 404,
     and of two moderators deciding one submission exactly one wins (`ModerationStoreTest` races
     both kinds). A decision sets `reviewed_at`, and a rejection its reason, which an approval clears.
-    New categories are written after the decision is made and in its transaction, so they commit
-    with it or not at all. An approved question is servable from the commit on: due at once for
+    A rejection pays the author back what the question cost (§8c), in its transaction and under the
+    row lock the decision took, so of two racing only the winner pays it. New categories are written
+    after the decision is made and in its transaction, so they commit with it or not at all. An approved question is servable from the commit on: due at once for
     every player in their current cycle, its author included. Nothing moves a decided question on
     but retirement, below: no second look at a rejection, and no approval undone.
   - *Retiring* (*built; provisional, §8b*): `POST /v1/admin/retirements` takes a
@@ -1213,8 +1375,8 @@ listed on the Account screen.
     `withSessionRecovery`, so nothing a moderator does can refresh or replace the player's session
     (the Auth plugin refreshes only on a 401). Each call sends the `AdminToken` it is given in the
     header, and only that call; nothing stores it, and `AdminToken.toString` shows none of it. The
-    queue and every decision come back as the author's `Submission`. An approval under
-    `Category.OTHER` is refused before anything is sent, and none keeps the author's categories.
+    queue and every decision come back as the author's `Submission`. An approval names its
+    categories by id, in id order, and none keeps the author's categories.
     `RejectionReason` holds only a reason the server accepts, by `checkedRejection`'s rules, so a
     rejection's 400 can only be a bug; its `MAX_LENGTH` copies the wire's limit, which `:core:domain`
     cannot see, and `ModerationMapperTest` pins the two equal.
@@ -1230,7 +1392,8 @@ listed on the Account screen.
     the address's admin budget (§8b). A `ModeratedQuestion` holds its categories as a question does,
     its status as a `SubmissionStatus` (`RETIRED`, or `OTHER` for one this build cannot name),
     whether it is a seed, its times as instants, its `Tally` and its like count. A filter by
-    `SubmissionStatus.OTHER` or `Category.OTHER` is refused before anything is sent. `WRONG_STATUS`
+    `SubmissionStatus.OTHER` is refused before anything is sent; its categories are ids, in id
+    order. `WRONG_STATUS`
     is `DomainError.WRONG_STATUS`. `moderationDataModule(environment)` binds it, and only there, for a
     client that only moderates: an HTTP client of its own over an in-memory session store nothing
     writes, no `TokenStorage` needed, no session repository, so no bearer token goes out and no guest
@@ -1246,7 +1409,12 @@ listed on the Account screen.
     anew on every Lock (`ModerationState.locks`): a text field keeps its undo history for as
     long as it is shown, so Undo in the one that held the token gave it back (`TokenBarTest`).
     Nothing is sent until what is typed can be a token (`AdminToken.of`), and one action runs at
-    a time. *Pending* lists the queue, oldest first, each submission with its options,
+    a time. Every Load, of either tab, reads the categories first (`GetCategories`, needing no
+    token), since a moderator adds them without a build: they are the approval's and the filter's
+    chips, and name a question's categories, in Serbian, one not listed by its id
+    (`ModerationState.categories`); a read that fails says so above the tab and keeps those read
+    before, and Lock keeps them, being the same for everybody. *Pending* lists the queue, oldest
+    first, each submission with its options,
     categories and age: Approve files it under the categories picked for it, none keeping the
     author's, and Reject sends the reason typed once it is a `RejectionReason`. The queue is
     read again after every decision, whatever became of it. A read lists at most
@@ -1273,7 +1441,16 @@ listed on the Account screen.
     named (`WyrException.retryAfter`, §8b). An answer the data layer cannot name (`UNKNOWN`) claims
     no status, leaving it to the detail line under it, and says a bare 404 means moderation is off
     on that server: a proxy's own page or an error code newer than the build reads as `UNKNOWN` too.
-    `ModerationViewModelTest` and `QuestionListViewModelTest` drive it over a scripted repository,
+    *Categories*, the third tab, lists every category, oldest first, with its id and both names, and
+    adds one and puts one's names right (*Categories*, above): Add, from a form of the two names and
+    an id, blank for the server to make one, goes once `CategoryDraft.isValid` holds by
+    `CategoryRules`, and clears the form once added; Rename... opens a category's names in its own
+    card, its id fixed, and Save names sends them. The categories are read again after every add or
+    rename, whatever became of it (the list is no admin route, so the rule above for a 403 or a 429
+    does not apply), and a failure shows under the form or the card it came from, a 409 as an id a
+    category has already. Lock forgets what was typed for a category and keeps the categories read.
+    `ModerationViewModelTest`, `QuestionListViewModelTest` and `CategoriesViewModelTest` drive it over
+    scripted repositories,
     `ModerationOverHttpTest` over the real client configuration, and `ScreensDrawTest` draws every
     screen off screen at a desktop window's size. The game's builds do not moderate at all.
 
@@ -1363,14 +1540,24 @@ hand, so the two cannot say different things; and **English** stands beside them
   Latin is the Cyrillic transliterated, every Serbian text is in Cyrillic, and no Latin or English
   one has a Cyrillic letter. Translated so far: the Home screen, the game's name (*Шта би радије?*,
   *Would You Rather?*) and *Играј*; the top bars and the icons' names (*Почетна*, *Налог*, *Назад*);
-  the switch's name, *Језик*; the Play screen's words (`PlayStrings`, `Strings.playScreen`), all but
-  the category picker's and the category names; the Account screen, whole, with My questions and the
-  server line; the Auth page, whole; and the Submit screen's form but its categories' names
-  (`Strings.accountScreens`, an `AccountStrings` of the Account screen's words and those of the pages
-  opened from it). **Try again** is one text of `Strings`, `tryAgain`, *Покушај поново*
-  (*provisional*, §8b), under a failure on Play, the Account screen, My questions, the Auth page and
-  the Submit form, so the game says it one way; the Account screens' *Нешто није у реду. Покушај
-  поново.* asks in its words, and `StringsTest` holds the two together.
+  the switch's name, *Језик*; the Play screen's words, the category picker's included (`PlayStrings`,
+  `Strings.playScreen`); the Account screen, whole, with My questions and the server line; the Auth
+  page, whole; and the Submit screen's form, whole (`Strings.accountScreens`, an `AccountStrings` of
+  the Account screen's words and those of the pages opened from it). **Try again** is one text of
+  `Strings`, `tryAgain`, *Покушај поново* (*provisional*, §8b), under a failure on Play, the Account
+  screen, My questions, the Auth page and the Submit form, so the game says it one way; the Account
+  screens' *Нешто није у реду. Покушај поново.* asks in its words, and `StringsTest` holds the two
+  together. So are *Откажи* (`cancel`), on the Auth page's warning and the Play picker, and
+  *Категорије нису учитане.* (`categoriesUnread`), under the Play picker and the Submit form's
+  categories alike, and the picker's Play is the Home screen's *Играј*.
+- **The categories' names** *(built)*: the server's, not `Strings`, since a moderator adds and
+  renames categories without a build (§8d, *Categories*), and named through one function,
+  `categoryName(category, language)` (`io.ntole.wyr.language`): `nameSr` in Serbian Cyrillic,
+  `SerbianScript.toLatin(nameSr)` in Serbian Latin, as every Latin text is made, and `nameEn` in
+  English; a category not read yet shows by its id in every language. A screen finds the language
+  shown in `LocalLanguage`, which `WyrStrings` provides beside `LocalStrings`. The Play screen's row
+  and picker and the Submit form's chips call it; `CategoryNamesTest`, `PlayScreenTest`,
+  `PlayScreenDrawTest` and `SubmitScreenDrawTest` hold each language to it.
 - **Numbers and symbols** *(built)*: a text holding a number or a name is a template, `{0}` and on,
   filled in by `fill` (`Templates.kt`), so each language puts it where its grammar wants it, and
   `StringsTest` holds every language's copy of a template to the same placeholders. **Points** have
@@ -1397,10 +1584,8 @@ hand, so the two cannot say different things; and **English** stands beside them
   fails leaves the language this run's only, silently. `LanguageViewModelTest` and `AppModuleTest`
   pin it, the sessions beside it in one storage untouched.
 - **Not translated yet**: question texts stay as their authors wrote them (server data; a later
-  change may put Serbian ones through `SerbianScript.toLatin`); the moderation app (`:app:adminApp`)
-  stays English; and so do the Play screen's category picker and the categories' names
-  (`categoryName`, which the picker and the Submit form's chips call), until categories are server
-  data (§8d, *Categories*).
+  change may put Serbian ones through `SerbianScript.toLatin`), and the moderation app
+  (`:app:adminApp`) stays English, naming categories in Serbian (`nameOf`).
 ---
 
 ## 9. How to work in this repo

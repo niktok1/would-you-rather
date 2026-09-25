@@ -76,13 +76,16 @@ public object WyrApi {
          *
          * POST: submits a question of the session player's own, with a
          * [io.ntole.wyr.core.question.SubmitQuestionRequest], answered 201 with its
-         * [io.ntole.wyr.core.question.SubmissionDto]. Requires a session, and earns nothing. The
+         * [io.ntole.wyr.core.question.SubmissionDto]. Requires a session, earns nothing, and costs
+         * its author [Limits.SUBMISSION_COST] (CLAUDE.md §8c), which a rejection pays back. The
          * question is stored pending and served to nobody until a moderator approves it, and then to
          * every player, its author included (CLAUDE.md §8d). A player may have at most
          * [Limits.MAX_PENDING_SUBMISSIONS] pending at once, and one more is refused with 409
-         * [io.ntole.wyr.core.error.ErrorCode.SUBMISSION_LIMIT]. Options the rules refuse are 422
+         * [io.ntole.wyr.core.error.ErrorCode.SUBMISSION_LIMIT]; an author with fewer points than it
+         * costs, with 409 [io.ntole.wyr.core.error.ErrorCode.NOT_ENOUGH_POINTS], nothing stored or
+         * taken. Options the rules refuse are 422
          * [io.ntole.wyr.core.error.ErrorCode.INVALID_SUBMISSION]; a malformed body, or one naming no
-         * category or one that is not real, is 400
+         * category or an id no category has, is 400
          * [io.ntole.wyr.core.error.ErrorCode.VALIDATION_FAILED].
          */
         public const val QUESTIONS: String = "/$VERSION/questions"
@@ -123,6 +126,14 @@ public object WyrApi {
         public const val LIKES: String = "/$VERSION/likes"
 
         /**
+         * GET: every category questions are filed under, with its id and both its names, as a
+         * [io.ntole.wyr.core.category.CategoryListDto], oldest first (CLAUDE.md §8d, *Categories*).
+         * Needs no session, and reads none: the list is the same for everybody, so a client can have it
+         * before it has a player. Limited per client address.
+         */
+        public const val CATEGORIES: String = "/$VERSION/categories"
+
+        /**
          * The stats of the player the bearer token names, as a
          * [io.ntole.wyr.core.player.PlayerStatsDto]. Requires a session. Reading them changes
          * nothing: in particular it never starts the next cycle, which only [QUESTIONS] does.
@@ -157,8 +168,8 @@ public object WyrApi {
          * A question that is not pending, whether decided already (by this moderator or another) or a
          * seed, is 409 [io.ntole.wyr.core.error.ErrorCode.ALREADY_DECIDED], and of two decisions racing
          * for one question exactly one is made. An id no question has is 404
-         * [io.ntole.wyr.core.error.ErrorCode.QUESTION_NOT_FOUND]. A malformed body, or one naming a
-         * category that is not real, is 400 [io.ntole.wyr.core.error.ErrorCode.VALIDATION_FAILED].
+         * [io.ntole.wyr.core.error.ErrorCode.QUESTION_NOT_FOUND]. A malformed body, or one naming an
+         * id no category has, is 400 [io.ntole.wyr.core.error.ErrorCode.VALIDATION_FAILED].
          */
         public const val ADMIN_APPROVALS: String = "/$VERSION/admin/approvals"
 
@@ -208,6 +219,27 @@ public object WyrApi {
          * refuses. An admin route: needs [Headers.ADMIN_TOKEN].
          */
         public const val ADMIN_RESTORATIONS: String = "/$VERSION/admin/restorations"
+
+        /**
+         * Adds a category, with an [io.ntole.wyr.core.category.CreateCategoryRequest], answered 201
+         * with its [io.ntole.wyr.core.category.CategoryDto] (CLAUDE.md §8d, *Categories*). From then on
+         * it is in [CATEGORIES], after every category before it, and a submission, an approval and a
+         * filter may name it. An id a category has already is 409
+         * [io.ntole.wyr.core.error.ErrorCode.CATEGORY_EXISTS]; names or an id the rules refuse, or a
+         * malformed body, 400 [io.ntole.wyr.core.error.ErrorCode.VALIDATION_FAILED]. Nothing deletes
+         * a category. An admin route: needs [Headers.ADMIN_TOKEN].
+         */
+        public const val ADMIN_CATEGORIES: String = "/$VERSION/admin/categories"
+
+        /**
+         * Sets both names of a category, with an [io.ntole.wyr.core.category.RenameCategoryRequest],
+         * answered with its [io.ntole.wyr.core.category.CategoryDto] as it now stands. Its id never
+         * changes. An id no category has is 404
+         * [io.ntole.wyr.core.error.ErrorCode.CATEGORY_NOT_FOUND]; names the rules refuse, or a
+         * malformed body, 400 [io.ntole.wyr.core.error.ErrorCode.VALIDATION_FAILED]. An admin route:
+         * needs [Headers.ADMIN_TOKEN].
+         */
+        public const val ADMIN_CATEGORY_RENAMES: String = "/$VERSION/admin/category-renames"
     }
 
     public object Headers {
@@ -234,12 +266,11 @@ public object WyrApi {
         public const val LIMIT: String = "limit"
 
         /**
-         * Optional [io.ntole.wyr.core.question.QuestionCategory] name filter on the feed and on
-         * [Paths.ADMIN_QUESTIONS], repeated for several: `?category=FOOD&category=ETHICS` serves the
-         * questions filed under any of them, each once, and none is every category (CLAUDE.md §8d).
-         * Each value is one name, never a comma-separated list. A value that names no real category,
-         * `UNKNOWN` included, is 400 [io.ntole.wyr.core.error.ErrorCode.VALIDATION_FAILED], whatever
-         * the others name.
+         * Optional category filter on the feed and on [Paths.ADMIN_QUESTIONS], by category id,
+         * repeated for several: `?category=FOOD&category=ETHICS` serves the questions filed under any
+         * of them, each once, and none is every category (CLAUDE.md §8d). Each value is one id, never a
+         * comma-separated list. A value that is no category's id is 400
+         * [io.ntole.wyr.core.error.ErrorCode.VALIDATION_FAILED], whatever the others name.
          */
         public const val CATEGORY: String = "category"
 
@@ -287,10 +318,32 @@ public object WyrApi {
         public const val MAX_REJECTION_REASON_LENGTH: Int = 200
 
         /**
+         * Longest id a category can have. An id is 1 to this many of `A`-`Z`, `0`-`9` and `_`
+         * (CLAUDE.md §8d, *Categories*), as the first ones are: `FOOD`, `LIFESTYLE`, `ETHICS`,
+         * `SUPERPOWERS` and `ABSURD`. Here rather than on the server so a client can check an id
+         * against the same number the server's columns are sized by.
+         */
+        public const val MAX_CATEGORY_ID_LENGTH: Int = 32
+
+        /**
+         * Longest name a category can have, in either language, counted as [MAX_OPTION_LENGTH]
+         * counts. Here rather than on the server so a client can check a name against the same
+         * number the server's columns are sized by.
+         */
+        public const val MAX_CATEGORY_NAME_LENGTH: Int = 40
+
+        /**
          * Most submissions one player may have waiting for a moderator at once (CLAUDE.md §8d).
          * Approved and rejected ones do not count, so a decision frees a place.
          */
         public const val MAX_PENDING_SUBMISSIONS: Int = 20
+
+        /**
+         * What submitting a question costs its author, in points, and so the fewest a player needs to
+         * submit (CLAUDE.md §8c): 1 until the game is released. The server charges this number; it is
+         * here rather than on the server so a client can say what submitting costs.
+         */
+        public const val SUBMISSION_COST: Int = 1
 
         /**
          * Shortest username an account can have, once lower-cased

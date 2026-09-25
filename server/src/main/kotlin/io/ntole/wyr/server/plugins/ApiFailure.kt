@@ -32,6 +32,9 @@ class ApiFailure(
         fun submissionLimit(limit: Int) =
             ApiFailure(HttpStatusCode.Conflict, ErrorCode.SUBMISSION_LIMIT, "already $limit submissions pending")
 
+        fun notEnoughPoints(cost: Int) =
+            ApiFailure(HttpStatusCode.Conflict, ErrorCode.NOT_ENOUGH_POINTS, "submitting costs $cost points")
+
         /** A moderator's decision on a question that is no longer, or never was, pending. */
         fun alreadyDecided(id: String) =
             ApiFailure(HttpStatusCode.Conflict, ErrorCode.ALREADY_DECIDED, "question $id is not pending")
@@ -41,6 +44,13 @@ class ApiFailure(
             id: String,
             expected: QuestionStatus,
         ) = ApiFailure(HttpStatusCode.Conflict, ErrorCode.WRONG_STATUS, "question $id is not ${expected.name}")
+
+        /** A category added under an id a category has already. */
+        fun categoryExists(id: String) =
+            ApiFailure(HttpStatusCode.Conflict, ErrorCode.CATEGORY_EXISTS, "a category is $id already")
+
+        fun categoryNotFound(id: String) =
+            ApiFailure(HttpStatusCode.NotFound, ErrorCode.CATEGORY_NOT_FOUND, "no category $id")
 
         /** A registration's username the rules refuse, the player's to put right. */
         fun invalidUsername(message: String) =

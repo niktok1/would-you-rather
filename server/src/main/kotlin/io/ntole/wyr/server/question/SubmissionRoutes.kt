@@ -11,6 +11,7 @@ import io.ntole.wyr.core.question.SubmissionListDto
 import io.ntole.wyr.core.question.SubmitQuestionRequest
 import io.ntole.wyr.server.auth.JWT_AUTH
 import io.ntole.wyr.server.auth.authenticatedPlayerId
+import io.ntole.wyr.server.category.CategoryStore
 import io.ntole.wyr.server.db.Db
 import io.ntole.wyr.server.player.PlayerStore
 import io.ntole.wyr.server.plugins.ApiFailure
@@ -44,10 +45,15 @@ fun Route.submissionRoutes(db: Db) {
             post(WyrApi.Paths.QUESTIONS) {
                 val authorId = call.authenticatedPlayerId()
 
-                // Checked before the transaction, as a vote's ids are: a refusal needs no database.
-                val submission = checkedSubmission(call.receiveOrReject<SubmitQuestionRequest>("submission"))
+                val request = call.receiveOrReject<SubmitQuestionRequest>("submission")
 
-                val stored = db.query { SubmissionStore.submit(authorId, submission) }
+                val stored =
+                    db.query {
+                        // An id no category has is a malformed request, which comes before any rule the
+                        // player can break by typing (checkedSubmission).
+                        val categories = CategoryStore.checked(request.categories)
+                        SubmissionStore.submit(authorId, checkedSubmission(request.copy(categories = categories)))
+                    }
 
                 call.respond(HttpStatusCode.Created, stored)
             }

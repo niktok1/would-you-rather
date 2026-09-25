@@ -1,6 +1,5 @@
 package io.ntole.wyr.core.domain.submission
 
-import io.ntole.wyr.core.domain.question.Category
 import kotlin.time.Instant
 
 /**
@@ -10,9 +9,9 @@ import kotlin.time.Instant
  * mapping between the two lives in `:core:data` (CLAUDE.md §3).
  *
  * [id] is the question's id, the one the feed serves it under once a moderator approves it.
- * [optionA] and [optionB] are as the server stored them, trimmed. [categories] are the ones it is
- * filed under, which a moderator may change when approving it, held as a question holds its own:
- * never empty, and each one this build cannot name is [Category.OTHER].
+ * [optionA] and [optionB] are as the server stored them, trimmed. [categories] are the ids of the
+ * ones it is filed under, which a moderator may change when approving it, held as a question holds
+ * its own ([io.ntole.wyr.core.domain.question.Question.categories]).
  *
  * [rejectionReason] is the moderator's short reason, which the server sends only for a
  * [SubmissionStatus.REJECTED] submission. [submittedAt] is when the server stored it.
@@ -21,15 +20,11 @@ public data class Submission(
     public val id: String,
     public val optionA: String,
     public val optionB: String,
-    public val categories: Set<Category>,
+    public val categories: Set<String>,
     public val status: SubmissionStatus,
     public val rejectionReason: String?,
     public val submittedAt: Instant,
-) {
-    init {
-        require(categories.isNotEmpty()) { "submission $id is filed under no category" }
-    }
-}
+)
 
 /**
  * Where a submission stands with the moderator (CLAUDE.md §8d).

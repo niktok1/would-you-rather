@@ -7,17 +7,21 @@ import io.ntole.wyr.core.api.WyrApi
 import io.ntole.wyr.core.domain.account.LogIn
 import io.ntole.wyr.core.domain.account.LogOut
 import io.ntole.wyr.core.domain.account.RegisterAccount
+import io.ntole.wyr.core.domain.category.GetCategories
+import io.ntole.wyr.core.domain.moderation.AddCategory
 import io.ntole.wyr.core.domain.moderation.ApproveSubmission
 import io.ntole.wyr.core.domain.moderation.GetPendingSubmissions
 import io.ntole.wyr.core.domain.moderation.GetQuestions
 import io.ntole.wyr.core.domain.moderation.ModerationRepository
 import io.ntole.wyr.core.domain.moderation.RejectSubmission
+import io.ntole.wyr.core.domain.moderation.RenameCategory
 import io.ntole.wyr.core.domain.moderation.RestoreQuestion
 import io.ntole.wyr.core.domain.moderation.RetireQuestion
 import io.ntole.wyr.core.domain.session.SessionRepository
 import io.ntole.wyr.core.network.InMemoryTokenStorage
 import io.ntole.wyr.core.network.TokenStorage
 import io.ntole.wyr.core.network.api.AuthApi
+import io.ntole.wyr.core.network.api.CategoryApi
 import io.ntole.wyr.core.network.api.ModerationApi
 import io.ntole.wyr.core.network.environment.WyrEnvironment
 import kotlinx.coroutines.test.runTest
@@ -70,6 +74,8 @@ class DataModuleTest {
         assertNull(koin.getOrNull<GetQuestions>())
         assertNull(koin.getOrNull<RetireQuestion>())
         assertNull(koin.getOrNull<RestoreQuestion>())
+        assertNull(koin.getOrNull<AddCategory>())
+        assertNull(koin.getOrNull<RenameCategory>())
         koin.close()
     }
 
@@ -85,6 +91,26 @@ class DataModuleTest {
         assertNotNull(koin.get<LogOut>())
         koin.close()
     }
+
+    @Test
+    fun `the game and a client that only moderates both read the categories from their own server`() =
+        runTest {
+            WyrEnvironment.entries.forEach { environment ->
+                val game = listOf(module { single<TokenStorage> { InMemoryTokenStorage() } }, dataModule(environment))
+                listOf(game, listOf(moderationDataModule(environment))).forEach { modules ->
+                    val koin = koinApplication { modules(modules) }.koin
+                    val client = koin.get<HttpClient>()
+                    client.plugin(HttpSend).intercept { request -> throw NotSent(request.url.buildString()) }
+
+                    assertNotNull(koin.get<GetCategories>(), environment.name)
+                    val request = assertFailsWith<NotSent>(environment.name) { koin.get<CategoryApi>().all() }
+
+                    assertEquals(environment.apiBaseUrl + WyrApi.Paths.CATEGORIES, request.url, environment.name)
+                    client.close()
+                    koin.close()
+                }
+            }
+        }
 
     @Test
     fun `a client that only moderates needs no storage and binds no session and sends to its own server`() =
@@ -104,6 +130,8 @@ class DataModuleTest {
                     koin.get<GetQuestions>(),
                     koin.get<RetireQuestion>(),
                     koin.get<RestoreQuestion>(),
+                    koin.get<AddCategory>(),
+                    koin.get<RenameCategory>(),
                 ).forEach { useCase -> assertNotNull(useCase, environment.name) }
                 assertNull(koin.getOrNull<SessionRepository>(), "nothing can mint a guest")
                 assertNull(koin.getOrNull<TokenStorage>())

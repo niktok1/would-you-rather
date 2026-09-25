@@ -2,7 +2,6 @@ package io.ntole.wyr.server.vote
 
 import io.ntole.wyr.core.vote.OptionSide
 import io.ntole.wyr.core.vote.VoteResultDto
-import io.ntole.wyr.core.vote.VoteTallyDto
 import io.ntole.wyr.server.db.INSERTING_INTO_VOTES
 import io.ntole.wyr.server.db.Players
 import io.ntole.wyr.server.db.Questions
@@ -12,6 +11,7 @@ import io.ntole.wyr.server.db.appTables
 import io.ntole.wyr.server.db.connectH2
 import io.ntole.wyr.server.db.h2Url
 import io.ntole.wyr.server.db.raceBehindFirst
+import io.ntole.wyr.server.db.tallyOf
 import io.ntole.wyr.server.player.PlayerStore
 import io.ntole.wyr.server.question.QuestionStore
 import org.jetbrains.exposed.v1.core.ResultRow
@@ -56,7 +56,7 @@ class VoteStoreTest {
 
         val again = cast(player, OptionSide.B, attempt = "second", at = 2_000L)
 
-        assertEquals(VoteTallyDto(votesA = 0, votesB = 1), again.tally)
+        assertEquals(tallyOf(QUESTION, votesA = 0, votesB = 1), again.tally)
         assertEquals(2 * Scoring.POINTS_PER_ANSWER, again.totalPoints)
         val vote = storedVotes().single()
         assertEquals(OptionSide.B.name, vote[Votes.side])
@@ -109,7 +109,7 @@ class VoteStoreTest {
         assertEquals(Scoring.POINTS_PER_ANSWER, first.totalPoints)
         assertEquals(2 * Scoring.POINTS_PER_ANSWER, second.totalPoints)
         assertEquals(false, second.replayed)
-        assertEquals(VoteTallyDto(votesA = 0, votesB = 1), second.tally)
+        assertEquals(tallyOf(QUESTION, votesA = 0, votesB = 1), second.tally)
         assertEquals(OptionSide.B.name, storedVotes().single()[Votes.side])
     }
 
@@ -196,7 +196,12 @@ class VoteStoreTest {
                     VoteStore.cast(caster, QUESTION, OptionSide.B, attemptId = "caster")
                 }
 
-            assertEquals(2L, result.tally.votesA + result.tally.votesB, "two players hold two votes")
+            val madeUp = tallyOf(QUESTION, votesA = 0, votesB = 0)
+            assertEquals(
+                madeUp.votesA + madeUp.votesB + 2,
+                result.tally.votesA + result.tally.votesB,
+                "two players hold two votes, beside the made-up ones",
+            )
             assertEquals(OptionSide.B.name, storedVotes().first { it[Votes.playerId] == switcher }[Votes.side])
         } finally {
             elsewhere.shutdownNow()

@@ -1,14 +1,15 @@
 package io.ntole.wyr.server.question
 
 import io.ntole.wyr.core.api.WyrApi
-import io.ntole.wyr.core.question.QuestionCategory
 import io.ntole.wyr.core.question.QuestionStatus
 import io.ntole.wyr.core.question.SubmissionDto
 import io.ntole.wyr.core.question.SubmitQuestionRequest
 import io.ntole.wyr.server.db.Players
 import io.ntole.wyr.server.db.QuestionCategories
 import io.ntole.wyr.server.db.Questions
+import io.ntole.wyr.server.player.PlayerStore
 import io.ntole.wyr.server.plugins.ApiFailure
+import io.ntole.wyr.server.vote.Scoring
 import org.jetbrains.exposed.v1.core.ResultRow
 import org.jetbrains.exposed.v1.core.SortOrder
 import org.jetbrains.exposed.v1.core.and
@@ -23,9 +24,12 @@ object SubmissionStore {
     /**
      * Stores [submission] as a question by [authorId], waiting for a moderator, and returns it as
      * its author sees it (CLAUDE.md §8d). Must run inside a transaction, with [submission] already
-     * checked (`checkedSubmission`), so its categories are each once and in order. The question and
-     * its categories are written in this one transaction. It pays nothing: authors earn through
-     * likes.
+     * checked (`checkedSubmission`) and its categories by `CategoryStore.checked`, in this same
+     * transaction, so they are each once, in the order of categories, and each a category's. The
+     * question and its categories are written in this one transaction, and so is its cost
+     * ([Scoring.SUBMISSION_COST], CLAUDE.md §8c), taken from the author's total ([PlayerStore.spend])
+     * and kept on the question for a rejection to pay back. An author with fewer points is refused with
+     * 409 and nothing is stored or taken. It earns nothing: authors earn through likes.
      *
      * An author may have at most [WyrApi.Limits.MAX_PENDING_SUBMISSIONS] pending at once, and a
      * count then an insert is a read-then-write (CLAUDE.md §4). At READ COMMITTED two submissions
@@ -49,6 +53,16 @@ object SubmissionStore {
             throw ApiFailure.submissionLimit(WyrApi.Limits.MAX_PENDING_SUBMISSIONS)
         }
 
+        // Under the author's row lock already, and a compare-and-set besides, so two submissions of
+        // their last point cannot both pay it.
+        if (!PlayerStore.spend(
+                authorId,
+                Scoring.SUBMISSION_COST,
+            )
+        ) {
+            throw ApiFailure.notEnoughPoints(Scoring.SUBMISSION_COST)
+        }
+
         val id = UUID.randomUUID().toString()
         Questions.insert { row ->
             row[Questions.id] = id
@@ -59,10 +73,11 @@ object SubmissionStore {
             row[submittedAt] = now
             row[reviewedAt] = null
             row[rejectionReason] = null
+            row[submissionCost] = Scoring.SUBMISSION_COST
         }
         QuestionCategories.batchInsert(submission.categories) { category ->
             this[QuestionCategories.questionId] = id
-            this[QuestionCategories.category] = category.name
+            this[QuestionCategories.category] = category
         }
 
         return SubmissionDto(
@@ -108,7 +123,7 @@ object SubmissionStore {
      */
     internal fun toSubmission(
         row: ResultRow,
-        categories: List<QuestionCategory>,
+        categories: List<String>,
     ): SubmissionDto {
         val status = statusOf(row)
         return SubmissionDto(

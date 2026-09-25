@@ -44,6 +44,7 @@ enum class RouteLimit(
     SUBMISSIONS(RateLimits::submissions, KeyedBy.PLAYER),
     STATS(RateLimits::stats, KeyedBy.PLAYER),
     MY_SUBMISSIONS(RateLimits::mySubmissions, KeyedBy.PLAYER),
+    CATEGORIES(RateLimits::categories, KeyedBy.ADDRESS),
     ADMIN(RateLimits::admin, KeyedBy.ADDRESS),
 
     /**
@@ -68,7 +69,7 @@ internal enum class KeyedBy {
 
     /**
      * The client's address, for a caller with no session to name: one minting a guest, refreshing,
-     * logging in, or moderating.
+     * logging in, or moderating, or with none needed: one reading the categories.
      */
     ADDRESS,
 }

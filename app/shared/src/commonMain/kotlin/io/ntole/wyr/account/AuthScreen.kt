@@ -165,7 +165,9 @@ private fun LogInForm(
         Text(text = strings.guestPointsWarning.fill(LocalStrings.current.points(warning)), color = colors.primaryText)
         Row(horizontalArrangement = Arrangement.spacedBy(dimens.spaceSm)) {
             Button(onClick = actions::logIn, enabled = state.canLogIn) { Text(strings.logInAnyway) }
-            OutlinedButton(onClick = actions::cancelLogIn, enabled = !state.isBusy) { Text(strings.cancel) }
+            OutlinedButton(onClick = actions::cancelLogIn, enabled = !state.isBusy) {
+                Text(LocalStrings.current.cancel)
+            }
         }
     }
     TextButton(onClick = { actions.setAuthMode(AuthMode.REGISTER) }, enabled = !state.isBusy) {

@@ -10,7 +10,6 @@ import io.ntole.wyr.core.domain.error.WyrException
 import io.ntole.wyr.core.domain.player.GetPlayerStats
 import io.ntole.wyr.core.domain.player.PlayerRepository
 import io.ntole.wyr.core.domain.player.PlayerStats
-import io.ntole.wyr.core.domain.question.Category
 import io.ntole.wyr.core.domain.question.Question
 import io.ntole.wyr.core.domain.question.QuestionRepository
 import io.ntole.wyr.core.domain.session.SessionRepository
@@ -783,16 +782,16 @@ class AccountViewModelTest {
         override suspend fun submit(
             optionA: String,
             optionB: String,
-            categories: Set<Category>,
+            categories: Set<String>,
         ): Submission = error("the Account screen submits nothing: the Submit screen does")
 
-        override val categories: StateFlow<Set<Category>> = MutableStateFlow(emptySet())
+        override val categories: StateFlow<Set<String>> = MutableStateFlow(emptySet())
 
         override suspend fun next(): Question = error("the Account screen serves no question")
 
         override suspend fun prefetch() = Unit
 
-        override suspend fun setCategories(categories: Set<Category>) = Unit
+        override suspend fun setCategories(categories: Set<String>) = Unit
 
         override suspend fun skip(questionId: String) = Unit
 
@@ -810,7 +809,7 @@ class AccountViewModelTest {
                 id = "q1",
                 optionA = "Fly",
                 optionB = "Swim",
-                categories = setOf(Category.SUPERPOWERS),
+                categories = setOf("SUPERPOWERS"),
                 status = SubmissionStatus.PENDING,
                 rejectionReason = null,
                 submittedAt = Instant.fromEpochMilliseconds(1_790_000_000_000L),

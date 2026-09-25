@@ -38,6 +38,15 @@ class FailureTest {
     }
 
     @Test
+    fun `a category's refusals say which`() {
+        assertTrue("A category has that id already (409)" in describe(Failure.Refused(DomainError.CATEGORY_EXISTS)))
+        assertEquals(
+            "No such category on this server (404).",
+            describe(Failure.Refused(DomainError.CATEGORY_NOT_FOUND)),
+        )
+    }
+
+    @Test
     fun `a 429 says how long to wait when the server named it`() {
         val named = describe(Failure.Refused(DomainError.RATE_LIMITED, retryAfter = 42.seconds))
         val unnamed = describe(Failure.Refused(DomainError.RATE_LIMITED))

@@ -1,5 +1,6 @@
 package io.ntole.wyr.admin.moderation
 
+import io.ntole.wyr.core.domain.category.Category
 import io.ntole.wyr.core.domain.moderation.AdminToken
 import io.ntole.wyr.core.domain.moderation.ModeratedQuestion
 import io.ntole.wyr.core.domain.moderation.ModeratedQuestionPage
@@ -7,7 +8,6 @@ import io.ntole.wyr.core.domain.moderation.ModerationRepository
 import io.ntole.wyr.core.domain.moderation.QuestionCursor
 import io.ntole.wyr.core.domain.moderation.QuestionFilter
 import io.ntole.wyr.core.domain.moderation.RejectionReason
-import io.ntole.wyr.core.domain.question.Category
 import io.ntole.wyr.core.domain.submission.Submission
 import io.ntole.wyr.core.domain.submission.SubmissionStatus
 import io.ntole.wyr.core.domain.vote.Tally
@@ -22,7 +22,7 @@ class FakeModeration : ModerationRepository {
     val tokens = mutableListOf<AdminToken>()
 
     var pending: suspend () -> List<Submission> = { QUEUE }
-    var approve: suspend (String, Set<Category>) -> Submission = { id, categories ->
+    var approve: suspend (String, Set<String>) -> Submission = { id, categories ->
         val submission = QUEUE.single { it.id == id }
         submission.copy(status = SubmissionStatus.APPROVED, categories = categories.ifEmpty { submission.categories })
     }
@@ -39,7 +39,7 @@ class FakeModeration : ModerationRepository {
     override suspend fun approve(
         token: AdminToken,
         questionId: String,
-        categories: Set<Category>,
+        categories: Set<String>,
     ): Submission {
         tokens += token
         calls += "approve $questionId $categories"
@@ -96,6 +96,36 @@ class FakeModeration : ModerationRepository {
         return restore.invoke(questionId)
     }
 
+    /** A category as the server stores it: its names trimmed, and FAST_FOOD for the id it makes. */
+    var addCategory: suspend (String?, String, String) -> Category = { id, nameSr, nameEn ->
+        Category(id ?: "FAST_FOOD", nameSr.trim(), nameEn.trim())
+    }
+    var renameCategory: suspend (String, String, String) -> Category = { id, nameSr, nameEn ->
+        Category(id, nameSr.trim(), nameEn.trim())
+    }
+
+    override suspend fun addCategory(
+        token: AdminToken,
+        id: String?,
+        nameSr: String,
+        nameEn: String,
+    ): Category {
+        tokens += token
+        calls += "addCategory $id|$nameSr|$nameEn"
+        return addCategory.invoke(id, nameSr, nameEn)
+    }
+
+    override suspend fun renameCategory(
+        token: AdminToken,
+        id: String,
+        nameSr: String,
+        nameEn: String,
+    ): Category {
+        tokens += token
+        calls += "renameCategory $id|$nameSr|$nameEn"
+        return renameCategory.invoke(id, nameSr, nameEn)
+    }
+
     companion object {
         const val TOKEN = "s3cret-admin-token"
 
@@ -104,7 +134,7 @@ class FakeModeration : ModerationRepository {
                 id = "q1",
                 optionA = "Fly",
                 optionB = "Swim",
-                categories = setOf(Category.SUPERPOWERS),
+                categories = setOf("SUPERPOWERS"),
                 status = SubmissionStatus.PENDING,
                 rejectionReason = null,
                 submittedAt = Instant.fromEpochMilliseconds(1_790_000_000_000L),
@@ -115,7 +145,7 @@ class FakeModeration : ModerationRepository {
                 id = "q2",
                 optionA = "Tea",
                 optionB = "Coffee",
-                categories = setOf(Category.FOOD, Category.OTHER),
+                categories = setOf("FOOD", "FROM_THE_FUTURE"),
                 status = SubmissionStatus.PENDING,
                 rejectionReason = null,
                 submittedAt = Instant.fromEpochMilliseconds(1_790_000_000_001L),
@@ -138,7 +168,7 @@ class FakeModeration : ModerationRepository {
                 id = id,
                 optionA = optionA,
                 optionB = optionB,
-                categories = setOf(Category.RANDOM),
+                categories = setOf("ABSURD"),
                 status = status,
                 isSeed = isSeed,
                 submittedAt = Instant.fromEpochMilliseconds(1_790_000_500_000L),

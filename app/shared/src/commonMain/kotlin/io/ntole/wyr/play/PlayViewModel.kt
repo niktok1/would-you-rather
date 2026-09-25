@@ -2,11 +2,12 @@ package io.ntole.wyr.play
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import io.ntole.wyr.core.domain.category.CategoryRepository
+import io.ntole.wyr.core.domain.category.GetCategories
 import io.ntole.wyr.core.domain.error.DomainError
 import io.ntole.wyr.core.domain.error.WyrException
 import io.ntole.wyr.core.domain.like.SetLike
 import io.ntole.wyr.core.domain.player.GetPlayerStats
-import io.ntole.wyr.core.domain.question.Category
 import io.ntole.wyr.core.domain.question.GetNextQuestion
 import io.ntole.wyr.core.domain.question.Question
 import io.ntole.wyr.core.domain.question.QuestionRepository
@@ -17,8 +18,11 @@ import io.ntole.wyr.core.domain.vote.Side
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
@@ -36,6 +40,8 @@ class PlayViewModel(
     private val setLike: SetLike,
     private val getPlayerStats: GetPlayerStats,
     private val questions: QuestionRepository,
+    private val getCategories: GetCategories,
+    categoryList: CategoryRepository,
 ) : ViewModel() {
     private val _state = MutableStateFlow<PlayUiState>(PlayUiState.Loading)
     val state: StateFlow<PlayUiState> = _state.asStateFlow()
@@ -43,14 +49,21 @@ class PlayViewModel(
     /**
      * The categories played, as the repository holds them, so they always say what the next fetch
      * asks for (CLAUDE.md §8d, *Categories*): none is every category. In memory for the app's life,
-     * as the repository keeps them, so a launch starts on every category again.
+     * as the repository keeps them, so a launch starts on every category again. Beside them, every
+     * category as last read from the server, to name them by.
      */
-    val categories: StateFlow<Set<Category>> = questions.categories
+    val categories: StateFlow<PlayedCategories> =
+        combine(questions.categories, categoryList.categories, ::PlayedCategories)
+            .stateIn(
+                viewModelScope,
+                SharingStarted.Eagerly,
+                PlayedCategories(questions.categories.value, categoryList.categories.value),
+            )
 
-    private val _picking = MutableStateFlow<Set<Category>?>(null)
+    private val _picking = MutableStateFlow<CategoryPicking?>(null)
 
-    /** What the open category picker has ticked, not played yet, or `null` while it is closed. */
-    val picking: StateFlow<Set<Category>?> = _picking.asStateFlow()
+    /** The open category picker, what it has ticked and its read of the categories, or `null` while it is closed. */
+    val picking: StateFlow<CategoryPicking?> = _picking.asStateFlow()
 
     private val _points = MutableStateFlow<Int?>(null)
 
@@ -180,30 +193,45 @@ class PlayViewModel(
     }
 
     /**
-     * Opens the category picker on the categories played now. Nothing changes until [applyCategories]:
-     * one change, and so one reload, however many categories the player ticks on the way.
+     * Opens the category picker on the categories played now, and reads every category from the
+     * server again, since a moderator adds them without a build (CLAUDE.md §8d, *Categories*): the
+     * picker lists what was read before until the read lands, and says so if it fails. Nothing changes
+     * until [applyCategories]: one change, and so one reload, however many categories the player ticks
+     * on the way.
      *
      * Only when the categories may change ([canChangeCategories]), since applying them drops the
      * question on screen: not while a question loads, nor while a vote, a skip or a like is in flight.
      */
     fun openCategories() {
         if (!_state.value.canChangeCategories) return
-        _picking.value = questions.categories.value
+        _picking.value = CategoryPicking(ticked = questions.categories.value, isLoading = true)
+
+        viewModelScope.launch {
+            val failure =
+                try {
+                    getCategories()
+                    null
+                } catch (unread: WyrException) {
+                    unread.error
+                }
+            // Onto the picker open now, if one is: what it lists is the repository's either way.
+            _picking.update { it?.copy(isLoading = false, failure = failure) }
+        }
     }
 
     /**
-     * Ticks [category] in the open picker, or unticks it if it is ticked. Unticking the last one is
-     * every category, since none selected is every category (CLAUDE.md §8d, *Categories*).
-     * [Category.OTHER] cannot be ticked: no feed can be filtered to it.
+     * Ticks the category [id] in the open picker, or unticks it if it is ticked. Unticking the last one
+     * is every category, since none selected is every category (CLAUDE.md §8d, *Categories*).
      */
-    fun toggleCategory(category: Category) {
-        if (category !in Category.selectable) return
-        _picking.update { ticked -> ticked?.let { if (category in it) it - category else it + category } }
+    fun toggleCategory(id: String) {
+        _picking.update { picking ->
+            picking?.copy(ticked = if (id in picking.ticked) picking.ticked - id else picking.ticked + id)
+        }
     }
 
     /** Unticks every category in the open picker, which is every category. */
     fun selectAllCategories() {
-        _picking.update { ticked -> ticked?.let { emptySet() } }
+        _picking.update { it?.copy(ticked = emptySet()) }
     }
 
     /**
@@ -219,7 +247,7 @@ class PlayViewModel(
      * if any, is not sent again: the player has moved on.
      */
     fun applyCategories() {
-        val ticked = _picking.value ?: return
+        val ticked = _picking.value?.ticked ?: return
         if (ticked == questions.categories.value) {
             _picking.value = null
             return

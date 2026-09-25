@@ -1,7 +1,6 @@
 package io.ntole.wyr.server.moderation
 
 import io.ntole.wyr.core.error.ErrorCode
-import io.ntole.wyr.core.question.QuestionCategory
 import io.ntole.wyr.core.question.QuestionStatus
 import io.ntole.wyr.core.question.SubmissionDto
 import io.ntole.wyr.core.question.SubmitQuestionRequest
@@ -15,11 +14,14 @@ import io.ntole.wyr.server.db.storedCategories
 import io.ntole.wyr.server.player.PlayerStore
 import io.ntole.wyr.server.plugins.ApiFailure
 import io.ntole.wyr.server.question.SubmissionStore
+import io.ntole.wyr.server.question.paidSubmission
+import io.ntole.wyr.server.vote.Scoring
 import org.jetbrains.exposed.v1.core.ResultRow
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.SchemaUtils
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
+import org.jetbrains.exposed.v1.jdbc.update
 import java.sql.Connection
 import java.util.UUID
 import kotlin.test.Test
@@ -45,8 +47,8 @@ class ModerationStoreTest {
     @Test
     fun `an approval files the question under the moderator's categories and records when`() {
         val author = newPlayer()
-        val submitted = submit(author, listOf(QuestionCategory.FOOD), at = 1_000L)
-        val chosen = listOf(QuestionCategory.ETHICS, QuestionCategory.SUPERPOWERS)
+        val submitted = submit(author, listOf("FOOD"), at = 1_000L)
+        val chosen = listOf("ETHICS", "SUPERPOWERS")
 
         val approved = transaction(database) { ModerationStore.approve(submitted.id, chosen, now = 5_000L) }
 
@@ -64,7 +66,7 @@ class ModerationStoreTest {
 
     @Test
     fun `an approval naming no categories keeps the author's`() {
-        val authors = listOf(QuestionCategory.FOOD, QuestionCategory.RANDOM)
+        val authors = listOf("FOOD", "ABSURD")
         val submitted = submit(newPlayer(), authors)
 
         val approved = transaction(database) { ModerationStore.approve(submitted.id, emptyList()) }
@@ -76,7 +78,7 @@ class ModerationStoreTest {
     @Test
     fun `a rejection stores its reason and records when`() {
         val author = newPlayer()
-        val submitted = submit(author, listOf(QuestionCategory.FOOD), at = 1_000L)
+        val submitted = submit(author, listOf("FOOD"), at = 1_000L)
 
         val rejected = transaction(database) { ModerationStore.reject(submitted.id, "Not a dilemma", now = 5_000L) }
 
@@ -92,10 +94,10 @@ class ModerationStoreTest {
 
     @Test
     fun `a question that is not pending cannot be decided again and keeps what its decision wrote`() {
-        val approved = submit(newPlayer(), listOf(QuestionCategory.FOOD))
-        val rejected = submit(newPlayer(), listOf(QuestionCategory.FOOD))
+        val approved = submit(newPlayer(), listOf("FOOD"))
+        val rejected = submit(newPlayer(), listOf("FOOD"))
         transaction(database) {
-            ModerationStore.approve(approved.id, listOf(QuestionCategory.ETHICS), now = 5_000L)
+            ModerationStore.approve(approved.id, listOf("ETHICS"), now = 5_000L)
             ModerationStore.reject(rejected.id, "Not a dilemma", now = 5_000L)
         }
         val before = listOf(approved.id, rejected.id, SEED).associateWith { id -> rowOf(id).decision() }
@@ -103,7 +105,7 @@ class ModerationStoreTest {
 
         listOf(approved.id, rejected.id, SEED).forEach { id ->
             assertAlreadyDecided("$id approved again") {
-                ModerationStore.approve(id, listOf(QuestionCategory.SUPERPOWERS), now = 9_000L)
+                ModerationStore.approve(id, listOf("SUPERPOWERS"), now = 9_000L)
             }
             assertAlreadyDecided("$id rejected") { ModerationStore.reject(id, "Changed my mind", now = 9_000L) }
         }
@@ -115,7 +117,7 @@ class ModerationStoreTest {
     @Test
     fun `deciding an id no question has is not found`() {
         listOf<() -> SubmissionDto>(
-            { ModerationStore.approve("no-such-question", listOf(QuestionCategory.FOOD)) },
+            { ModerationStore.approve("no-such-question", listOf("FOOD")) },
             { ModerationStore.reject("no-such-question", "Not a dilemma") },
         ).forEach { decision ->
             val failure = assertFailsWith<ApiFailure> { transaction(database) { decision() } }
@@ -125,7 +127,7 @@ class ModerationStoreTest {
 
     @Test
     fun `two moderators approving one submission at once let exactly one decide it`() {
-        val submitted = submit(newPlayer(), listOf(QuestionCategory.FOOD))
+        val submitted = submit(newPlayer(), listOf("FOOD"))
 
         // The second's update waits on the first's row lock. By id alone it would then match the row
         // the first committed, approve the question again and file it under the second's categories.
@@ -133,14 +135,14 @@ class ModerationStoreTest {
             raceBehindFirst(
                 url,
                 database,
-                { runCatching { ModerationStore.approve(submitted.id, listOf(QuestionCategory.ETHICS)) } },
-                { runCatching { ModerationStore.approve(submitted.id, listOf(QuestionCategory.SUPERPOWERS)) } },
+                { runCatching { ModerationStore.approve(submitted.id, listOf("ETHICS")) } },
+                { runCatching { ModerationStore.approve(submitted.id, listOf("SUPERPOWERS")) } },
             )
 
-        assertEquals(listOf(QuestionCategory.ETHICS), first.getOrThrow().categories)
+        assertEquals(listOf("ETHICS"), first.getOrThrow().categories)
         assertEquals(ErrorCode.ALREADY_DECIDED, (second.exceptionOrNull() as? ApiFailure)?.code)
         assertEquals(
-            listOf(QuestionCategory.ETHICS),
+            listOf("ETHICS"),
             transaction(database) { storedCategories() }[submitted.id],
             "the winner's categories",
         )
@@ -148,29 +150,74 @@ class ModerationStoreTest {
 
     @Test
     fun `an approval racing a rejection of one submission lets exactly one decide it`() {
-        val submitted = submit(newPlayer(), listOf(QuestionCategory.FOOD))
+        val submitted = submit(newPlayer(), listOf("FOOD"))
 
         val (first, second) =
             raceBehindFirst(
                 url,
                 database,
                 { runCatching { ModerationStore.reject(submitted.id, "Not a dilemma", now = 5_000L) } },
-                { runCatching { ModerationStore.approve(submitted.id, listOf(QuestionCategory.ETHICS)) } },
+                { runCatching { ModerationStore.approve(submitted.id, listOf("ETHICS")) } },
             )
 
         assertEquals(QuestionStatus.REJECTED, first.getOrThrow().status)
         assertEquals(ErrorCode.ALREADY_DECIDED, (second.exceptionOrNull() as? ApiFailure)?.code)
         assertEquals(Decision(QuestionStatus.REJECTED, 5_000L, "Not a dilemma"), rowOf(submitted.id).decision())
-        assertEquals(listOf(QuestionCategory.FOOD), transaction(database) { storedCategories() }[submitted.id])
+        assertEquals(listOf("FOOD"), transaction(database) { storedCategories() }[submitted.id])
+    }
+
+    @Test
+    fun `a rejection pays the author back what the question cost and an approval keeps it`() {
+        val author = newPlayer()
+        val (rejected, approved) = submit(author, listOf("FOOD")) to submit(author, listOf("FOOD"))
+        val before = totalOf(author)
+
+        transaction(database) { ModerationStore.reject(rejected.id, "Not a dilemma") }
+        assertEquals(before + Scoring.SUBMISSION_COST, totalOf(author), "the rejection paid it back")
+
+        transaction(database) { ModerationStore.approve(approved.id, emptyList()) }
+        assertEquals(before + Scoring.SUBMISSION_COST, totalOf(author), "the approval kept it")
+    }
+
+    @Test
+    fun `a rejection pays back what the question cost and no more`() {
+        // As V7 leaves a question submitted before submitting cost anything: it cost nothing.
+        val author = newPlayer()
+        val submitted = submit(author, listOf("FOOD"))
+        transaction(database) { Questions.update({ Questions.id eq submitted.id }) { it[submissionCost] = 0 } }
+        val before = totalOf(author)
+
+        transaction(database) { ModerationStore.reject(submitted.id, "Not a dilemma") }
+
+        assertEquals(before, totalOf(author))
+    }
+
+    @Test
+    fun `two moderators rejecting one submission at once pay it back once`() {
+        val author = newPlayer()
+        val submitted = submit(author, listOf("FOOD"))
+        val before = totalOf(author)
+
+        val (first, second) =
+            raceBehindFirst(
+                url,
+                database,
+                { runCatching { ModerationStore.reject(submitted.id, "Not a dilemma") } },
+                { runCatching { ModerationStore.reject(submitted.id, "A duplicate") } },
+            )
+
+        assertEquals(true, first.isSuccess)
+        assertEquals(ErrorCode.ALREADY_DECIDED, (second.exceptionOrNull() as? ApiFailure)?.code)
+        assertEquals(before + Scoring.SUBMISSION_COST, totalOf(author), "only the rejection that won paid")
     }
 
     @Test
     fun `the queue lists pending submissions oldest first and only players' own`() {
         val (one, other) = newPlayer() to newPlayer()
-        val newest = submit(one, listOf(QuestionCategory.FOOD), at = 3_000L)
-        val oldest = List(2) { submit(other, listOf(QuestionCategory.ETHICS), at = 1_000L) }.sortedBy { it.id }
-        val middle = submit(one, listOf(QuestionCategory.FOOD, QuestionCategory.RANDOM), at = 2_000L)
-        val approved = submit(other, listOf(QuestionCategory.FOOD), at = 500L)
+        val newest = submit(one, listOf("FOOD"), at = 3_000L)
+        val oldest = List(2) { submit(other, listOf("ETHICS"), at = 1_000L) }.sortedBy { it.id }
+        val middle = submit(one, listOf("FOOD", "ABSURD"), at = 2_000L)
+        val approved = submit(other, listOf("FOOD"), at = 500L)
         transaction(database) { ModerationStore.approve(approved.id, emptyList()) }
 
         val pending = queue(QuestionStatus.PENDING)
@@ -186,7 +233,7 @@ class ModerationStoreTest {
 
     @Test
     fun `the queue of rejected submissions carries each one's reason`() {
-        val submitted = List(2) { index -> submit(newPlayer(), listOf(QuestionCategory.FOOD), at = 1_000L + index) }
+        val submitted = List(2) { index -> submit(newPlayer(), listOf("FOOD"), at = 1_000L + index) }
         transaction(database) { submitted.forEach { ModerationStore.reject(it.id, "Reason for ${it.optionA}") } }
 
         val rejected = queue(QuestionStatus.REJECTED)
@@ -198,14 +245,14 @@ class ModerationStoreTest {
     @Test
     fun `the queue reads its categories in as many statements however long it is`() {
         val author = newPlayer()
-        repeat(5) { submit(author, listOf(QuestionCategory.FOOD, QuestionCategory.ETHICS)) }
+        repeat(5) { submit(author, listOf("FOOD", "ETHICS")) }
 
         val statements =
             listOf(1, 5).map { limit ->
                 transaction(database) {
                     val listed = ModerationStore.queue(QuestionStatus.PENDING, limit)
                     assertEquals(
-                        List(limit) { listOf(QuestionCategory.FOOD, QuestionCategory.ETHICS) },
+                        List(limit) { listOf("FOOD", "ETHICS") },
                         listed.map { it.categories },
                     )
                     statementCount
@@ -215,16 +262,19 @@ class ModerationStoreTest {
         assertEquals(statements.first(), statements.last(), "one statement per submission would grow with the queue")
     }
 
+    private fun totalOf(player: String): Int =
+        transaction(database) { checkNotNull(PlayerStore.find(player)).totalPoints }
+
     private fun newPlayer(): String = transaction(database) { PlayerStore.createGuest().id }
 
     private fun submit(
         author: String,
-        categories: List<QuestionCategory>,
+        categories: List<String>,
         at: Long = System.currentTimeMillis(),
     ): SubmissionDto {
         val tag = UUID.randomUUID().toString().take(8)
         val request = SubmitQuestionRequest("Option $tag", "Other $tag", categories)
-        return transaction(database) { SubmissionStore.submit(author, request, now = at) }
+        return transaction(database) { paidSubmission(author, request, now = at) }
     }
 
     private fun queue(

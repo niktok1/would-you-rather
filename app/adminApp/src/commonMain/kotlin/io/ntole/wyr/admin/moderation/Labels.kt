@@ -1,7 +1,7 @@
 package io.ntole.wyr.admin.moderation
 
+import io.ntole.wyr.core.domain.category.Category
 import io.ntole.wyr.core.domain.moderation.AdminToken
-import io.ntole.wyr.core.domain.question.Category
 import kotlin.time.Duration.Companion.days
 import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.minutes
@@ -13,8 +13,20 @@ fun optionsOf(
     optionB: String,
 ): String = "\"$optionA\" or \"$optionB\""
 
-/** [categories] by name, in the order given, which is declaration order wherever a set is sorted. */
-fun namesOf(categories: Set<Category>): String = categories.joinToString(", ") { it.name }
+/**
+ * The categories [ids] name, in the order given, each by its Serbian name as [known] lists it, or by
+ * its id when [known] does not list it, or has not been read.
+ */
+fun namesOf(
+    ids: Collection<String>,
+    known: List<Category>?,
+): String = ids.joinToString(", ") { id -> nameOf(id, known) }
+
+/** The category [id] by its Serbian name as [known] lists it, or by its id when it does not. */
+fun nameOf(
+    id: String,
+    known: List<Category>?,
+): String = known?.firstOrNull { it.id == id }?.nameSr ?: id
 
 /**
  * How long before [now] [from] was, roughly, as a moderator reads a submission's age. A clock behind

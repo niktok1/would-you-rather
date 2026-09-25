@@ -1,13 +1,12 @@
 package io.ntole.wyr.core.domain.moderation
 
-import io.ntole.wyr.core.domain.question.Category
+import io.ntole.wyr.core.domain.category.Category
 import io.ntole.wyr.core.domain.submission.Submission
 import io.ntole.wyr.core.domain.submission.SubmissionStatus
 import io.ntole.wyr.core.domain.vote.Tally
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
 import kotlin.test.assertNotNull
 import kotlin.time.Instant
 
@@ -27,10 +26,10 @@ class ModerationUseCasesTest {
     @Test
     fun `an approval sends the categories to file the submission under`() =
         runTest {
-            val approved = ApproveSubmission(moderation)(token, "q1", setOf(Category.FOOD, Category.RANDOM))
+            val approved = ApproveSubmission(moderation)(token, "q1", setOf("FOOD", "ABSURD"))
 
             assertEquals(PENDING.copy(status = SubmissionStatus.APPROVED), approved)
-            assertEquals(listOf("approve q1 [FOOD, RANDOM]"), moderation.calls)
+            assertEquals(listOf("approve q1 [FOOD, ABSURD]"), moderation.calls)
             assertEquals(listOf(token), moderation.tokens)
         }
 
@@ -57,7 +56,7 @@ class ModerationUseCasesTest {
     @Test
     fun `every question is listed a page at a time with the token and the filter and the cursor`() =
         runTest {
-            val filter = QuestionFilter(setOf(SubmissionStatus.RETIRED), setOf(Category.FOOD))
+            val filter = QuestionFilter(setOf(SubmissionStatus.RETIRED), setOf("FOOD"))
 
             val first = GetQuestions(moderation)(token)
             val next = GetQuestions(moderation)(token, filter, after = first.next)
@@ -85,9 +84,25 @@ class ModerationUseCasesTest {
         }
 
     @Test
-    fun `a question the moderator lists is filed under one category at least`() {
-        assertFailsWith<IllegalArgumentException> { LISTED.copy(categories = emptySet()) }
-    }
+    fun `a category is added with the token and its names as typed`() =
+        runTest {
+            val added = AddCategory(moderation)(token, null, " Брза храна ", "Fast food")
+
+            assertEquals(Category("MADE", " Брза храна ", "Fast food"), added)
+            // No id: the server's to make from the English name.
+            assertEquals(listOf("addCategory null| Брза храна |Fast food"), moderation.calls)
+            assertEquals(listOf(token), moderation.tokens)
+        }
+
+    @Test
+    fun `a category is renamed by its id with the token`() =
+        runTest {
+            val renamed = RenameCategory(moderation)(token, "FOOD", "Јело", "Meals")
+
+            assertEquals(Category("FOOD", "Јело", "Meals"), renamed)
+            assertEquals(listOf("renameCategory FOOD|Јело|Meals"), moderation.calls)
+            assertEquals(listOf(token), moderation.tokens)
+        }
 
     private class RecordingModeration : ModerationRepository {
         val calls = mutableListOf<String>()
@@ -102,7 +117,7 @@ class ModerationUseCasesTest {
         override suspend fun approve(
             token: AdminToken,
             questionId: String,
-            categories: Set<Category>,
+            categories: Set<String>,
         ): Submission {
             tokens += token
             calls += "approve $questionId $categories"
@@ -146,6 +161,28 @@ class ModerationUseCasesTest {
             calls += "restore $questionId"
             return LISTED
         }
+
+        override suspend fun addCategory(
+            token: AdminToken,
+            id: String?,
+            nameSr: String,
+            nameEn: String,
+        ): Category {
+            tokens += token
+            calls += "addCategory $id|$nameSr|$nameEn"
+            return Category(id ?: "MADE", nameSr, nameEn)
+        }
+
+        override suspend fun renameCategory(
+            token: AdminToken,
+            id: String,
+            nameSr: String,
+            nameEn: String,
+        ): Category {
+            tokens += token
+            calls += "renameCategory $id|$nameSr|$nameEn"
+            return Category(id, nameSr, nameEn)
+        }
     }
 
     private companion object {
@@ -154,7 +191,7 @@ class ModerationUseCasesTest {
                 id = "q1",
                 optionA = "Fly",
                 optionB = "Swim",
-                categories = setOf(Category.SUPERPOWERS),
+                categories = setOf("SUPERPOWERS"),
                 status = SubmissionStatus.PENDING,
                 rejectionReason = null,
                 submittedAt = Instant.fromEpochMilliseconds(1_790_000_000_000L),
@@ -165,7 +202,7 @@ class ModerationUseCasesTest {
                 id = "q1",
                 optionA = "Fly",
                 optionB = "Swim",
-                categories = setOf(Category.SUPERPOWERS),
+                categories = setOf("SUPERPOWERS"),
                 status = SubmissionStatus.APPROVED,
                 isSeed = false,
                 submittedAt = Instant.fromEpochMilliseconds(1_790_000_000_000L),

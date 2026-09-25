@@ -4,6 +4,8 @@ import io.ntole.wyr.server.db.Players
 import org.jetbrains.exposed.v1.core.ResultRow
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
+import org.jetbrains.exposed.v1.core.greaterEq
+import org.jetbrains.exposed.v1.core.minus
 import org.jetbrains.exposed.v1.core.plus
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.select
@@ -113,4 +115,22 @@ object PlayerStore {
             .where { Players.id eq playerId }
             .single()[Players.totalPoints]
     }
+
+    /**
+     * Takes [points] from the player's total if they have that many, and returns whether it did. Must
+     * run inside a transaction.
+     *
+     * A compare-and-set in SQL (CLAUDE.md §4): `total_points = total_points - n WHERE total_points >= n`.
+     * The subtraction is the update itself, as [addPoints]'s addition is, and the `WHERE` repeats what
+     * the spending relies on, so two spendings of a player's last point cannot both succeed: at READ
+     * COMMITTED the second waits on the first's row lock, then re-checks its `WHERE` against the total
+     * the first committed, and matches nothing. 0 rows updated is too few points, or no such player.
+     */
+    fun spend(
+        playerId: String,
+        points: Int,
+    ): Boolean =
+        Players.update({ (Players.id eq playerId) and (Players.totalPoints greaterEq points) }) { row ->
+            row[totalPoints] = totalPoints - points
+        } > 0
 }
