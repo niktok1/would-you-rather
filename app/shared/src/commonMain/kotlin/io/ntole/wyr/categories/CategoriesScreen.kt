@@ -35,6 +35,7 @@ import io.ntole.wyr.language.LocalLanguage
 import io.ntole.wyr.language.LocalStrings
 import io.ntole.wyr.language.Strings
 import io.ntole.wyr.language.categoryName
+import io.ntole.wyr.language.fill
 import io.ntole.wyr.theme.WyrThemeAccessors
 import io.ntole.wyr.theme.WyrTypeScale
 
@@ -119,7 +120,7 @@ fun CategoriesScreen(
                     Spacer(Modifier.weight(1f))
                 } else {
                     Text(
-                        text = strings.selectedCount(state.ticked.size),
+                        text = strings.selectedCount.fill(state.ticked.size),
                         color = colors.muted,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,

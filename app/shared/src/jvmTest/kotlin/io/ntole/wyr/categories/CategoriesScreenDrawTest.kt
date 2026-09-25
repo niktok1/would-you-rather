@@ -17,6 +17,7 @@ import io.ntole.wyr.descriptions
 import io.ntole.wyr.language.Language
 import io.ntole.wyr.language.WyrStrings
 import io.ntole.wyr.language.categoryName
+import io.ntole.wyr.language.fill
 import io.ntole.wyr.language.stringsOf
 import io.ntole.wyr.nodes
 import io.ntole.wyr.settle
@@ -74,7 +75,7 @@ class CategoriesScreenDrawTest {
                 assertTrue(play.boundsInRoot.bottom <= SHORT_PHONE_HEIGHT, "$language: Play at ${play.boundsInRoot}")
                 assertTrue(play.boundsInRoot.right <= SHORT_PHONE_WIDTH, "$language: Play at ${play.boundsInRoot}")
                 assertTrue(scene.searchField().boundsInRoot.top >= 0f, "$language")
-                assertTrue(strings.selectedCount(MANY_TICKED.size) in scene.allTexts(), "$language")
+                assertTrue(strings.selectedCount.fill(MANY_TICKED.size) in scene.allTexts(), "$language")
                 assertTrue(shared.tryAgain in scene.texts(), "$language")
                 assertEquals(emptyList(), scene.cutShort(), "$language")
 
@@ -172,21 +173,21 @@ class CategoriesScreenDrawTest {
             val strings = stringsOf(language).categoriesScreen
             val none = scene(CategoriesState(categories = KNOWN, found = KNOWN), language)
             try {
-                assertFalse(none.allTexts().any { strings.selected in it }, "$language")
+                assertFalse(strings.selectedCount.fill(0) in none.allTexts(), "$language: ${none.allTexts()}")
             } finally {
                 none.close()
             }
             val two =
                 scene(CategoriesState(ticked = setOf("FOOD", "ETHICS"), categories = KNOWN, found = KNOWN), language)
             try {
-                assertTrue(strings.selectedCount(2) in two.allTexts(), "$language: ${two.allTexts()}")
+                assertTrue(strings.selectedCount.fill(2) in two.allTexts(), "$language: ${two.allTexts()}")
             } finally {
                 two.close()
             }
         }
-        assertEquals("Изабрано: 2", stringsOf(Language.SERBIAN_CYRILLIC).categoriesScreen.selectedCount(2))
-        assertEquals("Izabrano: 2", stringsOf(Language.SERBIAN_LATIN).categoriesScreen.selectedCount(2))
-        assertEquals("Selected: 2", stringsOf(Language.ENGLISH).categoriesScreen.selectedCount(2))
+        assertEquals("Изабрано: 2", stringsOf(Language.SERBIAN_CYRILLIC).categoriesScreen.selectedCount.fill(2))
+        assertEquals("Izabrano: 2", stringsOf(Language.SERBIAN_LATIN).categoriesScreen.selectedCount.fill(2))
+        assertEquals("Selected: 2", stringsOf(Language.ENGLISH).categoriesScreen.selectedCount.fill(2))
     }
 
     @Test
