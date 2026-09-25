@@ -1110,17 +1110,20 @@ Play tab is frozen).
   this build's first boot on it, without running V1, so its history shows `1 BASELINE`; a database
   nothing had booted on runs V1 and shows `1 SQL`. The Render production database, built by `4cdc819`
   at the first deploy with the same table definitions, is recorded `1 BASELINE` by the first
-  migrating build that boots on it, and runs V2 in that boot or a later one. Before a migrating
-  build first boots on any other database it did not build, compare schemas read-only
+  migrating build that boots on it, and runs V2, V3 and V4 in that boot or later ones. Before a
+  migrating build first boots on any other database it did not build, compare schemas read-only
   (`pg_dump --schema-only`, CLAUDE.md §8b), since the baseline checks only that V1's tables exist.
   Never let `WYR_TEST_JDBC_URL` name the production database: the test suite and `pendingMigration`
   wipe the database it names. V2 moved `MigrationsTest`'s pre-migration database onto V1 (V1 run
-  alone, the history dropped) and made it read rows with `SELECT *`, since `Tables.kt` now names
-  columns V1 lacks; a new script adds its row to `BASELINED_HISTORY` and what it does to existing
-  rows to `afterLaterScripts` (`ADDED_COLUMNS` for a column added empty). That database's rows are
-  written through the stores, so a `selectAll` on a table a later script changed fails there: V3 made
-  the seed check only the id. The H2 draft omits `COLUMN` and upper-cases everything; write it in
-  lower case, one `ALTER TABLE` per column, since H2 takes no list of `ADD`s. Two boots at once
+  alone, the history dropped) and made it read rows with `SELECT *`, since `Tables.kt` names columns
+  V1 lacks, and V4 made it read only the tables there are, since it names a table V1 lacks too; a
+  new script adds its row to `BASELINED_HISTORY` and what it does to existing rows to
+  `afterLaterScripts` (`ADDED_COLUMNS` for a column added empty). That database's rows are written
+  through the stores only where the SQL they run names V1's columns alone: a `selectAll` on a table
+  a later script changed fails there (V3 moved the seed's check to the id alone), and a mint now
+  opens a session, in a table V1 lacks, so its player is inserted as a build before sessions minted
+  one (`playerAsMintedBefore`, V4). The H2 draft omits `COLUMN` and upper-cases everything; write it
+  in lower case, one `ALTER TABLE` per column, since H2 takes no list of `ADD`s. Two boots at once
   are safe on PostgreSQL, under Flyway's advisory lock, only because `Migrations.migrate` takes the
   baseline itself:
   Flyway's `baselineOnMigrate` sent a boot that lost a race on an empty database to the baseline,
