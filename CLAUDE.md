@@ -791,22 +791,22 @@ rewards reading the crowd may come later as a separate, opt-in mode, never as th
 
 **Current focus.** UI polish is paused. The game's own screens are the app: **Home**, **Play**,
 **Account**, and **Submit** and the **Auth** page opened from Account, reached from one another by
-buttons (*Navigation*, below), in every
-build, LOCAL, DEV and PROD alike, opening on Home. The engineering dev console functionality was first
-built behind is gone since `chore/remove-console` (*decided 2026-09-25*: the console is not needed),
-and nothing replaces it: a LOCAL or DEV build names its server on the Account screen (§8e), and a
-feature is tried through the game and the moderation app. A new feature gets a plain screen of the
-game's, or a place on one, theme tokens only (§5b), and its words in `Strings` (§8f).
+buttons (*Navigation*, below), in every build, LOCAL, DEV and PROD alike, opening on Home. The
+engineering dev console functionality was first built behind is gone since `chore/remove-console`
+(*decided 2026-09-25*: the console is not needed), and nothing replaces it: a LOCAL or DEV build
+names its server on the Account screen (§8e), and a feature is tried through the game and the
+moderation app. A new feature gets a plain screen of the game's, or a place on one, theme tokens
+only (§5b), and its words in `Strings` (§8f).
 
 **Navigation** (*decided 2026-09-25*: no tabs; `App.kt`, `io.ntole.wyr.navigation`, `io.ntole.wyr.home`):
 - The app opens on **Home**: the game's name, a big **Play** button and the account icon top right,
   and nothing else, the user asking for less text. Play opens the **Play** screen under a top bar of
   the home icon, left, back to Home, and the account icon, right. The account icon, from Home or
-  Play, opens the **Account** screen under a top bar of a back arrow. On it, a guest's one button opens the **Auth** page, to
-  register or log in, and My questions' *Ново питање* the **Submit** screen's form. The Account, Auth
-  and Submit bars hold a back arrow alone (`BackTopBar`); the Submit button the Account bar held
-  before is gone. The icons are the theme's (§5b), each named for a screen reader in the language
-  shown (§8f).
+  Play, opens the **Account** screen under a top bar of a back arrow. On it, a guest's one button
+  opens the **Auth** page, to register or log in, and My questions' *Ново питање* the **Submit**
+  screen's form. The Account, Auth and Submit bars hold a back arrow alone (`BackTopBar`); the
+  Submit button the Account bar held before is gone. The icons are the theme's (§5b), each named for
+  a screen reader in the language shown (§8f).
 - *The back stack* is made by hand, no navigation library: a sealed `Screen` and a `Navigator` of
   the screens opened, Home at the bottom. `open` shows a screen over the one shown, or goes back to
   it when it is on the stack already, so no screen is on it twice and the home icon is
@@ -818,15 +818,15 @@ game's, or a place on one, theme tokens only (§5b), and its words in `Strings` 
   androidMain); at Home it is left to the system, so it leaves the app. Desktop, the web and iOS bind
   nothing: their on-screen buttons are the way back.
 - *ViewModels* belong to the platform's owner, the activity's or the window's, as under the tabs,
-  never to the back stack: each screen's lives as long as the app, so Play keeps its question through
-  Account and back, or Home and back, and Account and Submit read the server again each time they
-  are shown; the Auth page is on the Account screen's. `AppNavigationTest` drives the whole `App` over fakes by tapping its buttons, and counts
-  the questions asked.
+  never to the back stack: each screen's lives as long as the app, so Play keeps its question
+  through Account and back, or Home and back, and Account and Submit read the server again each time
+  they are shown; the Auth page is on the Account screen's. `AppNavigationTest` drives the whole
+  `App` over fakes by tapping its buttons, and counts the questions asked.
 - *Heights*: each top bar is `WyrDimens.topBarHeight` high, 48, the tab row's height before it, so
-  the Play, Account, Auth and Submit screens keep the 599 of an iPhone SE's 667 their draw tests hold them
-  to. `TopBarsDrawTest` holds every bar to 48 at 375 wide with nothing cut short, in both themes and
-  every language; `HomeScreenDrawTest` holds Home to 599 at 375 wide (276 on this Mac) and to its two
-  texts and one icon.
+  the Play, Account, Auth and Submit screens keep the 599 of an iPhone SE's 667 their draw tests
+  hold them to. `TopBarsDrawTest` holds every bar to 48 at 375 wide with nothing cut short, in both
+  themes and every language; `HomeScreenDrawTest` holds Home to 599 at 375 wide (276 on this Mac)
+  and to its two texts and one icon.
 
 **The Account screen** (`io.ntole.wyr.account`; §8a *Accounts*, *Stats* below):
 - *Its order* (*decided 2026-09-25*, the user's redesign, with less text overall): the player on a
@@ -1122,7 +1122,7 @@ listed on the Account screen.
   `SubmissionRules.COST`, 1 until release, shows it on the button, *Пошаљи · 1 П*, and holds the
   button off while the player's points, read through `GetPlayerStats` each time the form is shown
   and after every submit, are fewer, with one line saying so, *Немаш довољно поена.* The client
-  alone is built: the server on this branch charges nothing, and §8c still counts a total as answers
+  alone is built: the server here charges nothing, and §8c still counts a total as answers
   and likes. The charge, and the server's refusal of a question its author cannot pay for
   (`NOT_ENOUGH_POINTS`), come with `feat/server-categories`. A stored question clears the form and
   goes back to My questions, which reads the list again (`SubmitState.sent`, which the form takes

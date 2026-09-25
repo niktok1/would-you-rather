@@ -71,55 +71,64 @@ it on a phone; nor whether the web build's default font draws Cyrillic.
 **On `merge/redesign`** (from 4821c05; not on `main`, nothing pushed): `feat/play-redesign`, then
 `feat/account-redesign`, each merged whole with `--no-ff`; the two paragraphs below say what each
 brought. Then, at the user's asking, **Skip moved from the top bar into the row between the cards**,
-after the like count, only while a question is asked, its place kept in the reveal (CLAUDE.md §8d,
-*The Play screen*): the top bar's centre slot went with it. `CentredRow` keeps the points in the
-middle of the screen while the categories played leave them room and moves them right only as far
-as a longer selection needs, so *Начин живота* shows whole at 375 wide on this Mac (*provisional*,
-§8b: ask the user, the other option being the points always in the middle). And **one points
-unit**, a text of `Strings` (`pointsUnit`, written by `Strings.points`): *П* in Serbian, *P* in
-Serbian Latin by the transliteration and in English, on the Play row, the Account card, the Auth
-page's guest-points warning and Send's cost, *Пошаљи · 1 П* (CLAUDE.md §8f, *Numbers and symbols*).
-The Account branch's constant Latin *P* (`POINTS_SYMBOL`, `pointsText`) is gone, and with it its
-*123 P* below.
+after the like count, only while a question is asked and off while anything is in flight, its place
+kept in the reveal so nothing in the row moves (CLAUDE.md §8d, *The Play screen*); the top bar's
+centre slot went with it. `CentredRow` keeps the points in the middle of the screen while the
+categories played leave them room and moves them right only as far as a longer selection needs, so
+*Начин живота* shows whole at 375 wide on this Mac, where a row keeping the points in the middle
+would leave it 115 of its 125 (*provisional*, §8b: ask the user; the other option is the points
+always in the middle). And **one points unit**, a text of `Strings` (`pointsUnit`, written by
+`Strings.points`): *П* in Serbian, *P* in Serbian Latin by the transliteration and in English, on
+the Play row, the Account card, the Auth page's guest-points warning and Send's cost, *Пошаљи · 1 П*
+(§8f, *Numbers and symbols*); the Account branch's constant Latin *P* (`POINTS_SYMBOL`,
+`pointsText`), and its *123 P* below, are gone. The client alone changed. Verified here: ktlint, the
+verify job's tests and client compiles, and the iOS Kotlin compiles; `:server:test` came from the
+cache, the server untouched. Tests: `:app:shared` 248 (`PlayScreenDrawTest` 21,
+`AppNavigationTest` 16, `TopBarsDrawTest` 4, `StringsTest` 7), `:core:domain` 70, `:core:data`
+139, `:core:network` 73 and 79 Android host, `:app:adminApp` 87, `:server` 311 (2 skipped). For
+`feat/server-categories`: `PlayScreen.kt` conflicts again, now with `CentredRow`'s `MiddleRow`,
+which takes the categories played as text, so its `categoriesPlayed(PlayedCategories)` keeps the
+`all` it is given; `sendText` takes the whole `Strings`, and the rest of the Account paragraph's
+merge notes hold. Not seen on a device.
 
-**On `feat/play-redesign`** (from 4821c05; merged into `merge/redesign`, nothing pushed): the user's **Play screen**
-redesign (CLAUDE.md §8d, *The Play screen*). Two cards and one row between them: the categories
-played (*Све*, a chevron, the picker dialog as before), the points (*123 П*, read each time the
-screen is shown and moved by each vote's answer, `PlayViewModel.points`) and the heart with the like
-count. A card answers; in the reveal the percentages count up over 2.5 s and either card goes on
-(`PlayViewModel.next`, now from the reveal only). The title, *OR*, Like and Next question buttons,
-vote counts, *+1* and the verdict are gone; Skip is an icon in the middle of the top bar while a
-question is asked. The screen's words are translated (`PlayStrings`); the picker and the category
-names stay English, and `CategoryPicker`, `CategoryOption` and `categoryName` are byte for byte
-untouched, for `feat/server-categories` (only `categoriesPlayed` takes the *All* text now). The client
-alone changed. Tests: `:app:shared` 192 (171 before). Ask the user: Skip in the bar's middle, the
-vote counts gone with the verdict, the title and *OR* gone, a failed like in the points' place, no
-re-read of the points after a like (a like of one's own question shows from the next vote or
-visit), and the half second after a reveal lands in which a card does not go on, so a double tap
-cannot skip the reveal (`REVEAL_HOLD_MILLIS`; or no hold). The count-up plays again when Play is
-shown again on a revealed question. Not seen on a device.
+**On `feat/play-redesign`** (from 4821c05; merged into `merge/redesign`, nothing pushed): the user's
+**Play screen** redesign (CLAUDE.md §8d, *The Play screen*). Two cards and one row between them: the
+categories played (*Све*, a chevron, the picker dialog as before), the points (*123 П*, read each
+time the screen is shown and moved by each vote's answer, `PlayViewModel.points`) and the heart with
+the like count. A card answers; in the reveal the percentages count up over 2.5 s and either card
+goes on (`PlayViewModel.next`, now from the reveal only). The title, *OR*, Like and Next question
+buttons, vote counts, *+1* and the verdict are gone; Skip is an icon in the middle of the top bar
+while a question is asked (in the row since, above). The screen's words are translated
+(`PlayStrings`); the picker and the category names stay English, and `CategoryPicker`,
+`CategoryOption` and `categoryName` are byte for byte untouched, for `feat/server-categories` (only
+`categoriesPlayed` takes the *All* text now). The client alone changed. Tests: `:app:shared` 192
+(171 before). Ask the user: the vote counts gone with the verdict, the title and *OR* gone, a failed
+like in the points' place, no re-read of the points after a like (a like of one's own question shows
+from the next vote or visit), and the half second after a reveal lands in which a card does not go
+on, so a double tap cannot skip the reveal (`REVEAL_HOLD_MILLIS`; or no hold). The count-up plays
+again when Play is shown again on a revealed question. Not seen on a device.
 
-**On `feat/account-redesign`** (from 4821c05; merged into `merge/redesign`, nothing pushed): the user's Account
-redesign (2026-09-25; CLAUDE.md §8d, *The Account screen*, *Submitting*; §8f). The Account screen,
-top down: a card of the player (the username or *Гост*, the points as *123 P*, four stats as numbers),
-**My questions** (the player's submissions, each option and its status in a word, and *Ново питање*),
-the language switch, Log out, and the server line, all in the three languages. A guest's one button
-opens the **Auth** page: Register only, with a link that switches it to Log in and back; the rules,
-the short failures and the guest-points warning kept, and back to Account once one works, or once
-the read after one whose answer was lost names the account. Shown before any player is read, a read
-that failed says so on top with Try again, and Log in waits for one. The Submit screen is only the
-form now, opened from My questions and back there once a question is stored (one stored after the
-player went back is read again if Account is shown then); Send shows the cost, *Пошаљи · 1 P*
-(`SubmissionRules.COST`, 1 until release), and is off with *Немаш довољно поена.* while the points
-are fewer. The client alone changed: the server here charges nothing. *Accounts* and *Submit on its
-own tab* below still walk the flows as they were before it. For the merge: `SubmitScreen.kt` and
-`SubmitScreenTest.kt` conflict with `feat/server-categories`' 4ceb426, which adds
-`SUBMISSION_COST = 1`, a cost `POINTS_NOTE` and an English `NOT_ENOUGH_POINTS` line; keep
+**On `feat/account-redesign`** (from 4821c05; merged into `merge/redesign`, nothing pushed): the
+user's Account redesign (2026-09-25; CLAUDE.md §8d, *The Account screen*, *Submitting*; §8f). The
+Account screen, top down: a card of the player (the username or *Гост*, the points as *123 P*, four
+stats as numbers), **My questions** (the player's submissions, each option and its status in a word,
+and *Ново питање*), the language switch, Log out, and the server line, all in the three languages. A
+guest's one button opens the **Auth** page: Register only, with a link that switches it to Log in
+and back; the rules, the short failures and the guest-points warning kept, and back to Account once
+one works, or once the read after one whose answer was lost names the account. Shown before any
+player is read, a read that failed says so on top with Try again, and Log in waits for one. The
+Submit screen is only the form now, opened from My questions and back there once a question is
+stored (one stored after the player went back is read again if Account is shown then); Send shows
+the cost, *Пошаљи · 1 P* (`SubmissionRules.COST`, 1 until release), and is off with *Немаш довољно
+поена.* while the points are fewer. The client alone changed: the server here charges nothing.
+*Accounts* and *Submit on its own tab* below still walk the flows as they were before it. For the
+merge: `SubmitScreen.kt` and `SubmitScreenTest.kt` conflict with `feat/server-categories`' 4ceb426,
+which adds `SUBMISSION_COST = 1`, a cost `POINTS_NOTE` and an English `NOT_ENOUGH_POINTS` line; keep
 `SubmissionRules.COST` as the only copy, drop `SUBMISSION_COST` and `POINTS_NOTE` (this branch has
 no note), map `NOT_ENOUGH_POINTS` to an `AccountStrings` text in all three languages (until then the
-form shows it as *Нешто није у реду*), and drop §8d *Submitting*'s "the server on this branch
-charges nothing". The chips still call `categoryName`; `Strings.kt` and CLAUDE.md §8f will conflict
-with `feat/play-redesign`, both adding texts. To ask the user: the Auth page has no heading (read
+form shows it as *Нешто није у реду*), and drop §8d *Submitting*'s "the server here charges
+nothing". The chips still call `categoryName`; `Strings.kt` and CLAUDE.md §8f will conflict with
+`feat/play-redesign`, both adding texts. To ask the user: the Auth page has no heading (read
 literally, it "shows only Register"), and the form's line that submitting earns no points is gone.
 Tests: `:app:shared` 225 (`AuthScreenDrawTest` 9, `TemplatesTest` 4 new; `AccountScreenDrawTest` 14,
 `AccountViewModelTest` 33, `SubmitViewModelTest` 25, `SubmitScreenDrawTest` 6, `AppNavigationTest`
