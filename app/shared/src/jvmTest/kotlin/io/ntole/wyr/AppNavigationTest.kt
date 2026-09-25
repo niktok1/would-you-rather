@@ -261,9 +261,13 @@ class AppNavigationTest {
             assertTrue(shown.any { "bob_1" in it }, "the account is not named: $shown")
         }
 
-    /** Android's back, button or gesture, goes back through the navigator: from the Auth page to Account. */
+    /**
+     * The back stack unwinds a screen at a tap: Auth, then Account, then Home. Android's back goes
+     * through the same navigator (`SystemBack`), which binds nothing on the JVM: only `NavigatorTest`
+     * and a device run cover it.
+     */
     @Test
-    fun `back from the Auth page returns to Account`() =
+    fun `the back arrow from the Auth page and then from Account returns to Home`() =
         withApp { scene ->
             scene.tap(CYRILLIC.account)
             scene.tap(CYRILLIC.accountScreens.openAuth)
