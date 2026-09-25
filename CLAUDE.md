@@ -828,8 +828,9 @@ and every request shows in its HTTP trace (`HttpTrace` in `:core:network`, never
   increment beside the points), distinct questions answered, current cycle, and how many questions
   are still due in it, counted by the feed's own predicate (`QuestionStore.dueCount`), and the
   likes received: how many likes the questions the player submitted hold now, their own included
-  (`LikeStore.receivedBy`, *Likes*), and the player's username, null for a guest (§8a, *Accounts*).
-  Built in `StatsStore.of`, as one statement, so the total always agrees with the answers given and
+  (`LikeStore.receivedBy`, *Likes*), and the player's username, null for a guest (§8a, *Accounts*;
+  `PlayerStats.username` on the client, so a screen reads the name with the points). Built in
+  `StatsStore.of`, as one statement, so the total always agrees with the answers given and
   the likes received (§8c). It only reads, and the cycle starts lazily on the next feed request, so
   between the answer that finishes a cycle and that request it reports the finished cycle with
   nothing due.

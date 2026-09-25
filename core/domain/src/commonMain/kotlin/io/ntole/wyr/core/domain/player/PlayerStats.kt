@@ -16,6 +16,9 @@ package io.ntole.wyr.core.domain.player
  * them included. Each is part of [totalPoints] while it is held, so the total can move without an
  * answer: a like of one of the player's questions, from anyone, adds to it, and an unlike takes that
  * back (CLAUDE.md §8d).
+ *
+ * [username] is the player's account name, lower-cased as the server keeps it, or null for a guest,
+ * who has none (CLAUDE.md §8a, *Accounts*). Read with the points, so the two are one moment's.
  */
 public data class PlayerStats(
     public val playerId: String,
@@ -25,4 +28,5 @@ public data class PlayerStats(
     public val cycle: Int,
     public val dueThisCycle: Int,
     public val likesReceived: Int,
+    public val username: String? = null,
 )
