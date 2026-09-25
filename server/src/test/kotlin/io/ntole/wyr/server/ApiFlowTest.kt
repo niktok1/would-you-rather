@@ -48,6 +48,7 @@ import io.ntole.wyr.core.vote.VoteTallyDto
 import io.ntole.wyr.server.auth.TokenService
 import io.ntole.wyr.server.config.ServerConfig
 import io.ntole.wyr.server.db.Sessions
+import io.ntole.wyr.server.db.TEST_SEEDS
 import io.ntole.wyr.server.db.inTransaction
 import io.ntole.wyr.server.db.serverPool
 import io.ntole.wyr.server.db.tallyOf
@@ -1916,7 +1917,7 @@ class ApiFlowTest {
                 onRender = false,
             )
 
-        application { wyrModule(config) }
+        application { wyrModule(config, TEST_SEEDS) }
 
         val client =
             createClient {

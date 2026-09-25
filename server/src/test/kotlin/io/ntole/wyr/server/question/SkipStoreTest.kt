@@ -9,6 +9,7 @@ import io.ntole.wyr.server.db.INSERTING_INTO_SKIPS
 import io.ntole.wyr.server.db.Questions
 import io.ntole.wyr.server.db.Seed
 import io.ntole.wyr.server.db.Skips
+import io.ntole.wyr.server.db.TEST_SEEDS
 import io.ntole.wyr.server.db.appTables
 import io.ntole.wyr.server.db.connectH2
 import io.ntole.wyr.server.db.filedUnder
@@ -42,7 +43,7 @@ class SkipStoreTest {
     private val pool: List<String> =
         transaction(database) {
             SchemaUtils.create(*appTables)
-            Seed.questionsIfEmpty()
+            Seed.writeMissing(TEST_SEEDS)
             Questions.select(Questions.id).map { it[Questions.id] }
         }
 

@@ -217,8 +217,9 @@ object Questions : Table("questions") {
 /**
  * Every category a question can be filed under (CLAUDE.md §8d, *Categories*): server data, not an
  * enum, so a moderator adds one without a build. V6 wrote the first ones (`Seed.CATEGORIES`), and the
- * seed writes them into a database with none, as the store tests build. Nothing deletes a category,
- * so an id read once stays a category's.
+ * seed writes every one its seeds are filed under where it is missing (`Seed.ALL_CATEGORIES`): the
+ * later ones everywhere, and V6's into a database with none, as the store tests build. Nothing
+ * deletes a category, so an id read once stays a category's.
  */
 object Categories : Table("categories") {
     /**

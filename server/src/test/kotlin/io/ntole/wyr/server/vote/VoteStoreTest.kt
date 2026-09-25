@@ -6,6 +6,7 @@ import io.ntole.wyr.server.db.INSERTING_INTO_VOTES
 import io.ntole.wyr.server.db.Players
 import io.ntole.wyr.server.db.Questions
 import io.ntole.wyr.server.db.Seed
+import io.ntole.wyr.server.db.TEST_SEEDS
 import io.ntole.wyr.server.db.Votes
 import io.ntole.wyr.server.db.appTables
 import io.ntole.wyr.server.db.connectH2
@@ -45,7 +46,7 @@ class VoteStoreTest {
     init {
         transaction(database) {
             SchemaUtils.create(*appTables)
-            Seed.questionsIfEmpty()
+            Seed.writeMissing(TEST_SEEDS)
         }
     }
 

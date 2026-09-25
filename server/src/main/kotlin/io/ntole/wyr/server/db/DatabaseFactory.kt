@@ -19,8 +19,9 @@ object DatabaseFactory {
      * (CLAUDE.md §8b).
      *
      * The seed runs once the migration has committed, in a transaction of its own, so it always finds
-     * the finished schema. Several servers booting at once are safe: Flyway lets one migrate while the
-     * rest wait, and the seed tolerates a racing boot by itself ([Seed.questionsIfEmpty]).
+     * the finished schema, and writes what the database lacks of [seeds], every seed but in the server
+     * tests ([Seed.writeMissing]). Several servers booting at once are safe: Flyway lets one migrate
+     * while the rest wait, and the seed tolerates a racing boot by itself.
      *
      * The pool is closed when [monitor] reports the application stopped. Tests start and stop a
      * whole server per case, and against a real Postgres each abandoned pool would keep holding
@@ -29,22 +30,26 @@ object DatabaseFactory {
     fun init(
         config: ServerConfig,
         monitor: Events,
+        seeds: List<Pair<String, Seed.Starter>> = Seed.SEEDS,
     ): Database {
         val dataSource = HikariDataSource(poolConfig(config))
         monitor.subscribe(ApplicationStopped) { dataSource.close() }
 
-        return migrateAndSeed(dataSource)
+        return migrateAndSeed(dataSource, seeds)
     }
 
     /**
      * What every boot does to the database behind [dataSource], apart from [init] so a test can boot
      * several servers on one database at once.
      */
-    internal fun migrateAndSeed(dataSource: DataSource): Database {
+    internal fun migrateAndSeed(
+        dataSource: DataSource,
+        seeds: List<Pair<String, Seed.Starter>> = Seed.SEEDS,
+    ): Database {
         Migrations.migrate(dataSource)
 
         val database = Database.connect(dataSource)
-        transaction(database) { Seed.questionsIfEmpty() }
+        transaction(database) { Seed.writeMissing(seeds) }
 
         return database
     }
