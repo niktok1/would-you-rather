@@ -497,9 +497,11 @@ EncryptedSharedPreferences: enough for a game that stores nothing personal.
   is a simple game that stores nothing personal, and most players stay a day or a few, so the
   simplest design that is correct enough wins over maximum security. A new player plays at once as a
   guest (§8a). **Register** is optional and keeps the guest's points; **log in** is how a registered
-  player gets their account on another device, and the app saves the credentials by itself.
-  Passwords are hashed on the server and never logged (`Passwords`: PBKDF2-HMAC-SHA256 from the JDK,
-  no library, 100,000 iterations over a 16-byte salt of each password's own, about 9 ms warm on the
+  player gets their account on another device. What the app saves by itself is the session, so a
+  player stays logged in while the device refreshes within 30 days; no password is stored, and the
+  phone's password manager may keep it (§8a, *The client*). Passwords are hashed on the server and
+  never logged (`Passwords`: PBKDF2-HMAC-SHA256 from the JDK, no library, 100,000 iterations over a
+  16-byte salt of each password's own, about 9 ms warm on the
   development machine and so, by estimate, 0.1 to 0.2 s on Render's tenth of a CPU). A stored hash
   names its algorithm and cost, `pbkdf2-sha256$<iterations>$<salt>$<hash>`, so the cost can be
   raised later and the hashes already stored still verify; nothing rehashes one at a new cost yet.
