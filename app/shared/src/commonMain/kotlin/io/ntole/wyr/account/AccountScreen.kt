@@ -239,7 +239,12 @@ private fun Section(
     val colors = WyrThemeAccessors.colors
 
     Column(verticalArrangement = Arrangement.spacedBy(WyrThemeAccessors.dimens.spaceSm)) {
-        Text(text = title, color = colors.primaryText, style = MaterialTheme.typography.titleMedium)
+        Text(
+            text = title,
+            color = colors.primaryText,
+            fontSize = WyrTypeScale.sectionTitle,
+            fontWeight = FontWeight.Bold,
+        )
         Text(text = note, color = colors.muted, fontSize = WyrTypeScale.statLabel)
         content()
     }

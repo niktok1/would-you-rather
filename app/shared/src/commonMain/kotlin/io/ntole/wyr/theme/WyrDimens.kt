@@ -28,6 +28,7 @@ object WyrTypeScale {
     val optionText = 22.sp
     val orPill = 14.sp
     val heading = 28.sp
+    val sectionTitle = 16.sp
     val statLabel = 13.sp
     val percentage = 34.sp
 
