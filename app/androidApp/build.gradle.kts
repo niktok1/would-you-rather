@@ -46,6 +46,10 @@ android {
     }
     buildTypes {
         release {
+            // Signed with the debug key until there is a Play upload key, so a release build (not
+            // debuggable, so Compose runs at full speed) installs on a phone for testing. Google Play
+            // refuses a debug-signed build, so publishing needs a real signing config first.
+            signingConfig = signingConfigs.getByName("debug")
             isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
