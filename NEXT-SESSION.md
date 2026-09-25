@@ -15,10 +15,12 @@ applied; **dev** `wyr-server-dev` on in-memory H2, deployed automatically from e
 `main` (its URL is on its Render page).
 
 **On `feat/simple-accounts`** (not merged): stage 1 took the recovery secret, Block Store, the
-Keychain, the rollback mirror and the question's row lock out (CLAUDE.md §8a, §8b). Stages 2 and 3
-add simple accounts (§8b, *Accounts*). A `d4a9dbf` build of the app on a phone that keeps a recovery
-secret fails every call against this server once its session dies, since the recovery it tries
-first is 404 here: install a build from this branch on it.
+Keychain, the rollback mirror and the question's row lock out (CLAUDE.md §8a, §8b). Stage 2 built
+simple accounts on the server (§8a, *Accounts*): V5, register, log in, log out, and the username in
+`GET /v1/me` (*Accounts*, under *Running it locally*). Stage 3, the client, is next; until then no
+client registers or logs in. A `d4a9dbf` build of the app on a phone that keeps a recovery secret
+fails every call against this server once its session dies, since the recovery it tries first is 404
+here: install a build from this branch on it.
 
 ### Verified working
 
@@ -387,6 +389,32 @@ first is 404 here: install a build from this branch on it.
   200 again (the grace) and 401 a third time, a vote 200 and the stats 1 point, and
   `POST /v1/auth/recover` and `POST /v1/me/recovery-secret` were 404; no token was in the log. The
   `server-postgres`, `docker-smoke` and `ios` jobs have not run on the branch.
+- `feat/simple-accounts`, stage 2 (server accounts; CLAUDE.md §8a, *Accounts*), on H2. `PasswordsTest`
+  pins the stored form, a salt per hash, a hash at another cost verifying at its own, and a stored
+  string not in the form failing without naming it. `AccountStoreTest` races two players for one name
+  (one wins, the other `USERNAME_TAKEN` after Exposed's rerun; without the read before the write the
+  rerun fails again) and two registrations of one player (the compare-and-set lets one through;
+  dropping it fails the test). `AccountFlowTest` covers every status of register, login and logout:
+  422 for each rule broken, 409 taken in any case and already registered, 401 and 400; a login from a
+  second device as a session of its own, both devices refreshing and playing as one player, a logout
+  ending only its device's session, its current and grace tokens both; a wrong password, an unknown
+  name and a name no account can have answered byte for byte alike; an unknown name refused only
+  after a hash's time (skipping the hash fails it: 1 ms against 8.5 ms); and no password, hash or
+  `pbkdf2` in the log. `RateLimitTest` has the three new groups and a login past its budget refused
+  before its password is checked. `MigrationsTest` takes every path to V5, production's (V1
+  baselined, V2 to V4 by the builds before, V5 by this one) among them, and `SchemaDriftTest` holds
+  V5 to `Tables.kt`. Counts: `:server` 310, 2 skipped; `:core:domain` 37; `:core:data` 134;
+  `:core:network` 78 (84 as Android host tests); `:app:shared` 106; `:app:adminApp` 87. ci.yml's
+  verify job's three steps pass, tests forced to rerun, as do the ios job's Kotlin compiles that need
+  no Xcode. The fat jar (`WYR_SERVER_ONLY=1`) on JDK 21, `PORT=18096`, no `DATABASE_URL`: Flyway ran
+  V1 to V5 and `/health` answered 200; a guest voted, registered as `Smoke_1` (answered `smoke_1`),
+  and was refused 409 registering again, a second guest 409 for `SMOKE_1` and 422 for `a b` and a
+  five-character password; `GET /v1/me` named `smoke_1` with 1 point; a login as `SMOKE_1` from a
+  second device answered the same player, and a wrong password and an unknown name the same 401
+  `INVALID_LOGIN`; both devices refreshed; the first logged out (204), after which both its refresh
+  tokens were 401 and the second's refreshed again with the point kept. No password, token or hash
+  was in the log. The first registration took 43 ms (a cold hash), a login 12 ms. The
+  `server-postgres`, `docker-smoke` and `ios` jobs have not run on the branch.
 - `:app:androidApp:assembleDebug` produces a real APK.
 - `ktlintCheck` clean across every module.
 
@@ -419,6 +447,12 @@ first is 404 here: install a build from this branch on it.
   nothing here has read its history. Check, read-only, that it reads `1 BASELINE`, `2 SQL`,
   `3 SQL`, `4 SQL`, and that `sessions` has a row for every `players` row with a
   `refresh_token_hash`. The next script after V4 runs there at the next Manual Deploy.
+- **Accounts on PostgreSQL, and on production.** V5 has run only on H2; `SchemaDriftTest` and
+  `MigrationsTest` take it to PostgreSQL in the `server-postgres` job, not yet run on the branch.
+  The race for one username is H2's alone (`AccountStoreTest` polls H2's `SESSIONS`): on PostgreSQL
+  the second writer waiting on the first's uncommitted name and failing with 23505 once it commits is
+  documented behaviour. Production takes V5 at its next Manual Deploy. The hash's cost on Render's
+  tenth of a CPU is an estimate (0.1 to 0.2 s): read a login's time in its log line once deployed.
 - **The `:core` modules' tests on iOS.** The ios CI job runs `:app:shared`'s tests on the simulator
   and only compiles the `:core` modules' tests, which Kotlin/Native refused while their
   names held commas (`SharedSessionStoreTest`'s among them, from before `feat/recovery-secret`, and
@@ -592,6 +626,30 @@ Raise any budget for a session with its variable, and a refused request says whi
 ```bash
 RATE_LIMIT_GUESTS_PER_HOUR=1000 ./gradlew :server:run
 ```
+
+### Accounts
+
+A guest registers to keep its points and logs in with the same name and password on another device
+(CLAUDE.md §8a, *Accounts*). No client does either yet, so by curl, against `./gradlew :server:run`:
+
+```bash
+ACCESS=$(curl -s -X POST localhost:8080/v1/auth/guest | python3 -c 'import sys,json; print(json.load(sys.stdin)["accessToken"])')
+curl -s -X POST localhost:8080/v1/auth/register -H "Authorization: Bearer $ACCESS" \
+  -H 'Content-Type: application/json' -d '{"username":"Bob_1","password":"correct horse"}'
+curl -s localhost:8080/v1/me -H "Authorization: Bearer $ACCESS"
+curl -s -X POST localhost:8080/v1/auth/login \
+  -H 'Content-Type: application/json' -d '{"username":"BOB_1","password":"correct horse"}'
+curl -s -o /dev/null -w '%{http_code}\n' -X POST localhost:8080/v1/auth/logout -H "Authorization: Bearer $ACCESS"
+```
+
+Registering answers `{"username":"bob_1"}`, the name lower-cased, and `/v1/me` then names it. A name
+must be 3 to 20 of `a`-`z`, `0`-`9` and `_` once lower-cased, nothing trimmed, and a password 6 to 128
+characters of any kind, or it is 422 `INVALID_USERNAME` or `INVALID_PASSWORD`; a name another player
+has is 409 `USERNAME_TAKEN`, and registering twice 409 `ALREADY_REGISTERED`. The login answers a
+`SessionDto` for a new session of the same player; a wrong password and a name with no account are
+the same 401 `INVALID_LOGIN`. The logout answers 204 and ends only the session `$ACCESS` was issued
+for: that session's refresh token is 401 from then on, and the login's session lives on. Logins are
+20 a minute per address (`RATE_LIMIT_LOGINS_PER_MINUTE`), registrations 20 an hour per player.
 
 ### Moderating
 
@@ -859,9 +917,11 @@ rules live in CLAUDE.md §8d. Each item is one short-lived branch, in order:
     sessions per device (V4) and a recovery secret. The user found the secret, Block Store, the
     Keychain and the rollback mirror too much for a simple game (2026-09-25), so
     `feat/simple-accounts` takes them out again, keeping per-device sessions and the grace.
-14. **Next:** `feat/simple-accounts` goes on to simple accounts (CLAUDE.md §8b, *Accounts*): play as a
-    guest at once, register optionally and keep the points, log in on another device. No-click
-    sign-in (Play Games Services, Game Center) comes later, once there is an Apple developer account.
+14. **Now:** `feat/simple-accounts` goes on to simple accounts (CLAUDE.md §8b, *Accounts*): play as a
+    guest at once, register optionally and keep the points, log in on another device. The server's
+    half is built (stage 2: V5, register, log in, log out, the username in the stats); the client's,
+    stage 3, is next. No-click sign-in (Play Games Services, Game Center) comes later, once there is
+    an Apple developer account.
 
 **For the moderation app.** Everything it needs is in `io.ntole.wyr.core.domain.moderation`, and
 none of it needs or makes a player session:
@@ -1069,6 +1129,16 @@ Play tab is frozen).
   this build still runs, which `ApiFlowTest` pins by dropping them. A rollback to a build from before
   sessions is not supported (CLAUDE.md §8b, *Rollbacks*). The server's `SessionStore` is not the
   client's, which keeps the stored session in `:core:network`.
+- **An account is a username and a password hash on a player, and a login is a new session**
+  (CLAUDE.md §8a, *Accounts*). The rules are written once, in `AccountRules.kt` (`usernameOrNull`,
+  `isPassword`), with their numbers in `WyrApi.Limits` for a client to check against. A password goes
+  only to `Passwords`, hashed on `Dispatchers.Default` and outside any transaction, and neither it nor
+  its hash may reach a log, an answer or a `toString` (`RegisterRequest` and `LoginRequest` hide it).
+  Exposed writes a failed statement's values into its message only when the transaction's `debug` is
+  on: keep it off. A login's 401 `INVALID_LOGIN` is no expired token: the client must send the login
+  with Ktor's `AuthCircuitBreaker` attribute, or the bearer plugin refreshes the session it holds and
+  sends the login again. Every access token names its session (`sessionId`), which only a logout
+  reads; a token without one, from `d4a9dbf`, is 401 there, and a refresh replaces it.
 - **A session write returns once it is durable, and suspends for it** (`TokenStorage.write`,
   CLAUDE.md §8a). `AndroidTokenStorage` used `apply()`, which returns before the file is written,
   so a kill just after a refresh could come back with the rotated-out token and orphan the guest.

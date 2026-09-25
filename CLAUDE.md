@@ -484,8 +484,10 @@ EncryptedSharedPreferences: enough for a game that stores nothing personal.
   raised later and the hashes already stored still verify; nothing rehashes one at a new cost yet.
   No email is collected, so there is **no password reset**: a forgotten password means a new
   account. No-click sign-in (Play Games Services on Android, Game Center on iOS) comes later, once
-  there is an Apple developer account. This replaces the recovery secret (V4), which is gone from
-  the server and every client; its column stays, unused, until a later migration drops it.
+  there is an Apple developer account: it would link a platform's player to a player here as
+  registering links a username, beside the password or in its place. This replaces the recovery
+  secret (V4), which is gone from the server and every client; its column stays, unused, until a
+  later migration drops it.
 - **SQLDelight cache** — see §4. Needs a per-platform split because of web. Lower priority now
   that the endless feed (§8d) makes the server the source of truth for what a player has answered:
   the client keeps no record of what it served, so a persisted queue would only save one fetch
