@@ -48,6 +48,7 @@ import io.ntole.wyr.language.LanguageViewModel
 import io.ntole.wyr.language.SerbianCyrillicStrings
 import io.ntole.wyr.play.categoryName
 import io.ntole.wyr.submit.sendText
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -183,6 +184,30 @@ class AppNavigationTest {
             assertTrue(CYRILLIC.accountScreens.newQuestion in shown, "the Account screen is not shown: $shown")
             assertTrue("Fly" in shown && CYRILLIC.accountScreens.pending in shown, "the question is not listed: $shown")
             assertEquals(2, game.submissionsRead)
+        }
+
+    /** Sent and then left before its answer came: My questions reads the list again once it is stored. */
+    @Test
+    fun `a question stored after the player went back is listed on My questions`() =
+        withApp { scene ->
+            val answer = CompletableDeferred<Unit>()
+            game.submitWaitsFor = answer
+            scene.tap(CYRILLIC.account)
+            scene.tap(CYRILLIC.accountScreens.newQuestion)
+            scene.type(0, "Fly")
+            scene.type(1, "Swim")
+            scene.tap(categoryName(Category.FOOD))
+            scene.tap(sendText(CYRILLIC.accountScreens))
+
+            scene.tap(CYRILLIC.back)
+            assertEquals(2, game.submissionsRead, "read as the Account screen is shown again")
+            answer.complete(Unit)
+            scene.settle()
+
+            val shown = scene.everyText()
+            assertTrue(CYRILLIC.accountScreens.newQuestion in shown, "the Account screen is not shown: $shown")
+            assertTrue("Fly" in shown && CYRILLIC.accountScreens.pending in shown, "the question is not listed: $shown")
+            assertEquals(3, game.submissionsRead)
         }
 
     @Test
@@ -346,6 +371,9 @@ class AppNavigationTest {
         /** The questions submitted, newest first. */
         val sent = mutableListOf<Submission>()
 
+        /** When set, a submission waits for it before it is stored. */
+        var submitWaitsFor: CompletableDeferred<Unit>? = null
+
         override val categories: StateFlow<Set<Category>> = MutableStateFlow(emptySet())
 
         override suspend fun next(): Question {
@@ -399,8 +427,9 @@ class AppNavigationTest {
             optionA: String,
             optionB: String,
             categories: Set<Category>,
-        ): Submission =
-            Submission(
+        ): Submission {
+            submitWaitsFor?.await()
+            return Submission(
                 id = "q${sent.size + 1}",
                 optionA = optionA,
                 optionB = optionB,
@@ -409,6 +438,7 @@ class AppNavigationTest {
                 rejectionReason = null,
                 submittedAt = Instant.fromEpochMilliseconds(1_790_000_000_000L),
             ).also { sent.add(0, it) }
+        }
 
         override suspend fun mine(): List<Submission> {
             submissionsRead++

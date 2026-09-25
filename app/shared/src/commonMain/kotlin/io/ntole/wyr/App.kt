@@ -128,10 +128,20 @@ private fun Account(
 ) {
     val viewModel = koinViewModel<AccountViewModel>()
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val submit = koinViewModel<SubmitViewModel>()
+    val submitState by submit.state.collectAsStateWithLifecycle()
 
     // Every time the screen is shown: the points move on the Play screen meanwhile, a guest's are what
     // a login would leave behind, and a moderator decides the player's questions.
     LaunchedEffect(viewModel) { viewModel.refresh() }
+    // A question sent from the form whose answer came once the player had come back here: My questions
+    // was read before it was stored, so it is read again, once no read is in flight.
+    LaunchedEffect(submitState.sent, state.isBusy) {
+        if (submitState.sent && !state.isBusy) {
+            submit.leftForm()
+            viewModel.refresh()
+        }
+    }
 
     AccountScreen(
         state = state,
@@ -167,7 +177,8 @@ private fun Auth(onSignedIn: () -> Unit) {
 
 /**
  * The Submit screen's form, opened from My questions. A question stored goes back to My questions,
- * [onSent], which reads the list again as the Account screen is shown.
+ * [onSent], which reads the list again as the Account screen is shown; one stored once the player had
+ * gone back is read again by the Account screen, if it is shown then.
  */
 @Composable
 private fun Submit(onSent: () -> Unit) {

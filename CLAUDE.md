@@ -1112,13 +1112,15 @@ listed on the Account screen.
   takes the cost and refuses a question its author cannot pay for itself (the branch that builds
   it, `feat/server-categories`, names that refusal). A stored question clears the form and goes back
   to My questions, which reads the list again (`SubmitState.sent`, which the form takes down as it
-  goes and the next action takes down too); a refusal keeps it and says why under it,
-  `INVALID_SUBMISSION`, `SUBMISSION_LIMIT` with the 20, a rate limit with its wait, or offline. Points
-  that cannot be read say so under Send, with Try again, apart from a refusal
-  (`SubmitState.submitFailure`, `pointsFailure`). One action at a time, and the form cannot change
-  while it is sent. `SubmitViewModelTest` drives it over fakes, `SubmitScreenDrawTest` draws every
-  state in both themes and every language at 400x900 and 375x599, and holds a written question to
-  599 whole; a longer state scrolls. `AppNavigationTest` sends one and lands back on My questions.
+  goes and the next action takes down too), and one stored once the player had gone back is read
+  again by the Account screen if it is shown then, which takes `sent` down; a refusal keeps it and
+  says why under it, `INVALID_SUBMISSION`, `SUBMISSION_LIMIT` with the 20, a rate limit with its
+  wait, or offline. Points that cannot be read say so under Send, with Try again, apart from a
+  refusal (`SubmitState.submitFailure`, `pointsFailure`). One action at a time, and the form cannot
+  change while it is sent. `SubmitViewModelTest` drives it over fakes, `SubmitScreenDrawTest` draws
+  every state in both themes and every language at 400x900 and 375x599, and holds a written question
+  to 599 whole; a longer state scrolls. `AppNavigationTest` sends one and lands back on My questions,
+  and sends one whose answer comes after the player went back, which My questions then lists.
 - **Moderation** *(built)*: a moderator approves or rejects each pending submission, **may change
   its categories** when approving (*Categories*: at least one stays, and a change replaces the
   question's `question_categories` rows in one transaction), and **may retire an approved question
