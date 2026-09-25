@@ -990,10 +990,10 @@ Play tab is frozen).
   knows none (`INVALID_RECOVERY_SECRET`): a mint on any other failure would keep a new secret over
   the one that recovers the account, for good. And it asks for a new secret only when the store
   holds none and could be read, because a new secret kills the one before wherever it is kept,
-  another iPhone's Keychain included. Keep `ErrorMapper` mapping the code to its own `DomainError`, never to
-  `UNAUTHORIZED`, and keep `AuthApi.recover` outside the bearer provider (`AuthCircuitBreaker`), or
-  its 401 sets off a refresh. On Android, the session's file (`wyr.auth.xml`) and the backup rules
-  that keep it on the phone must be renamed together.
+  another iPhone's Keychain included. Keep `ErrorMapper` mapping the code to its own `DomainError`,
+  never to `UNAUTHORIZED`, and keep `AuthApi.recover` outside the bearer provider
+  (`AuthCircuitBreaker`), or its 401 sets off a refresh. On Android, the session's file
+  (`wyr.auth.xml`) and the backup rules that keep it on the phone must be renamed together.
 - **A session write returns once it is durable, and suspends for it** (`TokenStorage.write`,
   CLAUDE.md §8a). `AndroidTokenStorage` used `apply()`, which returns before the file is written,
   so a kill just after a refresh could come back with the rotated-out token and orphan the guest.

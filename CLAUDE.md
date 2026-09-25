@@ -1118,7 +1118,8 @@ name one too.
   `.github/workflows/ci.yml`. That workflow is the definition of "green". Besides `verify` it runs
   `server-postgres` (the server suite against a Postgres service container), `docker-smoke` (builds
   the image and polls `/health`), and `ios` (framework link, simulator tests, the `:core` modules'
-  test compiles, and an `xcodebuild` simulator build on macOS). All four passed on their first run, 2026-09-24. None of those three
+  test compiles, and an `xcodebuild` simulator build on macOS). All four passed on their first run,
+  2026-09-24. None of those three
   can run on this machine: read their results with `gh run list -R niktok1/would-you-rather`,
   through a login to the personal account only (§7). `:server:test` uses H2 unless `WYR_TEST_JDBC_URL` (plus
   `WYR_TEST_DB_USER` / `WYR_TEST_DB_PASSWORD`) names another database; the suite then wipes it,
