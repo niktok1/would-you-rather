@@ -6,56 +6,70 @@ import io.ntole.wyr.core.domain.question.Question
 import io.ntole.wyr.core.domain.vote.Side
 import io.ntole.wyr.core.domain.vote.Tally
 import io.ntole.wyr.core.domain.vote.VoteOutcome
+import io.ntole.wyr.language.EnglishStrings
+import io.ntole.wyr.language.Language
+import io.ntole.wyr.language.SerbianCyrillicStrings
+import io.ntole.wyr.language.SerbianLatinStrings
+import io.ntole.wyr.language.stringsOf
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
-import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class PlayScreenTest {
     @Test
-    fun `a vote shows the points the server awarded it`() {
-        assertEquals("+1", pointsThisVote(outcome(pointsAwarded = 1, replayed = false)))
+    fun `the points are the number and its unit never broken between them`() {
+        assertEquals("123 П", SerbianCyrillicStrings.playScreen.points(123))
+        assertEquals("123 P", SerbianLatinStrings.playScreen.points(123))
+        assertEquals("0 P", EnglishStrings.playScreen.points(0))
     }
 
     @Test
-    fun `a replayed vote shows no points of its own`() {
-        // The Play tab's retry of a vote whose response was lost: it landed and paid the first time.
-        assertNull(pointsThisVote(outcome(pointsAwarded = 0, replayed = true)))
+    fun `a percentage is the number and its sign`() {
+        Language.entries.forEach { language -> assertEquals("70%", stringsOf(language).playScreen.percent(70)) }
     }
 
     @Test
-    fun `a question shows how many like it`() {
-        assertEquals("0 likes", likeCountOf(QUESTION))
-        assertEquals("1 like", likeCountOf(QUESTION.copy(likeCount = 1, likedByMe = true)))
-        assertEquals("12 likes", likeCountOf(QUESTION.copy(likeCount = 12)))
+    fun `each failure is worded in the language shown`() {
+        val strings = SerbianCyrillicStrings.playScreen
+        assertEquals(strings.cannotReach, failureText(DomainError.NETWORK, strings))
+        assertEquals(strings.outOfQuestions, failureText(DomainError.OUT_OF_QUESTIONS, strings))
+        assertEquals(strings.slowDown, failureText(DomainError.RATE_LIMITED, strings))
+        // A retired question is 404 to answer and to like alike.
+        assertEquals(strings.questionGone, failureText(DomainError.QUESTION_NOT_FOUND, strings))
+        assertEquals("That question is gone.", failureText(DomainError.QUESTION_NOT_FOUND, EnglishStrings.playScreen))
+        // Offline, or the server down or past the request timeout: runApi calls them all NETWORK.
+        assertEquals("Игра није доступна.", failureText(DomainError.NETWORK, strings))
+        assertEquals("Can't reach the game.", failureText(DomainError.NETWORK, EnglishStrings.playScreen))
+    }
+
+    /** The Play screen never submits, moderates or logs in, so those have the one short sentence. */
+    @Test
+    fun `every other failure is the same short sentence`() {
+        val strings = EnglishStrings.playScreen
+        val worded =
+            listOf(
+                DomainError.NETWORK,
+                DomainError.OUT_OF_QUESTIONS,
+                DomainError.RATE_LIMITED,
+                DomainError.QUESTION_NOT_FOUND,
+            )
+        DomainError.entries.filter { it !in worded }.forEach { error ->
+            assertEquals(strings.somethingWrong, failureText(error, strings), "$error")
+        }
     }
 
     @Test
-    fun `the Like button unlikes a question the player likes and likes any other`() {
-        assertEquals("Unlike", likeActionOf(QUESTION.copy(likeCount = 1, likedByMe = true)))
-        // Liked by others only: the player's own like is what the button sets.
-        assertEquals("Like", likeActionOf(QUESTION.copy(likeCount = 4, likedByMe = false)))
-    }
-
-    @Test
-    fun `a failed like says what went wrong in the player's words`() {
-        assertEquals("Can't reach the game right now. Try again.", likeFailureMessage(DomainError.NETWORK))
-        // A retired question is 404 to like and to unlike alike.
-        assertEquals("That question is no longer in the game.", likeFailureMessage(DomainError.QUESTION_NOT_FOUND))
-        assertEquals("Something went wrong. Try again.", likeFailureMessage(DomainError.SERVER))
-    }
-
-    @Test
-    fun `no category selected is all of them`() {
-        assertEquals("All", categoriesPlayed(emptySet()))
+    fun `no category selected is all of them in the language shown`() {
+        assertEquals("Све", categoriesPlayed(emptySet(), all = SerbianCyrillicStrings.playScreen.allCategories))
+        assertEquals("All", categoriesPlayed(emptySet(), all = EnglishStrings.playScreen.allCategories))
     }
 
     @Test
     fun `the categories played are named in the picker's order`() {
         // Not in the order the set holds them: in declaration order, as the picker lists them.
-        assertEquals("Food, Ethics", categoriesPlayed(linkedSetOf(Category.ETHICS, Category.FOOD)))
-        assertEquals("Superpowers", categoriesPlayed(setOf(Category.SUPERPOWERS)))
+        assertEquals("Food, Ethics", categoriesPlayed(linkedSetOf(Category.ETHICS, Category.FOOD), all = ALL))
+        assertEquals("Superpowers", categoriesPlayed(setOf(Category.SUPERPOWERS), all = ALL))
     }
 
     @Test
@@ -63,7 +77,7 @@ class PlayScreenTest {
         // Not none: a question filed only under categories this build cannot name is in none of them.
         assertEquals(
             "Food, Lifestyle, Ethics, Superpowers, Random",
-            categoriesPlayed(Category.selectable.toSet()),
+            categoriesPlayed(Category.selectable.toSet(), all = ALL),
         )
     }
 
@@ -81,26 +95,24 @@ class PlayScreenTest {
         assertTrue(PlayUiState.Asking(QUESTION).canChangeCategories)
         assertFalse(PlayUiState.Asking(QUESTION, isSubmitting = true).canChangeCategories)
         assertFalse(PlayUiState.Asking(QUESTION, isLiking = true).canChangeCategories)
-        val revealed = PlayUiState.Revealed(QUESTION, outcome(pointsAwarded = 1, replayed = false))
+        val revealed = PlayUiState.Revealed(QUESTION, OUTCOME)
         assertTrue(revealed.canChangeCategories)
         assertFalse(revealed.copy(isLiking = true).canChangeCategories)
         // Where a selection with nothing to serve leaves the player.
         assertTrue(PlayUiState.Failed(DomainError.OUT_OF_QUESTIONS).canChangeCategories)
     }
 
-    private fun outcome(
-        pointsAwarded: Int,
-        replayed: Boolean,
-    ): VoteOutcome =
-        VoteOutcome(
-            yourSide = Side.A,
-            tally = Tally(votesA = 1, votesB = 0),
-            pointsAwarded = pointsAwarded,
-            totalPoints = 1,
-            replayed = replayed,
-        )
-
     private companion object {
+        const val ALL = "All"
+
         val QUESTION = Question(id = "q1", optionA = "Fly", optionB = "Swim", categories = setOf(Category.FOOD))
+
+        val OUTCOME =
+            VoteOutcome(
+                yourSide = Side.A,
+                tally = Tally(votesA = 1, votesB = 0),
+                pointsAwarded = 1,
+                totalPoints = 1,
+            )
     }
 }

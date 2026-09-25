@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import io.ntole.wyr.core.domain.error.DomainError
 import io.ntole.wyr.core.domain.error.WyrException
 import io.ntole.wyr.core.domain.like.SetLike
+import io.ntole.wyr.core.domain.player.GetPlayerStats
 import io.ntole.wyr.core.domain.question.Category
 import io.ntole.wyr.core.domain.question.GetNextQuestion
 import io.ntole.wyr.core.domain.question.Question
@@ -13,17 +14,27 @@ import io.ntole.wyr.core.domain.question.SkipQuestion
 import io.ntole.wyr.core.domain.vote.AttemptId
 import io.ntole.wyr.core.domain.vote.CastVote
 import io.ntole.wyr.core.domain.vote.Side
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
+/**
+ * How long after a reveal lands a tap on a card is still taken for the answering tap's double, and
+ * does not go on (CLAUDE.md §8d, *The Play screen*; provisional). The second tap of a double tap
+ * comes at most 300 ms after the first, and so at most that long after a quick answer lands.
+ */
+internal const val REVEAL_HOLD_MILLIS: Long = 500
+
 class PlayViewModel(
     private val getNextQuestion: GetNextQuestion,
     private val castVote: CastVote,
     private val skipQuestion: SkipQuestion,
     private val setLike: SetLike,
+    private val getPlayerStats: GetPlayerStats,
     private val questions: QuestionRepository,
 ) : ViewModel() {
     private val _state = MutableStateFlow<PlayUiState>(PlayUiState.Loading)
@@ -41,11 +52,42 @@ class PlayViewModel(
     /** What the open category picker has ticked, not played yet, or `null` while it is closed. */
     val picking: StateFlow<Set<Category>?> = _picking.asStateFlow()
 
+    private val _points = MutableStateFlow<Int?>(null)
+
+    /**
+     * The player's points as the server last reported them (CLAUDE.md §8c), never worked out here:
+     * read each time the screen is shown ([refreshPoints]) and taken from each vote's answer, `null`
+     * until the first of them.
+     */
+    val points: StateFlow<Int?> = _points.asStateFlow()
+
+    /** The read of the points in flight, if any, which a vote's answer makes stale. */
+    private var pointsRead: Job? = null
+
+    /** Active for [REVEAL_HOLD_MILLIS] from the moment a reveal lands, while [next] waits. */
+    private var revealHold: Job? = null
+
     init {
-        next()
+        load()
     }
 
+    /**
+     * The next question, from the reveal (CLAUDE.md §8d, *The Play screen*): only once the question
+     * on screen is answered and nothing is in flight, one action at a time. Before answering, the
+     * way on is an answer or Skip, never this; and a second tap finds the next question loading.
+     *
+     * Not in the first [REVEAL_HOLD_MILLIS] of the reveal either: the cards that answer are the way
+     * on from it, so the second tap of a double tap, landing after a quick answer, would otherwise
+     * skip the reveal it had just brought.
+     */
     fun next() {
+        val revealed = _state.value as? PlayUiState.Revealed ?: return
+        if (revealed.isBusy) return
+        if (revealHold?.isActive == true) return
+        load()
+    }
+
+    private fun load() {
         _state.value = PlayUiState.Loading
 
         viewModelScope.launch {
@@ -96,7 +138,7 @@ class PlayViewModel(
             } catch (unrecorded: WyrException) {
                 // Moved on all the same (above). Only a WyrException: a cancellation must go on up.
             }
-            next()
+            load()
         }
     }
 
@@ -190,7 +232,7 @@ class PlayViewModel(
         viewModelScope.launch {
             // Before the fetch, so the question loaded is already the new selection's.
             questions.setCategories(ticked)
-            next()
+            load()
         }
     }
 
@@ -207,7 +249,26 @@ class PlayViewModel(
         // Only from a failure: a second tap on Try again finds the retry already under way.
         val failed = _state.value as? PlayUiState.Failed ?: return
         val lostVote = failed.lostVote
-        if (lostVote == null) next() else submit(lostVote)
+        if (lostVote == null) load() else submit(lostVote)
+    }
+
+    /**
+     * Reads the player's points, each time the Play screen is shown: they move meanwhile on other
+     * screens, a login or a logout, a submission, and with other players' likes of the player's
+     * questions. A read that fails keeps the points shown and says nothing: the next vote's answer
+     * brings them. A vote answered while a read is in flight wins, since the server may have
+     * answered the read before it counted the vote.
+     */
+    fun refreshPoints() {
+        pointsRead?.cancel()
+        pointsRead =
+            viewModelScope.launch {
+                try {
+                    _points.value = getPlayerStats().totalPoints
+                } catch (unread: WyrException) {
+                    // Kept as they were (above). Only a WyrException: a cancellation must go on up.
+                }
+            }
     }
 
     private fun submit(vote: PendingVote) {
@@ -216,15 +277,18 @@ class PlayViewModel(
         viewModelScope.launch {
             _state.value =
                 try {
-                    PlayUiState.Revealed(
-                        question = vote.question,
-                        outcome = castVote(vote.question.id, vote.side, vote.attempt),
-                    )
+                    val outcome = castVote(vote.question.id, vote.side, vote.attempt)
+                    // The vote's total is the newest the server has told: a read still in flight
+                    // may be older.
+                    pointsRead?.cancel()
+                    _points.value = outcome.totalPoints
+                    revealHold = viewModelScope.launch { delay(REVEAL_HOLD_MILLIS) }
+                    PlayUiState.Revealed(question = vote.question, outcome = outcome)
                 } catch (failure: WyrException) {
                     // Already voted is not really a failure to show: the question is spent, so move
                     // the player on rather than stranding them on an error they cannot resolve.
                     if (failure.error == DomainError.ALREADY_VOTED) {
-                        next()
+                        load()
                         return@launch
                     }
                     // NETWORK is what retry safety is for: the vote may have landed, and only its

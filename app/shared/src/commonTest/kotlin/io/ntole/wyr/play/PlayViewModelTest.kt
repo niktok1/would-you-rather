@@ -5,6 +5,9 @@ import io.ntole.wyr.core.domain.error.WyrException
 import io.ntole.wyr.core.domain.like.LikeRepository
 import io.ntole.wyr.core.domain.like.QuestionLikes
 import io.ntole.wyr.core.domain.like.SetLike
+import io.ntole.wyr.core.domain.player.GetPlayerStats
+import io.ntole.wyr.core.domain.player.PlayerRepository
+import io.ntole.wyr.core.domain.player.PlayerStats
 import io.ntole.wyr.core.domain.question.Category
 import io.ntole.wyr.core.domain.question.GetNextQuestion
 import io.ntole.wyr.core.domain.question.Question
@@ -428,8 +431,9 @@ class PlayViewModelTest {
             assertEquals(PlayUiState.Revealed(QUESTION, OUTCOME), viewModel.state.value)
         }
 
+    /** One action at a time: the reveal waits for its like, which then lands on it. */
     @Test
-    fun `a like answered once the player has moved on is not put on the next question`() =
+    fun `Next while a like is in flight does nothing`() =
         runTest(dispatcher) {
             val gate = CompletableDeferred<Unit>()
             val likes = FakeLikeRepository()
@@ -437,7 +441,8 @@ class PlayViewModelTest {
                 gate.await()
                 QuestionLikes(questionId, likeCount = 1, likedByMe = liked)
             }
-            val viewModel = viewModel(FakeQuestionRepository(QUESTION, NEXT_QUESTION), likes = likes)
+            val questions = FakeQuestionRepository(QUESTION, NEXT_QUESTION)
+            val viewModel = viewModel(questions, likes = likes)
             testScheduler.advanceUntilIdle()
             viewModel.choose(Side.A)
             testScheduler.advanceUntilIdle()
@@ -449,7 +454,175 @@ class PlayViewModelTest {
             gate.complete(Unit)
             testScheduler.advanceUntilIdle()
 
+            assertEquals(
+                PlayUiState.Revealed(QUESTION.copy(likeCount = 1, likedByMe = true), OUTCOME),
+                viewModel.state.value,
+            )
+            assertEquals(listOf("next"), questions.calls)
+        }
+
+    @Test
+    fun `Next after the reveal shows the next question`() =
+        runTest(dispatcher) {
+            val viewModel = viewModel(FakeQuestionRepository(QUESTION, NEXT_QUESTION))
+            testScheduler.advanceUntilIdle()
+            viewModel.choose(Side.B)
+            testScheduler.advanceUntilIdle()
+
+            viewModel.next()
+            testScheduler.advanceUntilIdle()
+
             assertEquals(PlayUiState.Asking(NEXT_QUESTION), viewModel.state.value)
+        }
+
+    /**
+     * The second tap of a double tap on a card can land after a quick answer. Until a moment after the
+     * reveal lands it is not the way on, so it cannot skip the reveal it brought; then a tap is.
+     */
+    @Test
+    fun `Next just after the reveal lands does nothing`() =
+        runTest(dispatcher) {
+            val questions = FakeQuestionRepository(QUESTION, NEXT_QUESTION)
+            val viewModel = viewModel(questions)
+            testScheduler.advanceUntilIdle()
+            viewModel.choose(Side.A)
+            testScheduler.runCurrent()
+            val revealed = assertIs<PlayUiState.Revealed>(viewModel.state.value)
+
+            testScheduler.advanceTimeBy(REVEAL_HOLD_MILLIS - 1)
+            viewModel.next()
+            testScheduler.runCurrent()
+            assertEquals(revealed, viewModel.state.value, "just before the hold ends")
+            assertEquals(listOf("next"), questions.calls)
+
+            testScheduler.advanceTimeBy(1)
+            testScheduler.runCurrent()
+            viewModel.next()
+            testScheduler.advanceUntilIdle()
+            assertEquals(PlayUiState.Asking(NEXT_QUESTION), viewModel.state.value, "once it has")
+        }
+
+    /** Before the reveal a card is an answer and Skip the way past it: never the next question. */
+    @Test
+    fun `Next before answering does nothing`() =
+        runTest(dispatcher) {
+            val questions = FakeQuestionRepository(QUESTION, NEXT_QUESTION)
+            val viewModel = viewModel(questions)
+            testScheduler.advanceUntilIdle()
+
+            viewModel.next()
+            testScheduler.advanceUntilIdle()
+
+            assertEquals(PlayUiState.Asking(QUESTION), viewModel.state.value)
+            assertEquals(listOf("next"), questions.calls)
+        }
+
+    @Test
+    fun `Next while the vote is in flight does nothing`() =
+        runTest(dispatcher) {
+            val questions = FakeQuestionRepository(QUESTION, NEXT_QUESTION)
+            val viewModel = viewModel(questions)
+            testScheduler.advanceUntilIdle()
+
+            viewModel.choose(Side.A)
+            viewModel.next()
+            testScheduler.advanceUntilIdle()
+
+            assertEquals(PlayUiState.Revealed(QUESTION, OUTCOME), viewModel.state.value)
+            assertEquals(listOf("next"), questions.calls)
+        }
+
+    /** Both taps land before the first one's fetch runs: one question further, not two. */
+    @Test
+    fun `a second tap on Next loads one question`() =
+        runTest(dispatcher) {
+            val questions = FakeQuestionRepository(QUESTION, NEXT_QUESTION, FOOD_QUESTION)
+            val viewModel = viewModel(questions)
+            testScheduler.advanceUntilIdle()
+            viewModel.choose(Side.A)
+            testScheduler.advanceUntilIdle()
+
+            viewModel.next()
+            viewModel.next()
+            testScheduler.advanceUntilIdle()
+
+            assertEquals(PlayUiState.Asking(NEXT_QUESTION), viewModel.state.value)
+            assertEquals(listOf("next", "next"), questions.calls)
+        }
+
+    /** Nothing to show until the server says, rather than a placeholder zero. */
+    @Test
+    fun `the points are unknown until read and then the server's`() =
+        runTest(dispatcher) {
+            val players = FakePlayerRepository()
+            val viewModel = viewModel(players = players)
+            testScheduler.advanceUntilIdle()
+            assertNull(viewModel.points.value)
+
+            viewModel.refreshPoints()
+            testScheduler.advanceUntilIdle()
+            assertEquals(5, viewModel.points.value)
+
+            // Read again every time, since they move on other screens meanwhile.
+            players.answer = { statsWith(totalPoints = 6) }
+            viewModel.refreshPoints()
+            testScheduler.advanceUntilIdle()
+            assertEquals(6, viewModel.points.value)
+            assertEquals(2, players.reads)
+        }
+
+    @Test
+    fun `a vote's answer moves the points to its total`() =
+        runTest(dispatcher) {
+            val viewModel = viewModel()
+            testScheduler.advanceUntilIdle()
+            viewModel.refreshPoints()
+            testScheduler.advanceUntilIdle()
+
+            viewModel.choose(Side.A)
+            testScheduler.advanceUntilIdle()
+
+            assertEquals(42, viewModel.points.value)
+        }
+
+    /** The read may have been answered before the vote was counted, so the vote's total stays. */
+    @Test
+    fun `a read answered after a vote does not put older points back`() =
+        runTest(dispatcher) {
+            val gate = CompletableDeferred<Unit>()
+            val players = FakePlayerRepository()
+            players.answer = {
+                gate.await()
+                statsWith(totalPoints = 5)
+            }
+            val viewModel = viewModel(players = players)
+            testScheduler.advanceUntilIdle()
+            viewModel.refreshPoints()
+            testScheduler.advanceUntilIdle()
+
+            viewModel.choose(Side.A)
+            testScheduler.advanceUntilIdle()
+            gate.complete(Unit)
+            testScheduler.advanceUntilIdle()
+
+            assertEquals(42, viewModel.points.value)
+        }
+
+    @Test
+    fun `a failed read keeps the points shown and the question as it was`() =
+        runTest(dispatcher) {
+            val players = FakePlayerRepository()
+            val viewModel = viewModel(players = players)
+            testScheduler.advanceUntilIdle()
+            viewModel.choose(Side.A)
+            testScheduler.advanceUntilIdle()
+
+            players.answer = { throw WyrException(DomainError.NETWORK) }
+            viewModel.refreshPoints()
+            testScheduler.advanceUntilIdle()
+
+            assertEquals(42, viewModel.points.value)
+            assertEquals(PlayUiState.Revealed(QUESTION, OUTCOME), viewModel.state.value)
         }
 
     @Test
@@ -764,11 +937,13 @@ class PlayViewModelTest {
         questions: QuestionRepository = FakeQuestionRepository(),
         votes: VoteRepository = FakeVoteRepository(),
         likes: LikeRepository = FakeLikeRepository(),
+        players: PlayerRepository = FakePlayerRepository(),
     ) = PlayViewModel(
         getNextQuestion = GetNextQuestion(questions, NoOpSessionRepository),
         castVote = CastVote(votes, NoOpSessionRepository),
         skipQuestion = SkipQuestion(questions, NoOpSessionRepository),
         setLike = SetLike(likes, NoOpSessionRepository),
+        getPlayerStats = GetPlayerStats(players, NoOpSessionRepository),
         questions = questions,
     )
 
@@ -803,6 +978,16 @@ class PlayViewModelTest {
                 tally = Tally(votesA = 7, votesB = 3),
                 pointsAwarded = 17,
                 totalPoints = 42,
+            )
+
+        fun statsWith(totalPoints: Int): PlayerStats =
+            PlayerStats(
+                totalPoints = totalPoints,
+                answersGiven = 0,
+                questionsAnswered = 0,
+                cycle = 1,
+                dueThisCycle = 10,
+                likesReceived = 0,
             )
     }
 
@@ -922,6 +1107,18 @@ class PlayViewModelTest {
         ): QuestionLikes {
             sent += questionId to liked
             return answer(questionId, liked)
+        }
+    }
+
+    /** Answers every read of the stats with [answer], and counts them. */
+    private class FakePlayerRepository : PlayerRepository {
+        var answer: suspend () -> PlayerStats = { statsWith(totalPoints = 5) }
+
+        var reads = 0
+
+        override suspend fun stats(): PlayerStats {
+            reads++
+            return answer()
         }
     }
 
