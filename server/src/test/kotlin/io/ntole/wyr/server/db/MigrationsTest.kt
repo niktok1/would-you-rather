@@ -361,7 +361,9 @@ internal class MigrationsTest(
 
     /**
      * Boots [SERVERS] servers on [database] together, each through a pool of its own as separate
-     * instances would, and fails unless every one of them boots.
+     * instances would, and fails unless every one of them boots. They seed the first seeds alone,
+     * which a database built before migrations already holds, so the seed writes nothing there and
+     * the database holds what the scripts leave ([afterLaterScripts]).
      */
     private fun bootAtOnce(database: TestDatabaseSettings) {
         val start = CountDownLatch(1)
@@ -373,7 +375,7 @@ internal class MigrationsTest(
                         Callable {
                             database.serverPool().use { pool ->
                                 start.await()
-                                DatabaseFactory.migrateAndSeed(pool)
+                                DatabaseFactory.migrateAndSeed(pool, TEST_SEEDS)
                             }
                         },
                     )

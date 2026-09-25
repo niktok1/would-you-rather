@@ -12,6 +12,7 @@ import io.ntole.wyr.server.db.Players
 import io.ntole.wyr.server.db.QuestionCategories
 import io.ntole.wyr.server.db.Questions
 import io.ntole.wyr.server.db.Seed
+import io.ntole.wyr.server.db.TEST_SEEDS
 import io.ntole.wyr.server.db.appTables
 import io.ntole.wyr.server.db.connectH2
 import io.ntole.wyr.server.db.h2Url
@@ -45,7 +46,7 @@ class StatsStoreTest {
     private val pool: List<String> =
         transaction(database) {
             SchemaUtils.create(*appTables)
-            Seed.questionsIfEmpty()
+            Seed.writeMissing(TEST_SEEDS)
             Questions.select(Questions.id).map { it[Questions.id] }
         }
 

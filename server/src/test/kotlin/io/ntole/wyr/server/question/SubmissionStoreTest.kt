@@ -9,6 +9,7 @@ import io.ntole.wyr.core.reaction.Reaction
 import io.ntole.wyr.core.vote.OptionSide
 import io.ntole.wyr.server.db.Questions
 import io.ntole.wyr.server.db.Seed
+import io.ntole.wyr.server.db.TEST_SEEDS
 import io.ntole.wyr.server.db.appTables
 import io.ntole.wyr.server.db.connectH2
 import io.ntole.wyr.server.db.h2Url
@@ -45,7 +46,7 @@ class SubmissionStoreTest {
     init {
         transaction(database) {
             SchemaUtils.create(*appTables)
-            Seed.questionsIfEmpty()
+            Seed.writeMissing(TEST_SEEDS)
         }
     }
 

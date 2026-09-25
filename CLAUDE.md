@@ -173,7 +173,7 @@ failing:
   carried on from: PostgreSQL aborts a transaction at its first error. It propagates, and Exposed
   rolls back and reruns the whole transaction, which then sees the committed row (`VoteStore.cast`,
   `SkipStore.skip`, `ReactionStore.set`, `AccountStore.register`, which `AccountStoreTest` races,
-  `CategoryStore.create`, which `CategoryStoreTest` races, and `Seed.questionsIfEmpty`, which
+  `CategoryStore.create`, which `CategoryStoreTest` races, and `Seed.writeMissing`, which
   `SeedTest` races). A plain read before such an insert only spares
   a certain violation, and needs no lock when finding the row writes nothing.
 - Numbers that must agree with one another are read in one statement, which sees one committed
@@ -1124,7 +1124,11 @@ listed on the Account screen.
     `FOOD`, `LIFESTYLE`, `ETHICS` and `SUPERPOWERS` under the names the enum sent, so an installed
     client reads every one as before, a millisecond apart in its declaration order, then `ABSURD`
     (*Апсурдно*, *Absurd*), which took every question filed under RANDOM (§8b: RANDOM is no category
-    now, *All* is no filter). Nothing deletes a category. On the wire a category is its id, a plain
+    now, *All* is no filter). Eight more came with the second seeds (*Seeds*), written by the seed,
+    not a migration, a millisecond apart from 2026-09-26 (`Seed.ALL_CATEGORIES`): `TRAVEL`
+    (*Путовања*, *Travel*), `WORK` (*Посао*, *Work*), `MONEY` (*Новац*, *Money*), `LOVE` (*Љубав*,
+    *Love*), `TECHNOLOGY` (*Технологија*, *Technology*), `SPORTS` (*Спорт*, *Sports*), `ANIMALS`
+    (*Животиње*, *Animals*) and `GROSS` (*Гадости*, *Gross*). Nothing deletes a category. On the wire a category is its id, a plain
     string (§5).
   - *The moderator* adds a category with `POST /v1/admin/categories` (`CreateCategoryRequest`,
     answered 201 with its `CategoryDto`) and sets both its names with
@@ -1288,10 +1292,23 @@ listed on the Account screen.
   `QuestionStore.servable` is the one predicate the feed, the due count and votes, skips and reactions
   (`QuestionStore.isServable`) read, and it asks only that a moderator approved the question and has
   not retired it (*Moderation*).
-- **Seeds** *(decided 2026-09-25; built)*: the server's starter questions (`Seed`), approved from
-  the start, authored by nobody. Each comes with **made-up votes**, a count for each side
+- **Seeds** *(decided 2026-09-25; built; 200 more 2026-09-26)*: the server's starter questions
+  (`Seed`), approved from the start, authored by nobody: 224, `seed-1` to `seed-224`, the first 24
+  under V6's categories and the 200 after them under those and eight more (*Categories*), 14 to 16
+  new in each, some filed under two. **The seed writes what a database lacks, by id**, at every
+  boot (`Seed.writeMissing`): a new database gets every seed, and one an earlier build seeded gets
+  the seeds and seed categories added since, at the first boot of the build that added them, which
+  is how they reach production. Nothing there is written again or changed: a retired seed stays
+  retired, and a category a moderator renamed, or added under a seed category's id, keeps its
+  names. So a new seed needs no migration; changing one already written does (V8, V9). The server
+  tests seed the first 24 alone (`TEST_SEEDS`): they were written against a pool one feed batch
+  holds, so seeds added later change none of them but `SeedTest`, which holds every seed to the
+  rules of a submission (`checkedSubmission`), to votes of its own and to Serbian Cyrillic, no two
+  alike, and every seed category to holding seeds. The seeds are universal, nothing that matters in
+  one place only (§8b, *Local questions*). Each comes with **made-up votes**, a count for each side
   (`questions.base_votes_a` and `base_votes_b`, V8), so its split looks like a crowd's from the first
-  answer: a different total and split for each (`SeedTest`), 105 to 523 votes. **Every tally the
+  answer: a different total and split for each (`SeedTest`), 96 to 548 votes, the larger side the
+  one a crowd would likely pick. **Every tally the
   server reports adds them** to the players' votes, a vote's answer and the moderator's list alike,
   read in the tally's one statement (`QuestionTally`, §4); every other question has none. They are
   no player's: a player still holds one vote per question, and nothing writes them after V8 and the
@@ -1490,8 +1507,8 @@ listed on the Account screen.
     racing exactly one wins. A vote, skip or reaction in flight as it commits may still land (§8b,
     *Retiring a question*). Stored as `questions.retired_at` (V3) beside an `APPROVED` status, never
     as a status: `statusOf` and `standsAt` read the two columns as one status, so a rollback to the
-    build before reads every row. The seed writes only into a database with no question, so a
-    retired seed stays retired through every boot. `RetirementTest` pins it, the races included.
+    build before reads every row. The seed writes only what a database lacks and changes nothing
+    there, so a retired seed stays retired through every boot. `RetirementTest` pins it, the races included.
   - *The client* is `ModerationRepository` in `:core:domain`, behind `GetPendingSubmissions`,
     `ApproveSubmission` and `RejectSubmission`, none of which ensures a session: the moderator is
     not a player. `DefaultModerationRepository` calls `ModerationApi` through `runApi` alone, never
@@ -1722,8 +1739,8 @@ hand, so the two cannot say different things; and **English** stands beside them
   guest has none of, and every question in two forms; the formal *Да ли бисте радије радили*, cold
   for a game; and every option as *да* with the present (*Да радиш четири дуга дана*), free of
   gender too but longer, every option opening on one word, and a migration of the seeds: the
-  fallback, should the infinitive read wrong after all. Nothing checks it: the 24 seeds keep it
-  (V9), and the moderator holds a player's question to it when deciding, since an approval cannot
+  fallback, should the infinitive read wrong after all. Nothing checks it: the 224 seeds keep it
+  (V9 and the second seeds), and the moderator holds a player's question to it when deciding, since an approval cannot
   change the text.
   - *Other languages* *(to settle when one gets questions)*: English's *Would you rather…* takes a
     bare verb, with no gender and no formality, so none of this came up there. Before a language's

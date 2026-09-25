@@ -33,6 +33,7 @@ import io.ntole.wyr.core.vote.OptionSide
 import io.ntole.wyr.core.vote.VoteRequest
 import io.ntole.wyr.server.NO_PRACTICAL_LIMIT
 import io.ntole.wyr.server.config.ServerConfig
+import io.ntole.wyr.server.db.TEST_SEEDS
 import io.ntole.wyr.server.testDatabaseFor
 import io.ntole.wyr.server.wyrModule
 import kotlinx.serialization.json.Json
@@ -244,6 +245,7 @@ class CategoryFlowTest {
                     clientIpHeader = null,
                     onRender = false,
                 ),
+                TEST_SEEDS,
             )
         }
         block(createClient { install(ContentNegotiation) { json(Json { ignoreUnknownKeys = true }) } })

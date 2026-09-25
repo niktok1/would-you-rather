@@ -14,6 +14,7 @@ import io.ntole.wyr.server.category.categoryRoutes
 import io.ntole.wyr.server.config.ServerConfig
 import io.ntole.wyr.server.db.DatabaseFactory
 import io.ntole.wyr.server.db.Db
+import io.ntole.wyr.server.db.Seed
 import io.ntole.wyr.server.moderation.AdminToken
 import io.ntole.wyr.server.moderation.moderationRoutes
 import io.ntole.wyr.server.player.playerRoutes
@@ -39,12 +40,16 @@ fun main() {
  * Assembles the application.
  *
  * Takes its [config] as a parameter rather than reading the environment itself so tests can
- * stand the whole server up against an isolated in-memory database.
+ * stand the whole server up against an isolated in-memory database, and the [seeds] a boot writes
+ * so they can stand it up on the first seeds alone (`TEST_SEEDS`).
  */
-fun Application.wyrModule(config: ServerConfig) {
+fun Application.wyrModule(
+    config: ServerConfig,
+    seeds: List<Pair<String, Seed.Starter>> = Seed.SEEDS,
+) {
     warnAboutInsecureDefaults(config)
 
-    val database = DatabaseFactory.init(config, monitor)
+    val database = DatabaseFactory.init(config, monitor, seeds)
     val db = Db(database)
     val tokens = TokenService(config)
 
