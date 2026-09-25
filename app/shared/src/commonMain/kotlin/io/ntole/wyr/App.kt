@@ -15,15 +15,16 @@ import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.ntole.wyr.account.AccountScreen
 import io.ntole.wyr.account.AccountViewModel
+import io.ntole.wyr.account.AuthScreen
 import io.ntole.wyr.home.HomeScreen
 import io.ntole.wyr.language.Language
 import io.ntole.wyr.language.LanguageViewModel
 import io.ntole.wyr.language.WyrStrings
 import io.ntole.wyr.navigation.AccountTopBar
+import io.ntole.wyr.navigation.BackTopBar
 import io.ntole.wyr.navigation.Navigator
 import io.ntole.wyr.navigation.PlayTopBar
 import io.ntole.wyr.navigation.Screen
-import io.ntole.wyr.navigation.SubmitTopBar
 import io.ntole.wyr.navigation.SystemBack
 import io.ntole.wyr.play.PlayScreen
 import io.ntole.wyr.play.PlayViewModel
@@ -89,11 +90,16 @@ private fun Screens(
 
                 Screen.Account -> {
                     AccountTopBar(onBack = { navigator.back() }, onSubmit = { navigator.open(Screen.Submit) })
-                    Below { Account(language, onSelectLanguage) }
+                    Below { Account(language, onSelectLanguage, onOpenAuth = { navigator.open(Screen.Auth) }) }
+                }
+
+                Screen.Auth -> {
+                    BackTopBar(onBack = { navigator.back() })
+                    Below { Auth(onSignedIn = { navigator.back() }) }
                 }
 
                 Screen.Submit -> {
-                    SubmitTopBar(onBack = { navigator.back() })
+                    BackTopBar(onBack = { navigator.back() })
                     Below { Submit() }
                 }
             }
@@ -111,6 +117,7 @@ private fun ColumnScope.Below(screen: @Composable () -> Unit) {
 private fun Account(
     language: Language,
     onSelectLanguage: (Language) -> Unit,
+    onOpenAuth: () -> Unit,
 ) {
     val viewModel = koinViewModel<AccountViewModel>()
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -125,7 +132,29 @@ private fun Account(
         environment = koinInject(),
         language = language,
         onSelectLanguage = onSelectLanguage,
+        onOpenAuth = onOpenAuth,
     )
+}
+
+/**
+ * The Auth page, on the Account screen's ViewModel: what it reads and what is typed are the Account
+ * screen's. A register or a login that worked goes back to the Account screen, [onSignedIn], which
+ * reads the player again as it is shown.
+ */
+@Composable
+private fun Auth(onSignedIn: () -> Unit) {
+    val viewModel = koinViewModel<AccountViewModel>()
+    val state by viewModel.state.collectAsStateWithLifecycle()
+
+    LaunchedEffect(viewModel) { viewModel.authShown() }
+    LaunchedEffect(state.signedIn) {
+        if (state.signedIn) {
+            viewModel.leftAuth()
+            onSignedIn()
+        }
+    }
+
+    AuthScreen(state = state, actions = viewModel)
 }
 
 @Composable

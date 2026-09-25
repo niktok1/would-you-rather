@@ -49,9 +49,9 @@ fun AccountTopBar(
     )
 }
 
-/** Submit's: the back arrow, to the Account screen it was opened from. */
+/** The Auth page's and Submit's: the back arrow, to the Account screen each was opened from. */
 @Composable
-fun SubmitTopBar(onBack: () -> Unit) {
+fun BackTopBar(onBack: () -> Unit) {
     TopBar(start = { BackButton(onBack) })
 }
 

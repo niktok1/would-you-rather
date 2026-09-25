@@ -14,6 +14,10 @@ import io.ntole.wyr.core.domain.question.Category
 import io.ntole.wyr.core.domain.question.Question
 import io.ntole.wyr.core.domain.question.QuestionRepository
 import io.ntole.wyr.core.domain.session.SessionRepository
+import io.ntole.wyr.language.EnglishStrings
+import io.ntole.wyr.language.SerbianCyrillicStrings
+import io.ntole.wyr.language.SerbianLatinStrings
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -149,8 +153,8 @@ class AccountViewModelTest {
             assertEquals("Logged in as bob_1", playingAs(state.shown()))
             assertEquals(12, state.stats?.totalPoints)
             assertEquals("guest1", game.player, "the same player")
-            // A registered player sees no form, so nothing typed is kept.
-            assertEquals(AccountState(stats = state.stats), state)
+            // A registered player sees no form, so nothing typed is kept; only the Auth page's cue to go back.
+            assertEquals(AccountState(stats = state.stats, signedIn = true), state)
             assertTrue("register Bob_1" in game.calls)
         }
 
@@ -194,7 +198,7 @@ class AccountViewModelTest {
 
             val state = viewModel.state.value
             assertEquals(AccountFailure(AccountAction.REGISTER, DomainError.USERNAME_TAKEN), state.failure)
-            assertEquals("That username is taken. Try another.", failureMessage(assertNotNull(state.failure)))
+            assertEquals("That name is taken.", failureMessage(assertNotNull(state.failure), ENGLISH))
             assertEquals("Bob_1", state.registerUsername)
             assertEquals("correct horse", state.registerPassword)
             assertEquals("Playing as guest", playingAs(state.shown()))
@@ -331,21 +335,196 @@ class AccountViewModelTest {
     fun `each failure reads as what the player can do about it`() {
         assertEquals(
             "Wrong username or password.",
-            failureMessage(AccountFailure(AccountAction.LOG_IN, DomainError.INVALID_LOGIN)),
+            failureMessage(AccountFailure(AccountAction.LOG_IN, DomainError.INVALID_LOGIN), ENGLISH),
         )
         assertEquals(
-            "Too many tries. Wait 42 s, then try again.",
-            failureMessage(AccountFailure(AccountAction.LOG_IN, DomainError.RATE_LIMITED, retryAfter = 42.seconds)),
+            "Too many tries. Wait 42 s.",
+            failureMessage(
+                AccountFailure(AccountAction.LOG_IN, DomainError.RATE_LIMITED, retryAfter = 42.seconds),
+                ENGLISH,
+            ),
         )
         assertEquals(
-            "Too many tries. Wait a moment, then try again.",
-            failureMessage(AccountFailure(AccountAction.REGISTER, DomainError.RATE_LIMITED)),
+            "Too many tries. Wait a moment.",
+            failureMessage(AccountFailure(AccountAction.REGISTER, DomainError.RATE_LIMITED), ENGLISH),
         )
         assertEquals(
-            "Can't reach the game. Check your connection.",
-            failureMessage(AccountFailure(AccountAction.LOAD, DomainError.NETWORK)),
+            "No connection. Check your internet.",
+            failureMessage(AccountFailure(AccountAction.LOAD, DomainError.NETWORK), ENGLISH),
+        )
+        assertEquals(
+            "Превише покушаја. Сачекај 42 сек.",
+            failureMessage(
+                AccountFailure(AccountAction.LOG_IN, DomainError.RATE_LIMITED, retryAfter = 42.seconds),
+                CYRILLIC,
+            ),
         )
     }
+
+    @Test
+    fun `the rules read with their numbers in every language`() {
+        assertEquals("3–20 characters: a–z, 0–9, _", usernameRule(ENGLISH))
+        assertEquals("6–128 characters", passwordRule(ENGLISH))
+        assertEquals("3–20 знакова: a–z, 0–9, _", usernameRule(CYRILLIC))
+        assertEquals("6–128 znakova", passwordRule(SerbianLatinStrings.accountScreens))
+    }
+
+    @Test
+    fun `the Auth page opens on Register and switches to Log in and back`() =
+        runTest(dispatcher) {
+            val viewModel = open()
+            assertEquals(AuthMode.REGISTER, viewModel.state.value.authMode)
+
+            viewModel.setAuthMode(AuthMode.LOG_IN)
+            assertEquals(AuthMode.LOG_IN, viewModel.state.value.authMode)
+
+            viewModel.setAuthMode(AuthMode.REGISTER)
+            assertEquals(AuthMode.REGISTER, viewModel.state.value.authMode)
+        }
+
+    @Test
+    fun `the other form takes the warning down`() =
+        runTest(dispatcher) {
+            game.points = 5
+            val viewModel = open()
+            viewModel.setAuthMode(AuthMode.LOG_IN)
+            viewModel.setLoginUsername("bob_1")
+            viewModel.setLoginPassword("correct horse")
+            viewModel.logIn()
+            assertEquals(5, viewModel.state.value.guestPointsWarning)
+
+            viewModel.setAuthMode(AuthMode.REGISTER)
+
+            assertNull(viewModel.state.value.guestPointsWarning)
+            assertEquals("bob_1", viewModel.state.value.loginUsername, "what was typed stays")
+        }
+
+    @Test
+    fun `the other form takes a form's failure down and keeps a read's`() =
+        runTest(dispatcher) {
+            game.accounts["bob_1"] = "their password" to "someone"
+            val viewModel = open()
+            viewModel.setRegisterUsername("bob_1")
+            viewModel.setRegisterPassword("correct horse")
+            viewModel.register()
+            testScheduler.advanceUntilIdle()
+            assertEquals(
+                DomainError.USERNAME_TAKEN,
+                viewModel.state.value.failure
+                    ?.error,
+            )
+
+            viewModel.setAuthMode(AuthMode.LOG_IN)
+            assertNull(viewModel.state.value.failure)
+
+            game.statsFailWith = DomainError.NETWORK
+            viewModel.refresh()
+            testScheduler.advanceUntilIdle()
+            viewModel.setAuthMode(AuthMode.REGISTER)
+            assertEquals(AccountFailure(AccountAction.LOAD, DomainError.NETWORK), viewModel.state.value.failure)
+        }
+
+    @Test
+    fun `the forms do not switch while an action runs`() =
+        runTest(dispatcher) {
+            val viewModel = open()
+            val answer = CompletableDeferred<Unit>()
+            game.registerWaitsFor = answer
+            viewModel.setRegisterUsername("bob_1")
+            viewModel.setRegisterPassword("correct horse")
+            viewModel.register()
+            testScheduler.advanceUntilIdle()
+
+            viewModel.setAuthMode(AuthMode.LOG_IN)
+            assertEquals(AuthMode.REGISTER, viewModel.state.value.authMode)
+
+            answer.complete(Unit)
+            testScheduler.advanceUntilIdle()
+        }
+
+    @Test
+    fun `a registration that worked is signed in until the Auth page leaves`() =
+        runTest(dispatcher) {
+            val viewModel = open()
+            assertFalse(viewModel.state.value.signedIn)
+            viewModel.setRegisterUsername("bob_1")
+            viewModel.setRegisterPassword("correct horse")
+
+            viewModel.register()
+            testScheduler.advanceUntilIdle()
+
+            // Up through the read after it, which empties the forms of a registered player.
+            assertTrue(viewModel.state.value.signedIn)
+            assertEquals("Logged in as bob_1", playingAs(viewModel.state.value.shown()))
+
+            viewModel.leftAuth()
+            assertFalse(viewModel.state.value.signedIn)
+        }
+
+    @Test
+    fun `a login that worked is signed in`() =
+        runTest(dispatcher) {
+            game.accounts["bob_1"] = "correct horse" to "bob-player"
+            val viewModel = open()
+            viewModel.setAuthMode(AuthMode.LOG_IN)
+            viewModel.setLoginUsername("bob_1")
+            viewModel.setLoginPassword("correct horse")
+
+            viewModel.logIn()
+            testScheduler.advanceUntilIdle()
+
+            assertTrue(viewModel.state.value.signedIn)
+            assertEquals(AuthMode.REGISTER, viewModel.state.value.authMode, "the forms are gone with the guest")
+        }
+
+    @Test
+    fun `a refused registration or login is not signed in`() =
+        runTest(dispatcher) {
+            game.accounts["bob_1"] = "correct horse" to "someone"
+            val viewModel = open()
+            viewModel.setRegisterUsername("bob_1")
+            viewModel.setRegisterPassword("correct horse")
+            viewModel.register()
+            testScheduler.advanceUntilIdle()
+            assertFalse(viewModel.state.value.signedIn)
+
+            viewModel.setAuthMode(AuthMode.LOG_IN)
+            viewModel.setLoginUsername("bob_1")
+            viewModel.setLoginPassword("wrong horse")
+            viewModel.logIn()
+            testScheduler.advanceUntilIdle()
+            assertFalse(viewModel.state.value.signedIn)
+        }
+
+    /** A page the player left before its answer came is not sent back later. */
+    @Test
+    fun `the next action takes signed in down`() =
+        runTest(dispatcher) {
+            val viewModel = open()
+            viewModel.setRegisterUsername("bob_1")
+            viewModel.setRegisterPassword("correct horse")
+            viewModel.register()
+            testScheduler.advanceUntilIdle()
+
+            viewModel.refresh()
+
+            assertFalse(viewModel.state.value.signedIn)
+        }
+
+    @Test
+    fun `the Auth page reads the player only when none is read`() =
+        runTest(dispatcher) {
+            val viewModel = viewModel()
+
+            viewModel.authShown()
+            testScheduler.advanceUntilIdle()
+            assertEquals(listOf("stats"), game.calls)
+            assertEquals("Playing as guest", playingAs(viewModel.state.value.shown()))
+
+            viewModel.authShown()
+            testScheduler.advanceUntilIdle()
+            assertEquals(listOf("stats"), game.calls)
+        }
 
     /** The player the screen shows, which a test expects there to be. */
     private fun AccountState.shown(): PlayerStats = assertNotNull(stats, "no player read")
@@ -388,6 +567,9 @@ class AccountViewModelTest {
         var likesReceived = 0
         var statsFailWith: DomainError? = null
 
+        /** When set, a registration waits for it before it answers. */
+        var registerWaitsFor: CompletableDeferred<Unit>? = null
+
         /** Who is playing on this device, as the stored session names them, or none. */
         var player: String? = null
             private set
@@ -415,6 +597,7 @@ class AccountViewModelTest {
             password: String,
         ): String {
             calls += "register $username"
+            registerWaitsFor?.await()
             val name = username.lowercase()
             if (name in accounts) throw WyrException(DomainError.USERNAME_TAKEN)
             accounts[name] = password to ensure()
@@ -449,5 +632,10 @@ class AccountViewModelTest {
         override suspend fun reset() {
             calls += "reset"
         }
+    }
+
+    private companion object {
+        val ENGLISH = EnglishStrings.accountScreens
+        val CYRILLIC = SerbianCyrillicStrings.accountScreens
     }
 }

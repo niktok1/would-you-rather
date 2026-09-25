@@ -11,11 +11,15 @@ import androidx.compose.ui.unit.Density
 import io.ntole.wyr.core.domain.error.DomainError
 import io.ntole.wyr.core.domain.player.PlayerStats
 import io.ntole.wyr.core.network.environment.WyrEnvironment
+import io.ntole.wyr.everyText
 import io.ntole.wyr.language.Language
 import io.ntole.wyr.language.WyrStrings
+import io.ntole.wyr.language.stringsOf
+import io.ntole.wyr.tap
 import io.ntole.wyr.theme.WyrTheme
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.seconds
 
@@ -29,7 +33,7 @@ import kotlin.time.Duration.Companion.seconds
 class AccountScreenDrawTest {
     @Test
     fun `the screen draws in every state it can be in`() {
-        (GUEST_STATES + WITHOUT_FORMS).forEach { state ->
+        (GUEST_STATES + NOT_A_GUEST).forEach { state ->
             listOf(false, true).forEach { dark ->
                 Language.entries.forEach { language ->
                     draw(state, dark, language, WIDTH, HEIGHT)
@@ -55,21 +59,20 @@ class AccountScreenDrawTest {
     @Test
     fun `the screen names its server last outside prod and none in prod`() {
         listOf(WyrEnvironment.LOCAL, WyrEnvironment.DEV).forEach { environment ->
-            (GUEST_STATES + WITHOUT_FORMS).forEach { state ->
+            (GUEST_STATES + NOT_A_GUEST).forEach { state ->
                 assertEquals(serverLine(environment), textsShown(state, environment).last(), "$environment: $state")
             }
         }
-        (GUEST_STATES + WITHOUT_FORMS).forEach { state ->
+        (GUEST_STATES + NOT_A_GUEST).forEach { state ->
             val shown = textsShown(state, WyrEnvironment.PROD)
             assertTrue(shown.none { it.startsWith("Server") }, "$state shows $shown")
         }
     }
 
     /**
-     * A registered player's screen, and one with no player read yet, has no form, so it must not need
-     * scrolling: the language switch, the stats, Log out and the server line all show at an iPhone
-     * SE's height. A guest's scrolls to its forms, which come under the same switch and the same
-     * lines as a registered player's, so its stats show before any scrolling too.
+     * No state has a form, a guest's forms being on the Auth page, so none must need scrolling: the
+     * language switch, the stats, the guest's one button or Log out, and the server line all show at
+     * an iPhone SE's height.
      *
      * Measured at the width drawn above, not 375, since CI's Linux fonts wrap wider than a phone's
      * (as `PlayScreenDrawTest` explains), and for DEV, whose server line is the longest. On this Mac
@@ -77,10 +80,37 @@ class AccountScreenDrawTest {
      * the server line).
      */
     @Test
-    fun `every state without a form fits a short phone whole`() {
-        WITHOUT_FORMS.forEach { state ->
+    fun `every state fits a short phone whole`() {
+        (GUEST_STATES + NOT_A_GUEST).forEach { state ->
             val needed = heightNeeded(state, WIDTH)
             assertTrue(needed <= SHORT_PHONE_HEIGHT, "$state needs $needed of $SHORT_PHONE_HEIGHT")
+        }
+    }
+
+    /** A guest's way to register or log in is one button, to the Auth page; a registered player has none. */
+    @Test
+    fun `a guest has one button to the Auth page and a registered player none`() {
+        Language.entries.forEach { language ->
+            val openAuth = stringsOf(language).accountScreens.openAuth
+            // Off while an action runs, as every button is.
+            GUEST_STATES.filterNot { it.isBusy }.forEach { state ->
+                var opened = 0
+                val scene = scene(state, language, onOpenAuth = { opened++ })
+                try {
+                    scene.tap(openAuth)
+                } finally {
+                    scene.close()
+                }
+                assertEquals(1, opened, "$language: $state")
+            }
+            NOT_A_GUEST.forEach { state ->
+                val scene = scene(state, language)
+                try {
+                    assertFalse(openAuth in scene.everyText(), "$language: $state")
+                } finally {
+                    scene.close()
+                }
+            }
         }
     }
 
@@ -151,11 +181,21 @@ class AccountScreenDrawTest {
         }
     }
 
+    private fun scene(
+        state: AccountState,
+        language: Language,
+        onOpenAuth: () -> Unit = {},
+    ): ImageComposeScene =
+        ImageComposeScene(width = WIDTH, height = HEIGHT, density = Density(1f)) {
+            WyrTheme { WyrStrings(language) { Screen(state, language = language, onOpenAuth = onOpenAuth) } }
+        }.also { it.render() }
+
     @Composable
     private fun Screen(
         state: AccountState,
         environment: WyrEnvironment = WyrEnvironment.DEV,
         language: Language = Language.DEFAULT,
+        onOpenAuth: () -> Unit = {},
     ) {
         AccountScreen(
             state = state,
@@ -163,11 +203,18 @@ class AccountScreenDrawTest {
             environment = environment,
             language = language,
             onSelectLanguage = {},
+            onOpenAuth = onOpenAuth,
         )
     }
 
     private object NoActions : AccountActions {
         override fun refresh() = Unit
+
+        override fun authShown() = Unit
+
+        override fun setAuthMode(mode: AuthMode) = Unit
+
+        override fun leftAuth() = Unit
 
         override fun setRegisterUsername(text: String) = Unit
 
@@ -202,7 +249,7 @@ class AccountScreenDrawTest {
         val REGISTERED =
             PlayerStats(123_456, 123_456, 12_345, 1_234, 12_345, 123_456, username = "abcdefghijklmnopqrst")
 
-        /** A guest's screen, with the forms. */
+        /** A guest's screen, its one button to the Auth page under the stats, whatever is typed there. */
         val GUEST_STATES =
             listOf(
                 AccountState(stats = GUEST),
@@ -220,8 +267,8 @@ class AccountScreenDrawTest {
                 ),
             )
 
-        /** Every state with no form: no player read yet, and a registered player. */
-        val WITHOUT_FORMS =
+        /** Every state with no button to the Auth page: no player read yet, and a registered player. */
+        val NOT_A_GUEST =
             listOf(
                 AccountState(),
                 AccountState(running = AccountAction.LOAD),

@@ -60,6 +60,7 @@ import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 /**
@@ -154,6 +155,49 @@ class AppNavigationTest {
             assertTrue(CYRILLIC.submitQuestion in scene.texts(), "the Account screen is not shown")
         }
 
+    @Test
+    fun `the Auth page opens from Account and its back arrow returns to Account`() =
+        withApp { scene ->
+            scene.tap(CYRILLIC.account)
+            scene.tap(CYRILLIC.accountScreens.openAuth)
+            assertTrue(CYRILLIC.accountScreens.toLogIn in scene.everyText(), "the Auth page is not shown")
+
+            scene.tap(CYRILLIC.back)
+
+            assertTrue(CYRILLIC.accountScreens.openAuth in scene.texts(), "the Account screen is not shown")
+        }
+
+    /** After a register that worked, the Account screen again, which reads the player it now names. */
+    @Test
+    fun `a registration that worked goes back to Account as the account`() =
+        withApp { scene ->
+            scene.tap(CYRILLIC.account)
+            scene.tap(CYRILLIC.accountScreens.openAuth)
+            scene.type(0, "bob_1")
+            scene.type(1, "correct horse")
+
+            scene.tap(CYRILLIC.accountScreens.register)
+            scene.settle()
+
+            assertEquals("bob_1", game.username)
+            val shown = scene.everyText()
+            assertFalse(CYRILLIC.accountScreens.register in shown, "the Auth page is still shown: $shown")
+            assertFalse(CYRILLIC.accountScreens.openAuth in shown, "a registered player has no way to register: $shown")
+            assertTrue(shown.any { "bob_1" in it }, "the account is not named: $shown")
+        }
+
+    /** Android's back, button or gesture, goes back through the navigator: from the Auth page to Account. */
+    @Test
+    fun `back from the Auth page returns to Account`() =
+        withApp { scene ->
+            scene.tap(CYRILLIC.account)
+            scene.tap(CYRILLIC.accountScreens.openAuth)
+            scene.tap(CYRILLIC.back)
+            scene.tap(CYRILLIC.back)
+
+            assertEquals(listOf(CYRILLIC.gameName, CYRILLIC.play), scene.texts())
+        }
+
     /** The switch changes the screen it is on at once, and every screen after it, and is kept. */
     @Test
     fun `the language switch changes every screen at once and is kept`() =
@@ -228,7 +272,8 @@ class AppNavigationTest {
 
     /**
      * The game, counting what the screens ask of it. Out of questions, so the Play screen shows a
-     * failure and no question needs making; nothing here votes, likes, skips or registers.
+     * failure and no question needs making; nothing here votes, likes or skips, and a registration
+     * always works.
      */
     private class FakeGame :
         QuestionRepository,
@@ -241,6 +286,9 @@ class AppNavigationTest {
         var questionsAsked = 0
         var statsRead = 0
         var submissionsRead = 0
+
+        /** The account the guest registered as, or null while none. */
+        var username: String? = null
 
         override val categories: StateFlow<Set<Category>> = MutableStateFlow(emptySet())
 
@@ -272,13 +320,13 @@ class AppNavigationTest {
 
         override suspend fun stats(): PlayerStats {
             statsRead++
-            return PlayerStats(0, 0, 0, 1, 10, 0)
+            return PlayerStats(0, 0, 0, 1, 10, 0, username = username)
         }
 
         override suspend fun register(
             username: String,
             password: String,
-        ): String = error("nothing registers here")
+        ): String = username.lowercase().also { this.username = it }
 
         override suspend fun logIn(
             username: String,

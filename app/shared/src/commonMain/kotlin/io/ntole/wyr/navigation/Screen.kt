@@ -17,9 +17,12 @@ sealed class Screen(
     /** Reached from the Account screen for now (§8d, *The Submit screen*). */
     data object Submit : Screen("submit")
 
+    /** The page a guest registers or logs in on, reached from the Account screen (§8d, *The Account screen*). */
+    data object Auth : Screen("auth")
+
     internal companion object {
         // Listed on each call, not kept in a property: the companion's properties are set up with the
         // class, before the objects are when one of them is used first, so a kept list could hold nulls.
-        fun ofKey(key: String): Screen? = listOf(Home, Play, Account, Submit).firstOrNull { it.key == key }
+        fun ofKey(key: String): Screen? = listOf(Home, Play, Account, Submit, Auth).firstOrNull { it.key == key }
     }
 }

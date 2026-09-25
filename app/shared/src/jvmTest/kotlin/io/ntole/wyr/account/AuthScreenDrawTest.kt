@@ -1,0 +1,320 @@
+package io.ntole.wyr.account
+
+import androidx.compose.ui.ImageComposeScene
+import androidx.compose.ui.unit.Density
+import io.ntole.wyr.core.domain.error.DomainError
+import io.ntole.wyr.core.domain.player.PlayerStats
+import io.ntole.wyr.everyText
+import io.ntole.wyr.language.Language
+import io.ntole.wyr.language.WyrStrings
+import io.ntole.wyr.language.fill
+import io.ntole.wyr.language.pointsText
+import io.ntole.wyr.language.stringsOf
+import io.ntole.wyr.sizeNeeded
+import io.ntole.wyr.tap
+import io.ntole.wyr.theme.WyrTheme
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
+import kotlin.time.Duration.Companion.seconds
+
+/**
+ * The Auth page (CLAUDE.md §8d, *The Account screen*) drawn off screen at two phones' sizes, in each
+ * theme and each language, from every state it can be in, and read and tapped through its semantics.
+ */
+class AuthScreenDrawTest {
+    @Test
+    fun `the page draws in every state it can be in`() {
+        STATES.forEach { state ->
+            listOf(false, true).forEach { dark ->
+                Language.entries.forEach { language ->
+                    listOf(WIDTH to HEIGHT, SHORT_PHONE_WIDTH to SHORT_PHONE_HEIGHT).forEach { (width, height) ->
+                        val scene = scene(state, language, dark = dark, width = width, height = height)
+                        try {
+                            assertEquals(width, scene.render().width)
+                        } finally {
+                            scene.close()
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * Two fields, a button and a link, or the warning's two buttons in the button's place: the page
+     * needs no scrolling on an iPhone SE in any state and any language. Measured 400 wide, as the
+     * Account screen is, since CI's Linux fonts wrap wider than a phone's.
+     */
+    @Test
+    fun `every state fits a short phone whole in every language`() {
+        STATES.forEach { state ->
+            Language.entries.forEach { language ->
+                val (_, height) =
+                    sizeNeeded(WIDTH, SHORT_PHONE_HEIGHT) {
+                        WyrTheme { WyrStrings(language) { AuthScreen(state = state, actions = Recorder()) } }
+                    }
+                assertTrue(height <= SHORT_PHONE_HEIGHT, "$state in $language needs $height of $SHORT_PHONE_HEIGHT")
+            }
+        }
+    }
+
+    /** Register only: the two fields with their rules, the show toggle, the button and the link to Log in. */
+    @Test
+    fun `the page opens on the register form`() {
+        Language.entries.forEach { language ->
+            val strings = stringsOf(language).accountScreens
+            val shown = textsOf(AccountState(stats = GUEST), language)
+
+            listOf(
+                strings.username,
+                strings.password,
+                usernameRule(strings),
+                passwordRule(strings),
+                strings.show,
+                strings.register,
+                strings.toLogIn,
+            ).forEach { text -> assertTrue(text in shown, "$language: \"$text\" is not in $shown") }
+            assertFalse(strings.logIn in shown, "$language: $shown")
+            assertFalse(strings.toRegister in shown, "$language: $shown")
+        }
+    }
+
+    /** Log in: the two fields, no rules, the button and the link back. */
+    @Test
+    fun `the login form has no rules and a link back`() {
+        Language.entries.forEach { language ->
+            val strings = stringsOf(language).accountScreens
+            val shown = textsOf(AccountState(stats = GUEST, authMode = AuthMode.LOG_IN), language)
+
+            listOf(strings.username, strings.password, strings.logIn, strings.toRegister).forEach { text ->
+                assertTrue(text in shown, "$language: \"$text\" is not in $shown")
+            }
+            listOf(usernameRule(strings), passwordRule(strings), strings.show, strings.register, strings.toLogIn)
+                .forEach { text -> assertFalse(text in shown, "$language: \"$text\" is in $shown") }
+        }
+    }
+
+    @Test
+    fun `each link switches the page to the other form`() {
+        Language.entries.forEach { language ->
+            val strings = stringsOf(language).accountScreens
+            val actions = Recorder()
+
+            tapping(AccountState(stats = GUEST), language, actions) { it.tap(strings.toLogIn) }
+            tapping(AccountState(stats = GUEST, authMode = AuthMode.LOG_IN), language, actions) {
+                it.tap(strings.toRegister)
+            }
+
+            assertEquals(listOf("mode LOG_IN", "mode REGISTER"), actions.calls, "$language")
+        }
+    }
+
+    @Test
+    fun `each form's button sends it and the toggle shows the password`() {
+        Language.entries.forEach { language ->
+            val strings = stringsOf(language).accountScreens
+            val actions = Recorder()
+            val typed = AccountState(stats = GUEST, registerUsername = "bob_1", registerPassword = "correct horse")
+
+            tapping(typed, language, actions) {
+                it.tap(strings.show)
+                it.tap(strings.register)
+            }
+            tapping(typed.copy(showRegisterPassword = true), language, actions) { it.tap(strings.hide) }
+            tapping(
+                AccountState(stats = GUEST, authMode = AuthMode.LOG_IN, loginUsername = "bob_1", loginPassword = "x"),
+                language,
+                actions,
+            ) { it.tap(strings.logIn) }
+
+            assertEquals(listOf("show", "register", "show", "log in"), actions.calls, "$language")
+        }
+    }
+
+    /** The one warning names the points a login leaves behind, and offers to go ahead or not. */
+    @Test
+    fun `the warning names the points and offers both ways`() {
+        Language.entries.forEach { language ->
+            val strings = stringsOf(language).accountScreens
+            val actions = Recorder()
+            val warned =
+                AccountState(
+                    stats = GUEST,
+                    authMode = AuthMode.LOG_IN,
+                    loginUsername = "bob_1",
+                    loginPassword = "correct horse",
+                    guestPointsWarning = 12,
+                )
+
+            val shown = textsOf(warned, language)
+            assertTrue(strings.guestPointsWarning.fill(pointsText(12)) in shown, "$language: $shown")
+            assertFalse(strings.logIn in shown, "$language: $shown")
+            tapping(warned, language, actions) {
+                it.tap(strings.logInAnyway)
+                it.tap(strings.cancel)
+            }
+
+            assertEquals(listOf("log in", "cancel"), actions.calls, "$language")
+        }
+    }
+
+    /** A refusal shows under the form that sent it, short, and only there. */
+    @Test
+    fun `a failure shows under the form that sent it`() {
+        Language.entries.forEach { language ->
+            val strings = stringsOf(language).accountScreens
+            val taken = AccountFailure(AccountAction.REGISTER, DomainError.USERNAME_TAKEN)
+            val wrong = AccountFailure(AccountAction.LOG_IN, DomainError.INVALID_LOGIN)
+
+            val logIn = AccountState(stats = GUEST, authMode = AuthMode.LOG_IN)
+
+            assertTrue(strings.usernameTaken in textsOf(AccountState(stats = GUEST, failure = taken), language))
+            assertTrue(strings.wrongLogin in textsOf(logIn.copy(failure = wrong), language))
+            assertFalse(strings.wrongLogin in textsOf(AccountState(stats = GUEST, failure = wrong), language))
+            assertFalse(strings.usernameTaken in textsOf(logIn.copy(failure = taken), language))
+        }
+    }
+
+    private fun tapping(
+        state: AccountState,
+        language: Language,
+        actions: Recorder,
+        taps: (ImageComposeScene) -> Unit,
+    ) {
+        val scene = scene(state, language, actions)
+        try {
+            taps(scene)
+        } finally {
+            scene.close()
+        }
+    }
+
+    private fun textsOf(
+        state: AccountState,
+        language: Language,
+    ): List<String> {
+        val scene = scene(state, language)
+        try {
+            return scene.everyText()
+        } finally {
+            scene.close()
+        }
+    }
+
+    private fun scene(
+        state: AccountState,
+        language: Language,
+        actions: AccountActions = Recorder(),
+        dark: Boolean = false,
+        width: Int = WIDTH,
+        height: Int = HEIGHT,
+    ): ImageComposeScene =
+        ImageComposeScene(width = width, height = height, density = Density(1f)) {
+            WyrTheme(darkTheme = dark) { WyrStrings(language) { AuthScreen(state = state, actions = actions) } }
+        }.also { it.render() }
+
+    /** What the page asked for, in order. */
+    private class Recorder : AccountActions {
+        val calls = mutableListOf<String>()
+
+        override fun refresh() {
+            calls += "refresh"
+        }
+
+        override fun authShown() {
+            calls += "shown"
+        }
+
+        override fun setAuthMode(mode: AuthMode) {
+            calls += "mode $mode"
+        }
+
+        override fun leftAuth() {
+            calls += "left"
+        }
+
+        override fun setRegisterUsername(text: String) = Unit
+
+        override fun setRegisterPassword(text: String) = Unit
+
+        override fun toggleShowRegisterPassword() {
+            calls += "show"
+        }
+
+        override fun register() {
+            calls += "register"
+        }
+
+        override fun setLoginUsername(text: String) = Unit
+
+        override fun setLoginPassword(text: String) = Unit
+
+        override fun logIn() {
+            calls += "log in"
+        }
+
+        override fun cancelLogIn() {
+            calls += "cancel"
+        }
+
+        override fun logOut() {
+            calls += "log out"
+        }
+    }
+
+    private companion object {
+        const val WIDTH = 400
+        const val HEIGHT = 900
+
+        /** An iPhone SE (667 high) less its status bar (20) and the top bar above the page (48). */
+        const val SHORT_PHONE_WIDTH = 375
+        const val SHORT_PHONE_HEIGHT = 599
+
+        val GUEST = PlayerStats(12, 12, 10, 1, 4, 0)
+
+        val STATES =
+            listOf(
+                AccountState(stats = GUEST),
+                AccountState(),
+                AccountState(stats = GUEST, registerUsername = "bob_1", registerPassword = "correct horse"),
+                AccountState(
+                    stats = GUEST,
+                    registerUsername = "a b",
+                    registerPassword = "short",
+                    showRegisterPassword = true,
+                ),
+                AccountState(
+                    stats = GUEST,
+                    registerUsername = "bob_1",
+                    registerPassword = "correct horse",
+                    failure = AccountFailure(AccountAction.REGISTER, DomainError.USERNAME_TAKEN),
+                ),
+                AccountState(
+                    stats = GUEST,
+                    registerUsername = "bob_1",
+                    registerPassword = "correct horse",
+                    failure = AccountFailure(AccountAction.REGISTER, DomainError.RATE_LIMITED, 42.seconds),
+                    running = AccountAction.REGISTER,
+                ),
+                AccountState(stats = GUEST, authMode = AuthMode.LOG_IN),
+                AccountState(
+                    stats = GUEST,
+                    authMode = AuthMode.LOG_IN,
+                    loginUsername = "bob_1",
+                    loginPassword = "wrong horse",
+                    failure = AccountFailure(AccountAction.LOG_IN, DomainError.INVALID_LOGIN),
+                ),
+                AccountState(
+                    stats = GUEST,
+                    authMode = AuthMode.LOG_IN,
+                    loginUsername = "bob_1",
+                    loginPassword = "correct horse",
+                    guestPointsWarning = 123_456,
+                    failure = AccountFailure(AccountAction.LOG_IN, DomainError.RATE_LIMITED, 42.seconds),
+                    running = AccountAction.LOG_IN,
+                ),
+            )
+    }
+}

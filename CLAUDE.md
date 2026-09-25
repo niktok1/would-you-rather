@@ -796,7 +796,8 @@ answer what they think is popular instead of what they actually prefer. A mode t
 rewards reading the crowd may come later as a separate, opt-in mode, never as the default.
 
 **Current focus.** UI polish is paused. The game's own screens are the app: **Home**, **Play**,
-**Account** and **Submit**, reached from one another by icon buttons (*Navigation*, below), in every
+**Account**, and **Submit** and the **Auth** page opened from Account, reached from one another by
+buttons (*Navigation*, below), in every
 build, LOCAL, DEV and PROD alike, opening on Home. The engineering dev console functionality was first
 built behind is gone since `chore/remove-console` (*decided 2026-09-25*: the console is not needed),
 and nothing replaces it: a LOCAL or DEV build names its server on the Account screen (§8e), and a
@@ -808,8 +809,10 @@ game's, or a place on one, theme tokens only (§5b), and its words in `Strings` 
   and nothing else, the user asking for less text. Play opens the **Play** screen under a top bar of
   the home icon, left, back to Home, and the account icon, right. The account icon, from Home or
   Play, opens the **Account** screen under a top bar of a back arrow and, on the right for now, the
-  way to the **Submit** screen, whose own bar has a back arrow. The icons are the theme's (§5b), each
-  named for a screen reader in the language shown (§8f).
+  way to the **Submit** screen; a guest's one button on the screen opens the **Auth** page, to
+  register or log in. The Submit screen's and the Auth page's bars hold a back arrow alone
+  (`BackTopBar`). The icons are the theme's (§5b), each named for a screen reader in the language
+  shown (§8f).
 - *The back stack* is made by hand, no navigation library: a sealed `Screen` and a `Navigator` of
   the screens opened, Home at the bottom. `open` shows a screen over the one shown, or goes back to
   it when it is on the stack already, so no screen is on it twice and the home icon is
@@ -823,10 +826,10 @@ game's, or a place on one, theme tokens only (§5b), and its words in `Strings` 
 - *ViewModels* belong to the platform's owner, the activity's or the window's, as under the tabs,
   never to the back stack: each screen's lives as long as the app, so Play keeps its question through
   Account and back, or Home and back, and Account and Submit read the server again each time they
-  are shown. `AppNavigationTest` drives the whole `App` over fakes by tapping its buttons, and counts
+  are shown; the Auth page is on the Account screen's. `AppNavigationTest` drives the whole `App` over fakes by tapping its buttons, and counts
   the questions asked.
 - *Heights*: each top bar is `WyrDimens.topBarHeight` high, 48, the tab row's height before it, so
-  the Play, Account and Submit screens keep the 599 of an iPhone SE's 667 their draw tests hold them
+  the Play, Account, Auth and Submit screens keep the 599 of an iPhone SE's 667 their draw tests hold them
   to. `TopBarsDrawTest` holds every bar to 48 at 375 wide with nothing cut short, in both themes and
   every language; `HomeScreenDrawTest` holds Home to 599 at 375 wide (276 on this Mac) and to its two
   texts and one icon.
@@ -841,25 +844,38 @@ game's, or a place on one, theme tokens only (§5b), and its words in `Strings` 
   something else leaves it.
 - It shows *Playing as guest* or *Logged in as* the username, and the player's points, read through
   `GetPlayerStats` each time the screen is shown, since the points move on Play meanwhile. A guest gets
-  **Register** (username, and password with a show/hide toggle), which keeps the points, and **Log
-  in**; a registered player gets **Log out**, after which the device plays on as a fresh guest.
+  **one button**, *Региструј се или се пријави*, to the Auth page (below), instead of the forms; a
+  registered player gets **Log out**, after which the device plays on as a fresh guest.
 - Under the points, a line each for the answers given and the questions they went to, the cycle and
-  the questions left in it, and the likes received. `AccountScreenDrawTest` holds every state without
-  a form, a registered player's among them, to 599 high, measured 400 wide as `PlayScreenDrawTest`
-  measures, and a guest's screen has the same lines above its forms, so its stats show before any
-  scrolling too.
-- Register says what `AccountRules` refuses as it is typed, and sends nothing until both fields
-  pass. A refusal from the server shows under the form that sent it: a taken name, a wrong login, a
-  rate limit with its wait, offline. A guest with points who logs in is warned once that the
-  guest's points stay behind (register first to keep them), and the next *Log in anyway* goes ahead.
+  the questions left in it, and the likes received. `AccountScreenDrawTest` holds every state, a
+  guest's and a registered player's among them, to 599 high, measured 400 wide as
+  `PlayScreenDrawTest` measures, since no state has a form.
+- **The Auth page** (`AuthScreen`, *decided 2026-09-25*), on the Account screen's ViewModel, shows
+  **Register** only (username, and password with a show/hide toggle), which keeps the points, and a
+  link, *Већ имаш налог? Пријави се*, that switches the same page to **Log in** (username, password),
+  with a link back, *Немаш налог? Региструј се* (`AccountState.authMode`, Register on a first
+  showing; not while an action runs). No heading and no notes, the user asking for less text. Under
+  each register field its rule, *3–20 знакова: a–z, 0–9, _* and *6–128 знакова*, in the error colour
+  while what is typed breaks it, and Register sends nothing until both pass. A register or a login
+  that worked goes back to the Account screen, which reads the player again (`AccountState.signedIn`,
+  which the page takes down as it goes and the next action takes down too, so a page left before its
+  answer came is not sent back later). Shown with no player read yet (an Android process brought
+  back on it), it reads the player first (`authShown`), so the warning below knows the points.
+  `AuthScreenDrawTest` holds every state to 599 high, measured 400 wide, in every language.
+- A refusal from the server shows under the form that sent it, in a few words: a taken name, a wrong
+  login, a rate limit with its wait, offline. A guest with points who logs in is warned once that the
+  guest's points stay behind, *Поени госта (12 P) неће прећи на налог.*, and the next *Ипак се
+  пријави* goes ahead; switching forms takes the warning down, and a form's failure with it.
 - Each field names its autofill content type (`NewUsername` and `NewPassword` to register,
   `Username` and `Password` to log in), so the phone's password manager can fill them and offer to
-  save them once a register or login that worked takes the forms off the screen (Compose on Android
+  save them once a register or login that worked takes the page off the screen (Compose on Android
   commits autofill when no autofillable field is left, so nothing typed is cleared before then).
   What is typed lives in `AccountViewModel`'s memory only, never in saved state.
 - One action at a time, and the player read again after every one, a failed one too: a registration
-  whose answer was lost shows as the account it made. `AccountViewModelTest` drives it over fakes and
-  `AccountScreenDrawTest` draws every state in both themes and every language; theme tokens only (§5b).
+  whose answer was lost shows as the account it made. `AccountViewModelTest` drives it over fakes,
+  `AccountScreenDrawTest` and `AuthScreenDrawTest` draw every state in both themes and every
+  language, and `AppNavigationTest` registers through the page and lands back on Account; theme
+  tokens only (§5b).
 - Its last line, in a LOCAL or DEV build, names the server the build talks to and its URL, *Server:
   Dev (https://wyr-server-dev.onrender.com)* (`serverLine`, §8e); a PROD build shows none.
   `AccountScreenDrawTest` finds it under everything else in every state, and holds a registered
@@ -1300,7 +1316,15 @@ hand, so the two cannot say different things; and **English** stands beside them
   Latin is the Cyrillic transliterated, every Serbian text is in Cyrillic, and no Latin or English
   one has a Cyrillic letter. Translated so far: the Home screen, the game's name (*Шта би радије?*,
   *Would You Rather?*) and *Играј*; the top bars, the icons' names (*Почетна*, *Налог*, *Назад*) and
-  the Account bar's *Пошаљи питање*; and the switch's name, *Језик*.
+  the Account bar's *Пошаљи питање*; the switch's name, *Језик*; and the Auth page, whole, with the
+  Account screen's button to it, its *Покушај поново* and its failures (`Strings.accountScreens`, an
+  `AccountStrings` of the Account screen's words and those of the pages opened from it).
+- **Numbers and symbols** *(built)*: a text holding a number or a name is a template, `{0}` and on,
+  filled in by `fill` (`Templates.kt`), so each language puts it where its grammar wants it, and
+  `StringsTest` holds every language's copy of a template to the same placeholders. The points'
+  symbol, **P** (`POINTS_SYMBOL`, `pointsText`: *123 P*), and the characters a username may hold
+  (`USERNAME_CHARACTERS`, *a–z, 0–9, _*) are the same in every language, as a unit's symbol is, so
+  they are not `Strings`, whose Serbian texts hold no Latin letter.
 - **The default** *(built)*: Serbian Cyrillic on a first launch, whatever the device's language:
   nothing reads the device's locale (`Language.DEFAULT`; `LanguageSwitchTest` sets an English, a
   German and a Serbian Latin locale on the JVM and still opens in Cyrillic).
@@ -1319,8 +1343,8 @@ hand, so the two cannot say different things; and **English** stands beside them
   pin it, the sessions beside it in one storage untouched.
 - **Not translated yet**: question texts stay as their authors wrote them (server data; a later
   change may put Serbian ones through `SerbianScript.toLatin`); the moderation app (`:app:adminApp`)
-  stays English; and the Play, Account and Submit screens' own copy, everything under their top bars
-  but the switch, stays English until the branches that redesign them translate it.
+  stays English; and the Play and Submit screens' own copy, and the Account screen's but the switch,
+  the Auth button and the failures, stays English until the branches that redesign them translate it.
 ---
 
 ## 9. How to work in this repo

@@ -8,9 +8,9 @@ import io.ntole.wyr.core.domain.player.PlayerStats
 import kotlin.time.Duration
 
 /**
- * What the Account screen shows (CLAUDE.md §8d, *The Account screen*): who is playing on this
- * device and their stats, and for a guest the Register and Log in forms, for a registered player Log
- * out.
+ * What the Account screen and the Auth page opened from it show (CLAUDE.md §8d, *The Account
+ * screen*): who is playing on this device and their stats, for a guest the Register or the Log in
+ * form, whichever [authMode] names, and for a registered player Log out.
  *
  * What is typed lives here, in memory, and never in saved state: a password must not be written to
  * disk. It stays in the fields until they leave the screen, which is when the platform's password
@@ -24,6 +24,8 @@ data class AccountState(
     val showRegisterPassword: Boolean = false,
     val loginUsername: String = "",
     val loginPassword: String = "",
+    /** Which form the Auth page shows: Register first, with a link to Log in and back. */
+    val authMode: AuthMode = AuthMode.REGISTER,
     /**
      * The points a login would leave behind on this guest, while the one warning about it is up: null
      * when it is not. A second Log in goes ahead.
@@ -33,6 +35,12 @@ data class AccountState(
     val failure: AccountFailure? = null,
     /** The action in flight, or null when idle. Only one runs at a time. */
     val running: AccountAction? = null,
+    /**
+     * A register or a login worked, and the Auth page has not gone back to the Account screen for it
+     * yet ([AccountActions.leftAuth]). The next action takes it down too, so it is never left over
+     * for a later showing of the page.
+     */
+    val signedIn: Boolean = false,
 ) {
     val isBusy: Boolean get() = running != null
 
@@ -57,6 +65,12 @@ data class AccountState(
     /** The points a login would leave behind, for a guest who has any, or null. */
     val pointsLeftBehindByLogIn: Int?
         get() = stats?.takeIf { it.username == null && it.totalPoints > 0 }?.totalPoints
+}
+
+/** The Auth page's two forms (CLAUDE.md §8d, *The Account screen*). */
+enum class AuthMode {
+    REGISTER,
+    LOG_IN,
 }
 
 /** What the Account screen can be busy doing. */
