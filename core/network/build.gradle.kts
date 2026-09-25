@@ -63,9 +63,6 @@ kotlin {
         // One engine per platform — Ktor has no single multiplatform engine.
         androidMain.dependencies {
             implementation(libs.ktor.clientOkhttp)
-            // Where an Android phone keeps the recovery secret: the one client library outside the
-            // §2 rule, approved for Android alone (CLAUDE.md §2, §8a).
-            implementation(libs.playServices.authBlockstore)
         }
         iosMain.dependencies {
             implementation(libs.ktor.clientDarwin)

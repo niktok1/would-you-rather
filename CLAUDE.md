@@ -41,16 +41,6 @@ equivalent exists: HikariCP (connection pooling), the PostgreSQL JDBC driver, `j
 2026-09-24), with the `flyway-database-postgresql` module Flyway needs to run on PostgreSQL. H2 is
 a fifth, used only as the local development database.
 
-One client library is an exception of the same kind: Google Play services' Block Store
-(`play-services-auth-blockstore`, *approved 2026-09-25*), Android only, where a phone keeps the
-recovery secret (§8a, *Recovery*). Nothing multiplatform does its job: it is the store Android keeps
-across a reinstall and hands on to the phone that replaces this one, by device-to-device transfer and,
-where the backup is end-to-end encrypted, from the cloud. It stays in Android source sets and never
-reaches common code: `:core:network`'s Android source set alone depends on it, for
-`AndroidRecoverySecretStorage`, behind a seam (`BlockStore`) that keeps Play services out of its host
-tests. Its `Task`s are awaited by hand rather than through `kotlinx-coroutines-play-services`, which
-would be one more dependency for a few lines.
-
 ---
 
 ## 3. Module structure
@@ -131,7 +121,6 @@ mechanism; this table is the rationale.
 | Serialization      | kotlinx.serialization  | Backbone of :core                                |
 | Async              | Coroutines + Flow      | Official                                         |
 | Local cache        | SQLDelight             | **Declared, not yet wired — see below**          |
-| Recovery secret    | Block Store            | Android only (play-services-auth-blockstore), §2 |
 | Server persistence | Exposed                | JetBrains Kotlin SQL framework, pairs with Ktor  |
 | Schema migrations  | Flyway                 | Server-only Java exception (§2); runs at boot    |
 | Schema diffing     | exposed-migration-jdbc | JetBrains; test scope only (drift test, drafts)  |
