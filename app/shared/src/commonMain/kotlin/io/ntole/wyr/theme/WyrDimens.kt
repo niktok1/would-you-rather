@@ -14,7 +14,6 @@ data class WyrDimens(
     val spaceLg: Dp = 24.dp,
     val spaceXl: Dp = 32.dp,
     val radiusCard: Dp = 24.dp,
-    val radiusPill: Dp = 999.dp,
     val optionMinHeight: Dp = 140.dp,
     /** The outline of the answer card the player picked, once the answer is revealed. */
     val pickBorder: Dp = 4.dp,
@@ -38,7 +37,6 @@ val WyrDefaultDimens: WyrDimens = WyrDimens()
 /** Type sizes that Material's scale does not cover well for this layout. */
 object WyrTypeScale {
     val optionText = 22.sp
-    val orPill = 14.sp
     val heading = 28.sp
     val sectionTitle = 16.sp
     val statLabel = 13.sp
