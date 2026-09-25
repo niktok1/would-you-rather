@@ -437,7 +437,7 @@ decided in §8b).
 - **Accounts** (*decided 2026-09-25*, §8b): a username and a password on a player, which a guest may
   add, keeping everything it has, and log in with on another device. Built on the server:
   `players.username`, lower-cased, under a unique constraint, and `players.password_hash` (V5), both
-  null for a guest. No client registers or logs in yet.
+  null for a guest. The game's client registers, logs in and logs out (*The client*, below).
   - *Registering* is `POST /v1/auth/register` with a `RegisterRequest`, bearer required, answered with
     an `AccountDto`: the player the token names gets the username and the password's hash
     (`Passwords`, §8b) and keeps its points, sessions and all else. The username, lower-cased and never
@@ -470,6 +470,19 @@ decided in §8b).
     mistyped password. `AccountRules` (`:core:domain`) holds the username and password rules, so a
     form says what is wrong before it sends; its numbers copy `WyrApi.Limits`, which the domain
     cannot see, and `AccountLimitsTest` pins each copy.
+  - *The client* is `AccountRepository` in `:core:domain`, behind `RegisterAccount`, `LogIn` and
+    `LogOut` (`DefaultAccountRepository`, `DefaultAccountRepositoryTest`). A registration refuses what
+    `AccountRules` refuses, then ensures a session, since on a first launch the guest registered is
+    the one just minted, and goes through `withSessionRecovery`, so on a dead session the retry
+    registers the fresh guest. A login needs no session and never goes through it. The session it
+    answers is stored in place of the device's (`DefaultSessionRepository.replace`, under the lock
+    minting takes), so the next call plays as the account; a guest's session is abandoned, and dies
+    unused. A logout is best effort: the device forgets its session whatever the server answers,
+    and the next call mints a fresh guest. A login and a logout drop the question queue
+    (`QuestionRepository.reset`), which the player before filled. The session is kept as a guest's
+    is, so a logged-in player stays logged in across launches while the device refreshes within a
+    refresh token's 30 days; one idle longer plays on as a fresh guest, and logs in again. No
+    password is stored, anywhere: the phone's password manager may keep it (§8d, *Current focus*).
 
 **Known limitation, by design for now:** a guest account is bound to one device's storage. Lose
 the device, reinstall the app or clear its storage, and the account — and its points — are gone,

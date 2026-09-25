@@ -1,6 +1,7 @@
 package io.ntole.wyr.core.data.di
 
 import io.ktor.client.HttpClient
+import io.ntole.wyr.core.data.account.DefaultAccountRepository
 import io.ntole.wyr.core.data.cache.InMemoryQuestionCache
 import io.ntole.wyr.core.data.like.DefaultLikeRepository
 import io.ntole.wyr.core.data.moderation.DefaultModerationRepository
@@ -10,6 +11,10 @@ import io.ntole.wyr.core.data.session.DefaultSessionDiagnostics
 import io.ntole.wyr.core.data.session.DefaultSessionRepository
 import io.ntole.wyr.core.data.submission.DefaultSubmissionRepository
 import io.ntole.wyr.core.data.vote.DefaultVoteRepository
+import io.ntole.wyr.core.domain.account.AccountRepository
+import io.ntole.wyr.core.domain.account.LogIn
+import io.ntole.wyr.core.domain.account.LogOut
+import io.ntole.wyr.core.domain.account.RegisterAccount
 import io.ntole.wyr.core.domain.like.LikeRepository
 import io.ntole.wyr.core.domain.like.SetLike
 import io.ntole.wyr.core.domain.moderation.ApproveSubmission
@@ -88,6 +93,7 @@ public fun dataModule(environment: WyrEnvironment): Module =
         single<PlayerRepository> { DefaultPlayerRepository(api = get(), session = get()) }
         single<SubmissionRepository> { DefaultSubmissionRepository(api = get(), session = get()) }
         single<LikeRepository> { DefaultLikeRepository(api = get(), session = get()) }
+        single<AccountRepository> { DefaultAccountRepository(api = get(), session = get()) }
 
         factory { GetNextQuestion(questions = get(), session = get()) }
         factory { SkipQuestion(questions = get(), session = get()) }
@@ -96,6 +102,9 @@ public fun dataModule(environment: WyrEnvironment): Module =
         factory { SubmitQuestion(submissions = get(), session = get()) }
         factory { GetMySubmissions(submissions = get(), session = get()) }
         factory { SetLike(likes = get(), session = get()) }
+        factory { RegisterAccount(accounts = get(), session = get()) }
+        factory { LogIn(accounts = get(), questions = get()) }
+        factory { LogOut(accounts = get(), questions = get()) }
     }
 
 /**

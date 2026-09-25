@@ -4,6 +4,9 @@ import io.ktor.client.HttpClient
 import io.ktor.client.plugins.HttpSend
 import io.ktor.client.plugins.plugin
 import io.ntole.wyr.core.api.WyrApi
+import io.ntole.wyr.core.domain.account.LogIn
+import io.ntole.wyr.core.domain.account.LogOut
+import io.ntole.wyr.core.domain.account.RegisterAccount
 import io.ntole.wyr.core.domain.moderation.ApproveSubmission
 import io.ntole.wyr.core.domain.moderation.GetPendingSubmissions
 import io.ntole.wyr.core.domain.moderation.GetQuestions
@@ -67,6 +70,19 @@ class DataModuleTest {
         assertNull(koin.getOrNull<GetQuestions>())
         assertNull(koin.getOrNull<RetireQuestion>())
         assertNull(koin.getOrNull<RestoreQuestion>())
+        koin.close()
+    }
+
+    @Test
+    fun `the game's data module binds the account's use cases`() {
+        val koin =
+            koinApplication {
+                modules(module { single<TokenStorage> { InMemoryTokenStorage() } }, dataModule(WyrEnvironment.LOCAL))
+            }.koin
+
+        assertNotNull(koin.get<RegisterAccount>())
+        assertNotNull(koin.get<LogIn>())
+        assertNotNull(koin.get<LogOut>())
         koin.close()
     }
 

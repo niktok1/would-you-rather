@@ -13,7 +13,10 @@ import io.ktor.http.HttpMethod
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.headersOf
 import io.ntole.wyr.core.api.WyrApi
+import io.ntole.wyr.core.auth.AccountDto
+import io.ntole.wyr.core.auth.LoginRequest
 import io.ntole.wyr.core.auth.RefreshRequest
+import io.ntole.wyr.core.auth.RegisterRequest
 import io.ntole.wyr.core.auth.SessionDto
 import io.ntole.wyr.core.error.ErrorCode
 import io.ntole.wyr.core.error.ErrorDto
@@ -36,8 +39,9 @@ import kotlinx.coroutines.sync.withLock
 /**
  * Just enough of the server, behind a [MockEngine], to put session recovery through the real
  * client: it mints guests, rotates refresh tokens, and rejects a feed request, a vote, a skip, a
- * like, a stats read, a submission or a read of the author's submissions from a player it does not
- * know — the state after a dev server restarts with an empty database.
+ * like, a stats read, a submission, a read of the author's submissions, a registration or a logout
+ * from a player it does not know — the state after a dev server restarts with an empty database. It
+ * registers a guest as an account and logs one in, a new session of the account's player each time.
  */
 internal class FakeServer {
     private val lock = Mutex()
@@ -100,6 +104,21 @@ internal class FakeServer {
 
     /** The `Authorization` header and body of every like, in arrival order. */
     val likesSentAs = mutableListOf<Pair<String?, LikeRequest>>()
+
+    /** Each account's password and player, by its username as kept, lower-cased. */
+    val accounts = mutableMapOf<String, Pair<String, String>>()
+
+    /** The `Authorization` header and body of every registration, in arrival order. */
+    val registrationsSentAs = mutableListOf<Pair<String?, RegisterRequest>>()
+
+    /** The `Authorization` header and body of every login, in arrival order. */
+    val loginsSentAs = mutableListOf<Pair<String?, LoginRequest>>()
+
+    /** The `Authorization` header of every logout, in arrival order. */
+    val logoutsSentAs = mutableListOf<String?>()
+
+    /** When set, every logout is refused with this status and code, whoever sends it. */
+    var refuseLogoutsWith: Pair<HttpStatusCode, ErrorCode>? = null
 
     val engine = MockEngine { request -> lock.withLock { handle(request) } }
 
@@ -178,12 +197,40 @@ internal class FakeServer {
                 like(request)
             }
 
+            WyrApi.Paths.AUTH_REGISTER -> {
+                register(request)
+            }
+
+            WyrApi.Paths.AUTH_LOGIN -> {
+                val login = WyrJson.decodeFromString<LoginRequest>(request.body.toByteArray().decodeToString())
+                loginsSentAs += request.headers[HttpHeaders.Authorization] to login
+                val account = accounts[login.username.lowercase()]
+                if (account != null && account.first == login.password) {
+                    issueSession(account.second)
+                } else {
+                    respondErrorDto(HttpStatusCode.Unauthorized, ErrorCode.INVALID_LOGIN)
+                }
+            }
+
+            WyrApi.Paths.AUTH_LOGOUT -> {
+                val authorization = request.headers[HttpHeaders.Authorization]
+                logoutsSentAs += authorization
+                val player = authorization?.removePrefix("Bearer access-")
+                val refusal = refuseLogoutsWith
+                when {
+                    refusal != null -> respondErrorDto(refusal.first, refusal.second)
+                    player !in players -> respondErrorDto(HttpStatusCode.Unauthorized, ErrorCode.UNAUTHORIZED)
+                    else -> respond("", HttpStatusCode.NoContent)
+                }
+            }
+
             WyrApi.Paths.ME -> {
                 val authorization = request.headers[HttpHeaders.Authorization]
                 statsSentAs += authorization
                 val player = authorization?.removePrefix("Bearer access-")
                 if (player != null && player in players) {
-                    respondJson(WyrJson.encodeToString(STATS.copy(playerId = player)))
+                    val username = accounts.entries.firstOrNull { it.value.second == player }?.key
+                    respondJson(WyrJson.encodeToString(STATS.copy(playerId = player, username = username)))
                 } else {
                     respondErrorDto(HttpStatusCode.Unauthorized, ErrorCode.UNAUTHORIZED)
                 }
@@ -214,6 +261,33 @@ internal class FakeServer {
         }
         val likes = LikeResultDto(questionId = like.questionId, likeCount = holders.size, likedByMe = player in holders)
         return respondJson(WyrJson.encodeToString(likes))
+    }
+
+    /** Registers a known player, a guest, under the name asked for, lower-cased, as the server's does. */
+    private suspend fun MockRequestHandleScope.register(request: HttpRequestData): HttpResponseData {
+        val authorization = request.headers[HttpHeaders.Authorization]
+        val registration = WyrJson.decodeFromString<RegisterRequest>(request.body.toByteArray().decodeToString())
+        registrationsSentAs += authorization to registration
+        val player = authorization?.removePrefix("Bearer access-")
+        val username = registration.username.lowercase()
+        return when {
+            player == null || player !in players -> {
+                respondErrorDto(HttpStatusCode.Unauthorized, ErrorCode.UNAUTHORIZED)
+            }
+
+            accounts.values.any { it.second == player } -> {
+                respondErrorDto(HttpStatusCode.Conflict, ErrorCode.ALREADY_REGISTERED)
+            }
+
+            username in accounts -> {
+                respondErrorDto(HttpStatusCode.Conflict, ErrorCode.USERNAME_TAKEN)
+            }
+
+            else -> {
+                accounts[username] = registration.password to player
+                respondJson(WyrJson.encodeToString(AccountDto(username)))
+            }
+        }
     }
 
     /** Stores nothing: answers a known player's submission as pending, exactly as it was sent. */

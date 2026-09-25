@@ -34,6 +34,13 @@ public class DefaultSessionRepository(
     internal fun storedSession(): SessionDto? = sessionStore.read()
 
     /**
+     * Stores [session], a login's, in place of whatever is stored, under the lock minting takes: a
+     * guest being minted meanwhile lands first and is replaced, and one asked for after finds this.
+     * A refresh in flight for the session before drops its answer, since the store has moved on.
+     */
+    internal suspend fun replace(session: SessionDto): Unit = mutex.withLock { persist { sessionStore.write(session) } }
+
+    /**
      * Throw away a session the server no longer accepts and mint a fresh one — unless that has
      * already happened.
      *

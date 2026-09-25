@@ -7,9 +7,10 @@ package io.ntole.wyr.core.network
  * implementations live in this module's platform source sets and are wired up by DI in
  * `:app:shared`, which is what keeps the Android `Context` requirement out of common code.
  *
- * Security note: today the platform implementations use ordinary preference storage, not the
- * Keychain / EncryptedSharedPreferences. That is acceptable while the only credential is a
- * guest refresh token, and must be revisited before real accounts exist.
+ * Security note: the platform implementations use ordinary preference storage, not the Keychain or
+ * EncryptedSharedPreferences. That is enough for a game that stores nothing personal (CLAUDE.md §8a):
+ * the one credential kept is the session's refresh token, a registered player's included, and no
+ * password is ever stored.
  */
 public interface TokenStorage {
     public fun read(key: String): String?
