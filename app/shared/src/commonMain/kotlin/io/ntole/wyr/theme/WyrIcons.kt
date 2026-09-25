@@ -69,6 +69,34 @@ object WyrIcons {
         }
     }
 
+    /**
+     * Skip: a triangle pointing right against a bar, a music player's "next", for going past a
+     * question without answering it (CLAUDE.md §8d, *The Play screen*).
+     */
+    val Skip: ImageVector by lazy {
+        icon("Skip") {
+            outline {
+                moveTo(6f, 6f)
+                lineTo(15f, 12f)
+                lineTo(6f, 18f)
+                close()
+                moveTo(18f, 6f)
+                verticalLineTo(18f)
+            }
+        }
+    }
+
+    /** A small chevron pointing down, beside a value a tap changes: the categories played. */
+    val ChevronDown: ImageVector by lazy {
+        icon("ChevronDown") {
+            outline {
+                moveTo(8f, 10f)
+                lineTo(12f, 14f)
+                lineTo(16f, 10f)
+            }
+        }
+    }
+
     /** A heart's outline, for a question the player does not like. */
     val Heart: ImageVector by lazy { icon("Heart") { outline { heart() } } }
 

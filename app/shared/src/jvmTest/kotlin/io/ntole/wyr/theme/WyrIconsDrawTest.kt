@@ -80,6 +80,8 @@ class WyrIconsDrawTest {
                 "Home" to WyrIcons.Home,
                 "Account" to WyrIcons.Account,
                 "Back" to WyrIcons.Back,
+                "Skip" to WyrIcons.Skip,
+                "ChevronDown" to WyrIcons.ChevronDown,
                 "Heart" to WyrIcons.Heart,
                 "HeartFilled" to WyrIcons.HeartFilled,
             )
