@@ -510,7 +510,8 @@ EncryptedSharedPreferences: enough for a game that stores nothing personal.
   there is an Apple developer account: it would link a platform's player to a player here as
   registering links a username, beside the password or in its place. This replaces the recovery
   secret (V4), which is gone from the server and every client; its column stays, unused, until a
-  later migration drops it.
+  later migration drops it. A `d4a9dbf` phone build that keeps a secret fails every call once its
+  session dies, since the recovery it tries first is now 404: install a current build on it.
 - **SQLDelight cache** — see §4. Needs a per-platform split because of web. Lower priority now
   that the endless feed (§8d) makes the server the source of truth for what a player has answered:
   the client keeps no record of what it served, so a persisted queue would only save one fetch
