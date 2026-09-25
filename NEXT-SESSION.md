@@ -15,8 +15,8 @@ automatically from every green commit on `main` (its URL is on its Render page).
 
 ### Verified working
 
-- `:server` on H2: 263 tests, 261 green and 2 skipped (the PostgreSQL-only boot races), including
-  73 end-to-end flow tests in `ApiFlowTest`. Flat scoring is covered there (every vote pays 1,
+- `:server` on H2: 292 tests, 290 green and 2 skipped (the PostgreSQL-only boot races), including
+  76 end-to-end flow tests in `ApiFlowTest`. Flat scoring is covered there (every vote pays 1,
   majority and minority alike, and the total
   accumulates) and by `PlayerStoreTest`, which races awards for one player and refreshes of one
   token. The endless feed, re-answering and attempt replay are covered there too, and by
@@ -465,6 +465,27 @@ automatically from every green commit on `main` (its URL is on its Render page).
   too), as do the iOS simulator main and test, and `:app:androidApp:assembleDebug` builds;
   `WYR_SERVER_ONLY=1` still configures `:core` and `:server` alone.
   `DesktopEnvironmentNameTest` pins `WYR_ENV`. Its JVM, JS and wasmJs compiles run.
+- The merge of `feat/recovery-secret` onto the moderation app (`merge/recovery-secret`, 9c9be37),
+  on H2. `MigrationsTest` holds every path to `1 BASELINE`, `2 SQL`, `3 SQL`, `4 SQL` with the rows
+  kept (V3's `retired_at` and V4's sessions, marks and empty secrets together), the build-by-build
+  path among them, and runs V4's backfill from V2 and from V3; `SchemaDriftTest` holds V3 and V4 to
+  `Tables.kt` together. `AdminModuleTest` pins that the moderation app binds no
+  `RecoverySecretStorage`, and `FailureTest` that `INVALID_RECOVERY_SECRET` has words of its own
+  there. The six test names with commas the moderation branch had added to the `:core` modules are
+  gone, so `:core:domain`'s, `:core:network`'s and `:core:data`'s iOS test compiles pass. Counts:
+  `:server` 292, 2 skipped (76 flows); `:core:domain` 37; `:core:data` 169; `:core:network` 94 (109
+  as Android host tests); `:app:shared` 111; `:app:adminApp` 87. ci.yml's verify job's three steps
+  pass as written; every client target compiles, the web app's, the desktop app's and the
+  moderation app's JVM, JS and wasmJs included, as do `:app:shared`'s iOS simulator main and test,
+  and `:app:androidApp:assembleDebug` builds. The fat jar (`WYR_SERVER_ONLY=1`) on JDK 21,
+  `PORT=18095`, no `DATABASE_URL` and a throwaway `ADMIN_TOKEN`: Flyway ran V1, V2, V3 and V4 in
+  order and `/health` was 200; a mint carried a 43-character secret, a recovery with it answered the
+  same player in a session of its own and with no secret, and both sessions refreshed; an unknown
+  secret was 401 `INVALID_RECOVERY_SECRET`; the admin list was 200 with the 24 seeds and no
+  `nextCursor`, and 403 `FORBIDDEN` with a wrong token; `seed-1` retired 200, again 409
+  `WRONG_STATUS`, and restored 200; a new secret killed the old one (401) and recovered the same
+  player; neither secret nor the admin token was in the server's log. The `server-postgres`,
+  `docker-smoke` and `ios` jobs have not run on the merge.
 - `:app:androidApp:assembleDebug` produces a real APK.
 - `ktlintCheck` clean across every module.
 
@@ -525,7 +546,8 @@ automatically from every green commit on `main` (its URL is on its Render page).
   and only compiles `:core:data`'s and `:core:network`'s, which Kotlin/Native refused while their
   names held commas (`SharedSessionStoreTest`'s among them, from before `feat/recovery-secret`, and
   five the moderation app's branch added, renamed at the merge); their JVM and Android host runs are
-  what cover them.
+  what cover them. `:core:domain`'s iOS test compile is in no job: it passes here since the merge
+  renamed the one name with a comma the moderation branch gave it.
 - **The settling refresh in a real browser or desktop pair.** Two tabs sharing `localStorage`, or
   two desktop instances sharing JVM preferences, have raced a refresh only in
   `SharedSessionStoreTest` on `MockEngine`. JVM preferences sync between processes on their own
