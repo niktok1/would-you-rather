@@ -2,6 +2,8 @@ package io.ntole.wyr.play
 
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.ImageComposeScene
+import androidx.compose.ui.graphics.toComposeImageBitmap
+import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.unit.Density
 import io.ntole.wyr.core.domain.error.DomainError
@@ -12,14 +14,17 @@ import io.ntole.wyr.core.domain.vote.Tally
 import io.ntole.wyr.core.domain.vote.VoteOutcome
 import io.ntole.wyr.theme.WyrTheme
 import kotlin.test.Test
+import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 /**
  * The Play screen drawn off screen at two phones' sizes, in each theme, from every state it can be
  * in, with every category played or a few, and with the category picker open. Compose measures and
  * draws it all, so a layout that cannot be measured fails here rather than when the tab opens.
- * Whether what it draws fits is asked separately, since a squeezed card draws.
+ * Whether what it draws fits is asked separately, since a squeezed card draws, and so is whether the
+ * picker is drawn at all, since the screen draws without it too.
  */
 class PlayScreenDrawTest {
     @Test
@@ -44,6 +49,26 @@ class PlayScreenDrawTest {
                     draw(state, dark, SHORT_PHONE_WIDTH, SHORT_PHONE_HEIGHT, picking = ticked)
                 }
             }
+        }
+    }
+
+    /**
+     * Drawing cannot see a dialog that never opens, since the screen draws without it too, and there
+     * is no Compose UI test library in the tree to look for it. So this compares pixels: the screen
+     * must draw differently with the picker open, and differently again with a category ticked in
+     * it. Two draws of one screen are the same pixels, which is what makes a difference mean one.
+     */
+    @Test
+    fun `the category picker opens over the screen with what it has ticked`() {
+        statesOf(QUESTION).forEach { state ->
+            val closed = pixels(state, picking = null)
+            assertContentEquals(closed, pixels(state, picking = null), "$state drawn twice")
+            val open = pixels(state, picking = emptySet())
+            assertFalse(closed.contentEquals(open), "$state draws the same with the picker open")
+            assertFalse(
+                open.contentEquals(pixels(state, picking = setOf(Category.ETHICS))),
+                "$state's picker draws the same with Ethics ticked",
+            )
         }
     }
 
@@ -132,6 +157,22 @@ class PlayScreenDrawTest {
             }
         try {
             assertEquals(width, scene.render().width)
+        } finally {
+            scene.close()
+        }
+    }
+
+    /** Every pixel of [state]'s screen at the short phone's size, in the light theme. */
+    private fun pixels(
+        state: PlayUiState,
+        picking: Set<Category>?,
+    ): IntArray {
+        val scene =
+            ImageComposeScene(width = SHORT_PHONE_WIDTH, height = SHORT_PHONE_HEIGHT, density = Density(1f)) {
+                WyrTheme(darkTheme = false) { Screen(state, categories = emptySet(), picking = picking) }
+            }
+        return try {
+            scene.render().toComposeImageBitmap().toPixelMap().buffer
         } finally {
             scene.close()
         }

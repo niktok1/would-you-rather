@@ -836,7 +836,9 @@ The third to move is the **category picker**, onto the Play screen (*Categories*
   every category again, and New guest keeps it.
 - `PlayViewModelTest` drives it over fakes. `PlayScreenDrawTest` draws every state with none, one and
   every category played, and with the picker open, in both themes; holds every state to 599 high
-  with each, every selection to the height of none, and the picker's card to 599 too.
+  with each, every selection to the height of none, and the picker's card to 599 too. With no
+  Compose UI test library in the tree, it checks the dialog by pixels: every state draws differently
+  with the picker open, and differently again with a category ticked in it.
 - The console has no Category row any more; its questions come from what the Play screen picked.
 
 - **Scoring** *(built; see §8c)*: every answer earns exactly **1 point**, whichever side

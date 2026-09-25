@@ -560,7 +560,9 @@ to try it on a phone is under *Categories on Play*.
   server. Android's 360x640 class (about 520 high) cuts the reveal's percentages as `main` did.
 - **The category picker on a device.** The same holds for it (`feat/play-categories`): drawn off
   screen, and its renders on this Mac looked at as images in review, both themes, never on a phone.
-  Nobody has tapped it, nor seen a platform's dialog open and close it.
+  `PlayScreenDrawTest` checks by pixels that the screen draws its dialog, and draws what is ticked
+  in it, not what the dialog shows. Nobody has tapped it, nor seen a platform's dialog open and
+  close it.
 - **The `:core` modules' tests on iOS.** The ios CI job runs `:app:shared`'s tests on the simulator
   and only compiles the `:core` modules' tests, which Kotlin/Native refused while their
   names held commas (`SharedSessionStoreTest`'s among them, from before `feat/recovery-secret`, and
