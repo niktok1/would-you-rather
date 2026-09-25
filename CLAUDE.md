@@ -1111,27 +1111,29 @@ listed on the Account screen.
     is served and counted once. A submission names one or more (*Submitting*).
   - *The client* lists the categories from the server (*The list*, above) and names nothing itself:
     the enum is gone, and so is `OTHER`, the bucket for what a build could not name. A question, a
-    submission and a moderated question hold the ids of their categories (`categories`, a set, in the
-    order the server sent them, mapped in `QuestionMapper`), whether or not a category of that id has
-    been read; a screen names each by the list last read (`CategoryRepository.categories`) and shows
-    one it has not read by its id. The server files every question under at least one; a payload
-    without them, which no server sends, reads as none rather than failing. A player's selection is a
-    set of ids too (`QuestionRepository.categories`, empty for every category), and every refill sends
-    all of it, in id order, so one selection is always one request. The Play screen plays the
-    selection whoever sets it (`PlayViewModel`'s `init`): a new one drops what is on screen, a
-    question asked or answered or a failure, a vote lost to `NETWORK` included, which is never sent
-    again (*Retry safety*), and loads a question from it (`load`, not `next`, which goes on only from
-    the reveal); a load, a vote, a skip or a like in flight there goes on, and the question after it
-    is the new selection's, since the change dropped the queue (`PlayViewModelTest`). The Categories
-    screen ticks any of the categories the server lists, and *Све* empties it (*The Categories
-    screen*, below). Ticking every category is not selecting none: a category a moderator adds later
-    is in none and not in those ticked. Nothing checks an id against the list before sending it: an
-    id no category has is the server's 400, which only a stale client could send, since ids never
-    change and no category is deleted. A client submits under a set of one or more (*Submitting*).
-    The game names a category in the language shown (§8f): the Play screen's row and the Submit
-    form's chips through `categoryName` in `io.ntole.wyr.language`, the Categories screen through
-    `Category.nameIn` in `io.ntole.wyr.categories`, the same choice made twice until one of them
-    goes: the Serbian name as the server keeps it in Serbian Cyrillic, that name through
+    submission and a moderated question hold the ids of their categories (`categories`, a set, in
+    the order the server sent them, mapped in `QuestionMapper`), whether or not a category of that
+    id has been read; a screen names each by the list last read (`CategoryRepository.categories`)
+    and shows one it has not read by its id. The server files every question under at least one; a
+    payload without them, which no server sends, reads as none rather than failing. A player's
+    selection is a set of ids too (`QuestionRepository.categories`, empty for every category), and
+    every refill sends all of it, in id order, so one selection is always one request. The Play
+    screen plays the selection whoever sets it (`PlayViewModel`'s `init`): a new one drops what is
+    on screen, a question asked, one revealed (in its first half second too) or a failure, out of
+    questions or a vote lost to `NETWORK`, which is never sent again (*Retry safety*), and loads a
+    question from it (`load`, not `next`, which goes on only from the reveal and waits out its first
+    half second); a load, a vote, a skip or a like in flight there goes on and changes nothing more
+    on screen, and the question after it is the new selection's, since the change dropped the queue
+    (`canChangeCategories`; `PlayViewModelTest` plays a selection from each of those states). The
+    Categories screen ticks any of the categories the server lists, and *Све* empties it (*The
+    Categories screen*, below). Ticking every category is not selecting none: a category a moderator
+    adds later is in none and not in those ticked. Nothing checks an id against the list before
+    sending it: an id no category has is the server's 400, which only a stale client could send,
+    since ids never change and no category is deleted. A client submits under a set of one or more
+    (*Submitting*). The game names a category in the language shown (§8f): the Play screen's row and
+    the Submit form's chips through `categoryName` in `io.ntole.wyr.language`, the Categories screen
+    through `Category.nameIn` in `io.ntole.wyr.categories`, the same choice made twice until one of
+    them goes: the Serbian name as the server keeps it in Serbian Cyrillic, that name through
     `SerbianScript.toLatin` in Serbian Latin, and the English name in English. The moderation app
     names it in Serbian (`nameOf`).
   - *The Categories screen* (*built 2026-09-25*; the user: "Category needs its own screen for

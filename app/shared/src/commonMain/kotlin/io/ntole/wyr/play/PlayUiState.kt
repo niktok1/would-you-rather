@@ -61,10 +61,13 @@ sealed interface PlayUiState {
 }
 
 /**
- * Whether the categories played may change now (CLAUDE.md §8d, *Categories*): on a question with
- * nothing in flight, one action at a time as the rest of the screen goes, and on a failure, where a
- * selection with nothing to serve leaves the player. Not while a question loads, since a change
- * drops the question on screen and loads another.
+ * Whether the Play screen takes a change of the categories played at once (CLAUDE.md §8d,
+ * *Categories*): on a question with nothing in flight, asked or revealed, one action at a time as
+ * the rest of the screen goes, and on a failure, where a selection with nothing to serve leaves the
+ * player. Only then do the categories played open the Categories screen, and a selection played
+ * there drop what is on screen and load a question from it. Not while a question loads, nor while a
+ * vote, a skip or a like is in flight: that goes on, and the question after it is the new
+ * selection's.
  */
 val PlayUiState.canChangeCategories: Boolean
     get() =

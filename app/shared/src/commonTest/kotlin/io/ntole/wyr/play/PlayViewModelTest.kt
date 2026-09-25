@@ -683,7 +683,8 @@ class PlayViewModelTest {
     @Test
     fun `categories played from the Categories screen after a vote lost to the network move on without it`() =
         runTest(dispatcher) {
-            // As the picker's change does: the vote counts only if it landed the first time (§8d).
+            // The player moved on instead of trying again: the vote counts only if it landed the first
+            // time, and nothing can pay for it twice (CLAUDE.md §8d, *Retry safety*).
             val votes = RecordingVoteRepository(DomainError.NETWORK)
             val questions = FakeQuestionRepository(servedFor = mapOf(setOf("FOOD") to FOOD_QUESTION))
             val viewModel = viewModel(questions, votes = votes)
@@ -725,6 +726,112 @@ class PlayViewModelTest {
             assertEquals(PlayUiState.Asking(QUESTION.copy(likeCount = 1, likedByMe = true)), viewModel.state.value)
             viewModel.skip()
             testScheduler.advanceUntilIdle()
+            assertEquals(PlayUiState.Asking(FOOD_QUESTION), viewModel.state.value)
+        }
+
+    /** Not next, which waits out the reveal's first half second: a selection played loads at once. */
+    @Test
+    fun `categories played from the Categories screen just after a reveal lands show one from them`() =
+        runTest(dispatcher) {
+            val questions = FakeQuestionRepository(servedFor = mapOf(setOf("FOOD") to FOOD_QUESTION))
+            val viewModel = viewModel(questions)
+            testScheduler.advanceUntilIdle()
+            viewModel.choose(Side.A)
+            testScheduler.runCurrent()
+            assertIs<PlayUiState.Revealed>(viewModel.state.value)
+
+            questions.setCategories(setOf("FOOD"))
+            testScheduler.runCurrent()
+
+            assertEquals(listOf("next", "setCategories [FOOD]", "next"), questions.calls)
+            assertEquals(PlayUiState.Asking(FOOD_QUESTION), viewModel.state.value)
+        }
+
+    /** Where a selection with nothing to serve leaves the player (CLAUDE.md §8d, *Categories*). */
+    @Test
+    fun `categories played from the Categories screen from out of questions show one from them`() =
+        runTest(dispatcher) {
+            // Whatever the feed answers is the server's rule: here, no questions at all in ABSURD.
+            val questions = FakeQuestionRepository(servedFor = mapOf(setOf("ABSURD") to null))
+            questions.categories.value = setOf("ABSURD")
+            val viewModel = viewModel(questions)
+            testScheduler.advanceUntilIdle()
+            assertEquals(PlayUiState.Failed(DomainError.OUT_OF_QUESTIONS), viewModel.state.value)
+
+            questions.setCategories(emptySet())
+            testScheduler.advanceUntilIdle()
+
+            assertEquals(listOf("next", "setCategories []", "next"), questions.calls)
+            assertEquals(PlayUiState.Asking(QUESTION), viewModel.state.value)
+        }
+
+    /** The load in flight shows what it brings, and the question after it is the new selection's. */
+    @Test
+    fun `categories played elsewhere while a question loads leave the screen to that load`() =
+        runTest(dispatcher) {
+            val gate = CompletableDeferred<Unit>()
+            val questions = FakeQuestionRepository(servedFor = mapOf(setOf("FOOD") to FOOD_QUESTION))
+            questions.nextWaitsFor = gate
+            val viewModel = viewModel(questions)
+            testScheduler.advanceUntilIdle()
+            assertEquals(PlayUiState.Loading, viewModel.state.value)
+
+            questions.setCategories(setOf("FOOD"))
+            testScheduler.advanceUntilIdle()
+            questions.nextWaitsFor = null
+            gate.complete(Unit)
+            testScheduler.advanceUntilIdle()
+
+            assertEquals(listOf("next", "setCategories [FOOD]"), questions.calls, "one load, not two")
+            assertEquals(PlayUiState.Asking(QUESTION), viewModel.state.value)
+            viewModel.skip()
+            testScheduler.advanceUntilIdle()
+            assertEquals(PlayUiState.Asking(FOOD_QUESTION), viewModel.state.value)
+        }
+
+    /** The vote in flight lands on the question it was for and is revealed; the next is the new selection's. */
+    @Test
+    fun `categories played elsewhere while a vote is in flight leave the question to it`() =
+        runTest(dispatcher) {
+            val gate = CompletableDeferred<Unit>()
+            val questions = FakeQuestionRepository(servedFor = mapOf(setOf("FOOD") to FOOD_QUESTION))
+            val viewModel = viewModel(questions, votes = GatedVoteRepository(gate))
+            testScheduler.advanceUntilIdle()
+            viewModel.choose(Side.A)
+            testScheduler.advanceUntilIdle()
+
+            questions.setCategories(setOf("FOOD"))
+            testScheduler.advanceUntilIdle()
+            assertEquals(PlayUiState.Asking(QUESTION, isSubmitting = true), viewModel.state.value)
+            gate.complete(Unit)
+            testScheduler.advanceUntilIdle()
+
+            assertEquals(listOf("next", "setCategories [FOOD]"), questions.calls)
+            assertEquals(PlayUiState.Revealed(QUESTION, OUTCOME), viewModel.state.value)
+            viewModel.next()
+            testScheduler.advanceUntilIdle()
+            assertEquals(PlayUiState.Asking(FOOD_QUESTION), viewModel.state.value)
+        }
+
+    /** A skip shows Loading while it is sent, and the load after it is already the new selection's. */
+    @Test
+    fun `categories played elsewhere while a skip is in flight load one question from them`() =
+        runTest(dispatcher) {
+            val gate = CompletableDeferred<Unit>()
+            val questions = FakeQuestionRepository(servedFor = mapOf(setOf("FOOD") to FOOD_QUESTION))
+            questions.skipWaitsFor = gate
+            val viewModel = viewModel(questions)
+            testScheduler.advanceUntilIdle()
+            viewModel.skip()
+            testScheduler.advanceUntilIdle()
+
+            questions.setCategories(setOf("FOOD"))
+            testScheduler.advanceUntilIdle()
+            assertEquals(PlayUiState.Loading, viewModel.state.value)
+            gate.complete(Unit)
+            testScheduler.advanceUntilIdle()
+
+            assertEquals(listOf("next", "setCategories [FOOD]", "next"), questions.calls, "one load, not two")
             assertEquals(PlayUiState.Asking(FOOD_QUESTION), viewModel.state.value)
         }
 
@@ -791,7 +898,9 @@ class PlayViewModelTest {
     /**
      * Serves [served] in order, then the last of them again and again, or, while the categories
      * selected are a key of [servedFor], that key's question every time, and none is out of
-     * questions. Records every skip, and refuses each with [skipFailure] when there is one.
+     * questions: chosen as the fetch starts, and handed over once [nextWaitsFor], if set, completes.
+     * Records every skip, and refuses each with [skipFailure] when there is one, once [skipWaitsFor],
+     * if set, completes.
      */
     private class FakeQuestionRepository(
         vararg served: Question,
@@ -805,15 +914,25 @@ class PlayViewModelTest {
         /** Every fetch and every change of categories, in order, the categories in id order. */
         val calls = mutableListOf<String>()
 
+        var nextWaitsFor: CompletableDeferred<Unit>? = null
+
+        var skipWaitsFor: CompletableDeferred<Unit>? = null
+
         override val categories = MutableStateFlow<Set<String>>(emptySet())
 
         override suspend fun next(): Question {
             calls += "next"
             val selected = categories.value
-            if (selected in servedFor) {
-                return servedFor[selected] ?: throw WyrException(DomainError.OUT_OF_QUESTIONS)
-            }
-            return if (served.size > 1) served.removeAt(0) else served.first()
+            val question =
+                if (selected in servedFor) {
+                    servedFor[selected] ?: throw WyrException(DomainError.OUT_OF_QUESTIONS)
+                } else if (served.size > 1) {
+                    served.removeAt(0)
+                } else {
+                    served.first()
+                }
+            nextWaitsFor?.await()
+            return question
         }
 
         override suspend fun prefetch() = Unit
@@ -825,6 +944,7 @@ class PlayViewModelTest {
 
         override suspend fun skip(questionId: String) {
             skipped += questionId
+            skipWaitsFor?.await()
             skipFailure?.let { throw WyrException(it) }
         }
 
@@ -853,6 +973,20 @@ class PlayViewModelTest {
             side: Side,
             attempt: AttemptId,
         ): VoteOutcome = OUTCOME.copy(yourSide = side)
+    }
+
+    /** Answers every vote once [gate] completes, as a slow server does. */
+    private class GatedVoteRepository(
+        private val gate: CompletableDeferred<Unit>,
+    ) : VoteRepository {
+        override suspend fun cast(
+            questionId: String,
+            side: Side,
+            attempt: AttemptId,
+        ): VoteOutcome {
+            gate.await()
+            return OUTCOME.copy(yourSide = side)
+        }
     }
 
     /** Records every vote, and refuses the first ones with [failures], in order. */
