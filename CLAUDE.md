@@ -1147,26 +1147,27 @@ listed on the Account screen.
     are ticked (*Изабрано: 3*, nothing while Све is) and **Играј**. Ticking Све unticks every
     category, ticking one unticks Све, and unticking the last is Све again: Све is none ticked, as
     the repository holds it. The search filters as it is typed, by any part of either name, whatever
-    the script and the case of either: a query and each name are compared in Serbian Latin,
-    lower-cased (`searchKey`, through `SerbianScript.toLatin`), so *hra*, *Хра* and *HRA* find
-    *Храна*, *lj* finds *Љ* and *рок* a name typed in Latin. Accents count, so *nacin* does not find
-    *Начин живота* (*provisional — user decision*: Serbian Latin is often typed without them; keep
-    it, or fold č and ć into c, š into s, ž into z and đ into dj or d). A category the search hides
-    stays ticked, and a search that finds none says so under Све. Each visit starts from the
-    categories played, nothing searched (`CategoriesViewModel.open`, called by the Play screen's
-    tap, so a rotation keeps what is ticked), and reads the list (`GetCategories`) as it is shown: a
-    read that fails says so above the list, *Игра није доступна.* offline, as the Play screen says
-    it, and *Категорије нису учитане.* otherwise (`unreadText`), with *Покушај поново*
-    (`Strings.tryAgain`), the categories read before staying to tick, and with none read before a
-    spinner shows while it reads. **Играј** sets what is ticked in one
-    `QuestionRepository.setCategories`, waits for it to land, the list and Играј off meanwhile, then
-    goes back to the Play screen, which shows a question from it (*The client*, above); what is
-    played already is not sent again, so the question stays. Back, the arrow or Android's, plays
-    nothing. `CategoriesViewModelTest`, `CategoriesScreenDrawTest` (every state in both themes and
-    every language at 400x900 and 375x599; with 301 categories at 375x599 the search field and Play
-    on screen, nothing cut short, only the lines that fit composed, and the list scrolled to its
-    last), `AppNavigationTest` (Play, Categories and back, played or not), `NavigatorTest`,
-    `TopBarsDrawTest`.
+    the script, the case and the accents of either: a query and each name are compared in Serbian
+    Latin, lower-cased, and then without accents (`searchKey`, through `SerbianScript.toLatin`), so
+    *hra*, *Хра* and *HRA* find *Храна*, *lj* finds *Љ* and *рок* a name typed in Latin. *Accents
+    fold* (*decided 2026-09-25*: the players' phones may lack a Serbian keyboard): č and ć into c, š
+    into s, ž into z and đ into dj, on both sides and in the English name too, so *nacin* finds
+    *Начин живота*, *djak* and *đak* find *Ђак*, *dzu* finds *Џунгла* and *ćevap* a name a moderator
+    typed as *Cevapi*. A category the search hides stays ticked, and a search that finds none says
+    so under Све. Each visit starts from the categories played, nothing searched
+    (`CategoriesViewModel.open`, called by the Play screen's tap, so a rotation keeps what is
+    ticked), and reads the list (`GetCategories`) as it is shown: a read that fails says so above
+    the list, *Игра није доступна.* offline, as the Play screen says it, and *Категорије нису
+    учитане.* otherwise (`unreadText`), with *Покушај поново* (`Strings.tryAgain`), the categories
+    read before staying to tick, and with none read before a spinner shows while it reads. **Играј**
+    sets what is ticked in one `QuestionRepository.setCategories`, waits for it to land, the list
+    and Играј off meanwhile, then goes back to the Play screen, which shows a question from it (*The
+    client*, above); what is played already is not sent again, so the question stays. Back, the
+    arrow or Android's, plays nothing. `CategoriesViewModelTest`, `CategoriesScreenDrawTest` (every
+    state in both themes and every language at 400x900 and 375x599; with 301 categories at 375x599
+    the search field and Play on screen, nothing cut short, only the lines that fit composed, and
+    the list scrolled to its last), `AppNavigationTest` (Play, Categories and back, played or not),
+    `NavigatorTest`, `TopBarsDrawTest`.
   - *A known limit:* the game's picker is a screen of its own, searched and lazy (*The Categories
     screen*), but the Submit form, the moderation app's category filter and each pending card lay out
     every chip in place, to be scrolled past, which suits tens of categories, not the hundreds

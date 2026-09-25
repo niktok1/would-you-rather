@@ -17,7 +17,7 @@ import kotlinx.coroutines.launch
 
 /** What the Categories screen can ask for, so the screen takes one argument for all of it. */
 interface CategoriesActions {
-    /** Shows the categories [query] finds, by either of their names, in either script. */
+    /** Shows the categories [query] finds, by either of their names, in either script, accents or none. */
     fun search(query: String)
 
     /** Ticks the category [id], or unticks it if it is ticked. */
@@ -159,8 +159,19 @@ class CategoriesViewModel(
 }
 
 /**
- * [text] as the search compares it: in Serbian Latin, lower-cased. A query then finds a name whatever
- * the script of either and whatever their case: *hra*, *Хра* and *HRA* all find *Храна*, and *рок* a
- * name a moderator wrote in Latin, *Rok*. Љ, Њ and Џ are two letters in Latin, so *lj* finds *Љ*.
+ * [text] as the search compares it: in Serbian Latin, lower-cased, and without Serbian Latin's
+ * accents (CLAUDE.md §8d, *The Categories screen*). A query then finds a name whatever the script of
+ * either and whatever their case: *hra*, *Хра* and *HRA* all find *Храна*, and *рок* a name a
+ * moderator wrote in Latin, *Rok*. Љ, Њ and Џ are two letters in Latin, so *lj* finds *Љ*. And a
+ * phone without a Serbian keyboard finds a name all the same: č and ć are c, š is s, ž is z and đ is
+ * dj, on both sides and in the English name too, so *nacin* finds *Начин живота* and *djak* finds
+ * *Ђак*, as *način* and *đak* do.
  */
-internal fun searchKey(text: String): String = SerbianScript.toLatin(text).lowercase()
+internal fun searchKey(text: String): String =
+    buildString {
+        SerbianScript.toLatin(text).lowercase().forEach { letter -> append(UNACCENTED[letter] ?: letter.toString()) }
+    }
+
+/** Each accented letter of Serbian Latin, small, as it is typed without its accent. */
+private val UNACCENTED: Map<Char, String> =
+    mapOf('č' to "c", 'ć' to "c", 'š' to "s", 'ž' to "z", 'đ' to "dj")

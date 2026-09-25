@@ -181,12 +181,52 @@ class CategoriesViewModelTest {
             assertEquals(listOf(LOVE), finds("LJUBAV"))
         }
 
-    /** Provisional (CLAUDE.md §8d, *The Categories screen*): Serbian Latin is often typed without them. */
+    /** A phone may have no Serbian keyboard (CLAUDE.md §8d, *The Categories screen*). */
     @Test
-    fun `a query without a letter's accent does not find it`() =
+    fun `a query without a letter's accent finds it`() =
         runTest(dispatcher) {
-            assertEquals(emptyList(), finds("nacin"))
+            assertEquals(listOf(LIFESTYLE), finds("nacin"))
+            assertEquals(listOf(LIFESTYLE), finds("NACIN ZIVOTA"))
+            assertEquals(listOf(JUNGLE), finds("dzu"))
         }
+
+    @Test
+    fun `a query finds the letter đ as dj with or without its accent`() =
+        runTest(dispatcher) {
+            categories.read = { LISTED + PUPIL }
+
+            listOf("djak", "đak", "Đak", "ђак", "DJAK").forEach { query ->
+                assertEquals(listOf(PUPIL), finds(query), query)
+            }
+        }
+
+    @Test
+    fun `an accented query finds a name written without its accents`() =
+        runTest(dispatcher) {
+            categories.read = { LISTED + GRILL }
+
+            assertEquals(listOf(GRILL), finds("ćevap"))
+            assertEquals(listOf(GRILL), finds("Ћевап"))
+        }
+
+    @Test
+    fun `a query finds an English name without its accents`() =
+        runTest(dispatcher) {
+            categories.read = { LISTED + FANS }
+
+            assertEquals(listOf(FANS), finds("djokovic"))
+            assertEquals(listOf(FANS), finds("Đoković"))
+        }
+
+    @Test
+    fun `the search key is Serbian Latin in small letters without accents`() {
+        assertEquals("nacin zivota", searchKey("Начин живота"))
+        assertEquals("djak", searchKey("Ђак"))
+        assertEquals("dzungla i ljubav", searchKey("Џунгла и љубав"))
+        assertEquals("cevapi sa kajmakom", searchKey("ĆEVAPI SA KAJMAKOM"))
+        assertEquals("sah", searchKey("Šah"))
+        assertEquals("food", searchKey("Food"))
+    }
 
     @Test
     fun `a query finds a name by any part of it`() =
@@ -585,6 +625,15 @@ class CategoriesViewModelTest {
 
         /** A Serbian name a moderator wrote in Latin. */
         val ROCK = Category(id = "ROCK", nameSr = "Rok muzika", nameEn = "Rock music")
+
+        /** Not in [LISTED]: a test that needs one adds it. Ђ is two letters without its accent. */
+        val PUPIL = Category(id = "PUPIL", nameSr = "Ђак", nameEn = "Pupil")
+
+        /** A Serbian name a moderator wrote in Latin without its accents. */
+        val GRILL = Category(id = "GRILL", nameSr = "Cevapi", nameEn = "Grill")
+
+        /** An English name with a Serbian Latin letter in it. */
+        val FANS = Category(id = "FANS", nameSr = "Навијачи", nameEn = "Đoković fans")
 
         val LISTED = listOf(FOOD, LIFESTYLE, ETHICS, ABSURD, LOVE, JUNGLE, ROCK)
     }
