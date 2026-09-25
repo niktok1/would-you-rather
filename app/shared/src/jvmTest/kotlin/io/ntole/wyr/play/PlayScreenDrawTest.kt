@@ -1,6 +1,7 @@
 package io.ntole.wyr.play
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.snapshots.Snapshot
 import androidx.compose.ui.ImageComposeScene
 import androidx.compose.ui.graphics.toComposeImageBitmap
 import androidx.compose.ui.graphics.toPixelMap
@@ -190,7 +191,7 @@ class PlayScreenDrawTest {
             expectedOf(strings).forEach { (state, expected) ->
                 val (texts, names) = expected
                 withScreen(state, language = language) { scene, _ ->
-                    scene.render(COUNTED_UP)
+                    scene.renderAt(COUNTED_UP)
                     assertEquals(texts.sorted(), scene.texts().sorted(), "$state in $language")
                     assertEquals(names, scene.descriptions(), "$state in $language")
                 }
@@ -295,16 +296,16 @@ class PlayScreenDrawTest {
     @Test
     fun `the reveal's percentages count up from 0 over two and a half seconds`() {
         withScreen(PlayUiState.Revealed(QUESTION, OUTCOME)) { scene, _ ->
-            scene.render(0)
+            scene.renderAt(0)
             assertEquals(listOf("0%", "0%"), percentages(scene), "at the start")
 
-            scene.render(COUNTED_UP / 2)
+            scene.renderAt(COUNTED_UP / 2)
             val halfway = percentages(scene).map { it.removeSuffix("%").toInt() }
             assertTrue(halfway[0] in 1 until 70 && halfway[1] in 1 until 30, "halfway: $halfway")
 
-            scene.render(COUNTED_UP)
+            scene.renderAt(COUNTED_UP)
             assertEquals(listOf("70%", "30%"), percentages(scene), "at two and a half seconds")
-            scene.render(COUNTED_UP * 2)
+            scene.renderAt(COUNTED_UP * 2)
             assertEquals(listOf("70%", "30%"), percentages(scene), "after")
         }
     }
@@ -342,6 +343,19 @@ class PlayScreenDrawTest {
         }
     }
 
+    /**
+     * Draws the scene at [nanoTime] until what that frame changed shows in its semantics. Drawn once,
+     * a frame can miss what the desktop's snapshot manager, on a thread of its own, does meanwhile:
+     * the count-up then starts a frame late, or its value reaches the texts a frame late, and the
+     * test fails now and then. The same frame drawn again changes nothing else.
+     */
+    private fun ImageComposeScene.renderAt(nanoTime: Long) {
+        repeat(3) {
+            Snapshot.sendApplyNotifications()
+            render(nanoTime)
+        }
+    }
+
     /** The percentages the scene shows, card A's first. */
     private fun percentages(scene: ImageComposeScene): List<String> = scene.texts().filter { it.endsWith("%") }
 
@@ -367,7 +381,7 @@ class PlayScreenDrawTest {
         val tapped = mutableListOf<String>()
     }
 
-    /** [test] on [state]'s screen at the short phone's size, in the light theme, drawn once at time 0. */
+    /** [test] on [state]'s screen at the short phone's size, in the light theme, drawn at time 0. */
     private fun withScreen(
         state: PlayUiState,
         points: Int? = POINTS,
@@ -382,7 +396,7 @@ class PlayScreenDrawTest {
                 }
             }
         try {
-            scene.render(0)
+            scene.renderAt(0)
             test(scene, actions)
         } finally {
             scene.close()
