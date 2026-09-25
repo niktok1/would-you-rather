@@ -499,8 +499,13 @@ auth SDK, satisfying §2.
       services every call throws, and the phone plays as a guest. The session store is to stay out of
       both cloud backup and device-to-device transfer, so a new phone gets only the secret, and
       recovers with it (not built yet).
-    - *iOS* (not built yet): a Keychain item synced through iCloud Keychain (`kSecAttrSynchronizable`),
-      so one person's iPhones share one account, each with a session of its own.
+    - *iOS* (built, compiled only: §9): a generic-password Keychain item per environment
+      (`IosRecoverySecretStorage` in `:core:network`; service `io.ntole.wyr.recovery`, the key as its
+      account), synced through iCloud Keychain (`kSecAttrSynchronizable`), so one person's iPhones
+      share one account, each with a session of its own. It is readable once the phone has been
+      unlocked after starting (`kSecAttrAccessibleAfterFirstUnlock`, never a `ThisDeviceOnly` class,
+      which would not sync), and the Keychain keeps it when the app is deleted. No test runs it: the
+      simulator's test binary is no signed app, so the app on a phone is the first to call it.
     - *Desktop and web* keep none: they bind no `RecoverySecretStorage` (`dataModule`), so they mint as
       before and never ask for a secret.
 - Provider linking (Play Games Services on Android, Game Center on iOS) is phase 2 (§8b, *Provider
