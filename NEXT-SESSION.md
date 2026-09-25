@@ -72,7 +72,8 @@ to try it on a phone is under *Categories on Play*.
   `OTHER` alone; `QuestionApiTest`, one `?category=` per category, in declaration order;
   `DefaultQuestionRepositoryTest`, a selection of several sent whole with every refill, any change to
   it dropping the queue (a refill in flight included), the same set keeping it, and `OTHER` refused;
-  and `PlayViewModelTest`, the Play screen's category picker: ticking, *All categories*, the
+  and `PlayViewModelTest`, the Play screen's category picker: ticking, *All categories*, every
+  category ticked played as all five and never as none (`PlayScreenTest` names them, not *All*), the
   selection sent to the repository before the next fetch, the question on screen dropped for one
   from it, the same selection keeping it, and no change while anything is in flight
   (`feat/play-categories`; the console's Category row, which it replaced, had

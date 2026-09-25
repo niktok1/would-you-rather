@@ -573,6 +573,25 @@ class PlayViewModelTest {
         }
 
     @Test
+    fun `every category ticked is played as all of them and not as none`() =
+        runTest(dispatcher) {
+            // Not the same selection (CLAUDE.md §8d, *Categories*): a question filed only under
+            // categories this build cannot name is in none of the five, and is served only to none.
+            val questions = FakeQuestionRepository()
+            val viewModel = viewModel(questions)
+            testScheduler.advanceUntilIdle()
+            viewModel.openCategories()
+
+            Category.selectable.forEach(viewModel::toggleCategory)
+            assertEquals(Category.selectable.toSet(), viewModel.picking.value, "ticked, not folded into All")
+            viewModel.applyCategories()
+            testScheduler.advanceUntilIdle()
+
+            assertEquals(listOf("next", "setCategories ${Category.selectable}", "next"), questions.calls)
+            assertEquals(Category.selectable.toSet(), viewModel.categories.value)
+        }
+
+    @Test
     fun `new categories drop the answered question on screen too`() =
         runTest(dispatcher) {
             val questions = FakeQuestionRepository(servedFor = mapOf(setOf(Category.FOOD) to FOOD_QUESTION))

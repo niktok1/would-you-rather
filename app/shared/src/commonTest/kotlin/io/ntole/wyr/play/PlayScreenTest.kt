@@ -59,6 +59,15 @@ class PlayScreenTest {
     }
 
     @Test
+    fun `every category selected is named and not called All`() {
+        // Not none: a question filed only under categories this build cannot name is in none of them.
+        assertEquals(
+            "Food, Lifestyle, Ethics, Superpowers, Random",
+            categoriesPlayed(Category.selectable.toSet()),
+        )
+    }
+
+    @Test
     fun `every category has a name in the player's words`() {
         assertEquals(
             listOf("Food", "Lifestyle", "Ethics", "Superpowers", "Random", "Other"),
