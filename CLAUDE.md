@@ -804,6 +804,10 @@ is tried through the game and the moderation app. A new feature gets a plain scr
 a place on one, theme tokens only (§5b).
 
 **The Account screen** (`io.ntole.wyr.account`; §8a *Accounts*, *Stats* below):
+- First, the language switch (§8f, `LanguageSwitch`), where the screen's *Account* heading stood
+  (*decided 2026-09-25*): on top, it is the first thing a player who cannot read the language shown
+  finds, a guest's forms included, and a registered player's screen still fits 599 high with it (572
+  of it on this Mac, where it was 557 with the heading).
 - It shows *Playing as guest* or *Logged in as* the username, and the player's points, read through
   `GetPlayerStats` each time the tab is shown, since the points move on Play meanwhile. A guest gets
   **Register** (username, and password with a show/hide toggle), which keeps the points, and **Log
@@ -824,7 +828,7 @@ a place on one, theme tokens only (§5b).
   What is typed lives in `AccountViewModel`'s memory only, never in saved state.
 - One action at a time, and the player read again after every one, a failed one too: a registration
   whose answer was lost shows as the account it made. `AccountViewModelTest` drives it over fakes and
-  `AccountScreenDrawTest` draws every state in both themes; theme tokens only (§5b).
+  `AccountScreenDrawTest` draws every state in both themes and every language; theme tokens only (§5b).
 - Its last line, in a LOCAL or DEV build, names the server the build talks to and its URL, *Server:
   Dev (https://wyr-server-dev.onrender.com)* (`serverLine`, §8e); a PROD build shows none.
   `AccountScreenDrawTest` finds it under everything else in every state, and holds a registered
@@ -1253,6 +1257,36 @@ hand, so the two cannot say different things; and **English** stands beside them
   come back as they were. Pure and in the domain, so a question's text can go through it later.
   `SerbianScriptTest` pins every letter, capital and small, the digraphs in each case, and text that
   must not change.
+- **The strings** *(built)*: `Strings` (`:app:shared`, `io.ntole.wyr.language`), a data class of
+  every translated text, one value per `Language`: `SerbianCyrillicStrings` written by hand,
+  `SerbianLatinStrings` made from it by `Strings.map(SerbianScript::toLatin)`, and `EnglishStrings`.
+  `App` provides the one shown through `LocalStrings` (`WyrStrings`), and a screen reads its words
+  from there and writes none of its own. Plain Kotlin values, not compose resources: string resources
+  cannot express one language made from another by a function, and a text missing from a language is
+  then a constructor that does not compile, not a key that fails at run time. `StringsTest` compares
+  the data classes' `toString`, which names every text, so a text added later is checked too: the
+  Latin is the Cyrillic transliterated, every Serbian text is in Cyrillic, and no Latin or English
+  one has a Cyrillic letter.
+- **The default** *(built)*: Serbian Cyrillic on a first launch, whatever the device's language:
+  nothing reads the device's locale (`Language.DEFAULT`; `LanguageSwitchTest` sets an English, a
+  German and a Serbian Latin locale on the JVM and still opens in Cyrillic).
+- **The switch** *(built)*: first on the Account screen (§8d), a segmented row of the three,
+  **Ћирилица**, **Latinica** and **English**, each named in itself whatever the language shown, so a
+  player who picked one they cannot read finds their own (`Language.ownName`, which is why the names
+  are not `Strings`). No label on screen; a screen reader hears it named (`Strings.language`). A tap
+  changes every screen at once and is then kept (`LanguageViewModel`, bound in `uiModule` and asked
+  for once by `App`).
+- **Kept on the device** *(built)*: under `wyr.language` in the storage the session is kept in (the
+  platform's `TokenStorage`: SharedPreferences, `NSUserDefaults`, JVM Preferences, `localStorage`), as
+  the language's BCP 47 tag (`sr-Cyrl`, `sr-Latn`, `en`). One key for the device, not one per
+  environment (§8e): the language is the player's, so every build on one desktop, iPhone or browser
+  shows the one last picked there. A tag this build does not know opens in Cyrillic, and a write that
+  fails leaves the language this run's only, silently. `LanguageViewModelTest` and `AppModuleTest`
+  pin it, the sessions beside it in one storage untouched.
+- **Not translated yet**: question texts stay as their authors wrote them (server data; a later
+  change may put Serbian ones through `SerbianScript.toLatin`); the moderation app (`:app:adminApp`)
+  stays English; and the Play, Submit and Account screens' own copy and the tab row stay English
+  until the branches that redesign them translate them.
 ---
 
 ## 9. How to work in this repo

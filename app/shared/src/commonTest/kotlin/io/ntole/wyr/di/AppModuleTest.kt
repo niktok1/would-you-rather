@@ -6,6 +6,8 @@ import io.ntole.wyr.core.network.InMemoryTokenStorage
 import io.ntole.wyr.core.network.SessionStore
 import io.ntole.wyr.core.network.TokenStorage
 import io.ntole.wyr.core.network.environment.WyrEnvironment
+import io.ntole.wyr.language.Language
+import io.ntole.wyr.language.LanguageViewModel
 import io.ntole.wyr.play.PlayViewModel
 import io.ntole.wyr.submit.SubmitViewModel
 import kotlinx.coroutines.Dispatchers
@@ -54,6 +56,7 @@ class AppModuleTest {
         koin.get<PlayViewModel>()
         koin.get<AccountViewModel>()
         koin.get<SubmitViewModel>()
+        koin.get<LanguageViewModel>()
     }
 
     @Test
@@ -74,6 +77,42 @@ class AppModuleTest {
 
             assertEquals(DEV_SESSION, dev.read())
             assertNull(prod.read())
+        }
+
+    /**
+     * On desktop, iOS and web every environment's build shares one storage (CLAUDE.md §8e), and the
+     * language is the player's, not the server's: a build for one shows the language picked in another.
+     */
+    @Test
+    fun `the language is one for the device whatever the environment`() =
+        runTest {
+            val storage = InMemoryTokenStorage()
+
+            koinFor(WyrEnvironment.DEV, storage).get<LanguageViewModel>().select(Language.ENGLISH)
+            testScheduler.advanceUntilIdle()
+
+            WyrEnvironment.entries.forEach { environment ->
+                assertEquals(Language.ENGLISH, koinFor(environment, storage).get<LanguageViewModel>().language.value)
+            }
+        }
+
+    /** The language shares the sessions' storage, so neither may write over the other. */
+    @Test
+    fun `the language and every session are kept apart in the one storage`() =
+        runTest {
+            val storage = InMemoryTokenStorage()
+            WyrEnvironment.entries.forEach { environment ->
+                koinFor(environment, storage).get<SessionStore>().write(DEV_SESSION)
+            }
+
+            koinFor(WyrEnvironment.PROD, storage).get<LanguageViewModel>().select(Language.SERBIAN_LATIN)
+            testScheduler.advanceUntilIdle()
+
+            WyrEnvironment.entries.forEach { environment ->
+                assertEquals(DEV_SESSION, koinFor(environment, storage).get<SessionStore>().read(), "$environment")
+            }
+            val language = koinFor(WyrEnvironment.PROD, storage).get<LanguageViewModel>().language
+            assertEquals(Language.SERBIAN_LATIN, language.value)
         }
 
     @Test

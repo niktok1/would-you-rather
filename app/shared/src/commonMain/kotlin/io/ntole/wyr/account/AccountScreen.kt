@@ -35,14 +35,18 @@ import io.ntole.wyr.core.domain.account.UsernameProblem
 import io.ntole.wyr.core.domain.error.DomainError
 import io.ntole.wyr.core.domain.player.PlayerStats
 import io.ntole.wyr.core.network.environment.WyrEnvironment
+import io.ntole.wyr.language.Language
+import io.ntole.wyr.language.LanguageSwitch
 import io.ntole.wyr.theme.WyrThemeAccessors
 import io.ntole.wyr.theme.WyrTypeScale
 
 /**
- * The Account screen (CLAUDE.md §8d, *The Account screen*): who is playing on this device and their
- * stats, the points first; for a guest, Register, which keeps the points, and Log in, to an account
- * registered anywhere; for a registered player, Log out. A build for any server but production's
- * names that server last ([serverLine]), [environment] being the one the build talks to.
+ * The Account screen (CLAUDE.md §8d, *The Account screen*): the language switch first, [language]
+ * the one the game is shown in, which [onSelectLanguage] changes (§8f); then who is playing on this
+ * device and their stats, the points first; for a guest, Register, which keeps the points, and Log
+ * in, to an account registered anywhere; for a registered player, Log out. A build for any server
+ * but production's names that server last ([serverLine]), [environment] being the one the build
+ * talks to.
  *
  * Plain on purpose while UI polish is paused, and every colour, space and size from the theme (§5b).
  * Each field names its autofill content type, so the platform's password manager can offer to fill
@@ -53,6 +57,8 @@ fun AccountScreen(
     state: AccountState,
     actions: AccountActions,
     environment: WyrEnvironment,
+    language: Language,
+    onSelectLanguage: (Language) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val colors = WyrThemeAccessors.colors
@@ -67,12 +73,7 @@ fun AccountScreen(
                     .padding(dimens.screenPadding),
             verticalArrangement = Arrangement.spacedBy(dimens.spaceLg),
         ) {
-            Text(
-                text = "Account",
-                color = colors.headingAccent,
-                fontSize = WyrTypeScale.heading,
-                fontWeight = FontWeight.ExtraBold,
-            )
+            LanguageSwitch(selected = language, onSelect = onSelectLanguage)
 
             Status(state, actions)
 

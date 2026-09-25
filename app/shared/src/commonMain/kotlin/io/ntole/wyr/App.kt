@@ -19,6 +19,9 @@ import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.ntole.wyr.account.AccountScreen
 import io.ntole.wyr.account.AccountViewModel
+import io.ntole.wyr.language.Language
+import io.ntole.wyr.language.LanguageViewModel
+import io.ntole.wyr.language.WyrStrings
 import io.ntole.wyr.play.PlayScreen
 import io.ntole.wyr.play.PlayViewModel
 import io.ntole.wyr.submit.SubmitScreen
@@ -35,33 +38,46 @@ import org.koin.compose.viewmodel.koinViewModel
  * publishes the Compose context, so no `KoinContext` wrapper is needed here.
  *
  * The root screens are the game's, every [RootScreen] behind a tab row, in every build whatever
- * server it talks to (CLAUDE.md §8d, *Current focus*), opening on the first, Play.
+ * server it talks to (CLAUDE.md §8d, *Current focus*), opening on the first, Play. They are shown in
+ * the language picked on the Account screen, Serbian Cyrillic until one is (§8f).
  */
 @Composable
 fun App() {
+    val languages = koinViewModel<LanguageViewModel>()
+    val language by languages.language.collectAsStateWithLifecycle()
+
     WyrTheme {
-        val screens = RootScreen.entries
-        var screen by rememberSaveable { mutableStateOf(screens.first()) }
+        WyrStrings(language) { Screens(language, onSelectLanguage = languages::select) }
+    }
+}
 
-        Surface(color = MaterialTheme.colorScheme.background, modifier = Modifier.fillMaxSize()) {
-            // The insets are applied once here, so the screens below find them already consumed.
-            Column(modifier = Modifier.fillMaxSize().safeContentPadding()) {
-                PrimaryTabRow(selectedTabIndex = screens.indexOf(screen)) {
-                    screens.forEach { entry ->
-                        Tab(
-                            selected = entry == screen,
-                            onClick = { screen = entry },
-                            text = { Text(entry.label) },
-                        )
-                    }
+/** The screens, every [RootScreen] behind a tab row, in [language]. */
+@Composable
+private fun Screens(
+    language: Language,
+    onSelectLanguage: (Language) -> Unit,
+) {
+    val screens = RootScreen.entries
+    var screen by rememberSaveable { mutableStateOf(screens.first()) }
+
+    Surface(color = MaterialTheme.colorScheme.background, modifier = Modifier.fillMaxSize()) {
+        // The insets are applied once here, so the screens below find them already consumed.
+        Column(modifier = Modifier.fillMaxSize().safeContentPadding()) {
+            PrimaryTabRow(selectedTabIndex = screens.indexOf(screen)) {
+                screens.forEach { entry ->
+                    Tab(
+                        selected = entry == screen,
+                        onClick = { screen = entry },
+                        text = { Text(entry.label) },
+                    )
                 }
+            }
 
-                Box(modifier = Modifier.weight(1f)) {
-                    when (screen) {
-                        RootScreen.Play -> Play()
-                        RootScreen.Submit -> Submit()
-                        RootScreen.Account -> Account()
-                    }
+            Box(modifier = Modifier.weight(1f)) {
+                when (screen) {
+                    RootScreen.Play -> Play()
+                    RootScreen.Submit -> Submit()
+                    RootScreen.Account -> Account(language, onSelectLanguage)
                 }
             }
         }
@@ -78,7 +94,10 @@ internal enum class RootScreen(
 }
 
 @Composable
-private fun Account() {
+private fun Account(
+    language: Language,
+    onSelectLanguage: (Language) -> Unit,
+) {
     val viewModel = koinViewModel<AccountViewModel>()
     val state by viewModel.state.collectAsStateWithLifecycle()
 
@@ -86,7 +105,13 @@ private fun Account() {
     // a login would leave behind.
     LaunchedEffect(viewModel) { viewModel.refresh() }
 
-    AccountScreen(state = state, actions = viewModel, environment = koinInject())
+    AccountScreen(
+        state = state,
+        actions = viewModel,
+        environment = koinInject(),
+        language = language,
+        onSelectLanguage = onSelectLanguage,
+    )
 }
 
 @Composable

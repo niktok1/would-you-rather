@@ -11,6 +11,8 @@ import androidx.compose.ui.unit.Density
 import io.ntole.wyr.core.domain.error.DomainError
 import io.ntole.wyr.core.domain.player.PlayerStats
 import io.ntole.wyr.core.network.environment.WyrEnvironment
+import io.ntole.wyr.language.Language
+import io.ntole.wyr.language.WyrStrings
 import io.ntole.wyr.theme.WyrTheme
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -18,19 +20,21 @@ import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.seconds
 
 /**
- * The Account screen drawn off screen at two phones' sizes, in each theme, from every state it can be
- * in. Compose measures and draws it all, so a layout that cannot be measured fails here rather than
- * when the tab opens. Whether what it draws fits is asked separately: the screen scrolls, so it draws
- * whatever its height. It is drawn for DEV, whose server line is the longest, unless a test names
- * another environment.
+ * The Account screen drawn off screen at two phones' sizes, in each theme and each language, from
+ * every state it can be in. Compose measures and draws it all, so a layout that cannot be measured
+ * fails here rather than when the tab opens. Whether what it draws fits is asked separately: the
+ * screen scrolls, so it draws whatever its height. It is drawn for DEV, whose server line is the
+ * longest, unless a test names another environment.
  */
 class AccountScreenDrawTest {
     @Test
     fun `the screen draws in every state it can be in`() {
         (GUEST_STATES + WITHOUT_FORMS).forEach { state ->
             listOf(false, true).forEach { dark ->
-                draw(state, dark, WIDTH, HEIGHT)
-                draw(state, dark, SHORT_PHONE_WIDTH, SHORT_PHONE_HEIGHT)
+                Language.entries.forEach { language ->
+                    draw(state, dark, language, WIDTH, HEIGHT)
+                    draw(state, dark, language, SHORT_PHONE_WIDTH, SHORT_PHONE_HEIGHT)
+                }
             }
         }
     }
@@ -63,13 +67,13 @@ class AccountScreenDrawTest {
 
     /**
      * A registered player's screen, and one with no player read yet, has no form, so it must not need
-     * scrolling: the stats, Log out and the server line all show at an iPhone SE's height. A guest's
-     * scrolls to its forms, which come under the same heading and the same lines as a registered
-     * player's, so its stats show before any scrolling too.
+     * scrolling: the language switch, the stats, Log out and the server line all show at an iPhone
+     * SE's height. A guest's scrolls to its forms, which come under the same switch and the same
+     * lines as a registered player's, so its stats show before any scrolling too.
      *
      * Measured at the width drawn above, not 375, since CI's Linux fonts wrap wider than a phone's
      * (as `PlayScreenDrawTest` explains), and for DEV, whose server line is the longest. On this Mac
-     * the tallest, a registered player whose read again failed, needs 557 of the 599 (509 without
+     * the tallest, a registered player whose read again failed, needs 572 of the 599 (524 without
      * the server line).
      */
     @Test
@@ -83,12 +87,13 @@ class AccountScreenDrawTest {
     private fun draw(
         state: AccountState,
         dark: Boolean,
+        language: Language,
         width: Int,
         height: Int,
     ) {
         val scene =
             ImageComposeScene(width = width, height = height, density = Density(1f)) {
-                WyrTheme(darkTheme = dark) { Screen(state) }
+                WyrTheme(darkTheme = dark) { WyrStrings(language) { Screen(state, language = language) } }
             }
         try {
             assertEquals(width, scene.render().width)
@@ -150,8 +155,15 @@ class AccountScreenDrawTest {
     private fun Screen(
         state: AccountState,
         environment: WyrEnvironment = WyrEnvironment.DEV,
+        language: Language = Language.DEFAULT,
     ) {
-        AccountScreen(state = state, actions = NoActions, environment = environment)
+        AccountScreen(
+            state = state,
+            actions = NoActions,
+            environment = environment,
+            language = language,
+            onSelectLanguage = {},
+        )
     }
 
     private object NoActions : AccountActions {
