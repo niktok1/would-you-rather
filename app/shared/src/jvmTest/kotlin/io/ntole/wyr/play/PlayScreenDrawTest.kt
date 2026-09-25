@@ -172,7 +172,11 @@ class PlayScreenDrawTest {
                 WyrTheme(darkTheme = false) { Screen(state, categories = emptySet(), picking = picking) }
             }
         return try {
-            scene.render().toComposeImageBitmap().toPixelMap().buffer
+            scene
+                .render()
+                .toComposeImageBitmap()
+                .toPixelMap()
+                .buffer
         } finally {
             scene.close()
         }
