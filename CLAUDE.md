@@ -682,7 +682,8 @@ seed (`Migrations`, `DatabaseFactory.init`). Nothing builds a table any other wa
   refresh-token grace window, §8a), V3 (a question's `retired_at`, §8d *Moderation*) and V4
   (sessions and the recovery secret, since dropped) there; the next Manual Deploy runs V5 there
   (a player's username and password hash, *Accounts*, above), which every player already there takes
-  as a guest, and every later script (V6, the categories table, §8d *Categories*).
+  as a guest, and every later script: V6 (the categories table, §8d *Categories*), V7 (what a
+  question cost, §8c), V8 (the seeds' made-up votes) and V9 (the seeds in Serbian, §8d *Seeds*).
   `Migrations.migrate` takes the baseline itself (`baselineVersion` 1), and only for a database
   holding every table V1 builds (`TABLES_BEFORE_MIGRATIONS`) and no history table; Flyway's
   `baselineOnMigrate` is off. Any other database with tables and no history fails the boot, rather
@@ -755,7 +756,10 @@ seed (`Migrations`, `DatabaseFactory.init`). Nothing builds a table any other wa
   `40550e9`) boots and serves on that: it reads a stored name it has no enum member for as RANDOM,
   so it shows an ABSURD question, or one under a category added later, as RANDOM, and its RANDOM
   filter, which compares the stored names, finds none of them. A submission or an approval it files
-  under RANDOM fails the foreign key, a 500, until the roll forward.
+  under RANDOM fails the foreign key, a 500, until the roll forward. V7 and V8 only add NOT NULL
+  columns with a default, which a build before never names, so it charges nothing for a submission
+  and pays nothing back for a rejection, and its tallies leave out the made-up votes; V9 only
+  rewrites the seeds' text.
 - *Several instances booting at once* (Render starts a deploy's new instance before it stops the old
   one): on PostgreSQL each script runs under Flyway's advisory lock, so one boot migrates while the
   rest wait, up to 50 tries a second apart, and then find nothing to do. Every boot that finds a
@@ -1040,6 +1044,11 @@ lists the player's own (*Submitting*, below).
   no player's: a player still holds one vote per question, and nothing writes them after V8 and the
   seed. V8 gives the seeds of a database seeded before theirs by id, the same counts `Seed` writes
   into a new one (`MigrationsTest` holds the two equal). No client can tell them from real votes.
+  The seeds are in **Serbian**, in Cyrillic (*decided 2026-09-25*), written for Serbian and keeping
+  the fun rather than put word for word from the English they began in (`SeedTest` holds every letter
+  to the Serbian Cyrillic alphabet). V9 rewrote the English seeds a database seeded before holds, by
+  id, into the same texts, leaving their categories, votes and likes alone. A player's own question
+  stays exactly as typed; putting questions into other languages is a later, bigger topic.
 - **Likes** *(built)*: any player may like any question, **their own
   included**, at any time (before or after answering), once each, and may unlike it. Each like
   currently held is **+1 point to the author**, and unliking takes that point back. The like count

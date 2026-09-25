@@ -11,6 +11,10 @@ import org.jetbrains.exposed.v1.jdbc.select
  * the bootstrap content. A seed has no author and is approved from the start, so every player is
  * served it. A few are filed under a second category, so a question in several is there to play
  * from the start.
+ *
+ * The seeds are in Serbian, in Cyrillic (CLAUDE.md §8d, *Seeds*): written for Serbian rather than
+ * put word for word from the English they began in. V9 rewrote the English ones a database seeded
+ * before holds, by id, into these same texts.
  */
 object Seed {
     /**
@@ -123,64 +127,93 @@ object Seed {
 
     private val STARTERS =
         listOf(
-            Starter(FOOD, "Only ever eat pizza again", "Only ever eat sushi again", votes = 212 to 158),
+            Starter(FOOD, "До краја живота јести само пицу", "До краја живота јести само суши", votes = 212 to 158),
             Starter(
                 FOOD,
-                "Give up coffee forever",
-                "Give up chocolate forever",
+                "Заувек се одрећи кафе",
+                "Заувек се одрећи чоколаде",
                 alsoIn = LIFESTYLE,
                 votes = 97 to 143,
             ),
-            Starter(FOOD, "Always slightly too salty food", "Always slightly bland food", votes = 188 to 61),
-            Starter(LIFESTYLE, "Work four long days", "Work five short days", votes = 264 to 119),
-            Starter(LIFESTYLE, "Live without music", "Live without films", votes = 52 to 301),
-            Starter(LIFESTYLE, "Never be late again", "Never be tired again", votes = 77 to 246),
-            Starter(LIFESTYLE, "Move to a new city every year", "Never leave your home town", votes = 134 to 171),
+            Starter(
+                FOOD,
+                "Да ти храна увек буде мало пресољена",
+                "Да ти храна увек буде мало бљутава",
+                votes =
+                    188 to 61,
+            ),
+            Starter(
+                LIFESTYLE,
+                "Радити четири дуга дана у недељи",
+                "Радити пет кратких дана у недељи",
+                votes =
+                    264 to 119,
+            ),
+            Starter(LIFESTYLE, "Живети без музике", "Живети без филмова", votes = 52 to 301),
+            Starter(LIFESTYLE, "Никад више не закаснити", "Никад више не осетити умор", votes = 77 to 246),
+            Starter(
+                LIFESTYLE,
+                "Сваке године се селити у нови град",
+                "Никад не напустити родни град",
+                votes = 134 to 171,
+            ),
             Starter(
                 ETHICS,
-                "Always tell the truth",
-                "Always be told the truth",
+                "Увек говорити истину",
+                "Да ти сви увек говоре истину",
                 alsoIn = LIFESTYLE,
                 votes = 156 to 139,
             ),
             Starter(
                 ETHICS,
-                "Know when anyone lies to you",
-                "Have everyone believe your lies",
+                "Увек знати кад те неко лаже",
+                "Да ти свако поверује у сваку лаж",
                 alsoIn = SUPERPOWERS,
                 votes = 283 to 88,
             ),
-            Starter(ETHICS, "Save one friend", "Save five strangers", votes = 201 to 176),
-            Starter(SUPERPOWERS, "Be able to fly", "Be able to turn invisible", votes = 318 to 205),
-            Starter(SUPERPOWERS, "Read minds", "See one week into the future", votes = 143 to 231),
-            Starter(SUPERPOWERS, "Teleport anywhere instantly", "Pause time for an hour a day", votes = 252 to 190),
+            Starter(ETHICS, "Спасти једног пријатеља", "Спасти пет непознатих људи", votes = 201 to 176),
+            Starter(SUPERPOWERS, "Имати моћ летења", "Имати моћ невидљивости", votes = 318 to 205),
+            Starter(SUPERPOWERS, "Читати туђе мисли", "Видети недељу дана унапред", votes = 143 to 231),
             Starter(
                 SUPERPOWERS,
-                "Never need sleep",
-                "Never need to eat",
+                "Телепортовати се било где у трену",
+                "Сваког дана зауставити време на сат",
+                votes =
+                    252 to 190,
+            ),
+            Starter(
+                SUPERPOWERS,
+                "Никад више не морати да спаваш",
+                "Никад више не морати да једеш",
                 alsoIn = FOOD,
                 votes = 219 to 97,
             ),
-            Starter(ABSURD, "Fight one horse-sized duck", "Fight a hundred duck-sized horses", votes = 167 to 274),
-            Starter(ABSURD, "Have fingers as long as legs", "Have legs as short as fingers", votes = 58 to 73),
-            Starter(ABSURD, "Always speak in rhyme", "Only ever whisper", votes = 121 to 94),
             Starter(
                 ABSURD,
-                "Live in permanent summer",
-                "Live in permanent winter",
+                "Борити се са једном патком величине коња",
+                "Борити се са сто коња величине патке",
+                votes =
+                    167 to 274,
+            ),
+            Starter(ABSURD, "Имати прсте дугачке као ноге", "Имати ноге кратке као прсти", votes = 58 to 73),
+            Starter(ABSURD, "Увек говорити у стиховима", "Увек само шапутати", votes = 121 to 94),
+            Starter(
+                ABSURD,
+                "Живети у вечном лету",
+                "Живети у вечној зими",
                 alsoIn = LIFESTYLE,
                 votes = 239 to 82,
             ),
-            Starter(LIFESTYLE, "Lose all your photos", "Lose all your messages", votes = 108 to 196),
-            Starter(ETHICS, "Be forgotten after you die", "Be remembered wrongly", votes = 149 to 131),
-            Starter(FOOD, "Eat only hot food", "Eat only cold food", votes = 176 to 68),
-            Starter(SUPERPOWERS, "Talk to animals", "Speak every human language", votes = 162 to 245),
+            Starter(LIFESTYLE, "Изгубити све своје фотографије", "Изгубити све своје поруке", votes = 108 to 196),
+            Starter(ETHICS, "Да те после смрти сви забораве", "Да те памте по погрешном", votes = 149 to 131),
+            Starter(FOOD, "Јести само топлу храну", "Јести само хладну храну", votes = 176 to 68),
+            Starter(SUPERPOWERS, "Разговарати са животињама", "Говорити све људске језике", votes = 162 to 245),
             Starter(
                 ABSURD,
-                "Have a permanent unexplained limp",
-                "Have a permanent unexplained cough",
+                "Заувек шепати без икаквог разлога",
+                "Заувек кашљати без икаквог разлога",
                 votes = 44 to 61,
             ),
-            Starter(LIFESTYLE, "Win the lottery tomorrow", "Live twenty years longer", votes = 186 to 233),
+            Starter(LIFESTYLE, "Сутра добити на лутрији", "Живети двадесет година дуже", votes = 186 to 233),
         )
 }

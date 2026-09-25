@@ -84,7 +84,8 @@ class QuestionStoreTest {
         batch.forEach { question -> assertEquals(stored[question.id], question.categories, question.id) }
         assertEquals(
             listOf("LIFESTYLE", "ETHICS"),
-            batch.single { it.optionA == "Always tell the truth" }.categories,
+            // Always tell the truth, or be told it: filed under ETHICS and LIFESTYLE, the older first.
+            batch.single { it.id == "seed-8" }.categories,
             "in the order of categories, not by id nor as stored",
         )
     }

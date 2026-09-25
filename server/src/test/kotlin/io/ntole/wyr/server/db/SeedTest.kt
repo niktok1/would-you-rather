@@ -115,6 +115,24 @@ class SeedTest {
         assertEquals(votes.size, votes.map { (a, b) -> a * 1_000 / (a + b) }.toSet().size, "no two splits alike")
     }
 
+    /**
+     * The seeds are in Serbian, in Cyrillic: every letter of every option is one of the Serbian
+     * Cyrillic alphabet's thirty, so neither a Latin lookalike nor a Russian letter slips in.
+     */
+    @Test
+    fun `every seed is written in Serbian Cyrillic`() {
+        val letters = SERBIAN_CYRILLIC + SERBIAN_CYRILLIC.uppercase()
+
+        Seed.SEEDS.forEach { (id, seed) ->
+            listOf(seed.optionA, seed.optionB).forEach { option ->
+                assertEquals("", option.filter { it.isLetter() && it !in letters }, "$id: $option")
+            }
+        }
+        Seed.CATEGORIES.forEach { category ->
+            assertEquals("", category.nameSr.filter { it.isLetter() && it !in letters }, category.id)
+        }
+    }
+
     /** What one seed writes, on a database of its own. */
     private fun seededOnce(): Map<String, Long> =
         TestDatabaseSettings(h2Url("wyr-seed-once-${UUID.randomUUID()}"), user = null, password = null)
@@ -136,5 +154,6 @@ class SeedTest {
     private companion object {
         const val RETIRED_SEED = "seed-1"
         const val RETIRED_AT = 5_000L
+        const val SERBIAN_CYRILLIC = "абвгдђежзијклљмнњопрстћуфхцчџш"
     }
 }
