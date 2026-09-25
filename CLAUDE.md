@@ -874,8 +874,8 @@ and reveals its tally, and holds Skip, Like and the category picker (*Skipping*,
   wide.
 - One action at a time (`isBusy`, `canChangeCategories`): while a vote, a skip or a like is in
   flight, the cards, the heart, Skip and the categories are off. A like that failed says why in the
-  points' place, in two short lines at most, so it moves nothing; a skip that failed moves on all
-  the same.
+  points' place, in two short lines at most, in a slot as high as the heart's touch target at any
+  font size, so it moves nothing; a skip that failed moves on all the same.
 - Loading is a spinner; a failure is one short sentence, *Пробај опет* and the categories played,
   the way out of a selection with nothing to serve. The words are `PlayStrings` (§8f).
 - The picker (`CategoryPicker`) is the dialog it was: nothing changes until Play, a new selection
@@ -886,8 +886,9 @@ and reveals its tally, and holds Skip, Like and the category picker (*Skipping*,
   every language at 400x900 and 375x599 (an iPhone SE less its status bar and the top bar), holds
   each to 599 high (376 on this Mac, 400 for a long Cyrillic reveal), reads each state's texts and
   nothing else, taps the cards before and after the reveal, steps the scene's clock through the count
-  up, and holds the row to 335 wide with only the categories cut; `TopBarsDrawTest` finds Skip in the
-  bar's middle, and `AppNavigationTest` skips through it.
+  up, holds the row to 335 wide with only the categories cut, and to one height with a like's
+  failure or without at font scales 1, 1.3 and 2; `TopBarsDrawTest` finds Skip in the bar's middle,
+  and `AppNavigationTest` skips through it.
 
 **The Submit screen** (`io.ntole.wyr.submit`), opened from the Account screen's top bar for now
 (*Navigation*), writes a question and lists the player's own (*Submitting*, below).

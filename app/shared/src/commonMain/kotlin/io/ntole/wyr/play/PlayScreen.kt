@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeContentPadding
@@ -26,6 +27,7 @@ import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconToggleButton
+import androidx.compose.material3.LocalMinimumInteractiveComponentSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -192,9 +194,9 @@ private fun QuestionBody(
  * like, filled while they like the question, and how many like it, as the server counted them
  * (CLAUDE.md §8d, *Likes*), before answering and after.
  *
- * It is the heart's height whatever it shows, so a failed like moves nothing. The two sides share
- * what the middle leaves, so the points stand in the middle of the screen, and a long selection is
- * cut short on its one line, never the like count: the middle is no wider than
+ * It is the heart's height whatever it shows, at any font size, so a failed like moves nothing. The
+ * two sides share what the middle leaves, so the points stand in the middle of the screen, and a
+ * long selection is cut short on its one line, never the like count: the middle is no wider than
  * `WyrDimens.playRowMiddleMaxWidth`. Internal, not private, so a test can measure it.
  */
 @Composable
@@ -224,29 +226,37 @@ internal fun MiddleRow(
             CategoriesPlayed(categories, enabled = canChangeCategories, onClick = onOpenCategories)
         }
 
-        // No wider than its cap, so the like count always has its width. How a like failed shows in
-        // the points' place, until the next like or the next question, in two short lines at most,
-        // which the heart's height holds.
-        val middle = Modifier.widthIn(max = dimens.playRowMiddleMaxWidth)
-        if (likeError != null) {
-            Text(
-                text = failureText(likeError, strings),
-                color = MaterialTheme.colorScheme.error,
-                fontSize = WyrTypeScale.statLabel,
-                textAlign = TextAlign.Center,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-                modifier = middle,
-            )
-        } else if (points != null) {
-            Text(
-                text = strings.points(points),
-                color = colors.primaryText,
-                fontWeight = FontWeight.Bold,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = middle,
-            )
+        // No wider than its cap, so the like count always has its width, and exactly as high as the
+        // heart's touch target, which does not grow with the phone's font size as text does. How a
+        // like failed shows in the points' place, until the next like or the next question, in two
+        // short lines at most, set close enough to fit up to half again the font size and cut short
+        // inside it past that, never growing the row.
+        Box(
+            contentAlignment = Alignment.Center,
+            modifier =
+                Modifier
+                    .widthIn(max = dimens.playRowMiddleMaxWidth)
+                    .height(LocalMinimumInteractiveComponentSize.current),
+        ) {
+            if (likeError != null) {
+                Text(
+                    text = failureText(likeError, strings),
+                    color = MaterialTheme.colorScheme.error,
+                    fontSize = WyrTypeScale.statLabel,
+                    lineHeight = WyrTypeScale.statLabelLineHeight,
+                    textAlign = TextAlign.Center,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            } else if (points != null) {
+                Text(
+                    text = strings.points(points),
+                    color = colors.primaryText,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
         }
 
         Row(

@@ -158,23 +158,34 @@ class PlayScreenDrawTest {
         }
     }
 
-    /** A failed like says so in the points' place, so no line of its own moves the cards. */
+    /**
+     * A failed like says so in the points' place, so no line of its own moves the cards; and at any
+     * font size, since text grows with the phone's font size and the heart's touch target does not.
+     */
     @Test
     fun `a failed like takes no height`() {
         val asked = PlayUiState.Asking(QUESTION)
         val revealed = PlayUiState.Revealed(QUESTION, OUTCOME)
-        Language.entries.forEach { language ->
-            LIKE_FAILURES.forEach { error ->
-                assertEquals(
-                    heightNeeded(asked, WIDTH, language = language),
-                    heightNeeded(asked.copy(likeError = error), WIDTH, language = language),
-                    "asked with $error in $language",
-                )
-                assertEquals(
-                    heightNeeded(revealed, WIDTH, language = language),
-                    heightNeeded(revealed.copy(likeError = error), WIDTH, language = language),
-                    "revealed with $error in $language",
-                )
+        FONT_SCALES.forEach { fontScale ->
+            Language.entries.forEach { language ->
+                LIKE_FAILURES.forEach { error ->
+                    val at = "in $language at font scale $fontScale"
+                    assertEquals(
+                        heightNeeded(asked, WIDTH, language = language, fontScale = fontScale),
+                        heightNeeded(asked.copy(likeError = error), WIDTH, language = language, fontScale = fontScale),
+                        "asked with $error $at",
+                    )
+                    assertEquals(
+                        heightNeeded(revealed, WIDTH, language = language, fontScale = fontScale),
+                        heightNeeded(
+                            revealed.copy(likeError = error),
+                            WIDTH,
+                            language = language,
+                            fontScale = fontScale,
+                        ),
+                        "revealed with $error $at",
+                    )
+                }
             }
         }
     }
@@ -443,24 +454,31 @@ class PlayScreenDrawTest {
         }
     }
 
-    /** The least height [state]'s screen needs at [width] for nothing in it to be squeezed. */
+    /**
+     * The least height [state]'s screen needs at [width] for nothing in it to be squeezed, with text
+     * at [fontScale] times its size.
+     */
     private fun heightNeeded(
         state: PlayUiState,
         width: Int,
         categories: Set<Category> = emptySet(),
         language: Language = Language.DEFAULT,
+        fontScale: Float = 1f,
     ): Int =
-        heightNeeded(width, "$state") { WyrStrings(language) { Screen(state, categories, POINTS, picking = null) } }
+        heightNeeded(width, "$state", fontScale) {
+            WyrStrings(language) { Screen(state, categories, POINTS, picking = null) }
+        }
 
     /** The least height [content] needs at [width] for nothing in it to be squeezed. */
     private fun heightNeeded(
         width: Int,
         what: String = "the content",
+        fontScale: Float = 1f,
         content: @Composable () -> Unit,
     ): Int {
         var needed = -1
         val scene =
-            ImageComposeScene(width = width, height = SHORT_PHONE_HEIGHT, density = Density(1f)) {
+            ImageComposeScene(width = width, height = SHORT_PHONE_HEIGHT, density = Density(1f, fontScale)) {
                 WyrTheme {
                     Layout(content = content) { measurables, constraints ->
                         val screen = measurables.single()
@@ -536,6 +554,9 @@ class PlayScreenDrawTest {
         /** None, which is every category; one; and every one, the longest line the row can hold. */
         val SELECTIONS: List<Set<Category>> =
             listOf(emptySet(), setOf(Category.ETHICS), Category.selectable.toSet())
+
+        /** The phone's font size as it is, Android's largest before Android 14, and twice it, the largest since. */
+        val FONT_SCALES: List<Float> = listOf(1f, 1.3f, 2f)
 
         /** Every way a like's failure is worded, the longest among them. */
         val LIKE_FAILURES: List<DomainError?> =

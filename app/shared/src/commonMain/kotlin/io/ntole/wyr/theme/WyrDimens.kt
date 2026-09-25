@@ -42,6 +42,12 @@ object WyrTypeScale {
     val heading = 28.sp
     val sectionTitle = 16.sp
     val statLabel = 13.sp
+
+    /**
+     * The line of [statLabel] where it takes two lines, a failed like's on the Play screen: close
+     * enough that two fit the heart's touch target up to half again the phone's font size.
+     */
+    val statLabelLineHeight = 16.sp
     val percentage = 34.sp
     val gameName = 40.sp
 
