@@ -78,7 +78,7 @@ vote counts, *+1* and the verdict are gone; Skip is an icon in the middle of the
 question is asked. The screen's words are translated (`PlayStrings`); the picker and the category
 names stay English, and `CategoryPicker`, `CategoryOption` and `categoryName` are byte for byte
 untouched, for `feat/server-categories` (only `categoriesPlayed` takes the *All* text now). The client
-alone changed. Tests: `:app:shared` 190 (171 before). Ask the user: Skip in the bar's middle, the
+alone changed. Tests: `:app:shared` 192 (171 before). Ask the user: Skip in the bar's middle, the
 vote counts gone with the verdict, the title and *OR* gone, a failed like in the points' place, no
 re-read of the points after a like (a like of one's own question shows from the next vote or
 visit), and the half second after a reveal lands in which a card does not go on, so a double tap
