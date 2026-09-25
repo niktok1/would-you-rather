@@ -17,6 +17,8 @@ object StatsStore {
      * The player's stats (CLAUDE.md §8d), or null for a player that does not exist. Must run inside
      * a transaction.
      *
+     * Beside the numbers, the player's username, null for a guest (CLAUDE.md §8a, *Accounts*).
+     *
      * All of them come from one statement: the player's row, with three counts beside it, the due
      * one compared with that row's own cycle. At READ COMMITTED each statement sees what was
      * committed before it began, so read one after another they could straddle an answer by the same
@@ -41,6 +43,7 @@ object StatsStore {
                 Players.totalPoints,
                 Players.answersGiven,
                 Players.currentCycle,
+                Players.username,
                 questionsAnswered,
                 dueThisCycle,
                 likesReceived,
@@ -55,6 +58,7 @@ object StatsStore {
                     cycle = row[Players.currentCycle],
                     dueThisCycle = row.countOf(dueThisCycle),
                     likesReceived = row.countOf(likesReceived),
+                    username = row[Players.username],
                 )
             }
     }

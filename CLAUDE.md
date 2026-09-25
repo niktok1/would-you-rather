@@ -439,6 +439,8 @@ decided in §8b).
     username nor the password changes for now; so is a registration sent again after its answer was
     lost. `AccountStore.register`, under §4's rules: the unique constraint decides two players racing
     for one name, a compare-and-set two registrations of one player (`AccountStoreTest`).
+  - `GET /v1/me` names the username (`PlayerStatsDto.username`), null for a guest; a client from
+    before accounts ignores it (§8d, *Stats*).
   - Neither a password nor its hash is ever logged, nor is either in any answer; `RegisterRequest`'s
     `toString` hides the password (`AccountFlowTest`).
 
@@ -798,10 +800,11 @@ and every request shows in its HTTP trace (`HttpTrace` in `:core:network`, never
   increment beside the points), distinct questions answered, current cycle, and how many questions
   are still due in it, counted by the feed's own predicate (`QuestionStore.dueCount`), and the
   likes received: how many likes the questions the player submitted hold now, their own included
-  (`LikeStore.receivedBy`, *Likes*). Built in `StatsStore.of`, as one statement, so the total always
-  agrees with the answers given and the likes received (§8c). It only reads, and the cycle starts
-  lazily on the next feed request, so between the answer that finishes a cycle and that request it
-  reports the finished cycle with nothing due.
+  (`LikeStore.receivedBy`, *Likes*), and the player's username, null for a guest (§8a, *Accounts*).
+  Built in `StatsStore.of`, as one statement, so the total always agrees with the answers given and
+  the likes received (§8c). It only reads, and the cycle starts lazily on the next feed request, so
+  between the answer that finishes a cycle and that request it reports the finished cycle with
+  nothing due.
 - **Skipping** *(built; decided 2026-09-23)*: allowed, earns nothing, and never touches the
   tally. The server **records the skip for the player's current cycle only**, so the question is
   no longer due in that cycle and comes back in the **next** one, except through a category filter

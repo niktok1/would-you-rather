@@ -6,6 +6,7 @@ import io.ntole.wyr.core.question.QuestionCategory
 import io.ntole.wyr.core.question.QuestionStatus
 import io.ntole.wyr.core.vote.OptionSide
 import io.ntole.wyr.core.vote.VoteResultDto
+import io.ntole.wyr.server.auth.AccountStore
 import io.ntole.wyr.server.db.Players
 import io.ntole.wyr.server.db.QuestionCategories
 import io.ntole.wyr.server.db.Questions
@@ -121,6 +122,15 @@ class StatsStoreTest {
         pool.forEach { id -> answer(other, id) }
 
         assertEquals(fresh(player), statsOf(player))
+    }
+
+    @Test
+    fun `the stats name a registered player's username and none for a guest`() {
+        val (guest, registered) = newPlayer() to newPlayer()
+        transaction(database) { AccountStore.register(registered, "bob", passwordHash = "hash") }
+
+        assertEquals(fresh(guest), statsOf(guest), "a guest has none")
+        assertEquals(fresh(registered).copy(username = "bob"), statsOf(registered))
     }
 
     @Test

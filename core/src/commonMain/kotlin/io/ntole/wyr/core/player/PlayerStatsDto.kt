@@ -18,10 +18,13 @@ import kotlinx.serialization.Serializable
  * starts only when the feed is next asked for a batch: in between, these report the finished cycle
  * with nothing due.
  *
+ * [username] is the player's account name, lower-cased, or null for a guest, who has none
+ * (CLAUDE.md §8a, *Accounts*).
+ *
  * The server reads every number at the same moment, so they always agree with one another.
  *
- * The numbers have defaults, zero and the first cycle, so a field a server stops sending reads as
- * that rather than failing to decode.
+ * The numbers have defaults, zero and the first cycle, and [username] null, so a field a server stops
+ * sending reads as that rather than failing to decode.
  */
 @Serializable
 public data class PlayerStatsDto(
@@ -32,4 +35,5 @@ public data class PlayerStatsDto(
     public val cycle: Int = 1,
     public val dueThisCycle: Int = 0,
     public val likesReceived: Int = 0,
+    public val username: String? = null,
 )

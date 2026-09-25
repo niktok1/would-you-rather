@@ -48,7 +48,9 @@ class AccountFlowTest {
 
             assertEquals(HttpStatusCode.OK, registered.status)
             assertEquals(AccountDto("bob_1"), registered.body<AccountDto>())
-            assertEquals(1, client.stats(guest).totalPoints, "the guest's point stays")
+            val stats = client.stats(guest)
+            assertEquals(1, stats.totalPoints, "the guest's point stays")
+            assertEquals("bob_1", stats.username, "and the stats name it")
             val refreshed = client.refresh(guest.refreshToken)
             assertEquals(HttpStatusCode.OK, refreshed.status, "and so does its session")
             assertEquals(guest.playerId, refreshed.body<SessionDto>().playerId)

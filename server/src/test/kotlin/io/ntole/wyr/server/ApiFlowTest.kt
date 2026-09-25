@@ -51,6 +51,7 @@ import io.ntole.wyr.server.db.inTransaction
 import io.ntole.wyr.server.db.serverPool
 import io.ntole.wyr.server.vote.Scoring
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
@@ -829,7 +830,9 @@ class ApiFlowTest {
                 response.body<PlayerStatsDto>(),
             )
             // Sent even where they equal the contract's defaults, which is all a fresh player has but
-            // the due count, so the values above are the server's rather than the decoder's.
+            // the due count, so the values above are the server's rather than the decoder's. A guest
+            // has no username, sent as null.
+            val sent = response.body<JsonObject>()
             assertEquals(
                 setOf(
                     "playerId",
@@ -839,9 +842,11 @@ class ApiFlowTest {
                     "cycle",
                     "dueThisCycle",
                     "likesReceived",
+                    "username",
                 ),
-                response.body<JsonObject>().keys,
+                sent.keys,
             )
+            assertEquals(JsonNull, sent["username"])
         }
 
     @Test
