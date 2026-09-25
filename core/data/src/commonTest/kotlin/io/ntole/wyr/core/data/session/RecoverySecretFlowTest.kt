@@ -424,6 +424,21 @@ class RecoverySecretFlowTest {
             assertEquals("a", store.read()?.playerId)
         }
 
+    /** A phone without Play services: New guest must still work there. */
+    @Test
+    fun `a secret store that can neither clear nor read lets the clear through`() =
+        runTest {
+            store.write(session("a"))
+            secrets.clearFails = true
+            secrets.readFails = true
+            val sessions = sessions()
+
+            sessions.clear()
+
+            assertNull(store.read())
+            assertEquals("guest1", sessions.ensure())
+        }
+
     @Test
     fun `a platform that keeps no secret mints as before and asks for none`() =
         runTest {

@@ -46,9 +46,35 @@ public class DefaultSessionRepository(
     /** The secret goes first: left behind, it would recover the player being cleared away at the next [ensure]. */
     override suspend fun clear(): Unit =
         mutex.withLock {
-            recovery?.let { store -> persist { store.clear() } }
+            recovery?.let { store -> dropSecret(store) }
             persist { sessionStore.clear() }
         }
+
+    /**
+     * Drops [store]'s secret, or fails as NETWORK where it is still there to be read. A store that can
+     * neither clear nor read, as on a phone without Play services, lets the clear through: a secret
+     * nothing can read recovers nobody, and the next [ensure] mints ([openSession]).
+     */
+    private suspend fun dropSecret(store: RecoverySecretStore) {
+        val failure =
+            try {
+                store.clear()
+                return
+            } catch (cancellation: CancellationException) {
+                throw cancellation
+            } catch (failed: Exception) {
+                failed
+            }
+        val stillThere =
+            try {
+                store.read() != null
+            } catch (cancellation: CancellationException) {
+                throw cancellation
+            } catch (unreadable: Exception) {
+                false
+            }
+        if (stillThere) persist { throw failure }
+    }
 
     /**
      * What deleting the app and installing it again leaves: the secret, and nothing that was kept
