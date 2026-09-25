@@ -1186,7 +1186,7 @@ the English name in English (§8f).
    row reads *Hrana, Etika*, and in English *Food, Ethics*. A category the moderation app adds shows
    the next time the picker opens. Opened offline, it says *Игра није доступна.* under the ones read
    before.
-3. Open it again and **Cancel**, or tap outside it: nothing changes. **Play** with what is already
+3. Open it again and **Откажи**, or tap outside it: nothing changes. **Играј** with what is already
    played: the question stays.
 4. Tick every category: the names are cut short on their one line, and the points move right of the
    middle only as far as the names need; the points, the like count and Skip stay whole. That is the
