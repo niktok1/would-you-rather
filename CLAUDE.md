@@ -833,9 +833,12 @@ game's, or a place on one, theme tokens only (§5b), and its words in `Strings` 
 
 **The Account screen** (`io.ntole.wyr.account`; §8a *Accounts*, *Stats* below):
 - First, the language switch (§8f, `LanguageSwitch`), where the screen's *Account* heading stood
-  (*decided 2026-09-25*): on top, it is the first thing a player who cannot read the language shown
-  finds, a guest's forms included, and a registered player's screen still fits 599 high with it (572
-  of it on this Mac, where it was 557 with the heading).
+  (*provisional — user decision*: the user asked only for a switch on this screen): on top, it is
+  the first thing a player who cannot read the language shown finds, a guest's forms included, and
+  a registered player's screen still fits 599 high with it (572 of it on this Mac, where it was 557
+  with the heading). The options: keep it; or keep the heading too, above the switch, which takes
+  that screen past 599 (the heading and its gap come back on top of the 572), so it scrolls unless
+  something else leaves it.
 - It shows *Playing as guest* or *Logged in as* the username, and the player's points, read through
   `GetPlayerStats` each time the screen is shown, since the points move on Play meanwhile. A guest gets
   **Register** (username, and password with a show/hide toggle), which keeps the points, and **Log
@@ -1301,12 +1304,12 @@ hand, so the two cannot say different things; and **English** stands beside them
 - **The default** *(built)*: Serbian Cyrillic on a first launch, whatever the device's language:
   nothing reads the device's locale (`Language.DEFAULT`; `LanguageSwitchTest` sets an English, a
   German and a Serbian Latin locale on the JVM and still opens in Cyrillic).
-- **The switch** *(built)*: first on the Account screen (§8d), a segmented row of the three,
-  **Ћирилица**, **Latinica** and **English**, each named in itself whatever the language shown, so a
-  player who picked one they cannot read finds their own (`Language.ownName`, which is why the names
-  are not `Strings`). No label on screen; a screen reader hears it named (`Strings.language`). A tap
-  changes every screen at once and is then kept (`LanguageViewModel`, bound in `uiModule` and asked
-  for once by `App`).
+- **The switch** *(built)*: first on the Account screen (§8d; provisional), a segmented row of the
+  three, **Ћирилица**, **Latinica** and **English**, each named in itself whatever the language
+  shown, so a player who picked one they cannot read finds their own (`Language.ownName`, which is
+  why the names are not `Strings`). No label on screen; a screen reader hears it named
+  (`Strings.language`). A tap changes every screen at once and is then kept (`LanguageViewModel`,
+  bound in `uiModule` and asked for once by `App`).
 - **Kept on the device** *(built)*: under `wyr.language` in the storage the session is kept in (the
   platform's `TokenStorage`: SharedPreferences, `NSUserDefaults`, JVM Preferences, `localStorage`), as
   the language's BCP 47 tag (`sr-Cyrl`, `sr-Latn`, `en`). One key for the device, not one per

@@ -60,7 +60,8 @@ over a back stack made by hand that Android's back pops (CLAUDE.md §8d, *Naviga
 draws its own icons, home, account, back and the two hearts (§5b). **Three languages**, picked on
 the Account screen and kept on the device: Serbian Cyrillic, the default whatever the device's
 language, Serbian Latin made from it by `SerbianScript.toLatin` (`:core:domain`), and English
-(§8f). Only Home, the top bars and the switch are translated; the Play, Account and Submit screens'
+(§8f). The switch in the Account heading's place is provisional (§8d, *The Account screen*): ask the
+user. Only Home, the top bars and the switch are translated; the Play, Account and Submit screens'
 own copy stays English for the branches that redesign them. The client alone changed. Tests:
 `:core:domain` 70 (`SerbianScriptTest` 16 new), `:app:shared` 171 (`NavigatorTest`,
 `AppNavigationTest`, `HomeScreenDrawTest`, `TopBarsDrawTest`, `WyrIconsDrawTest`, the language
