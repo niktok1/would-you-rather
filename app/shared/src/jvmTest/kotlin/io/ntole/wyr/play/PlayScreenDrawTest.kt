@@ -9,6 +9,7 @@ import androidx.compose.runtime.snapshots.Snapshot
 import androidx.compose.ui.ImageComposeScene
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.toComposeImageBitmap
 import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.layout.Layout
@@ -37,6 +38,8 @@ import io.ntole.wyr.nodes
 import io.ntole.wyr.sizeNeeded
 import io.ntole.wyr.tap
 import io.ntole.wyr.texts
+import io.ntole.wyr.theme.WyrDarkColors
+import io.ntole.wyr.theme.WyrLightColors
 import io.ntole.wyr.theme.WyrTheme
 import kotlin.math.abs
 import kotlin.test.Test
@@ -260,6 +263,32 @@ class PlayScreenDrawTest {
         listOf(PlayUiState.Asking(QUESTION), PlayUiState.Revealed(QUESTION, OUTCOME)).forEach { state ->
             val on = if (state is PlayUiState.Asking) parts + strings.skip else parts
             withScreen(state) { scene, _ -> on.forEach { assertFalse(scene.node(it).isOff, "$it in $state") } }
+        }
+    }
+
+    /**
+     * Skip also looks off while it is off, muted as the top bar drew it, so a tap that would do
+     * nothing does not look like one that skips; in both themes and every language. Told by the
+     * colours of its own pixels: the heading's accent and never the muted grey while it skips, and
+     * the grey and never the accent while a vote or a like is in flight.
+     */
+    @Test
+    fun `Skip is drawn muted while anything is in flight`() {
+        listOf(WyrLightColors, WyrDarkColors).forEach { colors ->
+            val accent = colors.headingAccent.toArgb()
+            val muted = colors.muted.toArgb()
+            Language.entries.forEach { language ->
+                val at = "in $language in the ${if (colors.isDark) "dark" else "light"} theme"
+                val on = skipColours(PlayUiState.Asking(QUESTION), colors.isDark, language)
+                assertTrue(accent in on && muted !in on, "Skip on $at")
+                listOf(
+                    PlayUiState.Asking(QUESTION, isSubmitting = true),
+                    PlayUiState.Asking(QUESTION, isLiking = true),
+                ).forEach { state ->
+                    val off = skipColours(state, colors.isDark, language)
+                    assertTrue(muted in off && accent !in off, "Skip on $state $at")
+                }
+            }
         }
     }
 
@@ -552,6 +581,23 @@ class PlayScreenDrawTest {
         Box(Modifier.width(width.dp).height(48.dp).semantics { contentDescription = name })
     }
 
+    /** The colours, as ARGB, of every pixel inside Skip's button on [state]'s screen. */
+    private fun skipColours(
+        state: PlayUiState,
+        dark: Boolean,
+        language: Language,
+    ): Set<Int> {
+        val colours = mutableSetOf<Int>()
+        withScreen(state, language = language, dark = dark) { scene, _ ->
+            val skip = scene.node(stringsOf(language).playScreen.skip).boundsInRoot
+            val pixels = scene.render().toComposeImageBitmap().toPixelMap()
+            for (x in skip.left.toInt() until skip.right.toInt()) {
+                for (y in skip.top.toInt() until skip.bottom.toInt()) colours += pixels[x, y].toArgb()
+            }
+        }
+        return colours
+    }
+
     /** Whether the one node showing [text] cuts it short: it needs more lines than it may take. */
     private fun ImageComposeScene.isCutShort(text: String): Boolean {
         val layouts = mutableListOf<TextLayoutResult>()
@@ -606,17 +652,21 @@ class PlayScreenDrawTest {
         val tapped = mutableListOf<String>()
     }
 
-    /** [test] on [state]'s screen at the short phone's size, in the light theme, drawn at time 0. */
+    /**
+     * [test] on [state]'s screen at the short phone's size, in the light theme unless [dark], drawn at
+     * time 0.
+     */
     private fun withScreen(
         state: PlayUiState,
         points: Int? = POINTS,
         language: Language = Language.DEFAULT,
+        dark: Boolean = false,
         test: (ImageComposeScene, Actions) -> Unit,
     ) {
         val actions = Actions()
         val scene =
             ImageComposeScene(width = SHORT_PHONE_WIDTH, height = SHORT_PHONE_HEIGHT, density = Density(1f)) {
-                WyrTheme(darkTheme = false) {
+                WyrTheme(darkTheme = dark) {
                     WyrStrings(language) { Screen(state, emptySet(), points, picking = null, actions) }
                 }
             }

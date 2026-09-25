@@ -924,9 +924,10 @@ and reveals its tally, and holds Skip, Like and the category picker (*Skipping*,
   a tap does where no text says it: *Следеће питање* on a revealed card, *Промени категорије* on the
   categories played.
 - One action at a time (`isBusy`, `canChangeCategories`): while a vote, a skip or a like is in
-  flight, the cards, the heart, Skip and the categories are off. A like that failed says why in the
-  points' place, in two short lines at most, in a slot as high as the heart's touch target at any
-  font size, so it moves nothing; a skip that failed moves on all the same.
+  flight, the cards, the heart, Skip and the categories are off, and Skip is drawn muted
+  (`WyrColors.muted`), as it was on the top bar. A like that failed says why in the points' place,
+  in two short lines at most, in a slot as high as the heart's touch target at any font size, so it
+  moves nothing; a skip that failed moves on all the same.
 - Loading is a spinner; a failure is one short sentence, *Пробај опет* and the categories played,
   the way out of a selection with nothing to serve. The words are `PlayStrings` (§8f).
 - The picker (`CategoryPicker`) is the dialog it was: nothing changes until Play, a new selection
@@ -940,11 +941,11 @@ and reveals its tally, and holds Skip, Like and the category picker (*Skipping*,
   tap does, taps the cards before and after the reveal, steps the scene's clock through the count
   up, holds the row to 335 wide with only the categories cut, asked with Skip and answered with its
   place kept, and to one height with a like's failure or without at font scales 1, 1.3 and 2, finds
-  Skip after the heart only while a question is asked, off while anything is in flight, and nothing
-  in the row moved by the reveal, shows *Начин живота*, *Супермоћи* and *Храна, Етика* whole beside
-  the points and the like (400 wide), and holds `CentredRow` to its rule on boxes of known widths,
-  which no font changes; `AppNavigationTest` skips through it, under a bar of home and the account
-  icon alone.
+  Skip after the heart only while a question is asked, off and drawn muted while anything is in
+  flight (by its pixels' colours, in both themes and every language), and nothing in the row moved
+  by the reveal, shows *Начин живота*, *Супермоћи* and *Храна, Етика* whole beside the points and
+  the like (400 wide), and holds `CentredRow` to its rule on boxes of known widths, which no font
+  changes; `AppNavigationTest` skips through it, under a bar of home and the account icon alone.
 
 **The Submit screen** (`io.ntole.wyr.submit`), opened from My questions on the Account screen
 (*Navigation*), is the form a question is written in (*Submitting*, below); the player's own are

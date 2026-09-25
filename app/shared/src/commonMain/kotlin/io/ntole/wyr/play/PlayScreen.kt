@@ -206,7 +206,8 @@ private fun QuestionBody(
  * the player's own like, filled while they like the question, how many like it, as the server
  * counted them (CLAUDE.md §8d, *Likes*), before answering and after, and Skip ([onSkip]) while the
  * question is not answered yet, `null` once it is. Skip's place is kept once it is gone, so the
- * reveal moves nothing in the row. The heart and Skip are on only while the screen is [idle].
+ * reveal moves nothing in the row. The heart and Skip are on only while the screen is [idle], and
+ * Skip is drawn muted while it is off.
  *
  * It is the heart's height whatever it shows, at any font size, so a failed like moves nothing. The
  * points stand in the middle of the screen unless the categories played need their room, and a long
@@ -285,10 +286,11 @@ internal fun MiddleRow(
                 )
                 if (onSkip != null) {
                     IconButton(onClick = onSkip, enabled = idle) {
+                        // Muted while off: a tint of its own hides the button's off colour.
                         Icon(
                             imageVector = WyrIcons.Skip,
                             contentDescription = strings.skip,
-                            tint = colors.headingAccent,
+                            tint = if (idle) colors.headingAccent else colors.muted,
                         )
                     }
                 } else {

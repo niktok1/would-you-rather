@@ -71,25 +71,25 @@ it on a phone; nor whether the web build's default font draws Cyrillic.
 **On `merge/redesign`** (from 4821c05; not on `main`, nothing pushed): `feat/play-redesign`, then
 `feat/account-redesign`, each merged whole with `--no-ff`; the two paragraphs below say what each
 brought. Then, at the user's asking, **Skip moved from the top bar into the row between the cards**,
-after the like count, only while a question is asked and off while anything is in flight, its place
-kept in the reveal so nothing in the row moves (CLAUDE.md §8d, *The Play screen*); the top bar's
-centre slot went with it. `CentredRow` keeps the points in the middle of the screen while the
-categories played leave them room and moves them right only as far as a longer selection needs, so
-*Начин живота* shows whole at 375 wide on this Mac, where a row keeping the points in the middle
-would leave it 115 of its 125 (*provisional*, §8b: ask the user; the other option is the points
-always in the middle). And **one points unit**, a text of `Strings` (`pointsUnit`, written by
-`Strings.points`): *П* in Serbian, *P* in Serbian Latin by the transliteration and in English, on
-the Play row, the Account card, the Auth page's guest-points warning and Send's cost, *Пошаљи · 1 П*
-(§8f, *Numbers and symbols*); the Account branch's constant Latin *P* (`POINTS_SYMBOL`,
-`pointsText`), and its *123 P* below, are gone. The client alone changed. Verified here: ktlint, the
-verify job's tests and client compiles, and the iOS Kotlin compiles; `:server:test` came from the
-cache, the server untouched. Tests: `:app:shared` 248 (`PlayScreenDrawTest` 21,
-`AppNavigationTest` 16, `TopBarsDrawTest` 4, `StringsTest` 7), `:core:domain` 70, `:core:data`
-139, `:core:network` 73 and 79 Android host, `:app:adminApp` 87, `:server` 311 (2 skipped). For
-`feat/server-categories`: `PlayScreen.kt` conflicts again, now with `CentredRow`'s `MiddleRow`,
-which takes the categories played as text, so its `categoriesPlayed(PlayedCategories)` keeps the
-`all` it is given; `sendText` takes the whole `Strings`, and the rest of the Account paragraph's
-merge notes hold. Not seen on a device.
+after the like count, only while a question is asked and off, drawn muted as on the top bar, while
+anything is in flight, its place kept in the reveal so nothing in the row moves (CLAUDE.md §8d, *The
+Play screen*); the top bar's centre slot went with it. `CentredRow` keeps the points in the middle
+of the screen while the categories played leave them room and moves them right only as far as a
+longer selection needs, so *Начин живота* shows whole at 375 wide on this Mac, where a row keeping
+the points in the middle would leave it 115 of its 125 (*provisional*, §8b: ask the user; the other
+option is the points always in the middle). And **one points unit**, a text of `Strings`
+(`pointsUnit`, written by `Strings.points`): *П* in Serbian, *P* in Serbian Latin by the
+transliteration and in English, on the Play row, the Account card, the Auth page's guest-points
+warning and Send's cost, *Пошаљи · 1 П* (§8f, *Numbers and symbols*); the Account branch's constant
+Latin *P* (`POINTS_SYMBOL`, `pointsText`), and its *123 P* below, are gone. The client alone
+changed. Verified here: ktlint, the verify job's tests and client compiles, and the iOS Kotlin
+compiles; `:server:test` came from the cache, the server untouched. Tests: `:app:shared` 248
+(`PlayScreenDrawTest` 21, `AppNavigationTest` 16, `TopBarsDrawTest` 4, `StringsTest` 7),
+`:core:domain` 70, `:core:data` 139, `:core:network` 73 and 79 Android host, `:app:adminApp` 87,
+`:server` 311 (2 skipped). For `feat/server-categories`: `PlayScreen.kt` conflicts again, now with
+`CentredRow`'s `MiddleRow`, which takes the categories played as text, so its
+`categoriesPlayed(PlayedCategories)` keeps the `all` it is given; `sendText` takes the whole
+`Strings`, and the rest of the Account paragraph's merge notes hold. Not seen on a device.
 
 **On `feat/play-redesign`** (from 4821c05; merged into `merge/redesign`, nothing pushed): the user's
 **Play screen** redesign (CLAUDE.md §8d, *The Play screen*). Two cards and one row between them: the
