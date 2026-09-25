@@ -29,4 +29,16 @@ public interface RecoverySecretStorage {
 
     /** Removes what is stored under [key], if anything is, as surely as [write] stores it. */
     public suspend fun clear(key: String)
+
+    /**
+     * Stores [value], which [key] already holds, again where the platform would now keep it further
+     * than when it was written, and never less far; elsewhere, as by default, does nothing. Block
+     * Store decides whether an entry goes to the cloud backup when it is stored, so a secret written
+     * before the backup was end-to-end encrypted stays out of it until stored again.
+     */
+    public suspend fun backUp(
+        key: String,
+        value: String,
+    ) {
+    }
 }

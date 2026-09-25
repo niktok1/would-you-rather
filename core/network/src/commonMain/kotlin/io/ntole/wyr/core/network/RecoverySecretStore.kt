@@ -40,6 +40,14 @@ public class RecoverySecretStore(
     }
 
     /**
+     * Stores [secret], the one kept for this server, again where the platform would now keep it
+     * further ([RecoverySecretStorage.backUp]). Throws when it cannot.
+     */
+    public suspend fun backUp(secret: String) {
+        secrets.backUp(secretKey, secret)
+    }
+
+    /**
      * How many secrets the server gave this install for [playerId] that it could not keep. Counted for
      * one player at a time, so another player's count reads as none.
      */

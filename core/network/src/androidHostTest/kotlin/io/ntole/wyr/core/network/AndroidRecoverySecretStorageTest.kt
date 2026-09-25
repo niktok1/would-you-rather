@@ -47,6 +47,33 @@ class AndroidRecoverySecretStorageTest {
             assertEquals(listOf(true, false), blockStore.stored.map { it.backUpToCloud })
         }
 
+    /** A screen lock set after the secret was written, say, or a check that failed then. */
+    @Test
+    fun `a secret is stored again into the cloud backup once the backup is encrypted end to end`() =
+        runTest {
+            blockStore.endToEndEncrypted = { false }
+            storage.write("k", "secret")
+            storage.backUp("k", "secret")
+            blockStore.endToEndEncrypted = { true }
+            storage.backUp("k", "secret")
+
+            assertEquals(listOf(false, true), blockStore.stored.map { it.backUpToCloud })
+            assertEquals("secret", storage.read("k"))
+        }
+
+    /** Stored again without it, the secret would be deleted from the cloud at Block Store's next sync. */
+    @Test
+    fun `a secret is never stored again out of the cloud backup`() =
+        runTest {
+            storage.write("k", "secret")
+            blockStore.endToEndEncrypted = { false }
+            storage.backUp("k", "secret")
+            blockStore.endToEndEncrypted = { throw IOException("Play services unavailable") }
+            storage.backUp("k", "secret")
+
+            assertEquals(listOf(true), blockStore.stored.map { it.backUpToCloud })
+        }
+
     @Test
     fun `a phone that cannot say whether its backup is encrypted keeps the secret out of it`() =
         runTest {

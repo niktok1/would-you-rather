@@ -506,16 +506,20 @@ auth SDK, satisfying §2.
     desktop and web, where it is *New guest*.
   - *Where it is kept* (*decided 2026-09-25*), bound in each platform's `platformModule`:
     - *Android* (built): Block Store (§2, `AndroidRecoverySecretStorage` in `:core:network`), which
-      keeps its entries across the app being uninstalled and installed again, and moves them to a new
-      phone set up from this one by device-to-device transfer. Its cloud copy is asked for only while
-      the backup is end-to-end encrypted (`isEndToEndEncryptionAvailable`; a phone that cannot say
-      counts as not), so a phone restored from any other cloud backup mints a guest. Without Play
-      services every call throws, and the phone plays as a guest. The session store stays out of both
-      the cloud backup and a device-to-device transfer, so a new phone gets only the secret, and
-      recovers with it into a session of its own: `data_extraction_rules.xml` (Android 12 and later)
-      and `backup_rules.xml` (`fullBackupContent`, Android 11 and earlier, for both) in
-      `:app:androidApp` exclude `AndroidTokenStorage`'s `wyr.auth.xml`, which holds the session and
-      the count of failed requests for a secret. `allowBackup` stays on, with nothing else in it yet.
+      keeps its entries across the app being uninstalled and installed again, and moves them to a
+      new phone set up from this one by device-to-device transfer. Its cloud copy is asked for only
+      while the backup is end-to-end encrypted (`isEndToEndEncryptionAvailable`; a phone that cannot
+      say counts as not), so a phone restored from any other cloud backup mints a guest. Block Store
+      decides that at each store, so a secret stored while the backup was not encrypted (before a
+      screen lock was set, say) is stored again into it by the first launch that finds it encrypted
+      (`backUp`), and never stored again out of it, which would delete the cloud's copy at the next
+      sync. Without Play services every call throws, and the phone plays as a guest. The session
+      store stays out of both the cloud backup and a device-to-device transfer, so a new phone gets
+      only the secret, and recovers with it into a session of its own: `data_extraction_rules.xml`
+      (Android 12 and later) and `backup_rules.xml` (`fullBackupContent`, Android 11 and earlier,
+      for both) in `:app:androidApp` exclude `AndroidTokenStorage`'s `wyr.auth.xml`, which holds the
+      session and the count of failed requests for a secret. `allowBackup` stays on, with nothing
+      else in it yet.
     - *iOS* (built, compiled only: §9): a generic-password Keychain item per environment
       (`IosRecoverySecretStorage` in `:core:network`; service `io.ntole.wyr.recovery`, the key as its
       account), synced through iCloud Keychain (`kSecAttrSynchronizable`), so one person's iPhones

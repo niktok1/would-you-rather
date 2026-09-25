@@ -51,6 +51,14 @@ class RecoverySecretStoreTest {
         }
 
     @Test
+    fun `a secret is stored again under its environment's own name`() =
+        runTest {
+            store(WyrEnvironment.DEV).backUp("dev")
+
+            assertEquals(listOf("wyr.recovery.dev" to "dev"), secrets.backedUp)
+        }
+
+    @Test
     fun `failed requests are counted for one player and another player's count reads as none`() =
         runTest {
             val store = store(WyrEnvironment.DEV)
@@ -102,6 +110,7 @@ class RecoverySecretStoreTest {
 
 private class MapSecretStorage : RecoverySecretStorage {
     val values = mutableMapOf<String, String>()
+    val backedUp = mutableListOf<Pair<String, String>>()
 
     override suspend fun read(key: String): String? = values[key]
 
@@ -114,5 +123,12 @@ private class MapSecretStorage : RecoverySecretStorage {
 
     override suspend fun clear(key: String) {
         values.remove(key)
+    }
+
+    override suspend fun backUp(
+        key: String,
+        value: String,
+    ) {
+        backedUp += key to value
     }
 }

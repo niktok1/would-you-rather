@@ -207,7 +207,9 @@ public class DefaultSessionRepository(
      * secret keeps it, whoever's it is. On iOS the Keychain item is shared by this person's iPhones
      * (CLAUDE.md §8a), and another player's there is the account the others share, which a new secret
      * would take from them; this device's own guest then stays bound to it, and should its session
-     * die, it recovers as that account.
+     * die, it recovers as that account. A secret held is stored again where the platform would now
+     * keep it further ([RecoverySecretStore.backUp]): on Android, into the cloud backup once that is
+     * end-to-end encrypted, which Block Store otherwise decides once, when the secret is written.
      *
      * Best effort, and never fails [ensure]. A request that fails is made again at the next launch,
      * whatever failed it: offline, a 5xx, a 429, a dead session, or the bare 404 of a server without
@@ -230,7 +232,11 @@ public class DefaultSessionRepository(
             } catch (unreadable: Exception) {
                 return
             }
-        if (held != null || store.failedRequests(playerId) >= MAX_FAILED_SECRET_REQUESTS) return
+        if (held != null) {
+            bestEffort { store.backUp(held) }
+            return
+        }
+        if (store.failedRequests(playerId) >= MAX_FAILED_SECRET_REQUESTS) return
 
         val secret =
             try {

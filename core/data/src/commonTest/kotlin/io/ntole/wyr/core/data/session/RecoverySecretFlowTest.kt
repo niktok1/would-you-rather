@@ -326,6 +326,28 @@ class RecoverySecretFlowTest {
             assertEquals(0, server.secretRequestsSent)
         }
 
+    /**
+     * Block Store decides whether the cloud backup has an entry when it is stored, so a secret written
+     * before the backup was end-to-end encrypted gets there only when it is stored again.
+     */
+    @Test
+    fun `a held secret is stored again once a launch where the platform would now keep it further`() =
+        runTest {
+            server.knowPlayer("a", secret = "secret-a")
+            store.write(session("a"))
+            recovery.write("secret-a")
+
+            val launch = sessions()
+            launch.ensure()
+            launch.ensure()
+            sessions().ensure()
+            secrets.writeFails = true
+            assertEquals("a", sessions().ensure(), "a store that cannot store it again fails nothing")
+
+            assertEquals(listOf("secret-a", "secret-a"), secrets.backedUp)
+            assertEquals(0, server.secretRequestsSent)
+        }
+
     /** On iOS the one Keychain item is the account this person's other iPhones share. */
     @Test
     fun `a secret kept for another player is left as it is`() =
