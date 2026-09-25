@@ -1453,6 +1453,14 @@ hand, so the two cannot say different things; and **English** stands beside them
   one has a Cyrillic letter. Translated so far: the Home screen, the game's name (*Шта би радије?*,
   *Would You Rather?*) and *Играј*; the top bars, the icons' names (*Почетна*, *Налог*, *Назад*) and
   the Account bar's *Пошаљи питање*; and the switch's name, *Језик*.
+- **Category names** *(built)*: a category is server data, with a name in Serbian, in Cyrillic, and
+  one in English (§8d, *Categories*), and `Category.nameIn(language)` (`io.ntole.wyr.categories`) is
+  the one function that picks which to show: the Serbian name in Serbian Cyrillic, that name through
+  `SerbianScript.toLatin` in Serbian Latin, as every Latin text of the game is made, and the English
+  name in English. A Serbian name a moderator typed in Latin reads as typed in both scripts, since
+  `toLatin` leaves Latin letters alone. `CategoryNameTest`. The game's screens still name categories
+  in Serbian (`categoryName` in `io.ntole.wyr.play`), and the moderation app too (`nameOf`), until
+  each uses it.
 - **The default** *(built)*: Serbian Cyrillic on a first launch, whatever the device's language:
   nothing reads the device's locale (`Language.DEFAULT`; `LanguageSwitchTest` sets an English, a
   German and a Serbian Latin locale on the JVM and still opens in Cyrillic).
