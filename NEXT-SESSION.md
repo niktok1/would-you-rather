@@ -701,12 +701,12 @@ Server first, then a client. The server defaults to in-memory H2 and logs a warn
 
 Android uses `http://10.0.2.2:8080` (the emulator's alias for the host loopback); desktop, iOS
 simulator, and web use `http://localhost:8080`. All four are `WyrEnvironment.LOCAL`'s, which a build
-targets unless it names another environment (below); on Android that is the `localDebug` variant, not
-the default. The **Account** tab's last line names the environment and the URL in use.
+targets unless it names another environment (below); on Android that is the `localDebug` variant,
+not the default. The **Account** tab's last line names the environment and the URL in use.
 `WYR_API_BASE_URL`, which pointed the desktop client at any server, is retired (CLAUDE.md §8e): name
 an environment instead (below). For the **web** client the server also needs `ALLOWED_WEB_ORIGINS`
-set or CORS preflight will reject every request. The page's dev server takes the first free port from 8080, so
-with the API already there it serves on 8081:
+set or CORS preflight will reject every request. The page's dev server takes the first free port
+from 8080, so with the API already there it serves on 8081:
 
 ```bash
 ALLOWED_WEB_ORIGINS=localhost:8081 ./gradlew :server:run

@@ -483,7 +483,8 @@ decided in §8b).
     (`QuestionRepository.reset`), which the player before filled. The session is kept as a guest's
     is, so a logged-in player stays logged in across launches while the device refreshes within a
     refresh token's 30 days; one idle longer plays on as a fresh guest, and logs in again. No
-    password is stored, anywhere: the phone's password manager may keep it (§8d, *The Account screen*).
+    password is stored, anywhere: the phone's password manager may keep it (§8d, *The Account
+    screen*).
 
 **Known limitation, by design for now:** a guest account is bound to one device's storage. Lose
 the device, reinstall the app or clear its storage, and the account — and its points — are gone,
@@ -599,15 +600,15 @@ EncryptedSharedPreferences: enough for a game that stores nothing personal.
   - *Per player*, so players behind one address do not share a budget: registrations 20 an hour
     (every one the rules take costs a password hash), logouts 30 a minute, the feed, votes and skips
     120 a minute each, likes 60 a minute, submissions 30 an hour (the 20-pending cap still applies),
-    `GET /v1/me` and `GET /v1/me/questions` 120 a minute each. The key is the player id in the bearer
-    token, which the limiter verifies itself (`verifiedPlayerId`): it runs before authentication, so
-    no principal is there yet. A request without a token this server signed spends its address's budget of the group
-    instead, and then gets its 401, so a forged token naming a player cannot spend that player's
-    budget. A token that has only expired, as every player's does in its turn, still names its
-    player for a refresh token's lifetime (`TokenService.expiredTokenVerifier`), so the request that
-    finds it expired spends that player's budget and reaches its 401, which is what the client
-    refreshes on; keyed by address, it would be answered 429 once the address's budget was spent,
-    and the client would not refresh.
+    `GET /v1/me` and `GET /v1/me/questions` 120 a minute each. The key is the player id in the
+    bearer token, which the limiter verifies itself (`verifiedPlayerId`): it runs before
+    authentication, so no principal is there yet. A request without a token this server signed
+    spends its address's budget of the group instead, and then gets its 401, so a forged token
+    naming a player cannot spend that player's budget. A token that has only expired, as every
+    player's does in its turn, still names its player for a refresh token's lifetime
+    (`TokenService.expiredTokenVerifier`), so the request that finds it expired spends that player's
+    budget and reaches its 401, which is what the client refreshes on; keyed by address, it would be
+    answered 429 once the address's budget was spent, and the client would not refresh.
   - `/health` is in no group, so Render's checks are never refused.
 
   The limiter runs before anything else of the route, so a refused request never reaches the
