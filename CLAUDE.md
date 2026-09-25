@@ -1017,6 +1017,10 @@ lists the player's own (*Submitting*, below).
     category is deleted. A client submits under a set of one or more (*Submitting*). The game names
     a category in Serbian for now (`categoryName` in `io.ntole.wyr.play`, the one place the language
     is chosen); the moderation app names it in Serbian too (`nameOf`).
+  - *A known limit:* every picker shows every category, a chip or a row each. The Play picker
+    scrolls inside its dialog, but the Submit form, the moderation app's category filter and each
+    pending card lay out every chip in place, to be scrolled past, which suits tens of categories,
+    not the hundreds planned; a searchable or collapsible picker comes with UI polish.
 - **Re-answering** *(built)*: a question can be answered again, whether or not the feed has
   served it again. It earns the point again **every time**, inside its cycle or not (farming is
   bounded by rate limiting, 120 votes a minute per player on average, §8b), and the player may
