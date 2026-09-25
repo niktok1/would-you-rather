@@ -43,7 +43,8 @@ the contract did not. How to try it on a phone is under *Submit on its own tab*.
 (the user, 2026-09-25: "console is not needed"). Every build, LOCAL, DEV and PROD alike, shows Play,
 Submit and Account and opens on Play (CLAUDE.md §8d, *Current focus*); a LOCAL or DEV build names its
 server on the Account tab's last line (§8e). Changes are tried through the game and the moderation
-app (*Trying a change*, below). The client alone changed; the server only in a comment and a test's
+app (*Trying a change*, below). What only the console read went with it: the HTTP trace
+(`HttpTrace`, `HttpTracing`). The client alone changed; the server only in a comment and a test's
 name.
 
 ### Verified working

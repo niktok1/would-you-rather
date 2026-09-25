@@ -21,7 +21,6 @@ import io.ntole.wyr.core.network.respondErrorDto
 import io.ntole.wyr.core.network.respondSession
 import io.ntole.wyr.core.network.session
 import io.ntole.wyr.core.network.storeHolding
-import io.ntole.wyr.core.network.trace.HttpTrace
 import io.ntole.wyr.core.question.AdminQuestionDto
 import io.ntole.wyr.core.question.AdminQuestionPageDto
 import io.ntole.wyr.core.question.ApproveSubmissionRequest
@@ -40,10 +39,8 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertNull
 
-/** What each admin request carries, what it leaves to the player's session, and what it keeps out of the trace. */
+/** What each admin request carries, what it leaves to the player's session, and what it keeps out of a failure. */
 class ModerationApiTest {
-    private val trace = HttpTrace()
-
     @Test
     fun `the pending queue is asked for with the admin token and the player's bearer left as it was`() =
         runTest {
@@ -258,37 +255,23 @@ class ModerationApiTest {
         }
 
     @Test
-    fun `the admin token reaches neither the trace nor a failure's message`() =
+    fun `the admin token never reaches a failure's message`() =
         runTest {
-            val engine =
-                MockEngine { request ->
-                    when (request.url.encodedPath) {
-                        WyrApi.Paths.ADMIN_SUBMISSIONS -> respondOk(QUEUE)
-
-                        WyrApi.Paths.ADMIN_APPROVALS -> respondOk(APPROVED)
-
-                        // What a server with moderation off answers: a bare 404, so the message is the client's own.
-                        else -> respond("", HttpStatusCode.NotFound)
-                    }
-                }
+            // What a server with moderation off answers: a bare 404, so the message is the client's own.
+            val engine = MockEngine { respond("", HttpStatusCode.NotFound) }
             val api = moderationApi(engine, storeHolding(session("a")))
 
-            api.pending(ADMIN_TOKEN)
-            api.approve(ADMIN_TOKEN, ApproveSubmissionRequest("q1"))
             val failure =
                 assertFailsWith<ApiException> { api.reject(ADMIN_TOKEN, RejectSubmissionRequest("q1", "a duplicate")) }
 
-            // The dev console shows both: every exchange, and a failure's message in its log.
-            val recorded = trace.exchanges.value.toString()
-            assertEquals(3, trace.exchanges.value.size)
-            assertFalse(ADMIN_TOKEN in recorded, "the admin token leaked into $recorded")
+            // The moderation app shows a failure's message as the server's line under it.
             assertFalse(ADMIN_TOKEN in failure.message.orEmpty(), "the admin token leaked into ${failure.message}")
         }
 
     private fun moderationApi(
         engine: MockEngine,
         store: SessionStore,
-    ): ModerationApi = ModerationApi(WyrHttpClient.create(BASE_URL, store, engine, trace))
+    ): ModerationApi = ModerationApi(WyrHttpClient.create(BASE_URL, store, engine))
 
     private inline fun <reified T> MockRequestHandleScope.respondOk(body: T): HttpResponseData =
         respond(WyrJson.encodeToString(body), HttpStatusCode.OK, jsonHeaders)

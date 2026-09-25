@@ -24,8 +24,7 @@ import io.ntole.wyr.core.question.SubmissionListDto
  * The moderator's routes (CLAUDE.md §8d, *Moderation*): the queue and its decisions, and the list of
  * every question with its retirement and restoration. Each call carries [adminToken] in
  * [WyrApi.Headers.ADMIN_TOKEN], and only that call: the token is the caller's to hold, in memory,
- * and is never set on the client, stored, or put anywhere the HTTP trace reads (it records no
- * headers).
+ * and is never set on the client or stored.
  *
  * The player's session is left alone. The Auth plugin still attaches the bearer token when there is
  * one, as it does to every request, and the admin routes ignore it. They answer a wrong token 403,
@@ -46,7 +45,7 @@ public class ModerationApi(
         client
             .get(WyrApi.Paths.ADMIN_SUBMISSIONS) {
                 admin(adminToken)
-                // Named although it is the server's default, so the trace says which list was asked for.
+                // Named although it is the server's default, so the request says which list it asks for.
                 parameter(WyrApi.Query.STATUS, QuestionStatus.PENDING.name)
                 parameter(WyrApi.Query.LIMIT, limit)
             }.body()

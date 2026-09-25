@@ -27,8 +27,6 @@ import io.ntole.wyr.core.auth.RefreshRequest
 import io.ntole.wyr.core.auth.SessionDto
 import io.ntole.wyr.core.error.ErrorCode
 import io.ntole.wyr.core.error.ErrorDto
-import io.ntole.wyr.core.network.trace.HttpTrace
-import io.ntole.wyr.core.network.trace.HttpTracing
 import kotlinx.coroutines.CancellationException
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.minutes
@@ -89,13 +87,11 @@ public object WyrHttpClient {
     /**
      * @param engine for tests, which pass a `MockEngine`. Production leaves it null so Ktor
      *   discovers the platform's engine as described above.
-     * @param trace where every exchange is recorded. The app passes the one the dev console reads.
      */
     public fun create(
         baseUrl: String,
         sessionStore: SessionStore,
         engine: HttpClientEngine? = null,
-        trace: HttpTrace = HttpTrace(),
     ): HttpClient {
         val config: HttpClientConfig<*>.() -> Unit = {
             expectSuccess = true
@@ -167,11 +163,6 @@ public object WyrHttpClient {
                 handleResponseExceptionWithRequest { cause, _ ->
                     if (cause is ResponseException) throw cause.toApiException()
                 }
-            }
-
-            // Last, so it records each request that went out, token refreshes and retries included.
-            install(HttpTracing) {
-                this.trace = trace
             }
         }
         return if (engine == null) HttpClient(config) else HttpClient(engine, config)

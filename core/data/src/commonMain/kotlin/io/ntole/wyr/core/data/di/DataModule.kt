@@ -49,7 +49,6 @@ import io.ntole.wyr.core.network.api.QuestionApi
 import io.ntole.wyr.core.network.api.SubmissionApi
 import io.ntole.wyr.core.network.api.VoteApi
 import io.ntole.wyr.core.network.environment.WyrEnvironment
-import io.ntole.wyr.core.network.trace.HttpTrace
 import org.koin.core.module.Module
 import org.koin.dsl.module
 
@@ -67,10 +66,7 @@ import org.koin.dsl.module
 public fun dataModule(environment: WyrEnvironment): Module =
     module {
         single { SessionStore(get<TokenStorage>(), environment) }
-        single { HttpTrace() }
-        single<HttpClient> {
-            WyrHttpClient.create(baseUrl = environment.apiBaseUrl, sessionStore = get(), trace = get())
-        }
+        single<HttpClient> { WyrHttpClient.create(baseUrl = environment.apiBaseUrl, sessionStore = get()) }
 
         single { AuthApi(get()) }
         single { QuestionApi(get()) }
@@ -121,12 +117,10 @@ public fun dataModule(environment: WyrEnvironment): Module =
  */
 public fun moderationDataModule(environment: WyrEnvironment): Module =
     module {
-        single { HttpTrace() }
         single<HttpClient> {
             WyrHttpClient.create(
                 baseUrl = environment.apiBaseUrl,
                 sessionStore = SessionStore(InMemoryTokenStorage(), environment),
-                trace = get(),
             )
         }
         single { ModerationApi(get()) }

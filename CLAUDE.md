@@ -1102,12 +1102,12 @@ lists the player's own (*Submitting*, below).
     not a player. `DefaultModerationRepository` calls `ModerationApi` through `runApi` alone, never
     `withSessionRecovery`, so nothing a moderator does can refresh or replace the player's session
     (the Auth plugin refreshes only on a 401). Each call sends the `AdminToken` it is given in the
-    header, and only that call; nothing stores it, the HTTP trace records no headers, and
-    `AdminToken.toString` shows none of it. The queue and every decision come back as the author's
-    `Submission`. An approval under `Category.OTHER` is refused before anything is sent, and none
-    keeps the author's categories. `RejectionReason` holds only a reason the server accepts, by
-    `checkedRejection`'s rules, so a rejection's 400 can only be a bug; its `MAX_LENGTH` copies the
-    wire's limit, which `:core:domain` cannot see, and `ModerationMapperTest` pins the two equal.
+    header, and only that call; nothing stores it, and `AdminToken.toString` shows none of it. The
+    queue and every decision come back as the author's `Submission`. An approval under
+    `Category.OTHER` is refused before anything is sent, and none keeps the author's categories.
+    `RejectionReason` holds only a reason the server accepts, by `checkedRejection`'s rules, so a
+    rejection's 400 can only be a bug; its `MAX_LENGTH` copies the wire's limit, which `:core:domain`
+    cannot see, and `ModerationMapperTest` pins the two equal.
     `ModerationApi.questions` asks for a page of the list, one `?status=` and `?category=` per value
     and the cursor sent back as it came, and `retire` and `restore` post a question's id; each
     carries the token as the others do. Behind `ModerationRepository` they are `GetQuestions`, a
