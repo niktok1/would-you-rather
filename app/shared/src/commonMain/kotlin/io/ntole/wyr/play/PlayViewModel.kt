@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import io.ntole.wyr.core.domain.error.DomainError
 import io.ntole.wyr.core.domain.error.WyrException
 import io.ntole.wyr.core.domain.like.SetLike
+import io.ntole.wyr.core.domain.player.GetPlayerStats
 import io.ntole.wyr.core.domain.question.Category
 import io.ntole.wyr.core.domain.question.GetNextQuestion
 import io.ntole.wyr.core.domain.question.Question
@@ -13,6 +14,7 @@ import io.ntole.wyr.core.domain.question.SkipQuestion
 import io.ntole.wyr.core.domain.vote.AttemptId
 import io.ntole.wyr.core.domain.vote.CastVote
 import io.ntole.wyr.core.domain.vote.Side
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -24,6 +26,7 @@ class PlayViewModel(
     private val castVote: CastVote,
     private val skipQuestion: SkipQuestion,
     private val setLike: SetLike,
+    private val getPlayerStats: GetPlayerStats,
     private val questions: QuestionRepository,
 ) : ViewModel() {
     private val _state = MutableStateFlow<PlayUiState>(PlayUiState.Loading)
@@ -40,6 +43,18 @@ class PlayViewModel(
 
     /** What the open category picker has ticked, not played yet, or `null` while it is closed. */
     val picking: StateFlow<Set<Category>?> = _picking.asStateFlow()
+
+    private val _points = MutableStateFlow<Int?>(null)
+
+    /**
+     * The player's points as the server last reported them (CLAUDE.md §8c), never worked out here:
+     * read each time the screen is shown ([refreshPoints]) and taken from each vote's answer, `null`
+     * until the first of them.
+     */
+    val points: StateFlow<Int?> = _points.asStateFlow()
+
+    /** The read of the points in flight, if any, which a vote's answer makes stale. */
+    private var pointsRead: Job? = null
 
     init {
         load()
@@ -221,16 +236,37 @@ class PlayViewModel(
         if (lostVote == null) load() else submit(lostVote)
     }
 
+    /**
+     * Reads the player's points, each time the Play screen is shown: they move meanwhile on other
+     * screens, a login or a logout, a submission, and with other players' likes of the player's
+     * questions. A read that fails keeps the points shown and says nothing: the next vote's answer
+     * brings them. A vote answered while a read is in flight wins, since the server may have
+     * answered the read before it counted the vote.
+     */
+    fun refreshPoints() {
+        pointsRead?.cancel()
+        pointsRead =
+            viewModelScope.launch {
+                try {
+                    _points.value = getPlayerStats().totalPoints
+                } catch (unread: WyrException) {
+                    // Kept as they were (above). Only a WyrException: a cancellation must go on up.
+                }
+            }
+    }
+
     private fun submit(vote: PendingVote) {
         _state.value = PlayUiState.Asking(vote.question, isSubmitting = true)
 
         viewModelScope.launch {
             _state.value =
                 try {
-                    PlayUiState.Revealed(
-                        question = vote.question,
-                        outcome = castVote(vote.question.id, vote.side, vote.attempt),
-                    )
+                    val outcome = castVote(vote.question.id, vote.side, vote.attempt)
+                    // The vote's total is the newest the server has told: a read still in flight
+                    // may be older.
+                    pointsRead?.cancel()
+                    _points.value = outcome.totalPoints
+                    PlayUiState.Revealed(question = vote.question, outcome = outcome)
                 } catch (failure: WyrException) {
                     // Already voted is not really a failure to show: the question is spent, so move
                     // the player on rather than stranding them on an error they cannot resolve.

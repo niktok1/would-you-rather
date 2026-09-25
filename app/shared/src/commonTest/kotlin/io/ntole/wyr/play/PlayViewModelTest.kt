@@ -5,6 +5,9 @@ import io.ntole.wyr.core.domain.error.WyrException
 import io.ntole.wyr.core.domain.like.LikeRepository
 import io.ntole.wyr.core.domain.like.QuestionLikes
 import io.ntole.wyr.core.domain.like.SetLike
+import io.ntole.wyr.core.domain.player.GetPlayerStats
+import io.ntole.wyr.core.domain.player.PlayerRepository
+import io.ntole.wyr.core.domain.player.PlayerStats
 import io.ntole.wyr.core.domain.question.Category
 import io.ntole.wyr.core.domain.question.GetNextQuestion
 import io.ntole.wyr.core.domain.question.Question
@@ -520,6 +523,81 @@ class PlayViewModelTest {
             assertEquals(listOf("next", "next"), questions.calls)
         }
 
+    /** Nothing to show until the server says, rather than a placeholder zero. */
+    @Test
+    fun `the points are unknown until read and then the server's`() =
+        runTest(dispatcher) {
+            val players = FakePlayerRepository()
+            val viewModel = viewModel(players = players)
+            testScheduler.advanceUntilIdle()
+            assertNull(viewModel.points.value)
+
+            viewModel.refreshPoints()
+            testScheduler.advanceUntilIdle()
+            assertEquals(5, viewModel.points.value)
+
+            // Read again every time, since they move on other screens meanwhile.
+            players.answer = { statsWith(totalPoints = 6) }
+            viewModel.refreshPoints()
+            testScheduler.advanceUntilIdle()
+            assertEquals(6, viewModel.points.value)
+            assertEquals(2, players.reads)
+        }
+
+    @Test
+    fun `a vote's answer moves the points to its total`() =
+        runTest(dispatcher) {
+            val viewModel = viewModel()
+            testScheduler.advanceUntilIdle()
+            viewModel.refreshPoints()
+            testScheduler.advanceUntilIdle()
+
+            viewModel.choose(Side.A)
+            testScheduler.advanceUntilIdle()
+
+            assertEquals(42, viewModel.points.value)
+        }
+
+    /** The read may have been answered before the vote was counted, so the vote's total stays. */
+    @Test
+    fun `a read answered after a vote does not put older points back`() =
+        runTest(dispatcher) {
+            val gate = CompletableDeferred<Unit>()
+            val players = FakePlayerRepository()
+            players.answer = {
+                gate.await()
+                statsWith(totalPoints = 5)
+            }
+            val viewModel = viewModel(players = players)
+            testScheduler.advanceUntilIdle()
+            viewModel.refreshPoints()
+            testScheduler.advanceUntilIdle()
+
+            viewModel.choose(Side.A)
+            testScheduler.advanceUntilIdle()
+            gate.complete(Unit)
+            testScheduler.advanceUntilIdle()
+
+            assertEquals(42, viewModel.points.value)
+        }
+
+    @Test
+    fun `a failed read keeps the points shown and the question as it was`() =
+        runTest(dispatcher) {
+            val players = FakePlayerRepository()
+            val viewModel = viewModel(players = players)
+            testScheduler.advanceUntilIdle()
+            viewModel.choose(Side.A)
+            testScheduler.advanceUntilIdle()
+
+            players.answer = { throw WyrException(DomainError.NETWORK) }
+            viewModel.refreshPoints()
+            testScheduler.advanceUntilIdle()
+
+            assertEquals(42, viewModel.points.value)
+            assertEquals(PlayUiState.Revealed(QUESTION, OUTCOME), viewModel.state.value)
+        }
+
     @Test
     fun `the categories shown are the ones the repository plays`() =
         runTest(dispatcher) {
@@ -832,11 +910,13 @@ class PlayViewModelTest {
         questions: QuestionRepository = FakeQuestionRepository(),
         votes: VoteRepository = FakeVoteRepository(),
         likes: LikeRepository = FakeLikeRepository(),
+        players: PlayerRepository = FakePlayerRepository(),
     ) = PlayViewModel(
         getNextQuestion = GetNextQuestion(questions, NoOpSessionRepository),
         castVote = CastVote(votes, NoOpSessionRepository),
         skipQuestion = SkipQuestion(questions, NoOpSessionRepository),
         setLike = SetLike(likes, NoOpSessionRepository),
+        getPlayerStats = GetPlayerStats(players, NoOpSessionRepository),
         questions = questions,
     )
 
@@ -871,6 +951,16 @@ class PlayViewModelTest {
                 tally = Tally(votesA = 7, votesB = 3),
                 pointsAwarded = 17,
                 totalPoints = 42,
+            )
+
+        fun statsWith(totalPoints: Int): PlayerStats =
+            PlayerStats(
+                totalPoints = totalPoints,
+                answersGiven = 0,
+                questionsAnswered = 0,
+                cycle = 1,
+                dueThisCycle = 10,
+                likesReceived = 0,
             )
     }
 
@@ -990,6 +1080,18 @@ class PlayViewModelTest {
         ): QuestionLikes {
             sent += questionId to liked
             return answer(questionId, liked)
+        }
+    }
+
+    /** Answers every read of the stats with [answer], and counts them. */
+    private class FakePlayerRepository : PlayerRepository {
+        var answer: suspend () -> PlayerStats = { statsWith(totalPoints = 5) }
+
+        var reads = 0
+
+        override suspend fun stats(): PlayerStats {
+            reads++
+            return answer()
         }
     }
 

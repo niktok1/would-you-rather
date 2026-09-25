@@ -146,6 +146,9 @@ private fun Play() {
     val categories by viewModel.categories.collectAsStateWithLifecycle()
     val picking by viewModel.picking.collectAsStateWithLifecycle()
 
+    // Every time the screen is shown: the points move on the Account and Submit screens meanwhile.
+    LaunchedEffect(viewModel) { viewModel.refreshPoints() }
+
     PlayScreen(
         state = state,
         categories = categories,

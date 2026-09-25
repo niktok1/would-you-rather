@@ -118,6 +118,20 @@ class AppNavigationTest {
             assertEquals(1, game.questionsAsked)
         }
 
+    /** The points move on the Account and Submit screens, so Play reads them each time it is shown. */
+    @Test
+    fun `Play reads the points each time it is shown`() =
+        withApp { scene ->
+            scene.tap(CYRILLIC.play)
+            assertEquals(1, game.statsRead)
+
+            scene.tap(CYRILLIC.account)
+            scene.tap(CYRILLIC.back)
+
+            // Once for the Account screen, and once more for Play shown again.
+            assertEquals(3, game.statsRead)
+        }
+
     @Test
     fun `Play keeps its question through Home and back`() =
         withApp { scene ->
