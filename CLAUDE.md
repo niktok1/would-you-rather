@@ -488,8 +488,11 @@ auth SDK, satisfying §2.
     (`MAX_FAILED_SECRET_REQUESTS`) the install asks no more for that player: a server without recovery
     refuses every one. One lost on the network does not count. The count is kept beside the session,
     in the token storage (`RecoverySecretStore`), so it goes where the session goes and never with the
-    secret, and a reinstall starts it again. `clear()`, the console's *New guest*, drops the secret with the session, which
-    would otherwise recover the player being cleared away. `RecoverySecretFlowTest` pins every case.
+    secret, and a reinstall starts it again.
+  - `clear()`, the console's *New guest*, drops the secret with the session, since it would otherwise
+    recover the player being cleared away, and fails as NETWORK when it cannot, unless the store
+    cannot read the secret back either, as without Play services, where nothing could recover with
+    it. `RecoverySecretFlowTest` pins every case.
   - *The console* shows whether a secret is kept (`SessionDiagnostics.recoverySecret`: kept, none,
     unreadable, or not kept on this platform), never the secret, and *Reinstall (keep secret)* does
     what deleting the app and installing it again does: `clearKeepingSecret()` drops the session and
