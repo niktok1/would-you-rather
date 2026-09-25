@@ -74,6 +74,32 @@ production's English ones by id; a new database is seeded in Serbian).
 
 ### Verified working
 
+- **`feat/server-categories`**, on this machine, at its last code commit: `ktlintCheck`, the verify
+  job's tests and client compiles (`:app:androidApp:assembleDebug` and both web targets included)
+  and the ios job's Kotlin compiles, all green; at each commit before it, lint, the server suite,
+  `:core:data:jvmTest` and the same compiles. Test counts from `build/test-results`: `:server:test` 346 (344
+  green, 2 skipped: the PostgreSQL-only boot races), `:core:domain:jvmTest` 54, `:core:data:jvmTest`
+  139, `:core:network:jvmTest` 70, `:core:network:testAndroidHostTest` 76, `:app:shared:jvmTest`
+  119, `:app:adminApp:jvmTest` 87. New: `CategoryStoreTest` (the order of categories, an id no
+  category has refused, two creations racing for one id), `CategoryRulesTest` (names, ids, the
+  derived id), `CategoryFlowTest` (the list to anybody, create, rename, 409, 404, 400, a new
+  category submitted, approved and played under); the cost in `SubmissionStoreTest` (charged, too
+  few refused with nothing stored, two submissions racing for a last point), `ModerationStoreTest`
+  (a rejection pays back what was paid, a question that cost nothing pays back nothing, two
+  rejections racing pay once), `StatsStoreTest` (`pointsSpent`, and a submission committed mid-read
+  in both numbers or neither) and `ApiFlowTest`; the made-up votes in every tally test and
+  `SeedTest`; `MigrationsTest` holds V6 to V9 to `Seed` on a database seeded as before
+  (`seedAsBefore`). The fat jar (`WYR_SERVER_ONLY=1 ./gradlew :server:buildFatJar`) booted on JDK 21,
+  port 18097, in-memory H2: `/health`, the five categories with Cyrillic names, a submission refused
+  for points, one paid by a vote, the next refused, a rejection's refund in `GET /v1/me`, seed-1's
+  tally with its made-up votes (212/158 plus the vote), a category created (409 the second time),
+  renamed and listed last, RANDOM 400, 403 without the token. **Rollback, by hand:** `40550e9`'s fat
+  jar seeded a file H2 database (V1 to V5, English, RANDOM, a submission under FOOD and RANDOM); this
+  branch's jar migrated it (V6 to V9: the submission and five seeds under ABSURD, Serbian seeds,
+  made-up votes, the old pending one's rejection paying nothing back); `40550e9` booted on it again
+  and served: ABSURD shown as RANDOM, its RANDOM filter an empty batch, tallies without the made-up
+  votes, the Serbian texts, a submission under FOOD stored and one under RANDOM a 500 (the foreign
+  key), as CLAUDE.md §8b, *Rollbacks*, says.
 - `:server` on H2: 311 tests, 309 green and 2 skipped (the PostgreSQL-only boot races), including
   78 end-to-end flow tests in `ApiFlowTest`. Flat scoring is covered there (every vote pays 1,
   majority and minority alike, and the total accumulates) and by `PlayerStoreTest`, which races
@@ -582,6 +608,11 @@ production's English ones by id; a new database is seeded in Serbian).
   nothing here has read its history. Check, read-only, that it reads `1 BASELINE`, `2 SQL`,
   `3 SQL`, `4 SQL`, and that `sessions` has a row for every `players` row with a
   `refresh_token_hash`. The next script after V4 runs there at the next Manual Deploy.
+- **V6 to V9 on PostgreSQL, and on production** (`feat/server-categories`). They have run only on
+  H2, here; `SchemaDriftTest` and `MigrationsTest` take them to PostgreSQL in the `server-postgres`
+  job, not yet run on the branch. The next Manual Deploy runs V5 to V9 there in one boot: after it,
+  read-only, the history should end `9 SQL`, `categories` hold five rows, no `question_categories`
+  row name RANDOM, and `seed-1`'s options be Serbian with 212 and 158 made-up votes.
 - **Accounts on PostgreSQL, and on production.** V5 has run only on H2; `SchemaDriftTest` and
   `MigrationsTest` take it to PostgreSQL in the `server-postgres` job, not yet run on the branch.
   The race for one username is H2's alone (`AccountStoreTest` polls H2's `SESSIONS`): on PostgreSQL
