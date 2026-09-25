@@ -254,21 +254,21 @@ class RateLimitTest {
         }
 
     @Test
-    fun `the default limits let the console's longest run of answers through`() =
+    fun `the default limits let a quick run of answers through`() =
         runServer("defaults", RateLimits.DEFAULT) { client ->
             val player = client.guest()
 
-            // As the console's Answer N at its most, 50: a batch at a time, each question answered.
+            // 50 in a row, faster than a person taps: a batch at a time, each question answered.
             var answered = 0
-            while (answered < CONSOLE_MOST_ANSWERS) {
+            while (answered < QUICK_RUN_ANSWERS) {
                 val batch = client.get(WyrApi.Paths.QUESTIONS) { bearerAuth(player.accessToken) }
                 assertEquals(HttpStatusCode.OK, batch.status)
-                batch.body<QuestionPageDto>().questions.take(CONSOLE_MOST_ANSWERS - answered).forEach { question ->
+                batch.body<QuestionPageDto>().questions.take(QUICK_RUN_ANSWERS - answered).forEach { question ->
                     assertEquals(HttpStatusCode.OK, client.vote(player, question.id).status, "answer ${++answered}")
                 }
             }
 
-            assertEquals(CONSOLE_MOST_ANSWERS, client.stats(player).totalPoints)
+            assertEquals(QUICK_RUN_ANSWERS, client.stats(player).totalPoints)
         }
 
     @Test
@@ -524,7 +524,7 @@ class RateLimitTest {
     private companion object {
         const val ADMIN_TOKEN = "test-admin-token-0123456789abcdef"
         const val SEED = "seed-1"
-        const val CONSOLE_MOST_ANSWERS = 50
+        const val QUICK_RUN_ANSWERS = 50
         val TWO_A_MINUTE = RequestBudget(requests = 2, per = 1.minutes)
 
         /** A failed-token budget whose lockout a test can wait out. */

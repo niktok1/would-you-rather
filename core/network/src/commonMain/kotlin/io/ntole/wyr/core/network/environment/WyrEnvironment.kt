@@ -11,23 +11,21 @@ package io.ntole.wyr.core.network.environment
 public enum class WyrEnvironment(
     /** Root URL of the API, scheme included, with no path: every route is an absolute path. */
     public val apiBaseUrl: String,
-    /** How a person reads the environment's name, as the dev console shows it. */
+    /** How a person reads the environment's name, as the game's Account screen and the moderation app show it. */
     public val displayName: String,
-    /** Whether a build for it shows the developer tools, the dev console among them. */
-    public val showsDeveloperTools: Boolean,
 ) {
     /**
      * A server on the developer's own machine, `./gradlew :server:run`: `localhost:8080`, except on
      * Android, whose emulator reaches the host through `10.0.2.2`. Nothing else can reach it, a
      * physical phone included.
      */
-    LOCAL(apiBaseUrl = localApiBaseUrl, displayName = "Local", showsDeveloperTools = true),
+    LOCAL(apiBaseUrl = localApiBaseUrl, displayName = "Local"),
 
     /** `wyr-server-dev` on Render: in-memory H2, deployed from every green commit on `main` (CLAUDE.md §8). */
-    DEV(apiBaseUrl = "https://wyr-server-dev.onrender.com", displayName = "Dev", showsDeveloperTools = true),
+    DEV(apiBaseUrl = "https://wyr-server-dev.onrender.com", displayName = "Dev"),
 
     /** `wyr-server` on Render, on the production database, deployed only by hand (CLAUDE.md §8). */
-    PROD(apiBaseUrl = "https://wyr-server.onrender.com", displayName = "Prod", showsDeveloperTools = false),
+    PROD(apiBaseUrl = "https://wyr-server.onrender.com", displayName = "Prod"),
     ;
 
     public companion object {

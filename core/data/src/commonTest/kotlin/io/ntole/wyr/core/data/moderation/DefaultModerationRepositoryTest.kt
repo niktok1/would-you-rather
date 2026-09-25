@@ -179,7 +179,7 @@ class DefaultModerationRepositoryTest {
                 decisions.forEach { decision ->
                     val failure = assertFailsWith<WyrException>("$code") { decision() }
                     assertEquals(expected, failure.error, "$code")
-                    // What the dev console shows beside the error.
+                    // What the moderation app shows under the error, as the server's own line.
                     assertEquals("refused as $code", failure.message)
                 }
             }

@@ -136,7 +136,7 @@ class DefaultSubmissionRepositoryTest {
                 }
 
             assertEquals(DomainError.INVALID_SUBMISSION, failure.error)
-            // What the dev console shows beside the error.
+            // The server's diagnostic text, carried as the message and never shown to the player.
             assertEquals("optionA is blank", failure.message)
             // Sent once and left alone: the player's to put right, not a dead session to recover.
             assertEquals(1, server.submissionsSentAs.size)

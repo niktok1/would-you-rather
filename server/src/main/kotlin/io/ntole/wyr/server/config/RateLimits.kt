@@ -68,8 +68,8 @@ data class RateLimits(
 ) {
     companion object {
         /**
-         * Generous for a person, however fast they tap: the console's *Answer N* sends at most 50 votes
-         * in a row, with a feed request per batch, and one run fits inside a minute's votes twice over.
+         * Generous for a person, however fast they tap: 50 answers in a row, with a feed request per
+         * batch, fit inside a minute's votes twice over.
          */
         val DEFAULT: RateLimits =
             RateLimits(

@@ -3,12 +3,10 @@ package io.ntole.wyr.di
 import io.ntole.wyr.account.AccountViewModel
 import io.ntole.wyr.core.data.di.dataModule
 import io.ntole.wyr.core.network.environment.WyrEnvironment
-import io.ntole.wyr.dev.DevConsoleViewModel
 import io.ntole.wyr.play.PlayViewModel
 import io.ntole.wyr.submit.SubmitViewModel
 import org.koin.core.context.startKoin
 import org.koin.core.module.Module
-import org.koin.core.module.dsl.viewModel
 import org.koin.core.module.dsl.viewModelOf
 import org.koin.dsl.KoinAppDeclaration
 import org.koin.dsl.module
@@ -19,21 +17,6 @@ internal val uiModule =
         viewModelOf(::PlayViewModel)
         viewModelOf(::AccountViewModel)
         viewModelOf(::SubmitViewModel)
-
-        // Not viewModelOf: the time source is a default, not a binding.
-        viewModel {
-            DevConsoleViewModel(
-                environment = get(),
-                sessions = get(),
-                diagnostics = get(),
-                questions = get(),
-                queue = get(),
-                getNextQuestion = get(),
-                castVote = get(),
-                getPlayerStats = get(),
-                httpTrace = get(),
-            )
-        }
     }
 
 /**
@@ -69,8 +52,8 @@ fun initKoin(
 /**
  * Every module but the platform's, for [environment]: the data module sends every request to its
  * URL, and the environment is bound for the screens that show it. Nothing can put another URL in its
- * place, so what the console shows is where requests go. Internal, not private, so a test can load
- * them as [initKoin] does.
+ * place, so the server the Account screen names is where requests go. Internal, not private, so a
+ * test can load them as [initKoin] does.
  */
 internal fun appModules(environment: WyrEnvironment): List<Module> =
     listOf(

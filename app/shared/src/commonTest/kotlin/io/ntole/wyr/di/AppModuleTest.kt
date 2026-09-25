@@ -6,7 +6,6 @@ import io.ntole.wyr.core.network.InMemoryTokenStorage
 import io.ntole.wyr.core.network.SessionStore
 import io.ntole.wyr.core.network.TokenStorage
 import io.ntole.wyr.core.network.environment.WyrEnvironment
-import io.ntole.wyr.dev.DevConsoleViewModel
 import io.ntole.wyr.play.PlayViewModel
 import io.ntole.wyr.submit.SubmitViewModel
 import kotlinx.coroutines.Dispatchers
@@ -30,8 +29,8 @@ import kotlin.test.assertTrue
 
 /**
  * The real data and UI modules, with only the platform bindings stood in for. A binding that is
- * missing only shows when a screen first asks for its ViewModel, and the console is the first
- * screen, so this is the difference between a failing test and an app that dies on launch.
+ * missing only shows when a screen first asks for its ViewModel, and Play is the first screen, so
+ * this is the difference between a failing test and an app that dies on launch.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class AppModuleTest {
@@ -55,17 +54,12 @@ class AppModuleTest {
         koin.get<PlayViewModel>()
         koin.get<AccountViewModel>()
         koin.get<SubmitViewModel>()
-        koin.get<DevConsoleViewModel>()
     }
 
     @Test
-    fun `each environment is the one the console shows`() {
+    fun `each environment is the one bound for the screens`() {
         WyrEnvironment.entries.forEach { environment ->
-            val koin = koinFor(environment)
-
-            assertEquals(environment, koin.get<WyrEnvironment>())
-            val console = koin.get<DevConsoleViewModel>().state.value
-            assertEquals(environment, console.environment)
+            assertEquals(environment, koinFor(environment).get<WyrEnvironment>())
         }
     }
 

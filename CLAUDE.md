@@ -483,7 +483,7 @@ decided in §8b).
     (`QuestionRepository.reset`), which the player before filled. The session is kept as a guest's
     is, so a logged-in player stays logged in across launches while the device refreshes within a
     refresh token's 30 days; one idle longer plays on as a fresh guest, and logs in again. No
-    password is stored, anywhere: the phone's password manager may keep it (§8d, *Current focus*).
+    password is stored, anywhere: the phone's password manager may keep it (§8d, *The Account screen*).
 
 **Known limitation, by design for now:** a guest account is bound to one device's storage. Lose
 the device, reinstall the app or clear its storage, and the account — and its points — are gone,
@@ -556,11 +556,11 @@ EncryptedSharedPreferences: enough for a game that stores nothing personal.
   categories carries it over unchanged. The options: keep it; serve again only the filter's
   answered questions, and its skipped ones only when it has nothing else; or answer an empty
   batch, which the client reads as out of questions. The Play screen's category picker sends the
-  categories selected (§8d, *Current focus*), so a player reaches this in every build, PROD's
+  categories selected (§8d, *The Play screen*), so a player reaches this in every build, PROD's
   included. `SkipStoreTest` pins what is built.
 - **The categories row on the Play screen** — *provisional — user decision.* The category picker
   was not to take height from the question's cards or from the reveal on a short phone (§8d,
-  *Current focus*). The reveal keeps to that: the categories share the row its points already took,
+  *The Play screen*). The reveal keeps to that: the categories share the row its points already took,
   and it needs 569 of the 599 as before. A question not answered yet does not: the row is drawn in
   every state, where before only the reveal drew one, so on this Mac it needs 537 at 360, 375 and
   400 wide (481 before), and each of its option cards is about 28 shorter. On an iPhone SE (599)
@@ -597,9 +597,9 @@ EncryptedSharedPreferences: enough for a game that stores nothing personal.
     out, a minute at a time. It is asked first, so guesses refused by it spend none of the
     moderator's 60.
   - *Per player*, so players behind one address do not share a budget: registrations 20 an hour
-    (every one the rules take costs a password hash), logouts 30 a minute, the feed, votes and skips 120 a minute each (the console's *Answer N* sends at most 50 votes in a row), likes 60 a minute,
-    submissions 30 an hour (the 20-pending cap still applies), `GET /v1/me` and
-    `GET /v1/me/questions` 120 a minute each. The key is the player id in the bearer token, which the
+    (every one the rules take costs a password hash), logouts 30 a minute, the feed, votes and skips
+    120 a minute each, likes 60 a minute, submissions 30 an hour (the 20-pending cap still applies),
+    `GET /v1/me` and `GET /v1/me/questions` 120 a minute each. The key is the player id in the bearer token, which the
     limiter verifies itself (`verifiedPlayerId`): it runs before authentication, so no principal is
     there yet. A request without a token this server signed spends its address's budget of the group
     instead, and then gets its 401, so a forged token naming a player cannot spend that player's
@@ -619,8 +619,8 @@ EncryptedSharedPreferences: enough for a game that stores nothing personal.
   `WyrException.retryAfter` (whole seconds only; an HTTP date or none is null), so a screen can say
   how long to wait without reading the diagnostic message. CORS exposes the header
   (`Access-Control-Expose-Headers`), without which a browser page's script could never read it
-  (`CorsTest`). Nothing retries it (`withSessionRecovery` retries only after a 401), and the console
-  logs it as an `err` entry.
+  (`CorsTest`). Nothing retries it (`withSessionRecovery` retries only after a 401): the Account and
+  Submit screens say how long to wait, and the Play screen asks the player to slow down.
 
   What remains: farming is bounded, not gone. A player can still earn 120 points a minute by
   re-answering, on average, and up to 240 where two windows meet (*decided 2026-09-23:* a re-answer
@@ -786,21 +786,24 @@ it here (and §8c, for scoring) in the same commit.
 answer what they think is popular instead of what they actually prefer. A mode that explicitly
 rewards reading the crowd may come later as a separate, opt-in mode, never as the default.
 
-**Current focus.** UI polish is paused. Functionality was built behind a plain engineering dev
-console, the default root screen of a LOCAL or DEV build, with the game's screens as further tabs; a
-PROD build shows the game's screens alone, opening on `PlayScreen` (§8e). The console is
-in `io.ntole.wyr.dev` (`:app:shared`), and every request shows in its HTTP trace (`HttpTrace` in
-`:core:network`, never headers or bodies). **Features now move into the game one by one**
-(*decided 2026-09-25*): each gets a plain screen of the game's, reachable in every build, PROD's
-included, and its console section is retired; once the last has moved, a small Diagnostics screen
-(the environment, the session, the HTTP trace) stays in dev builds and the console goes. A feature
-not moved yet still adds its section to the console. Navigation is the root tab row (`App.kt`,
-`rootScreensFor`), no library. The first to move is the **Account screen** (`io.ntole.wyr.account`,
-§8a *Accounts*), which the console never had forms for:
+**Current focus.** UI polish is paused. The game's own screens are the app: **Play**, **Submit** and
+**Account**, behind the root tab row (`App.kt`, `RootScreen`, no navigation library), in every build,
+LOCAL, DEV and PROD alike, opening on Play. The engineering dev console functionality was first built
+behind is gone since `chore/remove-console` (*decided 2026-09-25*: the console is not needed), and
+nothing replaces it: a LOCAL or DEV build names its server on the Account screen (§8e), and a feature
+is tried through the game and the moderation app. A new feature gets a plain screen of the game's, or
+a place on one, theme tokens only (§5b).
+
+**The Account screen** (`io.ntole.wyr.account`; §8a *Accounts*, *Stats* below):
 - It shows *Playing as guest* or *Logged in as* the username, and the player's points, read through
   `GetPlayerStats` each time the tab is shown, since the points move on Play meanwhile. A guest gets
   **Register** (username, and password with a show/hide toggle), which keeps the points, and **Log
   in**; a registered player gets **Log out**, after which the device plays on as a fresh guest.
+- Under the points, a line each for the answers given and the questions they went to, the cycle and
+  the questions left in it, and the likes received. `AccountScreenDrawTest` holds every state without
+  a form, a registered player's among them, to 599 high, measured 400 wide as `PlayScreenDrawTest`
+  measures, and a guest's screen has the same lines above its forms, so its stats show before any
+  scrolling too.
 - Register says what `AccountRules` refuses as it is typed, and sends nothing until both fields
   pass. A refusal from the server shows under the form that sent it: a taken name, a wrong login, a
   rate limit with its wait, offline. A guest with points who logs in is warned once that the
@@ -817,18 +820,9 @@ not moved yet still adds its section to the console. Navigation is the root tab 
   Dev (https://wyr-server-dev.onrender.com)* (`serverLine`, §8e); a PROD build shows none.
   `AccountScreenDrawTest` finds it under everything else in every state, and holds a registered
   player's screen with it to 599 high.
-- The console has no account forms. Its Session section names the account by its last stats read,
-  the username or `guest` (`accountOf`).
-- The fourth to move is the player's **stats** (*Stats*), onto this screen: under the points, a line
-  each for the answers given and the questions they went to, the cycle and the questions left in it,
-  and the likes received. `AccountScreenDrawTest` holds every state without a form, a registered
-  player's among them, to 599 high, measured 400 wide as `PlayScreenDrawTest` measures, and a
-  guest's screen has the same lines above its forms, so its stats show before any scrolling too.
-  The console's Stats section keeps only what its points check compares, the player and the total,
-  and *Read stats*.
 
-The second to move is **Skip and Like**, onto the Play screen (`io.ntole.wyr.play`; *Skipping* and
-*Likes*, below):
+**The Play screen** (`io.ntole.wyr.play`) asks a question and reveals its tally, and holds Skip and
+Like (*Skipping* and *Likes*, below) and the category picker (*Categories*, below):
 - One row under the question, asked or revealed: its like count, **Like** (**Unlike** while the
   player likes it), and the way on, **Skip** while it is asked and **Next question** once it is
   answered. One row, where Next question alone stood before, so the reveal is no taller than it was:
@@ -837,14 +831,6 @@ The second to move is **Skip and Like**, onto the Play screen (`io.ntole.wyr.pla
 - One action at a time (`PlayUiState.OnQuestion.isBusy`): while a vote, a skip or a like is in
   flight, every other control is off. A like that failed says why in one line under the cards, in the
   reveal's verdict's place, not beside it; a skip that failed moves on all the same (*Skipping*).
-- `PlayViewModelTest` drives it over fakes. `PlayScreenDrawTest` draws every state in both themes at
-  400x900 and 375x599 (an iPhone SE less its status bar and the tab row), holds every state to 599
-  high, and a reveal with a failed like to the height of one without. It measures 400 wide with one
-  short line an option, because CI's Linux wraps text wider than a phone does. Theme tokens only, and
-  the option cards and brand colors as they were (§5b).
-- The console has neither any more; its Play section keeps A/B, Answer N and Retry last vote for now.
-
-The third to move is the **category picker**, onto the Play screen (*Categories*, below):
 - Under the title, in every state, the categories played: *All*, or their names in declaration
   order, cut short on one line. A value over its label, as the reveal's points are, and in the same
   row beside them, so the reveal is no taller for it (on this Mac it still needs 569 of the 599; a
@@ -861,18 +847,19 @@ The third to move is the **category picker**, onto the Play screen (*Categories*
   failure it goes: a selection the feed has nothing in shows the out-of-questions state, and changing
   the categories is the way out of it. From a vote lost to `NETWORK` it goes too, and the lost
   attempt is never sent again (*Retry safety*).
-- The selection lives in the repository as before, in memory for the app's life: a launch plays
-  every category again, and New guest keeps it.
-- `PlayViewModelTest` drives it over fakes. `PlayScreenDrawTest` draws every state with none, one and
-  every category played, and with the picker open, in both themes; holds every state to 599 high
-  with each, every selection to the height of none, and the picker's card to 599 too. With no
-  Compose UI test library in the tree, it checks the dialog by pixels: every state draws differently
-  with the picker open, and differently again with a category ticked in it.
-- The console has no Category row any more; its questions come from what the Play screen picked.
+- The selection lives in the repository, in memory for the app's life: a launch plays every category
+  again, and a login or a logout keeps it.
+- `PlayViewModelTest` drives it over fakes. `PlayScreenDrawTest` draws every state in both themes at
+  400x900 and 375x599 (an iPhone SE less its status bar and the tab row), with none, one and every
+  category played, and with the picker open; holds every state to 599 high with each, a reveal with a
+  failed like to the height of one without, every selection to the height of none, and the picker's
+  card to 599 too. It measures 400 wide with one short line an option, because CI's Linux wraps text
+  wider than a phone does. With no Compose UI test library in the tree, it checks the dialog by
+  pixels: every state draws differently with the picker open, and differently again with a category
+  ticked in it. Theme tokens only, and the option cards and brand colors as they were (§5b).
 
-The fifth to move is **submitting**, onto a **Submit** tab of its own between Play and Account, in
-every build (`io.ntole.wyr.submit`; *Submitting*, below), and the console's *Submit a question*
-section is gone.
+**The Submit screen** (`io.ntole.wyr.submit`), a tab between Play and Account, writes a question and
+lists the player's own (*Submitting*, below).
 
 - **Scoring** *(built; see §8c)*: every answer earns exactly **1 point**, whichever side
   it picks. There is no majority bonus and no streak: the streak is removed from the server, the
@@ -903,8 +890,8 @@ section is gone.
     a request that finds no questions starts nothing. Questions skipped this cycle are served again
     this way too, so a skip does not hold through a category filter: *provisional — user decision*
     (§8b). The client selects any number (`QuestionRepository.setCategories`, from the Play
-    screen's category picker), none for every category; a change drops the queue, and New guest
-    keeps the selection.
+    screen's category picker), none for every category; a change drops the queue, and a login or a
+    logout keeps the selection.
   - `answeredBefore` means the player has a vote on the question, from any cycle.
 - **Categories** *(decided 2026-09-24; built)*: a
   question is filed under **any number of categories, at least one**. A player may pick **several**
@@ -923,7 +910,7 @@ section is gone.
   cannot read is `Category.OTHER` beside the rest, and an empty list is `OTHER` alone. A player's
   selection is a set too (`QuestionRepository.categories`, empty for every category, never `OTHER`),
   and every refill sends all of it; the Play screen's category picker ticks each category, and *All
-  categories* empties it (*Current focus*). Selecting all of `Category.selectable` is not selecting
+  categories* empties it (*The Play screen*). Selecting all of `Category.selectable` is not selecting
   none: a question filed only under categories this build cannot name is in none of them. A client
   submits under a set of one or more, never `OTHER` (*Submitting*).
 - **Re-answering** *(built)*: a question can be answered again, whether or not the feed has
@@ -941,7 +928,7 @@ section is gone.
   or a modified client can do that. Built in `VoteStore.cast` and in `AttemptId`, made once per
   tap: the Play tab resends a vote lost to `NETWORK` as the same attempt, as `withSessionRecovery`
   does its retry, when the player taps *Try again*. Changing the categories from that failure moves
-  on instead (*Current focus*) and abandons the attempt: the vote counts only if the first send
+  on instead (*The Play screen*) and abandons the attempt: the vote counts only if the first send
   landed, and nothing pays twice.
 - **Stats** *(built)*: `GET /v1/me` reports the session player's total points, answers given
   (every paid answer, re-answers included and replays not, in `players.answers_given`, an SQL
@@ -953,9 +940,7 @@ section is gone.
   `StatsStore.of`, as one statement, so the total always agrees with the answers given and
   the likes received (§8c). It only reads, and the cycle starts lazily on the next feed request, so
   between the answer that finishes a cycle and that request it reports the finished cycle with
-  nothing due. The Account screen shows every number but the player id (*Current focus*); the
-  console reads them to name the account and check the total against the last vote's, and *Read
-  stats* logs every number.
+  nothing due. The Account screen shows every number but the player id (*The Account screen*).
 - **Skipping** *(built; decided 2026-09-23)*: allowed, earns nothing, and never touches the
   tally. The server **records the skip for the player's current cycle only**, so the question is
   no longer due in that cycle and comes back in the **next** one, except through a category filter
@@ -1007,13 +992,9 @@ section is gone.
     of what the question on screen shows, then puts the server's answer on that question: only on
     the one the answer names, and only while it is still on screen. Nothing changes before the
     answer, so a like that failed, a like lost to `NETWORK` included, leaves the question as it was
-    with one line saying why under the cards (*Current focus*), and pressing again asks for the same
+    with one line saying why under the cards (*The Play screen*), and pressing again asks for the same
     like again. It works out no points itself: a like of the player's own question moves their total
     without a vote, so the reveal's total, which is the vote's, shows it only from the next vote on.
-  - *The console* no longer likes. It shows a question's `likeCount` and `likedByMe` as the feed
-    served them. Since a like moves its author's total without a vote, it compares its stats with
-    the last vote's total only while they count as many likes received as the first read after that
-    vote did (`likesMovedSinceOutcome`).
 - **Submitting** *(built; details decided 2026-09-23)*: earns no points
   directly, because authors earn through likes. The author writes both options and **picks one or
   more categories** (each a real one, not `UNKNOWN`; *Categories*). A player may have at most **20
@@ -1184,23 +1165,22 @@ section is gone.
     on that server: a proxy's own page or an error code newer than the build reads as `UNKNOWN` too.
     `ModerationViewModelTest` and `QuestionListViewModelTest` drive it over a scripted repository,
     `ModerationOverHttpTest` over the real client configuration, and `ScreensDrawTest` draws every
-    screen off screen at a desktop window's size. The dev console had a *Moderation* section until
-    the app replaced it (`feat/moderation-app`): the game's builds no longer moderate at all.
+    screen off screen at a desktop window's size. The game's builds do not moderate at all.
 
 ## 8e. Client environments — decided 2026-09-24
 
 Every client build targets one of three server environments, chosen **when it is built**, so a phone
 can play against the deployed servers and a production build can never talk to a development one by
 accident. `WyrEnvironment` (`io.ntole.wyr.core.network.environment`) names them, each with its API
-base URL, a display name, and whether a build for it shows the developer tools. It lives in
+base URL and a display name. It lives in
 `:core:network`, not `:app:shared`, so a client without the game UI (the moderation app,
 `:app:adminApp`, §3) can name one too.
 
-| Environment | Server                                                           | Developer tools |
-|-------------|------------------------------------------------------------------|-----------------|
-| `LOCAL`     | `http://localhost:8080`; the Android emulator's `10.0.2.2:8080`  | shown           |
-| `DEV`       | `https://wyr-server-dev.onrender.com` (§8: in-memory H2)         | shown           |
-| `PROD`      | `https://wyr-server.onrender.com`                                | hidden          |
+| Environment | Server                                                           |
+|-------------|------------------------------------------------------------------|
+| `LOCAL`     | `http://localhost:8080`; the Android emulator's `10.0.2.2:8080`  |
+| `DEV`       | `https://wyr-server-dev.onrender.com` (§8: in-memory H2)         |
+| `PROD`      | `https://wyr-server.onrender.com`                                |
 
 - *Naming one.* `WyrEnvironment.parse` takes `local`, `dev` or `prod`, in any case, trimmed; no name,
   or a blank one, is LOCAL. Any other value throws, naming it, rather than falling back. Every entry
@@ -1217,7 +1197,7 @@ base URL, a display name, and whether a build for it shows the developer tools. 
   (`desktopEnvironmentName`), which `Main.kt` hands to `initKoin`; unset is LOCAL.
   `WYR_API_BASE_URL`, which pointed the desktop client at any server, is retired: left set in a shell,
   it sent a PROD build's requests wherever it named, with nothing on screen to say so, since a PROD
-  build has no console. No client can put another URL in its environment's place. The moderation app
+  build names no server. No client can put another URL in its environment's place. The moderation app
   reads the same variable in its own `jvmMain` (`desktopEnvironmentName` there too), since it cannot
   see `:app:shared`'s: `WYR_ENV=dev ./gradlew :app:adminApp:run`.
 - *Web*: the Gradle property `wyr.env` (`-Pwyr.env=dev`), local when absent, which the
@@ -1232,11 +1212,10 @@ base URL, a display name, and whether a build for it shows the developer tools. 
   default). `Info.plist` carries it as its `WYR_ENV` key (`$(WYR_ENV)`), and `MainViewController`
   reads that from the main bundle; a missing key is LOCAL.
 - *In the app.* Koin binds the environment (`appModules`), and `dataModule` sends every request to
-  that same environment's URL, so the dev console's header, which shows its name and URL, always says
-  where requests go, as does the Account screen's last line in a LOCAL or DEV build (`serverLine`); a
-  PROD build names no server there. The console tab is shown only where the environment shows developer
-  tools (`rootScreensFor`): a PROD build shows the game's screens alone, Play, Submit and Account,
-  with no tab to reach the console.
+  that same environment's URL, so the Account screen's last line in a LOCAL or DEV build, which shows
+  its name and URL (`serverLine`), always says where requests go; a PROD build names no server there.
+  Every build shows the same screens, Play, Submit and Account (§8d, *Current focus*), and Android's
+  launcher label says *WYR Local* or *WYR Dev* besides.
   The moderation app binds its environment the same way (`adminModules`), and names it on every
   screen, whatever the environment: its header shows the server's name and URL, production's in the
   error colors, and the desktop window's title shows both too (`windowTitleOf`).

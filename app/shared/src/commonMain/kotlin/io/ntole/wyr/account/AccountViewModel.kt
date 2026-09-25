@@ -39,8 +39,8 @@ interface AccountActions {
 }
 
 /**
- * Drives the Account screen (CLAUDE.md §8d, *Current focus*): register the guest playing, log in to
- * an account, log out, each through its use case, and the player read after every one.
+ * Drives the Account screen (CLAUDE.md §8d, *The Account screen*): register the guest playing, log
+ * in to an account, log out, each through its use case, and the player read after every one.
  *
  * One action at a time, and after each the player is read again, whatever became of it: a
  * registration whose answer was lost may have landed, and the read then names the account.

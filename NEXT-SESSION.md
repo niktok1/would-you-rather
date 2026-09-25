@@ -39,6 +39,13 @@ fifth feature moved (CLAUDE.md §8d, *Current focus*, *Submitting*). The client 
 `SubmissionRules` in `:core:domain` so the form checks the options as they are typed; the server and
 the contract did not. How to try it on a phone is under *Submit on its own tab*.
 
+**On `chore/remove-console`** (from 61bfcad; not merged, nothing pushed): the dev console is gone
+(the user, 2026-09-25: "console is not needed"). Every build, LOCAL, DEV and PROD alike, shows Play,
+Submit and Account and opens on Play (CLAUDE.md §8d, *Current focus*); a LOCAL or DEV build names its
+server on the Account tab's last line (§8e). Changes are tried through the game and the moderation
+app (*Trying a change*, below). The client alone changed; the server only in a comment and a test's
+name.
+
 ### Verified working
 
 - `:server` on H2: 311 tests, 309 green and 2 skipped (the PostgreSQL-only boot races), including
@@ -558,7 +565,8 @@ the contract did not. How to try it on a phone is under *Submit on its own tab*.
   (read in `AndroidAutofillManager`'s source, Compose 1.11), and iOS and the browsers may do nothing
   with them. The real client has run against a real server only on the JVM, against the local fat
   jar; not from a phone, not against dev, and not through the refresh that turns a `d4a9dbf` access
-  token (no `sessionId`) into one a logout takes.
+  token (no `sessionId`) into one a logout takes. Nor has anyone seen its server line
+  (`chore/remove-console`) on a phone: it is drawn off screen, and found there by its semantics.
 - **Skip and Like on the Play tab on a device.** No build with them has been installed or run: the
   screen is drawn off screen on the desktop (`PlayScreenDrawTest`), which proves it measures, draws
   and fits 599 high but not what it shows (there is no Compose UI test library in the tree), and its
@@ -597,7 +605,7 @@ the contract did not. How to try it on a phone is under *Submit on its own tab*.
   (`SELECT ... FOR UPDATE`) and then counts in a later statement, which at READ COMMITTED sees a
   submission committed while it waited. That has run only on H2 (`SubmissionStoreTest` polls H2's
   `SESSIONS`); on PostgreSQL it is documented behaviour, not something a test here has seen. The
-  client has run against a live `:server:run` on H2 only, and the console's section never.
+  client has run against a live `:server:run` on H2 only.
 - **Moderation on Postgres, and from any client.** A decision is a compare-and-set,
   `UPDATE ... WHERE id = ? AND status = 'PENDING'`, and a second decision on the question waits on
   the first's row lock and then re-checks that `WHERE` against the committed row. That has run only
@@ -616,7 +624,7 @@ the contract did not. How to try it on a phone is under *Submit on its own tab*.
   unlikes on the like's row, the grouped count with its `COUNT(CASE ...)` and the stats' subquery
   have run only on H2 (`LikeStoreTest` polls H2's
   `SESSIONS`). The client has sent likes only from the JVM (the live run above), and nobody has
-  pressed the Play tab's Like, which replaced the console's, on any platform.
+  pressed the Play tab's Like on any platform.
 - **Multiple categories on Postgres, and in the client.** The `EXISTS ... IN` filter, the batch's
   second statement for its categories and the batch insert of a submission's categories have run
   only on H2. On the client, several categories per question and a selection of several have run
@@ -655,11 +663,9 @@ the contract did not. How to try it on a phone is under *Submit on its own tab*.
 - **The UI has not been looked at on a device.** It compiles and its ViewModels are tested, but no
   screenshot has been taken on a phone, a simulator or in a browser; the Play screen's off-screen
   renders on the desktop were looked at as images in review (*Skip and Like on the Play tab on a
-  device*, above). Treat the layout and the §5b palette in practice as unreviewed. The dev console
-  has not been opened either: its actions are tested through its ViewModel, and the use cases behind
-  them ran live. `SkipQuestion`, now behind the Play tab's Skip, has run only against `FakeServer`,
-  and `POST /v1/skips` itself only in the server's own tests. The Submit tab, which replaced the
-  console's *Submit a question* section (`feat/submit-screen`), has not been opened either: it is
+  device*, above). Treat the layout and the §5b palette in practice as unreviewed. `SkipQuestion`,
+  behind the Play tab's Skip, has run only against `FakeServer`, and `POST /v1/skips` itself only in
+  the server's own tests. The Submit tab (`feat/submit-screen`) has not been opened either: it is
   drawn off screen (`SubmitScreenDrawTest`), its renders on this Mac were looked at as images in
   review, both themes, and its ViewModel is driven over fakes; its use cases ran live, but nobody
   has typed a question into it on a phone, nor seen a keyboard's Enter in its wrapping fields.
@@ -687,7 +693,7 @@ Server first, then a client. The server defaults to in-memory H2 and logs a warn
 Android uses `http://10.0.2.2:8080` (the emulator's alias for the host loopback); desktop, iOS
 simulator, and web use `http://localhost:8080`. All four are `WyrEnvironment.LOCAL`'s, which a build
 targets unless it names another environment (below); on Android that is the `localDebug` variant, not
-the default. The console's header shows the environment and the `api` in use. `WYR_API_BASE_URL`,
+the default. The **Account** tab's last line names the environment and the URL in use. `WYR_API_BASE_URL`,
 which pointed the desktop client at any server, is retired (CLAUDE.md §8e): name an environment
 instead (below). For the **web** client the server also needs `ALLOWED_WEB_ORIGINS` set or CORS
 preflight will reject every request. The page's dev server takes the first free port from 8080, so
@@ -706,9 +712,9 @@ ALLOWED_WEB_ORIGINS=localhost:8081 ./gradlew :server:run
 Every client build targets one server environment, chosen when it is built, `local` unless it names
 another (CLAUDE.md §8e). `dev` is `wyr-server-dev` at https://wyr-server-dev.onrender.com (in-memory
 H2, reset on every deploy), `prod` is https://wyr-server.onrender.com; both answered `/health` with
-200 on 2026-09-24. The console's header shows the environment and its URL, and so does the last line
-of the **Account** tab in a `local` or `dev` build (*Server: Dev (https://wyr-server-dev.onrender.com)*);
-a `prod` build has no console at all, only Play, Submit and Account, and names no server. Each environment keeps a guest of its own, so switching between them
+200 on 2026-09-24. The last line of the **Account** tab names the environment and its URL in a
+`local` or `dev` build (*Server: Dev (https://wyr-server-dev.onrender.com)*), and a `prod` build names
+none; every build shows the same three tabs, Play, Submit and Account. Each environment keeps a guest of its own, so switching between them
 loses neither.
 
 - **Android**: Android Studio's *Build Variants* panel, where `devDebug` is the default, since a
@@ -743,8 +749,9 @@ run the app to read its own key.
 ### Rate limits
 
 The server limits locally too, with the same budgets as on Render (CLAUDE.md §8b), each keyed by the
-socket peer or the player. The one a developer meets first is 10 guests an hour: *New guest* pressed
-an eleventh time answers 429, which the console logs as `err RATE_LIMITED` with the seconds to wait.
+socket peer or the player. The one a developer meets first is 10 guests an hour: an eleventh fresh
+guest in the hour (every fresh install, clear of storage and logout makes one) answers 429, which the
+**Account** tab shows as *Too many tries. Wait N s, then try again.*
 Raise any budget for a session with its variable, and a refused request says which one in the log:
 
 ```bash
@@ -775,8 +782,8 @@ on a device or against a server, and the renders were looked at on this Mac only
 on a deploy or a spin-down). The numbers are a fresh guest's, with only the 24 seeds on the server
 and no category picked:
 
-1. `./gradlew :app:androidApp:installDevDebug`, then *New guest* on the **Console** tab (an install
-   over an old one keeps its session, and its numbers), or uninstall first. Answer 3 questions on
+1. Uninstall any older *WYR Dev* (an install over it keeps its session, and its numbers), then
+   `./gradlew :app:androidApp:installDevDebug`. Answer 3 questions on
    **Play**, skip 1, and open **Account**: *3 points*, *3 answers to 3 questions*, *Cycle 1: 20
    questions left* (the 24 seeds less the 4), *0 likes on questions you submitted*.
 2. Answer or skip on Play until no question is left: once Play has asked for more, Account shows
@@ -835,7 +842,7 @@ registrations 20 an hour per player.
 ### Submit on its own tab
 
 The game's **Submit** tab writes a question and lists your own (CLAUDE.md §8d, *Submitting*), in every
-build, PROD's included; the console's *Submit a question* section is gone. Submitting earns no points;
+build, PROD's included. Submitting earns no points;
 once approved, each like the question holds pays you 1.
 
 **To try it on a phone** (`devDebug`, against the dev server, whose in-memory H2 forgets everything on
@@ -868,13 +875,13 @@ Locally the same works against `ADMIN_TOKEN=... ./gradlew :server:run` (*Moderat
 ### Skip and Like on Play
 
 The game's **Play** tab skips and likes (CLAUDE.md §8d, *Skipping* and *Likes*), in every build,
-PROD's included; the console does neither any more.
+PROD's included.
 
 **To try it on a phone** (`devDebug`, against the dev server, whose in-memory H2 forgets everything on
 a deploy or a spin-down; the server needs nothing new):
 
-1. `./gradlew :app:androidApp:installDevDebug`, open *WYR Dev*, and go to the **Play** tab (a PROD
-   build opens on it).
+1. `./gradlew :app:androidApp:installDevDebug` and open *WYR Dev*: it opens on the **Play** tab, as
+   every build does.
 2. One row under the two options: the like count (`0 likes` on a question nobody likes), **Like**
    and **Skip**.
    Press **Like**: the count goes up by one and the button reads **Unlike**; press it again and both
@@ -899,7 +906,7 @@ a deploy or a spin-down; the server needs nothing new):
 ### Categories on Play
 
 The game's **Play** tab picks the categories played (CLAUDE.md §8d, *Categories*), in every build,
-PROD's included; the console's Category row is gone. The selection lives in memory for the app's
+PROD's included. The selection lives in memory for the app's
 life, so a launch plays every category again.
 
 **To try it on a phone** (`devDebug`, as for *Skip and Like on Play*; the server needs nothing new):
@@ -908,8 +915,7 @@ life, so a launch plays every category again.
    title: **All** over *change categories*, which should read as something to tap.
 2. Tap it: a dialog of *All categories* (ticked) and the five categories. Tick *Food* and *Ethics*:
    nothing changes behind the dialog yet. **Play**: the question on screen goes, and the next is filed
-   under Food or Ethics; the header reads *Food, Ethics*, beside the points once you answer. The
-   Console tab's HTTP trace shows the fetch with `category=FOOD&category=ETHICS`.
+   under Food or Ethics; the header reads *Food, Ethics*, beside the points once you answer.
 3. Open it again and **Cancel**, or tap outside it: nothing changes. **Play** with what is already
    played: the question stays.
 4. Tick every category: the header cuts the names short on its one line, and the reveal is as tall as
@@ -1035,71 +1041,31 @@ status changed first (409)`. Every admin request spends the address's 60 a minut
 retirement or restoration is one; a decision is one, one more for the queue, and one per 100
 questions the list shows; nothing is read again after a 403 or a 429.
 
-### The dev console
+### Trying a change
 
-The app opens on the **Console** tab (`io.ntole.wyr.dev`) in a LOCAL or DEV build. **Play** is the
-game screen, which has taken over the console's Skip, Like and Category row (CLAUDE.md §8d,
-*Skipping*, *Likes* and *Categories*). The two share one question repository, so the console's
-questions come from the categories the Play tab picked.
+There is no dev console (`chore/remove-console`): a change is tried through the game, as a player
+would, and moderated through the moderation app, against `./gradlew :server:run` or dev. Each
+feature's *To try it* steps are above. What the console used to provoke on purpose goes this way now:
 
-- **Session.** *Ensure session* mints a guest, or reuses the stored one. The header then shows the
-  player id and when its access token expires. Opening the console reads the stats, which ensures a
-  session too, so the first open mints a guest. *New guest* drops the session and the question
-  queue, then mints a fresh player and loads a question for it. The section names the account,
-  `account: <username>` once the stats read names one, `guest` otherwise, `stats not read` before a
-  read works. Registering and logging in are the game's **Account** tab; the console reads the stats
-  only on its own actions, so after a change there, press *Read stats* to see it here.
-- **Play.** The question shows every category it is filed under, `OTHER` for
-  each one this build cannot name. *A* / *B* answer it, each tap as a new attempt, and the raw
-  `VoteOutcome` appears below, `replayed` included. A question the feed looped back to shows
-  `answeredBefore: true` and logs as `question=<id> looped`. The header's total points is the last
-  outcome's `totalPoints`; the Stats section has the server's own count. The question shows its
-  `likeCount` and `likedByMe` too, as the feed served them; liking is the Play tab's now.
-- **Retry last vote (same attempt)**, under Play. Sends the last vote again unchanged, attempt id
-  included, whether or not it got an answer. While it is still that question's latest answer the server
-  replays it, logged as `+0 total=<n> replayed`. A vote that never landed is paid as an answer.
-  Every vote's log entry shows its attempt id, so the two entries can be compared.
-- **Answer many.** *Answer N* answers N questions in a row (1 to 50), alternating A and B. Each
-  answer is logged as `answer` as it lands, then the run as `answered=N looped=K total=T`; a
-  failure ends the run, and its vote is left for *Retry last vote*. **To see the loop:** the server
-  seeds 24 questions, so press *New guest*, then *Answer N* with 25. The first 24 are the seeds in
-  random order and the 25th logs `looped`: it is the first question of cycle 2, which serves all
-  24 again in a new random order.
-- **Stats.** The player (`playerId`) and total points of `GET /v1/me`, for the points check below;
-  every other number it returns is the game's **Account** tab's now (*Stats on Account*), and the
-  `readStats` log entry's. Read when the console opens, after
-  every vote, *Answer N* and *New guest*, and on *Read stats*. *Read stats* is an action like any other, logged as `readStats` whether it works or
-  not. The other reads are logged only when they fail, as `refreshStats`. A read that fails keeps
-  what was shown, which after a vote is nothing: a vote's outcome drops the stats it outdated. A red
-  `MISMATCH totalPoints` line means the stats and the last outcome disagree: a vote landed whose
-  answer was lost (*Retry last vote* replays it, and the flag goes), a vote from the Play tab, a
-  like of one of the player's questions, from the Play tab or anyone, between a vote and the first
-  read to work after it, or a bug. The two are compared only for one player. A read the server refused as a
-  dead session (a restarted `:server:run` does that) recovers it, and the stats are then a fresh
-  guest's: instead of the flag, Stats shows `lastOutcome: paid to <id>, not compared`. A like of one
-  of the player's questions, theirs or anyone's, moves the total without a vote, so once
-  `likesReceived` differs from what the first read after the last vote counted, Stats shows
-  `lastOutcome: likesReceived <n> then, <m> now, not compared` instead of the flag.
-  **To see the lazy cycle start:**
-  once the last due question is answered or skipped, *Read stats* logs the finished cycle with
-  `due=0`. The next cycle starts only when the feed is next asked for questions, which the
-  console does when its queue is empty (*Next question*, or the next answer of *Answer N*).
-  *Read stats* then logs it, with the whole pool due; the Account tab shows the same.
-- **Questions.** Fetch the next question, or empty the local queue, and see its size.
-- **Vote by id.** Sends a vote for whatever id is typed, as a new attempt. An unknown id provokes
-  `QUESTION_NOT_FOUND` (404). A known one is simply answered again and pays 1: there is no
-  "already voted" any more.
-- **Action log.** Every action, newest first: `ok`, `err` (the `DomainError` and its diagnostic
-  message) or `crash` (anything else thrown), with how long it took. One action runs at a time.
-- **HTTP trace.** Every request that went out, with status and time. A refreshed call shows as
-  the 401, the refresh, and the retry. One that got no answer shows what the caller was thrown:
-  `HttpRequestTimeoutException` once it ran out of time (CLAUDE.md §8a), never the cancellation Ktor
-  wraps it in on the way.
+- **Which server.** The **Account** tab's last line in a `local` or `dev` build; a `prod` build names
+  none (CLAUDE.md §8e).
+- **A fresh guest.** Uninstall, or clear the app's storage, or **Log out** a registered player on
+  **Account**. The desktop client keeps its session in JVM preferences, one per environment, and the
+  browser in `localStorage`.
+- **Cycles.** The server seeds 24 questions: answer or skip on **Play** until none is left, and
+  **Account** shows the finished cycle with *0 questions left*, then *Cycle 2: 24 questions left* once
+  Play has asked for more.
+- **Retrying a vote.** Answer on **Play** in airplane mode: the vote fails as offline, and *Try again*
+  with the network back sends it as the same attempt, paid once if the first send never landed and
+  replayed for nothing if it did (CLAUDE.md §8d, *Retry safety*).
+- **What no screen sends**, such as a vote for an unknown id (404 `QUESTION_NOT_FOUND`) or a
+  refresh token replayed: curl, as under *Accounts* and *Moderating*, above.
 
 ## Roadmap (agreed 2026-09-23)
 
-UI polish is paused and the work is functionality-first behind an engineering dev console. Game
-rules live in CLAUDE.md §8d. Each item is one short-lived branch, in order:
+UI polish is paused and the work is functionality-first, in the game's own screens; the engineering
+dev console it began behind is gone (`chore/remove-console`). Game rules live in CLAUDE.md §8d. Each
+item is one short-lived branch, in order:
 
 0. `chore/ci-coverage` *(done)* — fix fat-jar JDBC driver registration (the image cannot boot on
    H2), close the Hikari pool on stop, set `autoDeployTrigger: "off"`, and add CI jobs for
@@ -1114,7 +1080,8 @@ rules live in CLAUDE.md §8d. Each item is one short-lived branch, in order:
    `:core:network` / `:core:data` tests.
 3a. `fix/read-committed` *(done)* — transactions at READ COMMITTED; refresh-token rotation is a
    compare-and-set.
-4. `feat/dev-console` *(done)* — the engineering UI, as the default root.
+4. `feat/dev-console` *(done; removed by `chore/remove-console`)* — the engineering UI, as the
+   default root.
 5. `feat/endless-feed` *(done)* — per-player feed, re-answering, idempotency key; then
    `feat/feed-cycles` *(done)*: every question once per cycle, a new random order each cycle.
 6. `feat/player-stats` *(done)* — `GET /v1/me`.
@@ -1152,12 +1119,14 @@ rules live in CLAUDE.md §8d. Each item is one short-lived branch, in order:
 15. `feat/play-skip-like` *(on `main` and `origin/main` at b8d992c)* — Skip and Like move from the
     console onto the **Play** tab, the second feature moved (CLAUDE.md §8d). Still to do: try it on a
     phone (*Skip and Like on Play*).
-16. **Now:** `feat/play-categories` — the category picker moves from the console's Category row onto
-    the **Play** tab, the third feature moved (CLAUDE.md §8d). Next: the user's call on the
+16. `feat/play-categories` — the category picker moves from the console's Category row onto the
+    **Play** tab, the third feature moved (CLAUDE.md §8d). Still to do: the user's call on the
     categories row, which takes 56 from a question not answered yet (CLAUDE.md §8b, *The categories
-    row on the Play screen*), review, merge, push, CI, then try it on a phone (*Categories on Play*),
-    and move the next feature: the console still has *Submit a question* with the player's
-    submissions.
+    row on the Play screen*), then try it on a phone (*Categories on Play*). Then `feat/account-stats`
+    and `feat/submit-screen` moved the stats and submitting, the last of the console's features.
+17. **Now:** `chore/remove-console` — the console goes, with nothing in its place; every build shows
+    Play, Submit and Account, and a LOCAL or DEV build names its server on Account. Next: review,
+    merge, push, CI, then try it on a phone (*Trying a change*).
 
 **For the moderation app.** Everything it needs is in `io.ntole.wyr.core.domain.moderation`, and
 none of it needs or makes a player session:
@@ -1184,16 +1153,16 @@ none of it needs or makes a player session:
   `ALREADY_DECIDED` for a question another moderator moved first, `QUESTION_NOT_FOUND`, `NETWORK`,
   `RATE_LIMITED`, and `UNKNOWN` for a server with moderation off (a bare 404).
 - *Built on it:* `:app:adminApp`, with its pending queue and the list of every question (*The
-  moderation app*, above). The dev console's *Moderation* section is gone, and the game's
-  `dataModule` binds nothing of the moderator's: the game no longer moderates.
+  moderation app*, above). The game's `dataModule` binds nothing of the moderator's: the game does not
+  moderate.
 
 **Remote:** `github.com/niktok1/would-you-rather` (private), `origin`, pushed over SSH through the
 `github-wyr` host alias with a deploy key scoped to this repo (CLAUDE.md §7). `gh` is logged in to
 the personal account for reading CI. Render is set up from the blueprint (`wyr` on the personal
 account); its `ADMIN_TOKEN`s are set by hand in each service's Environment tab.
 
-Deferred: SQLDelight, a leaderboard, UI polish and WCAG. The Play tab is no longer frozen: features
-move onto it as they leave the console (CLAUDE.md §8d, *Current focus*).
+Deferred: SQLDelight, a leaderboard, UI polish and WCAG. The game's tabs are the app (CLAUDE.md §8d,
+*Current focus*).
 
 ## Things worth knowing before you touch the code
 

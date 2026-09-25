@@ -79,7 +79,7 @@ class SubmissionApiTest {
 
             assertEquals(ErrorCode.INVALID_SUBMISSION, failure.code)
             assertEquals(422, failure.status)
-            // The server's diagnostic text, which the dev console shows.
+            // The server's diagnostic text, carried as the message and never shown to the player.
             assertEquals("test", failure.message)
         }
 

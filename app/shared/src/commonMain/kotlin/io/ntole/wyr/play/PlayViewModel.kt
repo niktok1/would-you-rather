@@ -76,10 +76,10 @@ class PlayViewModel(
      * earns nothing and leaves the tally alone, and the server keeps the question out of the rest of
      * the player's cycle, so it comes back in the next one.
      *
-     * A skip that fails moves on all the same, and says nothing, as the dev console's did: the
-     * player asked not to answer this question, and keeping them on it, or on an error they can do
-     * nothing about, would make them deal with it anyway. All an unrecorded skip loses is that the
-     * question stays due, so the feed may serve it again this cycle, where Skip works on it again.
+     * A skip that fails moves on all the same, and says nothing: the player asked not to answer this
+     * question, and keeping them on it, or on an error they can do nothing about, would make them
+     * deal with it anyway. All an unrecorded skip loses is that the question stays due, so the feed
+     * may serve it again this cycle, where Skip works on it again.
      * A failure that is not the skip's alone, such as being offline, shows on the next question's
      * fetch, or on its vote.
      */

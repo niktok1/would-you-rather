@@ -39,7 +39,7 @@ import io.ntole.wyr.theme.WyrThemeAccessors
 import io.ntole.wyr.theme.WyrTypeScale
 
 /**
- * The Account screen (CLAUDE.md §8d, *Current focus*): who is playing on this device and their
+ * The Account screen (CLAUDE.md §8d, *The Account screen*): who is playing on this device and their
  * stats, the points first; for a guest, Register, which keeps the points, and Log in, to an account
  * registered anywhere; for a registered player, Log out. A build for any server but production's
  * names that server last ([serverLine]), [environment] being the one the build talks to.

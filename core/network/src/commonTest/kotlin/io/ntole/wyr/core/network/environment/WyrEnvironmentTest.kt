@@ -3,7 +3,6 @@ package io.ntole.wyr.core.network.environment
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
-import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 /** What a build may name its environment, and where each environment is. */
@@ -45,13 +44,6 @@ class WyrEnvironmentTest {
         val url = WyrEnvironment.LOCAL.apiBaseUrl
 
         assertTrue(url.startsWith("http://") && url.endsWith(":8080"), url)
-    }
-
-    @Test
-    fun `only prod hides the developer tools`() {
-        assertTrue(WyrEnvironment.LOCAL.showsDeveloperTools)
-        assertTrue(WyrEnvironment.DEV.showsDeveloperTools)
-        assertFalse(WyrEnvironment.PROD.showsDeveloperTools)
     }
 
     @Test

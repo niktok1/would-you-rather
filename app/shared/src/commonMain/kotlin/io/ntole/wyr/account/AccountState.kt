@@ -8,8 +8,9 @@ import io.ntole.wyr.core.domain.player.PlayerStats
 import kotlin.time.Duration
 
 /**
- * What the Account screen shows (CLAUDE.md §8d, *Current focus*): who is playing on this device and
- * their stats, and for a guest the Register and Log in forms, for a registered player Log out.
+ * What the Account screen shows (CLAUDE.md §8d, *The Account screen*): who is playing on this
+ * device and their stats, and for a guest the Register and Log in forms, for a registered player Log
+ * out.
  *
  * What is typed lives here, in memory, and never in saved state: a password must not be written to
  * disk. It stays in the fields until they leave the screen, which is when the platform's password

@@ -19,9 +19,6 @@ import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.ntole.wyr.account.AccountScreen
 import io.ntole.wyr.account.AccountViewModel
-import io.ntole.wyr.core.network.environment.WyrEnvironment
-import io.ntole.wyr.dev.DevConsoleScreen
-import io.ntole.wyr.dev.DevConsoleViewModel
 import io.ntole.wyr.play.PlayScreen
 import io.ntole.wyr.play.PlayViewModel
 import io.ntole.wyr.submit.SubmitScreen
@@ -37,13 +34,13 @@ import org.koin.compose.viewmodel.koinViewModel
  * entry-point rule in CLAUDE.md §3. [io.ntole.wyr.di.initKoin] must have run first; `startKoin`
  * publishes the Compose context, so no `KoinContext` wrapper is needed here.
  *
- * The root screens are the ones [rootScreensFor] gives the build's environment, behind a tab row.
- * The game's screens take over the console's features one by one (CLAUDE.md §8d, *Current focus*).
+ * The root screens are the game's, every [RootScreen] behind a tab row, in every build whatever
+ * server it talks to (CLAUDE.md §8d, *Current focus*), opening on the first, Play.
  */
 @Composable
 fun App() {
     WyrTheme {
-        val screens = rootScreensFor(koinInject<WyrEnvironment>())
+        val screens = RootScreen.entries
         var screen by rememberSaveable { mutableStateOf(screens.first()) }
 
         Surface(color = MaterialTheme.colorScheme.background, modifier = Modifier.fillMaxSize()) {
@@ -61,7 +58,6 @@ fun App() {
 
                 Box(modifier = Modifier.weight(1f)) {
                     when (screen) {
-                        RootScreen.Console -> DevConsole()
                         RootScreen.Play -> Play()
                         RootScreen.Submit -> Submit()
                         RootScreen.Account -> Account()
@@ -72,47 +68,13 @@ fun App() {
     }
 }
 
-/**
- * The root screens a build for [environment] shows, the first of them opening. The game's screens,
- * Play, Submit and Account, are in every build. The dev console comes first while functionality
- * comes before polish (CLAUDE.md §8d), and only where the environment shows developer tools: a
- * production build opens on Play, and has no tab to reach the console.
- */
-internal fun rootScreensFor(environment: WyrEnvironment): List<RootScreen> =
-    if (environment.showsDeveloperTools) {
-        listOf(RootScreen.Console, RootScreen.Play, RootScreen.Submit, RootScreen.Account)
-    } else {
-        listOf(RootScreen.Play, RootScreen.Submit, RootScreen.Account)
-    }
-
+/** The game's root screens, as its tabs, in order: the first is the one the app opens on. */
 internal enum class RootScreen(
     val label: String,
 ) {
-    Console("Console"),
     Play("Play"),
     Submit("Submit"),
     Account("Account"),
-}
-
-@Composable
-private fun DevConsole() {
-    val viewModel = koinViewModel<DevConsoleViewModel>()
-    val state by viewModel.state.collectAsStateWithLifecycle()
-    val httpExchanges by viewModel.httpExchanges.collectAsStateWithLifecycle()
-
-    DevConsoleScreen(
-        state = state,
-        httpExchanges = httpExchanges,
-        onEnsureSession = viewModel::ensureSession,
-        onNewGuest = viewModel::newGuest,
-        onNextQuestion = viewModel::nextQuestion,
-        onResetQueue = viewModel::resetQueue,
-        onVote = viewModel::vote,
-        onVoteById = viewModel::voteById,
-        onRetryLastVote = viewModel::retryLastVote,
-        onAnswerMany = viewModel::answerMany,
-        onReadStats = viewModel::readStats,
-    )
 }
 
 @Composable

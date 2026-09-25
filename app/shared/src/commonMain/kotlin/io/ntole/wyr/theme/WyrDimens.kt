@@ -1,7 +1,5 @@
 package io.ntole.wyr.theme
 
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -31,7 +29,4 @@ object WyrTypeScale {
     val sectionTitle = 16.sp
     val statLabel = 13.sp
     val percentage = 34.sp
-
-    /** Raw values, log lines and HTTP trace lines on the dev console, where columns should align. */
-    val code = TextStyle(fontFamily = FontFamily.Monospace, fontSize = 12.sp, lineHeight = 16.sp)
 }
