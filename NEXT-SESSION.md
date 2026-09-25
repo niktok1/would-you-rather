@@ -857,7 +857,9 @@ a deploy or a spin-down; the server needs nothing new):
    *Retired: out of the game for now*.
 5. The 21st question pending shows *You have 20 questions waiting for review already* and keeps the
    form. Airplane mode, then **Submit**: *Can't reach the game. Check your connection.*, the form
-   kept to send again.
+   kept to send again, and the same under *My submissions*, with **Try again**. Still in airplane
+   mode, leave the tab and open it again, then **Submit** once more: *My submissions* shows no list,
+   only the failure and **Try again**, never a spinner. Back online, **Try again** lists them.
 
 Locally the same works against `ADMIN_TOKEN=... ./gradlew :server:run` (*Moderating*, below), with
 `./gradlew :app:desktopApp:run` for the game and `./gradlew :app:adminApp:run` to approve.

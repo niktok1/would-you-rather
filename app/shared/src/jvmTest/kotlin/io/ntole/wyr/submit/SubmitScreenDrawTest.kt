@@ -109,7 +109,15 @@ class SubmitScreenDrawTest {
             listOf(
                 SubmitState(),
                 SubmitState(running = SubmitAction.LOAD),
-                SubmitState(failure = SubmitFailure(SubmitAction.LOAD, DomainError.NETWORK)),
+                SubmitState(listFailure = SubmitFailure(DomainError.NETWORK)),
+                // Offline from the start: a refused question over a list never read.
+                SubmitState(
+                    optionA = "Fly",
+                    optionB = "Swim",
+                    categories = setOf(Category.FOOD),
+                    submitFailure = SubmitFailure(DomainError.NETWORK),
+                    listFailure = SubmitFailure(DomainError.NETWORK),
+                ),
                 SubmitState(submissions = emptyList()),
                 WRITTEN,
                 WRITTEN.copy(running = SubmitAction.LOAD),
@@ -117,12 +125,16 @@ class SubmitScreenDrawTest {
                 WRITTEN.copy(optionA = "Fly\nhigh", optionB = LONGEST, categories = emptySet()),
                 WRITTEN.copy(optionB = "FLY"),
                 WRITTEN.copy(running = SubmitAction.SUBMIT),
-                WRITTEN.copy(failure = SubmitFailure(SubmitAction.SUBMIT, DomainError.SUBMISSION_LIMIT)),
-                WRITTEN.copy(failure = SubmitFailure(SubmitAction.SUBMIT, DomainError.RATE_LIMITED, 42.seconds)),
+                WRITTEN.copy(submitFailure = SubmitFailure(DomainError.SUBMISSION_LIMIT)),
+                WRITTEN.copy(submitFailure = SubmitFailure(DomainError.RATE_LIMITED, 42.seconds)),
+                WRITTEN.copy(
+                    submitFailure = SubmitFailure(DomainError.SUBMISSION_LIMIT),
+                    listFailure = SubmitFailure(DomainError.NETWORK),
+                ),
                 SubmitState(
                     submissions = EVERY_STATUS,
                     sent = true,
-                    failure = SubmitFailure(SubmitAction.LOAD, DomainError.SERVER),
+                    listFailure = SubmitFailure(DomainError.SERVER),
                 ),
             )
     }

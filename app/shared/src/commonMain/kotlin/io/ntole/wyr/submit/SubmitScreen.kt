@@ -129,7 +129,7 @@ private fun Form(
         }
         Text(text = "Pick one or more.", color = colors.muted, fontSize = WyrTypeScale.statLabel)
 
-        state.failure?.takeIf { it.action == SubmitAction.SUBMIT }?.let { FailureText(it) }
+        state.submitFailure?.let { FailureText(it) }
         if (state.sent) Text(text = SENT_NOTE, color = colors.primaryText)
         Button(onClick = actions::submit, enabled = state.canSubmit, modifier = Modifier.fillMaxWidth()) {
             Text("Submit")
@@ -176,8 +176,10 @@ private fun MySubmissions(
         SectionTitle("My submissions")
 
         val submissions = state.submissions
-        val failure = state.failure?.takeIf { it.action == SubmitAction.LOAD }
+        val failure = state.listFailure
         when {
+            // With no failure a read is on its way: every action ends in one, and a read that fails
+            // says so here, whatever the action before it ended in.
             submissions == null -> {
                 if (failure == null) CircularProgressIndicator(color = colors.headingAccent)
             }

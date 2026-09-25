@@ -23,8 +23,14 @@ data class SubmitState(
     val submissions: List<Submission>? = null,
     /** Whether the last Submit stored its question, until the next action starts. */
     val sent: Boolean = false,
-    /** What the last action ended in, when it failed, and which it was, so its part can say so. */
-    val failure: SubmitFailure? = null,
+    /** Why the last Submit stored nothing, until the next action starts. It shows under the form. */
+    val submitFailure: SubmitFailure? = null,
+    /**
+     * Why the last read of the list failed, until the next action starts. It shows under the list,
+     * with Try again, whatever the action before it ended in: a list never read has nothing else to
+     * show, and one read before may lack a question the failed Submit stored after all.
+     */
+    val listFailure: SubmitFailure? = null,
     /** The action in flight, or null when idle. Only one runs at a time. */
     val running: SubmitAction? = null,
 ) {
@@ -63,11 +69,10 @@ enum class SubmitAction {
 }
 
 /**
- * How [action] failed. [retryAfter] is the wait the server named with a
+ * How an action failed. [retryAfter] is the wait the server named with a
  * [DomainError.RATE_LIMITED], or null.
  */
 data class SubmitFailure(
-    val action: SubmitAction,
     val error: DomainError,
     val retryAfter: Duration? = null,
 )

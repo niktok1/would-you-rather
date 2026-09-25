@@ -55,11 +55,11 @@ class SubmitScreenTest {
     fun `a failure nobody can act on asks to try again`() {
         assertEquals(
             "Something went wrong. Try again.",
-            failureMessage(SubmitFailure(SubmitAction.LOAD, DomainError.SERVER)),
+            failureMessage(SubmitFailure(DomainError.SERVER)),
         )
         assertEquals(
             "Too many tries. Wait a moment, then try again.",
-            failureMessage(SubmitFailure(SubmitAction.LOAD, DomainError.RATE_LIMITED)),
+            failureMessage(SubmitFailure(DomainError.RATE_LIMITED)),
         )
     }
 

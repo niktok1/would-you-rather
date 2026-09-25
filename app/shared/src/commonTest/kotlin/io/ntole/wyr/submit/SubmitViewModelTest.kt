@@ -63,7 +63,8 @@ class SubmitViewModelTest {
             assertEquals(MINE, state.submissions)
             // The session first, as every use case makes sure of it.
             assertEquals(listOf("ensure", "mine"), server.calls)
-            assertNull(state.failure)
+            assertNull(state.submitFailure)
+            assertNull(state.listFailure)
             assertFalse(state.isBusy)
         }
 
@@ -181,7 +182,8 @@ class SubmitViewModelTest {
             assertEquals("", state.optionB)
             assertEquals(emptySet(), state.categories)
             assertTrue(state.sent)
-            assertNull(state.failure)
+            assertNull(state.submitFailure)
+            assertNull(state.listFailure)
             assertFalse(state.isBusy)
             val listed = assertNotNull(state.submissions)
             assertEquals("Fly", listed.first().optionA)
@@ -214,10 +216,10 @@ class SubmitViewModelTest {
             testScheduler.advanceUntilIdle()
 
             val state = viewModel.state.value
-            assertEquals(SubmitFailure(SubmitAction.SUBMIT, DomainError.INVALID_SUBMISSION), state.failure)
+            assertEquals(SubmitFailure(DomainError.INVALID_SUBMISSION), state.submitFailure)
             assertEquals(
                 "The game can't take that question as written. Check both options.",
-                failureMessage(assertNotNull(state.failure)),
+                failureMessage(assertNotNull(state.submitFailure)),
             )
             assertEquals("Fly", state.optionA)
             assertEquals("Swim", state.optionB)
@@ -237,8 +239,8 @@ class SubmitViewModelTest {
             viewModel.submit()
             testScheduler.advanceUntilIdle()
 
-            val failure = assertNotNull(viewModel.state.value.failure)
-            assertEquals(SubmitFailure(SubmitAction.SUBMIT, DomainError.SUBMISSION_LIMIT), failure)
+            val failure = assertNotNull(viewModel.state.value.submitFailure)
+            assertEquals(SubmitFailure(DomainError.SUBMISSION_LIMIT), failure)
             assertEquals(
                 "You have 20 questions waiting for review already. Send more once one is reviewed.",
                 failureMessage(failure),
@@ -257,8 +259,11 @@ class SubmitViewModelTest {
             testScheduler.advanceUntilIdle()
 
             val state = viewModel.state.value
-            assertEquals(SubmitFailure(SubmitAction.SUBMIT, DomainError.NETWORK), state.failure)
-            assertEquals("Can't reach the game. Check your connection.", failureMessage(assertNotNull(state.failure)))
+            assertEquals(SubmitFailure(DomainError.NETWORK), state.submitFailure)
+            assertEquals(
+                "Can't reach the game. Check your connection.",
+                failureMessage(assertNotNull(state.submitFailure)),
+            )
             assertEquals("Fly", state.optionA)
             assertTrue(state.canSubmit, "to send again")
         }
@@ -273,8 +278,8 @@ class SubmitViewModelTest {
             viewModel.submit()
             testScheduler.advanceUntilIdle()
 
-            val failure = assertNotNull(viewModel.state.value.failure)
-            assertEquals(SubmitFailure(SubmitAction.SUBMIT, DomainError.RATE_LIMITED, 42.seconds), failure)
+            val failure = assertNotNull(viewModel.state.value.submitFailure)
+            assertEquals(SubmitFailure(DomainError.RATE_LIMITED, 42.seconds), failure)
             assertEquals("Too many tries. Wait 42 s, then try again.", failureMessage(failure))
         }
 
@@ -285,14 +290,14 @@ class SubmitViewModelTest {
             val viewModel = open()
 
             assertNull(viewModel.state.value.submissions)
-            assertEquals(SubmitFailure(SubmitAction.LOAD, DomainError.NETWORK), viewModel.state.value.failure)
+            assertEquals(SubmitFailure(DomainError.NETWORK), viewModel.state.value.listFailure)
 
             server.mineFailsWith = null
             viewModel.refresh()
             testScheduler.advanceUntilIdle()
 
             assertEquals(MINE, viewModel.state.value.submissions)
-            assertNull(viewModel.state.value.failure)
+            assertNull(viewModel.state.value.listFailure)
         }
 
     @Test
@@ -307,12 +312,13 @@ class SubmitViewModelTest {
 
             val state = viewModel.state.value
             assertTrue(state.sent)
-            assertEquals(SubmitFailure(SubmitAction.LOAD, DomainError.SERVER), state.failure)
+            assertNull(state.submitFailure)
+            assertEquals(SubmitFailure(DomainError.SERVER), state.listFailure)
             assertEquals(MINE, state.submissions)
         }
 
     @Test
-    fun `a refused question whose list read fails too names the refusal`() =
+    fun `a refused question whose list read fails too says each under its own part`() =
         runTest(dispatcher) {
             server.submitFailsWith = WyrException(DomainError.SUBMISSION_LIMIT)
             val viewModel = open()
@@ -322,10 +328,41 @@ class SubmitViewModelTest {
             viewModel.submit()
             testScheduler.advanceUntilIdle()
 
-            assertEquals(
-                SubmitFailure(SubmitAction.SUBMIT, DomainError.SUBMISSION_LIMIT),
-                viewModel.state.value.failure,
-            )
+            val state = viewModel.state.value
+            assertEquals(SubmitFailure(DomainError.SUBMISSION_LIMIT), state.submitFailure)
+            // The list is as read before, so it says it could not be read again.
+            assertEquals(SubmitFailure(DomainError.NETWORK), state.listFailure)
+            assertEquals(MINE, state.submissions)
+        }
+
+    @Test
+    fun `a list never read whose read fails again after a refused question still offers to try again`() =
+        runTest(dispatcher) {
+            // Offline from the moment the tab is shown.
+            server.mineFailsWith = DomainError.NETWORK
+            server.submitFailsWith = WyrException(DomainError.NETWORK, "connect timed out")
+            val viewModel = open()
+            assertEquals(SubmitFailure(DomainError.NETWORK), viewModel.state.value.listFailure)
+
+            viewModel.write("Fly", "Swim", Category.FOOD)
+            viewModel.submit()
+            testScheduler.advanceUntilIdle()
+
+            // Nothing in flight, no list and a failure under it: the screen offers Try again there,
+            // where it would otherwise wait on a read nobody makes.
+            val state = viewModel.state.value
+            assertFalse(state.isBusy)
+            assertNull(state.submissions)
+            assertEquals(SubmitFailure(DomainError.NETWORK), state.submitFailure)
+            assertEquals(SubmitFailure(DomainError.NETWORK), state.listFailure)
+
+            server.mineFailsWith = null
+            viewModel.refresh()
+            testScheduler.advanceUntilIdle()
+
+            assertEquals(MINE, viewModel.state.value.submissions)
+            assertNull(viewModel.state.value.listFailure)
+            assertNull(viewModel.state.value.submitFailure)
         }
 
     @Test

@@ -65,8 +65,12 @@ class SubmitViewModel(
         val draft = _state.value
         if (!draft.canSubmit) return
         perform(SubmitAction.SUBMIT) {
-            submitQuestion(draft.optionA, draft.optionB, draft.categories)
-            _state.update { it.copy(optionA = "", optionB = "", categories = emptySet(), sent = true) }
+            try {
+                submitQuestion(draft.optionA, draft.optionB, draft.categories)
+                _state.update { it.copy(optionA = "", optionB = "", categories = emptySet(), sent = true) }
+            } catch (failure: WyrException) {
+                _state.update { it.copy(submitFailure = failure.toSubmitFailure()) }
+            }
         }
     }
 
@@ -74,23 +78,19 @@ class SubmitViewModel(
     private fun edit(change: SubmitState.() -> SubmitState) = _state.update { if (it.isSubmitting) it else it.change() }
 
     /**
-     * Runs [block] as the one action in flight, then reads the list again, a failed action's too. A
-     * second action while one runs is ignored.
+     * Runs [block] as the one action in flight, then reads the list again, whatever [block] ended in:
+     * it records its own failure. A second action while one runs is ignored.
      */
     private fun perform(
         action: SubmitAction,
         block: suspend () -> Unit,
     ) {
         if (_state.value.isBusy) return
-        _state.update { it.copy(running = action, failure = null, sent = false) }
+        _state.update { it.copy(running = action, submitFailure = null, listFailure = null, sent = false) }
 
         viewModelScope.launch {
             try {
-                try {
-                    block()
-                } catch (failure: WyrException) {
-                    _state.update { it.copy(failure = SubmitFailure(action, failure.error, failure.retryAfter)) }
-                }
+                block()
                 load()
             } finally {
                 _state.update { it.copy(running = null) }
@@ -100,16 +100,17 @@ class SubmitViewModel(
 
     /**
      * Reads the player's submissions, minting a guest where there is none. A failed read keeps what
-     * was shown, and says so unless the action before it already failed, which says more.
+     * was shown and says so under the list, whatever the action before it ended in, so a list never
+     * read is never left waiting on nothing.
      */
     private suspend fun load() {
         try {
             val submissions = getMySubmissions()
             _state.update { it.copy(submissions = submissions) }
         } catch (failure: WyrException) {
-            _state.update {
-                it.copy(failure = it.failure ?: SubmitFailure(SubmitAction.LOAD, failure.error, failure.retryAfter))
-            }
+            _state.update { it.copy(listFailure = failure.toSubmitFailure()) }
         }
     }
 }
+
+private fun WyrException.toSubmitFailure(): SubmitFailure = SubmitFailure(error, retryAfter)
