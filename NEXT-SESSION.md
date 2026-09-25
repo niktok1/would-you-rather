@@ -298,11 +298,13 @@ and then, when the desktop's snapshot manager, on Swing's thread, told the scene
 drawing late. **`devRelease` is how fast the game really is**
 (`./gradlew :app:androidApp:assembleDevRelease`, not debuggable, and signed with the debug key since
 f3bdce1, so it installs over `devDebug` and back with `adb install -r`, keeping the data). A debug
-build's Compose is several times slower, and `devDebug` is now smooth enough to work in, not a measure
-of speed. To compare two builds on the phone: `adb shell dumpsys gfxinfo io.ntole.wyr.dev reset`, play
-about ten reveals, then `adb shell dumpsys gfxinfo io.ntole.wyr.dev`, and read *Janky frames*, the
-50th and 90th percentiles and *Number Slow UI thread*. Not yet measured on the phone after the change.
-Seen there before it, in `devRelease`, and not the count up's doing: the first frames after a launch
+build's Compose is several times slower, so `devDebug` is not a measure of speed. It **should** now be
+smooth enough to work in, since a frame of the count up composes, lays out and tells accessibility
+nothing, but that is expected, not measured: no build with the change has been on the phone yet. To
+compare two builds on the phone: `adb shell dumpsys gfxinfo io.ntole.wyr.dev reset`, play about ten
+reveals, then `adb shell dumpsys gfxinfo io.ntole.wyr.dev`, and read *Janky frames*, the 50th and 90th
+percentiles and *Number Slow UI thread*; record `devDebug`'s here once they exist. Seen there before
+the change, in `devRelease`, and not the count up's doing: the first frames after a launch
 take up to 750 ms on the UI thread (code not yet compiled, with no baseline profile), and the
 RenderThread sometimes waits 50 to 300 ms on the display's buffers.
 
