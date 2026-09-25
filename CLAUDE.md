@@ -1163,14 +1163,14 @@ and every request shows in its HTTP trace (`HttpTrace` in `:core:network`, never
     `SubmissionStatus.OTHER` or `Category.OTHER` is refused before anything is sent. `WRONG_STATUS`
     is `DomainError.WRONG_STATUS`. `moderationDataModule(environment)` binds it, and only there, for a
     client that only moderates: an HTTP client of its own over an in-memory session store nothing
-    writes, no `TokenStorage` needed, no session repository, so no bearer token goes out and no guest
-    can be minted. The game's `dataModule` binds none of it, so the game cannot moderate
-    (`DataModuleTest` pins both).
+    writes, no `TokenStorage` or `RecoverySecretStorage` needed, no session repository, so no bearer
+    token goes out and no guest can be minted or recovered. The game's `dataModule` binds none of it,
+    so the game cannot moderate (`DataModuleTest` pins both).
   - *The moderation app* (`:app:adminApp`, `io.ntole.wyr.admin`, §3) is where a moderator works: a
     desktop window and a browser page on `moderationDataModule` (`adminModules`), so it never has a
-    player session, sends no bearer token and mints no guest (`AdminModuleTest`). Its header always
-    names the server and its URL, production's in the error colors, and so does the desktop window's
-    title (§8e). The admin token is typed into a masked field and held in `ModerationViewModel`'s
+    player session, sends no bearer token, mints or recovers no guest and keeps no recovery secret
+    (`AdminModuleTest`). Its header always names the server and its URL, production's in the error
+    colors, and so does the desktop window's title (§8e). The admin token is typed into a masked field and held in `ModerationViewModel`'s
     memory only, never in saved state or storage, and `SecretText` keeps it out of the state's text;
     Lock forgets it and everything read with it, and cancels the action in flight, so nothing it
     answers is shown. The field itself is made anew on every Lock (`ModerationState.locks`): a text

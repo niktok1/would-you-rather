@@ -17,6 +17,7 @@ import io.ntole.wyr.core.domain.moderation.RestoreQuestion
 import io.ntole.wyr.core.domain.moderation.RetireQuestion
 import io.ntole.wyr.core.domain.question.GetNextQuestion
 import io.ntole.wyr.core.domain.session.SessionRepository
+import io.ntole.wyr.core.network.RecoverySecretStorage
 import io.ntole.wyr.core.network.SessionStore
 import io.ntole.wyr.core.network.TokenStorage
 import io.ntole.wyr.core.network.environment.WyrEnvironment
@@ -77,6 +78,7 @@ class AdminModuleTest {
                 assertNull(koin.getOrNull<SessionRepository>(), "nothing can mint a guest")
                 assertNull(koin.getOrNull<SessionStore>())
                 assertNull(koin.getOrNull<TokenStorage>(), "nothing can store a session")
+                assertNull(koin.getOrNull<RecoverySecretStorage>(), "nothing can keep or recover a player")
                 assertNull(koin.getOrNull<GetNextQuestion>(), "no player use case at all")
 
                 val sent = requestsOf(koin)
