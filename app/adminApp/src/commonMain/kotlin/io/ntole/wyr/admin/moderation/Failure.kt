@@ -70,6 +70,14 @@ private fun describe(
             "No such question on this server (404)."
         }
 
+        DomainError.CATEGORY_EXISTS -> {
+            "A category has that id already (409), given or made from the English name: nothing was added."
+        }
+
+        DomainError.CATEGORY_NOT_FOUND -> {
+            "No such category on this server (404)."
+        }
+
         DomainError.NETWORK -> {
             "No answer from the server. A Render service asleep takes up to a minute to wake: try again."
         }

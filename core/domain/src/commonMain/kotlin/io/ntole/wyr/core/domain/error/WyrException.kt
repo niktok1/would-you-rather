@@ -36,6 +36,15 @@ public enum class DomainError {
     WRONG_STATUS,
 
     /**
+     * A moderator tried to add a category under an id a category has already, given or made from the
+     * English name. Nothing was added.
+     */
+    CATEGORY_EXISTS,
+
+    /** A moderator tried to rename a category no category's id names. Nothing changed. */
+    CATEGORY_NOT_FOUND,
+
+    /**
      * A moderator's request did not carry the server's admin token. Nothing to do with the player's
      * session, which stays as it is.
      */

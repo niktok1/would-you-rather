@@ -9,6 +9,9 @@ import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpMethod
 import io.ktor.http.HttpStatusCode
 import io.ntole.wyr.core.api.WyrApi
+import io.ntole.wyr.core.category.CategoryDto
+import io.ntole.wyr.core.category.CreateCategoryRequest
+import io.ntole.wyr.core.category.RenameCategoryRequest
 import io.ntole.wyr.core.error.ErrorCode
 import io.ntole.wyr.core.network.ApiException
 import io.ntole.wyr.core.network.BASE_URL
@@ -184,6 +187,45 @@ class ModerationApiTest {
                 assertEquals(ADMIN_TOKEN, sent.headers[WyrApi.Headers.ADMIN_TOKEN])
                 assertEquals("""{"questionId":"q1"}""", sent.body.toByteArray().decodeToString())
             }
+        }
+
+    @Test
+    fun `a category is added and renamed with the admin token and its names`() =
+        runTest {
+            val engine =
+                MockEngine { request ->
+                    val added = CategoryDto(id = "FAST_FOOD", nameSr = "Брза храна", nameEn = "Fast food")
+                    if (request.url.encodedPath == WyrApi.Paths.ADMIN_CATEGORIES) {
+                        respond(WyrJson.encodeToString(added), HttpStatusCode.Created, jsonHeaders)
+                    } else {
+                        respondOk(added.copy(nameSr = "Брза клопа"))
+                    }
+                }
+            val api = moderationApi(engine, storeHolding(session("a")))
+
+            val added = api.addCategory(ADMIN_TOKEN, CreateCategoryRequest(nameSr = "Брза храна", nameEn = "Fast food"))
+            val renamed =
+                api.renameCategory(ADMIN_TOKEN, RenameCategoryRequest("FAST_FOOD", "Брза клопа", "Fast food"))
+
+            assertEquals("FAST_FOOD", added.id)
+            assertEquals("Брза клопа", renamed.nameSr)
+            assertEquals(
+                listOf(WyrApi.Paths.ADMIN_CATEGORIES, WyrApi.Paths.ADMIN_CATEGORY_RENAMES),
+                engine.requestHistory.map { it.url.encodedPath },
+            )
+            engine.requestHistory.forEach { sent ->
+                assertEquals(HttpMethod.Post, sent.method)
+                assertEquals(ADMIN_TOKEN, sent.headers[WyrApi.Headers.ADMIN_TOKEN])
+            }
+            // No id: the server makes it from the English name.
+            assertEquals(
+                """{"nameSr":"Брза храна","nameEn":"Fast food"}""",
+                engine.requestHistory
+                    .first()
+                    .body
+                    .toByteArray()
+                    .decodeToString(),
+            )
         }
 
     @Test

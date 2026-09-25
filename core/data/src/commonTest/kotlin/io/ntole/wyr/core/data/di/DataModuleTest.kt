@@ -8,11 +8,13 @@ import io.ntole.wyr.core.domain.account.LogIn
 import io.ntole.wyr.core.domain.account.LogOut
 import io.ntole.wyr.core.domain.account.RegisterAccount
 import io.ntole.wyr.core.domain.category.GetCategories
+import io.ntole.wyr.core.domain.moderation.AddCategory
 import io.ntole.wyr.core.domain.moderation.ApproveSubmission
 import io.ntole.wyr.core.domain.moderation.GetPendingSubmissions
 import io.ntole.wyr.core.domain.moderation.GetQuestions
 import io.ntole.wyr.core.domain.moderation.ModerationRepository
 import io.ntole.wyr.core.domain.moderation.RejectSubmission
+import io.ntole.wyr.core.domain.moderation.RenameCategory
 import io.ntole.wyr.core.domain.moderation.RestoreQuestion
 import io.ntole.wyr.core.domain.moderation.RetireQuestion
 import io.ntole.wyr.core.domain.session.SessionRepository
@@ -72,6 +74,8 @@ class DataModuleTest {
         assertNull(koin.getOrNull<GetQuestions>())
         assertNull(koin.getOrNull<RetireQuestion>())
         assertNull(koin.getOrNull<RestoreQuestion>())
+        assertNull(koin.getOrNull<AddCategory>())
+        assertNull(koin.getOrNull<RenameCategory>())
         koin.close()
     }
 
@@ -126,6 +130,8 @@ class DataModuleTest {
                     koin.get<GetQuestions>(),
                     koin.get<RetireQuestion>(),
                     koin.get<RestoreQuestion>(),
+                    koin.get<AddCategory>(),
+                    koin.get<RenameCategory>(),
                 ).forEach { useCase -> assertNotNull(useCase, environment.name) }
                 assertNull(koin.getOrNull<SessionRepository>(), "nothing can mint a guest")
                 assertNull(koin.getOrNull<TokenStorage>())

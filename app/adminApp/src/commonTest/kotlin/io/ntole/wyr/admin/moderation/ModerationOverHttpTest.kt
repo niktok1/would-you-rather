@@ -15,10 +15,12 @@ import io.ntole.wyr.core.api.WyrApi
 import io.ntole.wyr.core.data.moderation.DefaultModerationRepository
 import io.ntole.wyr.core.domain.category.GetCategories
 import io.ntole.wyr.core.domain.error.DomainError
+import io.ntole.wyr.core.domain.moderation.AddCategory
 import io.ntole.wyr.core.domain.moderation.ApproveSubmission
 import io.ntole.wyr.core.domain.moderation.GetPendingSubmissions
 import io.ntole.wyr.core.domain.moderation.GetQuestions
 import io.ntole.wyr.core.domain.moderation.RejectSubmission
+import io.ntole.wyr.core.domain.moderation.RenameCategory
 import io.ntole.wyr.core.domain.moderation.RestoreQuestion
 import io.ntole.wyr.core.domain.moderation.RetireQuestion
 import io.ntole.wyr.core.error.ErrorCode
@@ -243,6 +245,8 @@ class ModerationOverHttpTest {
             restoreQuestion = RestoreQuestion(repository),
             // Not over the engine: this is about the admin routes, and the categories are none.
             getCategories = GetCategories(FakeCategories()),
+            addCategory = AddCategory(repository),
+            renameCategory = RenameCategory(repository),
         ).also {
             it.setAdminToken(FakeModeration.TOKEN)
             testScheduler.advanceUntilIdle()

@@ -11,10 +11,14 @@ import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.headersOf
 import io.ntole.wyr.core.api.WyrApi
+import io.ntole.wyr.core.category.CategoryDto
+import io.ntole.wyr.core.category.CreateCategoryRequest
+import io.ntole.wyr.core.category.RenameCategoryRequest
 import io.ntole.wyr.core.data.BASE_URL
 import io.ntole.wyr.core.data.respondJson
 import io.ntole.wyr.core.data.session
 import io.ntole.wyr.core.data.storeHolding
+import io.ntole.wyr.core.domain.category.Category
 import io.ntole.wyr.core.domain.error.DomainError
 import io.ntole.wyr.core.domain.error.WyrException
 import io.ntole.wyr.core.domain.moderation.AdminToken
@@ -339,6 +343,45 @@ class DefaultModerationRepositoryTest {
                 }
         }
 
+    @Test
+    fun `a category is added with the token and comes back as the server stored it`() =
+        runTest {
+            val added = repositoryOver(storeHolding(null)).addCategory(token, null, " Брза храна ", "Fast food")
+
+            // Stored as the server's CategoryRules have it: trimmed, the id made from the English name.
+            assertEquals(Category(id = "FAST_FOOD", nameSr = "Брза храна", nameEn = "Fast food"), added)
+            val sent = engine.requestHistory.single()
+            assertEquals(WyrApi.Paths.ADMIN_CATEGORIES, sent.url.encodedPath)
+            assertEquals(CreateCategoryRequest(nameSr = " Брза храна ", nameEn = "Fast food"), decode(sent))
+            assertEquals(listOf(token.value), adminTokensSent())
+        }
+
+    @Test
+    fun `a category's names are put right by its id with the token`() =
+        runTest {
+            val renamed = repositoryOver(storeHolding(null)).renameCategory(token, "FOOD", "Јело", "Meals")
+
+            assertEquals(Category(id = "FOOD", nameSr = "Јело", nameEn = "Meals"), renamed)
+            val sent = engine.requestHistory.single()
+            assertEquals(WyrApi.Paths.ADMIN_CATEGORY_RENAMES, sent.url.encodedPath)
+            assertEquals(RenameCategoryRequest("FOOD", "Јело", "Meals"), decode(sent))
+            assertEquals(listOf(token.value), adminTokensSent())
+        }
+
+    @Test
+    fun `an id a category has already and an id none has read as their own DomainErrors`() =
+        runTest {
+            val moderation = repositoryOver(storeHolding(null))
+
+            refuseWith = { respondError(HttpStatusCode.Conflict, ErrorDto("FOOD exists", ErrorCode.CATEGORY_EXISTS)) }
+            val exists = assertFailsWith<WyrException> { moderation.addCategory(token, "FOOD", "Храна", "Food") }
+            refuseWith = { respondError(HttpStatusCode.NotFound, ErrorDto("no GONE", ErrorCode.CATEGORY_NOT_FOUND)) }
+            val missing = assertFailsWith<WyrException> { moderation.renameCategory(token, "GONE", "Нема", "Gone") }
+
+            assertEquals(DomainError.CATEGORY_EXISTS, exists.error)
+            assertEquals(DomainError.CATEGORY_NOT_FOUND, missing.error)
+        }
+
     private suspend fun MockRequestHandleScope.answer(request: HttpRequestData): HttpResponseData {
         val refusal = refuseWith
         return when {
@@ -378,6 +421,18 @@ class DefaultModerationRepositoryTest {
                 respondJson(WyrJson.encodeToString(RETIRED.copy(status = QuestionStatus.APPROVED, retiredAt = null)))
             }
 
+            request.url.encodedPath == WyrApi.Paths.ADMIN_CATEGORIES -> {
+                // As the server stores it; the id it makes from the English name.
+                val creation = decode<CreateCategoryRequest>(request)
+                val stored = CategoryDto(creation.id ?: "FAST_FOOD", creation.nameSr.trim(), creation.nameEn.trim())
+                respond(WyrJson.encodeToString(stored), HttpStatusCode.Created, JSON)
+            }
+
+            request.url.encodedPath == WyrApi.Paths.ADMIN_CATEGORY_RENAMES -> {
+                val renaming = decode<RenameCategoryRequest>(request)
+                respondJson(WyrJson.encodeToString(CategoryDto(renaming.id, renaming.nameSr, renaming.nameEn)))
+            }
+
             request.url.encodedPath == WyrApi.Paths.ADMIN_REJECTIONS -> {
                 // Echoed as sent, so a reason sent untrimmed would come back untrimmed.
                 val rejection = decode<RejectSubmissionRequest>(request)
@@ -414,6 +469,8 @@ class DefaultModerationRepositoryTest {
 
     private companion object {
         const val SUBMITTED_AT = 1_790_000_000_000L
+
+        val JSON = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString())
 
         /** A refresh of "a"'s session, as the server rotates it: still player "a". */
         val ROTATED = session("a").copy(accessToken = "access-a-rotated", refreshToken = "refresh-a-rotated")

@@ -1,11 +1,14 @@
 package io.ntole.wyr.core.data.moderation
 
+import io.ntole.wyr.core.category.CreateCategoryRequest
+import io.ntole.wyr.core.category.RenameCategoryRequest
 import io.ntole.wyr.core.data.mapper.approveSubmissionRequest
 import io.ntole.wyr.core.data.mapper.rejectSubmissionRequest
 import io.ntole.wyr.core.data.mapper.runApi
 import io.ntole.wyr.core.data.mapper.toDomain
 import io.ntole.wyr.core.data.mapper.wireCategories
 import io.ntole.wyr.core.data.mapper.wireStatuses
+import io.ntole.wyr.core.domain.category.Category
 import io.ntole.wyr.core.domain.moderation.AdminToken
 import io.ntole.wyr.core.domain.moderation.ModeratedQuestion
 import io.ntole.wyr.core.domain.moderation.ModeratedQuestionPage
@@ -70,4 +73,18 @@ public class DefaultModerationRepository(
         token: AdminToken,
         questionId: String,
     ): ModeratedQuestion = runApi { api.restore(token.value, RestoreQuestionRequest(questionId)) }.toDomain()
+
+    override suspend fun addCategory(
+        token: AdminToken,
+        id: String?,
+        nameSr: String,
+        nameEn: String,
+    ): Category = runApi { api.addCategory(token.value, CreateCategoryRequest(id, nameSr, nameEn)) }.toDomain()
+
+    override suspend fun renameCategory(
+        token: AdminToken,
+        id: String,
+        nameSr: String,
+        nameEn: String,
+    ): Category = runApi { api.renameCategory(token.value, RenameCategoryRequest(id, nameSr, nameEn)) }.toDomain()
 }

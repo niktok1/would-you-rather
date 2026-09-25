@@ -1,6 +1,7 @@
 package io.ntole.wyr.admin.moderation
 
 import io.ntole.wyr.core.domain.category.Category
+import io.ntole.wyr.core.domain.category.CategoryRules
 import io.ntole.wyr.core.domain.moderation.AdminToken
 import io.ntole.wyr.core.domain.moderation.ModeratedQuestion
 import io.ntole.wyr.core.domain.moderation.QuestionCursor
@@ -12,7 +13,8 @@ import kotlin.jvm.JvmInline
 
 /**
  * Everything the moderation app shows: the admin token as typed, the pending queue, the list of every
- * question, and what the moderator has picked or typed for each pending one.
+ * question, the categories, and what the moderator has picked or typed for each pending one and for a
+ * category.
  *
  * Nothing is read until the moderator asks, since no token has been typed yet. One action runs at a
  * time ([running]), so what the screens show changes in the order things happened.
@@ -68,6 +70,7 @@ data class ModerationState(
         when (screen) {
             Screen.PENDING -> pending.outcomes
             Screen.QUESTIONS -> questions.outcomes
+            Screen.CATEGORIES -> categories.outcomes
         }
 }
 
@@ -77,12 +80,13 @@ data class ModerationState(
  */
 val LISTABLE_STATUSES: List<SubmissionStatus> = SubmissionStatus.entries.filter { it != SubmissionStatus.OTHER }
 
-/** The app's two screens, each with the outcomes of the actions started from it. */
+/** The app's screens, each with the outcomes of the actions started from it. */
 enum class Screen(
     val label: String,
 ) {
     PENDING("Pending"),
     QUESTIONS("All questions"),
+    CATEGORIES("Categories"),
 }
 
 /**
@@ -134,14 +138,48 @@ data class QuestionList(
  * Every category, as the server last listed them, oldest first, or `null` until a read works: what an
  * approval's and the filter's chips offer, and what names the categories a question is filed under,
  * one not listed by its id. Read with every Load, before what it loads, since a moderator adds
- * categories without a build; the list needs no token, but it is read as the actions that do are,
- * one at a time. A read that fails keeps what was listed and says why in [failure].
+ * categories without a build, and again after every add and rename, whatever became of it; the list
+ * needs no token, but it is read as the actions that do are, one at a time. A read that fails keeps
+ * what was listed and says why in [failure].
  */
 data class CategoryList(
     val categories: List<Category>? = null,
     /** Why the last read failed, or `null` once one works. */
     val failure: Failure? = null,
+    /** The category being written for Add, exactly as typed, an empty id for the server to make. */
+    val adding: CategoryDraft = CategoryDraft(),
+    /** The category whose names are being put right, by its id, with the names as typed, or `null`. */
+    val renaming: CategoryDraft? = null,
+    /** Why the last Add failed, shown under its form until the next add or rename or Load. */
+    val addFailure: Failure? = null,
+    /** Why the last rename failed, shown under its category until the next add or rename or Load. */
+    val renameFailure: Failure? = null,
+    /** What the last add or rename that worked did; no failures, which are the two above. */
+    val outcomes: Outcomes = Outcomes(),
 )
+
+/**
+ * A category as the moderator types it (CLAUDE.md §8d, *Categories*): its [id], blank for the server
+ * to make one from [nameEn] when adding, and fixed when renaming, and its names in Serbian and
+ * English, all exactly as typed; the server trims the names.
+ */
+data class CategoryDraft(
+    val id: String = "",
+    val nameSr: String = "",
+    val nameEn: String = "",
+) {
+    /** The id to send: `null`, for the server to make one, while none is typed. */
+    val idToSend: String? get() = id.ifBlank { null }
+
+    /**
+     * Whether the server would take it: both names, and the id when one is typed, by its
+     * [CategoryRules], so nothing it would refuse as malformed is sent.
+     */
+    val isValid: Boolean
+        get() =
+            CategoryRules.isName(nameSr) && CategoryRules.isName(nameEn) &&
+                (idToSend?.let(CategoryRules::isId) ?: true)
+}
 
 /**
  * The outcomes of the actions started from one screen: why each action on a question failed, by the
@@ -184,6 +222,9 @@ enum class Action {
     LOAD_MORE,
     RETIRE,
     RESTORE,
+    LOAD_CATEGORIES,
+    ADD_CATEGORY,
+    RENAME_CATEGORY,
 }
 
 /**

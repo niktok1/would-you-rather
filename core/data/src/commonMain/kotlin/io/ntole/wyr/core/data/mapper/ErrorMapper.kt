@@ -110,9 +110,11 @@ internal fun ErrorCode.toDomain(): DomainError =
 
         ErrorCode.WRONG_STATUS -> DomainError.WRONG_STATUS
 
-        // Answered only to a moderator adding or renaming a category, which no client does yet: the
-        // next client branch gives each a DomainError of its own.
-        ErrorCode.CATEGORY_EXISTS, ErrorCode.CATEGORY_NOT_FOUND -> DomainError.UNKNOWN
+        // Answered only to a moderator adding or renaming a category: each a DomainError of its own,
+        // so the moderation app says which.
+        ErrorCode.CATEGORY_EXISTS -> DomainError.CATEGORY_EXISTS
+
+        ErrorCode.CATEGORY_NOT_FOUND -> DomainError.CATEGORY_NOT_FOUND
 
         // Never UNAUTHORIZED: that would throw the player's session away over a moderator's token.
         ErrorCode.FORBIDDEN -> DomainError.FORBIDDEN

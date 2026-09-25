@@ -536,8 +536,7 @@ EncryptedSharedPreferences: enough for a game that stores nothing personal.
   `CreateCategoryRequest` and `RenameCategoryRequest`, the `X-Admin-Token` header (`WyrApi.Headers`),
   `QuestionStatus.RETIRED` and the error codes `FORBIDDEN`, `ALREADY_DECIDED`, `WRONG_STATUS`,
   `CATEGORY_EXISTS` and `CATEGORY_NOT_FOUND`. The moderator's client (`ModerationApi` calls every
-  admin route but the two for categories, which the next client branch adds) and the moderation app
-  are built on it (§8d, *Moderation*).
+  admin route) and the moderation app are built on it (§8d, *Moderation*).
 - **A rejection reason is one line** — *provisional — user decision.* §8d asks for a short reason;
   the server also holds it to one line, as it does an option: no control character, nor U+2028 or
   U+2029 (`checkedRejection`). Chosen as the stricter reading, since a reason is shown to its author
@@ -963,7 +962,16 @@ lists the player's own (*Submitting*, below).
     `CATEGORY_EXISTS`, the primary key deciding two creations racing (§4); a rename of an id no
     category has 404 `CATEGORY_NOT_FOUND`. A rename never changes the id, so what is filed under it
     stays. No delete, for now. `CategoryRules`, `CategoryStore.create` and `rename`,
-    `CategoryRulesTest`, `CategoryStoreTest`, `CategoryFlowTest`.
+    `CategoryRulesTest`, `CategoryStoreTest`, `CategoryFlowTest`. On the client, `ModerationApi`
+    `addCategory` and `renameCategory`, behind `AddCategory` and `RenameCategory` (`:core:domain`,
+    through `runApi` alone, as every moderator's call), answered with the `Category` as stored;
+    `CATEGORY_EXISTS` and `CATEGORY_NOT_FOUND` are `DomainError`s of their own. `CategoryRules`
+    (`:core:domain`) copies the id's and the names' rules, so the moderation app checks before it
+    sends (`CategoryLimitsTest` pins its numbers to `WyrApi.Limits`), but not the derivation, whose
+    accent stripping needs Java's `Normalizer`: an id left blank is sent as none, and the server's
+    answer names the id it made. An English name that derives nothing, sent with no id, is the
+    server's 400, which the moderation app shows as a server failure; the id field's hint says to
+    type one then.
   - *The list*: `GET /v1/categories` (`WyrApi.Paths.CATEGORIES`) answers every category, a
     `CategoryListDto` of `CategoryDto`s (`id`, `nameSr`, `nameEn`), in the order of categories. It
     needs no session and reads none, so a client can have it before it has a player, and it is
@@ -1156,7 +1164,7 @@ lists the player's own (*Submitting*, below).
   its categories** when approving (*Categories*: at least one stays, and a change replaces the
   question's `question_categories` rows in one transaction), and **may retire an approved question
   and restore it** (*Retiring*, below; provisional, §8b), sees every question (the list), and **adds
-  categories and puts their names right** (*Categories*, on the server only so far). A
+  categories and puts their names right** (*Categories*). A
   rejection carries a **short reason**, and the author sees the status of each of their submissions
   and, for a rejected one, that reason (`GET /v1/me/questions`, *Submitting*). The moderator is
   whoever holds the server's admin token (`ADMIN_TOKEN`, §8), not a role on a player account. Built
@@ -1290,7 +1298,16 @@ lists the player's own (*Submitting*, below).
     named (`WyrException.retryAfter`, §8b). An answer the data layer cannot name (`UNKNOWN`) claims
     no status, leaving it to the detail line under it, and says a bare 404 means moderation is off
     on that server: a proxy's own page or an error code newer than the build reads as `UNKNOWN` too.
-    `ModerationViewModelTest` and `QuestionListViewModelTest` drive it over a scripted repository,
+    *Categories*, the third tab, lists every category, oldest first, with its id and both names, and
+    adds one and puts one's names right (*Categories*, above): Add, from a form of the two names and
+    an id, blank for the server to make one, goes once `CategoryDraft.isValid` holds by
+    `CategoryRules`, and clears the form once added; Rename... opens a category's names in its own
+    card, its id fixed, and Save names sends them. The categories are read again after every add or
+    rename, whatever became of it (the list is no admin route, so the rule above for a 403 or a 429
+    does not apply), and a failure shows under the form or the card it came from, a 409 as an id a
+    category has already. Lock forgets what was typed for a category and keeps the categories read.
+    `ModerationViewModelTest`, `QuestionListViewModelTest` and `CategoriesViewModelTest` drive it over
+    scripted repositories,
     `ModerationOverHttpTest` over the real client configuration, and `ScreensDrawTest` draws every
     screen off screen at a desktop window's size. The game's builds do not moderate at all.
 

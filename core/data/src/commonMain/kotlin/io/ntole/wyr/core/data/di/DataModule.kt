@@ -19,11 +19,13 @@ import io.ntole.wyr.core.domain.category.CategoryRepository
 import io.ntole.wyr.core.domain.category.GetCategories
 import io.ntole.wyr.core.domain.like.LikeRepository
 import io.ntole.wyr.core.domain.like.SetLike
+import io.ntole.wyr.core.domain.moderation.AddCategory
 import io.ntole.wyr.core.domain.moderation.ApproveSubmission
 import io.ntole.wyr.core.domain.moderation.GetPendingSubmissions
 import io.ntole.wyr.core.domain.moderation.GetQuestions
 import io.ntole.wyr.core.domain.moderation.ModerationRepository
 import io.ntole.wyr.core.domain.moderation.RejectSubmission
+import io.ntole.wyr.core.domain.moderation.RenameCategory
 import io.ntole.wyr.core.domain.moderation.RestoreQuestion
 import io.ntole.wyr.core.domain.moderation.RetireQuestion
 import io.ntole.wyr.core.domain.player.GetPlayerStats
@@ -137,5 +139,7 @@ public fun moderationDataModule(environment: WyrEnvironment): Module =
         factory { GetQuestions(moderation = get()) }
         factory { RetireQuestion(moderation = get()) }
         factory { RestoreQuestion(moderation = get()) }
+        factory { AddCategory(moderation = get()) }
+        factory { RenameCategory(moderation = get()) }
         factory { GetCategories(categories = get()) }
     }

@@ -3,6 +3,7 @@ package io.ntole.wyr.admin
 import androidx.compose.ui.ImageComposeScene
 import androidx.compose.ui.unit.Density
 import io.ntole.wyr.admin.moderation.Action
+import io.ntole.wyr.admin.moderation.CategoryDraft
 import io.ntole.wyr.admin.moderation.CategoryList
 import io.ntole.wyr.admin.moderation.DecisionDraft
 import io.ntole.wyr.admin.moderation.Failure
@@ -85,6 +86,27 @@ class ScreensDrawTest {
         draw(WyrEnvironment.DEV, list, Screen.QUESTIONS)
         // Retire waiting to be confirmed, its dialog over the list.
         draw(WyrEnvironment.PROD, list.copy(running = null, retiring = "seed-1"), Screen.QUESTIONS)
+    }
+
+    @Test
+    fun `the app draws the categories with a category being added and one being renamed`() {
+        val categories =
+            ModerationState(
+                adminToken = SecretText("typed"),
+                categories =
+                    CategoryList(
+                        categories = FakeCategories.LISTED,
+                        failure = Failure.Refused(DomainError.NETWORK),
+                        adding = CategoryDraft(id = "fast food", nameSr = "Брза храна", nameEn = "Fast\nfood"),
+                        renaming = CategoryDraft("FOOD", "Храна", ""),
+                        addFailure = Failure.Refused(DomainError.CATEGORY_EXISTS, detail = "FOOD exists"),
+                        renameFailure = Failure.Refused(DomainError.SERVER),
+                        outcomes = Outcomes(notice = "Added SPORT: Спорт / Sport."),
+                    ),
+                running = Running(Action.RENAME_CATEGORY),
+            )
+
+        WyrEnvironment.entries.forEach { environment -> draw(environment, categories, Screen.CATEGORIES) }
     }
 
     private fun draw(

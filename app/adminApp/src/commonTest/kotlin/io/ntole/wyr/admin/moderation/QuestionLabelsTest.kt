@@ -87,12 +87,15 @@ class QuestionLabelsTest {
             ModerationState(
                 pending = PendingQueue(submissions = FakeModeration.QUEUE),
                 questions = QuestionList(questions = LISTED),
+                categories = CategoryList(FakeCategories.LISTED),
             )
 
         assertEquals("Pending", tabLabelOf(Screen.PENDING, ModerationState()))
         assertEquals("All questions", tabLabelOf(Screen.QUESTIONS, ModerationState()))
+        assertEquals("Categories", tabLabelOf(Screen.CATEGORIES, ModerationState()))
         assertEquals("Pending (2)", tabLabelOf(Screen.PENDING, read))
         assertEquals("All questions (5)", tabLabelOf(Screen.QUESTIONS, read))
+        assertEquals("Categories (4)", tabLabelOf(Screen.CATEGORIES, read))
     }
 
     @Test

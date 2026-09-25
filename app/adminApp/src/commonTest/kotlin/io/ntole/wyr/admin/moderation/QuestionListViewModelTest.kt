@@ -6,6 +6,7 @@ import io.ntole.wyr.admin.moderation.FakeModeration.Companion.pageOf
 import io.ntole.wyr.core.domain.category.GetCategories
 import io.ntole.wyr.core.domain.error.DomainError
 import io.ntole.wyr.core.domain.error.WyrException
+import io.ntole.wyr.core.domain.moderation.AddCategory
 import io.ntole.wyr.core.domain.moderation.ApproveSubmission
 import io.ntole.wyr.core.domain.moderation.GetPendingSubmissions
 import io.ntole.wyr.core.domain.moderation.GetQuestions
@@ -13,6 +14,7 @@ import io.ntole.wyr.core.domain.moderation.ModeratedQuestionPage
 import io.ntole.wyr.core.domain.moderation.QuestionCursor
 import io.ntole.wyr.core.domain.moderation.QuestionFilter
 import io.ntole.wyr.core.domain.moderation.RejectSubmission
+import io.ntole.wyr.core.domain.moderation.RenameCategory
 import io.ntole.wyr.core.domain.moderation.RestoreQuestion
 import io.ntole.wyr.core.domain.moderation.RetireQuestion
 import io.ntole.wyr.core.domain.submission.SubmissionStatus
@@ -511,6 +513,8 @@ class QuestionListViewModelTest {
             retireQuestion = RetireQuestion(moderation),
             restoreQuestion = RestoreQuestion(moderation),
             getCategories = GetCategories(categories),
+            addCategory = AddCategory(moderation),
+            renameCategory = RenameCategory(moderation),
         ).also { testScheduler.advanceUntilIdle() }
 
     /** The app with the token typed and the list's first page read, the one call so far. */

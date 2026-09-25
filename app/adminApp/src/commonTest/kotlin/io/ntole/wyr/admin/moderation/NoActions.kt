@@ -47,4 +47,18 @@ object NoActions : ModerationActions {
     override fun confirmRetire() = Unit
 
     override fun restore(questionId: String) = Unit
+
+    override fun loadCategories() = Unit
+
+    override fun editNewCategory(draft: CategoryDraft) = Unit
+
+    override fun saveNewCategory() = Unit
+
+    override fun startRenaming(categoryId: String) = Unit
+
+    override fun editRenaming(draft: CategoryDraft) = Unit
+
+    override fun cancelRenaming() = Unit
+
+    override fun saveRenaming() = Unit
 }

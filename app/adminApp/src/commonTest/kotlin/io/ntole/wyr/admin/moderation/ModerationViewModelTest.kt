@@ -7,12 +7,14 @@ import io.ntole.wyr.core.domain.category.Category
 import io.ntole.wyr.core.domain.category.GetCategories
 import io.ntole.wyr.core.domain.error.DomainError
 import io.ntole.wyr.core.domain.error.WyrException
+import io.ntole.wyr.core.domain.moderation.AddCategory
 import io.ntole.wyr.core.domain.moderation.AdminToken
 import io.ntole.wyr.core.domain.moderation.ApproveSubmission
 import io.ntole.wyr.core.domain.moderation.GetPendingSubmissions
 import io.ntole.wyr.core.domain.moderation.GetQuestions
 import io.ntole.wyr.core.domain.moderation.RejectSubmission
 import io.ntole.wyr.core.domain.moderation.RejectionReason
+import io.ntole.wyr.core.domain.moderation.RenameCategory
 import io.ntole.wyr.core.domain.moderation.RestoreQuestion
 import io.ntole.wyr.core.domain.moderation.RetireQuestion
 import io.ntole.wyr.core.domain.submission.Submission
@@ -524,6 +526,8 @@ class ModerationViewModelTest {
             retireQuestion = RetireQuestion(moderation),
             restoreQuestion = RestoreQuestion(moderation),
             getCategories = GetCategories(categories),
+            addCategory = AddCategory(moderation),
+            renameCategory = RenameCategory(moderation),
         ).also { testScheduler.advanceUntilIdle() }
 
     /** The app with the token typed and [QUEUE] loaded, its read the one call so far. */

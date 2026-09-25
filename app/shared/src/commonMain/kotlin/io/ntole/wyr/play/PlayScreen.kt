@@ -640,6 +640,8 @@ private fun message(error: DomainError): String =
         DomainError.NOT_ENOUGH_POINTS -> "You need more points for that."
         DomainError.ALREADY_DECIDED -> "That question has already been reviewed."
         DomainError.WRONG_STATUS -> "That question can't be changed that way right now."
+        DomainError.CATEGORY_EXISTS -> "That category is in the game already."
+        DomainError.CATEGORY_NOT_FOUND -> "That category isn't in the game."
         DomainError.FORBIDDEN -> "That needs a moderator."
         DomainError.INVALID_USERNAME -> "That username can't be used."
         DomainError.INVALID_PASSWORD -> "That password can't be used."

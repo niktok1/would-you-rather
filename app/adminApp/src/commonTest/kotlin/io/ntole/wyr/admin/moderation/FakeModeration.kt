@@ -1,5 +1,6 @@
 package io.ntole.wyr.admin.moderation
 
+import io.ntole.wyr.core.domain.category.Category
 import io.ntole.wyr.core.domain.moderation.AdminToken
 import io.ntole.wyr.core.domain.moderation.ModeratedQuestion
 import io.ntole.wyr.core.domain.moderation.ModeratedQuestionPage
@@ -93,6 +94,36 @@ class FakeModeration : ModerationRepository {
         tokens += token
         calls += "restore $questionId"
         return restore.invoke(questionId)
+    }
+
+    /** A category as the server stores it: its names trimmed, and FAST_FOOD for the id it makes. */
+    var addCategory: suspend (String?, String, String) -> Category = { id, nameSr, nameEn ->
+        Category(id ?: "FAST_FOOD", nameSr.trim(), nameEn.trim())
+    }
+    var renameCategory: suspend (String, String, String) -> Category = { id, nameSr, nameEn ->
+        Category(id, nameSr.trim(), nameEn.trim())
+    }
+
+    override suspend fun addCategory(
+        token: AdminToken,
+        id: String?,
+        nameSr: String,
+        nameEn: String,
+    ): Category {
+        tokens += token
+        calls += "addCategory $id|$nameSr|$nameEn"
+        return addCategory.invoke(id, nameSr, nameEn)
+    }
+
+    override suspend fun renameCategory(
+        token: AdminToken,
+        id: String,
+        nameSr: String,
+        nameEn: String,
+    ): Category {
+        tokens += token
+        calls += "renameCategory $id|$nameSr|$nameEn"
+        return renameCategory.invoke(id, nameSr, nameEn)
     }
 
     companion object {

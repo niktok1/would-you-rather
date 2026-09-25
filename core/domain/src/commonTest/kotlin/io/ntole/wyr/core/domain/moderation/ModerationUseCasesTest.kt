@@ -1,5 +1,6 @@
 package io.ntole.wyr.core.domain.moderation
 
+import io.ntole.wyr.core.domain.category.Category
 import io.ntole.wyr.core.domain.submission.Submission
 import io.ntole.wyr.core.domain.submission.SubmissionStatus
 import io.ntole.wyr.core.domain.vote.Tally
@@ -82,6 +83,27 @@ class ModerationUseCasesTest {
             assertEquals(listOf(token, token), moderation.tokens)
         }
 
+    @Test
+    fun `a category is added with the token and its names as typed`() =
+        runTest {
+            val added = AddCategory(moderation)(token, null, " Брза храна ", "Fast food")
+
+            assertEquals(Category("MADE", " Брза храна ", "Fast food"), added)
+            // No id: the server's to make from the English name.
+            assertEquals(listOf("addCategory null| Брза храна |Fast food"), moderation.calls)
+            assertEquals(listOf(token), moderation.tokens)
+        }
+
+    @Test
+    fun `a category is renamed by its id with the token`() =
+        runTest {
+            val renamed = RenameCategory(moderation)(token, "FOOD", "Јело", "Meals")
+
+            assertEquals(Category("FOOD", "Јело", "Meals"), renamed)
+            assertEquals(listOf("renameCategory FOOD|Јело|Meals"), moderation.calls)
+            assertEquals(listOf(token), moderation.tokens)
+        }
+
     private class RecordingModeration : ModerationRepository {
         val calls = mutableListOf<String>()
         val tokens = mutableListOf<AdminToken>()
@@ -138,6 +160,28 @@ class ModerationUseCasesTest {
             tokens += token
             calls += "restore $questionId"
             return LISTED
+        }
+
+        override suspend fun addCategory(
+            token: AdminToken,
+            id: String?,
+            nameSr: String,
+            nameEn: String,
+        ): Category {
+            tokens += token
+            calls += "addCategory $id|$nameSr|$nameEn"
+            return Category(id ?: "MADE", nameSr, nameEn)
+        }
+
+        override suspend fun renameCategory(
+            token: AdminToken,
+            id: String,
+            nameSr: String,
+            nameEn: String,
+        ): Category {
+            tokens += token
+            calls += "renameCategory $id|$nameSr|$nameEn"
+            return Category(id, nameSr, nameEn)
         }
     }
 

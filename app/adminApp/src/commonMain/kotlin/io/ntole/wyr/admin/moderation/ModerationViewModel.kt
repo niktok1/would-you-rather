@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import io.ntole.wyr.core.domain.category.GetCategories
 import io.ntole.wyr.core.domain.error.DomainError
 import io.ntole.wyr.core.domain.error.WyrException
+import io.ntole.wyr.core.domain.moderation.AddCategory
 import io.ntole.wyr.core.domain.moderation.AdminToken
 import io.ntole.wyr.core.domain.moderation.ApproveSubmission
 import io.ntole.wyr.core.domain.moderation.GetPendingSubmissions
@@ -13,6 +14,7 @@ import io.ntole.wyr.core.domain.moderation.ModeratedQuestion
 import io.ntole.wyr.core.domain.moderation.QuestionCursor
 import io.ntole.wyr.core.domain.moderation.QuestionFilter
 import io.ntole.wyr.core.domain.moderation.RejectSubmission
+import io.ntole.wyr.core.domain.moderation.RenameCategory
 import io.ntole.wyr.core.domain.moderation.RestoreQuestion
 import io.ntole.wyr.core.domain.moderation.RetireQuestion
 import io.ntole.wyr.core.domain.submission.SubmissionStatus
@@ -72,6 +74,22 @@ interface ModerationActions {
     fun confirmRetire()
 
     fun restore(questionId: String)
+
+    fun loadCategories()
+
+    /** Replaces what is typed for Add with [draft]. */
+    fun editNewCategory(draft: CategoryDraft)
+
+    fun saveNewCategory()
+
+    fun startRenaming(categoryId: String)
+
+    /** Replaces the names typed for the category being renamed with [draft]'s; its id stays. */
+    fun editRenaming(draft: CategoryDraft)
+
+    fun cancelRenaming()
+
+    fun saveRenaming()
 }
 
 /**
@@ -81,7 +99,8 @@ interface ModerationActions {
  * [RetireQuestion] takes out of play once the moderator confirms it and whose retired ones
  * [RestoreQuestion] puts back. A pending question in the list is decided as in the queue. The
  * categories, read through [GetCategories] before the queue or the list each Load reads, are what the
- * chips offer and what names a question's categories.
+ * chips offer and what names a question's categories; [AddCategory] adds one and [RenameCategory]
+ * puts its names right.
  *
  * Nothing here has a player session, or could make one: the moderator is whoever holds the token,
  * and the app's wiring binds no session at all (`moderationDataModule`). Every request carries the
@@ -99,6 +118,8 @@ class ModerationViewModel(
     private val retireQuestion: RetireQuestion,
     private val restoreQuestion: RestoreQuestion,
     private val getCategories: GetCategories,
+    private val addCategory: AddCategory,
+    private val renameCategory: RenameCategory,
 ) : ViewModel(),
     ModerationActions {
     private val _state = MutableStateFlow(ModerationState())
@@ -113,14 +134,15 @@ class ModerationViewModel(
      * Forgets the token and everything read with it: the queue, the list, what was picked and typed,
      * and every outcome, and, since [ModerationState.locks] moves on, the token field's undo history.
      * The action in flight is cancelled, so nothing it answers is shown. The list's filter stays: it
-     * was never the server's. So do the categories, which are the same for everybody and need no token.
+     * was never the server's. So do the categories as read, which are the same for everybody and need
+     * no token; what was typed for one goes, with the rest typed.
      */
     override fun lock() {
         // Counted before the cancel, which may run the cancelled action's cleanup at once.
         _state.update {
             ModerationState(
                 questions = QuestionList(filter = it.questions.filter),
-                categories = it.categories,
+                categories = CategoryList(categories = it.categories.categories, failure = it.categories.failure),
                 locks = it.locks + 1,
             )
         }
@@ -258,6 +280,93 @@ class ModerationViewModel(
             "Restored ${optionsOf(restored.optionA, restored.optionB)}: served again."
         }
 
+    /** Reads the categories, as an action of its own, starting the categories' outcomes afresh. */
+    override fun loadCategories() =
+        exclusively(Running(Action.LOAD_CATEGORIES)) {
+            _state.update { it.withCategories { list -> list.copy(addFailure = null, renameFailure = null) } }
+            readCategories()
+        }
+
+    override fun editNewCategory(draft: CategoryDraft) =
+        _state.update {
+            it.withCategories { list -> list.copy(adding = draft) }
+        }
+
+    /**
+     * Adds the category typed, under its id, or under one the server makes from the English name when
+     * none is typed, once [CategoryDraft.isValid]; then reads the categories again, whatever became of
+     * it: an add whose answer was lost may have been made, and one refused as existing lists the
+     * category that has the id. What was typed is cleared once it is added, unless typed over meanwhile.
+     */
+    override fun saveNewCategory() {
+        val draft = _state.value.categories.adding
+        if (!draft.isValid) return
+        exclusively(Running(Action.ADD_CATEGORY)) { token ->
+            _state.update { it.withCategories { list -> list.copy(addFailure = null, renameFailure = null) } }
+            val failure =
+                failureOf {
+                    val added = addCategory(token, draft.idToSend, draft.nameSr, draft.nameEn)
+                    val notice = "Added ${added.id}: ${added.nameSr} / ${added.nameEn}."
+                    _state.update {
+                        it.noticed(Screen.CATEGORIES, notice).withCategories { list ->
+                            list.copy(adding = if (list.adding == draft) CategoryDraft() else list.adding)
+                        }
+                    }
+                }
+            if (failure != null) _state.update { it.withCategories { list -> list.copy(addFailure = failure) } }
+            readCategories()
+        }
+    }
+
+    /** Starts putting right the names of the category [categoryId], from the ones it has. */
+    override fun startRenaming(categoryId: String) {
+        val category =
+            _state.value.categories.categories
+                ?.firstOrNull { it.id == categoryId } ?: return
+        val draft = CategoryDraft(id = category.id, nameSr = category.nameSr, nameEn = category.nameEn)
+        _state.update { it.withCategories { list -> list.copy(renaming = draft, renameFailure = null) } }
+    }
+
+    override fun editRenaming(draft: CategoryDraft) =
+        _state.update {
+            it.withCategories { list ->
+                val renaming = list.renaming ?: return@withCategories list
+                list.copy(renaming = draft.copy(id = renaming.id))
+            }
+        }
+
+    /** Drops the names typed for the category being renamed; nothing is sent. */
+    override fun cancelRenaming() =
+        _state.update {
+            it.withCategories { list ->
+                list.copy(renaming = null, renameFailure = null)
+            }
+        }
+
+    /**
+     * Sends the names typed for the category being renamed, once [CategoryDraft.isValid]; then reads
+     * the categories again, whatever became of it, as [saveNewCategory] does.
+     */
+    override fun saveRenaming() {
+        val draft = _state.value.categories.renaming ?: return
+        if (!draft.isValid) return
+        exclusively(Running(Action.RENAME_CATEGORY)) { token ->
+            _state.update { it.withCategories { list -> list.copy(addFailure = null, renameFailure = null) } }
+            val failure =
+                failureOf {
+                    val renamed = renameCategory(token, draft.id, draft.nameSr, draft.nameEn)
+                    val notice = "Renamed ${renamed.id}: ${renamed.nameSr} / ${renamed.nameEn}."
+                    _state.update {
+                        it.noticed(Screen.CATEGORIES, notice).withCategories { list ->
+                            list.copy(renaming = list.renaming?.takeUnless { renaming -> renaming == draft })
+                        }
+                    }
+                }
+            if (failure != null) _state.update { it.withCategories { list -> list.copy(renameFailure = failure) } }
+            readCategories()
+        }
+    }
+
     /**
      * Sends a decision on [questionId] from [from], which answers with the line to show once it is
      * made, then reads the queue again, and the list if it was read, whatever became of it: a decision
@@ -362,7 +471,7 @@ class ModerationViewModel(
         val failure =
             failureOf {
                 val listed = getCategories()
-                _state.update { it.copy(categories = CategoryList(categories = listed)) }
+                _state.update { it.withCategories { list -> list.copy(categories = listed, failure = null) } }
             }
         if (failure != null) _state.update { it.copy(categories = it.categories.copy(failure = failure)) }
     }
@@ -437,7 +546,13 @@ class ModerationViewModel(
         if (current.isBusy) return
         val lockedAtStart = current.locks
         // A notice says what the last action did, so the next one clears it wherever it was shown.
-        _state.update { it.noticed(Screen.PENDING, null).noticed(Screen.QUESTIONS, null).copy(running = running) }
+        _state.update {
+            Screen.entries
+                .fold(
+                    it,
+                ) { cleared, screen -> cleared.noticed(screen, null) }
+                .copy(running = running)
+        }
 
         inFlight =
             viewModelScope.launch {
@@ -486,7 +601,11 @@ class ModerationViewModel(
         when (screen) {
             Screen.PENDING -> copy(pending = pending.copy(outcomes = change(pending.outcomes)))
             Screen.QUESTIONS -> copy(questions = questions.copy(outcomes = change(questions.outcomes)))
+            Screen.CATEGORIES -> withCategories { it.copy(outcomes = change(it.outcomes)) }
         }
+
+    private fun ModerationState.withCategories(change: (CategoryList) -> CategoryList): ModerationState =
+        copy(categories = change(categories))
 
     /** Drops what was picked for a question no longer pending on either screen. */
     private fun ModerationState.pruned(): ModerationState {
