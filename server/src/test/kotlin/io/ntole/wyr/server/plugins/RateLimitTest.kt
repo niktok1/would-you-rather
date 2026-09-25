@@ -464,6 +464,9 @@ class RateLimitTest {
             Group("my submissions", { copy(mySubmissions = it) }) { caller ->
                 caller.client.get(WyrApi.Paths.MY_QUESTIONS) { bearerAuth(caller.player.accessToken) }
             },
+            Group("categories", { copy(categories = it) }, needsSession = false) { caller ->
+                caller.client.get(WyrApi.Paths.CATEGORIES)
+            },
             Group("admin", { copy(admin = it) }, needsSession = false) { caller ->
                 caller.client.queue(ADMIN_TOKEN)
             },

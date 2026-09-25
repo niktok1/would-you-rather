@@ -1,5 +1,6 @@
 package io.ntole.wyr.server.category
 
+import io.ntole.wyr.core.category.CategoryDto
 import io.ntole.wyr.server.db.Categories
 import io.ntole.wyr.server.plugins.ApiFailure
 import org.jetbrains.exposed.v1.core.SortOrder
@@ -10,6 +11,18 @@ import org.jetbrains.exposed.v1.jdbc.select
  * stable id and a name in Serbian and in English.
  */
 object CategoryStore {
+    /**
+     * Every category, with both its names, in the order of categories ([ids]): what
+     * `GET /v1/categories` lists. Must run inside a transaction.
+     */
+    fun all(): List<CategoryDto> =
+        Categories
+            .select(Categories.id, Categories.nameSr, Categories.nameEn)
+            .orderBy(Categories.createdAt to SortOrder.ASC, Categories.id to SortOrder.ASC)
+            .map { row ->
+                CategoryDto(id = row[Categories.id], nameSr = row[Categories.nameSr], nameEn = row[Categories.nameEn])
+            }
+
     /**
      * Every category's id, in the order of categories: oldest first, then by id. Every list of
      * categories the server sends is in this order, a question's own included. Must run inside a

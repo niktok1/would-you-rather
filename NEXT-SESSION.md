@@ -60,7 +60,8 @@ everything filed under RANDOM to ABSURD and holds `question_categories` to it wi
 RANDOM is no category any more (§8b: *All* is no filter). Every categories field on the wire is
 plain ids, `QuestionCategory` and its list serializer are gone (§5), and the JSON for the first ids
 is what it was. The client maps ABSURD to its `Category.RANDOM` until the next branch lists the
-categories from the server.
+categories from the server. `GET /v1/categories` lists every category, with its id and both names,
+oldest first, to anybody (no bearer), limited per address.
 
 ### Verified working
 

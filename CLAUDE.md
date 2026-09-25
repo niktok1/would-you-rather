@@ -592,8 +592,8 @@ EncryptedSharedPreferences: enough for a game that stores nothing personal.
   one window ends and the next begins, while over any longer span the average holds:
   - *Per client address* (on Render, Cloudflare's `CF-Connecting-IP`: `CLIENT_IP_HEADER`, §8), for a
     caller with no session to name: guest minting 10 an hour, refreshes 30 a minute, logins 20 a
-    minute (what bounds guessing a password, as each costs a hash), the admin routes 60 a minute
-    together, and on top of that, admin requests with a wrong or missing token 10 a minute. A
+    minute (what bounds guessing a password, as each costs a hash), the categories list 120 a minute
+    (it needs no session), the admin routes 60 a minute together, and on top of that, admin requests with a wrong or missing token 10 a minute. A
     request with the right token spends none of that last budget, but once an address has spent it,
     every admin request from the address is refused until the budget is back, the right token's too
     (`LockingOut`): were that one let in, its 200 among the 429s would give it away, and guessing
@@ -924,6 +924,13 @@ lists the player's own (*Submitting*, below).
     (*Апсурдно*, *Absurd*), which took every question filed under RANDOM (§8b: RANDOM is no category
     now, *All* is no filter). Nothing deletes a category. On the wire a category is its id, a plain
     string (§5).
+  - *The list*: `GET /v1/categories` (`WyrApi.Paths.CATEGORIES`) answers every category, a
+    `CategoryListDto` of `CategoryDto`s (`id`, `nameSr`, `nameEn`), in the order of categories. It
+    needs no session and reads none, so a client can have it before it has a player, and it is
+    limited per address (§8b). *Decided*: ordered by when each was added, not by Serbian name, which
+    would sort differently on H2 and PostgreSQL and by each database's collation; a client sorts by
+    the name it shows, in the player's language, if it sorts at all. `CategoryStore.all`,
+    `CategoryFlowTest`.
   - Built in `question_categories`, one row per question and category, written in the question's
     own transaction, each row held to a category by a foreign key (V6): `QuestionDto.categories`,
     `SubmissionDto.categories` and `AdminQuestionDto.categories` carry every one, each once, in the

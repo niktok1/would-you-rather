@@ -19,6 +19,7 @@ internal fun rateLimitsOf(budget: RequestBudget): RateLimits =
         submissions = budget,
         stats = budget,
         mySubmissions = budget,
+        categories = budget,
         admin = budget,
         adminTokenFailures = budget,
     )

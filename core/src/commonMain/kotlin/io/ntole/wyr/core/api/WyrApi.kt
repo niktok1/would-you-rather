@@ -123,6 +123,14 @@ public object WyrApi {
         public const val LIKES: String = "/$VERSION/likes"
 
         /**
+         * GET: every category questions are filed under, with its id and both its names, as a
+         * [io.ntole.wyr.core.category.CategoryListDto], oldest first (CLAUDE.md §8d, *Categories*).
+         * Needs no session, and reads none: the list is the same for everybody, so a client can have it
+         * before it has a player. Limited per client address.
+         */
+        public const val CATEGORIES: String = "/$VERSION/categories"
+
+        /**
          * The stats of the player the bearer token names, as a
          * [io.ntole.wyr.core.player.PlayerStatsDto]. Requires a session. Reading them changes
          * nothing: in particular it never starts the next cycle, which only [QUESTIONS] does.

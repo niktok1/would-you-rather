@@ -20,7 +20,7 @@ data class RequestBudget(
  * What one client may send (CLAUDE.md §8b, *Rate limiting*): a budget for each group of routes, spent
  * apart from every other group's. Registrations, logouts, the feed, votes, skips, likes, submissions and
  * the two reads of the player's own are per player, so players behind one address do not share them; the
- * rest, whose caller has no session to name, per client address.
+ * rest, whose caller has no session to name, or needs none, per client address.
  *
  * Each is overridable by the environment variable [fromEnvironment] names, a count per the period the
  * name ends in. The periods are fixed.
@@ -56,6 +56,11 @@ data class RateLimits(
     val stats: RequestBudget,
     /** `GET /v1/me/questions`. */
     val mySubmissions: RequestBudget,
+    /**
+     * `GET /v1/categories`, per address, since it needs no session. A client reads the list when it
+     * starts and when a picker opens, and players behind one address share this.
+     */
+    val categories: RequestBudget,
     /** Every admin route together, per address, whatever token the request carries. */
     val admin: RequestBudget,
     /**
@@ -85,6 +90,7 @@ data class RateLimits(
                 submissions = RequestBudget(requests = 30, per = 1.hours),
                 stats = RequestBudget(requests = 120, per = 1.minutes),
                 mySubmissions = RequestBudget(requests = 120, per = 1.minutes),
+                categories = RequestBudget(requests = 120, per = 1.minutes),
                 admin = RequestBudget(requests = 60, per = 1.minutes),
                 adminTokenFailures = RequestBudget(requests = 10, per = 1.minutes),
             )
@@ -121,6 +127,7 @@ data class RateLimits(
                     submissions = budget("RATE_LIMIT_SUBMISSIONS_PER_HOUR", submissions),
                     stats = budget("RATE_LIMIT_STATS_PER_MINUTE", stats),
                     mySubmissions = budget("RATE_LIMIT_MY_SUBMISSIONS_PER_MINUTE", mySubmissions),
+                    categories = budget("RATE_LIMIT_CATEGORIES_PER_MINUTE", categories),
                     admin = budget("RATE_LIMIT_ADMIN_PER_MINUTE", admin),
                     adminTokenFailures = budget("RATE_LIMIT_ADMIN_TOKEN_FAILURES_PER_MINUTE", adminTokenFailures),
                 )
