@@ -520,7 +520,7 @@ EncryptedSharedPreferences: enough for a game that stores nothing personal.
   moderator model (an admin token). The submission contract is settled and built on the server:
   `SubmitQuestionRequest`, `SubmissionDto`, `SubmissionListDto` and `QuestionStatus` in `:core`.
   No author travels on the wire: a submission's author is whoever its bearer token names, and a
-  player lists only their own. The client and the console submit and list them. The moderation
+  player lists only their own. The game's Submit tab submits and lists them. The moderation
   contract is settled and built on the server too: the admin routes, `ApproveSubmissionRequest`,
   `RejectSubmissionRequest`, the question list's `AdminQuestionPageDto` and `AdminQuestionDto`
   (paged by `WyrApi.Query.CURSOR`), `RetireQuestionRequest` and `RestoreQuestionRequest`, the
@@ -866,6 +866,10 @@ The third to move is the **category picker**, onto the Play screen (*Categories*
   with the picker open, and differently again with a category ticked in it.
 - The console has no Category row any more; its questions come from what the Play screen picked.
 
+The fifth to move is **submitting**, onto a **Submit** tab of its own between Play and Account, in
+every build (`io.ntole.wyr.submit`; *Submitting*, below), and the console's *Submit a question*
+section is gone.
+
 - **Scoring** *(built; see §8c)*: every answer earns exactly **1 point**, whichever side
   it picks. There is no majority bonus and no streak: the streak is removed from the server, the
   contract, and the domain. The reveal still shows the split and whether the player sided with
@@ -1031,7 +1035,16 @@ The third to move is the **category picker**, onto the Play screen (*Categories*
   again before building the request; every other rule is the server's to enforce, and
   `SubmissionRules` (`:core:domain`) copies the options' rules so a form can check what is typed, as
   `AccountRules` does for accounts (`SubmissionLimitsTest` pins its numbers to `WyrApi.Limits`). A
-  status this build cannot name is `SubmissionStatus.OTHER`. The console's *Submit a question* section drives both.
+  status this build cannot name is `SubmissionStatus.OTHER`. The game's **Submit** tab drives both
+  (`SubmitViewModel`): two options and one or more categories of `Category.selectable`, what
+  `SubmissionRules` refuses in each option shown under it as it is typed, and Submit off until
+  nothing is refused and a category is picked. A stored question clears the form; a refusal keeps it
+  and says why under it, `INVALID_SUBMISSION`, `SUBMISSION_LIMIT` with the 20, a rate limit with its
+  wait, or offline. *My submissions*, below the form, lists the player's own, each with its options,
+  categories and status, a rejected one with its reason, read each time the tab is shown and after
+  every submit, a failed one too. One action at a time, and the form cannot change while it is sent.
+  One line says submitting earns no points. `SubmitViewModelTest` drives it over fakes, and
+  `SubmitScreenDrawTest` draws every state in both themes at 400x900 and 375x599; the screen scrolls.
 - **Moderation** *(built)*: a moderator approves or rejects each pending submission, **may change
   its categories** when approving (*Categories*: at least one stays, and a change replaces the
   question's `question_categories` rows in one transaction), and **may retire an approved question
@@ -1214,8 +1227,8 @@ base URL, a display name, and whether a build for it shows the developer tools. 
 - *In the app.* Koin binds the environment (`appModules`), and `dataModule` sends every request to
   that same environment's URL, so the dev console's header, which shows its name and URL, always says
   where requests go. The console tab is shown only where the environment shows developer
-  tools (`rootScreensFor`): a PROD build shows the game's screens alone, Play and Account, with no tab
-  to reach the console.
+  tools (`rootScreensFor`): a PROD build shows the game's screens alone, Play, Submit and Account,
+  with no tab to reach the console.
   The moderation app binds its environment the same way (`adminModules`), and names it on every
   screen, whatever the environment: its header shows the server's name and URL, production's in the
   error colors, and the desktop window's title shows both too (`windowTitleOf`).

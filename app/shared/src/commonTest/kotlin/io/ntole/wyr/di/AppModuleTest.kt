@@ -7,8 +7,8 @@ import io.ntole.wyr.core.network.SessionStore
 import io.ntole.wyr.core.network.TokenStorage
 import io.ntole.wyr.core.network.environment.WyrEnvironment
 import io.ntole.wyr.dev.DevConsoleViewModel
-import io.ntole.wyr.dev.submission.SubmissionConsoleViewModel
 import io.ntole.wyr.play.PlayViewModel
+import io.ntole.wyr.submit.SubmitViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -54,8 +54,8 @@ class AppModuleTest {
 
         koin.get<PlayViewModel>()
         koin.get<AccountViewModel>()
+        koin.get<SubmitViewModel>()
         koin.get<DevConsoleViewModel>()
-        koin.get<SubmissionConsoleViewModel>()
     }
 
     @Test

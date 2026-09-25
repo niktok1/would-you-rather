@@ -33,6 +33,12 @@ moved from the console's Category row onto the Play tab, the third feature moved
 *Current focus*, *Categories*). The client alone changed; the server and the contract did not. How
 to try it on a phone is under *Categories on Play*.
 
+**On `feat/submit-screen`** (from b8d992c; not merged, nothing pushed): **submitting** moved from the
+console's *Submit a question* section onto a **Submit** tab of the game's own, in every build, the
+fifth feature moved (CLAUDE.md §8d, *Current focus*, *Submitting*). The client alone changed, with
+`SubmissionRules` in `:core:domain` so the form checks the options as they are typed; the server and
+the contract did not. How to try it on a phone is under *Submit on its own tab*.
+
 ### Verified working
 
 - `:server` on H2: 311 tests, 309 green and 2 skipped (the PostgreSQL-only boot races), including
@@ -201,7 +207,8 @@ to try it on a phone is under *Categories on Play*.
   submission's categories mapped as a question's, with none or `OTHER` refused before sending,
   `SubmitQuestionTest` the same refused before a session is ensured,
   `DefaultSubmissionRepositoryTest` recovery after a 401 and the 422 and 409 end to end through
-  `MockEngine`, and `SubmissionConsoleViewModelTest` the console section.
+  `MockEngine`, and `SubmissionConsoleViewModelTest` the console section (retired with it by
+  `feat/submit-screen`, whose `SubmitViewModelTest` drives the Submit tab).
 - Client resilience (`fix/client-resilience`, no server or contract change): `RequestTimeoutTest`
   pins, in virtual time, a call the server never answers failing at 60 s as
   `HttpRequestTimeoutException`, a 50 s cold start answered, the connect and socket timeouts handed
@@ -651,9 +658,11 @@ to try it on a phone is under *Categories on Play*.
   device*, above). Treat the layout and the §5b palette in practice as unreviewed. The dev console
   has not been opened either: its actions are tested through its ViewModel, and the use cases behind
   them ran live. `SkipQuestion`, now behind the Play tab's Skip, has run only against `FakeServer`,
-  and `POST /v1/skips` itself only in the server's own tests. The *Submit a question* section has
-  not been opened either: its ViewModel and line helpers are tested, and its use cases ran live, but
-  it has never been drawn.
+  and `POST /v1/skips` itself only in the server's own tests. The Submit tab, which replaced the
+  console's *Submit a question* section (`feat/submit-screen`), has not been opened either: it is
+  drawn off screen (`SubmitScreenDrawTest`), its renders on this Mac were looked at as images in
+  review, both themes, and its ViewModel is driven over fakes; its use cases ran live, but nobody
+  has typed a question into it on a phone, nor seen a keyboard's Enter in its wrapping fields.
 - **The moderation app has not been opened.** No window has been shown and no page served: its
   screens were drawn off screen by `ScreensDrawTest` and looked at as images once, and its
   ViewModel has run against a local fat jar from the JVM only (*Verified*, above), never against
@@ -822,6 +831,37 @@ ends only the session `$ACCESS` was issued for: that session's refresh token is 
 the login's session lives on. Logins are 20 a minute per address (`RATE_LIMIT_LOGINS_PER_MINUTE`),
 registrations 20 an hour per player.
 
+### Submit on its own tab
+
+The game's **Submit** tab writes a question and lists your own (CLAUDE.md §8d, *Submitting*), in every
+build, PROD's included; the console's *Submit a question* section is gone. Submitting earns no points;
+once approved, each like the question holds pays you 1.
+
+**To try it on a phone** (`devDebug`, against the dev server, whose in-memory H2 forgets everything on
+a deploy or a spin-down; the server needs nothing new):
+
+1. `./gradlew :app:androidApp:installDevDebug`, open *WYR Dev*, and go to the **Submit** tab, between
+   Play and Account. *My submissions* reads *None yet* for a fresh guest.
+2. Type option A and B and tap one or more categories. Each option says what is wrong as it is
+   typed: nothing but spaces is *Write something here*, a line break *One line, with no line breaks
+   or tabs*, over 200 characters *At most 200 characters*, and B the same as A, ignoring case and the
+   spaces at either end, *The two options must be different*. **Submit** stays off until nothing is
+   wrong and a category is picked.
+3. **Submit**: the form clears, *Sent* shows above the button, and the question tops *My
+   submissions*, trimmed, as *Pending: waiting for a moderator*, with its categories.
+4. Approve it in the moderation app (*The moderation app*, below): `WYR_ENV=dev ./gradlew
+   :app:adminApp:run`, type dev's `ADMIN_TOKEN` (its Environment tab on Render), *Load pending*,
+   pick categories in place of yours if you like, and **Approve**. On the phone, leave the Submit tab
+   and come back: *Approved: in the game*, and **Play** serves it in the current cycle. A rejection
+   shows as *Rejected:* and the reason typed, and a question retired under *All questions* as
+   *Retired: out of the game for now*.
+5. The 21st question pending shows *You have 20 questions waiting for review already* and keeps the
+   form. Airplane mode, then **Submit**: *Can't reach the game. Check your connection.*, the form
+   kept to send again.
+
+Locally the same works against `ADMIN_TOKEN=... ./gradlew :server:run` (*Moderating*, below), with
+`./gradlew :app:desktopApp:run` for the game and `./gradlew :app:adminApp:run` to approve.
+
 ### Skip and Like on Play
 
 The game's **Play** tab skips and likes (CLAUDE.md §8d, *Skipping* and *Likes*), in every build,
@@ -848,10 +888,10 @@ a deploy or a spin-down; the server needs nothing new):
    is answered. Network back on, **Like** again: it goes through. **Skip** offline
    moves on all the same while questions are queued, and shows *Can't reach the game* with *Try again*
    once they run out.
-6. A like of your own question pays you a point: submit one on the console (*Submit a question*),
-   approve it in the moderation app, and play until it comes up. Like it, and the **Account** tab's
-   points go up by one; the reveal's total is the vote's, so it shows the point from the next vote
-   on.
+6. A like of your own question pays you a point: submit one on the **Submit** tab (*Submit on its
+   own tab*), approve it in the moderation app, and play until it comes up. Like it, and the
+   **Account** tab's points go up by one; the reveal's total is the vote's, so it shows the point
+   from the next vote on.
 
 ### Categories on Play
 
@@ -1046,25 +1086,6 @@ questions come from the categories the Play tab picked.
 - **Vote by id.** Sends a vote for whatever id is typed, as a new attempt. An unknown id provokes
   `QUESTION_NOT_FOUND` (404). A known one is simply answered again and pays 1: there is no
   "already voted" any more.
-- **Submit a question** (`io.ntole.wyr.dev.submission`, a ViewModel of its own). Type option A
-  and B, and pick one or more category chips (every category but `OTHER`). *Submit* stays off until
-  both options hold more than whitespace and a category is picked. The options go as typed, and the
-  entry shows them quoted, then the submission as the server stored it: trimmed, categories in
-  declaration order, `PENDING`. A stored one clears both options, unless they were changed while it
-  was in flight, and keeps the categories. A refusal keeps everything and logs `err` with the
-  server's own message: `INVALID_SUBMISSION` for what the options say (422; the fields are not
-  single-line, so a line break can be typed to provoke it), `SUBMISSION_LIMIT` for the 21st pending
-  (409). **My submissions** lists the player's own, newest first: status, categories, and for a
-  rejected one the reason (`OTHER` is a status this build cannot name). Read when the console opens,
-  after every *Submit*, a failed one too, and on *Refresh my submissions*, which logs
-  `listSubmissions` whether it works or not; the other reads log only a failure, as
-  `refreshSubmissions`. "listed for" is the player it was read as, which after *New guest* is the
-  previous one until it is read again. The section has its own log, below the list, and runs one
-  action at a time of its own; its requests show in the HTTP trace with the rest. That is not the
-  console's, so *New guest* pressed while a read is in flight can mislabel the list it returns, as
-  "not read" or as the new guest's. A submission stays `PENDING` until it is decided in the
-  moderation app (*The moderation app*, above), and *Refresh my submissions* then shows the
-  decision.
 - **Action log.** Every action, newest first: `ok`, `err` (the `DomainError` and its diagnostic
   message) or `crash` (anything else thrown), with how long it took. One action runs at a time.
 - **HTTP trace.** Every request that went out, with status and time. A refreshed call shows as

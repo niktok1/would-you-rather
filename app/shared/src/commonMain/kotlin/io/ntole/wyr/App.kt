@@ -22,9 +22,10 @@ import io.ntole.wyr.account.AccountViewModel
 import io.ntole.wyr.core.network.environment.WyrEnvironment
 import io.ntole.wyr.dev.DevConsoleScreen
 import io.ntole.wyr.dev.DevConsoleViewModel
-import io.ntole.wyr.dev.submission.SubmissionConsole
 import io.ntole.wyr.play.PlayScreen
 import io.ntole.wyr.play.PlayViewModel
+import io.ntole.wyr.submit.SubmitScreen
+import io.ntole.wyr.submit.SubmitViewModel
 import io.ntole.wyr.theme.WyrTheme
 import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
@@ -62,6 +63,7 @@ fun App() {
                     when (screen) {
                         RootScreen.Console -> DevConsole()
                         RootScreen.Play -> Play()
+                        RootScreen.Submit -> Submit()
                         RootScreen.Account -> Account()
                     }
                 }
@@ -72,15 +74,15 @@ fun App() {
 
 /**
  * The root screens a build for [environment] shows, the first of them opening. The game's screens,
- * Play and Account, are in every build. The dev console comes first while functionality comes before
- * polish (CLAUDE.md §8d), and only where the environment shows developer tools: a production build
- * opens on Play, and has no tab to reach the console.
+ * Play, Submit and Account, are in every build. The dev console comes first while functionality
+ * comes before polish (CLAUDE.md §8d), and only where the environment shows developer tools: a
+ * production build opens on Play, and has no tab to reach the console.
  */
 internal fun rootScreensFor(environment: WyrEnvironment): List<RootScreen> =
     if (environment.showsDeveloperTools) {
-        listOf(RootScreen.Console, RootScreen.Play, RootScreen.Account)
+        listOf(RootScreen.Console, RootScreen.Play, RootScreen.Submit, RootScreen.Account)
     } else {
-        listOf(RootScreen.Play, RootScreen.Account)
+        listOf(RootScreen.Play, RootScreen.Submit, RootScreen.Account)
     }
 
 internal enum class RootScreen(
@@ -88,6 +90,7 @@ internal enum class RootScreen(
 ) {
     Console("Console"),
     Play("Play"),
+    Submit("Submit"),
     Account("Account"),
 }
 
@@ -109,7 +112,6 @@ private fun DevConsole() {
         onRetryLastVote = viewModel::retryLastVote,
         onAnswerMany = viewModel::answerMany,
         onReadStats = viewModel::readStats,
-        submitSection = { SubmissionConsole() },
     )
 }
 
@@ -123,6 +125,17 @@ private fun Account() {
     LaunchedEffect(viewModel) { viewModel.refresh() }
 
     AccountScreen(state = state, actions = viewModel)
+}
+
+@Composable
+private fun Submit() {
+    val viewModel = koinViewModel<SubmitViewModel>()
+    val state by viewModel.state.collectAsStateWithLifecycle()
+
+    // Every time the tab is shown: a moderator decides the player's submissions meanwhile.
+    LaunchedEffect(viewModel) { viewModel.refresh() }
+
+    SubmitScreen(state = state, actions = viewModel)
 }
 
 @Composable

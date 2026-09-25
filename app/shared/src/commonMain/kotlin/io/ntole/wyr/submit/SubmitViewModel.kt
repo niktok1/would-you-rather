@@ -1,0 +1,115 @@
+package io.ntole.wyr.submit
+
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import io.ntole.wyr.core.domain.error.WyrException
+import io.ntole.wyr.core.domain.question.Category
+import io.ntole.wyr.core.domain.submission.GetMySubmissions
+import io.ntole.wyr.core.domain.submission.SubmitQuestion
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
+
+/** What the Submit screen can ask for, so the screen takes one argument for all of it. */
+interface SubmitActions {
+    /** Reads the player's own submissions again. */
+    fun refresh()
+
+    fun setOptionA(text: String)
+
+    fun setOptionB(text: String)
+
+    /** Picks [category] for the question, or unpicks it if it is picked. */
+    fun toggleCategory(category: Category)
+
+    fun submit()
+}
+
+/**
+ * Drives the Submit screen (CLAUDE.md §8d, *Submitting*): a question written and filed under the
+ * categories picked, sent through [SubmitQuestion], and the player's own submissions read through
+ * [GetMySubmissions].
+ *
+ * One action at a time, and the list read again after every submit, a failed one too: a submission
+ * whose answer was lost may have been stored, and the list is where it shows.
+ */
+class SubmitViewModel(
+    private val submitQuestion: SubmitQuestion,
+    private val getMySubmissions: GetMySubmissions,
+) : ViewModel(),
+    SubmitActions {
+    private val _state = MutableStateFlow(SubmitState())
+    val state: StateFlow<SubmitState> = _state.asStateFlow()
+
+    /** Not read on creation: the screen asks every time it is shown, since a moderator decides meanwhile. */
+    override fun refresh() = perform(SubmitAction.LOAD) {}
+
+    override fun setOptionA(text: String) = edit { copy(optionA = text) }
+
+    override fun setOptionB(text: String) = edit { copy(optionB = text) }
+
+    /** [Category.OTHER] names nothing a question can be filed under, so it is never picked. */
+    override fun toggleCategory(category: Category) {
+        if (category !in Category.selectable) return
+        edit { copy(categories = if (category in categories) categories - category else categories + category) }
+    }
+
+    /**
+     * Sends the question as typed, then reads the list again. Nothing happens until
+     * [SubmitState.canSubmit]. Once the server stores it, the form is cleared for the next one; a
+     * refusal keeps it, to put right and send again.
+     */
+    override fun submit() {
+        val draft = _state.value
+        if (!draft.canSubmit) return
+        perform(SubmitAction.SUBMIT) {
+            submitQuestion(draft.optionA, draft.optionB, draft.categories)
+            _state.update { it.copy(optionA = "", optionB = "", categories = emptySet(), sent = true) }
+        }
+    }
+
+    /** Ignored while a question is being sent, so what is cleared once it is stored is what was sent. */
+    private fun edit(change: SubmitState.() -> SubmitState) = _state.update { if (it.isSubmitting) it else it.change() }
+
+    /**
+     * Runs [block] as the one action in flight, then reads the list again, a failed action's too. A
+     * second action while one runs is ignored.
+     */
+    private fun perform(
+        action: SubmitAction,
+        block: suspend () -> Unit,
+    ) {
+        if (_state.value.isBusy) return
+        _state.update { it.copy(running = action, failure = null, sent = false) }
+
+        viewModelScope.launch {
+            try {
+                try {
+                    block()
+                } catch (failure: WyrException) {
+                    _state.update { it.copy(failure = SubmitFailure(action, failure.error, failure.retryAfter)) }
+                }
+                load()
+            } finally {
+                _state.update { it.copy(running = null) }
+            }
+        }
+    }
+
+    /**
+     * Reads the player's submissions, minting a guest where there is none. A failed read keeps what
+     * was shown, and says so unless the action before it already failed, which says more.
+     */
+    private suspend fun load() {
+        try {
+            val submissions = getMySubmissions()
+            _state.update { it.copy(submissions = submissions) }
+        } catch (failure: WyrException) {
+            _state.update {
+                it.copy(failure = it.failure ?: SubmitFailure(SubmitAction.LOAD, failure.error, failure.retryAfter))
+            }
+        }
+    }
+}
