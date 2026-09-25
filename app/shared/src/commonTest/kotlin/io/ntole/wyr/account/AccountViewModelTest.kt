@@ -445,6 +445,20 @@ class AccountViewModelTest {
                 CYRILLIC,
             ),
         )
+        // Not "Нема везе.", which reads first as "never mind".
+        assertEquals(
+            "Нема интернет везе.",
+            failureMessage(AccountFailure(AccountAction.LOAD, DomainError.NETWORK), CYRILLIC),
+        )
+        assertEquals(
+            "Nema internet veze.",
+            failureMessage(AccountFailure(AccountAction.LOAD, DomainError.NETWORK), SerbianLatinStrings.accountScreens),
+        )
+        // The player's own account, not a name someone else holds.
+        assertEquals(
+            "Већ имаш налог.",
+            failureMessage(AccountFailure(AccountAction.REGISTER, DomainError.ALREADY_REGISTERED), CYRILLIC),
+        )
     }
 
     @Test
