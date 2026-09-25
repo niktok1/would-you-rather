@@ -28,7 +28,7 @@ object Players : Table("players") {
 
     // The next seven are unused since `feat/simple-accounts`, which dropped the rollback mirror and the
     // recovery secret: no statement names them, so a later migration can drop them (CLAUDE.md §8b,
-    // *Rollbacks*). Declared until then, so SchemaDriftTest holds this file to V4.
+    // *Rollbacks*). Declared until then, so SchemaDriftTest holds this file to the scripts.
 
     /** Unused since `feat/simple-accounts` (the mirror of a session's token); drop in a later migration. */
     val refreshTokenHash = varchar("refresh_token_hash", 64).nullable()
@@ -59,6 +59,19 @@ object Players : Table("players") {
      */
     val currentCycle = integer("current_cycle").default(FIRST_CYCLE)
 
+    /**
+     * The player's username (CLAUDE.md §8b, *Accounts*), stored lower-cased so no two differ only in
+     * case, or null for a guest, who has none (V5). Never changes once set.
+     */
+    val username = varchar("username", WyrApi.Limits.MAX_USERNAME_LENGTH).nullable()
+
+    /**
+     * The player's password as `Passwords` keeps it, a salted hash that names its own cost, or null for
+     * a guest. Set in the transaction that sets [username], so no player has one without the other.
+     * Wider than today's form needs, for a costlier one later.
+     */
+    val passwordHash = varchar("password_hash", PASSWORD_HASH_LENGTH).nullable()
+
     override val primaryKey = PrimaryKey(id)
 
     init {
@@ -66,7 +79,12 @@ object Players : Table("players") {
         index(isUnique = true, refreshTokenHash)
         index(isUnique = true, previousRefreshTokenHash)
         index(isUnique = true, recoverySecretHash)
+        // The constraint, not a read, decides two registrations racing for one name, and a login looks
+        // the name up by it. NULLs never collide in it, on either engine, so guests never do.
+        index(isUnique = true, username)
     }
+
+    private const val PASSWORD_HASH_LENGTH = 255
 
     const val FIRST_CYCLE: Int = 1
 }

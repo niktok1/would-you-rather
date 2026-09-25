@@ -583,8 +583,9 @@ seed (`Migrations`, `DatabaseFactory.init`). Nothing builds a table any other wa
   column, key or index between then and V1, so it holds exactly V1, and the first migrating build to
   boot on it records `1 BASELINE`. That was `d4a9dbf`, deployed 2026-09-25, which ran V2 (the
   refresh-token grace window, §8a), V3 (a question's `retired_at`, §8d *Moderation*) and V4
-  (sessions and the recovery secret, since dropped) there; the next Manual Deploy runs whatever
-  script comes after V4 there.
+  (sessions and the recovery secret, since dropped) there; the next Manual Deploy runs V5 there
+  (a player's username and password hash, *Accounts*, above), which every player already there takes
+  as a guest.
   `Migrations.migrate` takes the baseline itself (`baselineVersion` 1), and only for a database
   holding every table V1 builds (`TABLES_BEFORE_MIGRATIONS`) and no history table; Flyway's
   `baselineOnMigrate` is off. Any other database with tables and no history fails the boot, rather
@@ -648,7 +649,9 @@ seed (`Migrations`, `DatabaseFactory.init`). Nothing builds a table any other wa
   so it would refuse every device and each would mint a fresh guest. A rollback to `d4a9dbf`,
   production's build before this one, still works: it reads the sessions this build writes. The
   unused columns stay declared (`Players`) and no statement names them, so the later migration that
-  drops them leaves a schema this build runs on (`ApiFlowTest`).
+  drops them leaves a schema this build runs on (`ApiFlowTest`). V5 only adds two nullable columns and
+  a unique constraint on one, which `d4a9dbf` never names: after a rollback a registered player plays
+  on through their sessions as a guest would, and cannot log in anywhere new until the roll forward.
 - *Several instances booting at once* (Render starts a deploy's new instance before it stops the old
   one): on PostgreSQL each script runs under Flyway's advisory lock, so one boot migrates while the
   rest wait, up to 50 tries a second apart, and then find nothing to do. Every boot that finds a

@@ -246,5 +246,11 @@ public object WyrApi {
          * Approved and rejected ones do not count, so a decision frees a place.
          */
         public const val MAX_PENDING_SUBMISSIONS: Int = 20
+
+        /**
+         * Longest username an account can have, once lower-cased. Here rather than on the server so a
+         * client can check a name against the same number the server's column is sized by.
+         */
+        public const val MAX_USERNAME_LENGTH: Int = 20
     }
 }

@@ -87,7 +87,8 @@ internal class MigrationsTest(
     /**
      * The path the production database takes when every build with a script is deployed in turn
      * (CLAUDE.md §8b): recorded at V1, then each later script run by a boot of its own, the last by
-     * this build's, on the rows written before it.
+     * this build's, on the rows written before it. Production is at V4 (`d4a9dbf`), so this build's
+     * own is V5.
      */
     @Test
     fun `a database each build migrated in turn takes this build's scripts, its data kept`() {
@@ -472,8 +473,9 @@ internal class MigrationsTest(
      * [before], a database's contents at V1, as the scripts after V1 leave them. V2 gives every player
      * no previous refresh token and V3 retires no question. V4 gives nobody a recovery secret, and every
      * player who holds a refresh token a session holding it, under the player's own id and creation
-     * time, and marks their row, the mirror, with that session's token. None changes anything else. A
-     * later script that changes the rows already there adds what it does to them here.
+     * time, and marks their row, the mirror, with that session's token. V5 leaves every player a guest,
+     * with no username and no password. None changes anything else. A later script that changes the
+     * rows already there adds what it does to them here.
      */
     private fun afterLaterScripts(before: Contents): Contents {
         val widened =
@@ -518,12 +520,13 @@ internal class MigrationsTest(
          * The history of a database built before migrations once a boot has migrated it: V1 recorded
          * without running it, then every later script run.
          */
-        private val BASELINED_HISTORY = listOf("1 BASELINE", "2 SQL", "3 SQL", "4 SQL")
+        private val BASELINED_HISTORY = listOf("1 BASELINE", "2 SQL", "3 SQL", "4 SQL", "5 SQL")
 
         /**
          * The columns the scripts after V1 add, by table, empty in every row already there but for
-         * the players' mark, which V4 then sets ([afterLaterScripts]): V2's previous refresh token and
-         * V4's mark and recovery secret on players, and V3's retirement on questions.
+         * the players' mark, which V4 then sets ([afterLaterScripts]): V2's previous refresh token,
+         * V4's mark and recovery secret and V5's username and password hash on players, and V3's
+         * retirement on questions.
          */
         private val ADDED_COLUMNS =
             mapOf(
@@ -534,6 +537,8 @@ internal class MigrationsTest(
                         "previous_refresh_token_rotated_at",
                         "mirrored_refresh_token_hash",
                         "recovery_secret_hash",
+                        "username",
+                        "password_hash",
                     ),
                 Questions.tableName to listOf("retired_at"),
             )
