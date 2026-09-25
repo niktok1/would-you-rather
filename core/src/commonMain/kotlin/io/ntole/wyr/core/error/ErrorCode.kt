@@ -53,6 +53,13 @@ public enum class ErrorCode {
     NOT_ENOUGH_POINTS,
 
     /**
+     * A guest tried to submit a question: only a registered player may (CLAUDE.md §8d, *Submitting*).
+     * Registering, which keeps everything the guest has, is the way on. Sent with 403, never 401: the
+     * session is fine, so a client must not refresh it or replace it.
+     */
+    ACCOUNT_REQUIRED,
+
+    /**
      * A moderator tried to approve or reject a submission that is not pending: a moderator decided
      * it already, or it is a seed, approved from the start. Sent with 409.
      */

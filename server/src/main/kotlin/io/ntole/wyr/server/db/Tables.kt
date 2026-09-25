@@ -2,6 +2,7 @@ package io.ntole.wyr.server.db
 
 import io.ntole.wyr.core.api.WyrApi
 import io.ntole.wyr.core.question.QuestionStatus
+import io.ntole.wyr.core.reaction.Reaction
 import org.jetbrains.exposed.v1.core.Table
 
 /**
@@ -338,26 +339,31 @@ object Skips : Table("skips") {
 }
 
 /**
- * The likes players hold on questions (CLAUDE.md §8d): a row while the player likes the question,
- * and none once they unlike it, so every row is a like held now, and each is a point to the
- * question's author (`LikeStore.setLiked`). Kept apart from [Votes], since a like is no answer: a
- * player may like a question they have never answered, and liking one changes nothing that is due.
+ * The reactions players hold on questions (CLAUDE.md §8d, *Reactions*): a row while the player likes
+ * or dislikes the question, and none once they take it back, so every row is a reaction held now. A
+ * like held is a point to the question's author; a dislike is worth nothing to anybody
+ * (`ReactionStore.set`). Kept apart from [Votes], since a reaction is no answer: a player may react to
+ * a question they have never answered, and reacting changes nothing that is due.
  */
-object Likes : Table("likes") {
+object Reactions : Table("reactions") {
     val playerId = varchar("player_id", 36).references(Players.id)
     val questionId = varchar("question_id", 36).references(Questions.id)
 
+    /** [Reaction.LIKE] or [Reaction.DISLIKE]; never [Reaction.NONE], which is no row. */
+    val reaction = enumerationByName<Reaction>("reaction", 8)
+
     /**
-     * A player likes a question once. The key is what enforces that, as for a vote: two first likes
-     * racing both find no like, and only the key refuses the second.
+     * A player holds one reaction per question, a like or a dislike, never both. The key is what
+     * enforces that, as for a vote: two first reactions racing both find none, and only the key
+     * refuses the second.
      */
     override val primaryKey = PrimaryKey(playerId, questionId)
 
     init {
-        // For the like counts, read for every batch the feed serves, every like, and the stats'
-        // likes on an author's questions. question_id is the key's second column, so the key cannot
-        // find one question's likes, and PostgreSQL does not index a foreign key by itself. With
-        // player_id in it, a count and whether the player is among it need only the index.
+        // For the reaction counts, read for every batch the feed serves, every reaction, and the
+        // stats' likes on an author's questions. question_id is the key's second column, so the key
+        // cannot find one question's reactions, and PostgreSQL does not index a foreign key by itself.
+        // With player_id in it, the counts are the index and one look at each row it finds.
         index(isUnique = false, questionId, playerId)
     }
 }
@@ -369,4 +375,4 @@ object Likes : Table("likes") {
  * builds what the migrations do.
  */
 val appTables: Array<Table> =
-    arrayOf(Players, Sessions, Questions, Categories, QuestionCategories, Votes, Skips, Likes)
+    arrayOf(Players, Sessions, Questions, Categories, QuestionCategories, Votes, Skips, Reactions)

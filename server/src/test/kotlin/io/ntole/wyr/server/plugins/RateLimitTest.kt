@@ -25,7 +25,6 @@ import io.ntole.wyr.core.category.CreateCategoryRequest
 import io.ntole.wyr.core.category.RenameCategoryRequest
 import io.ntole.wyr.core.error.ErrorCode
 import io.ntole.wyr.core.error.ErrorDto
-import io.ntole.wyr.core.like.LikeRequest
 import io.ntole.wyr.core.player.PlayerStatsDto
 import io.ntole.wyr.core.question.ApproveSubmissionRequest
 import io.ntole.wyr.core.question.QuestionPageDto
@@ -35,6 +34,8 @@ import io.ntole.wyr.core.question.RetireQuestionRequest
 import io.ntole.wyr.core.question.SkipRequest
 import io.ntole.wyr.core.question.SubmissionListDto
 import io.ntole.wyr.core.question.SubmitQuestionRequest
+import io.ntole.wyr.core.reaction.Reaction
+import io.ntole.wyr.core.reaction.ReactionRequest
 import io.ntole.wyr.core.vote.OptionSide
 import io.ntole.wyr.core.vote.VoteRequest
 import io.ntole.wyr.server.NO_PRACTICAL_LIMIT
@@ -69,7 +70,13 @@ class RateLimitTest {
     fun `every group refuses the request past its budget with 429, RATE_LIMITED and Retry-After`() {
         groups.forEach { group ->
             runServer("group-${group.name}", group.limitedTo(NO_PRACTICAL_LIMIT, TWO_A_MINUTE)) { client ->
-                val caller = Caller(client, if (group.needsSession) client.guest() else null)
+                val session =
+                    when {
+                        group.needsAccount -> client.registered()
+                        group.needsSession -> client.guest()
+                        else -> null
+                    }
+                val caller = Caller(client, session)
 
                 repeat(TWO_A_MINUTE.requests) { index ->
                     assertEquals(group.allowed, group.send(caller).status, "${group.name} request ${index + 1}")
@@ -84,7 +91,7 @@ class RateLimitTest {
     @Test
     fun `a refused request does none of its work`() =
         runServer("no-work", NO_PRACTICAL_LIMIT.copy(votes = TWO_A_MINUTE, submissions = TWO_A_MINUTE)) { client ->
-            val player = client.guest()
+            val player = client.registered()
 
             repeat(2) { assertEquals(HttpStatusCode.OK, client.vote(player).status) }
             assertRateLimited(client.vote(player), "the third vote")
@@ -392,6 +399,8 @@ class RateLimitTest {
         val limitedTo: RateLimits.(RequestBudget) -> RateLimits,
         val allowed: HttpStatusCode = HttpStatusCode.OK,
         val needsSession: Boolean = true,
+        /** Whether the session must be a registered player's rather than a guest's. */
+        val needsAccount: Boolean = false,
         val send: suspend (Caller) -> HttpResponse,
     )
 
@@ -456,11 +465,17 @@ class RateLimitTest {
             Group("skips", { copy(skips = it) }, allowed = HttpStatusCode.NoContent) { caller ->
                 caller.client.post(WyrApi.Paths.SKIPS) { json(caller.player, SkipRequest(SEED)) }
             },
-            Group("likes", { copy(likes = it) }) { caller ->
-                caller.client.post(WyrApi.Paths.LIKES) { json(caller.player, LikeRequest(SEED, liked = true)) }
+            Group("reactions", { copy(reactions = it) }) { caller ->
+                caller.client.post(WyrApi.Paths.REACTIONS) { json(caller.player, ReactionRequest(SEED, Reaction.LIKE)) }
             },
-            // A vote first, outside this group, earns the point each submission costs.
-            Group("submissions", { copy(submissions = it) }, allowed = HttpStatusCode.Created) {
+            // A vote first, outside this group, earns the point each submission costs, and only a
+            // registered player may submit.
+            Group(
+                "submissions",
+                { copy(submissions = it) },
+                allowed = HttpStatusCode.Created,
+                needsAccount = true,
+            ) {
                 it.client.vote(it.player)
                 it.client.submit(it.player, "Question ${it.sent++}")
             },
@@ -589,6 +604,20 @@ class RateLimitTest {
         const val OTHER_CLIENT = "203.0.113.8"
 
         suspend fun HttpClient.guest(): SessionDto = post(WyrApi.Paths.AUTH_GUEST).body()
+
+        /** A fresh guest, registered under a name of its own, as only a registered player may submit. */
+        suspend fun HttpClient.registered(): SessionDto =
+            guest().also { session ->
+                val name =
+                    "p" +
+                        UUID
+                            .randomUUID()
+                            .toString()
+                            .replace("-", "")
+                            .take(12)
+                val response = post(WyrApi.Paths.AUTH_REGISTER) { json(session, RegisterRequest(name, "a password")) }
+                assertEquals(HttpStatusCode.OK, response.status, "registering $name")
+            }
 
         /** The request as the proxy in front would send it on from [address]. */
         fun HttpRequestBuilder.from(address: String) {

@@ -1,5 +1,6 @@
 package io.ntole.wyr.server.db
 
+import io.ntole.wyr.core.reaction.Reaction
 import io.ntole.wyr.server.TestDatabaseSettings
 import io.ntole.wyr.server.auth.SessionStore
 import io.ntole.wyr.server.player.PlayerStore
@@ -412,10 +413,8 @@ internal class MigrationsTest(
             seedAsBefore()
             val author = playerAsMintedBefore(refreshTokenHash = "a".repeat(64), refreshExpiresAt = 1L)
             PlayerStore.addPoints(author, points = 3)
-            Likes.insert { row ->
-                row[playerId] = author
-                row[questionId] = "seed-1"
-            }
+            // Plain SQL: Tables.kt names no likes table since V10 replaced it with reactions.
+            exec("INSERT INTO likes (player_id, question_id) VALUES ('$author', 'seed-1')")
         }
     }
 
@@ -448,23 +447,25 @@ internal class MigrationsTest(
     }
 
     /**
-     * Every row of every app table the database has, each column by its lower-case name, so a
-     * comparison shows any row lost, added or changed, and any table added. Read with `SELECT *` rather
-     * than through the table definitions, which name columns and tables a database built before
-     * migrations does not have yet.
+     * Every row of every app table the database has, and of every table a script since dropped
+     * ([DROPPED_TABLES]), each column by its lower-case name, so a comparison shows any row lost, added
+     * or changed, and any table added or dropped. Read with `SELECT *` rather than through the table
+     * definitions, which name columns and tables a database built before migrations does not have yet,
+     * and no longer name those it had.
      */
     private fun JdbcTransaction.contents(): Contents {
         val present = schemaTables()
-        return appTables.filter { it.tableName in present }.associate { table ->
+        val tables = appTables.map { it.tableName } + DROPPED_TABLES
+        return tables.filter { it in present }.associateWith { table ->
             val rows =
-                exec("SELECT * FROM ${table.tableName}") { result ->
+                exec("SELECT * FROM $table") { result ->
                     val metadata = result.metaData
                     val columns = (1..metadata.columnCount).associateBy { metadata.getColumnLabel(it).lowercase() }
                     buildList {
                         while (result.next()) add(columns.mapValues { (_, at) -> result.getString(at) })
                     }
                 }.orEmpty()
-            table.tableName to rows.canonical()
+            rows.canonical()
         }
     }
 
@@ -484,8 +485,9 @@ internal class MigrationsTest(
      * with no username and no password. V6 adds the first categories ([Seed.CATEGORIES]) and files what
      * was under RANDOM under ABSURD instead. V7 gives every question a cost of 0. V8 gives every
      * question no made-up votes, then each seed those `Seed` gives it, and V9 each seed the Serbian
-     * options `Seed` gives it. None changes anything else. A later script that changes
-     * the rows already there adds what it does to them here.
+     * options `Seed` gives it. V10 moves every like into reactions, as a like, and drops likes. None
+     * changes anything else. A later script that changes the rows already there adds what it does to
+     * them here.
      */
     private fun afterLaterScripts(before: Contents): Contents {
         val widened =
@@ -540,9 +542,11 @@ internal class MigrationsTest(
             widened.getValue(QuestionCategories.tableName).map { row ->
                 if (row["category"] == "RANDOM") row + ("category" to Seed.ABSURD) else row
             }
+        val reactions = widened.getValue(LIKES).map { like -> like + ("reaction" to Reaction.LIKE.name) }
         return (
-            widened +
+            widened - LIKES +
                 mapOf(
+                    Reactions.tableName to reactions,
                     Players.tableName to marked,
                     Sessions.tableName to sessions,
                     Categories.tableName to categories,
@@ -565,7 +569,13 @@ internal class MigrationsTest(
          * without running it, then every later script run.
          */
         private val BASELINED_HISTORY =
-            listOf("1 BASELINE", "2 SQL", "3 SQL", "4 SQL", "5 SQL", "6 SQL", "7 SQL", "8 SQL", "9 SQL")
+            listOf("1 BASELINE", "2 SQL", "3 SQL", "4 SQL", "5 SQL", "6 SQL", "7 SQL", "8 SQL", "9 SQL", "10 SQL")
+
+        /** V1's table of likes, which V10 replaced with reactions, so Tables.kt no longer names it. */
+        private const val LIKES = "likes"
+
+        /** The tables a script after V1 dropped, each by name, which [contents] reads where they are. */
+        private val DROPPED_TABLES = listOf(LIKES)
 
         /**
          * The columns the scripts after V1 add, by table, empty in every row already there but for

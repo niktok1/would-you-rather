@@ -4,7 +4,7 @@ import io.ntole.wyr.core.question.AdminQuestionDto
 import io.ntole.wyr.core.question.AdminQuestionPageDto
 import io.ntole.wyr.core.question.QuestionStatus
 import io.ntole.wyr.core.question.SubmissionDto
-import io.ntole.wyr.server.db.Likes
+import io.ntole.wyr.core.reaction.Reaction
 import io.ntole.wyr.server.db.QuestionCategories
 import io.ntole.wyr.server.db.Questions
 import io.ntole.wyr.server.player.PlayerStore
@@ -13,6 +13,7 @@ import io.ntole.wyr.server.question.QuestionStore
 import io.ntole.wyr.server.question.SubmissionStore
 import io.ntole.wyr.server.question.standsAt
 import io.ntole.wyr.server.question.statusOf
+import io.ntole.wyr.server.reaction.ReactionStore
 import io.ntole.wyr.server.vote.QuestionTally
 import org.jetbrains.exposed.v1.core.Expression
 import org.jetbrains.exposed.v1.core.Op
@@ -20,7 +21,6 @@ import org.jetbrains.exposed.v1.core.ResultRow
 import org.jetbrains.exposed.v1.core.SortOrder
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.compoundOr
-import org.jetbrains.exposed.v1.core.count
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.core.greater
 import org.jetbrains.exposed.v1.core.inList
@@ -28,7 +28,6 @@ import org.jetbrains.exposed.v1.core.isNotNull
 import org.jetbrains.exposed.v1.core.less
 import org.jetbrains.exposed.v1.core.or
 import org.jetbrains.exposed.v1.core.statements.UpdateStatement
-import org.jetbrains.exposed.v1.core.wrapAsExpression
 import org.jetbrains.exposed.v1.jdbc.Query
 import org.jetbrains.exposed.v1.jdbc.batchInsert
 import org.jetbrains.exposed.v1.jdbc.deleteWhere
@@ -298,13 +297,14 @@ object ModerationStore {
 
     /**
      * The questions [where] picks, as [query] reads them: their own columns, their tally as a vote's
-     * answer reports it, made-up votes included ([QuestionTally]), and their like count, in this one
-     * statement. So the numbers of a question are one committed moment's, as the tally's two sides are
+     * answer reports it, made-up votes included ([QuestionTally]), and their like and dislike counts,
+     * in this one statement. So the numbers of a question are one committed moment's, as the tally's two sides are
      * in a vote's answer (CLAUDE.md §4): read apart, a re-answer committing in between could count one
      * player's vote on both sides, or on neither.
      *
      * The counts are subqueries on the row's own id, each found through an index: the vote counts
-     * through `votes (question_id, side)` and the like count through `likes (question_id, player_id)`.
+     * through `votes (question_id, side)` and the reaction counts through
+     * `reactions (question_id, player_id)`.
      * The categories take one more statement for every row read ([toAdminQuestions]), so a page is two
      * statements whatever its length, never one per question.
      */
@@ -312,10 +312,10 @@ object ModerationStore {
         where: Op<Boolean>,
     ) {
         private val tally = QuestionTally()
-        private val likes: Expression<Long?> =
-            wrapAsExpression(Likes.select(Likes.playerId.count()).where { Likes.questionId eq Questions.id })
+        private val likes = ReactionStore.countOn(Reaction.LIKE)
+        private val dislikes = ReactionStore.countOn(Reaction.DISLIKE)
 
-        val query: Query = Questions.select(ADMIN_COLUMNS + tally.columns + likes).where(where)
+        val query: Query = Questions.select(ADMIN_COLUMNS + tally.columns + likes + dislikes).where(where)
 
         /** [rows], read by [query], with their categories. */
         fun toAdminQuestions(rows: List<ResultRow>): List<AdminQuestionDto> {
@@ -338,6 +338,7 @@ object ModerationStore {
                     rejectionReason = row[Questions.rejectionReason].takeIf { status == QuestionStatus.REJECTED },
                     tally = tally.of(row),
                     likeCount = checkNotNull(row[likes]) { "a COUNT subquery came back null" }.toInt(),
+                    dislikeCount = checkNotNull(row[dislikes]) { "a COUNT subquery came back null" }.toInt(),
                 )
             }
         }

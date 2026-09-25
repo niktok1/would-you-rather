@@ -5,6 +5,8 @@ import io.ntole.wyr.core.error.ErrorCode
 import io.ntole.wyr.core.question.QuestionStatus
 import io.ntole.wyr.core.question.SubmissionDto
 import io.ntole.wyr.core.question.SubmitQuestionRequest
+import io.ntole.wyr.core.reaction.Reaction
+import io.ntole.wyr.core.vote.OptionSide
 import io.ntole.wyr.server.db.Questions
 import io.ntole.wyr.server.db.Seed
 import io.ntole.wyr.server.db.appTables
@@ -15,7 +17,9 @@ import io.ntole.wyr.server.db.storedCategories
 import io.ntole.wyr.server.moderation.ModerationStore
 import io.ntole.wyr.server.player.PlayerStore
 import io.ntole.wyr.server.plugins.ApiFailure
+import io.ntole.wyr.server.reaction.ReactionStore
 import io.ntole.wyr.server.vote.Scoring
+import io.ntole.wyr.server.vote.VoteStore
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.SchemaUtils
@@ -64,6 +68,29 @@ class SubmissionStoreTest {
         assertNull(row[Questions.reviewedAt], "no moderator has seen it")
         assertNull(row[Questions.rejectionReason])
         assertEquals(QuestionStatus.PENDING to 1_000L, submission.status to submission.submittedAt)
+    }
+
+    @Test
+    fun `the author's list counts each question's likes, dislikes and the players who answered it`() {
+        val author = newPlayer()
+        val approved = submit(author, question(1)).id.also { decide(it, QuestionStatus.APPROVED) }
+        val pending = submit(author, question(2)).id
+        val (one, two, three) = List(3) { newPlayer() }
+        answer(one, approved, OptionSide.A)
+        answer(two, approved, OptionSide.B)
+        // A re-answer moves the player's one vote: still one player who answered.
+        answer(one, approved, OptionSide.B)
+        react(one, approved, Reaction.LIKE)
+        react(two, approved, Reaction.LIKE)
+        react(three, approved, Reaction.DISLIKE)
+        // Another question's are not this one's.
+        answer(three, SEED, OptionSide.A)
+        react(one, SEED, Reaction.DISLIKE)
+
+        val listed = transaction(database) { SubmissionStore.byAuthor(author) }.associateBy { it.id }
+
+        assertEquals(Triple(2, 1, 2), listed.getValue(approved).counts(), "likes, dislikes and players who answered")
+        assertEquals(Triple(0, 0, 0), listed.getValue(pending).counts(), "never served")
     }
 
     @Test
@@ -226,6 +253,25 @@ class SubmissionStoreTest {
 
     private fun question(index: Int) = SubmitQuestionRequest("Option $index", "Other $index", listOf("ABSURD"))
 
+    private fun answer(
+        player: String,
+        questionId: String,
+        side: OptionSide,
+    ) {
+        transaction(database) { VoteStore.cast(player, questionId, side, attemptId = UUID.randomUUID().toString()) }
+    }
+
+    private fun react(
+        player: String,
+        questionId: String,
+        reaction: Reaction,
+    ) {
+        transaction(database) { ReactionStore.set(player, questionId, reaction) }
+    }
+
+    /** A listed submission's like count, dislike count and how many players answered it. */
+    private fun SubmissionDto.counts(): Triple<Int, Int, Int> = Triple(likeCount, dislikeCount, answerCount)
+
     private fun assertLimitReached(author: String) {
         val refused = assertFailsWith<ApiFailure> { submit(author, question(REFUSED)) }
         assertEquals(ErrorCode.SUBMISSION_LIMIT, refused.code)
@@ -256,6 +302,8 @@ class SubmissionStoreTest {
         }
 
     private companion object {
+        const val SEED = "seed-1"
+
         /** Indexes for the questions submitted after a test's loop, apart from the loop's own. */
         const val LAST = 1_000
         const val REFUSED = 2_000

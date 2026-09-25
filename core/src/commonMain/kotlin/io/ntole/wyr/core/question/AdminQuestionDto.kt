@@ -20,9 +20,10 @@ import kotlinx.serialization.Serializable
  * All three are epoch milliseconds. [rejectionReason] is the moderator's short reason, sent only for
  * a [QuestionStatus.REJECTED] question and null for any other.
  *
- * [tally] is every player's latest answer to it, one vote per player, and [likeCount] how many
- * players like it. The server reads both in one statement, so they are one moment's numbers. A
- * retired question keeps both, and no vote or like reaches it until it is restored.
+ * [tally] is every player's latest answer to it, one vote per player, [likeCount] how many players
+ * like it and [dislikeCount] how many dislike it. The server reads them in one statement, so they are
+ * one moment's numbers. A retired question keeps them all, and no vote or reaction reaches it until it
+ * is restored.
  *
  * [categories] must keep its default, and [status] its default, for a value added server-side to
  * decode on an older client — see [QuestionDto.categories] and [QuestionStatus].
@@ -41,4 +42,5 @@ public data class AdminQuestionDto(
     public val rejectionReason: String? = null,
     public val tally: VoteTallyDto,
     public val likeCount: Int = 0,
+    public val dislikeCount: Int = 0,
 )

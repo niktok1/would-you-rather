@@ -1,5 +1,6 @@
 package io.ntole.wyr.core.question
 
+import io.ntole.wyr.core.reaction.Reaction
 import kotlinx.serialization.Serializable
 
 /**
@@ -20,10 +21,11 @@ import kotlinx.serialization.Serializable
  * feed has looped back to it (CLAUDE.md §8d). No client reads it since the dev console, which
  * labelled a looped question, went; the player-facing reveal does not show a previous pick.
  *
- * [likeCount] is how many players like the question, the requesting one included when [likedByMe]
- * (CLAUDE.md §8d). Both are sent whether or not the player has answered it, since a like count is
- * visible before answering. The server reads them together, so they always agree. They default to
- * none, so a question from a server that sends no likes decodes as liked by nobody.
+ * [likeCount] is how many players like the question and [dislikeCount] how many dislike it, the
+ * requesting one among them as [myReaction] says (CLAUDE.md §8d, *Reactions*). All three are sent
+ * whether or not the player has answered it, since the counts are visible before answering. The
+ * server reads them together, so they always agree. They default to none, so a question from a server
+ * that sends no reactions decodes as one nobody has reacted to.
  */
 @Serializable
 public data class QuestionDto(
@@ -33,5 +35,6 @@ public data class QuestionDto(
     public val categories: List<String> = emptyList(),
     public val answeredBefore: Boolean = false,
     public val likeCount: Int = 0,
-    public val likedByMe: Boolean = false,
+    public val dislikeCount: Int = 0,
+    public val myReaction: Reaction = Reaction.NONE,
 )

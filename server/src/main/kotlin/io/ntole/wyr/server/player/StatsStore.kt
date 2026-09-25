@@ -5,8 +5,8 @@ import io.ntole.wyr.core.question.QuestionStatus
 import io.ntole.wyr.server.db.Players
 import io.ntole.wyr.server.db.Questions
 import io.ntole.wyr.server.db.Votes
-import io.ntole.wyr.server.like.LikeStore
 import io.ntole.wyr.server.question.QuestionStore
+import io.ntole.wyr.server.reaction.ReactionStore
 import org.jetbrains.exposed.v1.core.Coalesce
 import org.jetbrains.exposed.v1.core.Expression
 import org.jetbrains.exposed.v1.core.ResultRow
@@ -43,7 +43,7 @@ object StatsStore {
         val questionsAnswered =
             wrapAsExpression<Long>(Votes.select(Votes.questionId.count()).where { Votes.playerId eq playerId })
         val dueThisCycle = QuestionStore.dueCount(playerId, categories = emptySet(), cycle = Players.currentCycle)
-        val likesReceived = LikeStore.receivedBy(playerId)
+        val likesReceived = ReactionStore.likesReceivedBy(playerId)
         val pointsSpent = spentBy(playerId)
 
         return Players

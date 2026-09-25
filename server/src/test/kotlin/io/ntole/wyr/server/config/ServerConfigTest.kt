@@ -110,7 +110,7 @@ class ServerConfigTest {
         listOf(limits.feed, limits.votes, limits.skips, limits.stats, limits.mySubmissions).forEach { budget ->
             assertEquals(RequestBudget(120, 1.minutes), budget)
         }
-        assertEquals(RequestBudget(60, 1.minutes), limits.likes)
+        assertEquals(RequestBudget(60, 1.minutes), limits.reactions)
         assertEquals(RequestBudget(30, 1.hours), limits.submissions)
         assertEquals(RequestBudget(60, 1.minutes), limits.admin)
         assertEquals(RequestBudget(10, 1.minutes), limits.adminTokenFailures)
@@ -128,7 +128,7 @@ class ServerConfigTest {
                 Triple("RATE_LIMIT_FEED_PER_MINUTE", RateLimits::feed, 1.minutes),
                 Triple("RATE_LIMIT_VOTES_PER_MINUTE", RateLimits::votes, 1.minutes),
                 Triple("RATE_LIMIT_SKIPS_PER_MINUTE", RateLimits::skips, 1.minutes),
-                Triple("RATE_LIMIT_LIKES_PER_MINUTE", RateLimits::likes, 1.minutes),
+                Triple("RATE_LIMIT_REACTIONS_PER_MINUTE", RateLimits::reactions, 1.minutes),
                 Triple("RATE_LIMIT_SUBMISSIONS_PER_HOUR", RateLimits::submissions, 1.hours),
                 Triple("RATE_LIMIT_STATS_PER_MINUTE", RateLimits::stats, 1.minutes),
                 Triple("RATE_LIMIT_MY_SUBMISSIONS_PER_MINUTE", RateLimits::mySubmissions, 1.minutes),

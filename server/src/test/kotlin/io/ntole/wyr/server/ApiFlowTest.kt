@@ -20,13 +20,12 @@ import io.ktor.server.testing.ApplicationTestBuilder
 import io.ktor.server.testing.testApplication
 import io.ntole.wyr.core.api.WyrApi
 import io.ntole.wyr.core.auth.RefreshRequest
+import io.ntole.wyr.core.auth.RegisterRequest
 import io.ntole.wyr.core.auth.SessionDto
 import io.ntole.wyr.core.category.CreateCategoryRequest
 import io.ntole.wyr.core.category.RenameCategoryRequest
 import io.ntole.wyr.core.error.ErrorCode
 import io.ntole.wyr.core.error.ErrorDto
-import io.ntole.wyr.core.like.LikeRequest
-import io.ntole.wyr.core.like.LikeResultDto
 import io.ntole.wyr.core.player.PlayerStatsDto
 import io.ntole.wyr.core.question.AdminQuestionDto
 import io.ntole.wyr.core.question.AdminQuestionPageDto
@@ -41,10 +40,14 @@ import io.ntole.wyr.core.question.SkipRequest
 import io.ntole.wyr.core.question.SubmissionDto
 import io.ntole.wyr.core.question.SubmissionListDto
 import io.ntole.wyr.core.question.SubmitQuestionRequest
+import io.ntole.wyr.core.reaction.Reaction
+import io.ntole.wyr.core.reaction.ReactionRequest
+import io.ntole.wyr.core.reaction.ReactionResultDto
 import io.ntole.wyr.core.vote.OptionSide
 import io.ntole.wyr.core.vote.VoteRequest
 import io.ntole.wyr.core.vote.VoteResultDto
 import io.ntole.wyr.core.vote.VoteTallyDto
+import io.ntole.wyr.server.auth.AccountStore
 import io.ntole.wyr.server.auth.TokenService
 import io.ntole.wyr.server.config.ServerConfig
 import io.ntole.wyr.server.db.Sessions
@@ -1048,7 +1051,8 @@ class ApiFlowTest {
     @Test
     fun `a submission that is malformed or names no real category is a validation error`() =
         runServer("submit-malformed") { client ->
-            val author = client.guest()
+            // Registered, since a guest is refused before anything it sends is checked.
+            val author = client.registered()
 
             listOf(
                 "no category" to """{"optionA":"Fly","optionB":"Swim"}""",
@@ -1097,9 +1101,41 @@ class ApiFlowTest {
         }
 
     @Test
+    fun `a guest cannot submit whatever the submission holds, and can once registered`() =
+        runServer("submit-guest") { client ->
+            val guest = client.guest()
+            grantPoints(guest.playerId, Scoring.SUBMISSION_COST)
+
+            listOf(
+                "a question the rules take" to question("Fly"),
+                // Each of these would be refused for what it holds, but a guest is refused first.
+                "the same option twice" to SubmitQuestionRequest("Fly", "fly", listOf("FOOD")),
+                "a category no category has" to SubmitQuestionRequest("Fly", "Swim", listOf("NO_SUCH_CATEGORY")),
+            ).forEach { (case, request) ->
+                // Straight with the token, so nothing registers the guest first.
+                val response = client.submit(guest.accessToken, request)
+
+                assertEquals(HttpStatusCode.Forbidden, response.status, case)
+                assertEquals(ErrorCode.ACCOUNT_REQUIRED, response.body<ErrorDto>().code, case)
+            }
+            assertEquals(emptyList(), client.mySubmissions(guest), "nothing stored")
+            assertEquals(Scoring.SUBMISSION_COST, client.stats(guest).totalPoints, "and nothing taken")
+
+            val registered =
+                client.post(WyrApi.Paths.AUTH_REGISTER) {
+                    bearerAuth(guest.accessToken)
+                    contentType(ContentType.Application.Json)
+                    setBody(RegisterRequest("guestnomore", "a password"))
+                }
+            assertEquals(HttpStatusCode.OK, registered.status)
+
+            assertEquals(HttpStatusCode.Created, client.submit(guest.accessToken, question("Fly")).status, "registered")
+        }
+
+    @Test
     fun `submitting costs a point which a rejection pays back and an approval keeps`() =
         runServer("submit-cost") { client ->
-            val author = client.guest()
+            val author = client.registered()
             // Straight with the token, so nothing gives the author the points first.
             val refused = client.submit(author.accessToken, question("Broke"))
             assertEquals(HttpStatusCode.Conflict, refused.status)
@@ -1218,7 +1254,7 @@ class ApiFlowTest {
     fun `a validly signed token for a player that does not exist cannot submit`() =
         runServer("submit-ghost-player") { client ->
             // As for the ghost-player vote, the helper's token for a real player has to pass first.
-            val real = client.guest()
+            val real = client.registered()
             val request = SubmitQuestionRequest("Fly", "Swim", listOf("FOOD"))
             grantPoints(real.playerId, Scoring.SUBMISSION_COST)
             assertEquals(HttpStatusCode.Created, client.submit(signAccessToken(real.playerId), request).status)
@@ -1248,7 +1284,18 @@ class ApiFlowTest {
             assertEquals(queue, client.queue("?${WyrApi.Query.STATUS}=PENDING"), "which is the default")
             assertEquals(queue.take(2), client.queue("?${WyrApi.Query.LIMIT}=2"), "the head of the queue")
             assertEquals(
-                setOf("id", "optionA", "optionB", "categories", "status", "rejectionReason", "submittedAt"),
+                setOf(
+                    "id",
+                    "optionA",
+                    "optionB",
+                    "categories",
+                    "status",
+                    "rejectionReason",
+                    "submittedAt",
+                    "likeCount",
+                    "dislikeCount",
+                    "answerCount",
+                ),
                 response
                     .body<JsonObject>()
                     .getValue("submissions")
@@ -1373,7 +1420,11 @@ class ApiFlowTest {
                 "and answered by them like any other",
             )
             assertEquals(emptyList(), client.queue(), "out of the queue")
-            assertEquals(listOf(approved), client.queue("?${WyrApi.Query.STATUS}=APPROVED"))
+            assertEquals(
+                listOf(approved.copy(answerCount = 1)),
+                client.queue("?${WyrApi.Query.STATUS}=APPROVED"),
+                "its author's answer counted",
+            )
         }
 
     @Test
@@ -1550,7 +1601,8 @@ class ApiFlowTest {
             val pending = client.submitted(author, question("Pending"))
             val approved = client.approvedQuestion(author, "Approved")
             client.vote(player, approved.id, OptionSide.B)
-            client.liked(player, approved.id, liked = true)
+            client.reacted(player, approved.id, Reaction.LIKE)
+            client.reacted(author, approved.id, Reaction.DISLIKE)
             val seeds = client.wholePool(author).ids().filterNot { it == approved.id }
 
             val response = client.adminQuestions("?${WyrApi.Query.LIMIT}=${WyrApi.Limits.MAX_PAGE_SIZE}")
@@ -1573,8 +1625,12 @@ class ApiFlowTest {
                 "newest first; the order of a tie is the database's",
             )
             assertEquals(QuestionStatus.PENDING, byId.getValue(pending.id).status)
-            val numbers = byId.getValue(approved.id).let { it.status to (it.tally to it.likeCount) }
-            assertEquals(QuestionStatus.APPROVED to (VoteTallyDto(votesA = 0, votesB = 1) to 1), numbers)
+            val numbers =
+                byId
+                    .getValue(
+                        approved.id,
+                    ).let { it.status to Triple(it.tally, it.likeCount, it.dislikeCount) }
+            assertEquals(QuestionStatus.APPROVED to Triple(VoteTallyDto(votesA = 0, votesB = 1), 1, 1), numbers)
             assertEquals(
                 ADMIN_QUESTION_FIELDS,
                 response
@@ -1639,7 +1695,7 @@ class ApiFlowTest {
             val (author, player) = client.guest() to client.guest()
             val question = client.approvedQuestion(author, "Retired")
             client.vote(player, question.id, OptionSide.B)
-            client.liked(player, question.id, liked = true)
+            client.reacted(player, question.id, Reaction.LIKE)
 
             val response = client.retire(question.id)
 
@@ -1654,8 +1710,9 @@ class ApiFlowTest {
                     listOf(
                         "an answer" to client.castVote(session, VoteRequest(question.id, OptionSide.A, "attempt-2")),
                         "a skip" to client.skip(session, question.id),
-                        "a like" to client.like(session, question.id, liked = true),
-                        "an unlike" to client.like(session, question.id, liked = false),
+                        "a like" to client.react(session, question.id, Reaction.LIKE),
+                        "a dislike" to client.react(session, question.id, Reaction.DISLIKE),
+                        "taking one back" to client.react(session, question.id, Reaction.NONE),
                     )
                 refusals.forEach { (what, refusal) ->
                     assertEquals(HttpStatusCode.NotFound, refusal.status, "$what by $who")
@@ -1751,18 +1808,18 @@ class ApiFlowTest {
         }
 
     @Test
-    fun `a like is set rather than toggled and pays the author a point for as long as it is held`() =
-        runServer("like") { client ->
+    fun `a reaction is set rather than toggled and a like pays the author a point for as long as it is held`() =
+        runServer("reaction") { client ->
             val (author, fan) = client.guest() to client.guest()
             val question = client.approvedQuestion(author, "Fly")
 
-            val response = client.like(fan, question.id, liked = true)
+            val response = client.react(fan, question.id, Reaction.LIKE)
 
             assertEquals(HttpStatusCode.OK, response.status)
-            assertEquals(LikeResultDto(question.id, likeCount = 1, likedByMe = true), response.body<LikeResultDto>())
+            assertEquals(result(question.id, likes = 1, mine = Reaction.LIKE), response.body<ReactionResultDto>())
             assertEquals(
-                LikeResultDto(question.id, likeCount = 1, likedByMe = true),
-                client.liked(fan, question.id, liked = true),
+                result(question.id, likes = 1, mine = Reaction.LIKE),
+                client.reacted(fan, question.id, Reaction.LIKE),
                 "liking again changes nothing",
             )
             val paid = client.stats(author)
@@ -1771,34 +1828,63 @@ class ApiFlowTest {
             assertEquals(0, client.stats(fan).totalPoints, "and the fan nothing")
 
             val forFan = client.wholePool(fan).single { it.id == question.id }
-            assertEquals(1 to true, forFan.likeCount to forFan.likedByMe, "shown before the fan answers it")
+            assertEquals(1 to Reaction.LIKE, forFan.likeCount to forFan.myReaction, "shown before the fan answers it")
             assertFalse(forFan.answeredBefore)
             val forAuthor = client.wholePool(author).single { it.id == question.id }
-            assertEquals(1 to false, forAuthor.likeCount to forAuthor.likedByMe)
+            assertEquals(1 to Reaction.NONE, forAuthor.likeCount to forAuthor.myReaction)
 
-            assertEquals(
-                LikeResultDto(question.id, likeCount = 0, likedByMe = false),
-                client.liked(fan, question.id, liked = false),
-            )
-            assertEquals(
-                LikeResultDto(question.id, likeCount = 0, likedByMe = false),
-                client.liked(fan, question.id, liked = false),
-                "unliking again changes nothing",
-            )
+            assertEquals(result(question.id), client.reacted(fan, question.id, Reaction.NONE))
+            assertEquals(result(question.id), client.reacted(fan, question.id, Reaction.NONE), "taking none back again")
             val unpaid = client.stats(author)
             assertEquals(0, unpaid.totalPoints, "the point went with the like, once")
             assertEquals(0, unpaid.likesReceived)
         }
 
     @Test
-    fun `an author may like their own question and a seed's likes pay nobody`() =
-        runServer("like-own-and-seed") { client ->
+    fun `a dislike replaces a like, takes its point back and pays nobody anything`() =
+        runServer("dislike") { client ->
+            val (author, player) = client.guest() to client.guest()
+            val question = client.approvedQuestion(author, "Fly")
+            client.reacted(player, question.id, Reaction.LIKE)
+
+            assertEquals(
+                result(question.id, dislikes = 1, mine = Reaction.DISLIKE),
+                client.reacted(player, question.id, Reaction.DISLIKE),
+            )
+            assertEquals(
+                0 to 0,
+                client.stats(author).let { it.totalPoints to it.likesReceived },
+                "the like's point went",
+            )
+            assertEquals(0, client.stats(player).totalPoints)
+            val forPlayer = client.wholePool(player).single { it.id == question.id }
+            assertEquals(
+                Triple(0, 1, Reaction.DISLIKE),
+                Triple(forPlayer.likeCount, forPlayer.dislikeCount, forPlayer.myReaction),
+            )
+
+            assertEquals(
+                result(question.id, likes = 1, mine = Reaction.LIKE),
+                client.reacted(player, question.id, Reaction.LIKE),
+            )
+            assertEquals(Scoring.POINTS_PER_LIKE, client.stats(author).totalPoints, "and back again")
+        }
+
+    @Test
+    fun `an author may react to their own question and a seed's reactions pay nobody`() =
+        runServer("reaction-own-and-seed") { client ->
             val (author, other) = client.guest() to client.guest()
             val own = client.approvedQuestion(author, "Fly")
 
-            assertEquals(LikeResultDto(own.id, likeCount = 1, likedByMe = true), client.liked(author, own.id, true))
-            assertEquals(LikeResultDto("seed-1", likeCount = 1, likedByMe = true), client.liked(author, "seed-1", true))
-            assertEquals(LikeResultDto("seed-1", likeCount = 2, likedByMe = true), client.liked(other, "seed-1", true))
+            assertEquals(result(own.id, likes = 1, mine = Reaction.LIKE), client.reacted(author, own.id, Reaction.LIKE))
+            assertEquals(
+                result("seed-1", likes = 1, mine = Reaction.LIKE),
+                client.reacted(author, "seed-1", Reaction.LIKE),
+            )
+            assertEquals(
+                result("seed-1", likes = 1, dislikes = 1, mine = Reaction.DISLIKE),
+                client.reacted(other, "seed-1", Reaction.DISLIKE),
+            )
 
             val stats = client.stats(author)
             assertEquals(Scoring.POINTS_PER_LIKE, stats.totalPoints, "for their own question, not for the seed")
@@ -1807,8 +1893,8 @@ class ApiFlowTest {
         }
 
     @Test
-    fun `liking a question that does not exist or is not approved is a not-found`() =
-        runServer("like-missing-question") { client ->
+    fun `reacting to a question that does not exist or is not approved is a not-found`() =
+        runServer("reaction-missing-question") { client ->
             val (author, player) = client.guest() to client.guest()
             val pending = client.submitted(author, question("Pending"))
             val rejected = client.submitted(author, question("Rejected"))
@@ -1817,10 +1903,10 @@ class ApiFlowTest {
 
             listOf("no-such-question", LONGER_THAN_ANY_ID, pending.id, rejected.id).forEach { questionId ->
                 listOf(author, player).forEach { session ->
-                    listOf(true, false).forEach { liked ->
-                        val response = client.like(session, questionId, liked)
+                    Reaction.entries.forEach { reaction ->
+                        val response = client.react(session, questionId, reaction)
 
-                        assertEquals(HttpStatusCode.NotFound, response.status, "$questionId liked=$liked")
+                        assertEquals(HttpStatusCode.NotFound, response.status, "$questionId given $reaction")
                         assertEquals(ErrorCode.QUESTION_NOT_FOUND, response.body<ErrorDto>().code, questionId)
                     }
                 }
@@ -1829,12 +1915,12 @@ class ApiFlowTest {
         }
 
     @Test
-    fun `liking needs a session`() =
-        runServer("like-no-token") { client ->
+    fun `reacting needs a session`() =
+        runServer("reaction-no-token") { client ->
             val response =
-                client.post(WyrApi.Paths.LIKES) {
+                client.post(WyrApi.Paths.REACTIONS) {
                     contentType(ContentType.Application.Json)
-                    setBody(LikeRequest("seed-1", liked = true))
+                    setBody(ReactionRequest("seed-1", Reaction.LIKE))
                 }
 
             assertEquals(HttpStatusCode.Unauthorized, response.status)
@@ -1842,36 +1928,41 @@ class ApiFlowTest {
         }
 
     @Test
-    fun `a validly signed token for a player that does not exist cannot like`() =
-        runServer("like-ghost-player") { client ->
+    fun `a validly signed token for a player that does not exist cannot react`() =
+        runServer("reaction-ghost-player") { client ->
             // As for the ghost-player vote, the helper's token for a real player has to pass first.
             val real = client.guest()
-            assertEquals(HttpStatusCode.OK, client.like(signAccessToken(real.playerId), "seed-1", liked = true).status)
+            assertEquals(
+                HttpStatusCode.OK,
+                client.react(signAccessToken(real.playerId), "seed-1", Reaction.LIKE).status,
+            )
 
-            val response = client.like(signAccessToken("no-such-player"), "seed-1", liked = true)
+            val response = client.react(signAccessToken("no-such-player"), "seed-1", Reaction.LIKE)
 
             assertEquals(HttpStatusCode.Unauthorized, response.status)
             assertEquals(ErrorCode.UNAUTHORIZED, response.body<ErrorDto>().code)
         }
 
     @Test
-    fun `a like body the server cannot use is a validation error`() =
-        runServer("malformed-like") { client ->
+    fun `a reaction body the server cannot use is a validation error`() =
+        runServer("malformed-reaction") { client ->
             val session = client.guest()
 
             listOf(
                 "malformed json" to "{not json",
-                "no questionId" to """{"liked":true}""",
-                // A like sets rather than toggles, so a request must say which.
-                "no liked" to """{"questionId":"seed-1"}""",
-                "null liked" to """{"questionId":"seed-1","liked":null}""",
-                "blank questionId" to """{"questionId":"  ","liked":true}""",
+                "no questionId" to """{"reaction":"LIKE"}""",
+                // A reaction is set rather than toggled, so a request must say which.
+                "no reaction" to """{"questionId":"seed-1"}""",
+                "null reaction" to """{"questionId":"seed-1","reaction":null}""",
+                // The enum is closed: no member to read an unknown one as.
+                "unknown reaction" to """{"questionId":"seed-1","reaction":"LOVE"}""",
+                "blank questionId" to """{"questionId":"  ","reaction":"LIKE"}""",
                 // PostgreSQL refuses a NUL in text, which H2 stores, so only the check can catch it.
-                "NUL in questionId" to """{"questionId":"seed-1\u0000","liked":true}""",
-                "newline in questionId" to """{"questionId":"seed-1\n","liked":true}""",
+                "NUL in questionId" to """{"questionId":"seed-1\u0000","reaction":"LIKE"}""",
+                "newline in questionId" to """{"questionId":"seed-1\n","reaction":"LIKE"}""",
             ).forEach { (case, body) ->
                 val response =
-                    client.post(WyrApi.Paths.LIKES) {
+                    client.post(WyrApi.Paths.REACTIONS) {
                         bearerAuth(session.accessToken)
                         contentType(ContentType.Application.Json)
                         setBody(body)
@@ -1880,8 +1971,17 @@ class ApiFlowTest {
                 assertEquals(HttpStatusCode.BadRequest, response.status, case)
                 assertEquals(ErrorCode.VALIDATION_FAILED, response.body<ErrorDto>().code, case)
             }
-            assertEquals(0, client.wholePool(session).single { it.id == "seed-1" }.likeCount, "and nothing was liked")
+            val seed = client.wholePool(session).single { it.id == "seed-1" }
+            assertEquals(0 to 0, seed.likeCount to seed.dislikeCount, "and nobody reacted")
         }
+
+    /** What a reaction to [questionId] answers, with these counts and the player's own [mine]. */
+    private fun result(
+        questionId: String,
+        likes: Int = 0,
+        dislikes: Int = 0,
+        mine: Reaction = Reaction.NONE,
+    ) = ReactionResultDto(questionId, likeCount = likes, dislikeCount = dislikes, myReaction = mine)
 
     /**
      * A server on [database], its own unless a test that reaches into it passes one, moderated with
@@ -1973,6 +2073,19 @@ class ApiFlowTest {
 
     private suspend fun HttpClient.guest(): SessionDto = post(WyrApi.Paths.AUTH_GUEST).body()
 
+    /** A fresh guest, registered through the API under a name of its own. */
+    private suspend fun HttpClient.registered(): SessionDto =
+        guest().also { session ->
+            val name = "p" + session.playerId.replace("-", "").take(12)
+            val response =
+                post(WyrApi.Paths.AUTH_REGISTER) {
+                    bearerAuth(session.accessToken)
+                    contentType(ContentType.Application.Json)
+                    setBody(RegisterRequest(name, "a password"))
+                }
+            assertEquals(HttpStatusCode.OK, response.status, "registering $name")
+        }
+
     private suspend fun HttpClient.refresh(refreshToken: String): HttpResponse =
         post(WyrApi.Paths.AUTH_REFRESH) {
             contentType(ContentType.Application.Json)
@@ -2021,15 +2134,30 @@ class ApiFlowTest {
 
     /**
      * Submits [request] as [session]'s player, given the points it costs first (CLAUDE.md §8c), so the
-     * player's total ends where it began: what a test submits for when it is not about the cost.
+     * player's total ends where it began, and an account first if a guest, since only a registered
+     * player may submit (§8d, *Submitting*): what a test submits for when it is about neither.
      */
     private suspend fun HttpClient.submit(
         session: SessionDto,
         request: SubmitQuestionRequest,
     ): HttpResponse {
         grantPoints(session.playerId, Scoring.SUBMISSION_COST)
+        registerIfGuest(session.playerId)
         return submit(session.accessToken, request)
     }
+
+    /**
+     * Gives [playerId] an account straight in the database of the server under test, unless it has
+     * one: a name made from its id, and a hash no password matches, since nothing here logs in as it.
+     */
+    private fun registerIfGuest(playerId: String) =
+        checkNotNull(serverDatabase) { "no server is running" }.serverPool().use { pool ->
+            pool.inTransaction {
+                if (PlayerStore.find(playerId)?.username == null) {
+                    AccountStore.register(playerId, "p" + playerId.replace("-", "").take(12), "not-a-password-hash")
+                }
+            }
+        }
 
     /** Adds [points] to [playerId]'s total straight in the database of the server under test. */
     private fun grantPoints(
@@ -2185,27 +2313,27 @@ class ApiFlowTest {
         return submission
     }
 
-    private suspend fun HttpClient.liked(
+    private suspend fun HttpClient.reacted(
         session: SessionDto,
         questionId: String,
-        liked: Boolean,
-    ): LikeResultDto = like(session, questionId, liked).body()
+        reaction: Reaction,
+    ): ReactionResultDto = react(session, questionId, reaction).body()
 
-    private suspend fun HttpClient.like(
+    private suspend fun HttpClient.react(
         session: SessionDto,
         questionId: String,
-        liked: Boolean,
-    ): HttpResponse = like(session.accessToken, questionId, liked)
+        reaction: Reaction,
+    ): HttpResponse = react(session.accessToken, questionId, reaction)
 
-    private suspend fun HttpClient.like(
+    private suspend fun HttpClient.react(
         accessToken: String,
         questionId: String,
-        liked: Boolean,
+        reaction: Reaction,
     ): HttpResponse =
-        post(WyrApi.Paths.LIKES) {
+        post(WyrApi.Paths.REACTIONS) {
             bearerAuth(accessToken)
             contentType(ContentType.Application.Json)
-            setBody(LikeRequest(questionId, liked))
+            setBody(ReactionRequest(questionId, reaction))
         }
 
     private suspend fun HttpClient.me(session: SessionDto): HttpResponse =
@@ -2275,6 +2403,7 @@ class ApiFlowTest {
                 "rejectionReason",
                 "tally",
                 "likeCount",
+                "dislikeCount",
             )
     }
 }

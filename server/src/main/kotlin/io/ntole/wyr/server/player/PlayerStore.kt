@@ -18,6 +18,11 @@ object PlayerStore {
         val totalPoints: Int,
         /** Which pass over the questions the feed is on for this player (CLAUDE.md §8d). */
         val cycle: Int,
+        /**
+         * The player's account name, lower-cased, or null for a guest (CLAUDE.md §8a, *Accounts*). Once
+         * set it never changes or goes: nothing unregisters a player or renames one.
+         */
+        val username: String? = null,
     )
 
     /**
@@ -44,7 +49,7 @@ object PlayerStore {
      */
     fun find(id: String): Player? =
         Players
-            .select(Players.id, Players.totalPoints, Players.currentCycle)
+            .select(Players.id, Players.totalPoints, Players.currentCycle, Players.username)
             .where { Players.id eq id }
             .limit(1)
             .firstOrNull()
@@ -55,6 +60,7 @@ object PlayerStore {
             id = this[Players.id],
             totalPoints = this[Players.totalPoints],
             cycle = this[Players.currentCycle],
+            username = this[Players.username],
         )
 
     /**
@@ -90,8 +96,8 @@ object PlayerStore {
 
     /**
      * Adds [points] to the player's total and returns the new total. Must run inside a transaction.
-     * [points] is negative to take points back, as an unlike takes back its like's point
-     * (`LikeStore.setLiked`).
+     * [points] is negative to take points back, as taking a like back takes back its point
+     * (`ReactionStore.set`).
      *
      * The addition happens in SQL (`total_points = total_points + n`) rather than as a read and
      * then a write, so two votes by one player landing together cannot both start from the same

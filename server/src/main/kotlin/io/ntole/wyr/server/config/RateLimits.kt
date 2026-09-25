@@ -18,7 +18,7 @@ data class RequestBudget(
 
 /**
  * What one client may send (CLAUDE.md §8b, *Rate limiting*): a budget for each group of routes, spent
- * apart from every other group's. Registrations, logouts, the feed, votes, skips, likes, submissions and
+ * apart from every other group's. Registrations, logouts, the feed, votes, skips, reactions, submissions and
  * the two reads of the player's own are per player, so players behind one address do not share them; the
  * rest, whose caller has no session to name, or needs none, per client address.
  *
@@ -48,8 +48,8 @@ data class RateLimits(
     val votes: RequestBudget,
     /** `POST /v1/skips`. */
     val skips: RequestBudget,
-    /** `POST /v1/likes`. */
-    val likes: RequestBudget,
+    /** `POST /v1/reactions`. */
+    val reactions: RequestBudget,
     /** `POST /v1/questions`. The pending cap still applies within it. */
     val submissions: RequestBudget,
     /** `GET /v1/me`. */
@@ -86,7 +86,7 @@ data class RateLimits(
                 feed = RequestBudget(requests = 120, per = 1.minutes),
                 votes = RequestBudget(requests = 120, per = 1.minutes),
                 skips = RequestBudget(requests = 120, per = 1.minutes),
-                likes = RequestBudget(requests = 60, per = 1.minutes),
+                reactions = RequestBudget(requests = 60, per = 1.minutes),
                 submissions = RequestBudget(requests = 30, per = 1.hours),
                 stats = RequestBudget(requests = 120, per = 1.minutes),
                 mySubmissions = RequestBudget(requests = 120, per = 1.minutes),
@@ -123,7 +123,7 @@ data class RateLimits(
                     feed = budget("RATE_LIMIT_FEED_PER_MINUTE", feed),
                     votes = budget("RATE_LIMIT_VOTES_PER_MINUTE", votes),
                     skips = budget("RATE_LIMIT_SKIPS_PER_MINUTE", skips),
-                    likes = budget("RATE_LIMIT_LIKES_PER_MINUTE", likes),
+                    reactions = budget("RATE_LIMIT_REACTIONS_PER_MINUTE", reactions),
                     submissions = budget("RATE_LIMIT_SUBMISSIONS_PER_HOUR", submissions),
                     stats = budget("RATE_LIMIT_STATS_PER_MINUTE", stats),
                     mySubmissions = budget("RATE_LIMIT_MY_SUBMISSIONS_PER_MINUTE", mySubmissions),

@@ -40,7 +40,7 @@ enum class RouteLimit(
     FEED(RateLimits::feed, KeyedBy.PLAYER),
     VOTES(RateLimits::votes, KeyedBy.PLAYER),
     SKIPS(RateLimits::skips, KeyedBy.PLAYER),
-    LIKES(RateLimits::likes, KeyedBy.PLAYER),
+    REACTIONS(RateLimits::reactions, KeyedBy.PLAYER),
     SUBMISSIONS(RateLimits::submissions, KeyedBy.PLAYER),
     STATS(RateLimits::stats, KeyedBy.PLAYER),
     MY_SUBMISSIONS(RateLimits::mySubmissions, KeyedBy.PLAYER),

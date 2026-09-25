@@ -4,17 +4,22 @@ import io.ntole.wyr.core.api.WyrApi
 import io.ntole.wyr.core.question.QuestionStatus
 import io.ntole.wyr.core.question.SubmissionDto
 import io.ntole.wyr.core.question.SubmitQuestionRequest
+import io.ntole.wyr.core.reaction.Reaction
 import io.ntole.wyr.server.db.Players
 import io.ntole.wyr.server.db.QuestionCategories
 import io.ntole.wyr.server.db.Questions
+import io.ntole.wyr.server.db.Votes
 import io.ntole.wyr.server.player.PlayerStore
 import io.ntole.wyr.server.plugins.ApiFailure
+import io.ntole.wyr.server.reaction.ReactionStore
 import io.ntole.wyr.server.vote.Scoring
+import org.jetbrains.exposed.v1.core.Expression
 import org.jetbrains.exposed.v1.core.ResultRow
 import org.jetbrains.exposed.v1.core.SortOrder
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.count
 import org.jetbrains.exposed.v1.core.eq
+import org.jetbrains.exposed.v1.core.wrapAsExpression
 import org.jetbrains.exposed.v1.jdbc.batchInsert
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.select
@@ -96,9 +101,11 @@ object SubmissionStore {
      * Must run inside a transaction. Two submitted in the same millisecond come in id order, which is
      * fixed but says nothing about which came first. Seeds have no author, so they never appear.
      *
-     * The categories come from one more statement for all of them ([QuestionStore.categoriesOf]),
-     * picked by author rather than by id, since nothing bounds how many there are. A submission
-     * committed between the two is in the second only, and left out with the rest of it.
+     * Each comes with how many players like it, dislike it and have answered it, read in the one
+     * statement that reads the questions, so a question's numbers are one moment's (CLAUDE.md §4). The
+     * categories come from one more statement for all of them ([QuestionStore.categoriesOf]), picked
+     * by author rather than by id, since nothing bounds how many there are. A submission committed
+     * between the two is in the second only, and left out with the rest of it.
      */
     fun byAuthor(authorId: String): List<SubmissionDto> {
         val rows =
@@ -134,11 +141,29 @@ object SubmissionStore {
             status = status,
             rejectionReason = row[Questions.rejectionReason].takeIf { status == QuestionStatus.REJECTED },
             submittedAt = row[Questions.submittedAt],
+            likeCount = row.countOf(likeCount),
+            dislikeCount = row.countOf(dislikeCount),
+            answerCount = row.countOf(answerCount),
         )
     }
 
+    /** A `COUNT` subquery's value. It always yields one row, so it is never null. */
+    private fun ResultRow.countOf(expression: Expression<Long?>): Int =
+        checkNotNull(this[expression]) { "a COUNT subquery came back null" }.toInt()
+
+    /**
+     * How many players like the row's question, dislike it, and have answered it, each counted once:
+     * subqueries on its id, found through `reactions (question_id, player_id)` and the votes key. A
+     * question never served has none. Its made-up votes are left out of the answers, since only a seed
+     * has any and no author has a seed.
+     */
+    private val likeCount = ReactionStore.countOn(Reaction.LIKE)
+    private val dislikeCount = ReactionStore.countOn(Reaction.DISLIKE)
+    private val answerCount: Expression<Long?> =
+        wrapAsExpression(Votes.select(Votes.playerId.count()).where { Votes.questionId eq Questions.id })
+
     /** What [toSubmission] reads, and no more. */
-    internal val SUBMISSION_COLUMNS =
+    internal val SUBMISSION_COLUMNS: List<Expression<*>> =
         listOf(
             Questions.id,
             Questions.optionA,
@@ -147,6 +172,9 @@ object SubmissionStore {
             Questions.retiredAt,
             Questions.rejectionReason,
             Questions.submittedAt,
+            likeCount,
+            dislikeCount,
+            answerCount,
         )
 
     /**

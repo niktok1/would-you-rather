@@ -160,26 +160,28 @@ failing:
   `WHERE` can hold the whole check, nothing need be read first (`SessionStore.rotate`, whose second
   racer re-checks it against the first's commit).
   Or the read takes the row lock (`SELECT ... FOR UPDATE`), so a concurrent writer waits and then
-  reads the row as committed (`VoteStore.cast`, which branches on more than one outcome, and
-  `SkipStore.skip`).
+  reads the row as committed (`VoteStore.cast` and `ReactionStore.set`, which branch on more than
+  one outcome, and `SkipStore.skip`).
   A read of rows a racing writer is about to add has no row to lock, so it locks a parent row that
   every such writer locks first (`SubmissionStore.submit` counts an author's pending questions
   under the author's `players` row).
   The one exception is a value copied from another row, which may be a plain read where a stale
   copy is provably harmless, with the proof at the read (`VoteStore.currentCycle`: the feed moves
   the cycle on only once the answer's question is already answered or skipped in the one read).
-- Uniqueness is a constraint (the `Votes`, `Skips`, `Likes` and `Categories` primary keys,
+- Uniqueness is a constraint (the `Votes`, `Skips`, `Reactions` and `Categories` primary keys,
   `players.username`'s unique constraint), never a prior `SELECT`. A violation is never caught and
   carried on from: PostgreSQL aborts a transaction at its first error. It propagates, and Exposed
   rolls back and reruns the whole transaction, which then sees the committed row (`VoteStore.cast`,
-  `SkipStore.skip`, `LikeStore.setLiked`, `AccountStore.register`, which `AccountStoreTest` races,
+  `SkipStore.skip`, `ReactionStore.set`, `AccountStore.register`, which `AccountStoreTest` races,
   `CategoryStore.create`, which `CategoryStoreTest` races, and `Seed.questionsIfEmpty`, which
   `SeedTest` races). A plain read before such an insert only spares
-  a certain violation, and needs no lock when finding the row writes nothing (a like already held).
+  a certain violation, and needs no lock when finding the row writes nothing.
 - Numbers that must agree with one another are read in one statement, which sees one committed
   state; two statements can straddle another transaction's commit (the tally in `VoteStore`,
-  `StatsStore.of`, a question's like count beside `likedByMe` in `LikeStore.likesOf`, a question's
-  tally and like count in the moderator's list, `ModerationStore.questions`).
+  `StatsStore.of`, a question's like and dislike counts beside the player's own reaction in
+  `ReactionStore.reactionsOf`, a question's tally and reaction counts in the moderator's list,
+  `ModerationStore.questions`, and a submission's counts in its author's list,
+  `SubmissionStore.byAuthor`).
 
 REPEATABLE_READ was dropped because it refuses the second of two concurrent writes to a row
 (SQLState 40001) and Exposed makes only 3 attempts with no delay, so a burst on one row, such as
@@ -556,16 +558,16 @@ EncryptedSharedPreferences: enough for a game that stores nothing personal.
 - **Retiring a question** — *provisional — user decision.* The user asked for a way to take an
   approved question out of play and put it back (§8d, *Moderation*); the details are this build's.
   Built: a moderator retires an approved question, a seed included, and restores a retired one.
-  Retired, it is served to nobody and due for nobody, and a vote, skip, like or unlike of it is 404;
-  nothing it earned is taken back, so its answers' points stay and its likes stay held and paid, and
-  nobody can unlike it until it is restored. Restored, it is due for every player who has not
+  Retired, it is served to nobody and due for nobody, and a vote, skip or reaction to it is 404, taking
+  one back included; nothing it earned is taken back, so its answers' points stay and its reactions
+  stay held, its likes paid, and nobody can take one back until it is restored. Restored, it is due for every player who has not
   answered or skipped it in their current cycle. It is stored as `questions.retired_at` beside an
   `APPROVED` status, and sent as `QuestionStatus.RETIRED`, so a rollback to the build before (§8b,
-  *Rollbacks*) reads every row and only serves retired questions again. A vote, skip or like reads
+  *Rollbacks*) reads every row and only serves retired questions again. A vote, skip or reaction reads
   servability plainly (`QuestionStore.isServable`, no lock on the question; *decided 2026-09-25*),
   so one in flight as a retirement commits may still land, uncounted in the retirement's answer.
-  The options: keep it; let an unlike through on a retired question, so a player can still take a
-  like back (and its author's point with it); take back what a retired question earned (every
+  The options: keep it; let a reaction be taken back on a retired question, so a player can still
+  take a like back (and its author's point with it); take back what a retired question earned (every
   total would move, and §8c's sum would need the retired questions left out on both sides); or
   `RETIRED` stored as a status of its own once no build before this one is a rollback target, which
   drops the column.
@@ -621,7 +623,7 @@ EncryptedSharedPreferences: enough for a game that stores nothing personal.
     moderator's 60.
   - *Per player*, so players behind one address do not share a budget: registrations 20 an hour
     (every one the rules take costs a password hash), logouts 30 a minute, the feed, votes and skips
-    120 a minute each, likes 60 a minute, submissions 30 an hour (the 20-pending cap still applies),
+    120 a minute each, reactions 60 a minute, submissions 30 an hour (the 20-pending cap still applies),
     `GET /v1/me` and `GET /v1/me/questions` 120 a minute each. The key is the player id in the
     bearer token, which the limiter verifies itself (`verifiedPlayerId`): it runs before
     authentication, so no principal is there yet. A request without a token this server signed
@@ -654,9 +656,10 @@ EncryptedSharedPreferences: enough for a game that stores nothing personal.
   would grant every budget again, so running two needs a shared store first (Render Key Value, say).
   A restart, which a deploy or a free instance's spin-down is, resets them.
 - **Likes from fresh guests** — *decided 2026-09-24: no like limitations.* A like pays its author
-  once per player (§8d, *Likes*), and guests cost nothing to mint (§8a), so a script minting guests
-  could pay one author a point per guest for each of their questions. The user accepted that: every
-  like held pays, whoever holds it, and the only bound is guest minting's per-address budget.
+  once per player (§8d, *Reactions*), and guests cost nothing to mint (§8a), so a script minting
+  guests could pay one author a point per guest for each of their questions. The user accepted that:
+  every like held pays, whoever holds it, and the only bound is guest minting's per-address budget.
+  Dislikes cost nobody anything (§8c), so fresh guests' dislikes move only a count.
 - **Refresh answers lost past the grace** — *decided 2026-09-24: no time bound* (§8a). The 10
   minutes built first turned a player whose refresh answer was lost, and who came back later, into a
   fresh guest. What remains, accepted: a refresh that spends the previous token and whose answer is lost
@@ -739,7 +742,8 @@ seed (`Migrations`, `DatabaseFactory.init`). Nothing builds a table any other wa
   (sessions and the recovery secret, since dropped) there; the next Manual Deploy runs V5 there
   (a player's username and password hash, *Accounts*, above), which every player already there takes
   as a guest, and every later script: V6 (the categories table, §8d *Categories*), V7 (what a
-  question cost, §8c), V8 (the seeds' made-up votes) and V9 (the seeds in Serbian, §8d *Seeds*).
+  question cost, §8c), V8 (the seeds' made-up votes), V9 (the seeds in Serbian, §8d *Seeds*) and
+  V10 (likes become reactions, §8d *Reactions*).
   `Migrations.migrate` takes the baseline itself (`baselineVersion` 1), and only for a database
   holding every table V1 builds (`TABLES_BEFORE_MIGRATIONS`) and no history table; Flyway's
   `baselineOnMigrate` is off. Any other database with tables and no history fails the boot, rather
@@ -815,7 +819,10 @@ seed (`Migrations`, `DatabaseFactory.init`). Nothing builds a table any other wa
   under RANDOM fails the foreign key, a 500, until the roll forward. V7 and V8 only add NOT NULL
   columns with a default, which a build before never names, so it charges nothing for a submission
   and pays nothing back for a rejection, and its tallies leave out the made-up votes; V9 only
-  rewrites the seeds' text.
+  rewrites the seeds' text. V10 moves every like into `reactions`, as a like, and drops `likes`, which
+  every build before it reads, so none of them runs on what it leaves: accepted, since nothing is live
+  yet and so no build before it is a rollback target (the user, 2026-09-26). `MigrationsTest` reads a
+  table a later script dropped by name (`DROPPED_TABLES`), since `Tables.kt` no longer names it.
 - *Several instances booting at once* (Render starts a deploy's new instance before it stops the old
   one): on PostgreSQL each script runs under Flyway's advisory lock, so one boot migrates while the
   rest wait, up to 50 tries a second apart, and then find nothing to do. Every boot that finds a
@@ -840,8 +847,11 @@ returns and never recomputes points, so the two cannot disagree.
 - Every answer earns `Scoring.POINTS_PER_ANSWER`, which is **1 point**, whichever side it picks
   (§8d). There is no majority bonus and no streak.
 - Every like a question holds earns its author `Scoring.POINTS_PER_LIKE`, which is **1 point**,
-  their own likes included, paid when the like is added and taken back when it is removed (§8d,
-  *Likes*). A seed has no author and pays nobody.
+  their own likes included, paid when the like is added and taken back when it is removed, a dislike
+  replacing it included (§8d, *Reactions*). A seed has no author and pays nobody.
+- A **dislike** earns and costs nobody anything (*decided 2026-09-26*): a guest costs nothing to mint
+  (§8a), so a dislike that cost its author a point would let a script drive any author below zero,
+  and so stop them submitting. It is a count, for now for the players and the moderator to see.
 - Submitting a question **costs** its author `Scoring.SUBMISSION_COST`, **1 point** until the game is
   released (*decided 2026-09-25*), taken in the submission's own transaction (§8d, *Submitting*). The
   number is the wire's, `WyrApi.Limits.SUBMISSION_COST`, so a client can say what it is (the game's
@@ -857,10 +867,11 @@ returns and never recomputes points, so the two cannot disagree.
   which `GET /v1/me` reports in one read. Retiring a question takes nothing back (§8d,
   *Moderation*): its answers' points stay, and so do its likes, held and paid and counted in its
   author's likes received, so the sum holds over every question, retired or not. Two edge cases,
-  accepted: an unlike can take an author who spent their points below 0, and a submission can then
+  accepted: taking a like back, or a dislike replacing it, can take an author who spent their points
+  below 0, and a submission can then
   wait until they earn it back; and after a rollback to a build before V7, a rejection made there
   pays nothing back, so its author is short that point for good. One more, where two rules meet:
-  an author is paid for their own like (§8d, *Likes*), so liking their approved question gives its
+  an author is paid for their own like (§8d, *Reactions*), so liking their approved question gives its
   cost back. *Decided 2026-09-25: keep it.* The cost is 1 point only until release and will rise,
   and with thousands of questions an author rarely meets their own.
 - `PlayerStore.addPoints` adds in SQL (`total_points = total_points + n`), never as a read then a
@@ -1245,7 +1256,8 @@ listed on the Account screen.
   increment beside the points), distinct questions answered, current cycle, and how many questions
   are still due in it, counted by the feed's own predicate (`QuestionStore.dueCount`), and the
   likes received: how many likes the questions the player submitted hold now, their own included
-  (`LikeStore.receivedBy`, *Likes*), the points spent: what the player's questions not rejected
+  (`ReactionStore.likesReceivedBy`, *Reactions*; dislikes are worth nothing, so not counted), the
+  points spent: what the player's questions not rejected
   cost them (`pointsSpent`, *Submitting*), and the player's username, null for a guest (§8a,
   *Accounts*; `PlayerStats.username` on the client, so a screen reads the name with the points).
   Built in `StatsStore.of`, as one statement, so the total always agrees with the answers given, the
@@ -1271,8 +1283,8 @@ listed on the Account screen.
   this cycle, where Skip works on it again. Nothing else goes while a skip is in flight, and an
   answered question goes on with a tap on a card instead.
 - **Own questions** *(built; decided 2026-09-24)*: an author is served their own questions
-  **like any other player** and may answer, skip and like them; the user chose the simpler logic.
-  `QuestionStore.servable` is the one predicate the feed, the due count and votes, skips and likes
+  **like any other player** and may answer, skip and react to them; the user chose the simpler logic.
+  `QuestionStore.servable` is the one predicate the feed, the due count and votes, skips and reactions
   (`QuestionStore.isServable`) read, and it asks only that a moderator approved the question and has
   not retired it (*Moderation*).
 - **Seeds** *(decided 2026-09-25; built)*: the server's starter questions (`Seed`), approved from
@@ -1290,30 +1302,43 @@ listed on the Account screen.
   with no word agreeing with the player's gender. V9 rewrote the English seeds a database seeded before holds, by
   id, into the same texts, leaving their categories, votes and likes alone. A player's own question
   stays exactly as typed; putting questions into other languages is a later, bigger topic.
-- **Likes** *(built)*: any player may like any question, **their own
-  included**, at any time (before or after answering), once each, and may unlike it. Each like
-  currently held is **+1 point to the author**, and unliking takes that point back. The like count
-  is visible before answering. For now likes do nothing else; serving questions by quality is a
-  later idea. A seed has no author: a like on one counts and pays nobody.
-  - Built as `POST /v1/likes` (`WyrApi.Paths.LIKES`), in `LikeStore.setLiked`, on `likes`, one row
-    per player and question while the like is held, under a primary key on both. A `LikeRequest`
-    names the question and `liked`, which *sets* the like rather than toggling it, so asking for what
-    already holds writes nothing and pays nothing and a retry needs no attempt id; `liked` has no
-    default, and a body without it is 400. The answer is a `LikeResultDto`: the question, its
-    `likeCount` and `likedByMe`. A question that is not servable is 404 and an unknown player 401,
-    as for votes and skips, and the id is checked as a vote's is. That holds for an unlike too: a
-    retired question's likes stay held and paid until it is restored (*Moderation*).
-  - Only a row actually inserted pays the author (`Scoring.POINTS_PER_LIKE`, an SQL increment) and
-    only one actually deleted takes the point back, in the same transaction. A like reads whether the
-    row is there and inserts only if not, and two first likes racing fail on the key, which Exposed's
-    rerun turns into a repeat (§4); an unlike is one delete, so of two racing only one deletes.
-    `LikeStoreTest` races both.
-  - Every feed batch carries each question's `likeCount` and `likedByMe` (`QuestionDto`), answered
-    or not, read in one more grouped statement per batch (`LikeStore.likesOf`), never one per
-    question, and the two numbers in that one statement so they agree. `GET /v1/me` reports
-    `likesReceived` (*Stats*). Nothing about a like touches the tally, the cycle or what is due.
+- **Reactions** *(built; likes 2026-09-24, dislikes decided 2026-09-26)*: any player may **like** or
+  **dislike** any question, **their own included**, at any time (before or after answering), and may
+  take either back. A player holds **one reaction per question**: liking a question they dislike takes
+  the dislike back, and the other way round. Each like currently held is **+1 point to the author**,
+  and taking it back, alone or by disliking, takes that point back; a dislike earns and costs nobody
+  anything (§8c). Both counts are visible before answering. For now reactions do nothing else; serving
+  questions by quality is a later idea. A seed has no author: a reaction to one counts and pays nobody.
+  - Built as `POST /v1/reactions` (`WyrApi.Paths.REACTIONS`), in `ReactionStore.set`, on `reactions`
+    (V10, which replaced `likes`), one row per player and question while they hold a reaction, its
+    kind in `reaction` (`LIKE` or `DISLIKE`), under a primary key on both, so a like and a dislike of
+    one question can never both be held. A `ReactionRequest` names the question and the `reaction`,
+    `LIKE`, `DISLIKE` or `NONE`, which *sets* what the player holds rather than toggling it, so asking
+    for what already holds writes nothing and pays nothing and a retry needs no attempt id;
+    `reaction` has no default, and a body without it is 400. `Reaction` is a closed enum on the wire,
+    as `OptionSide` is (§5): another kind of reaction would be a field of its own. The answer is a
+    `ReactionResultDto`: the question, its `likeCount` and `dislikeCount`, and `myReaction`. A
+    question that is not servable is 404 and an unknown player 401, as for votes and skips, and the
+    id is checked as a vote's is. That holds for taking a reaction back too: a retired question's
+    reactions stay held, and its likes paid, until it is restored (*Moderation*).
+  - The reaction held is read under its row lock (`SELECT ... FOR UPDATE`, §4), since what is written
+    and what is paid depend on which of the three it is: a second request of the same player's for
+    the same question waits, then reads what the first left. Only a like actually added pays the
+    author (`Scoring.POINTS_PER_LIKE`, an SQL increment) and only one actually removed or replaced
+    takes the point back, in the same transaction. With no row to lock, two first reactions racing
+    fail on the key, which Exposed's rerun turns into a repeat, or into a change of mind when the two
+    differ (§4). `ReactionStoreTest` races each case.
+  - Every feed batch carries each question's `likeCount`, `dislikeCount` and `myReaction`
+    (`QuestionDto`), answered or not, read in one more grouped statement per batch
+    (`ReactionStore.reactionsOf`), never one per question, and every number in that one statement so
+    they agree. `GET /v1/me` reports `likesReceived` (*Stats*). The moderator's list carries both
+    counts (`AdminQuestionDto`), and so does the author's own list, with how many players answered
+    each question (`SubmissionDto.likeCount`, `dislikeCount` and `answerCount`, read with the
+    question in one statement, `SubmissionStore.byAuthor`; a question never served has none, and a
+    seed's made-up votes are no author's). Nothing about a reaction touches the tally, the cycle or
+    what is due.
   - No author travels on the wire, so the result carries no points: an author sees theirs in their
-    stats. `SubmissionDto` carries no like count yet.
+    stats.
   - *The client* is `LikeRepository` in `:core:domain`, behind `SetLike`, which ensures a session
     first. `DefaultLikeRepository` sends the `LikeRequest` through `withSessionRecovery`, as votes and
     skips go, and the retry after a recovered session sends the same `liked`, so a resend can never
@@ -1329,13 +1354,18 @@ listed on the Account screen.
     like again. It works out no points itself: a like of the player's own question moves their total
     without a vote, so the points between the cards show it from the next vote on, or from the next
     time the Play screen is shown, which reads them again.
-- **Submitting** *(built; details decided 2026-09-23; the cost 2026-09-25)*: **costs a point**
-  (§8c) and earns no points directly, because authors earn through likes. The author writes both
+- **Submitting** *(built; details decided 2026-09-23; the cost 2026-09-25; registered players only
+  2026-09-26)*: **only a registered player may submit** (§8a, *Accounts*); a guest registers first,
+  keeping everything it has. It **costs a point** (§8c) and earns no points directly, because authors
+  earn through likes. The author writes both
   options (in Serbian, as §8f, *How an option is phrased*, asks, which the moderator holds them
   to) and **picks one or more categories** (each a category's id; *Categories*). A player may
   have at most **20 submissions pending** moderation at once. A submitted question is served only
   after a moderator approves it; once approved it is due for every player in their current cycle.
-  Built as `POST /v1/questions`, in `SubmissionStore.submit` after `checkedSubmission`. Both options
+  Built as `POST /v1/questions`, in `SubmissionStore.submit` after `checkedSubmission`. A guest's
+  submission is 403 `ACCOUNT_REQUIRED` before anything it holds is checked (a plain read of the
+  player, `PlayerStore.find`: nothing unregisters one); a guest still lists whatever it submitted
+  before the rule. Both options
   are trimmed, then each must be non-blank, at most `WyrApi.Limits.MAX_OPTION_LENGTH` (200, UTF-16
   units) and one line (no control character, nor U+2028 or U+2029, the line and paragraph
   separators), and the two must differ ignoring case: otherwise 422 `INVALID_SUBMISSION`, which the
@@ -1411,8 +1441,8 @@ listed on the Account screen.
     as the feed is, in a `SubmissionListDto` of `SubmissionDto`s. Never a seed, and no author.
   - `GET /v1/admin/questions` is the list of every question, seeds included, newest first, in an
     `AdminQuestionPageDto` of `AdminQuestionDto`s: options, categories, status, whether it is a seed,
-    when it was stored, reviewed and retired, a rejected one's reason, its tally and its like count,
-    and no author. `?status=` and `?category=` narrow it, each repeated for several and matching any
+    when it was stored, reviewed and retired, a rejected one's reason, its tally, its like count and
+    its dislike count, and no author. `?status=` and `?category=` narrow it, each repeated for several and matching any
     of its values, none for all; `UNKNOWN` or a name that is no status, and an id no category has,
     is 400, as for the feed's category (`categoryFilter`, `CategoryStore.checked`). `?limit=` bounds a page as the feed's is. A page is asked for by
     cursor, not offset (`QuestionCursor`, `?cursor=`): `nextCursor` is the last question's place,
@@ -1420,7 +1450,7 @@ listed on the Account screen.
     the limit. A question stored meanwhile is newer than every one listed and lands before the first
     page, where an offset would push one already listed onto the next page and list it twice. A page
     is two statements whatever its length (`ModerationStore.questions`): its rows with both vote
-    counts and the like count as subqueries in one statement, so a question's numbers are one
+    counts and both reaction counts as subqueries in one statement, so a question's numbers are one
     moment's (§4), and their categories in one more. No index orders every question by time: the
     list is the moderator's alone and the table small; `(submitted_at, id)` is the index once it is
     not.
@@ -1444,14 +1474,14 @@ listed on the Account screen.
     `RetireQuestionRequest`, the id of an approved question, a seed's included, and
     `POST /v1/admin/restorations` a `RestoreQuestionRequest`, the id of a retired one. Both answer
     200 with the question's `AdminQuestionDto`. A retired question is served to nobody and due for
-    nobody, so a cycle can finish without it, and a vote, skip, like or unlike of it is 404; nothing
-    it earned is taken back (§8c). Its author sees it as `RETIRED` in `GET /v1/me/questions`, the
+    nobody, so a cycle can finish without it, and a vote, skip or reaction to it is 404; nothing it
+    earned is taken back (§8c). Its author sees it as `RETIRED` in `GET /v1/me/questions`, the
     moderator in the queue's and the list's `?status=RETIRED`, never under `APPROVED`. Restored, it
     is servable again from the commit on, due for every player who has neither answered nor skipped
     it in their current cycle. Each is a compare-and-set (`ModerationStore.move`, §4): retire only a
     question standing at approved, restore only one standing at retired, anything else 409
     `WRONG_STATUS` and changes nothing, an unknown id 404, a malformed body 400; of two moderators
-    racing exactly one wins. A vote, skip or like in flight as it commits may still land (§8b,
+    racing exactly one wins. A vote, skip or reaction in flight as it commits may still land (§8b,
     *Retiring a question*). Stored as `questions.retired_at` (V3) beside an `APPROVED` status, never
     as a status: `statusOf` and `standsAt` read the two columns as one status, so a rollback to the
     build before reads every row. The seed writes only into a database with no question, so a

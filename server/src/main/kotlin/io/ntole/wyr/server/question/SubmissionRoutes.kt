@@ -21,7 +21,8 @@ import io.ntole.wyr.server.plugins.receiveOrReject
 
 /**
  * A player's own questions (CLAUDE.md §8d). Submitting one and listing them both need a session,
- * since the author is whoever the bearer token names.
+ * since the author is whoever the bearer token names, and submitting needs a registered player's. A
+ * guest still lists whatever it submitted before that rule.
  */
 fun Route.submissionRoutes(db: Db) {
     authenticate(JWT_AUTH) {
@@ -49,6 +50,13 @@ fun Route.submissionRoutes(db: Db) {
 
                 val stored =
                     db.query {
+                        // Only a registered player may submit (CLAUDE.md §8d, *Submitting*), so a guest is
+                        // refused before anything they sent is checked. A plain read: nothing unregisters a
+                        // player, and a guest registering meanwhile sent this as a guest. As for the list, a
+                        // validly signed token can outlive its player.
+                        val author = PlayerStore.find(authorId) ?: throw ApiFailure.unauthorized("unknown player")
+                        if (author.username == null) throw ApiFailure.accountRequired()
+
                         // An id no category has is a malformed request, which comes before any rule the
                         // player can break by typing (checkedSubmission).
                         val categories = CategoryStore.checked(request.categories)

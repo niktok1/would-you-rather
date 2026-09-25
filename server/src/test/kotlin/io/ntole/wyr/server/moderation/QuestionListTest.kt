@@ -5,6 +5,7 @@ import io.ntole.wyr.core.question.AdminQuestionPageDto
 import io.ntole.wyr.core.question.QuestionStatus
 import io.ntole.wyr.core.question.SubmissionDto
 import io.ntole.wyr.core.question.SubmitQuestionRequest
+import io.ntole.wyr.core.reaction.Reaction
 import io.ntole.wyr.core.vote.OptionSide
 import io.ntole.wyr.core.vote.VoteTallyDto
 import io.ntole.wyr.server.db.Questions
@@ -14,10 +15,10 @@ import io.ntole.wyr.server.db.connectH2
 import io.ntole.wyr.server.db.filedUnder
 import io.ntole.wyr.server.db.h2Url
 import io.ntole.wyr.server.db.tallyOf
-import io.ntole.wyr.server.like.LikeStore
 import io.ntole.wyr.server.player.PlayerStore
 import io.ntole.wyr.server.question.SubmissionStore
 import io.ntole.wyr.server.question.paidSubmission
+import io.ntole.wyr.server.reaction.ReactionStore
 import io.ntole.wyr.server.vote.VoteStore
 import org.jetbrains.exposed.v1.core.Transaction
 import org.jetbrains.exposed.v1.core.statements.StatementContext
@@ -170,7 +171,7 @@ class QuestionListTest {
     }
 
     @Test
-    fun `each question carries its tally and its like count`() {
+    fun `each question carries its tally, its like count and its dislike count`() {
         val author = newPlayer()
         val question = submit(author, at = seededAt + 1)
         transaction(database) { ModerationStore.approve(question.id, emptyList()) }
@@ -181,13 +182,19 @@ class QuestionListTest {
         // A re-answer moves the player's one vote.
         answer(three, question.id, OptionSide.A)
         answer(one, SEED, OptionSide.B)
-        listOf(one, two).forEach { player -> like(player, question.id) }
+        listOf(one, two).forEach { player -> react(player, question.id, Reaction.LIKE) }
+        react(three, question.id, Reaction.DISLIKE)
+        react(three, SEED, Reaction.DISLIKE)
 
         val listed = everything().associateBy { it.id }
 
-        assertEquals(VoteTallyDto(votesA = 3, votesB = 0) to 2, listed.getValue(question.id).numbers(), "none made up")
-        assertEquals(tallyOf(SEED, votesA = 0, votesB = 1) to 0, listed.getValue(SEED).numbers())
-        assertEquals(tallyOf("seed-2", votesA = 0, votesB = 0) to 0, listed.getValue("seed-2").numbers())
+        assertEquals(
+            Triple(VoteTallyDto(votesA = 3, votesB = 0), 2, 1),
+            listed.getValue(question.id).numbers(),
+            "none made up",
+        )
+        assertEquals(Triple(tallyOf(SEED, votesA = 0, votesB = 1), 0, 1), listed.getValue(SEED).numbers())
+        assertEquals(Triple(tallyOf("seed-2", votesA = 0, votesB = 0), 0, 0), listed.getValue("seed-2").numbers())
     }
 
     @Test
@@ -219,10 +226,11 @@ class QuestionListTest {
 
     @Test
     fun `a page is read in as many statements however long it is`() {
-        val liker = newPlayer()
+        val (liker, critic) = newPlayer() to newPlayer()
         seeds.forEach { id ->
             answer(liker, id, OptionSide.A)
-            like(liker, id)
+            react(liker, id, Reaction.LIKE)
+            react(critic, id, Reaction.DISLIKE)
         }
 
         val statements =
@@ -230,7 +238,12 @@ class QuestionListTest {
                 transaction(database) {
                     val listed = ModerationStore.questions(emptySet(), emptySet(), after = null, limit = limit)
                     assertEquals(limit, listed.questions.size)
-                    assertTrue(listed.questions.all { it.numbers() == (tallyOf(it.id, votesA = 1, votesB = 0) to 1) })
+                    assertTrue(
+                        listed.questions.all {
+                            it.numbers() ==
+                                Triple(tallyOf(it.id, votesA = 1, votesB = 0), 1, 1)
+                        },
+                    )
                     assertTrue(listed.questions.all { it.categories.isNotEmpty() })
                     statementCount
                 }
@@ -259,11 +272,12 @@ class QuestionListTest {
         transaction(database) { VoteStore.cast(player, questionId, side, attemptId = UUID.randomUUID().toString()) }
     }
 
-    private fun like(
+    private fun react(
         player: String,
         questionId: String,
+        reaction: Reaction,
     ) {
-        transaction(database) { LikeStore.setLiked(player, questionId, liked = true) }
+        transaction(database) { ReactionStore.set(player, questionId, reaction) }
     }
 
     private fun page(
@@ -288,7 +302,7 @@ class QuestionListTest {
         categories: Set<String> = emptySet(),
     ): List<String> = page(limit = 100, statuses = statuses, categories = categories).questions.map { it.id }
 
-    /** [submission] as the list shows it once a moderator left it at [status], with no votes or likes. */
+    /** [submission] as the list shows it once a moderator left it at [status], with no votes or reactions. */
     private fun listed(
         submission: SubmissionDto,
         status: QuestionStatus,
@@ -307,9 +321,10 @@ class QuestionListTest {
         rejectionReason = reason,
         tally = VoteTallyDto(votesA = 0, votesB = 0),
         likeCount = 0,
+        dislikeCount = 0,
     )
 
-    private fun AdminQuestionDto.numbers(): Pair<VoteTallyDto, Int> = tally to likeCount
+    private fun AdminQuestionDto.numbers(): Triple<VoteTallyDto, Int, Int> = Triple(tally, likeCount, dislikeCount)
 
     /** Runs [action] once, after the first statement the transaction executes. */
     private fun afterFirstStatement(action: () -> Unit): StatementInterceptor =

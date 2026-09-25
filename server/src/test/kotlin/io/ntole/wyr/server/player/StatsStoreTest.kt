@@ -1,9 +1,10 @@
 package io.ntole.wyr.server.player
 
-import io.ntole.wyr.core.like.LikeResultDto
 import io.ntole.wyr.core.player.PlayerStatsDto
 import io.ntole.wyr.core.question.QuestionStatus
 import io.ntole.wyr.core.question.SubmitQuestionRequest
+import io.ntole.wyr.core.reaction.Reaction
+import io.ntole.wyr.core.reaction.ReactionResultDto
 import io.ntole.wyr.core.vote.OptionSide
 import io.ntole.wyr.core.vote.VoteResultDto
 import io.ntole.wyr.server.auth.AccountStore
@@ -14,9 +15,9 @@ import io.ntole.wyr.server.db.Seed
 import io.ntole.wyr.server.db.appTables
 import io.ntole.wyr.server.db.connectH2
 import io.ntole.wyr.server.db.h2Url
-import io.ntole.wyr.server.like.LikeStore
 import io.ntole.wyr.server.moderation.ModerationStore
 import io.ntole.wyr.server.question.SubmissionStore
+import io.ntole.wyr.server.reaction.ReactionStore
 import io.ntole.wyr.server.vote.Scoring
 import io.ntole.wyr.server.vote.VoteStore
 import org.jetbrains.exposed.v1.core.Transaction
@@ -239,7 +240,7 @@ class StatsStoreTest {
     private fun like(
         player: String,
         questionId: String,
-    ): LikeResultDto = transaction(database) { LikeStore.setLiked(player, questionId, liked = true) }
+    ): ReactionResultDto = transaction(database) { ReactionStore.set(player, questionId, Reaction.LIKE) }
 
     private fun statsOf(player: String): PlayerStatsDto? = transaction(database) { StatsStore.of(player) }
 

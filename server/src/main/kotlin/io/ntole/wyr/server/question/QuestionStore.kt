@@ -8,8 +8,8 @@ import io.ntole.wyr.server.db.QuestionCategories
 import io.ntole.wyr.server.db.Questions
 import io.ntole.wyr.server.db.Skips
 import io.ntole.wyr.server.db.Votes
-import io.ntole.wyr.server.like.LikeStore
 import io.ntole.wyr.server.player.PlayerStore
+import io.ntole.wyr.server.reaction.ReactionStore
 import org.jetbrains.exposed.v1.core.Column
 import org.jetbrains.exposed.v1.core.Expression
 import org.jetbrains.exposed.v1.core.JoinType
@@ -69,10 +69,11 @@ object QuestionStore {
      * question (the Votes and Skips keys are both player and question), and the categories are an
      * `EXISTS` rather than a join, so no question appears twice, however many of them it has. The
      * random key is rendered `RANDOM()`, which H2 and PostgreSQL both have. The batch's categories
-     * are then read in one more statement ([categoriesOf]), and its likes in one more
-     * ([LikeStore.likesOf]): how many players like each question and whether this one does, sent
-     * whether or not the player has answered it (CLAUDE.md §8d). A like committed after the batch
-     * was chosen shows in them, which is harmless, since it is then how the question stands.
+     * are then read in one more statement ([categoriesOf]), and its reactions in one more
+     * ([ReactionStore.reactionsOf]): how many players like each question and dislike it, and what this
+     * one thinks of it, sent whether or not the player has answered it (CLAUDE.md §8d). A reaction
+     * committed after the batch was chosen shows in them, which is harmless, since it is then how the
+     * question stands.
      */
     fun feed(
         playerId: String,
@@ -111,7 +112,7 @@ object QuestionStore {
     /**
      * Which questions [playerId] may be served at all, whether answered or not (CLAUDE.md §8d). This
      * is the one place that decides it, so the feed, anything that counts what a player has left,
-     * and what a player may answer, skip or like ([isServable]) all agree.
+     * and what a player may answer, skip or react to ([isServable]) all agree.
      *
      * A question is servable while it stands at approved ([standsAt]): once a moderator has approved
      * it, and for as long as no moderator has retired it (CLAUDE.md §8d, *Moderation*), to every player
@@ -151,12 +152,12 @@ object QuestionStore {
 
         val ids = rows.map { row -> row[Questions.id] }
         val categories = categoriesOf(Questions.id inList ids)
-        val likes = LikeStore.likesOf(playerId, ids)
+        val reactions = ReactionStore.reactionsOf(playerId, ids)
         return rows.map { row ->
             toDto(
                 row,
                 categories = categories[row[Questions.id]].orEmpty(),
-                likes = likes[row[Questions.id]] ?: LikeStore.QuestionLikes.NONE,
+                reactions = reactions[row[Questions.id]] ?: ReactionStore.QuestionReactions.NONE,
                 answeredBefore = row.getOrNull(Votes.answeredInCycle) != null,
             )
         }
@@ -198,14 +199,14 @@ object QuestionStore {
     ): Op<Boolean> = inCycle.isNull() or (inCycle less cycle)
 
     /**
-     * Whether a player may answer, skip or like the question [id]: it exists and is [servable], due
-     * or not. Any other question is not found, as far as they are concerned: one still waiting for a
-     * moderator, a rejected one, or a retired one. An author answers, skips and likes their own like
-     * any other. Must run inside a transaction.
+     * Whether a player may answer, skip or react to the question [id]: it exists and is [servable],
+     * due or not. Any other question is not found, as far as they are concerned: one still waiting for
+     * a moderator, a rejected one, or a retired one. An author answers, skips and reacts to their own
+     * like any other. Must run inside a transaction.
      *
-     * A plain read, with no lock on the question's row, so votes, skips and likes of one question
+     * A plain read, with no lock on the question's row, so votes, skips and reactions of one question
      * never queue behind one another. A question can stop being servable (`ModerationStore.retire`),
-     * so a vote, skip or like that read it servable just before a retirement commits still lands,
+     * so a vote, skip or reaction that read it servable just before a retirement commits still lands,
      * after it: accepted (CLAUDE.md §8b, *Retiring a question*).
      */
     fun isServable(id: String): Boolean =
@@ -218,7 +219,7 @@ object QuestionStore {
     private fun toDto(
         row: ResultRow,
         categories: List<String>,
-        likes: LikeStore.QuestionLikes,
+        reactions: ReactionStore.QuestionReactions,
         answeredBefore: Boolean,
     ): QuestionDto =
         QuestionDto(
@@ -227,8 +228,9 @@ object QuestionStore {
             optionB = row[Questions.optionB],
             categories = categories,
             answeredBefore = answeredBefore,
-            likeCount = likes.count,
-            likedByMe = likes.likedByMe,
+            likeCount = reactions.likes,
+            dislikeCount = reactions.dislikes,
+            myReaction = reactions.mine,
         )
 
     /**

@@ -35,6 +35,10 @@ class ApiFailure(
         fun notEnoughPoints(cost: Int) =
             ApiFailure(HttpStatusCode.Conflict, ErrorCode.NOT_ENOUGH_POINTS, "submitting costs $cost points")
 
+        /** A guest's submission: only a registered player may submit (CLAUDE.md §8d, *Submitting*). */
+        fun accountRequired() =
+            ApiFailure(HttpStatusCode.Forbidden, ErrorCode.ACCOUNT_REQUIRED, "only a registered player may submit")
+
         /** A moderator's decision on a question that is no longer, or never was, pending. */
         fun alreadyDecided(id: String) =
             ApiFailure(HttpStatusCode.Conflict, ErrorCode.ALREADY_DECIDED, "question $id is not pending")

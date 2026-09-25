@@ -16,6 +16,7 @@ import io.ktor.http.contentType
 import io.ktor.serialization.kotlinx.json.json
 import io.ktor.server.testing.testApplication
 import io.ntole.wyr.core.api.WyrApi
+import io.ntole.wyr.core.auth.RegisterRequest
 import io.ntole.wyr.core.auth.SessionDto
 import io.ntole.wyr.core.category.CategoryDto
 import io.ntole.wyr.core.category.CategoryListDto
@@ -153,6 +154,14 @@ class CategoryFlowTest {
         runServer("create-played") { client ->
             client.createCategory(CreateCategoryRequest(nameSr = "Животиње", nameEn = "Animals"))
             val author = client.guest()
+            // Only a registered player may submit.
+            val registered =
+                client.post(WyrApi.Paths.AUTH_REGISTER) {
+                    bearerAuth(author.accessToken)
+                    contentType(ContentType.Application.Json)
+                    setBody(RegisterRequest("catperson", "a password"))
+                }
+            assertEquals(HttpStatusCode.OK, registered.status)
             // The point the submission costs.
             val vote = VoteRequest("seed-1", OptionSide.A, attemptId = "earn")
             client.post(WyrApi.Paths.VOTES) {

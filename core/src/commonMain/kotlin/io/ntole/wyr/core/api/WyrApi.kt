@@ -71,15 +71,17 @@ public object WyrApi {
          * this cycle while something outside it is: its categories are served again within the same
          * cycle, `answeredBefore` on what the player has answered. That includes what the player
          * skipped in them, which is provisional (CLAUDE.md §8b). There is no cursor; asking again is
-         * how to get the next batch. Every question comes with how many players like it and whether
-         * this one does ([LIKES]), answered or not.
+         * how to get the next batch. Every question comes with how many players like it, how many
+         * dislike it and what this one thinks of it ([REACTIONS]), answered or not.
          *
          * POST: submits a question of the session player's own, with a
          * [io.ntole.wyr.core.question.SubmitQuestionRequest], answered 201 with its
-         * [io.ntole.wyr.core.question.SubmissionDto]. Requires a session, earns nothing, and costs
-         * its author [Limits.SUBMISSION_COST] (CLAUDE.md §8c), which a rejection pays back. The
-         * question is stored pending and served to nobody until a moderator approves it, and then to
-         * every player, its author included (CLAUDE.md §8d). A player may have at most
+         * [io.ntole.wyr.core.question.SubmissionDto]. Requires the session of a registered player: a
+         * guest's submission is refused with 403 [io.ntole.wyr.core.error.ErrorCode.ACCOUNT_REQUIRED]
+         * before anything it holds is checked. It earns nothing, and costs its author
+         * [Limits.SUBMISSION_COST] (CLAUDE.md §8c), which a rejection pays back. The question is stored
+         * pending and served to nobody until a moderator approves it, and then to every player, its
+         * author included (CLAUDE.md §8d). A player may have at most
          * [Limits.MAX_PENDING_SUBMISSIONS] pending at once, and one more is refused with 409
          * [io.ntole.wyr.core.error.ErrorCode.SUBMISSION_LIMIT]; an author with fewer points than it
          * costs, with 409 [io.ntole.wyr.core.error.ErrorCode.NOT_ENOUGH_POINTS], nothing stored or
@@ -110,20 +112,22 @@ public object WyrApi {
         public const val SKIPS: String = "/$VERSION/skips"
 
         /**
-         * Likes or unlikes a question for the session player (CLAUDE.md §8d), with a
-         * [io.ntole.wyr.core.like.LikeRequest], answered with a [io.ntole.wyr.core.like.LikeResultDto].
-         * Requires a session. Any question the player is served may be liked, their own included, at
-         * any time, whether they have answered it or not.
+         * Likes, dislikes or takes either back for the session player (CLAUDE.md §8d, *Reactions*),
+         * with a [io.ntole.wyr.core.reaction.ReactionRequest], answered with a
+         * [io.ntole.wyr.core.reaction.ReactionResultDto]. Requires a session. Any question the player is
+         * served may be reacted to, their own included, at any time, whether they have answered it or
+         * not.
          *
-         * The request sets the like rather than toggling it, so a player holds at most one like per
-         * question, and asking for what already holds changes nothing: a retry is harmless. Each like
-         * held is a point to the question's author, paid when it is added and taken back when it is
-         * removed. A seed has no author, so its likes count and pay nobody. A like does nothing else:
-         * it is no answer and no skip, and leaves what is due alone. A question no player is served is
-         * 404, as for [VOTES], for an unlike too: the likes a retired question holds stay held, and
-         * paid, until it is restored.
+         * The request sets the reaction rather than toggling it, so a player holds at most one per
+         * question, a like or a dislike, and asking for what already holds changes nothing: a retry is
+         * harmless. Each like held is a point to the question's author, paid when it is added and taken
+         * back when it is removed, a dislike that replaces it included; a dislike pays and costs nobody
+         * anything. A seed has no author, so its likes count and pay nobody. A reaction does nothing
+         * else: it is no answer and no skip, and leaves what is due alone. A question no player is
+         * served is 404, as for [VOTES], for taking a reaction back too: the reactions a retired
+         * question holds stay held, and its likes paid, until it is restored.
          */
-        public const val LIKES: String = "/$VERSION/likes"
+        public const val REACTIONS: String = "/$VERSION/reactions"
 
         /**
          * GET: every category questions are filed under, with its id and both its names, as a
@@ -185,8 +189,8 @@ public object WyrApi {
         /**
          * Every question, whatever its status, seeds included, newest first, as the moderator sees each
          * one: an [io.ntole.wyr.core.question.AdminQuestionPageDto] of
-         * [io.ntole.wyr.core.question.AdminQuestionDto]s, with its tally and like count (CLAUDE.md §8d,
-         * *Moderation*). [Query.STATUS] and [Query.CATEGORY] narrow it, each repeated for several and
+         * [io.ntole.wyr.core.question.AdminQuestionDto]s, with its tally, like count and dislike count
+         * (CLAUDE.md §8d, *Moderation*). [Query.STATUS] and [Query.CATEGORY] narrow it, each repeated for several and
          * each matching any of its values, none for all; [Query.LIMIT] bounds a page within the feed's
          * bounds, and [Query.CURSOR] asks for the page after the one that sent it. No author travels.
          * An admin route: needs [Headers.ADMIN_TOKEN].
@@ -198,9 +202,9 @@ public object WyrApi {
          * [io.ntole.wyr.core.question.RetireQuestionRequest], answered with its
          * [io.ntole.wyr.core.question.AdminQuestionDto], now
          * [io.ntole.wyr.core.question.QuestionStatus.RETIRED] (CLAUDE.md §8d, *Moderation*). From then
-         * on it is served to nobody and due for nobody, and a vote, skip, like or unlike of it is 404,
-         * until [ADMIN_RESTORATIONS] restores it. Nothing it earned is taken back: its answers' points
-         * stay, and its likes stay held and paid. An admin route: needs [Headers.ADMIN_TOKEN].
+         * on it is served to nobody and due for nobody, and a vote, skip or reaction to it is 404, until
+         * [ADMIN_RESTORATIONS] restores it. Nothing it earned is taken back: its answers' points stay,
+         * and its reactions stay held, its likes paid. An admin route: needs [Headers.ADMIN_TOKEN].
          *
          * A question that is not approved, a retired one included, is 409
          * [io.ntole.wyr.core.error.ErrorCode.WRONG_STATUS], and of two retirements racing for one

@@ -8,17 +8,17 @@ import io.ntole.wyr.core.question.QuestionDto
 import io.ntole.wyr.core.question.QuestionStatus
 import io.ntole.wyr.core.question.SubmissionDto
 import io.ntole.wyr.core.question.SubmitQuestionRequest
+import io.ntole.wyr.core.reaction.Reaction
 import io.ntole.wyr.core.vote.OptionSide
 import io.ntole.wyr.core.vote.VoteTallyDto
-import io.ntole.wyr.server.db.Likes
 import io.ntole.wyr.server.db.Questions
+import io.ntole.wyr.server.db.Reactions
 import io.ntole.wyr.server.db.Seed
 import io.ntole.wyr.server.db.Skips
 import io.ntole.wyr.server.db.appTables
 import io.ntole.wyr.server.db.connectH2
 import io.ntole.wyr.server.db.h2Url
 import io.ntole.wyr.server.db.raceBehindFirst
-import io.ntole.wyr.server.like.LikeStore
 import io.ntole.wyr.server.player.PlayerStore
 import io.ntole.wyr.server.player.StatsStore
 import io.ntole.wyr.server.plugins.ApiFailure
@@ -26,6 +26,7 @@ import io.ntole.wyr.server.question.QuestionStore
 import io.ntole.wyr.server.question.SkipStore
 import io.ntole.wyr.server.question.SubmissionStore
 import io.ntole.wyr.server.question.paidSubmission
+import io.ntole.wyr.server.reaction.ReactionStore
 import io.ntole.wyr.server.vote.Scoring
 import io.ntole.wyr.server.vote.VoteStore
 import org.jetbrains.exposed.v1.core.Transaction
@@ -103,21 +104,24 @@ class RetirementTest {
     }
 
     @Test
-    fun `nobody can answer, skip, like or unlike a retired question, and its likes stay held`() {
+    fun `nobody can answer, skip or react to a retired question, and its reactions stay held`() {
         val author = newPlayer()
         val liker = newPlayer()
+        val critic = newPlayer()
         val question = approved(author)
-        like(liker, question, liked = true)
+        react(liker, question, Reaction.LIKE)
+        react(critic, question, Reaction.DISLIKE)
         retire(question)
 
-        listOf(author, liker).forEach { who ->
+        listOf(author, liker, critic).forEach { who ->
             assertNotFound("answered") { answer(who, question) }
             assertNotFound("skipped") { transaction(database) { SkipStore.skip(who, question) } }
-            assertNotFound("liked") { like(who, question, liked = true) }
-            assertNotFound("unliked") { like(who, question, liked = false) }
+            Reaction.entries.forEach { reaction ->
+                assertNotFound("given $reaction") { react(who, question, reaction) }
+            }
         }
 
-        assertEquals(listOf(liker), likersOf(question), "the like still held")
+        assertEquals(mapOf(liker to Reaction.LIKE, critic to Reaction.DISLIKE), reactionsTo(question), "still held")
         assertEquals(Scoring.POINTS_PER_LIKE, statsOf(author).totalPoints, "and still paid")
     }
 
@@ -128,8 +132,8 @@ class RetirementTest {
         val question = approved(author)
         answer(player, question)
         answer(author, SEED)
-        like(player, question, liked = true)
-        like(author, question, liked = true)
+        react(player, question, Reaction.LIKE)
+        react(author, question, Reaction.LIKE)
         val before = listOf(author, player).associateWith { statsOf(it) }
         val listedBefore = listed(question)
 
@@ -148,7 +152,7 @@ class RetirementTest {
         assertEquals(
             listedBefore.copy(status = QuestionStatus.RETIRED, retiredAt = listed(question).retiredAt),
             listed(question),
-            "its tally and its like count kept",
+            "its tally and its reaction counts kept",
         )
     }
 
@@ -249,7 +253,7 @@ class RetirementTest {
     }
 
     @Test
-    fun `a vote, skip or like in flight as a retirement commits still lands`() {
+    fun `a vote, skip or reaction in flight as a retirement commits still lands`() {
         val player = newPlayer()
         val (voted, skipped, liked) = List(3) { approved(newPlayer()) }
 
@@ -258,12 +262,12 @@ class RetirementTest {
         // (CLAUDE.md §8b, *Retiring a question*). Locked, the retirement would wait, and time out here.
         retiredMidway(voted) { VoteStore.cast(player, voted, OptionSide.B, attemptId = "in-flight") }
         retiredMidway(skipped) { SkipStore.skip(player, skipped) }
-        retiredMidway(liked) { LikeStore.setLiked(player, liked, liked = true) }
+        retiredMidway(liked) { ReactionStore.set(player, liked, Reaction.LIKE) }
 
         listOf(voted, skipped, liked).forEach { id -> assertEquals(QuestionStatus.RETIRED, listed(id).status) }
         assertEquals(VoteTallyDto(votesA = 0, votesB = 1), listed(voted).tally, "the vote landed")
         assertEquals(listOf(player), skippersOf(skipped), "the skip landed")
-        assertEquals(listOf(player), likersOf(liked), "the like landed")
+        assertEquals(mapOf(player to Reaction.LIKE), reactionsTo(liked), "the like landed")
     }
 
     private fun newPlayer(): String = transaction(database) { PlayerStore.createGuest().id }
@@ -296,12 +300,12 @@ class RetirementTest {
         }
     }
 
-    private fun like(
+    private fun react(
         player: String,
         questionId: String,
-        liked: Boolean,
+        reaction: Reaction,
     ) {
-        transaction(database) { LikeStore.setLiked(player, questionId, liked) }
+        transaction(database) { ReactionStore.set(player, questionId, reaction) }
     }
 
     /**
@@ -348,9 +352,12 @@ class RetirementTest {
             Skips.select(Skips.playerId).where { Skips.questionId eq questionId }.map { it[Skips.playerId] }
         }
 
-    private fun likersOf(questionId: String): List<String> =
+    private fun reactionsTo(questionId: String): Map<String, Reaction> =
         transaction(database) {
-            Likes.select(Likes.playerId).where { Likes.questionId eq questionId }.map { it[Likes.playerId] }
+            Reactions
+                .select(Reactions.playerId, Reactions.reaction)
+                .where { Reactions.questionId eq questionId }
+                .associate { it[Reactions.playerId] to it[Reactions.reaction] }
         }
 
     private fun feed(
