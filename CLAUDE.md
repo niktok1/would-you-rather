@@ -1142,15 +1142,15 @@ listed on the Account screen.
   change their pick. Every answer, first or not, counts for the player's current cycle. The tally
   always holds **one vote per player per question**, their latest, beside a seed's made-up votes
   (*Seeds*). Built in `VoteStore.cast`, which moves the player's vote.
-- **Retry safety** *(built)*: every vote carries a client-generated idempotency key. A repeat
-  of the key last recorded for that question is replayed: nothing is written, it pays nothing, and
-  it reports the stored side with the current tally and total, not the result first returned. Any
-  other key is a fresh answer. Only the latest key per question is kept, so an older key arriving
-  after a newer answer is a fresh answer too: it pays again and moves the vote back to its side.
-  The app never resends an older attempt after a newer one, so only a duplicate from the network
-  or a modified client can do that. Built in `VoteStore.cast` and in `AttemptId`, made once per
-  tap: the Play screen resends a vote lost to `NETWORK` as the same attempt, as `withSessionRecovery`
-  does its retry, when the player taps *Покушај поново*. Changing the categories from that failure moves
+- - **Retry safety** *(built)*: every vote carries a client-generated idempotency key. A repeat of
+  the key last recorded for that question is replayed: nothing is written, it pays nothing, and it
+  reports the stored side with the current tally and total, not the result first returned. Any other
+  key is a fresh answer. Only the latest key per question is kept, so an older key arriving after a
+  newer answer is a fresh answer too: it pays again and moves the vote back to its side. The app
+  never resends an older attempt after a newer one, so only a duplicate from the network or a
+  modified client can do that. Built in `VoteStore.cast` and in `AttemptId`, made once per tap: the
+  Play screen resends a vote lost to `NETWORK` as the same attempt, as `withSessionRecovery` does
+  its retry, when the player taps *Покушај поново*. Changing the categories from that failure moves
   on instead (*The Play screen*) and abandons the attempt: the vote counts only if the first send
   landed, and nothing pays twice.
 - **Stats** *(built)*: `GET /v1/me` reports the session player's total points, answers given
@@ -1242,67 +1242,66 @@ listed on the Account screen.
     like again. It works out no points itself: a like of the player's own question moves their total
     without a vote, so the points between the cards show it from the next vote on, or from the next
     time the Play screen is shown, which reads them again.
-- **Submitting** *(built; details decided 2026-09-23; the cost 2026-09-25)*: **costs a point**
+- - **Submitting** *(built; details decided 2026-09-23; the cost 2026-09-25)*: **costs a point**
   (§8c) and earns no points directly, because authors earn through likes. The author writes both
   options and **picks one or more categories** (each a category's id; *Categories*). A player may
-  have at most **20 submissions pending** moderation at once. A submitted question is served only after a moderator
-  approves it; once approved it is due for every player in their current cycle. Built as
-  `POST /v1/questions`, in `SubmissionStore.submit` after `checkedSubmission`. Both options are
-  trimmed, then each must be non-blank, at most `WyrApi.Limits.MAX_OPTION_LENGTH` (200, UTF-16
+  have at most **20 submissions pending** moderation at once. A submitted question is served only
+  after a moderator approves it; once approved it is due for every player in their current cycle.
+  Built as `POST /v1/questions`, in `SubmissionStore.submit` after `checkedSubmission`. Both options
+  are trimmed, then each must be non-blank, at most `WyrApi.Limits.MAX_OPTION_LENGTH` (200, UTF-16
   units) and one line (no control character, nor U+2028 or U+2029, the line and paragraph
   separators), and the two must differ ignoring case: otherwise 422 `INVALID_SUBMISSION`, which the
-  player can put right. No category, or an id no category has, is 400 `VALIDATION_FAILED`, and
-  comes before any of those, since no correct client sends either: a picker must have one picked
-  before it lets the player submit, and offers only categories the server has. A category named
-  twice is filed once, and the question's categories are stored in the submission's own
-  transaction. The 21st pending submission is 409
-  `SUBMISSION_LIMIT`, counted under the author's row lock (§4). Then the cost is taken, under the same
-  lock and as a compare-and-set (`PlayerStore.spend`, §4): an author with fewer points is 409
-  `NOT_ENOUGH_POINTS`, and nothing is stored or taken; the question keeps what it cost. A rejection
-  pays it back (*Moderation*). A submission is stored `PENDING`
-  until a moderator decides it (*Moderation*). Questions carry an author and a
-  `QuestionStatus`, and `QuestionStore.servable` serves only approved ones, due at once in whatever
-  cycle each player is on. `GET /v1/me/questions` lists the author's submissions of every status,
-  newest first, a rejected one with its reason and a retired one as `RETIRED`
-  (`SubmissionStore.byAuthor`; `SubmissionStatus.RETIRED` on the client). On the client,
-  `SubmitQuestion` and `GetMySubmissions` go through `withSessionRecovery`
-  (`DefaultSubmissionRepository`). `SubmitQuestion` refuses no category before it ensures a
-  session, so nothing is sent, not even a guest's mint, and the repository refuses it again before
-  building the request; every other rule is the server's to enforce, and
-  `SubmissionRules` (`:core:domain`) copies the options' rules so a form can check what is typed, as
-  `AccountRules` does for accounts (`SubmissionLimitsTest` pins its numbers to `WyrApi.Limits`). A
-  status this build cannot name is `SubmissionStatus.OTHER`. The game lists the player's own on the
-  Account screen, *My questions* (*The Account screen*), and writes one on the **Submit** screen's
-  form, opened from there (`SubmitViewModel`, *decided 2026-09-25*): under *Шта би радије…*, two
-  options and one or more of the categories the server lists, read (`GetCategories`) each time the
-  form is shown, before the points, and named in the language shown as on Play (`categoryName`,
-  §8f), what `SubmissionRules` refuses in each option shown under it as it is typed, and Send off
-  until nothing is refused and a category is picked. A read of the categories that fails says so
-  under them in one line, *Категорије нису учитане.* (*Нема интернет везе.* offline), with Try
-  again, and those read before stay to pick from; when the points could not be read either, the one
-  failure under Send says so, and its Try again reads both. **The cost** has one copy on the client,
-  `SubmissionRules.SUBMISSION_COST`, the domain's copy of `WyrApi.Limits.SUBMISSION_COST`, which is
-  what `Scoring.SUBMISSION_COST` charges, so a change to the cost fails `SubmissionLimitsTest` until
-  the copy changes too (an installed build shows the cost it was built with). The form shows it on
-  the button, in the points' one unit, *Пошаљи · 1 П* (`Strings.pointsUnit`, §8f), and holds the
-  button off while the player's points, read through `GetPlayerStats` each time the form is shown
-  and after every submit, are fewer, with one short line saying so, *Немаш довољно поена.* The
-  server's own refusal, `NOT_ENOUGH_POINTS` (`DomainError.NOT_ENOUGH_POINTS`, points spent
-  meanwhile), is that same line, shown once: the points read after it hold the button off again. No
-  other line explains the cost, the user asking for less text. A stored question clears the form and
-  goes back to My questions, which reads the list again (`SubmitState.sent`, which the form takes
-  down as it goes and the next action takes down too), and one stored once the player had gone back
-  is read again by the Account screen if it is shown then, which takes `sent` down; a refusal keeps
-  it and says why under it, `INVALID_SUBMISSION`, `SUBMISSION_LIMIT` with the 20, a rate limit
-  with its wait, or offline. Points that cannot be read say so under Send, with Try again, apart
-  from a refusal (`SubmitState.submitFailure`, `pointsFailure`, `categoriesFailure`). One action at
-  a time, and the form cannot change while it is sent. `SubmitViewModelTest` drives it over fakes,
-  the categories' read and its failure and a refusal for points included; `SubmitScreenDrawTest`
-  draws every state in both themes and every language at 400x900 and 375x599, holds a written
-  question under the server's first five categories to 599 whole (a longer state scrolls), names the
-  chips in each language, and finds the refusal for points said once. `AppNavigationTest` sends one
-  and lands back on My questions, and sends one whose answer comes after the player went back, which
-  My questions then lists.
+  player can put right. No category, or an id no category has, is 400 `VALIDATION_FAILED`, and comes
+  before any of those, since no correct client sends either: a picker must have one picked before it
+  lets the player submit, and offers only categories the server has. A category named twice is filed
+  once, and the question's categories are stored in the submission's own transaction. The 21st
+  pending submission is 409 `SUBMISSION_LIMIT`, counted under the author's row lock (§4). Then the
+  cost is taken, under the same lock and as a compare-and-set (`PlayerStore.spend`, §4): an author
+  with fewer points is 409 `NOT_ENOUGH_POINTS`, and nothing is stored or taken; the question keeps
+  what it cost. A rejection pays it back (*Moderation*). A submission is stored `PENDING` until a
+  moderator decides it (*Moderation*). Questions carry an author and a `QuestionStatus`, and
+  `QuestionStore.servable` serves only approved ones, due at once in whatever cycle each player is
+  on. `GET /v1/me/questions` lists the author's submissions of every status, newest first, a
+  rejected one with its reason and a retired one as `RETIRED` (`SubmissionStore.byAuthor`;
+  `SubmissionStatus.RETIRED` on the client). On the client, `SubmitQuestion` and `GetMySubmissions`
+  go through `withSessionRecovery` (`DefaultSubmissionRepository`). `SubmitQuestion` refuses no
+  category before it ensures a session, so nothing is sent, not even a guest's mint, and the
+  repository refuses it again before building the request; every other rule is the server's to
+  enforce, and `SubmissionRules` (`:core:domain`) copies the options' rules so a form can check what
+  is typed, as `AccountRules` does for accounts (`SubmissionLimitsTest` pins its numbers to
+  `WyrApi.Limits`). A status this build cannot name is `SubmissionStatus.OTHER`. The game lists the
+  player's own on the Account screen, *My questions* (*The Account screen*), and writes one on the
+  **Submit** screen's form, opened from there (`SubmitViewModel`, *decided 2026-09-25*): under *Шта
+  би радије…*, two options and one or more of the categories the server lists, read
+  (`GetCategories`) each time the form is shown, before the points, and named in the language shown
+  as on Play (`categoryName`, §8f), what `SubmissionRules` refuses in each option shown under it as
+  it is typed, and Send off until nothing is refused and a category is picked. A read of the
+  categories that fails says so under them in one line, *Категорије нису учитане.* (*Нема интернет
+  везе.* offline), with Try again, and those read before stay to pick from; when the points could
+  not be read either, the one failure under Send says so, and its Try again reads both. **The cost**
+  has one copy on the client, `SubmissionRules.SUBMISSION_COST`, the domain's copy of
+  `WyrApi.Limits.SUBMISSION_COST`, which is what `Scoring.SUBMISSION_COST` charges, so a change to
+  the cost fails `SubmissionLimitsTest` until the copy changes too (an installed build shows the
+  cost it was built with). The form shows it on the button, in the points' one unit, *Пошаљи · 1 П*
+  (`Strings.pointsUnit`, §8f), and holds the button off while the player's points, read through
+  `GetPlayerStats` each time the form is shown and after every submit, are fewer, with one short
+  line saying so, *Немаш довољно поена.* The server's own refusal, `NOT_ENOUGH_POINTS`
+  (`DomainError.NOT_ENOUGH_POINTS`, points spent meanwhile), is that same line, shown once: the
+  points read after it hold the button off again. No other line explains the cost, the user asking
+  for less text. A stored question clears the form and goes back to My questions, which reads the
+  list again (`SubmitState.sent`, which the form takes down as it goes and the next action takes
+  down too), and one stored once the player had gone back is read again by the Account screen if it
+  is shown then, which takes `sent` down; a refusal keeps it and says why under it,
+  `INVALID_SUBMISSION`, `SUBMISSION_LIMIT` with the 20, a rate limit with its wait, or offline.
+  Points that cannot be read say so under Send, with Try again, apart from a refusal
+  (`SubmitState.submitFailure`, `pointsFailure`, `categoriesFailure`). One action at a time, and the
+  form cannot change while it is sent. `SubmitViewModelTest` drives it over fakes, the categories'
+  read and its failure and a refusal for points included; `SubmitScreenDrawTest` draws every state
+  in both themes and every language at 400x900 and 375x599, holds a written question under the
+  server's first five categories to 599 whole (a longer state scrolls), names the chips in each
+  language, and finds the refusal for points said once. `AppNavigationTest` sends one and lands back
+  on My questions, and sends one whose answer comes after the player went back, which My questions
+  then lists.
 - **Moderation** *(built)*: a moderator approves or rejects each pending submission, **may change
   its categories** when approving (*Categories*: at least one stays, and a change replaces the
   question's `question_categories` rows in one transaction), and **may retire an approved question

@@ -69,29 +69,29 @@ own copy stays English for the branches that redesign them. The client alone cha
 tests; `RootScreensTest` went with the tabs). Not seen on a device: Android's back, and any screen of
 it on a phone; nor whether the web build's default font draws Cyrillic.
 
-**On `merge/redesign`, `main` merged in** (60b0d7f, `feat/server-categories` with its clients;
-one `--no-ff` merge, nothing pushed): the redesign's screens on main's server categories and cost.
+**On `merge/redesign`, `main` merged in** (60b0d7f, `feat/server-categories` with its clients; one
+`--no-ff` merge, nothing pushed): the redesign's screens on main's server categories and cost.
 Categories are main's data everywhere, ids and the server's names, with the redesign's UI: the row's
 categories, and the picker **dialog** as main has it (it reads the list on opening, a line while it
 loads with none, one if the read fails), its words translated (`PlayStrings.pickerTitle`,
-`pickerAll`, `pickerLoading`; its buttons are `Strings.cancel`, lifted out of `AccountStrings` for the
-Auth page and the picker alike, and `Strings.play`), for the parallel branch that replaces it with a
-screen to build on. **Category names by language**, through one function, `categoryName(category,
-language)` in `io.ntole.wyr.language` (it was `io.ntole.wyr.play`): `nameSr` in Cyrillic,
-`SerbianScript.toLatin(nameSr)` in Latinica, `nameEn` in English, the language read from
-`LocalLanguage`, which `WyrStrings` now provides beside `LocalStrings`. **The cost** has one copy,
-main's `SubmissionRules.SUBMISSION_COST`, pinned to `WyrApi.Limits.SUBMISSION_COST` by
+`pickerAll`, `pickerLoading`; its buttons are `Strings.cancel`, lifted out of `AccountStrings` for
+the Auth page and the picker alike, and `Strings.play`), for the parallel branch that replaces it
+with a screen to build on. **Category names by language**, through one function,
+`categoryName(category, language)` in `io.ntole.wyr.language` (it was `io.ntole.wyr.play`): `nameSr`
+in Cyrillic, `SerbianScript.toLatin(nameSr)` in Latinica, `nameEn` in English, the language read
+from `LocalLanguage`, which `WyrStrings` now provides beside `LocalStrings`. **The cost** has one
+copy, main's `SubmissionRules.SUBMISSION_COST`, pinned to `WyrApi.Limits.SUBMISSION_COST` by
 `SubmissionLimitsTest`; the redesign's `COST` is gone, overruling the Account paragraph's merge note
 below (the task asked for main's), and so are main's `POINTS_NOTE`, `SENT_NOTE`, the form's list of
 submissions (My questions on Account has it) and the English refusal for points. Send shows the cost
 in `Strings.pointsUnit`, *Пошаљи · 1 П*, off while the points are fewer; the server's
 `NOT_ENOUGH_POINTS` is the same short line, *Немаш довољно поена.*, said once. The Submit form reads
 the categories and then the points each time it is shown; a failed read of the categories says
-*Категорије нису учитане.* (`Strings.categoriesUnread`, the picker's too), or offline, under the chips
-with Try again, unless the points failed too. **`pointsSpent`** is not shown: the Account card keeps
-its four counts, none of them a term of a sum (CLAUDE.md §8b, *What submitting cost, on the Account
-screen*: ask the user; the other option is a fifth number). Every string translated; no English
-literal left from main's side in `:app:shared`. The moderation app stays English (§8f).
+*Категорије нису учитане.* (`Strings.categoriesUnread`, the picker's too), or offline, under the
+chips with Try again, unless the points failed too. **`pointsSpent`** is not shown: the Account card
+keeps its four counts, none of them a term of a sum (CLAUDE.md §8b, *What submitting cost, on the
+Account screen*: ask the user; the other option is a fifth number). Every string translated; no
+English literal left from main's side in `:app:shared`. The moderation app stays English (§8f).
 Verified here at the merge (*Verified working*): lint, the verify job's tests and client compiles,
 and the iOS Kotlin compiles. Tests: `:app:shared` 267 (250 on the redesign, 128 on main), `:server`
 346 (2 skipped), `:core:domain` 72, `:core:data` 142, `:core:network` 72 and 78 Android host,
@@ -211,26 +211,27 @@ two category values changed type under the same names (`PlayedCategories`, `Cate
 
 ### Verified working
 
-- **`merge/redesign` with `main` merged in** (60b0d7f merged `--no-ff`), on this machine, the merge
-  commit's tree: the verify job's lists exactly, `ktlintCheck`; `:server:test :core:domain:jvmTest
-  :core:data:jvmTest :core:network:jvmTest :core:network:testAndroidHostTest :app:shared:jvmTest
-  :app:adminApp:jvmTest`, each with `--rerun`, so none came from the build cache; the client
-  compiles, `:app:androidApp:assembleDebug` and both web targets of `:app:shared` and
-  `:app:adminApp` included; and the ios job's Kotlin compiles (`:app:shared:compileKotlinIosSimulatorArm64`
-  and the `compileTestKotlinIosSimulatorArm64` of `:app:shared` and the three `:core` modules), each
-  Gradle's own exit code 0. Test counts from `build/test-results`: `:server:test` 346 (344 green, 2
-  skipped: the PostgreSQL-only boot races), `:core:domain:jvmTest` 72, `:core:data:jvmTest` 142,
-  `:core:network:jvmTest` 72, `:core:network:testAndroidHostTest` 78, `:app:shared:jvmTest` 267,
-  `:app:adminApp:jvmTest` 106, no failure anywhere. New or changed: `CategoryNamesTest` (each
-  language's name, one not read by its id); `PlayScreenTest` (the categories played in each
-  language, the picker's lines in each); `PlayScreenDrawTest` (the picker's words and the categories
-  in each language and the server's order, its card within 599 in every language, its loading and
-  failure lines in both themes and every language, the row's names in each language);
-  `SubmitScreenTest` and `SubmitScreenDrawTest` (the chips in each language, a failed read of the
-  categories with Try again, the refusal for points as one line, said once); `SubmitViewModelTest`
-  (the categories read before the points, a refusal for points reading the points again);
-  `AppNavigationTest` submits under a category the fake server lists. `:server`, `:core` and
-  `:app:adminApp` are main's byte for byte, but for `SubmissionRules`' KDoc.
+- - **`merge/redesign` with `main` merged in** (60b0d7f merged `--no-ff`), on this machine, the
+  merge commit's tree: the verify job's lists exactly, `ktlintCheck`; `:server:test
+  :core:domain:jvmTest :core:data:jvmTest :core:network:jvmTest :core:network:testAndroidHostTest
+  :app:shared:jvmTest :app:adminApp:jvmTest`, each with `--rerun`, so none came from the build
+  cache; the client compiles, `:app:androidApp:assembleDebug` and both web targets of `:app:shared`
+  and `:app:adminApp` included; and the ios job's Kotlin compiles
+  (`:app:shared:compileKotlinIosSimulatorArm64` and the `compileTestKotlinIosSimulatorArm64` of
+  `:app:shared` and the three `:core` modules), each Gradle's own exit code 0. Test counts from
+  `build/test-results`: `:server:test` 346 (344 green, 2 skipped: the PostgreSQL-only boot races),
+  `:core:domain:jvmTest` 72, `:core:data:jvmTest` 142, `:core:network:jvmTest` 72,
+  `:core:network:testAndroidHostTest` 78, `:app:shared:jvmTest` 267, `:app:adminApp:jvmTest` 106, no
+  failure anywhere. New or changed: `CategoryNamesTest` (each language's name, one not read by its
+  id); `PlayScreenTest` (the categories played in each language, the picker's lines in each);
+  `PlayScreenDrawTest` (the picker's words and the categories in each language and the server's
+  order, its card within 599 in every language, its loading and failure lines in both themes and
+  every language, the row's names in each language); `SubmitScreenTest` and `SubmitScreenDrawTest`
+  (the chips in each language, a failed read of the categories with Try again, the refusal for
+  points as one line, said once); `SubmitViewModelTest` (the categories read before the points, a
+  refusal for points reading the points again); `AppNavigationTest` submits under a category the
+  fake server lists. `:server`, `:core` and `:app:adminApp` are main's byte for byte, but for
+  `SubmissionRules`' KDoc.
 - **`feat/server-categories`, the clients** (4ceb426, 4a009e4, a4c05fb, c48aa95), on this machine. At
   the last, the verify job's lists exactly: `ktlintCheck`; `:server:test :core:domain:jvmTest
   :core:data:jvmTest :core:network:jvmTest :core:network:testAndroidHostTest :app:shared:jvmTest
@@ -794,15 +795,16 @@ two category values changed type under the same names (`PlayedCategories`, `Cate
   nothing here has read its history. Check, read-only, that it reads `1 BASELINE`, `2 SQL`,
   `3 SQL`, `4 SQL`, and that `sessions` has a row for every `players` row with a
   `refresh_token_hash`. The next script after V4 runs there at the next Manual Deploy.
-- **The clients' categories on a device** (`feat/server-categories`). No build with them has been
+- - **The clients' categories on a device** (`feat/server-categories`). No build with them has been
   installed or run: the Play picker, the Submit chips and the moderation app's Categories tab are
   drawn off screen (`PlayScreenDrawTest`, `SubmitScreenDrawTest`, `ScreensDrawTest`) and driven over
   fakes, and no app has read `GET /v1/categories` from a real server. Serbian names on a phone's
   fonts, the names in Latinica and English, a picker of many more than five categories, and the
   Account card once a question has cost a point (its answers and likes then count more than its
-  points; `pointsSpent` is shown nowhere, CLAUDE.md §8b), are unseen. Installed builds from before this branch against a server from it: a filter or a
-  submission under RANDOM is 400, ABSURD and every new category show as `OTHER`, and a refusal for
-  points reads as `UNKNOWN`, as the server's handoff says; not tried on a phone.
+  points; `pointsSpent` is shown nowhere, CLAUDE.md §8b), are unseen. Installed builds from before
+  this branch against a server from it: a filter or a submission under RANDOM is 400, ABSURD and
+  every new category show as `OTHER`, and a refusal for points reads as `UNKNOWN`, as the server's
+  handoff says; not tried on a phone.
 - **V6 to V9 on PostgreSQL, and on production** (`feat/server-categories`). They have run only on
   H2, here; `SchemaDriftTest` and `MigrationsTest` take them to PostgreSQL in the `server-postgres`
   job, not yet run on the branch. The next Manual Deploy runs V5 to V9 there in one boot: after it,
