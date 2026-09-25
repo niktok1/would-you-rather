@@ -249,8 +249,9 @@ adding another `WyrColors` value.
 a 24 by 24 grid, so no icon library is needed (§2): `Home`, `Account` and `Back` (an arrow pointing
 left) for the top bars (§8d, *Navigation*), `Heart` and `HeartFilled`, the outline and the filled
 heart, for likes, and for the Play screen `Skip` (a triangle against a bar) and `ChevronDown`, the
-small chevron beside the categories played (§8d, *The Play screen*). They carry no colour of their own: `Icon` tints each from `WyrColors`, so they
-follow the light and dark themes as text does. Adding an icon = adding a `WyrIcons` value.
+small chevron beside the categories played (§8d, *The Play screen*). They carry no colour of their
+own: `Icon` tints each from `WyrColors`, so they follow the light and dark themes as text does.
+Adding an icon = adding a `WyrIcons` value.
 `WyrIconsDrawTest` draws each off screen: every one a figure of the theme's size, no two the same,
 and the filled heart covering the outline and its inside.
 
