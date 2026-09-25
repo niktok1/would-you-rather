@@ -887,9 +887,9 @@ The third to move is the **category picker**, onto the Play screen (*Categories*
   cannot read is `Category.OTHER` beside the rest, and an empty list is `OTHER` alone. A player's
   selection is a set too (`QuestionRepository.categories`, empty for every category, never `OTHER`),
   and every refill sends all of it; the Play screen's category picker ticks each category, and *All
-  categories* empties it (*Current focus*). Selecting all of `Category.selectable` is not selecting none: a question filed only
-  under categories this build cannot name is in none of them. A client submits under a set of one
-  or more, never `OTHER` (*Submitting*).
+  categories* empties it (*Current focus*). Selecting all of `Category.selectable` is not selecting
+  none: a question filed only under categories this build cannot name is in none of them. A client
+  submits under a set of one or more, never `OTHER` (*Submitting*).
 - **Re-answering** *(built)*: a question can be answered again, whether or not the feed has
   served it again. It earns the point again **every time**, inside its cycle or not (farming is
   bounded by rate limiting, 120 votes a minute per player on average, §8b), and the player may
