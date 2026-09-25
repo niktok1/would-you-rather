@@ -121,16 +121,17 @@ alone changed; the server only in a comment and a test's name.
   Moderation's client, on the same branch, which merges `feat/submission-client` up to its data layer
   (5ca5cd7) for the `Submission` domain type and its mapping: `ModerationApiTest` pins the admin header
   on each admin call and on no other request, the bearer left to the Auth plugin (none without a
-  session), no refresh after a 403, and the token absent from the trace and from a failure's message;
-  `DefaultModerationRepositoryTest` the queue mapped as the author's list is, an approval's categories
-  in declaration order and none keeping the author's, `OTHER` refused before sending, the trimmed
-  reason, each refusal's `DomainError` with its message, `UNKNOWN` for moderation off, and that neither
-  a 403 nor a 401 replaces the player's session or makes one; `AdminTokenTest` and
-  `RejectionReasonTest` the token's and the reason's rules; `ModerationMapperTest` the reason limit
-  against the wire's; and `ModerationConsoleViewModelTest` the console's section then: nothing sent
-  without a valid token, Reject off until the reason is valid, the queue read again after every
-  decision, picks for a submission no longer listed dropped, and the token in neither the state's text
-  nor the log. It went with that section on `feat/moderation-app`, whose `ModerationViewModelTest` and
+  session), no refresh after a 403, and the token absent from a failure's message and from the trace
+  (that half removed with the trace by `chore/remove-console`); `DefaultModerationRepositoryTest`
+  the queue mapped as the author's list is, an approval's categories in declaration order and none
+  keeping the author's, `OTHER` refused before sending, the trimmed reason, each refusal's
+  `DomainError` with its message, `UNKNOWN` for moderation off, and that neither a 403 nor a 401
+  replaces the player's session or makes one; `AdminTokenTest` and `RejectionReasonTest` the token's
+  and the reason's rules; `ModerationMapperTest` the reason limit against the wire's; and
+  `ModerationConsoleViewModelTest` the console's section then: nothing sent without a valid token,
+  Reject off until the reason is valid, the queue read again after every decision, picks for a
+  submission no longer listed dropped, and the token in neither the state's text nor the log. It
+  went with that section on `feat/moderation-app`, whose `ModerationViewModelTest` and
   `QuestionListViewModelTest` pin the moderation app instead (below).
   Likes (`feat/question-likes`, server and contract only; `:server` 179 tests with it, 65 of them
   flows): `LikeStoreTest` pins a like paying the author a point and an unlike taking it back, a
@@ -191,8 +192,8 @@ alone changed; the server only in a comment and a test's name.
   session alone, all through `MockEngine`; and `DevConsoleViewModelTest` the Like button and the
   likes-moved comparison, a like sent before any read after the vote worked included. On
   `feat/play-skip-like` the Like left the console with its tests and those of a like sent before any
-  read: the console's keep only the likes-moved comparison, and `PlayViewModelTest` and
-  `PlayScreenTest` cover the Play tab's Like.
+  read: the console's kept only the likes-moved comparison, removed with the console by
+  `chore/remove-console`, and `PlayViewModelTest` and `PlayScreenTest` cover the Play tab's Like.
 - Live curl run against `./gradlew :server:run` confirmed guest auth, paging, voting,
   refresh-token rotation, replay rejection, and the `ErrorDto` envelope on 400/401/404/409. That
   run predates flat scoring, `fix/read-committed` and the endless feed, so the scoring it checked
@@ -228,12 +229,13 @@ alone changed; the server only in a comment and a test's name.
   to the engine on every call and on a retry after a refresh, the refresh's 5 minutes with the
   ordinary connect timeout (from `AuthApi.refresh` too), a 90 s refresh landing although the call
   that asked for it timed out, and a refresh that never ends giving up at 5 minutes with the old
-  session kept. `RunApiOverHttpTest` pins a timeout as `NETWORK`, `HttpTraceTest` a timeout traced as
-  one and a cancellation still as a cancellation. `AndroidTokenStorageTest`, an Android host test,
-  pins `commit()` over `apply()`, off the caller's thread, one commit at a time in order, a failed
-  commit thrown, and a write whose caller was cancelled landing. `SessionStorageFailureTest` pins a
-  session the store could not make durable, as a guest is minted, on a clear and in recovery,
-  failing the call as `NETWORK` rather than as a bare exception, with no guest minted twice for it.
+  session kept. `RunApiOverHttpTest` pins a timeout as `NETWORK`, `HttpTraceTest` a timeout traced
+  as one and a cancellation still as a cancellation (removed with the trace by
+  `chore/remove-console`). `AndroidTokenStorageTest`, an Android host test, pins `commit()` over
+  `apply()`, off the caller's thread, one commit at a time in order, a failed commit thrown, and a
+  write whose caller was cancelled landing. `SessionStorageFailureTest` pins a session the store
+  could not make durable, as a guest is minted, on a clear and in recovery, failing the call as
+  `NETWORK` rather than as a bare exception, with no guest minted twice for it.
   `DesktopApiBaseUrlTest` pins `WYR_API_BASE_URL`: bound by the desktop module, blank as unset,
   trimmed, and every malformed value refused with the variable named. By hand: an invalid value run
   through `./gradlew :app:desktopApp:run` stopped the app at start naming it, and a second run, on a
@@ -249,9 +251,10 @@ alone changed; the server only in a comment and a test's name.
   spending the failed-token budget, and once that is spent, refused exactly as every wrong guess
   and no token are until the budget is back; guesses refused by that budget spending none of the
   admin one; each of the queue, an approval and a rejection spending both admin budgets and refused
-  by each; the defaults letting *Answer N*'s 50 through; one INFO line per refusal, naming the
-  limit and the player and neither the token nor a client address; no header read with none
-  trusted, and behind `CF-Connecting-IP` one budget per address it names, a forged
+  by each; the defaults letting 50 answers in a row through (`the default limits let a quick run of
+  answers through`, named for the console's *Answer N* until `chore/remove-console`); one INFO line
+  per refusal, naming the limit and the player and neither the token nor a client address; no header
+  read with none trusted, and behind `CF-Connecting-IP` one budget per address it names, a forged
   `X-Forwarded-For` changing nothing and a request without it keyed by the socket peer; and a boot
   warning on Render with no header trusted. `ClientAddressTest` pins the value read and the
   fallbacks, `ServerConfigTest` the defaults and every `RATE_LIMIT_*` and `CLIENT_IP_HEADER` value
@@ -265,9 +268,9 @@ alone changed; the server only in a comment and a test's name.
   allowing `X-Forwarded-For` as the header, each fails them. On the client, `RunApiOverHttpTest`
   pins the server's 429 and a proxy's HTML 429 as `RATE_LIMITED`, sent once, and
   `DefaultVoteRepositoryTest` a rate-limited vote not resent and a rate-limited refresh keeping the
-  session and minting no guest; recovering on `RATE_LIMITED` fails them. The console needed nothing:
-  `resultOf` logs every `WyrException` as `err`, `RATE_LIMITED` included, and *Answer N* stops at
-  it.
+  session and minting no guest; recovering on `RATE_LIMITED` fails them. The console needed nothing
+  then: `resultOf` logged every `WyrException` as `err`, `RATE_LIMITED` included, and *Answer N*
+  stopped at it (both removed with the console by `chore/remove-console`).
 - Live run of the rate limits against the fat jar on Netty, `PORT=18433` with `ADMIN_TOKEN`,
   `TRUSTED_PROXY_HOPS=2` and budgets of 2 guests, 3 votes and 2 wrong admin tokens, by curl:
   `/health` five times, 200 each; three mints from one address behind the proxies, 200, 200 and
@@ -777,13 +780,13 @@ the client alone changed. Verified on this Mac: `AccountViewModelTest` (17, 14 b
 guest's stats and a registered player's, and again on each showing; `AccountScreenDrawTest` (3, 1
 before) draws every state at 400x900 and 375x599 in both themes, reads every line off the screen's
 semantics, and holds every state without a form to 599 high (509 at most); `DevConsoleScreenTest`
-the console's likes-moved line. A screen showing only the points, and the cycle swapped with what is
-left, each broke a test. Counts: `:server` 311, 2 skipped (from the build cache: untouched);
-`:core:domain` 47; `:core:data` 146; `:core:network` 82 (88 as Android host tests); `:app:shared`
-135 (129 before); `:app:adminApp` 87. Lint, the verify job's tests (client tasks forced to rerun)
-and client compiles, `assembleDebug` included, and the ios job's Kotlin compiles pass. **Not
-verified:** nothing has run on a device or against a server, and the renders were looked at on this
-Mac only.
+the console's likes-moved line (removed with the console by `chore/remove-console`). A screen
+showing only the points, and the cycle swapped with what is left, each broke a test. Counts:
+`:server` 311, 2 skipped (from the build cache: untouched); `:core:domain` 47; `:core:data` 146;
+`:core:network` 82 (88 as Android host tests); `:app:shared` 135 (129 before); `:app:adminApp` 87.
+Lint, the verify job's tests (client tasks forced to rerun) and client compiles, `assembleDebug`
+included, and the ios job's Kotlin compiles pass. **Not verified:** nothing has run on a device or
+against a server, and the renders were looked at on this Mac only.
 
 **To try it on a phone** (`devDebug`, against the dev server, whose in-memory H2 forgets everything
 on a deploy or a spin-down). The numbers are a fresh guest's, with only the 24 seeds on the server
