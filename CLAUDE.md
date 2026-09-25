@@ -815,6 +815,11 @@ not moved yet still adds its section to the console. Navigation is the root tab 
   `AccountScreenDrawTest` draws every state in both themes; theme tokens only (§5b).
 - The console has no account forms. Its Session section names the account by its last stats read,
   the username or `guest` (`accountOf`).
+- The fourth to move is the player's **stats** (*Stats*), onto this screen: under the points, a line
+  each for the answers given and the questions they went to, the cycle and the questions left in it,
+  and the likes received, and `AccountScreenDrawTest` holds a registered player's screen whole to a
+  375x599 phone, so a guest's stats show before any scrolling too. The console's Stats section keeps
+  only what its points check compares, the player and the total, and *Read stats*.
 
 The second to move is **Skip and Like**, onto the Play screen (`io.ntole.wyr.play`; *Skipping* and
 *Likes*, below):
@@ -938,7 +943,8 @@ The third to move is the **category picker**, onto the Play screen (*Categories*
   `StatsStore.of`, as one statement, so the total always agrees with the answers given and
   the likes received (§8c). It only reads, and the cycle starts lazily on the next feed request, so
   between the answer that finishes a cycle and that request it reports the finished cycle with
-  nothing due.
+  nothing due. The Account screen shows every number but the player id (*Current focus*); the
+  console only checks the total against the last vote's.
 - **Skipping** *(built; decided 2026-09-23)*: allowed, earns nothing, and never touches the
   tally. The server **records the skip for the player's current cycle only**, so the question is
   no longer due in that cycle and comes back in the **next** one, except through a category filter
@@ -994,9 +1000,9 @@ The third to move is the **category picker**, onto the Play screen (*Categories*
     like again. It works out no points itself: a like of the player's own question moves their total
     without a vote, so the reveal's total, which is the vote's, shows it only from the next vote on.
   - *The console* no longer likes. It shows a question's `likeCount` and `likedByMe` as the feed
-    served them, and `likesReceived` in its stats. Since a like moves its author's total without a
-    vote, it compares its stats with the last vote's total only while they count as many likes
-    received as the first read after that vote did (`likesMovedSinceOutcome`).
+    served them. Since a like moves its author's total without a vote, it compares its stats with
+    the last vote's total only while they count as many likes received as the first read after that
+    vote did (`likesMovedSinceOutcome`).
 - **Submitting** *(built; details decided 2026-09-23)*: earns no points
   directly, because authors earn through likes. The author writes both options and **picks one or
   more categories** (each a real one, not `UNKNOWN`; *Categories*). A player may have at most **20

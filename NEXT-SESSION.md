@@ -788,6 +788,24 @@ ends only the session `$ACCESS` was issued for: that session's refresh token is 
 the login's session lives on. Logins are 20 a minute per address (`RATE_LIMIT_LOGINS_PER_MINUTE`),
 registrations 20 an hour per player.
 
+### Stats on Account
+
+The game's **Account** tab shows the player's stats under the points (CLAUDE.md §8d, *Current
+focus*, *Stats*), in every build, PROD's included: the answers given and the questions they went to,
+the cycle and the questions left in it, and the likes the questions the player submitted hold, as
+`GET /v1/me` counts them, read each time the tab is shown. The server needs nothing new.
+
+**To try it on a phone** (`devDebug`, against the dev server):
+
+1. `./gradlew :app:androidApp:installDevDebug`, answer 3 questions on **Play**, skip 1, and open
+   **Account**: *3 points*, *3 answers to 3 questions*, *Cycle 1: 20 questions left* (the 24 seeds
+   less the 4), *0 likes on questions you submitted*.
+2. Answer or skip on Play until no question is left: once Play has asked for more, Account shows
+   *Cycle 2: 24 questions left*, the answers and questions as they were (*Cycle 1: 0 questions left*
+   before, if it has not asked yet).
+3. A like of one of your own questions (*Skip and Like on Play*, step 6) shows as *1 like on questions
+   you submitted*, and a point more.
+
 ### Skip and Like on Play
 
 The game's **Play** tab skips and likes (CLAUDE.md §8d, *Skipping* and *Likes*), in every build,
@@ -988,9 +1006,9 @@ questions come from the categories the Play tab picked.
   seeds 24 questions, so press *New guest*, then *Answer N* with 25. The first 24 are the seeds in
   random order and the 25th logs `looped`: it is the first question of cycle 2, which serves all
   24 again in a new random order.
-- **Stats.** Every number `GET /v1/me` returns: total points, answers given (re-answers count,
-  replays do not), distinct questions answered, the cycle, how many questions are still due in it,
-  and the likes the player's own questions hold (`likesReceived`). Read when the console opens, after
+- **Stats.** The player (`playerId`) and total points of `GET /v1/me`, for the points check below;
+  every other number it returns is the game's **Account** tab's now (*Stats on Account*), and the
+  `readStats` log entry's. Read when the console opens, after
   every vote, *Answer N* and *New guest*, and on *Read stats*. *Read stats* is an action like any other, logged as `readStats` whether it works or
   not. The other reads are logged only when they fail, as `refreshStats`. A read that fails keeps
   what was shown, which after a vote is nothing: a vote's outcome drops the stats it outdated. A red
@@ -1002,12 +1020,12 @@ questions come from the categories the Play tab picked.
   guest's: instead of the flag, Stats shows `lastOutcome: paid to <id>, not compared`. A like of one
   of the player's questions, theirs or anyone's, moves the total without a vote, so once
   `likesReceived` differs from what the first read after the last vote counted, Stats shows
-  `lastOutcome: likesReceived was <n> then, not compared` instead of the flag.
+  `lastOutcome: likesReceived <n> then, <m> now, not compared` instead of the flag.
   **To see the lazy cycle start:**
-  once the last due question is answered or skipped, Stats shows the finished cycle with
-  `dueThisCycle: 0`. The next cycle starts only when the feed is next asked for questions, which the
+  once the last due question is answered or skipped, *Read stats* logs the finished cycle with
+  `due=0`. The next cycle starts only when the feed is next asked for questions, which the
   console does when its queue is empty (*Next question*, or the next answer of *Answer N*).
-  *Read stats* then shows it, with the whole pool due.
+  *Read stats* then logs it, with the whole pool due; the Account tab shows the same.
 - **Questions.** Fetch the next question, or empty the local queue, and see its size.
 - **Vote by id.** Sends a vote for whatever id is typed, as a new attempt. An unknown id provokes
   `QUESTION_NOT_FOUND` (404). A known one is simply answered again and pays 1: there is no

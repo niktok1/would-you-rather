@@ -20,7 +20,8 @@ import io.ntole.wyr.core.network.environment.WyrEnvironment
  * guest, and on Read stats. A vote's outcome drops them, so they are never older than
  * [lastOutcome]. A read that fails leaves them as they were, which may be none. Read stats is an
  * action like any other, logged as `readStats` whether it works or not. The other reads are logged
- * only when they fail, as a `refreshStats` entry.
+ * only when they fail, as a `refreshStats` entry. They are read for the account they name and for
+ * [pointsMismatch]: the numbers are shown to the player on the game's Account tab (CLAUDE.md §8d).
  */
 data class DevConsoleState(
     /** The server environment this build was made for, whose URL every request goes to (CLAUDE.md §8e). */

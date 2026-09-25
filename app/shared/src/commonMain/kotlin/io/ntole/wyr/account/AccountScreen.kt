@@ -39,8 +39,8 @@ import io.ntole.wyr.theme.WyrTypeScale
 
 /**
  * The Account screen (CLAUDE.md §8d, *Current focus*): who is playing on this device and their
- * points; for a guest, Register, which keeps the points, and Log in, to an account registered
- * anywhere; for a registered player, Log out.
+ * stats, the points first; for a guest, Register, which keeps the points, and Log in, to an account
+ * registered anywhere; for a registered player, Log out.
  *
  * Plain on purpose while UI polish is paused, and every colour, space and size from the theme (§5b).
  * Each field names its autofill content type, so the platform's password manager can offer to fill
@@ -104,7 +104,11 @@ private fun Status(
         when {
             stats != null -> {
                 Text(text = playingAs(stats), color = colors.primaryText, fontWeight = FontWeight.Bold)
-                Text(text = pointsOf(stats), color = colors.muted, fontSize = WyrTypeScale.statLabel)
+                Column(verticalArrangement = Arrangement.spacedBy(dimens.spaceXs)) {
+                    statLines(stats).forEach { line ->
+                        Text(text = line, color = colors.muted, fontSize = WyrTypeScale.statLabel)
+                    }
+                }
             }
 
             failure == null -> {
@@ -269,6 +273,20 @@ internal fun playingAs(stats: PlayerStats): String = stats.username?.let { "Logg
 
 internal fun pointsOf(stats: PlayerStats): String = pointsText(stats.totalPoints)
 
+/**
+ * The player's stats, a line each, as the server counted them (CLAUDE.md §8d, *Stats*): the points,
+ * the answers given and the questions they went to (a re-answer is one more answer to the same
+ * question), the cycle and how many questions are left in it, neither answered nor skipped, and the
+ * likes the questions the player submitted hold. Nothing is worked out here.
+ */
+internal fun statLines(stats: PlayerStats): List<String> =
+    listOf(
+        pointsOf(stats),
+        "${counted(stats.answersGiven, "answer")} to ${counted(stats.questionsAnswered, "question")}",
+        "Cycle ${stats.cycle}: ${counted(stats.dueThisCycle, "question")} left",
+        "${counted(stats.likesReceived, "like")} on questions you submitted",
+    )
+
 /** The username rule, or what is wrong with the name typed by it. */
 internal fun usernameHint(problem: UsernameProblem?): String =
     when (problem) {
@@ -301,7 +319,13 @@ internal fun passwordHint(problem: PasswordProblem?): String =
 internal fun guestProgressWarning(points: Int): String =
     "Your ${pointsText(points)} as a guest stay behind on this guest if you log in: register first to keep them."
 
-private fun pointsText(points: Int): String = if (points == 1) "1 point" else "$points points"
+private fun pointsText(points: Int): String = counted(points, "point")
+
+/** [count] of [noun], which takes an s but for one. */
+private fun counted(
+    count: Int,
+    noun: String,
+): String = if (count == 1) "1 $noun" else "$count ${noun}s"
 
 /**
  * Player-facing copy for a failed action, by its [DomainError], never the server's message, which is

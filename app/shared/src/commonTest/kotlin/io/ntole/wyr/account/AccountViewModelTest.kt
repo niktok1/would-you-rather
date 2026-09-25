@@ -71,6 +71,70 @@ class AccountViewModelTest {
         }
 
     @Test
+    fun `a guest's stats read as the server counted them`() =
+        runTest(dispatcher) {
+            game.points = 12
+            game.answersGiven = 15
+            game.questionsAnswered = 10
+            game.cycle = 2
+            game.dueThisCycle = 4
+            game.likesReceived = 3
+
+            val state = open().state.value
+
+            assertEquals("Playing as guest", playingAs(state.shown()))
+            assertEquals(
+                listOf(
+                    "12 points",
+                    "15 answers to 10 questions",
+                    "Cycle 2: 4 questions left",
+                    "3 likes on questions you submitted",
+                ),
+                statLines(state.shown()),
+            )
+        }
+
+    @Test
+    fun `a registered player's stats read as the server counted them`() =
+        runTest(dispatcher) {
+            game.accounts["bob_1"] = "correct horse" to "guest1"
+            game.points = 1
+            game.answersGiven = 1
+            game.questionsAnswered = 1
+            game.cycle = 1
+            game.dueThisCycle = 1
+            game.likesReceived = 1
+
+            val state = open().state.value
+
+            assertEquals("Logged in as bob_1", playingAs(state.shown()))
+            assertEquals(
+                listOf(
+                    "1 point",
+                    "1 answer to 1 question",
+                    "Cycle 1: 1 question left",
+                    "1 like on questions you submitted",
+                ),
+                statLines(state.shown()),
+            )
+        }
+
+    @Test
+    fun `each showing reads the stats again`() =
+        runTest(dispatcher) {
+            val viewModel = open()
+            assertEquals("Cycle 1: 0 questions left", statLines(viewModel.state.value.shown())[2])
+
+            // Played on the Play tab meanwhile: the last question of cycle 1 answered, then more asked for.
+            game.cycle = 2
+            game.dueThisCycle = 24
+            viewModel.refresh()
+            testScheduler.advanceUntilIdle()
+
+            assertEquals("Cycle 2: 24 questions left", statLines(viewModel.state.value.shown())[2])
+        }
+
+    @Test
     fun `a registration keeps the points and reads as logged in`() =
         runTest(dispatcher) {
             game.points = 12
@@ -311,7 +375,14 @@ class AccountViewModelTest {
 
         /** Each account's password and player, by username, lower-cased. */
         val accounts = mutableMapOf<String, Pair<String, String>>()
+
+        /** The stats of whoever is playing, as the server counts them. */
         var points = 0
+        var answersGiven = 0
+        var questionsAnswered = 0
+        var cycle = 1
+        var dueThisCycle = 0
+        var likesReceived = 0
         var statsFailWith: DomainError? = null
         private var player: String? = null
         private var guestsMinted = 0
@@ -331,11 +402,11 @@ class AccountViewModelTest {
             return PlayerStats(
                 playerId = playing,
                 totalPoints = points,
-                answersGiven = points,
-                questionsAnswered = points,
-                cycle = 1,
-                dueThisCycle = 0,
-                likesReceived = 0,
+                answersGiven = answersGiven,
+                questionsAnswered = questionsAnswered,
+                cycle = cycle,
+                dueThisCycle = dueThisCycle,
+                likesReceived = likesReceived,
                 username = accounts.entries.firstOrNull { it.value.second == playing }?.key,
             )
         }

@@ -196,8 +196,9 @@ private fun Header(state: DevConsoleState) {
 }
 
 /**
- * The stats as the server counted them, and whether they disagree with the last outcome, or are
- * another player's and so say nothing about it.
+ * What the stats are read for here: whose they are and their total, and whether they disagree with
+ * the last outcome, or are another player's and so say nothing about it. The rest of the numbers are
+ * the game's Account tab's (CLAUDE.md §8d, *Stats*), and the log's.
  */
 @Composable
 private fun Stats(state: DevConsoleState) {
@@ -207,17 +208,12 @@ private fun Stats(state: DevConsoleState) {
     } else {
         Value("playerId", stats.playerId)
         Value("totalPoints", stats.totalPoints.toString())
-        Value("answersGiven", stats.answersGiven.toString())
-        Value("questionsAnswered", stats.questionsAnswered.toString())
-        Value("cycle", stats.cycle.toString())
-        Value("dueThisCycle", stats.dueThisCycle.toString())
-        Value("likesReceived", stats.likesReceived.toString())
     }
     if (state.statsForAnotherPlayer) {
         Value("lastOutcome", "paid to ${state.lastOutcomePlayerId}, not compared")
     }
     if (state.likesMovedSinceOutcome) {
-        Value("lastOutcome", "likesReceived was ${state.likesReceivedAtOutcome} then, not compared")
+        Value("lastOutcome", likesMovedNote(state.likesReceivedAtOutcome, stats?.likesReceived))
     }
     if (state.pointsMismatch) {
         val outcomeTotal = state.lastOutcome?.totalPoints
@@ -306,6 +302,15 @@ private fun Buttons(content: @Composable () -> Unit) {
  * Registering and logging in are the game's Account tab (CLAUDE.md §8d, *Current focus*), not this.
  */
 internal fun accountOf(stats: PlayerStats?): String = if (stats == null) "stats not read" else stats.username ?: "guest"
+
+/**
+ * Why the stats are not compared with the last outcome once the likes received have moved since:
+ * [atOutcome] is what the first read after it counted, [now] what the stats count.
+ */
+internal fun likesMovedNote(
+    atOutcome: Int?,
+    now: Int?,
+): String = "likesReceived $atOutcome then, $now now, not compared"
 
 /** Every one of [categories], in the order the set holds them. */
 internal fun namesOf(categories: Set<Category>): String = categories.joinToString(", ") { it.name }

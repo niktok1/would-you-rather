@@ -15,6 +15,11 @@ class DevConsoleScreenTest {
     }
 
     @Test
+    fun `likes moved since the outcome name both counts`() {
+        assertEquals("likesReceived 0 then, 1 now, not compared", likesMovedNote(0, 1))
+    }
+
+    @Test
     fun `the session names its account or a guest`() {
         val stats = PlayerStats("p1", 0, 0, 0, 1, 0, 0)
 

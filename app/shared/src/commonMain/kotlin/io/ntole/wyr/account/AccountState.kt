@@ -9,14 +9,14 @@ import kotlin.time.Duration
 
 /**
  * What the Account screen shows (CLAUDE.md §8d, *Current focus*): who is playing on this device and
- * their points, and for a guest the Register and Log in forms, for a registered player Log out.
+ * their stats, and for a guest the Register and Log in forms, for a registered player Log out.
  *
  * What is typed lives here, in memory, and never in saved state: a password must not be written to
  * disk. It stays in the fields until they leave the screen, which is when the platform's password
  * manager, told what the fields hold (autofill content types), offers to save it.
  */
 data class AccountState(
-    /** The player as last read: their username, null for a guest, and their points. Null until read. */
+    /** The player as last read: their username, null for a guest, and their stats. Null until read. */
     val stats: PlayerStats? = null,
     val registerUsername: String = "",
     val registerPassword: String = "",
@@ -60,7 +60,7 @@ data class AccountState(
 
 /** What the Account screen can be busy doing. */
 enum class AccountAction {
-    /** Reading who is playing and their points. */
+    /** Reading who is playing and their stats. */
     LOAD,
     REGISTER,
     LOG_IN,

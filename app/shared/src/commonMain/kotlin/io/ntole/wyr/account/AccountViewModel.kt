@@ -15,7 +15,7 @@ import kotlinx.coroutines.launch
 
 /** What the Account screen can ask for, so the screen takes one argument for all of it. */
 interface AccountActions {
-    /** Reads who is playing and their points again. */
+    /** Reads who is playing and their stats again. */
     fun refresh()
 
     fun setRegisterUsername(text: String)
@@ -56,8 +56,8 @@ class AccountViewModel(
     val state: StateFlow<AccountState> = _state.asStateFlow()
 
     /**
-     * Not read on creation: the screen asks every time it is shown, since the points move on the Play
-     * tab meanwhile, and a guest's are what a login would leave behind.
+     * Not read on creation: the screen asks every time it is shown, since the stats move on the Play
+     * tab meanwhile, and a guest's points are what a login would leave behind.
      */
     override fun refresh() = perform(AccountAction.LOAD) {}
 

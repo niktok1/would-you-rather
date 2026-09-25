@@ -91,9 +91,9 @@ class DevConsoleViewModel(
         }
 
     /**
-     * The stats again, as an action of their own. Next question, which asks the feed for more, does
-     * not read them, so this is how to watch the next cycle start once the last question due is
-     * answered (CLAUDE.md §8d): the cycle stays finished until the feed is next asked for questions.
+     * The stats again, as an action of their own, so they are checked against the last outcome again
+     * without a vote: after a read that failed, or once a like has moved the total (CLAUDE.md §8d).
+     * The log names every number; the player sees them on the game's Account tab.
      */
     fun readStats() = perform("readStats") { loadStats().summary() }
 
