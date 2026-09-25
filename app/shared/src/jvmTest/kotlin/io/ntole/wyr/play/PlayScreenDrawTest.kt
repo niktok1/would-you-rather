@@ -246,7 +246,9 @@ class PlayScreenDrawTest {
         /**
          * An iPhone SE (667 high) less its status bar (20) and the tab row above the Play tab (48).
          * Android's 360x640 class leaves about 520, which cuts the reveal's percentages off: a limit
-         * of the cards' layout, not of the controls under them.
+         * of the cards' layout, not of the controls under them. Since the categories row is drawn in
+         * every state, a question not answered yet (537 here) no longer fits there either, and its
+         * cards are squeezed below their least height (CLAUDE.md §8b, provisional).
          */
         const val SHORT_PHONE_WIDTH = 375
         const val SHORT_PHONE_HEIGHT = 599

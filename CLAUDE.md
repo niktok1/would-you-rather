@@ -558,6 +558,22 @@ EncryptedSharedPreferences: enough for a game that stores nothing personal.
   batch, which the client reads as out of questions. The Play screen's category picker sends the
   categories selected (§8d, *Current focus*), so a player reaches this in every build, PROD's
   included. `SkipStoreTest` pins what is built.
+- **The categories row on the Play screen** — *provisional — user decision.* The category picker
+  was not to take height from the question's cards or from the reveal on a short phone (§8d,
+  *Current focus*). The reveal keeps to that: the categories share the row its points already took,
+  and it needs 569 of the 599 as before. A question not answered yet does not: the row is drawn in
+  every state, where before only the reveal drew one, so on this Mac it needs 537 at 360, 375 and
+  400 wide (481 before), and each of its option cards is about 28 shorter. On an iPhone SE (599)
+  its cards stay taller than `optionMinHeight`; on Android's 360x640 class (about 520) it no longer
+  fits, and its cards are squeezed below their least height, as only the reveal's were before.
+  Built this way so the header is one height in every state (the reveal no longer moves the cards
+  down) and a selection with nothing to serve can be changed from the failure it leads to. The
+  options: keep it; draw the categories only where a row is drawn anyway, in the reveal beside the
+  points, and in the failures, so a question not answered yet gets its height back and a player
+  changes the categories only once they have answered; or put them on the title's line, which at
+  375 wide leaves room for little more than *All*. The row under the question has no room for them
+  beside Like and Next question at 375 wide. `PlayScreenDrawTest` holds every state to 599 high,
+  not to its height before.
 - **Retrying a submission** — *decided 2026-09-24: keep it simple.* A submission carries no
   attempt id, so one sent again after its response was lost is stored twice, both pending; the
   moderator rejects the copy, and the 20-pending cap bounds how many there can be. Nothing resends
@@ -821,9 +837,9 @@ The third to move is the **category picker**, onto the Play screen (*Categories*
 - Under the title, in every state, the categories played: *All*, or their names in declaration
   order, cut short on one line. A value over its label, as the reveal's points are, and in the same
   row beside them, so the reveal is no taller for it (on this Mac it still needs 569 of the 599; a
-  question not answered yet needs 56 more than before, from the height its cards had to spare). The
-  label is *change categories*: the value's accent colour is the title's too, and nothing else
-  marks it as something to tap.
+  question not answered yet needs 56 more than before, from the height its cards had to spare:
+  *provisional*, §8b, *The categories row on the Play screen*). The label is *change categories*:
+  the value's accent colour is the title's too, and nothing else marks it as something to tap.
 - Tapping it opens a small dialog (`CategoryPicker`): *All categories* and every category but
   `OTHER`, ticked or not, then *Cancel* and *Play*. Nothing changes until Play, so ticking several is
   one change and one reload. A new selection drops the question on screen, answered or not, and

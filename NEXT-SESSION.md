@@ -562,7 +562,9 @@ to try it on a phone is under *Categories on Play*.
   screen, and its renders on this Mac looked at as images in review, both themes, never on a phone.
   `PlayScreenDrawTest` checks by pixels that the screen draws its dialog, and draws what is ticked
   in it, not what the dialog shows. Nobody has tapped it, nor seen a platform's dialog open and
-  close it.
+  close it. On Android's 360x640 class a question not answered yet no longer fits either, since the
+  categories row is drawn in every state: its option cards are squeezed below their least height
+  (CLAUDE.md §8b, *The categories row on the Play screen*, provisional).
 - **The `:core` modules' tests on iOS.** The ios CI job runs `:app:shared`'s tests on the simulator
   and only compiles the `:core` modules' tests, which Kotlin/Native refused while their
   names held commas (`SharedSessionStoreTest`'s among them, from before `feat/recovery-secret`, and
@@ -1093,9 +1095,11 @@ rules live in CLAUDE.md §8d. Each item is one short-lived branch, in order:
     console onto the **Play** tab, the second feature moved (CLAUDE.md §8d). Still to do: try it on a
     phone (*Skip and Like on Play*).
 16. **Now:** `feat/play-categories` — the category picker moves from the console's Category row onto
-    the **Play** tab, the third feature moved (CLAUDE.md §8d). Next: review, merge, push, CI, then
-    try it on a phone (*Categories on Play*), and move the next feature: the console still has
-    *Submit a question* with the player's submissions.
+    the **Play** tab, the third feature moved (CLAUDE.md §8d). Next: the user's call on the
+    categories row, which takes 56 from a question not answered yet (CLAUDE.md §8b, *The categories
+    row on the Play screen*), review, merge, push, CI, then try it on a phone (*Categories on Play*),
+    and move the next feature: the console still has *Submit a question* with the player's
+    submissions.
 
 **For the moderation app.** Everything it needs is in `io.ntole.wyr.core.domain.moderation`, and
 none of it needs or makes a player session:
