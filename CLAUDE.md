@@ -817,9 +817,11 @@ not moved yet still adds its section to the console. Navigation is the root tab 
   the username or `guest` (`accountOf`).
 - The fourth to move is the player's **stats** (*Stats*), onto this screen: under the points, a line
   each for the answers given and the questions they went to, the cycle and the questions left in it,
-  and the likes received, and `AccountScreenDrawTest` holds a registered player's screen whole to a
-  375x599 phone, so a guest's stats show before any scrolling too. The console's Stats section keeps
-  only what its points check compares, the player and the total, and *Read stats*.
+  and the likes received. `AccountScreenDrawTest` holds every state without a form, a registered
+  player's among them, to 599 high, measured 400 wide as `PlayScreenDrawTest` measures, and a
+  guest's screen has the same lines above its forms, so its stats show before any scrolling too.
+  The console's Stats section keeps only what its points check compares, the player and the total,
+  and *Read stats*.
 
 The second to move is **Skip and Like**, onto the Play screen (`io.ntole.wyr.play`; *Skipping* and
 *Likes*, below):
@@ -944,7 +946,8 @@ The third to move is the **category picker**, onto the Play screen (*Categories*
   the likes received (§8c). It only reads, and the cycle starts lazily on the next feed request, so
   between the answer that finishes a cycle and that request it reports the finished cycle with
   nothing due. The Account screen shows every number but the player id (*Current focus*); the
-  console only checks the total against the last vote's.
+  console reads them to name the account and check the total against the last vote's, and *Read
+  stats* logs every number.
 - **Skipping** *(built; decided 2026-09-23)*: allowed, earns nothing, and never touches the
   tally. The server **records the skip for the player's current cycle only**, so the question is
   no longer due in that cycle and comes back in the **next** one, except through a category filter
