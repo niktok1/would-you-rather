@@ -17,7 +17,8 @@ import io.ntole.wyr.core.api.WyrApi
  *
  * Every like a question holds earns its author [POINTS_PER_LIKE] for as long as it is held
  * (`LikeStore.setLiked`), their own likes included. Submitting a question costs its author
- * [SUBMISSION_COST] (`SubmissionStore.submit`), which a rejection pays back and an approval keeps. So
+ * [SUBMISSION_COST] (`SubmissionStore.submit`), which a rejection pays back and an approval keeps,
+ * though an author who likes it is paid for that like as for anyone's (CLAUDE.md §8c, provisional). So
  * a player's total is always what their answers earned, plus that much for each like their questions
  * hold, less what their questions not rejected cost them.
  */

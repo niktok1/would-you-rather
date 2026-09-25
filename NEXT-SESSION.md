@@ -66,8 +66,9 @@ and renames one (`POST /v1/admin/category-renames`, 404 `CATEGORY_NOT_FOUND`); n
 Submitting costs `Scoring.SUBMISSION_COST`, 1 point until release (CLAUDE.md §8c): too few is 409
 `NOT_ENOUGH_POINTS`, a rejection pays back what the question cost (V7 keeps it on the question,
 `submission_cost`), and `GET /v1/me` reports `pointsSpent`, so the total is what the answers and likes
-earned less that. Every seed
-comes with made-up votes (V8, `questions.base_votes_a`/`_b`, CLAUDE.md §8d *Seeds*), which every
+earned less that. For the user to decide: an author's own like pays them, so liking their approved
+question gives its cost back (CLAUDE.md §8c, *provisional*); keep it, or let an own like pay
+nothing. Every seed comes with made-up votes (V8, `questions.base_votes_a`/`_b`, CLAUDE.md §8d *Seeds*), which every
 tally the server reports adds to the players' own, and the seeds are in Serbian Cyrillic (V9 rewrote
 production's English ones by id; a new database is seeded in Serbian).
 

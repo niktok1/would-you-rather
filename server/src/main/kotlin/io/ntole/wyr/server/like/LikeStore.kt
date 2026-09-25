@@ -43,7 +43,8 @@ object LikeStore {
      * actually removed takes back, so an author's total is always what their answers earned plus a
      * point for each like their questions hold, less what their questions not rejected cost them
      * ([Scoring]). A seed has no author: its likes count and pay nobody. An author may like their
-     * own question, and is paid for it like for anyone's like.
+     * own question, and is paid for it like for anyone's like, so liking an approved one gives back
+     * what it cost (CLAUDE.md §8c, provisional).
      *
      * Any question the player may be served can be liked, answered or not, and no other: one a
      * moderator has not approved, or has retired, is not found, as for a vote
