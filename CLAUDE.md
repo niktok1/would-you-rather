@@ -1229,6 +1229,22 @@ game UI (the moderation app, `:app:adminApp`, §3) can name one too.
   Preferences node, one bundle id's `NSUserDefaults`, one origin's `localStorage`. With one key, a
   build for one server sent the other's tokens to it and, once they were refused, replaced that
   guest, and its points, with a new one (§8a). Android's flavors have storage of their own anyway.
+
+## 8f. Languages — decided 2026-09-25
+
+The game is Serbian first (the user: "main language should be serbian"). Its words are written in
+**Serbian Cyrillic**, the source text; **Serbian Latin** is made from the Cyrillic, never written by
+hand, so the two cannot say different things; and **English** stands beside them.
+
+- **Serbian Latin by transliteration** *(built)*: `SerbianScript.toLatin` (`:core:domain`,
+  `io.ntole.wyr.core.domain.language`), Serbian's exact letter-for-letter transliteration. Љ, Њ and Џ
+  are Lj, Nj and Dž, and LJ, NJ and DŽ in a word written in capitals (two letters or more, none
+  small; a word is a run of letters, so a hyphen or a full stop ends one); Ђ, Ж, Ћ, Ч and Ш are the
+  precomposed Đ, Ž, Ć, Č and Š, and Dž is two letters, never Unicode's one-character digraph. Latin
+  letters, digits, punctuation, spacing and the Cyrillic letters Serbian does not use (Я, Щ, Ы...)
+  come back as they were. Pure and in the domain, so a question's text can go through it later.
+  `SerbianScriptTest` pins every letter, capital and small, the digraphs in each case, and text that
+  must not change.
 ---
 
 ## 9. How to work in this repo
