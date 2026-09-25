@@ -45,8 +45,8 @@ class DefaultAccountRepositoryTest {
                 server.registrationsSentAs,
             )
             // The guest's points and all are the account's now, and the stats name it.
-            assertEquals("guest1", device.stats().playerId)
             assertEquals("bob_1", device.stats().username)
+            assertEquals("Bearer access-guest1", server.statsSentAs.last(), "read as the guest")
         }
 
     @Test
@@ -103,8 +103,8 @@ class DefaultAccountRepositoryTest {
 
             // The tablet plays as the account from its very next call; its guest is left behind.
             assertEquals("guest1", tablet.store.read()?.playerId)
-            assertEquals("guest1", tablet.stats().playerId)
             assertEquals("bob_1", tablet.stats().username)
+            assertEquals("Bearer access-guest1", server.statsSentAs.last(), "read as the account")
             // A session of the tablet's own: the phone's is left alone.
             assertEquals(phoneSession, phone.store.read())
             // Sent with no bearer: a login reads none.
@@ -148,7 +148,8 @@ class DefaultAccountRepositoryTest {
             assertEquals<List<String?>>(listOf("Bearer access-guest1"), server.logoutsSentAs)
             assertNull(device.store.read())
             val next = GetPlayerStats(device.players, device.sessions)()
-            assertEquals("guest2", next.playerId)
+            assertEquals("guest2", device.store.read()?.playerId)
+            assertEquals("Bearer access-guest2", server.statsSentAs.last(), "read as the fresh guest")
             assertNull(next.username)
         }
 

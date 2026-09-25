@@ -47,9 +47,9 @@ moderation app (*Trying a change*, below). What only the console read went with 
 (`HttpTrace`, `HttpTracing`); `SessionDiagnostics`, the session and token expiry its header
 showed; the session port's `currentPlayerId` and `clear`, which only it called through the port (a
 logout clears the session through `DefaultSessionRepository` itself); `Question.answeredBefore`,
-which only it showed; and `VoteOutcome.questionId`, which only it read (the wire's `QuestionDto`
-and `VoteResultDto` still carry both). The client alone changed; the server only in a comment and a
-test's name.
+which only it showed; and `PlayerStats.playerId` and `VoteOutcome.questionId`, which only it read
+(the wire's `QuestionDto`, `PlayerStatsDto` and `VoteResultDto` still carry all three). The client
+alone changed; the server only in a comment and a test's name.
 
 ### Verified working
 

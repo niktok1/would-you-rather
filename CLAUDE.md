@@ -941,7 +941,9 @@ lists the player's own (*Submitting*, below).
   `StatsStore.of`, as one statement, so the total always agrees with the answers given and
   the likes received (§8c). It only reads, and the cycle starts lazily on the next feed request, so
   between the answer that finishes a cycle and that request it reports the finished cycle with
-  nothing due. The Account screen shows every number but the player id (above).
+  nothing due. The Account screen shows every number (above). No client reads the player id
+  (`PlayerStatsDto.playerId`): the domain's `PlayerStats` has no such field since the dev console
+  went.
 - **Skipping** *(built; decided 2026-09-23)*: allowed, earns nothing, and never touches the
   tally. The server **records the skip for the player's current cycle only**, so the question is
   no longer due in that cycle and comes back in the **next** one, except through a category filter

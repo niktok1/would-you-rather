@@ -148,7 +148,7 @@ class AccountViewModelTest {
             val state = viewModel.state.value
             assertEquals("Logged in as bob_1", playingAs(state.shown()))
             assertEquals(12, state.stats?.totalPoints)
-            assertEquals("guest1", state.stats?.playerId, "the same player")
+            assertEquals("guest1", game.player, "the same player")
             // A registered player sees no form, so nothing typed is kept.
             assertEquals(AccountState(stats = state.stats), state)
             assertTrue("register Bob_1" in game.calls)
@@ -221,7 +221,7 @@ class AccountViewModelTest {
 
             val state = viewModel.state.value
             assertTrue("logIn bob_1" in game.calls)
-            assertEquals("bob-player", state.stats?.playerId)
+            assertEquals("bob-player", game.player)
             assertEquals("Logged in as bob_1", playingAs(state.shown()))
             assertNull(state.guestPointsWarning)
             assertEquals("", state.loginPassword)
@@ -238,8 +238,10 @@ class AccountViewModelTest {
             viewModel.logIn()
             testScheduler.advanceUntilIdle()
 
-            val stats = viewModel.state.value.shown()
-            assertEquals("bob-player", stats.playerId)
+            val state = viewModel.state.value
+            assertEquals("bob-player", game.player)
+            assertEquals("Logged in as bob_1", playingAs(state.shown()))
+            assertNull(state.guestPointsWarning)
         }
 
     @Test
@@ -272,7 +274,8 @@ class AccountViewModelTest {
 
             val state = viewModel.state.value
             assertEquals(AccountFailure(AccountAction.LOG_IN, DomainError.INVALID_LOGIN), state.failure)
-            assertEquals("guest1", state.stats?.playerId)
+            assertEquals("guest1", game.player)
+            assertEquals("Playing as guest", playingAs(state.shown()))
             assertEquals("wrong horse", state.loginPassword, "kept, to put right")
         }
 
@@ -288,7 +291,7 @@ class AccountViewModelTest {
 
             val stats = viewModel.state.value.shown()
             assertEquals("Playing as guest", playingAs(stats))
-            assertEquals("guest2", stats.playerId)
+            assertEquals("guest2", game.player)
         }
 
     @Test
@@ -305,7 +308,7 @@ class AccountViewModelTest {
             testScheduler.advanceUntilIdle()
 
             val state = viewModel.state.value
-            assertEquals("guest1", state.stats?.playerId)
+            assertEquals("Playing as guest", playingAs(state.shown()))
             assertNull(state.failure)
         }
 
@@ -384,7 +387,10 @@ class AccountViewModelTest {
         var dueThisCycle = 0
         var likesReceived = 0
         var statsFailWith: DomainError? = null
-        private var player: String? = null
+
+        /** Who is playing on this device, as the stored session names them, or none. */
+        var player: String? = null
+            private set
         private var guestsMinted = 0
 
         override suspend fun ensure(): String = player ?: "guest${++guestsMinted}".also { player = it }
@@ -394,7 +400,6 @@ class AccountViewModelTest {
             statsFailWith?.let { throw WyrException(it) }
             val playing = ensure()
             return PlayerStats(
-                playerId = playing,
                 totalPoints = points,
                 answersGiven = answersGiven,
                 questionsAnswered = questionsAnswered,

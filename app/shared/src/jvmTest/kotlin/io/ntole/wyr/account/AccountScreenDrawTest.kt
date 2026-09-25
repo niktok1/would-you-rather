@@ -184,11 +184,11 @@ class AccountScreenDrawTest {
         const val SHORT_PHONE_WIDTH = 375
         const val SHORT_PHONE_HEIGHT = 599
 
-        val GUEST = PlayerStats("guest1", 12, 12, 10, 1, 4, 0)
+        val GUEST = PlayerStats(12, 12, 10, 1, 4, 0)
 
         /** The longest name there can be, and numbers long enough to widen every line. */
         val REGISTERED =
-            PlayerStats("p1", 123_456, 123_456, 12_345, 1_234, 12_345, 123_456, username = "abcdefghijklmnopqrst")
+            PlayerStats(123_456, 123_456, 12_345, 1_234, 12_345, 123_456, username = "abcdefghijklmnopqrst")
 
         /** A guest's screen, with the forms. */
         val GUEST_STATES =

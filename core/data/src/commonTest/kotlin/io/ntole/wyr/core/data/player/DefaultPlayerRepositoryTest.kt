@@ -31,7 +31,6 @@ class DefaultPlayerRepositoryTest {
             // FakeServer.STATS, decoded through the real client, for the player just minted.
             assertEquals(
                 PlayerStats(
-                    playerId = "guest1",
                     totalPoints = 7,
                     answersGiven = 9,
                     questionsAnswered = 5,
@@ -51,11 +50,11 @@ class DefaultPlayerRepositoryTest {
             // The server has never heard of "a": the state after a dev server restarts.
             val store = storeHolding(session("a"))
 
-            val stats = repositoryOver(store).stats()
+            repositoryOver(store).stats()
 
-            assertEquals("guest1", stats.playerId, "the fresh guest's stats, not the dead session's")
             assertEquals(1, server.guestsMinted)
             assertEquals("guest1", store.read()?.playerId)
+            // The fresh guest's stats, not the dead session's: the second read is the one answered.
             assertEquals(listOf<String?>("Bearer access-a", "Bearer access-guest1"), server.statsSentAs)
         }
 

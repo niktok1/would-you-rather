@@ -21,7 +21,6 @@ package io.ntole.wyr.core.domain.player
  * who has none (CLAUDE.md §8a, *Accounts*). Read with the points, so the two are one moment's.
  */
 public data class PlayerStats(
-    public val playerId: String,
     public val totalPoints: Int,
     public val answersGiven: Int,
     public val questionsAnswered: Int,

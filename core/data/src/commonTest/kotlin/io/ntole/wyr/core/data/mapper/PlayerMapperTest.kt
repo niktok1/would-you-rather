@@ -24,7 +24,6 @@ class PlayerMapperTest {
 
         assertEquals(
             PlayerStats(
-                playerId = "p1",
                 totalPoints = 7,
                 answersGiven = 9,
                 questionsAnswered = 5,
