@@ -17,6 +17,13 @@ data class WyrDimens(
     val radiusPill: Dp = 999.dp,
     val optionMinHeight: Dp = 140.dp,
     val screenPadding: Dp = 20.dp,
+    /**
+     * The top bar's height, the tab row's before it, so a screen under it keeps the 599 of an iPhone
+     * SE's 667 that its draw test holds it to (667 less the status bar's 20 and this).
+     */
+    val topBarHeight: Dp = 48.dp,
+    val playButtonWidth: Dp = 240.dp,
+    val playButtonHeight: Dp = 64.dp,
 )
 
 val WyrDefaultDimens: WyrDimens = WyrDimens()
@@ -29,4 +36,9 @@ object WyrTypeScale {
     val sectionTitle = 16.sp
     val statLabel = 13.sp
     val percentage = 34.sp
+    val gameName = 40.sp
+
+    /** The game's name's line, set with it: it takes two lines on a phone, and the text style's own is for body text. */
+    val gameNameLineHeight = 46.sp
+    val playButton = 24.sp
 }

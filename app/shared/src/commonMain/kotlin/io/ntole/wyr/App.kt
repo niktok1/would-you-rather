@@ -2,23 +2,29 @@ package io.ntole.wyr
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.safeContentPadding
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Tab
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.ntole.wyr.account.AccountScreen
 import io.ntole.wyr.account.AccountViewModel
+import io.ntole.wyr.home.HomeScreen
+import io.ntole.wyr.language.Language
+import io.ntole.wyr.language.LanguageViewModel
+import io.ntole.wyr.language.WyrStrings
+import io.ntole.wyr.navigation.AccountTopBar
+import io.ntole.wyr.navigation.Navigator
+import io.ntole.wyr.navigation.PlayTopBar
+import io.ntole.wyr.navigation.Screen
+import io.ntole.wyr.navigation.SubmitTopBar
+import io.ntole.wyr.navigation.SystemBack
 import io.ntole.wyr.play.PlayScreen
 import io.ntole.wyr.play.PlayViewModel
 import io.ntole.wyr.submit.SubmitScreen
@@ -34,59 +40,92 @@ import org.koin.compose.viewmodel.koinViewModel
  * entry-point rule in CLAUDE.md §3. [io.ntole.wyr.di.initKoin] must have run first; `startKoin`
  * publishes the Compose context, so no `KoinContext` wrapper is needed here.
  *
- * The root screens are the game's, every [RootScreen] behind a tab row, in every build whatever
- * server it talks to (CLAUDE.md §8d, *Current focus*), opening on the first, Play.
+ * The screens are the game's, in every build whatever server it talks to (CLAUDE.md §8d,
+ * *Navigation*): Home first, and the rest opened from it through a [Navigator], a back stack made by
+ * hand, no tabs and no navigation library. They are shown in the language picked on the Account
+ * screen, Serbian Cyrillic until one is (§8f).
  */
 @Composable
 fun App() {
-    WyrTheme {
-        val screens = RootScreen.entries
-        var screen by rememberSaveable { mutableStateOf(screens.first()) }
+    val languages = koinViewModel<LanguageViewModel>()
+    val language by languages.language.collectAsStateWithLifecycle()
 
-        Surface(color = MaterialTheme.colorScheme.background, modifier = Modifier.fillMaxSize()) {
-            // The insets are applied once here, so the screens below find them already consumed.
-            Column(modifier = Modifier.fillMaxSize().safeContentPadding()) {
-                PrimaryTabRow(selectedTabIndex = screens.indexOf(screen)) {
-                    screens.forEach { entry ->
-                        Tab(
-                            selected = entry == screen,
-                            onClick = { screen = entry },
-                            text = { Text(entry.label) },
-                        )
-                    }
+    WyrTheme {
+        WyrStrings(language) { Screens(language, onSelectLanguage = languages::select) }
+    }
+}
+
+/**
+ * The screen on top of the back stack, and only it. Each screen's ViewModel belongs to the platform's
+ * own owner, the activity's or the window's, as it did under the tabs, never to the back stack: a
+ * screen left and come back to, Play above all, shows what it showed, its question included.
+ */
+@Composable
+private fun Screens(
+    language: Language,
+    onSelectLanguage: (Language) -> Unit,
+) {
+    val navigator = rememberSaveable(saver = Navigator.Saver) { Navigator() }
+    SystemBack(enabled = navigator.canGoBack, onBack = { navigator.back() })
+
+    Surface(color = MaterialTheme.colorScheme.background, modifier = Modifier.fillMaxSize()) {
+        // The insets are applied once here, so the screens below find them already consumed.
+        Column(modifier = Modifier.fillMaxSize().safeContentPadding()) {
+            when (navigator.current) {
+                Screen.Home -> {
+                    HomeScreen(
+                        onPlay = { navigator.open(Screen.Play) },
+                        onAccount = { navigator.open(Screen.Account) },
+                    )
                 }
 
-                Box(modifier = Modifier.weight(1f)) {
-                    when (screen) {
-                        RootScreen.Play -> Play()
-                        RootScreen.Submit -> Submit()
-                        RootScreen.Account -> Account()
-                    }
+                Screen.Play -> {
+                    PlayTopBar(
+                        onHome = { navigator.open(Screen.Home) },
+                        onAccount = { navigator.open(Screen.Account) },
+                    )
+                    Below { Play() }
+                }
+
+                Screen.Account -> {
+                    AccountTopBar(onBack = { navigator.back() }, onSubmit = { navigator.open(Screen.Submit) })
+                    Below { Account(language, onSelectLanguage) }
+                }
+
+                Screen.Submit -> {
+                    SubmitTopBar(onBack = { navigator.back() })
+                    Below { Submit() }
                 }
             }
         }
     }
 }
 
-/** The game's root screens, as its tabs, in order: the first is the one the app opens on. */
-internal enum class RootScreen(
-    val label: String,
-) {
-    Play("Play"),
-    Submit("Submit"),
-    Account("Account"),
+/** A screen under its top bar, in the height the bar leaves it. */
+@Composable
+private fun ColumnScope.Below(screen: @Composable () -> Unit) {
+    Box(modifier = Modifier.weight(1f)) { screen() }
 }
 
 @Composable
-private fun Account() {
+private fun Account(
+    language: Language,
+    onSelectLanguage: (Language) -> Unit,
+) {
     val viewModel = koinViewModel<AccountViewModel>()
     val state by viewModel.state.collectAsStateWithLifecycle()
 
-    // Every time the tab is shown: the points move on the Play tab meanwhile, and a guest's are what
-    // a login would leave behind.
+    // Every time the screen is shown: the points move on the Play screen meanwhile, and a guest's are
+    // what a login would leave behind.
     LaunchedEffect(viewModel) { viewModel.refresh() }
 
-    AccountScreen(state = state, actions = viewModel, environment = koinInject())
+    AccountScreen(
+        state = state,
+        actions = viewModel,
+        environment = koinInject(),
+        language = language,
+        onSelectLanguage = onSelectLanguage,
+    )
 }
 
 @Composable
@@ -94,7 +133,7 @@ private fun Submit() {
     val viewModel = koinViewModel<SubmitViewModel>()
     val state by viewModel.state.collectAsStateWithLifecycle()
 
-    // Every time the tab is shown: a moderator decides the player's submissions meanwhile.
+    // Every time the screen is shown: a moderator decides the player's submissions meanwhile.
     LaunchedEffect(viewModel) { viewModel.refresh() }
 
     SubmitScreen(state = state, actions = viewModel)

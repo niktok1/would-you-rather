@@ -52,7 +52,23 @@ which only it showed; and `PlayerStats.playerId` and `VoteOutcome.questionId`, w
 (the wire's `QuestionDto`, `PlayerStatsDto` and `VoteResultDto` still carry all three). The client
 alone changed; the server only in a comment and a test's name.
 
-**On `feat/server-categories`** (from 40550e9; not merged, nothing pushed; the server and the
+**On `feat/app-foundation`** (from 40550e9; merged into main as 4821c05): the foundation of the
+user's redesign (2026-09-25), which the Play, Account and category screens' redesigns build on. **No
+tabs**: the app opens on **Home**, the game's name, a big Play and the account icon; Play and
+Account each show under a top bar of icon buttons, and Submit is reached from Account's bar for now,
+over a back stack made by hand that Android's back pops (CLAUDE.md §8d, *Navigation*). The theme
+draws its own icons, home, account, back and the two hearts (§5b). **Three languages**, picked on
+the Account screen and kept on the device: Serbian Cyrillic, the default whatever the device's
+language, Serbian Latin made from it by `SerbianScript.toLatin` (`:core:domain`), and English
+(§8f). The switch in the Account heading's place is provisional (§8d, *The Account screen*): ask the
+user. Only Home, the top bars and the switch are translated; the Play, Account and Submit screens'
+own copy stays English for the branches that redesign them. The client alone changed. Tests:
+`:core:domain` 70 (`SerbianScriptTest` 16 new), `:app:shared` 171 (`NavigatorTest`,
+`AppNavigationTest`, `HomeScreenDrawTest`, `TopBarsDrawTest`, `WyrIconsDrawTest`, the language
+tests; `RootScreensTest` went with the tabs). Not seen on a device: Android's back, and any screen of
+it on a phone; nor whether the web build's default font draws Cyrillic.
+
+**On `feat/server-categories`** (from 40550e9, merged into main after ; the server and the
 contract first, then the clients): categories are **server data** (CLAUDE.md
 §8d, *Categories*, decided 2026-09-25). V6 adds `categories` (id, Serbian and English names, when
 added), writes the first five, `FOOD`, `LIFESTYLE`, `ETHICS`, `SUPERPOWERS` and `ABSURD`, moves

@@ -253,6 +253,14 @@ Implemented as `WyrTheme` in `:app:shared` (`io.ntole.wyr.theme`): `WyrColors` +
 Material components inherit it instead of falling back to Material defaults. Adding a theme =
 adding another `WyrColors` value.
 
+**Icons** are drawn by hand in the theme too, as `ImageVector`s in `WyrIcons`, a few strokes each on
+a 24 by 24 grid, so no icon library is needed (§2): `Home`, `Account` and `Back` (an arrow pointing
+left) for the top bars (§8d, *Navigation*), and `Heart` and `HeartFilled`, the outline and the filled
+heart, for likes. They carry no colour of their own: `Icon` tints each from `WyrColors`, so they
+follow the light and dark themes as text does. Adding an icon = adding a `WyrIcons` value.
+`WyrIconsDrawTest` draws each off screen: every one a figure of the theme's size, no two the same,
+and the filled heart covering the outline and its inside.
+
 The moderation app has a theme of its own, `AdminTheme` in `:app:adminApp` (`io.ntole.wyr.admin.theme`),
 since it may not depend on `:app:shared` (§3): Material 3's default light and dark schemes and type
 scale, with `AdminDimens` and `AdminType` beside them. The same rule holds in its screens: no hex, dp
@@ -828,17 +836,52 @@ it here (and §8c, for scoring) in the same commit.
 answer what they think is popular instead of what they actually prefer. A mode that explicitly
 rewards reading the crowd may come later as a separate, opt-in mode, never as the default.
 
-**Current focus.** UI polish is paused. The game's own screens are the app: **Play**, **Submit** and
-**Account**, behind the root tab row (`App.kt`, `RootScreen`, no navigation library), in every build,
-LOCAL, DEV and PROD alike, opening on Play. The engineering dev console functionality was first built
-behind is gone since `chore/remove-console` (*decided 2026-09-25*: the console is not needed), and
-nothing replaces it: a LOCAL or DEV build names its server on the Account screen (§8e), and a feature
-is tried through the game and the moderation app. A new feature gets a plain screen of the game's, or
-a place on one, theme tokens only (§5b).
+**Current focus.** UI polish is paused. The game's own screens are the app: **Home**, **Play**,
+**Account** and **Submit**, reached from one another by icon buttons (*Navigation*, below), in every
+build, LOCAL, DEV and PROD alike, opening on Home. The engineering dev console functionality was first
+built behind is gone since `chore/remove-console` (*decided 2026-09-25*: the console is not needed),
+and nothing replaces it: a LOCAL or DEV build names its server on the Account screen (§8e), and a
+feature is tried through the game and the moderation app. A new feature gets a plain screen of the
+game's, or a place on one, theme tokens only (§5b), and its words in `Strings` (§8f).
+
+**Navigation** (*decided 2026-09-25*: no tabs; `App.kt`, `io.ntole.wyr.navigation`, `io.ntole.wyr.home`):
+- The app opens on **Home**: the game's name, a big **Play** button and the account icon top right,
+  and nothing else, the user asking for less text. Play opens the **Play** screen under a top bar of
+  the home icon, left, back to Home, and the account icon, right. The account icon, from Home or
+  Play, opens the **Account** screen under a top bar of a back arrow and, on the right for now, the
+  way to the **Submit** screen, whose own bar has a back arrow. The icons are the theme's (§5b), each
+  named for a screen reader in the language shown (§8f).
+- *The back stack* is made by hand, no navigation library: a sealed `Screen` and a `Navigator` of
+  the screens opened, Home at the bottom. `open` shows a screen over the one shown, or goes back to
+  it when it is on the stack already, so no screen is on it twice and the home icon is
+  `open(Screen.Home)`; `back` goes to the screen before, and at Home does nothing. The stack is saved
+  state (`Navigator.Saver`), so an Android activity made anew, on a rotation say, shows the screen it
+  showed. `NavigatorTest` pins it.
+- *Android's back*, button or gesture, goes back through the navigator (`SystemBack`, over
+  `BackHandler` from the catalog's `androidx.activity:activity-compose`, in `:app:shared`'s
+  androidMain); at Home it is left to the system, so it leaves the app. Desktop, the web and iOS bind
+  nothing: their on-screen buttons are the way back.
+- *ViewModels* belong to the platform's owner, the activity's or the window's, as under the tabs,
+  never to the back stack: each screen's lives as long as the app, so Play keeps its question through
+  Account and back, or Home and back, and Account and Submit read the server again each time they
+  are shown. `AppNavigationTest` drives the whole `App` over fakes by tapping its buttons, and counts
+  the questions asked.
+- *Heights*: each top bar is `WyrDimens.topBarHeight` high, 48, the tab row's height before it, so
+  the Play, Account and Submit screens keep the 599 of an iPhone SE's 667 their draw tests hold them
+  to. `TopBarsDrawTest` holds every bar to 48 at 375 wide with nothing cut short, in both themes and
+  every language; `HomeScreenDrawTest` holds Home to 599 at 375 wide (276 on this Mac) and to its two
+  texts and one icon.
 
 **The Account screen** (`io.ntole.wyr.account`; §8a *Accounts*, *Stats* below):
+- First, the language switch (§8f, `LanguageSwitch`), where the screen's *Account* heading stood
+  (*provisional — user decision*: the user asked only for a switch on this screen): on top, it is
+  the first thing a player who cannot read the language shown finds, a guest's forms included, and
+  a registered player's screen still fits 599 high with it (572 of it on this Mac, where it was 557
+  with the heading). The options: keep it; or keep the heading too, above the switch, which takes
+  that screen past 599 (the heading and its gap come back on top of the 572), so it scrolls unless
+  something else leaves it.
 - It shows *Playing as guest* or *Logged in as* the username, and the player's points, read through
-  `GetPlayerStats` each time the tab is shown, since the points move on Play meanwhile. A guest gets
+  `GetPlayerStats` each time the screen is shown, since the points move on Play meanwhile. A guest gets
   **Register** (username, and password with a show/hide toggle), which keeps the points, and **Log
   in**; a registered player gets **Log out**, after which the device plays on as a fresh guest.
 - Under the points, a line each for the answers given and the questions they went to, the cycle and
@@ -857,7 +900,7 @@ a place on one, theme tokens only (§5b).
   What is typed lives in `AccountViewModel`'s memory only, never in saved state.
 - One action at a time, and the player read again after every one, a failed one too: a registration
   whose answer was lost shows as the account it made. `AccountViewModelTest` drives it over fakes and
-  `AccountScreenDrawTest` draws every state in both themes; theme tokens only (§5b).
+  `AccountScreenDrawTest` draws every state in both themes and every language; theme tokens only (§5b).
 - Its last line, in a LOCAL or DEV build, names the server the build talks to and its URL, *Server:
   Dev (https://wyr-server-dev.onrender.com)* (`serverLine`, §8e); a PROD build shows none.
   `AccountScreenDrawTest` finds it under everything else in every state, and holds a registered
@@ -895,7 +938,7 @@ Like (*Skipping* and *Likes*, below) and the category picker (*Categories*, belo
 - The selection lives in the repository, in memory for the app's life: a launch plays every category
   again, and a login or a logout keeps it.
 - `PlayViewModelTest` drives it over fakes. `PlayScreenDrawTest` draws every state in both themes at
-  400x900 and 375x599 (an iPhone SE less its status bar and the tab row), with none, one and every
+  400x900 and 375x599 (an iPhone SE less its status bar and the top bar), with none, one and every
   category played, and with the picker open; holds every state to 599 high with each, a reveal with a
   failed like to the height of one without, every selection to the height of none, and the picker's
   card to 599 too. It measures 400 wide with one short line an option, because CI's Linux wraps text
@@ -903,8 +946,8 @@ Like (*Skipping* and *Likes*, below) and the category picker (*Categories*, belo
   pixels: every state draws differently with the picker open, and differently again with a category
   ticked in it. Theme tokens only, and the option cards and brand colors as they were (§5b).
 
-**The Submit screen** (`io.ntole.wyr.submit`), a tab between Play and Account, writes a question and
-lists the player's own (*Submitting*, below).
+**The Submit screen** (`io.ntole.wyr.submit`), opened from the Account screen's top bar for now
+(*Navigation*), writes a question and lists the player's own (*Submitting*, below).
 
 - **Scoring** *(built; see §8c)*: every answer earns exactly **1 point**, whichever side
   it picks. There is no majority bonus and no streak: the streak is removed from the server, the
@@ -1369,8 +1412,8 @@ game UI (the moderation app, `:app:adminApp`, §3) can name one too.
 - *In the app.* Koin binds the environment (`appModules`), and `dataModule` sends every request to
   that same environment's URL, so the Account screen's last line in a LOCAL or DEV build, which shows
   its name and URL (`serverLine`), always says where requests go; a PROD build names no server there.
-  Every build shows the same screens, Play, Submit and Account (§8d, *Current focus*), and Android's
-  launcher label says *WYR Local* or *WYR Dev* besides.
+  Every build shows the same screens, Home, Play, Account and Submit (§8d, *Current focus*), and
+  Android's launcher label says *WYR Local* or *WYR Dev* besides.
   The moderation app binds its environment the same way (`adminModules`), and names it on every
   screen, whatever the environment: its header shows the server's name and URL, production's in the
   error colors, and the desktop window's title shows both too (`windowTitleOf`).
@@ -1381,6 +1424,55 @@ game UI (the moderation app, `:app:adminApp`, §3) can name one too.
   Preferences node, one bundle id's `NSUserDefaults`, one origin's `localStorage`. With one key, a
   build for one server sent the other's tokens to it and, once they were refused, replaced that
   guest, and its points, with a new one (§8a). Android's flavors have storage of their own anyway.
+
+## 8f. Languages — decided 2026-09-25
+
+The game is Serbian first (the user: "main language should be serbian"). Its words are written in
+**Serbian Cyrillic**, the source text; **Serbian Latin** is made from the Cyrillic, never written by
+hand, so the two cannot say different things; and **English** stands beside them.
+
+- **Serbian Latin by transliteration** *(built)*: `SerbianScript.toLatin` (`:core:domain`,
+  `io.ntole.wyr.core.domain.language`), Serbian's exact letter-for-letter transliteration. Љ, Њ and Џ
+  are Lj, Nj and Dž, and LJ, NJ and DŽ in a word written in capitals (two letters or more, none
+  small; a word is a run of letters, so a hyphen or a full stop ends one); Ђ, Ж, Ћ, Ч and Ш are the
+  precomposed Đ, Ž, Ć, Č and Š, the accented Ѐ and Ѝ (ѝ, her, beside и, and) the precomposed È and
+  Ì, and Dž is two letters, never Unicode's one-character digraph. Latin letters, digits,
+  punctuation, spacing and the Cyrillic letters Serbian does not use (Я, Щ, Ы...) come back as they
+  were. Pure and in the domain, so a question's text can go through it later. `SerbianScriptTest`
+  pins every letter, capital and small, the digraphs in each case, the accented letters, and text
+  that must not change.
+- **The strings** *(built)*: `Strings` (`:app:shared`, `io.ntole.wyr.language`), a data class of
+  every translated text, one value per `Language`: `SerbianCyrillicStrings` written by hand,
+  `SerbianLatinStrings` made from it by `Strings.map(SerbianScript::toLatin)`, and `EnglishStrings`.
+  `App` provides the one shown through `LocalStrings` (`WyrStrings`), and a screen reads its words
+  from there and writes none of its own. Plain Kotlin values, not compose resources: string resources
+  cannot express one language made from another by a function, and a text missing from a language is
+  then a constructor that does not compile, not a key that fails at run time. `StringsTest` compares
+  the data classes' `toString`, which names every text, so a text added later is checked too: the
+  Latin is the Cyrillic transliterated, every Serbian text is in Cyrillic, and no Latin or English
+  one has a Cyrillic letter. Translated so far: the Home screen, the game's name (*Шта би радије?*,
+  *Would You Rather?*) and *Играј*; the top bars, the icons' names (*Почетна*, *Налог*, *Назад*) and
+  the Account bar's *Пошаљи питање*; and the switch's name, *Језик*.
+- **The default** *(built)*: Serbian Cyrillic on a first launch, whatever the device's language:
+  nothing reads the device's locale (`Language.DEFAULT`; `LanguageSwitchTest` sets an English, a
+  German and a Serbian Latin locale on the JVM and still opens in Cyrillic).
+- **The switch** *(built)*: first on the Account screen (§8d; provisional), a segmented row of the
+  three, **Ћирилица**, **Latinica** and **English**, each named in itself whatever the language
+  shown, so a player who picked one they cannot read finds their own (`Language.ownName`, which is
+  why the names are not `Strings`). No label on screen; a screen reader hears it named
+  (`Strings.language`). A tap changes every screen at once and is then kept (`LanguageViewModel`,
+  bound in `uiModule` and asked for once by `App`).
+- **Kept on the device** *(built)*: under `wyr.language` in the storage the session is kept in (the
+  platform's `TokenStorage`: SharedPreferences, `NSUserDefaults`, JVM Preferences, `localStorage`), as
+  the language's BCP 47 tag (`sr-Cyrl`, `sr-Latn`, `en`). One key for the device, not one per
+  environment (§8e): the language is the player's, so every build on one desktop, iPhone or browser
+  shows the one last picked there. A tag this build does not know opens in Cyrillic, and a write that
+  fails leaves the language this run's only, silently. `LanguageViewModelTest` and `AppModuleTest`
+  pin it, the sessions beside it in one storage untouched.
+- **Not translated yet**: question texts stay as their authors wrote them (server data; a later
+  change may put Serbian ones through `SerbianScript.toLatin`); the moderation app (`:app:adminApp`)
+  stays English; and the Play, Account and Submit screens' own copy, everything under their top bars
+  but the switch, stays English until the branches that redesign them translate it.
 ---
 
 ## 9. How to work in this repo
