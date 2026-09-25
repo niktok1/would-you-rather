@@ -1,6 +1,5 @@
 package io.ntole.wyr.core.data.mapper
 
-import io.ntole.wyr.core.domain.question.Category
 import io.ntole.wyr.core.domain.submission.Submission
 import io.ntole.wyr.core.domain.submission.SubmissionStatus
 import io.ntole.wyr.core.question.QuestionStatus
@@ -42,25 +41,17 @@ internal fun QuestionStatus.toDomain(): SubmissionStatus =
 
 /**
  * Domain to wire, for a submission: the options as given, since every rule about them is the
- * server's, and [categories] by their ids ([toWireOrNull]) in declaration order, so one selection is
- * always one request.
+ * server's, and [categories], ids, in id order, so one selection is always one request, however it
+ * was put together. The server files them in the order of categories whatever order they come in.
  *
  * @throws IllegalArgumentException when [categories] is empty, which the server refuses as a
- *   malformed request, or holds [Category.OTHER], which has no wire category to file a question
- *   under.
+ *   malformed request.
  */
 internal fun submitQuestionRequest(
     optionA: String,
     optionB: String,
-    categories: Set<Category>,
+    categories: Set<String>,
 ): SubmitQuestionRequest {
     require(categories.isNotEmpty()) { "a question is submitted under at least one category" }
-    return SubmitQuestionRequest(
-        optionA = optionA,
-        optionB = optionB,
-        categories =
-            categories.sorted().map { category ->
-                requireNotNull(category.toWireOrNull()) { "no question can be submitted under $category" }
-            },
-    )
+    return SubmitQuestionRequest(optionA = optionA, optionB = optionB, categories = categories.sorted())
 }

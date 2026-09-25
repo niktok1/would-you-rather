@@ -3,6 +3,7 @@ package io.ntole.wyr.admin.moderation
 import io.ntole.wyr.admin.moderation.FakeModeration.Companion.LISTED
 import io.ntole.wyr.admin.moderation.FakeModeration.Companion.TOKEN
 import io.ntole.wyr.admin.moderation.FakeModeration.Companion.pageOf
+import io.ntole.wyr.core.domain.category.GetCategories
 import io.ntole.wyr.core.domain.error.DomainError
 import io.ntole.wyr.core.domain.error.WyrException
 import io.ntole.wyr.core.domain.moderation.ApproveSubmission
@@ -14,7 +15,6 @@ import io.ntole.wyr.core.domain.moderation.QuestionFilter
 import io.ntole.wyr.core.domain.moderation.RejectSubmission
 import io.ntole.wyr.core.domain.moderation.RestoreQuestion
 import io.ntole.wyr.core.domain.moderation.RetireQuestion
-import io.ntole.wyr.core.domain.question.Category
 import io.ntole.wyr.core.domain.submission.SubmissionStatus
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
@@ -37,6 +37,7 @@ import kotlin.test.assertTrue
 class QuestionListViewModelTest {
     private val dispatcher = StandardTestDispatcher()
     private val moderation = FakeModeration()
+    private val categories = FakeCategories()
 
     @BeforeTest
     fun setUp() {
@@ -78,19 +79,19 @@ class QuestionListViewModelTest {
             viewModel.setAdminToken(TOKEN)
             viewModel.toggleStatusFilter(SubmissionStatus.RETIRED)
             viewModel.toggleStatusFilter(SubmissionStatus.APPROVED)
-            viewModel.toggleCategoryFilter(Category.RANDOM)
-            viewModel.toggleCategoryFilter(Category.FOOD)
+            viewModel.toggleCategoryFilter("ABSURD")
+            viewModel.toggleCategoryFilter("FOOD")
 
             viewModel.loadQuestions()
             testScheduler.advanceUntilIdle()
             viewModel.loadMore()
             testScheduler.advanceUntilIdle()
 
-            // In declaration order, whatever order they were picked in.
+            // In declaration order and in id order, whatever order they were picked in.
             assertEquals(
                 listOf(
-                    "questions [APPROVED, RETIRED] [FOOD, RANDOM] after=null",
-                    "questions [APPROVED, RETIRED] [FOOD, RANDOM] after=2",
+                    "questions [APPROVED, RETIRED] [ABSURD, FOOD] after=null",
+                    "questions [APPROVED, RETIRED] [ABSURD, FOOD] after=2",
                 ),
                 moderation.calls,
             )
@@ -119,7 +120,6 @@ class QuestionListViewModelTest {
             val viewModel = open()
 
             viewModel.toggleStatusFilter(SubmissionStatus.OTHER)
-            viewModel.toggleCategoryFilter(Category.OTHER)
 
             assertEquals(QuestionFilter(), viewModel.state.value.questions.filter)
             assertEquals(
@@ -138,7 +138,7 @@ class QuestionListViewModelTest {
         runTest(dispatcher) {
             val viewModel = open()
             viewModel.toggleStatusFilter(SubmissionStatus.PENDING)
-            viewModel.toggleCategoryFilter(Category.ETHICS)
+            viewModel.toggleCategoryFilter("ETHICS")
 
             viewModel.clearFilter()
 
@@ -363,7 +363,7 @@ class QuestionListViewModelTest {
             val viewModel = openWithList()
             viewModel.loadPending()
             testScheduler.advanceUntilIdle()
-            viewModel.toggleApprovalCategory("q1", Category.ETHICS)
+            viewModel.toggleApprovalCategory("q1", "ETHICS")
             moderation.calls.clear()
 
             viewModel.approve("q1", Screen.QUESTIONS)
@@ -371,7 +371,7 @@ class QuestionListViewModelTest {
 
             assertEquals(listOf("approve q1 [ETHICS]", "pending", "questions [] [] after=null"), moderation.calls)
             val state = viewModel.state.value
-            assertEquals("Approved \"Fly\" or \"Swim\" under ETHICS.", state.questions.outcomes.notice)
+            assertEquals("Approved \"Fly\" or \"Swim\" under Етика.", state.questions.outcomes.notice)
             assertNull(state.pending.outcomes.notice, "the list's notice is the list's")
         }
 
@@ -418,11 +418,11 @@ class QuestionListViewModelTest {
         runTest(dispatcher) {
             val viewModel = openWithList()
             moderation.pending = { emptyList() }
-            viewModel.toggleApprovalCategory("q1", Category.FOOD)
+            viewModel.toggleApprovalCategory("q1", "FOOD")
             viewModel.loadPending()
             testScheduler.advanceUntilIdle()
 
-            assertEquals(mapOf("q1" to DecisionDraft(setOf(Category.FOOD))), viewModel.state.value.drafts)
+            assertEquals(mapOf("q1" to DecisionDraft(setOf("FOOD"))), viewModel.state.value.drafts)
 
             viewModel.toggleStatusFilter(SubmissionStatus.APPROVED)
             assertEquals(emptyMap(), viewModel.state.value.drafts, "pending nowhere listed any more")
@@ -483,7 +483,7 @@ class QuestionListViewModelTest {
         runTest(dispatcher) {
             val viewModel = open()
             viewModel.setAdminToken(TOKEN)
-            viewModel.toggleCategoryFilter(Category.RANDOM)
+            viewModel.toggleCategoryFilter("ABSURD")
             viewModel.loadQuestions()
             viewModel.loadPending()
             testScheduler.advanceUntilIdle()
@@ -491,8 +491,15 @@ class QuestionListViewModelTest {
 
             viewModel.lock()
 
-            val filter = QuestionFilter(categories = setOf(Category.RANDOM))
-            assertEquals(ModerationState(questions = QuestionList(filter = filter), locks = 1), viewModel.state.value)
+            val filter = QuestionFilter(categories = setOf("ABSURD"))
+            assertEquals(
+                ModerationState(
+                    questions = QuestionList(filter = filter),
+                    categories = CategoryList(FakeCategories.LISTED),
+                    locks = 1,
+                ),
+                viewModel.state.value,
+            )
         }
 
     private fun TestScope.open(): ModerationViewModel =
@@ -503,6 +510,7 @@ class QuestionListViewModelTest {
             getQuestions = GetQuestions(moderation),
             retireQuestion = RetireQuestion(moderation),
             restoreQuestion = RestoreQuestion(moderation),
+            getCategories = GetCategories(categories),
         ).also { testScheduler.advanceUntilIdle() }
 
     /** The app with the token typed and the list's first page read, the one call so far. */

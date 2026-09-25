@@ -40,8 +40,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
+import io.ntole.wyr.core.domain.category.Category
 import io.ntole.wyr.core.domain.error.DomainError
-import io.ntole.wyr.core.domain.question.Category
 import io.ntole.wyr.core.domain.question.Question
 import io.ntole.wyr.core.domain.vote.Side
 import io.ntole.wyr.core.domain.vote.VoteOutcome
@@ -52,21 +52,21 @@ import io.ntole.wyr.theme.WyrTypeScale
  * The game: a question, its two options, and the reveal once it is answered.
  *
  * [categories] are the categories played, none for every category, shown in the header, where
- * tapping them opens the category picker (CLAUDE.md §8d, *Categories*). [picking] is what the open
- * picker has ticked, or `null` while it is closed.
+ * tapping them opens the category picker (CLAUDE.md §8d, *Categories*), with every category as last
+ * read, which the picker lists. [picking] is the open picker, or `null` while it is closed.
  */
 @Composable
 fun PlayScreen(
     state: PlayUiState,
-    categories: Set<Category>,
-    picking: Set<Category>?,
+    categories: PlayedCategories,
+    picking: CategoryPicking?,
     onChoose: (Side) -> Unit,
     onSkip: () -> Unit,
     onToggleLike: () -> Unit,
     onNext: () -> Unit,
     onRetry: () -> Unit,
     onOpenCategories: () -> Unit,
-    onToggleCategory: (Category) -> Unit,
+    onToggleCategory: (String) -> Unit,
     onSelectAllCategories: () -> Unit,
     onApplyCategories: () -> Unit,
     onCloseCategories: () -> Unit,
@@ -130,7 +130,8 @@ fun PlayScreen(
         if (picking != null) {
             Dialog(onDismissRequest = onCloseCategories) {
                 CategoryPicker(
-                    ticked = picking,
+                    categories = categories.known,
+                    picking = picking,
                     canApply = state.canChangeCategories,
                     onToggle = onToggleCategory,
                     onSelectAll = onSelectAllCategories,
@@ -158,7 +159,7 @@ fun PlayScreen(
 @Composable
 private fun Header(
     state: PlayUiState,
-    categories: Set<Category>,
+    categories: PlayedCategories,
     onOpenCategories: () -> Unit,
 ) {
     val colors = WyrThemeAccessors.colors
@@ -203,29 +204,34 @@ private fun Header(
     }
 }
 
-/** The categories played, as the header names them: all of them while none is selected. */
-internal fun categoriesPlayed(categories: Set<Category>): String =
-    if (categories.isEmpty()) {
-        "All"
-    } else {
-        // In declaration order, as the picker lists them, whatever order the set holds them in.
-        Category.entries.filter { it in categories }.joinToString(", ", transform = ::categoryName)
-    }
-
-/** A category in the player's words, never its wire name. */
-internal fun categoryName(category: Category): String =
-    when (category) {
-        Category.FOOD -> "Food"
-        Category.LIFESTYLE -> "Lifestyle"
-        Category.ETHICS -> "Ethics"
-        Category.SUPERPOWERS -> "Superpowers"
-        Category.RANDOM -> "Random"
-        Category.OTHER -> "Other"
-    }
+/**
+ * The categories played, as the header names them: all of them while none is selected, or their names
+ * in the order the picker lists them, the server's, and after them any the app has not read, by id.
+ */
+internal fun categoriesPlayed(categories: PlayedCategories): String {
+    val selected = categories.selected
+    if (selected.isEmpty()) return "All"
+    val listed = categories.known.map { it.id }.filter { it in selected }
+    val unread = (selected - listed.toSet()).sorted()
+    return (listed + unread).joinToString(", ") { categoryName(it, categories.known) }
+}
 
 /**
- * The category picker's card, in a dialog over the screen: every category the feed can be filtered
- * to, ticked or not, and All categories, ticked while none is. Nothing is played until Play, and
+ * A category in the player's words: its Serbian name, for now. With [categoryName] for an id, the one
+ * place the game names a category, so the language it is named in is chosen here.
+ */
+internal fun categoryName(category: Category): String = category.nameSr
+
+/** The category [id] in the player's words, as [known] has it, or the id itself for one not read yet. */
+internal fun categoryName(
+    id: String,
+    known: List<Category>,
+): String = known.firstOrNull { it.id == id }?.let { categoryName(it) } ?: id
+
+/**
+ * The category picker's card, in a dialog over the screen: every one of [categories], the server's,
+ * ticked or not, and All categories, ticked while none is. A line under them says the list is being
+ * read, while nothing was read before, or that the read failed. Nothing is played until Play, and
  * Play is off while the screen cannot take a change ([canApply]), one action at a time.
  *
  * The list scrolls, so a window shorter than the card keeps Play on screen. Internal, not private,
@@ -233,9 +239,10 @@ internal fun categoryName(category: Category): String =
  */
 @Composable
 internal fun CategoryPicker(
-    ticked: Set<Category>,
+    categories: List<Category>,
+    picking: CategoryPicking,
     canApply: Boolean,
-    onToggle: (Category) -> Unit,
+    onToggle: (String) -> Unit,
     onSelectAll: () -> Unit,
     onApply: () -> Unit,
     onClose: () -> Unit,
@@ -258,14 +265,19 @@ internal fun CategoryPicker(
             Spacer(Modifier.size(dimens.spaceSm))
 
             Column(modifier = Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState())) {
+                val ticked = picking.ticked
                 CategoryOption(label = "All categories", ticked = ticked.isEmpty(), onClick = onSelectAll)
-                Category.selectable.forEach { category ->
+                categories.forEach { category ->
                     CategoryOption(
                         label = categoryName(category),
-                        ticked = category in ticked,
-                        onClick = { onToggle(category) },
+                        ticked = category.id in ticked,
+                        onClick = { onToggle(category.id) },
                     )
                 }
+            }
+            pickerNote(picking, listed = categories.isNotEmpty())?.let { note ->
+                Spacer(Modifier.size(dimens.spaceSm))
+                Text(text = note, color = colors.muted, fontSize = WyrTypeScale.statLabel)
             }
 
             Spacer(Modifier.size(dimens.spaceMd))
@@ -279,6 +291,21 @@ internal fun CategoryPicker(
         }
     }
 }
+
+/**
+ * What the picker says under its list, if anything: that the categories are being read while none was
+ * read before, or that the read failed, which leaves the ones read before listed.
+ */
+internal fun pickerNote(
+    picking: CategoryPicking,
+    listed: Boolean,
+): String? =
+    when {
+        picking.failure == DomainError.NETWORK -> "Can't reach the game to list the categories."
+        picking.failure != null -> "Couldn't list the categories. Open this again to retry."
+        picking.isLoading && !listed -> "Loading the categories…"
+        else -> null
+    }
 
 /**
  * One line of the picker, ticked or not; the whole line toggles it, and is at least as tall as a

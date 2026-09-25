@@ -2,6 +2,7 @@ package io.ntole.wyr.admin.moderation
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import io.ntole.wyr.core.domain.category.GetCategories
 import io.ntole.wyr.core.domain.error.DomainError
 import io.ntole.wyr.core.domain.error.WyrException
 import io.ntole.wyr.core.domain.moderation.AdminToken
@@ -14,7 +15,6 @@ import io.ntole.wyr.core.domain.moderation.QuestionFilter
 import io.ntole.wyr.core.domain.moderation.RejectSubmission
 import io.ntole.wyr.core.domain.moderation.RestoreQuestion
 import io.ntole.wyr.core.domain.moderation.RetireQuestion
-import io.ntole.wyr.core.domain.question.Category
 import io.ntole.wyr.core.domain.submission.SubmissionStatus
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
@@ -37,7 +37,7 @@ interface ModerationActions {
 
     fun toggleApprovalCategory(
         questionId: String,
-        category: Category,
+        categoryId: String,
     )
 
     fun setReason(
@@ -57,7 +57,7 @@ interface ModerationActions {
 
     fun toggleStatusFilter(status: SubmissionStatus)
 
-    fun toggleCategoryFilter(category: Category)
+    fun toggleCategoryFilter(categoryId: String)
 
     fun clearFilter()
 
@@ -79,7 +79,9 @@ interface ModerationActions {
  * nowhere else; the pending queue, decided through [ApproveSubmission] and [RejectSubmission]; and
  * the list of every question, read through [GetQuestions] a page at a time, whose approved questions
  * [RetireQuestion] takes out of play once the moderator confirms it and whose retired ones
- * [RestoreQuestion] puts back. A pending question in the list is decided as in the queue.
+ * [RestoreQuestion] puts back. A pending question in the list is decided as in the queue. The
+ * categories, read through [GetCategories] before the queue or the list each Load reads, are what the
+ * chips offer and what names a question's categories.
  *
  * Nothing here has a player session, or could make one: the moderator is whoever holds the token,
  * and the app's wiring binds no session at all (`moderationDataModule`). Every request carries the
@@ -96,6 +98,7 @@ class ModerationViewModel(
     private val getQuestions: GetQuestions,
     private val retireQuestion: RetireQuestion,
     private val restoreQuestion: RestoreQuestion,
+    private val getCategories: GetCategories,
 ) : ViewModel(),
     ModerationActions {
     private val _state = MutableStateFlow(ModerationState())
@@ -110,32 +113,42 @@ class ModerationViewModel(
      * Forgets the token and everything read with it: the queue, the list, what was picked and typed,
      * and every outcome, and, since [ModerationState.locks] moves on, the token field's undo history.
      * The action in flight is cancelled, so nothing it answers is shown. The list's filter stays: it
-     * was never the server's.
+     * was never the server's. So do the categories, which are the same for everybody and need no token.
      */
     override fun lock() {
         // Counted before the cancel, which may run the cancelled action's cleanup at once.
-        _state.update { ModerationState(questions = QuestionList(filter = it.questions.filter), locks = it.locks + 1) }
+        _state.update {
+            ModerationState(
+                questions = QuestionList(filter = it.questions.filter),
+                categories = it.categories,
+                locks = it.locks + 1,
+            )
+        }
         inFlight?.cancel()
         inFlight = null
     }
 
-    /** Reads the queue, as an action of its own, starting the queue's outcomes afresh. */
+    /**
+     * Reads the categories and then the queue, as an action of its own, starting the queue's outcomes
+     * afresh.
+     */
     override fun loadPending() =
         exclusively(Running(Action.LOAD_PENDING)) { token ->
             _state.update { it.copy(pending = it.pending.copy(outcomes = Outcomes())) }
+            readCategories()
             readQueue(token)
         }
 
     /**
-     * Picks [category] for [questionId]'s approval, or unpicks it if it is picked. What is picked
-     * replaces the author's categories on approval, and none keeps them.
+     * Picks the category [categoryId] for [questionId]'s approval, or unpicks it if it is picked. What
+     * is picked replaces the author's categories on approval, and none keeps them.
      */
     override fun toggleApprovalCategory(
         questionId: String,
-        category: Category,
+        categoryId: String,
     ) = _state.update {
         val draft = it.draftOf(questionId)
-        it.copy(drafts = it.drafts + (questionId to draft.copy(categories = draft.categories.toggled(category))))
+        it.copy(drafts = it.drafts + (questionId to draft.copy(categories = draft.categories.toggled(categoryId))))
     }
 
     override fun setReason(
@@ -151,7 +164,8 @@ class ModerationViewModel(
         val categories = _state.value.draftOf(questionId).categories
         decide(Action.APPROVE, questionId, from) { token ->
             val approved = approveSubmission(token, questionId, categories)
-            "Approved ${optionsOf(approved.optionA, approved.optionB)} under ${namesOf(approved.categories)}."
+            val names = namesOf(approved.categories, _state.value.categories.categories)
+            "Approved ${optionsOf(approved.optionA, approved.optionB)} under $names."
         }
     }
 
@@ -179,22 +193,21 @@ class ModerationViewModel(
         refilter { it.copy(statuses = it.statuses.toggled(status)) }
     }
 
-    /**
-     * Lists questions filed under [category] too, or no longer; none is every category. Never
-     * [Category.OTHER], which names nothing the server can list by.
-     */
-    override fun toggleCategoryFilter(category: Category) {
-        if (category !in Category.selectable) return
-        refilter { it.copy(categories = it.categories.toggled(category)) }
-    }
+    /** Lists questions filed under the category [categoryId] too, or no longer; none is every category. */
+    override fun toggleCategoryFilter(categoryId: String) =
+        refilter { it.copy(categories = it.categories.toggled(categoryId)) }
 
     /** Lists every question again. */
     override fun clearFilter() = refilter { QuestionFilter() }
 
-    /** Reads the list's first page at its filter, as an action of its own, starting its outcomes afresh. */
+    /**
+     * Reads the categories and then the list's first page at its filter, as an action of its own,
+     * starting its outcomes afresh.
+     */
     override fun loadQuestions() =
         exclusively(Running(Action.LOAD_QUESTIONS)) { token ->
             _state.update { it.copy(questions = it.questions.copy(outcomes = Outcomes())) }
+            readCategories()
             readList(token, shown = 0)
         }
 
@@ -344,6 +357,16 @@ class ModerationViewModel(
         }
     }
 
+    /** Reads every category; a read that fails keeps what was listed and says why. */
+    private suspend fun readCategories() {
+        val failure =
+            failureOf {
+                val listed = getCategories()
+                _state.update { it.copy(categories = CategoryList(categories = listed)) }
+            }
+        if (failure != null) _state.update { it.copy(categories = it.categories.copy(failure = failure)) }
+    }
+
     /** Reads the queue; a read that fails keeps what was listed and says why. */
     private suspend fun readQueue(token: AdminToken) {
         val failure =
@@ -475,7 +498,7 @@ class ModerationViewModel(
         return copy(drafts = drafts.filterKeys(pendingIds::contains))
     }
 
-    /** This set with [value] in it, or out of it if it was in, in declaration order. */
+    /** This set with [value] in it, or out of it if it was in, in order: declaration order, or an id's. */
     private fun <T : Comparable<T>> Set<T>.toggled(value: T): Set<T> =
         (if (value in this) this - value else this + value).sorted().toSet()
 }

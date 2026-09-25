@@ -6,8 +6,8 @@ import androidx.compose.ui.graphics.toComposeImageBitmap
 import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.unit.Density
+import io.ntole.wyr.core.domain.category.Category
 import io.ntole.wyr.core.domain.error.DomainError
-import io.ntole.wyr.core.domain.question.Category
 import io.ntole.wyr.core.domain.question.Question
 import io.ntole.wyr.core.domain.vote.Side
 import io.ntole.wyr.core.domain.vote.Tally
@@ -66,7 +66,7 @@ class PlayScreenDrawTest {
             val open = pixels(state, picking = emptySet())
             assertFalse(closed.contentEquals(open), "$state draws the same with the picker open")
             assertFalse(
-                open.contentEquals(pixels(state, picking = setOf(Category.ETHICS))),
+                open.contentEquals(pixels(state, picking = setOf("ETHICS"))),
                 "$state's picker draws the same with Ethics ticked",
             )
         }
@@ -104,7 +104,7 @@ class PlayScreenDrawTest {
             listOf(WIDTH, SHORT_PHONE_WIDTH).forEach { width ->
                 assertEquals(
                     heightNeeded(state, width, categories = emptySet()),
-                    heightNeeded(state, width, categories = Category.selectable.toSet()),
+                    heightNeeded(state, width, categories = EVERY),
                     "$state at $width wide",
                 )
             }
@@ -118,7 +118,8 @@ class PlayScreenDrawTest {
             val needed =
                 heightNeeded(SHORT_PHONE_WIDTH) {
                     CategoryPicker(
-                        ticked = ticked,
+                        categories = KNOWN,
+                        picking = CategoryPicking(ticked),
                         canApply = true,
                         onToggle = {},
                         onSelectAll = {},
@@ -127,6 +128,43 @@ class PlayScreenDrawTest {
                     )
                 }
             assertTrue(needed <= SHORT_PHONE_HEIGHT, "the picker on $ticked needs $needed of $SHORT_PHONE_HEIGHT")
+        }
+    }
+
+    /**
+     * The picker while it reads the categories with none read before, and once a read failed, with
+     * and without the ones read before: each draws, and says so under what it lists.
+     */
+    @Test
+    fun `the category picker draws while it reads the categories and when the read failed`() {
+        val pickings =
+            listOf(
+                emptyList<Category>() to CategoryPicking(emptySet(), isLoading = true),
+                emptyList<Category>() to CategoryPicking(emptySet(), failure = DomainError.NETWORK),
+                KNOWN to CategoryPicking(setOf("ETHICS"), failure = DomainError.SERVER),
+            )
+        pickings.forEach { (known, picking) ->
+            listOf(false, true).forEach { dark ->
+                val scene =
+                    ImageComposeScene(width = SHORT_PHONE_WIDTH, height = SHORT_PHONE_HEIGHT, density = Density(1f)) {
+                        WyrTheme(darkTheme = dark) {
+                            CategoryPicker(
+                                known,
+                                picking,
+                                canApply = true,
+                                onToggle = {},
+                                onSelectAll = {},
+                                onApply = {},
+                                onClose = {},
+                            )
+                        }
+                    }
+                try {
+                    assertEquals(SHORT_PHONE_WIDTH, scene.render().width)
+                } finally {
+                    scene.close()
+                }
+            }
         }
     }
 
@@ -148,8 +186,8 @@ class PlayScreenDrawTest {
         dark: Boolean,
         width: Int,
         height: Int,
-        categories: Set<Category> = emptySet(),
-        picking: Set<Category>? = null,
+        categories: Set<String> = emptySet(),
+        picking: Set<String>? = null,
     ) {
         val scene =
             ImageComposeScene(width = width, height = height, density = Density(1f)) {
@@ -165,7 +203,7 @@ class PlayScreenDrawTest {
     /** Every pixel of [state]'s screen at the short phone's size, in the light theme. */
     private fun pixels(
         state: PlayUiState,
-        picking: Set<Category>?,
+        picking: Set<String>?,
     ): IntArray {
         val scene =
             ImageComposeScene(width = SHORT_PHONE_WIDTH, height = SHORT_PHONE_HEIGHT, density = Density(1f)) {
@@ -186,7 +224,7 @@ class PlayScreenDrawTest {
     private fun heightNeeded(
         state: PlayUiState,
         width: Int,
-        categories: Set<Category> = emptySet(),
+        categories: Set<String> = emptySet(),
     ): Int = heightNeeded(width, "$state") { Screen(state, categories, picking = null) }
 
     /** The least height [content] needs at [width] for nothing in it to be squeezed. */
@@ -216,16 +254,17 @@ class PlayScreenDrawTest {
         return needed
     }
 
+    /** The screen with [categories] played and [picking] ticked in the open picker, [KNOWN] read. */
     @Composable
     private fun Screen(
         state: PlayUiState,
-        categories: Set<Category>,
-        picking: Set<Category>?,
+        categories: Set<String>,
+        picking: Set<String>?,
     ) {
         PlayScreen(
             state = state,
-            categories = categories,
-            picking = picking,
+            categories = PlayedCategories(selected = categories, known = KNOWN),
+            picking = picking?.let(::CategoryPicking),
             onChoose = {},
             onSkip = {},
             onToggleLike = {},
@@ -259,13 +298,23 @@ class PlayScreenDrawTest {
                 id = "q1",
                 optionA = "Be able to fly but only a metre off the ground",
                 optionB = "Turn invisible but only while nobody is looking",
-                categories = setOf(Category.SUPERPOWERS),
+                categories = setOf("SUPERPOWERS"),
             )
         val ONE_LINE_QUESTION = QUESTION.copy(optionA = "Fly", optionB = "Swim")
 
+        /** The server's first five categories, as V6 wrote them, in the order of categories. */
+        val KNOWN =
+            listOf(
+                Category(id = "FOOD", nameSr = "Храна", nameEn = "Food"),
+                Category(id = "LIFESTYLE", nameSr = "Начин живота", nameEn = "Lifestyle"),
+                Category(id = "ETHICS", nameSr = "Етика", nameEn = "Ethics"),
+                Category(id = "SUPERPOWERS", nameSr = "Супермоћи", nameEn = "Superpowers"),
+                Category(id = "ABSURD", nameSr = "Апсурдно", nameEn = "Absurd"),
+            )
+        val EVERY: Set<String> = KNOWN.map { it.id }.toSet()
+
         /** None, which is every category; one; and every one, the longest line the header can hold. */
-        val SELECTIONS: List<Set<Category>> =
-            listOf(emptySet(), setOf(Category.ETHICS), Category.selectable.toSet())
+        val SELECTIONS: List<Set<String>> = listOf(emptySet(), setOf("ETHICS"), EVERY)
         val OUTCOME =
             VoteOutcome(
                 yourSide = Side.B,

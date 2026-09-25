@@ -1,8 +1,10 @@
 package io.ntole.wyr.submit
 
+import io.ntole.wyr.core.domain.category.Category
+import io.ntole.wyr.core.domain.category.CategoryRepository
+import io.ntole.wyr.core.domain.category.GetCategories
 import io.ntole.wyr.core.domain.error.DomainError
 import io.ntole.wyr.core.domain.error.WyrException
-import io.ntole.wyr.core.domain.question.Category
 import io.ntole.wyr.core.domain.session.SessionRepository
 import io.ntole.wyr.core.domain.submission.GetMySubmissions
 import io.ntole.wyr.core.domain.submission.OptionProblem
@@ -14,6 +16,7 @@ import io.ntole.wyr.core.domain.submission.SubmitQuestion
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.resetMain
@@ -34,6 +37,7 @@ import kotlin.time.Instant
 class SubmitViewModelTest {
     private val dispatcher = StandardTestDispatcher()
     private val server = FakeServer()
+    private val categories = FakeCategoryRepository()
 
     @BeforeTest
     fun setUp() {
@@ -53,6 +57,55 @@ class SubmitViewModelTest {
             testScheduler.advanceUntilIdle()
 
             assertEquals(emptyList(), server.calls)
+            assertEquals(0, categories.reads)
+        }
+
+    @Test
+    fun `showing the screen reads the categories to pick from in the server's order`() =
+        runTest(dispatcher) {
+            val viewModel = open()
+
+            assertEquals(1, categories.reads)
+            assertEquals(FakeCategoryRepository.LISTED, viewModel.state.value.categoryOptions)
+            assertNull(viewModel.state.value.categoriesFailure)
+            // A moderator adds one, and the next time the screen is shown lists it.
+            val animals = Category(id = "ANIMALS", nameSr = "Животиње", nameEn = "Animals")
+            categories.read = { FakeCategoryRepository.LISTED + animals }
+            viewModel.refresh()
+            testScheduler.advanceUntilIdle()
+            assertEquals(FakeCategoryRepository.LISTED + animals, viewModel.state.value.categoryOptions)
+        }
+
+    @Test
+    fun `the categories another screen read are there to pick from before this one reads them`() =
+        runTest(dispatcher) {
+            categories.refresh()
+
+            val viewModel = viewModel()
+            testScheduler.advanceUntilIdle()
+
+            assertEquals(FakeCategoryRepository.LISTED, viewModel.state.value.categoryOptions)
+        }
+
+    @Test
+    fun `categories that cannot be read say so and keep those read before and the list is read all the same`() =
+        runTest(dispatcher) {
+            val viewModel = open()
+            server.calls.clear()
+            categories.read = { throw WyrException(DomainError.NETWORK) }
+
+            viewModel.refresh()
+            testScheduler.advanceUntilIdle()
+
+            val state = viewModel.state.value
+            assertEquals(SubmitFailure(DomainError.NETWORK), state.categoriesFailure)
+            assertEquals(FakeCategoryRepository.LISTED, state.categoryOptions)
+            assertEquals(listOf("ensure", "mine"), server.calls)
+            // Try again reads them again.
+            categories.read = { FakeCategoryRepository.LISTED }
+            viewModel.refresh()
+            testScheduler.advanceUntilIdle()
+            assertNull(viewModel.state.value.categoriesFailure)
         }
 
     @Test
@@ -84,7 +137,7 @@ class SubmitViewModelTest {
         runTest(dispatcher) {
             val viewModel = open()
             server.calls.clear()
-            viewModel.toggleCategory(Category.FOOD)
+            viewModel.toggleCategory("FOOD")
 
             listOf(
                 "   " to OptionProblem.BLANK,
@@ -113,7 +166,7 @@ class SubmitViewModelTest {
             val viewModel = open()
             server.calls.clear()
 
-            viewModel.write(" Fly", "FLY ", Category.FOOD)
+            viewModel.write(" Fly", "FLY ", "FOOD")
             viewModel.submit()
             testScheduler.advanceUntilIdle()
 
@@ -140,25 +193,15 @@ class SubmitViewModelTest {
         }
 
     @Test
-    fun `OTHER is never picked`() =
-        runTest(dispatcher) {
-            val viewModel = open()
-
-            viewModel.toggleCategory(Category.OTHER)
-
-            assertEquals(emptySet(), viewModel.state.value.categories)
-        }
-
-    @Test
     fun `a category tapped again is unpicked`() =
         runTest(dispatcher) {
             val viewModel = open()
 
-            viewModel.toggleCategory(Category.FOOD)
-            viewModel.toggleCategory(Category.ETHICS)
-            viewModel.toggleCategory(Category.FOOD)
+            viewModel.toggleCategory("FOOD")
+            viewModel.toggleCategory("ETHICS")
+            viewModel.toggleCategory("FOOD")
 
-            assertEquals(setOf(Category.ETHICS), viewModel.state.value.categories)
+            assertEquals(setOf("ETHICS"), viewModel.state.value.categories)
         }
 
     @Test
@@ -167,7 +210,7 @@ class SubmitViewModelTest {
             val viewModel = open()
             server.calls.clear()
 
-            viewModel.write(" Fly ", "Swim", Category.SUPERPOWERS, Category.FOOD)
+            viewModel.write(" Fly ", "Swim", "SUPERPOWERS", "FOOD")
             assertTrue(viewModel.state.value.canSubmit)
             viewModel.submit()
             testScheduler.advanceUntilIdle()
@@ -195,7 +238,7 @@ class SubmitViewModelTest {
     fun `the next action takes the sent note down`() =
         runTest(dispatcher) {
             val viewModel = open()
-            viewModel.write("Fly", "Swim", Category.FOOD)
+            viewModel.write("Fly", "Swim", "FOOD")
             viewModel.submit()
             testScheduler.advanceUntilIdle()
 
@@ -211,7 +254,7 @@ class SubmitViewModelTest {
             val viewModel = open()
             server.calls.clear()
 
-            viewModel.write("Fly", "Swim", Category.FOOD)
+            viewModel.write("Fly", "Swim", "FOOD")
             viewModel.submit()
             testScheduler.advanceUntilIdle()
 
@@ -223,7 +266,7 @@ class SubmitViewModelTest {
             )
             assertEquals("Fly", state.optionA)
             assertEquals("Swim", state.optionB)
-            assertEquals(setOf(Category.FOOD), state.categories)
+            assertEquals(setOf("FOOD"), state.categories)
             assertFalse(state.sent)
             // After a failure too: a submission whose answer was lost may have been stored.
             assertEquals("mine", server.calls.last())
@@ -235,7 +278,7 @@ class SubmitViewModelTest {
             server.submitFailsWith = WyrException(DomainError.SUBMISSION_LIMIT, "20 submissions pending")
             val viewModel = open()
 
-            viewModel.write("Fly", "Swim", Category.FOOD)
+            viewModel.write("Fly", "Swim", "FOOD")
             viewModel.submit()
             testScheduler.advanceUntilIdle()
 
@@ -254,7 +297,7 @@ class SubmitViewModelTest {
             server.submitFailsWith = WyrException(DomainError.NETWORK, "connect timed out")
             val viewModel = open()
 
-            viewModel.write("Fly", "Swim", Category.FOOD)
+            viewModel.write("Fly", "Swim", "FOOD")
             viewModel.submit()
             testScheduler.advanceUntilIdle()
 
@@ -274,7 +317,7 @@ class SubmitViewModelTest {
             server.submitFailsWith = WyrException(DomainError.RATE_LIMITED, retryAfter = 42.seconds)
             val viewModel = open()
 
-            viewModel.write("Fly", "Swim", Category.FOOD)
+            viewModel.write("Fly", "Swim", "FOOD")
             viewModel.submit()
             testScheduler.advanceUntilIdle()
 
@@ -306,7 +349,7 @@ class SubmitViewModelTest {
             val viewModel = open()
             server.mineFailsWith = DomainError.SERVER
 
-            viewModel.write("Fly", "Swim", Category.FOOD)
+            viewModel.write("Fly", "Swim", "FOOD")
             viewModel.submit()
             testScheduler.advanceUntilIdle()
 
@@ -324,7 +367,7 @@ class SubmitViewModelTest {
             val viewModel = open()
             server.mineFailsWith = DomainError.NETWORK
 
-            viewModel.write("Fly", "Swim", Category.FOOD)
+            viewModel.write("Fly", "Swim", "FOOD")
             viewModel.submit()
             testScheduler.advanceUntilIdle()
 
@@ -344,7 +387,7 @@ class SubmitViewModelTest {
             val viewModel = open()
             assertEquals(SubmitFailure(DomainError.NETWORK), viewModel.state.value.listFailure)
 
-            viewModel.write("Fly", "Swim", Category.FOOD)
+            viewModel.write("Fly", "Swim", "FOOD")
             viewModel.submit()
             testScheduler.advanceUntilIdle()
 
@@ -370,7 +413,7 @@ class SubmitViewModelTest {
         runTest(dispatcher) {
             val viewModel = open()
             server.calls.clear()
-            viewModel.write("Fly", "Swim", Category.FOOD)
+            viewModel.write("Fly", "Swim", "FOOD")
 
             viewModel.submit()
             viewModel.submit()
@@ -385,7 +428,7 @@ class SubmitViewModelTest {
     fun `nothing is sent while the list is being read`() =
         runTest(dispatcher) {
             val viewModel = viewModel()
-            viewModel.write("Fly", "Swim", Category.FOOD)
+            viewModel.write("Fly", "Swim", "FOOD")
 
             viewModel.refresh()
             assertFalse(viewModel.state.value.canSubmit)
@@ -402,18 +445,18 @@ class SubmitViewModelTest {
             val viewModel = open()
             val answer = CompletableDeferred<Unit>()
             server.submitWaitsFor = answer
-            viewModel.write("Fly", "Swim", Category.FOOD)
+            viewModel.write("Fly", "Swim", "FOOD")
 
             viewModel.submit()
             testScheduler.advanceUntilIdle()
             assertTrue(viewModel.state.value.isSubmitting)
             viewModel.setOptionA("Run")
             viewModel.setOptionB("Walk")
-            viewModel.toggleCategory(Category.ETHICS)
+            viewModel.toggleCategory("ETHICS")
 
             assertEquals("Fly", viewModel.state.value.optionA)
             assertEquals("Swim", viewModel.state.value.optionB)
-            assertEquals(setOf(Category.FOOD), viewModel.state.value.categories)
+            assertEquals(setOf("FOOD"), viewModel.state.value.categories)
 
             answer.complete(Unit)
             testScheduler.advanceUntilIdle()
@@ -428,11 +471,11 @@ class SubmitViewModelTest {
             val viewModel = viewModel()
 
             viewModel.refresh()
-            viewModel.write("Fly", "Swim", Category.FOOD)
+            viewModel.write("Fly", "Swim", "FOOD")
             testScheduler.advanceUntilIdle()
 
             assertEquals("Fly", viewModel.state.value.optionA)
-            assertEquals(setOf(Category.FOOD), viewModel.state.value.categories)
+            assertEquals(setOf("FOOD"), viewModel.state.value.categories)
         }
 
     /** A view model whose screen has been shown, and read the list. */
@@ -446,13 +489,15 @@ class SubmitViewModelTest {
         SubmitViewModel(
             submitQuestion = SubmitQuestion(server, server),
             getMySubmissions = GetMySubmissions(server, server),
+            getCategories = GetCategories(categories),
+            categoryList = categories,
         )
 
     /** Types both options and picks exactly [categories]. */
     private fun SubmitViewModel.write(
         optionA: String,
         optionB: String,
-        vararg categories: Category,
+        vararg categories: String,
     ) {
         setOptionA(optionA)
         setOptionB(optionB)
@@ -462,7 +507,7 @@ class SubmitViewModelTest {
 
     /**
      * The server and this device's session in one. Every call that reaches it is in [calls], a
-     * submission with its options quoted as sent and its categories in declaration order.
+     * submission with its options quoted as sent and its categories in id order.
      */
     private class FakeServer :
         SubmissionRepository,
@@ -483,7 +528,7 @@ class SubmitViewModelTest {
         override suspend fun submit(
             optionA: String,
             optionB: String,
-            categories: Set<Category>,
+            categories: Set<String>,
         ): Submission {
             calls += "submit \"$optionA\"|\"$optionB\"|${categories.sorted()}"
             submitWaitsFor?.await()
@@ -509,6 +554,29 @@ class SubmitViewModelTest {
         }
     }
 
+    /** The server's categories as the tests script them, each read counted in [reads]. */
+    private class FakeCategoryRepository : CategoryRepository {
+        var reads = 0
+
+        var read: suspend () -> List<Category> = { LISTED }
+
+        override val categories = MutableStateFlow<List<Category>>(emptyList())
+
+        override suspend fun refresh(): List<Category> {
+            reads++
+            return read().also { categories.value = it }
+        }
+
+        companion object {
+            val LISTED =
+                listOf(
+                    Category(id = "FOOD", nameSr = "Храна", nameEn = "Food"),
+                    Category(id = "ETHICS", nameSr = "Етика", nameEn = "Ethics"),
+                    Category(id = "SUPERPOWERS", nameSr = "Супермоћи", nameEn = "Superpowers"),
+                )
+        }
+    }
+
     private companion object {
         val MINE =
             listOf(
@@ -516,7 +584,7 @@ class SubmitViewModelTest {
                     id = "q2",
                     optionA = "Tea",
                     optionB = "Coffee",
-                    categories = setOf(Category.FOOD),
+                    categories = setOf("FOOD"),
                     status = SubmissionStatus.REJECTED,
                     rejectionReason = "a duplicate",
                     submittedAt = Instant.fromEpochMilliseconds(1_790_000_000_001L),
@@ -525,7 +593,7 @@ class SubmitViewModelTest {
                     id = "q1",
                     optionA = "Lie",
                     optionB = "Steal",
-                    categories = setOf(Category.ETHICS),
+                    categories = setOf("ETHICS"),
                     status = SubmissionStatus.PENDING,
                     rejectionReason = null,
                     submittedAt = Instant.fromEpochMilliseconds(1_790_000_000_000L),

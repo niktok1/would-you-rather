@@ -9,11 +9,11 @@ import kotlinx.coroutines.flow.StateFlow
  */
 public interface QuestionRepository {
     /**
-     * The categories [next] and [prefetch] ask the feed for: the questions filed under any of them,
-     * or under every category while it is empty (CLAUDE.md §8d). It starts empty, and only
+     * The ids of the categories [next] and [prefetch] ask the feed for: the questions filed under any
+     * of them, or under every category while it is empty (CLAUDE.md §8d). It starts empty, and only
      * [setCategories] changes it.
      */
-    public val categories: StateFlow<Set<Category>>
+    public val categories: StateFlow<Set<String>>
 
     /**
      * The next question to play, fetching more if the local supply is low.
@@ -32,21 +32,19 @@ public interface QuestionRepository {
     public suspend fun prefetch()
 
     /**
-     * Filters the feed to the questions filed under any of [categories], or back to every category
-     * with none.
+     * Filters the feed to the questions filed under any of [categories], by id, or back to every
+     * category with none.
      *
      * A change drops every queued question, so nothing queued for the selection before is handed
      * out after this returns. A refill already in flight lands before the change does, as it does
      * before a [reset], so it cannot put them back after it. Selecting the categories already
-     * selected changes nothing. Selecting all of [Category.selectable] is not selecting none: a
-     * question filed only under categories this build cannot name is in none of them. The
-     * categories are one pool played within the player's cycle, not a cycle of their own: once
-     * nothing in any of them is due, they are served again (CLAUDE.md §8d, *Categories*).
-     *
-     * @throws IllegalArgumentException when [categories] holds [Category.OTHER], which is not in
-     *   [Category.selectable], leaving the selection and the queue as they were.
+     * selected changes nothing. Ticking every category is not selecting none: a category a moderator
+     * adds later is played under none, and not under the ones ticked. The categories are one pool played
+     * within the player's cycle, not a cycle of their own: once nothing in any of them is due, they
+     * are served again (CLAUDE.md §8d, *Categories*). An id no category has is the server's to refuse,
+     * when the next fetch asks for it.
      */
-    public suspend fun setCategories(categories: Set<Category>)
+    public suspend fun setCategories(categories: Set<String>)
 
     /**
      * Skips the question [questionId] for the rest of the player's current cycle (CLAUDE.md §8d).

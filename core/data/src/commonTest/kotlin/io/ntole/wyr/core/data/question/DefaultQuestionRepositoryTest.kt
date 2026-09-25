@@ -14,7 +14,6 @@ import io.ntole.wyr.core.data.session.DefaultSessionRepository
 import io.ntole.wyr.core.data.storeHolding
 import io.ntole.wyr.core.domain.error.DomainError
 import io.ntole.wyr.core.domain.error.WyrException
-import io.ntole.wyr.core.domain.question.Category
 import io.ntole.wyr.core.domain.question.GetNextQuestion
 import io.ntole.wyr.core.domain.question.SkipQuestion
 import io.ntole.wyr.core.error.ErrorCode
@@ -212,14 +211,14 @@ class DefaultQuestionRepositoryTest {
             val repository = repositoryOver(feed.engine)
             assertEquals("q1", repository.next().id)
 
-            repository.setCategories(setOf(Category.ETHICS))
+            repository.setCategories(setOf("ETHICS"))
 
-            assertEquals(setOf(Category.ETHICS), repository.categories.value)
+            assertEquals(setOf("ETHICS"), repository.categories.value)
             assertEquals(0, cache.count())
             // Without the switch dropping the queue, this is q2, still queued from the unfiltered batch.
             val served = List(3) { repository.next() }
             assertEquals(listOf("e1", "e2", "e3"), served.map { it.id })
-            assertEquals(setOf(setOf(Category.ETHICS)), served.map { it.categories }.toSet())
+            assertEquals(setOf(setOf("ETHICS")), served.map { it.categories }.toSet())
             assertEquals(listOf(emptyList(), listOf("ETHICS")), feed.asked)
         }
 
@@ -228,15 +227,15 @@ class DefaultQuestionRepositoryTest {
         runTest {
             val feed = CategoryFeed()
             val repository = repositoryOver(feed.engine)
-            repository.setCategories(setOf(Category.FOOD, Category.ETHICS))
-            assertEquals("f1", repository.next().id)
+            repository.setCategories(setOf("FOOD", "ETHICS"))
+            assertEquals("e1", repository.next().id)
 
-            repository.setCategories(setOf(Category.ETHICS))
+            repository.setCategories(setOf("FOOD"))
 
             assertEquals(0, cache.count())
-            // Without the change dropping the queue, this is f2, a FOOD question no longer selected.
-            assertEquals("e1", repository.next().id)
-            assertEquals(listOf(listOf("FOOD", "ETHICS"), listOf("ETHICS")), feed.asked)
+            // Without the change dropping the queue, this is e2, an ETHICS question no longer selected.
+            assertEquals("f1", repository.next().id)
+            assertEquals(listOf(listOf("ETHICS", "FOOD"), listOf("FOOD")), feed.asked)
         }
 
     @Test
@@ -244,16 +243,16 @@ class DefaultQuestionRepositoryTest {
         runTest {
             val feed = CategoryFeed()
             val repository = repositoryOver(feed.engine)
-            repository.setCategories(setOf(Category.FOOD))
+            repository.setCategories(setOf("FOOD"))
             assertEquals("f1", repository.next().id)
 
-            repository.setCategories(setOf(Category.FOOD, Category.ETHICS))
+            repository.setCategories(setOf("FOOD", "ETHICS"))
 
-            // f2 still comes first, but from a batch that asked for ETHICS too: the queue the FOOD batch
-            // left would have held ETHICS off until it ran out.
+            // An ETHICS question at once, from a batch that asked for it: the queue the FOOD batch left
+            // would have given f2, and held ETHICS off until it ran out.
             assertEquals(0, cache.count())
-            assertEquals("f2", repository.next().id)
-            assertEquals(listOf(listOf("FOOD"), listOf("FOOD", "ETHICS")), feed.asked)
+            assertEquals("e1", repository.next().id)
+            assertEquals(listOf(listOf("FOOD"), listOf("ETHICS", "FOOD")), feed.asked)
         }
 
     @Test
@@ -276,7 +275,7 @@ class DefaultQuestionRepositoryTest {
             unfilteredRequested.await()
             // Runs until it has to wait: the refill holds the lock while its batch is in flight.
             val switch =
-                launch(start = CoroutineStart.UNDISPATCHED) { repository.setCategories(setOf(Category.ETHICS)) }
+                launch(start = CoroutineStart.UNDISPATCHED) { repository.setCategories(setOf("ETHICS")) }
             answerUnfiltered.complete(Unit)
             refill.await()
             switch.join()
@@ -290,7 +289,7 @@ class DefaultQuestionRepositoryTest {
         runTest {
             val feed = CategoryFeed()
             val repository = repositoryOver(feed.engine)
-            repository.setCategories(setOf(Category.RANDOM, Category.FOOD))
+            repository.setCategories(setOf("FOOD", "ABSURD"))
 
             repository.next()
             // A prefetch, and the next that finds the queue empty after it.
@@ -298,7 +297,8 @@ class DefaultQuestionRepositoryTest {
             repeat(cache.count()) { repository.next() }
             repository.next()
 
-            assertEquals(List(3) { listOf("FOOD", "ABSURD") }, feed.asked)
+            // In id order every time, whatever order the selection was put together in.
+            assertEquals(List(3) { listOf("ABSURD", "FOOD") }, feed.asked)
         }
 
     @Test
@@ -306,7 +306,7 @@ class DefaultQuestionRepositoryTest {
         runTest {
             val feed = CategoryFeed()
             val repository = repositoryOver(feed.engine)
-            repository.setCategories(setOf(Category.FOOD))
+            repository.setCategories(setOf("FOOD"))
             assertEquals("f1", repository.next().id)
 
             repository.setCategories(emptySet())
@@ -321,14 +321,14 @@ class DefaultQuestionRepositoryTest {
         runTest {
             val feed = CategoryFeed()
             val repository = repositoryOver(feed.engine)
-            repository.setCategories(setOf(Category.FOOD, Category.ETHICS))
-            assertEquals("f1", repository.next().id)
+            repository.setCategories(setOf("FOOD", "ETHICS"))
+            assertEquals("e1", repository.next().id)
 
             // The same set, whatever order it was put together in.
-            repository.setCategories(setOf(Category.ETHICS, Category.FOOD))
+            repository.setCategories(setOf("ETHICS", "FOOD"))
 
-            assertEquals("f2", repository.next().id)
-            assertEquals(listOf(listOf("FOOD", "ETHICS")), feed.asked, "not a fetch")
+            assertEquals("e2", repository.next().id)
+            assertEquals(listOf(listOf("ETHICS", "FOOD")), feed.asked, "not a fetch")
         }
 
     @Test
@@ -336,13 +336,13 @@ class DefaultQuestionRepositoryTest {
         runTest {
             val feed = CategoryFeed()
             val repository = repositoryOver(feed.engine)
-            val selection = mutableSetOf(Category.FOOD)
+            val selection = mutableSetOf("FOOD")
             repository.setCategories(selection)
 
-            selection += Category.ETHICS
+            selection += "ETHICS"
             repository.next()
 
-            assertEquals(setOf(Category.FOOD), repository.categories.value)
+            assertEquals(setOf("FOOD"), repository.categories.value)
             assertEquals(listOf(listOf("FOOD")), feed.asked)
         }
 
@@ -352,32 +352,28 @@ class DefaultQuestionRepositoryTest {
             // The queue was the old player's, but the selection is what to ask the feed for.
             val feed = CategoryFeed()
             val repository = repositoryOver(feed.engine)
-            repository.setCategories(setOf(Category.FOOD))
+            repository.setCategories(setOf("FOOD"))
             repository.next()
 
             repository.reset()
 
-            assertEquals(setOf(Category.FOOD), repository.categories.value)
+            assertEquals(setOf("FOOD"), repository.categories.value)
             // Not f1, which is still on screen.
             assertEquals("f2", repository.next().id)
             assertEquals(listOf(listOf("FOOD"), listOf("FOOD")), feed.asked)
         }
 
     @Test
-    fun `OTHER cannot be selected and changes nothing`() =
+    fun `a category added after this build is asked for by its id`() =
         runTest {
+            // Categories are server data: whatever id the server listed, the feed can be filtered to.
             val feed = CategoryFeed()
             val repository = repositoryOver(feed.engine)
-            repository.setCategories(setOf(Category.FOOD))
-            assertEquals("f1", repository.next().id)
 
-            assertFailsWith<IllegalArgumentException> {
-                repository.setCategories(setOf(Category.ETHICS, Category.OTHER))
-            }
+            repository.setCategories(setOf("ANIMALS"))
 
-            assertEquals(setOf(Category.FOOD), repository.categories.value)
-            assertEquals("f2", repository.next().id)
-            assertEquals(listOf(listOf("FOOD")), feed.asked)
+            assertEquals("a1", repository.next().id)
+            assertEquals(listOf(listOf("ANIMALS")), feed.asked)
         }
 
     @Test

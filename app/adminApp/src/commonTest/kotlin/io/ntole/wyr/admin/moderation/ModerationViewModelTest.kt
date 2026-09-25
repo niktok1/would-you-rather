@@ -3,6 +3,8 @@ package io.ntole.wyr.admin.moderation
 import io.ntole.wyr.admin.moderation.FakeModeration.Companion.QUEUE
 import io.ntole.wyr.admin.moderation.FakeModeration.Companion.SECOND
 import io.ntole.wyr.admin.moderation.FakeModeration.Companion.TOKEN
+import io.ntole.wyr.core.domain.category.Category
+import io.ntole.wyr.core.domain.category.GetCategories
 import io.ntole.wyr.core.domain.error.DomainError
 import io.ntole.wyr.core.domain.error.WyrException
 import io.ntole.wyr.core.domain.moderation.AdminToken
@@ -13,7 +15,6 @@ import io.ntole.wyr.core.domain.moderation.RejectSubmission
 import io.ntole.wyr.core.domain.moderation.RejectionReason
 import io.ntole.wyr.core.domain.moderation.RestoreQuestion
 import io.ntole.wyr.core.domain.moderation.RetireQuestion
-import io.ntole.wyr.core.domain.question.Category
 import io.ntole.wyr.core.domain.submission.Submission
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
@@ -38,6 +39,7 @@ import kotlin.time.Duration.Companion.seconds
 class ModerationViewModelTest {
     private val dispatcher = StandardTestDispatcher()
     private val moderation = FakeModeration()
+    private val categories = FakeCategories()
 
     @BeforeTest
     fun setUp() {
@@ -123,7 +125,7 @@ class ModerationViewModelTest {
     fun `Lock forgets the token and everything read with it`() =
         runTest(dispatcher) {
             val viewModel = openWithQueue()
-            viewModel.toggleApprovalCategory("q1", Category.FOOD)
+            viewModel.toggleApprovalCategory("q1", "FOOD")
             viewModel.setReason("q2", "a duplicate")
             moderation.approve = { _, _ -> throw WyrException(DomainError.ALREADY_DECIDED) }
             viewModel.approve("q1", Screen.PENDING)
@@ -131,7 +133,11 @@ class ModerationViewModelTest {
 
             viewModel.lock()
 
-            assertEquals(ModerationState(locks = 1), viewModel.state.value)
+            // The categories stay: the same for everybody, and read with no token.
+            assertEquals(
+                ModerationState(categories = CategoryList(FakeCategories.LISTED), locks = 1),
+                viewModel.state.value,
+            )
         }
 
     @Test
@@ -163,7 +169,11 @@ class ModerationViewModelTest {
             queue.complete(QUEUE)
             testScheduler.advanceUntilIdle()
 
-            assertEquals(ModerationState(locks = 1), viewModel.state.value)
+            // The categories, read before the queue, stay as Lock keeps them.
+            assertEquals(
+                ModerationState(categories = CategoryList(FakeCategories.LISTED), locks = 1),
+                viewModel.state.value,
+            )
         }
 
     @Test
@@ -247,7 +257,8 @@ class ModerationViewModelTest {
             assertEquals(listOf("pending", "approve q1 []", "pending"), moderation.calls)
             val queue = viewModel.state.value.pending
             assertEquals(listOf(SECOND), queue.submissions)
-            assertEquals("Approved \"Fly\" or \"Swim\" under SUPERPOWERS.", queue.outcomes.notice)
+            // Named as the categories read with the queue name it.
+            assertEquals("Approved \"Fly\" or \"Swim\" under Супермоћи.", queue.outcomes.notice)
         }
 
     @Test
@@ -255,18 +266,18 @@ class ModerationViewModelTest {
         runTest(dispatcher) {
             val viewModel = openWithQueue()
 
-            viewModel.toggleApprovalCategory("q1", Category.RANDOM)
-            viewModel.toggleApprovalCategory("q1", Category.ETHICS)
-            viewModel.toggleApprovalCategory("q1", Category.FOOD)
-            viewModel.toggleApprovalCategory("q1", Category.RANDOM)
-            viewModel.toggleApprovalCategory("q2", Category.LIFESTYLE)
+            viewModel.toggleApprovalCategory("q1", "ABSURD")
+            viewModel.toggleApprovalCategory("q1", "ETHICS")
+            viewModel.toggleApprovalCategory("q1", "FOOD")
+            viewModel.toggleApprovalCategory("q1", "ABSURD")
+            viewModel.toggleApprovalCategory("q2", "LIFESTYLE")
             viewModel.approve("q1", Screen.PENDING)
             testScheduler.advanceUntilIdle()
 
-            // In declaration order, and only q1's.
-            assertEquals("approve q1 [FOOD, ETHICS]", moderation.calls[1])
+            // In id order, and only q1's.
+            assertEquals("approve q1 [ETHICS, FOOD]", moderation.calls[1])
             assertEquals(
-                "Approved \"Fly\" or \"Swim\" under FOOD, ETHICS.",
+                "Approved \"Fly\" or \"Swim\" under Етика, Храна.",
                 viewModel.state.value.pending.outcomes.notice,
             )
         }
@@ -409,8 +420,8 @@ class ModerationViewModelTest {
     fun `what was picked for a submission no longer pending goes and the rest stays`() =
         runTest(dispatcher) {
             val viewModel = openWithQueue()
-            viewModel.toggleApprovalCategory("q1", Category.FOOD)
-            viewModel.toggleApprovalCategory("q2", Category.ETHICS)
+            viewModel.toggleApprovalCategory("q1", "FOOD")
+            viewModel.toggleApprovalCategory("q2", "ETHICS")
             viewModel.setReason("q2", "half typed")
             moderation.pending = { listOf(SECOND) }
 
@@ -418,7 +429,7 @@ class ModerationViewModelTest {
             testScheduler.advanceUntilIdle()
 
             assertEquals(
-                mapOf("q2" to DecisionDraft(setOf(Category.ETHICS), "half typed")),
+                mapOf("q2" to DecisionDraft(setOf("ETHICS"), "half typed")),
                 viewModel.state.value.drafts,
             )
         }
@@ -472,6 +483,38 @@ class ModerationViewModelTest {
             assertFalse(viewModel.state.value.isBusy)
         }
 
+    @Test
+    fun `every Load reads the categories again before what it loads`() =
+        runTest(dispatcher) {
+            val viewModel = openWithQueue()
+            assertEquals(1, categories.reads)
+            assertEquals(CategoryList(FakeCategories.LISTED), viewModel.state.value.categories)
+
+            // A moderator adds one meanwhile, here or elsewhere: the next Load names it.
+            val animals = Category(id = "ANIMALS", nameSr = "Животиње", nameEn = "Animals")
+            categories.read = { FakeCategories.LISTED + animals }
+            viewModel.loadQuestions()
+            testScheduler.advanceUntilIdle()
+
+            assertEquals(2, categories.reads)
+            assertEquals(FakeCategories.LISTED + animals, viewModel.state.value.categories.categories)
+        }
+
+    @Test
+    fun `a categories read that fails keeps those read before and the queue is read all the same`() =
+        runTest(dispatcher) {
+            val viewModel = openWithQueue()
+            categories.read = { throw WyrException(DomainError.NETWORK, "offline") }
+
+            viewModel.loadPending()
+            testScheduler.advanceUntilIdle()
+
+            val listed = viewModel.state.value.categories
+            assertEquals(FakeCategories.LISTED, listed.categories)
+            assertEquals(Failure.Refused(DomainError.NETWORK, detail = "offline"), listed.failure)
+            assertEquals(listOf("pending", "pending"), moderation.calls)
+        }
+
     private fun TestScope.open(): ModerationViewModel =
         ModerationViewModel(
             getPendingSubmissions = GetPendingSubmissions(moderation),
@@ -480,6 +523,7 @@ class ModerationViewModelTest {
             getQuestions = GetQuestions(moderation),
             retireQuestion = RetireQuestion(moderation),
             restoreQuestion = RestoreQuestion(moderation),
+            getCategories = GetCategories(categories),
         ).also { testScheduler.advanceUntilIdle() }
 
     /** The app with the token typed and [QUEUE] loaded, its read the one call so far. */

@@ -1,11 +1,11 @@
 package io.ntole.wyr.admin.moderation
 
+import io.ntole.wyr.core.domain.category.Category
 import io.ntole.wyr.core.domain.moderation.AdminToken
 import io.ntole.wyr.core.domain.moderation.ModeratedQuestion
 import io.ntole.wyr.core.domain.moderation.QuestionCursor
 import io.ntole.wyr.core.domain.moderation.QuestionFilter
 import io.ntole.wyr.core.domain.moderation.RejectionReason
-import io.ntole.wyr.core.domain.question.Category
 import io.ntole.wyr.core.domain.submission.Submission
 import io.ntole.wyr.core.domain.submission.SubmissionStatus
 import kotlin.jvm.JvmInline
@@ -26,6 +26,7 @@ data class ModerationState(
     val adminToken: SecretText = SecretText(""),
     val pending: PendingQueue = PendingQueue(),
     val questions: QuestionList = QuestionList(),
+    val categories: CategoryList = CategoryList(),
     /**
      * For each pending question, by id, the approval's categories and the rejection's reason, the
      * same whichever screen it is decided from.
@@ -130,6 +131,19 @@ data class QuestionList(
 }
 
 /**
+ * Every category, as the server last listed them, oldest first, or `null` until a read works: what an
+ * approval's and the filter's chips offer, and what names the categories a question is filed under,
+ * one not listed by its id. Read with every Load, before what it loads, since a moderator adds
+ * categories without a build; the list needs no token, but it is read as the actions that do are,
+ * one at a time. A read that fails keeps what was listed and says why in [failure].
+ */
+data class CategoryList(
+    val categories: List<Category>? = null,
+    /** Why the last read failed, or `null` once one works. */
+    val failure: Failure? = null,
+)
+
+/**
  * The outcomes of the actions started from one screen: why each action on a question failed, by the
  * question's id, shown under it, or at the top once the screen no longer lists it, kept until the
  * next action on it or the screen's own Load; and what the last action that worked did, in a line,
@@ -141,12 +155,12 @@ data class Outcomes(
 )
 
 /**
- * What the moderator has picked for one pending submission: the [categories] an approval files it
- * under in place of the author's (none keeps the author's), and the [reason] to reject it with,
+ * What the moderator has picked for one pending submission: the [categories], ids, an approval files
+ * it under in place of the author's (none keeps the author's), and the [reason] to reject it with,
  * exactly as typed.
  */
 data class DecisionDraft(
-    val categories: Set<Category> = emptySet(),
+    val categories: Set<String> = emptySet(),
     val reason: String = "",
 )
 

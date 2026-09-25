@@ -1,11 +1,13 @@
 package io.ntole.wyr.play
 
+import io.ntole.wyr.core.domain.category.Category
+import io.ntole.wyr.core.domain.category.CategoryRepository
+import io.ntole.wyr.core.domain.category.GetCategories
 import io.ntole.wyr.core.domain.error.DomainError
 import io.ntole.wyr.core.domain.error.WyrException
 import io.ntole.wyr.core.domain.like.LikeRepository
 import io.ntole.wyr.core.domain.like.QuestionLikes
 import io.ntole.wyr.core.domain.like.SetLike
-import io.ntole.wyr.core.domain.question.Category
 import io.ntole.wyr.core.domain.question.GetNextQuestion
 import io.ntole.wyr.core.domain.question.Question
 import io.ntole.wyr.core.domain.question.QuestionRepository
@@ -457,23 +459,71 @@ class PlayViewModelTest {
         runTest(dispatcher) {
             // The repository outlives the screen, so it can open on a feed already filtered.
             val questions = FakeQuestionRepository()
-            questions.categories.value = setOf(Category.ETHICS)
+            questions.categories.value = setOf("ETHICS")
             val viewModel = viewModel(questions)
 
-            assertEquals(setOf(Category.ETHICS), viewModel.categories.value)
+            assertEquals(setOf("ETHICS"), viewModel.categories.value.selected)
+        }
+
+    @Test
+    fun `the categories are named from the list the app read last`() =
+        runTest(dispatcher) {
+            // Read by another screen, say: the repository keeps them for every screen.
+            val categories = FakeCategoryRepository()
+            categories.refresh()
+            val viewModel = viewModel(categories = categories)
+
+            assertEquals(FakeCategoryRepository.LISTED, viewModel.categories.value.known)
+        }
+
+    @Test
+    fun `opening the picker reads the categories again and lists what the server has now`() =
+        runTest(dispatcher) {
+            val categories = FakeCategoryRepository()
+            val viewModel = viewModel(categories = categories)
+            testScheduler.advanceUntilIdle()
+
+            viewModel.openCategories()
+            assertEquals(true, viewModel.picking.value?.isLoading, "listed as read before, while it is read")
+            testScheduler.advanceUntilIdle()
+
+            assertEquals(1, categories.reads)
+            assertEquals(CategoryPicking(ticked = emptySet()), viewModel.picking.value)
+            assertEquals(FakeCategoryRepository.LISTED, viewModel.categories.value.known)
+        }
+
+    @Test
+    fun `a picker whose read fails says so and lists the categories read before`() =
+        runTest(dispatcher) {
+            val categories = FakeCategoryRepository()
+            val viewModel = viewModel(categories = categories)
+            testScheduler.advanceUntilIdle()
+            viewModel.openCategories()
+            testScheduler.advanceUntilIdle()
+            viewModel.closeCategories()
+            categories.read = { throw WyrException(DomainError.NETWORK) }
+
+            viewModel.openCategories()
+            testScheduler.advanceUntilIdle()
+
+            assertEquals(CategoryPicking(ticked = emptySet(), failure = DomainError.NETWORK), viewModel.picking.value)
+            assertEquals(FakeCategoryRepository.LISTED, viewModel.categories.value.known)
+            // Nothing else is lost: a category can still be ticked and played.
+            viewModel.toggleCategory("FOOD")
+            assertEquals(setOf("FOOD"), viewModel.picking.value?.ticked)
         }
 
     @Test
     fun `the picker opens on the categories played now`() =
         runTest(dispatcher) {
             val questions = FakeQuestionRepository()
-            questions.categories.value = setOf(Category.ETHICS)
+            questions.categories.value = setOf("ETHICS")
             val viewModel = viewModel(questions)
             testScheduler.advanceUntilIdle()
 
             viewModel.openCategories()
 
-            assertEquals(setOf(Category.ETHICS), viewModel.picking.value)
+            assertEquals(setOf("ETHICS"), viewModel.picking.value?.ticked)
         }
 
     @Test
@@ -484,11 +534,11 @@ class PlayViewModelTest {
             testScheduler.advanceUntilIdle()
             viewModel.openCategories()
 
-            viewModel.toggleCategory(Category.FOOD)
-            viewModel.toggleCategory(Category.ETHICS)
+            viewModel.toggleCategory("FOOD")
+            viewModel.toggleCategory("ETHICS")
             testScheduler.advanceUntilIdle()
 
-            assertEquals(setOf(Category.FOOD, Category.ETHICS), viewModel.picking.value)
+            assertEquals(setOf("FOOD", "ETHICS"), viewModel.picking.value?.ticked)
             assertEquals(listOf("next"), questions.calls, "no change and no fetch yet")
             assertEquals(PlayUiState.Asking(QUESTION), viewModel.state.value)
         }
@@ -499,15 +549,15 @@ class PlayViewModelTest {
             val viewModel = viewModel()
             testScheduler.advanceUntilIdle()
             viewModel.openCategories()
-            viewModel.toggleCategory(Category.FOOD)
-            viewModel.toggleCategory(Category.ETHICS)
+            viewModel.toggleCategory("FOOD")
+            viewModel.toggleCategory("ETHICS")
 
-            viewModel.toggleCategory(Category.FOOD)
+            viewModel.toggleCategory("FOOD")
 
-            assertEquals(setOf(Category.ETHICS), viewModel.picking.value)
-            viewModel.toggleCategory(Category.ETHICS)
+            assertEquals(setOf("ETHICS"), viewModel.picking.value?.ticked)
+            viewModel.toggleCategory("ETHICS")
             // None ticked is every category (CLAUDE.md §8d).
-            assertEquals(emptySet(), viewModel.picking.value)
+            assertEquals(emptySet(), viewModel.picking.value?.ticked)
         }
 
     @Test
@@ -516,25 +566,12 @@ class PlayViewModelTest {
             val viewModel = viewModel()
             testScheduler.advanceUntilIdle()
             viewModel.openCategories()
-            viewModel.toggleCategory(Category.FOOD)
-            viewModel.toggleCategory(Category.RANDOM)
+            viewModel.toggleCategory("FOOD")
+            viewModel.toggleCategory("ABSURD")
 
             viewModel.selectAllCategories()
 
-            assertEquals(emptySet(), viewModel.picking.value)
-        }
-
-    @Test
-    fun `Other cannot be ticked`() =
-        runTest(dispatcher) {
-            // No feed can be filtered to it, and the repository refuses it.
-            val viewModel = viewModel()
-            testScheduler.advanceUntilIdle()
-            viewModel.openCategories()
-
-            viewModel.toggleCategory(Category.OTHER)
-
-            assertEquals(emptySet(), viewModel.picking.value)
+            assertEquals(emptySet(), viewModel.picking.value?.ticked)
         }
 
     @Test
@@ -544,7 +581,7 @@ class PlayViewModelTest {
             val viewModel = viewModel(questions)
             testScheduler.advanceUntilIdle()
 
-            viewModel.toggleCategory(Category.FOOD)
+            viewModel.toggleCategory("FOOD")
             viewModel.selectAllCategories()
             viewModel.applyCategories()
             testScheduler.advanceUntilIdle()
@@ -556,18 +593,18 @@ class PlayViewModelTest {
     @Test
     fun `applying new categories sends them to the repository then shows a question from them`() =
         runTest(dispatcher) {
-            val questions = FakeQuestionRepository(servedFor = mapOf(setOf(Category.FOOD) to FOOD_QUESTION))
+            val questions = FakeQuestionRepository(servedFor = mapOf(setOf("FOOD") to FOOD_QUESTION))
             val viewModel = viewModel(questions)
             testScheduler.advanceUntilIdle()
             viewModel.openCategories()
-            viewModel.toggleCategory(Category.FOOD)
+            viewModel.toggleCategory("FOOD")
 
             viewModel.applyCategories()
             testScheduler.advanceUntilIdle()
 
             // Changed first, so the question loaded is the new selection's.
             assertEquals(listOf("next", "setCategories [FOOD]", "next"), questions.calls)
-            assertEquals(setOf(Category.FOOD), viewModel.categories.value)
+            assertEquals(setOf("FOOD"), viewModel.categories.value.selected)
             assertEquals(PlayUiState.Asking(FOOD_QUESTION), viewModel.state.value)
             assertNull(viewModel.picking.value, "the picker closes")
         }
@@ -575,20 +612,25 @@ class PlayViewModelTest {
     @Test
     fun `every category ticked is played as all of them and not as none`() =
         runTest(dispatcher) {
-            // Not the same selection (CLAUDE.md §8d, *Categories*): a question filed only under
-            // categories this build cannot name is in none of the five, and is served only to none.
+            // Not the same selection (CLAUDE.md §8d, *Categories*): a category a moderator adds later
+            // is in none, and not in these.
             val questions = FakeQuestionRepository()
             val viewModel = viewModel(questions)
             testScheduler.advanceUntilIdle()
             viewModel.openCategories()
+            testScheduler.advanceUntilIdle()
+            val every =
+                viewModel.categories.value.known
+                    .map { it.id }
+                    .toSet()
 
-            Category.selectable.forEach(viewModel::toggleCategory)
-            assertEquals(Category.selectable.toSet(), viewModel.picking.value, "ticked, not folded into All")
+            every.forEach(viewModel::toggleCategory)
+            assertEquals(every, viewModel.picking.value?.ticked, "ticked, not folded into All")
             viewModel.applyCategories()
             testScheduler.advanceUntilIdle()
 
-            assertEquals(listOf("next", "setCategories ${Category.selectable}", "next"), questions.calls)
-            assertEquals(Category.selectable.toSet(), viewModel.categories.value)
+            assertEquals(listOf("next", "setCategories ${every.sorted()}", "next"), questions.calls)
+            assertEquals(every, viewModel.categories.value.selected)
         }
 
     @Test
@@ -597,7 +639,7 @@ class PlayViewModelTest {
             // The player moved on instead of trying again: the vote counts only if it landed the
             // first time, and nothing can pay for it twice (CLAUDE.md §8d, *Retry safety*).
             val votes = RecordingVoteRepository(DomainError.NETWORK)
-            val questions = FakeQuestionRepository(servedFor = mapOf(setOf(Category.FOOD) to FOOD_QUESTION))
+            val questions = FakeQuestionRepository(servedFor = mapOf(setOf("FOOD") to FOOD_QUESTION))
             val viewModel = viewModel(questions, votes = votes)
             testScheduler.advanceUntilIdle()
             viewModel.choose(Side.A)
@@ -606,7 +648,7 @@ class PlayViewModelTest {
             assertEquals(QUESTION, failed.lostVote?.question, "a vote Try again would send again")
 
             viewModel.openCategories()
-            viewModel.toggleCategory(Category.FOOD)
+            viewModel.toggleCategory("FOOD")
             viewModel.applyCategories()
             testScheduler.advanceUntilIdle()
 
@@ -617,13 +659,13 @@ class PlayViewModelTest {
     @Test
     fun `new categories drop the answered question on screen too`() =
         runTest(dispatcher) {
-            val questions = FakeQuestionRepository(servedFor = mapOf(setOf(Category.FOOD) to FOOD_QUESTION))
+            val questions = FakeQuestionRepository(servedFor = mapOf(setOf("FOOD") to FOOD_QUESTION))
             val viewModel = viewModel(questions)
             testScheduler.advanceUntilIdle()
             viewModel.choose(Side.A)
             testScheduler.advanceUntilIdle()
             viewModel.openCategories()
-            viewModel.toggleCategory(Category.FOOD)
+            viewModel.toggleCategory("FOOD")
 
             viewModel.applyCategories()
             testScheduler.advanceUntilIdle()
@@ -638,8 +680,8 @@ class PlayViewModelTest {
             val viewModel = viewModel(questions)
             testScheduler.advanceUntilIdle()
             viewModel.openCategories()
-            viewModel.toggleCategory(Category.FOOD)
-            viewModel.toggleCategory(Category.FOOD)
+            viewModel.toggleCategory("FOOD")
+            viewModel.toggleCategory("FOOD")
 
             viewModel.applyCategories()
             testScheduler.advanceUntilIdle()
@@ -656,13 +698,13 @@ class PlayViewModelTest {
             val viewModel = viewModel(questions)
             testScheduler.advanceUntilIdle()
             viewModel.openCategories()
-            viewModel.toggleCategory(Category.FOOD)
+            viewModel.toggleCategory("FOOD")
 
             viewModel.closeCategories()
             testScheduler.advanceUntilIdle()
 
             assertNull(viewModel.picking.value)
-            assertEquals(emptySet(), viewModel.categories.value)
+            assertEquals(emptySet(), viewModel.categories.value.selected)
             assertEquals(listOf("next"), questions.calls)
         }
 
@@ -673,7 +715,7 @@ class PlayViewModelTest {
             val viewModel = viewModel(questions)
             testScheduler.advanceUntilIdle()
             viewModel.openCategories()
-            viewModel.toggleCategory(Category.FOOD)
+            viewModel.toggleCategory("FOOD")
 
             // Both land before the first one's coroutine gets to run.
             viewModel.applyCategories()
@@ -718,11 +760,11 @@ class PlayViewModelTest {
                 gate.await()
                 QuestionLikes(questionId, likeCount = 1, likedByMe = liked)
             }
-            val questions = FakeQuestionRepository(servedFor = mapOf(setOf(Category.FOOD) to FOOD_QUESTION))
+            val questions = FakeQuestionRepository(servedFor = mapOf(setOf("FOOD") to FOOD_QUESTION))
             val viewModel = viewModel(questions, likes = likes)
             testScheduler.advanceUntilIdle()
             viewModel.openCategories()
-            viewModel.toggleCategory(Category.FOOD)
+            viewModel.toggleCategory("FOOD")
             viewModel.toggleLike()
             testScheduler.advanceUntilIdle()
 
@@ -730,7 +772,7 @@ class PlayViewModelTest {
             testScheduler.advanceUntilIdle()
 
             assertEquals(listOf("next"), questions.calls, "refused while the like is in flight")
-            assertEquals(setOf(Category.FOOD), viewModel.picking.value, "and kept to apply later")
+            assertEquals(setOf("FOOD"), viewModel.picking.value?.ticked, "and kept to apply later")
             gate.complete(Unit)
             testScheduler.advanceUntilIdle()
             viewModel.applyCategories()
@@ -742,11 +784,11 @@ class PlayViewModelTest {
     fun `categories with nothing to serve show out of questions and can be changed from there`() =
         runTest(dispatcher) {
             // Whatever the feed answers is the server's rule: here, no questions at all.
-            val questions = FakeQuestionRepository(servedFor = mapOf(setOf(Category.RANDOM) to null))
+            val questions = FakeQuestionRepository(servedFor = mapOf(setOf("ABSURD") to null))
             val viewModel = viewModel(questions)
             testScheduler.advanceUntilIdle()
             viewModel.openCategories()
-            viewModel.toggleCategory(Category.RANDOM)
+            viewModel.toggleCategory("ABSURD")
             viewModel.applyCategories()
             testScheduler.advanceUntilIdle()
             assertEquals(PlayUiState.Failed(DomainError.OUT_OF_QUESTIONS), viewModel.state.value)
@@ -756,7 +798,7 @@ class PlayViewModelTest {
             viewModel.applyCategories()
             testScheduler.advanceUntilIdle()
 
-            assertEquals(emptySet(), viewModel.categories.value)
+            assertEquals(emptySet(), viewModel.categories.value.selected)
             assertEquals(PlayUiState.Asking(QUESTION), viewModel.state.value)
         }
 
@@ -764,12 +806,15 @@ class PlayViewModelTest {
         questions: QuestionRepository = FakeQuestionRepository(),
         votes: VoteRepository = FakeVoteRepository(),
         likes: LikeRepository = FakeLikeRepository(),
+        categories: CategoryRepository = FakeCategoryRepository(),
     ) = PlayViewModel(
         getNextQuestion = GetNextQuestion(questions, NoOpSessionRepository),
         castVote = CastVote(votes, NoOpSessionRepository),
         skipQuestion = SkipQuestion(questions, NoOpSessionRepository),
         setLike = SetLike(likes, NoOpSessionRepository),
         questions = questions,
+        getCategories = GetCategories(categories),
+        categoryList = categories,
     )
 
     private companion object {
@@ -778,7 +823,7 @@ class PlayViewModelTest {
                 id = "q1",
                 optionA = "Fly",
                 optionB = "Turn invisible",
-                categories = setOf(Category.SUPERPOWERS),
+                categories = setOf("SUPERPOWERS"),
             )
 
         val NEXT_QUESTION =
@@ -786,7 +831,7 @@ class PlayViewModelTest {
                 id = "q2",
                 optionA = "Always be cold",
                 optionB = "Always be hot",
-                categories = setOf(Category.LIFESTYLE),
+                categories = setOf("LIFESTYLE"),
             )
 
         val FOOD_QUESTION =
@@ -794,7 +839,7 @@ class PlayViewModelTest {
                 id = "f1",
                 optionA = "Only eat soup",
                 optionB = "Never eat soup again",
-                categories = setOf(Category.FOOD),
+                categories = setOf("FOOD"),
             )
 
         val OUTCOME =
@@ -814,16 +859,16 @@ class PlayViewModelTest {
     private class FakeQuestionRepository(
         vararg served: Question,
         private val skipFailure: DomainError? = null,
-        private val servedFor: Map<Set<Category>, Question?> = emptyMap(),
+        private val servedFor: Map<Set<String>, Question?> = emptyMap(),
     ) : QuestionRepository {
         private val served = served.toMutableList().ifEmpty { mutableListOf(QUESTION) }
 
         val skipped = mutableListOf<String>()
 
-        /** Every fetch and every change of categories, in order, the categories in declaration order. */
+        /** Every fetch and every change of categories, in order, the categories in id order. */
         val calls = mutableListOf<String>()
 
-        override val categories = MutableStateFlow<Set<Category>>(emptySet())
+        override val categories = MutableStateFlow<Set<String>>(emptySet())
 
         override suspend fun next(): Question {
             calls += "next"
@@ -836,7 +881,7 @@ class PlayViewModelTest {
 
         override suspend fun prefetch() = Unit
 
-        override suspend fun setCategories(categories: Set<Category>) {
+        override suspend fun setCategories(categories: Set<String>) {
             calls += "setCategories ${categories.sorted()}"
             this.categories.value = categories
         }
@@ -852,13 +897,13 @@ class PlayViewModelTest {
     private class FailingQuestionRepository(
         private val error: DomainError,
     ) : QuestionRepository {
-        override val categories: StateFlow<Set<Category>> = MutableStateFlow(emptySet())
+        override val categories: StateFlow<Set<String>> = MutableStateFlow(emptySet())
 
         override suspend fun next(): Question = throw WyrException(error)
 
         override suspend fun prefetch() = Unit
 
-        override suspend fun setCategories(categories: Set<Category>) = Unit
+        override suspend fun setCategories(categories: Set<String>) = Unit
 
         override suspend fun skip(questionId: String) = Unit
 
@@ -922,6 +967,29 @@ class PlayViewModelTest {
         ): QuestionLikes {
             sent += questionId to liked
             return answer(questionId, liked)
+        }
+    }
+
+    /** The server's categories as the tests script them, each read counted in [reads]. */
+    private class FakeCategoryRepository : CategoryRepository {
+        var reads = 0
+
+        var read: suspend () -> List<Category> = { LISTED }
+
+        override val categories = MutableStateFlow<List<Category>>(emptyList())
+
+        override suspend fun refresh(): List<Category> {
+            reads++
+            return read().also { categories.value = it }
+        }
+
+        companion object {
+            val LISTED =
+                listOf(
+                    Category(id = "FOOD", nameSr = "Храна", nameEn = "Food"),
+                    Category(id = "ETHICS", nameSr = "Етика", nameEn = "Ethics"),
+                    Category(id = "ABSURD", nameSr = "Апсурдно", nameEn = "Absurd"),
+                )
         }
     }
 

@@ -1,6 +1,5 @@
 package io.ntole.wyr.admin.moderation
 
-import io.ntole.wyr.core.domain.question.Category
 import io.ntole.wyr.core.domain.submission.SubmissionStatus
 
 /** Buttons that do nothing, for drawing a screen from a state alone. */
@@ -13,7 +12,7 @@ object NoActions : ModerationActions {
 
     override fun toggleApprovalCategory(
         questionId: String,
-        category: Category,
+        categoryId: String,
     ) = Unit
 
     override fun setReason(
@@ -33,7 +32,7 @@ object NoActions : ModerationActions {
 
     override fun toggleStatusFilter(status: SubmissionStatus) = Unit
 
-    override fun toggleCategoryFilter(category: Category) = Unit
+    override fun toggleCategoryFilter(categoryId: String) = Unit
 
     override fun clearFilter() = Unit
 

@@ -4,7 +4,6 @@ import io.ntole.wyr.core.data.mapper.submitQuestionRequest
 import io.ntole.wyr.core.data.mapper.toDomain
 import io.ntole.wyr.core.data.session.DefaultSessionRepository
 import io.ntole.wyr.core.data.session.withSessionRecovery
-import io.ntole.wyr.core.domain.question.Category
 import io.ntole.wyr.core.domain.submission.Submission
 import io.ntole.wyr.core.domain.submission.SubmissionRepository
 import io.ntole.wyr.core.network.api.SubmissionApi
@@ -26,10 +25,10 @@ public class DefaultSubmissionRepository(
     override suspend fun submit(
         optionA: String,
         optionB: String,
-        categories: Set<Category>,
+        categories: Set<String>,
     ): Submission {
-        // Built before anything is sent, so a selection the server would refuse as malformed never
-        // leaves the client.
+        // Built before anything is sent, so a submission under no category, which the server would
+        // refuse as malformed, never leaves the client.
         val request = submitQuestionRequest(optionA, optionB, categories)
 
         return session.withSessionRecovery { api.submit(request) }.toDomain()

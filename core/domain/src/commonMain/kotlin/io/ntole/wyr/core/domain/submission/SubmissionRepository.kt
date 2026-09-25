@@ -1,20 +1,18 @@
 package io.ntole.wyr.core.domain.submission
 
-import io.ntole.wyr.core.domain.question.Category
-
 /** The session player's own questions, as the server holds them. Implemented in `:core:data`. */
 public interface SubmissionRepository {
     /**
-     * Submits a question of the player's own, filed under [categories], and returns it as the server
-     * stored it: pending, with both options trimmed and its categories each once (CLAUDE.md §8d).
+     * Submits a question of the player's own, filed under [categories], by id, and returns it as the
+     * server stored it: pending, with both options trimmed and its categories each once (CLAUDE.md
+     * §8d).
      *
-     * [categories] must hold at least one, and only categories in [Category.selectable]: the server
-     * refuses a submission under none as a malformed request, and [Category.OTHER] names nothing it
-     * can file a question under. The options are sent as given. What an option may say is the
-     * server's to rule on, so nothing here checks them.
+     * [categories] must hold at least one: the server refuses a submission under none as a malformed
+     * request, as it does one under an id no category has, which a picker of the server's categories
+     * never sends. The options are sent as given. What an option may say is the server's to rule on,
+     * so nothing here checks them.
      *
-     * @throws IllegalArgumentException when [categories] is empty or holds [Category.OTHER], having
-     *   sent nothing.
+     * @throws IllegalArgumentException when [categories] is empty, having sent nothing.
      * @throws io.ntole.wyr.core.domain.error.WyrException on any other failure, with
      *   [io.ntole.wyr.core.domain.error.DomainError.INVALID_SUBMISSION] for options the server's
      *   rules refuse, [io.ntole.wyr.core.domain.error.DomainError.SUBMISSION_LIMIT] when the
@@ -25,7 +23,7 @@ public interface SubmissionRepository {
     public suspend fun submit(
         optionA: String,
         optionB: String,
-        categories: Set<Category>,
+        categories: Set<String>,
     ): Submission
 
     /**

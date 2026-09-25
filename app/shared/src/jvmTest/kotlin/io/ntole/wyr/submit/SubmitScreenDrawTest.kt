@@ -2,8 +2,8 @@ package io.ntole.wyr.submit
 
 import androidx.compose.ui.ImageComposeScene
 import androidx.compose.ui.unit.Density
+import io.ntole.wyr.core.domain.category.Category
 import io.ntole.wyr.core.domain.error.DomainError
-import io.ntole.wyr.core.domain.question.Category
 import io.ntole.wyr.core.domain.submission.Submission
 import io.ntole.wyr.core.domain.submission.SubmissionRules
 import io.ntole.wyr.core.domain.submission.SubmissionStatus
@@ -54,7 +54,7 @@ class SubmitScreenDrawTest {
 
         override fun setOptionB(text: String) = Unit
 
-        override fun toggleCategory(category: Category) = Unit
+        override fun toggleCategory(id: String) = Unit
 
         override fun submit() = Unit
     }
@@ -69,12 +69,23 @@ class SubmitScreenDrawTest {
 
         val LONGEST = "Be able to fly ".repeat(20).take(SubmissionRules.MAX_OPTION_LENGTH)
 
+        /** The server's first five categories, as V6 wrote them, in the order of categories. */
+        val KNOWN =
+            listOf(
+                Category(id = "FOOD", nameSr = "Храна", nameEn = "Food"),
+                Category(id = "LIFESTYLE", nameSr = "Начин живота", nameEn = "Lifestyle"),
+                Category(id = "ETHICS", nameSr = "Етика", nameEn = "Ethics"),
+                Category(id = "SUPERPOWERS", nameSr = "Супермоћи", nameEn = "Superpowers"),
+                Category(id = "ABSURD", nameSr = "Апсурдно", nameEn = "Absurd"),
+            )
+        val EVERY: Set<String> = KNOWN.map { it.id }.toSet()
+
         val PENDING =
             Submission(
                 id = "q1",
                 optionA = "Fly",
                 optionB = "Swim",
-                categories = setOf(Category.SUPERPOWERS),
+                categories = setOf("SUPERPOWERS"),
                 status = SubmissionStatus.PENDING,
                 rejectionReason = null,
                 submittedAt = Instant.parse("2026-09-25T12:00:00Z"),
@@ -84,7 +95,8 @@ class SubmitScreenDrawTest {
         val EVERY_STATUS =
             listOf(
                 PENDING,
-                PENDING.copy(id = "q2", status = SubmissionStatus.APPROVED, categories = Category.entries.toSet()),
+                // Every category, and one not read yet, by its id.
+                PENDING.copy(id = "q2", status = SubmissionStatus.APPROVED, categories = EVERY + "ANIMALS"),
                 PENDING.copy(
                     id = "q3",
                     optionA = LONGEST,
@@ -101,7 +113,8 @@ class SubmitScreenDrawTest {
             SubmitState(
                 optionA = "Fly",
                 optionB = "Swim",
-                categories = setOf(Category.SUPERPOWERS, Category.RANDOM),
+                categories = setOf("SUPERPOWERS", "ABSURD"),
+                categoryOptions = KNOWN,
                 submissions = EVERY_STATUS,
             )
 
@@ -114,9 +127,11 @@ class SubmitScreenDrawTest {
                 SubmitState(
                     optionA = "Fly",
                     optionB = "Swim",
-                    categories = setOf(Category.FOOD),
+                    categories = setOf("FOOD"),
                     submitFailure = SubmitFailure(DomainError.NETWORK),
                     listFailure = SubmitFailure(DomainError.NETWORK),
+                    // Nor the categories: none to pick from, and a line saying so.
+                    categoriesFailure = SubmitFailure(DomainError.NETWORK),
                 ),
                 SubmitState(submissions = emptyList()),
                 WRITTEN,
@@ -126,6 +141,7 @@ class SubmitScreenDrawTest {
                 WRITTEN.copy(optionB = "FLY"),
                 WRITTEN.copy(running = SubmitAction.SUBMIT),
                 WRITTEN.copy(submitFailure = SubmitFailure(DomainError.SUBMISSION_LIMIT)),
+                WRITTEN.copy(categoriesFailure = SubmitFailure(DomainError.SERVER)),
                 WRITTEN.copy(submitFailure = SubmitFailure(DomainError.RATE_LIMITED, 42.seconds)),
                 WRITTEN.copy(
                     submitFailure = SubmitFailure(DomainError.SUBMISSION_LIMIT),

@@ -25,8 +25,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
+import io.ntole.wyr.core.domain.category.Category
 import io.ntole.wyr.core.domain.error.DomainError
-import io.ntole.wyr.core.domain.question.Category
 import io.ntole.wyr.core.domain.submission.OptionProblem
 import io.ntole.wyr.core.domain.submission.Submission
 import io.ntole.wyr.core.domain.submission.SubmissionRules
@@ -112,10 +112,10 @@ private fun Form(
         SectionTitle("Categories")
         // No vertical spacing: each chip's touch target already stands clear of the row below.
         FlowRow(horizontalArrangement = Arrangement.spacedBy(dimens.spaceSm)) {
-            Category.selectable.forEach { category ->
+            state.categoryOptions.forEach { category ->
                 FilterChip(
-                    selected = category in state.categories,
-                    onClick = { actions.toggleCategory(category) },
+                    selected = category.id in state.categories,
+                    onClick = { actions.toggleCategory(category.id) },
                     label = { Text(categoryName(category)) },
                     enabled = editable,
                     // The theme's primary, which is the palette's: it maps nothing to the container
@@ -129,6 +129,10 @@ private fun Form(
             }
         }
         Text(text = "Pick one or more.", color = colors.muted, fontSize = WyrTypeScale.statLabel)
+        state.categoriesFailure?.let { failure ->
+            Text(text = categoriesFailureMessage(failure), color = MaterialTheme.colorScheme.error)
+            OutlinedButton(onClick = actions::refresh, enabled = !state.isBusy) { Text("Try again") }
+        }
 
         state.submitFailure?.let { FailureText(it) }
         if (state.sent) Text(text = SENT_NOTE, color = colors.primaryText)
@@ -193,7 +197,7 @@ private fun MySubmissions(
                 if (state.running == SubmitAction.LOAD) {
                     LinearProgressIndicator(color = colors.headingAccent, modifier = Modifier.fillMaxWidth())
                 }
-                submissions.forEach { SubmissionCard(it) }
+                submissions.forEach { SubmissionCard(it, state.categoryOptions) }
             }
         }
         if (failure != null) {
@@ -204,7 +208,10 @@ private fun MySubmissions(
 }
 
 @Composable
-private fun SubmissionCard(submission: Submission) {
+private fun SubmissionCard(
+    submission: Submission,
+    known: List<Category>,
+) {
     val colors = WyrThemeAccessors.colors
     val dimens = WyrThemeAccessors.dimens
 
@@ -222,7 +229,7 @@ private fun SubmissionCard(submission: Submission) {
             Text(text = "or", color = colors.muted, fontSize = WyrTypeScale.statLabel)
             Text(text = submission.optionB, color = colors.primaryText)
             Text(
-                text = categoryNames(submission.categories),
+                text = categoryNames(submission.categories, known),
                 color = colors.muted,
                 fontSize = WyrTypeScale.statLabel,
             )
@@ -285,9 +292,21 @@ internal fun statusLine(submission: Submission): String =
         SubmissionStatus.OTHER -> "Its status is one this version of the app can't show"
     }
 
-/** The categories a question is filed under, in the player's words and in declaration order. */
-internal fun categoryNames(categories: Set<Category>): String =
-    Category.entries.filter { it in categories }.joinToString(", ", transform = ::categoryName)
+/**
+ * The categories a question is filed under, ids, in the player's words as [known] has them, one not
+ * read yet by its id, in the order the question lists them, the server's.
+ */
+internal fun categoryNames(
+    categories: Set<String>,
+    known: List<Category>,
+): String = categories.joinToString(", ") { categoryName(it, known) }
+
+/** Why the categories could not be read, in the player's words, the categories read before staying. */
+internal fun categoriesFailureMessage(failure: SubmitFailure): String =
+    when (failure.error) {
+        DomainError.NETWORK -> "Can't reach the game to list the categories. Check your connection."
+        else -> "Couldn't list the categories. Try again."
+    }
 
 /**
  * Player-facing copy for a failed action, by its [DomainError], never the server's message, which is

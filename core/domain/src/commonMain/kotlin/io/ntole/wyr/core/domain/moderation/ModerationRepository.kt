@@ -1,6 +1,5 @@
 package io.ntole.wyr.core.domain.moderation
 
-import io.ntole.wyr.core.domain.question.Category
 import io.ntole.wyr.core.domain.submission.Submission
 import io.ntole.wyr.core.domain.submission.SubmissionStatus
 
@@ -27,12 +26,10 @@ public interface ModerationRepository {
 
     /**
      * Approves the pending submission [questionId] and returns it as its author now sees it. It is
-     * filed under [categories] in place of the ones its author picked, or under the author's when
-     * [categories] is empty, and served from then on to every player, its author included.
+     * filed under [categories], by id, in place of the ones its author picked, or under the author's
+     * when [categories] is empty, and served from then on to every player, its author included.
      *
-     * @throws IllegalArgumentException when [categories] holds [Category.OTHER], which names nothing
-     *   the server can file a question under, having sent nothing.
-     * @throws io.ntole.wyr.core.domain.error.WyrException on any other failure, with
+     * @throws io.ntole.wyr.core.domain.error.WyrException on any failure, with
      *   [io.ntole.wyr.core.domain.error.DomainError.ALREADY_DECIDED] for a submission that is not
      *   pending (decided already, by this moderator or another, or a seed) and
      *   [io.ntole.wyr.core.domain.error.DomainError.QUESTION_NOT_FOUND] for an id no question has.
@@ -40,7 +37,7 @@ public interface ModerationRepository {
     public suspend fun approve(
         token: AdminToken,
         questionId: String,
-        categories: Set<Category>,
+        categories: Set<String>,
     ): Submission
 
     /**
@@ -61,8 +58,8 @@ public interface ModerationRepository {
      * must be asked for with the same [filter]. At most [PAGE_SIZE] questions, read from the server
      * every time.
      *
-     * @throws IllegalArgumentException when [filter] holds [SubmissionStatus.OTHER] or
-     *   [Category.OTHER], which name nothing the server can filter by, having sent nothing.
+     * @throws IllegalArgumentException when [filter] holds [SubmissionStatus.OTHER], which names no
+     *   status the server can filter by, having sent nothing.
      * @throws io.ntole.wyr.core.domain.error.WyrException on any other failure, as [pending] does.
      */
     public suspend fun questions(

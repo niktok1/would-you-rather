@@ -7,7 +7,6 @@ import io.ntole.wyr.admin.tabLabelOf
 import io.ntole.wyr.core.domain.moderation.ModerationRepository
 import io.ntole.wyr.core.domain.moderation.QuestionCursor
 import io.ntole.wyr.core.domain.moderation.QuestionFilter
-import io.ntole.wyr.core.domain.question.Category
 import io.ntole.wyr.core.domain.submission.SubmissionStatus
 import io.ntole.wyr.core.domain.vote.Tally
 import kotlin.test.Test
@@ -28,15 +27,15 @@ class QuestionLabelsTest {
     @Test
     fun `the filter says what it lists, none picked being every one`() {
         assertEquals("every status", statusFilterOf(QuestionFilter()))
-        assertEquals("every category", categoryFilterOf(QuestionFilter()))
+        assertEquals("every category", categoryFilterOf(QuestionFilter(), FakeCategories.LISTED))
 
         val picked =
             QuestionFilter(
                 setOf(SubmissionStatus.APPROVED, SubmissionStatus.RETIRED),
-                setOf(Category.FOOD, Category.ETHICS),
+                setOf("ETHICS", "FOOD"),
             )
         assertEquals("Approved, Retired", statusFilterOf(picked))
-        assertEquals("FOOD, ETHICS", categoryFilterOf(picked))
+        assertEquals("Етика, Храна", categoryFilterOf(picked, FakeCategories.LISTED))
     }
 
     @Test

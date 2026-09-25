@@ -8,7 +8,6 @@ import io.ntole.wyr.core.data.session.DefaultSessionRepository
 import io.ntole.wyr.core.data.storeHolding
 import io.ntole.wyr.core.domain.error.DomainError
 import io.ntole.wyr.core.domain.error.WyrException
-import io.ntole.wyr.core.domain.question.Category
 import io.ntole.wyr.core.domain.submission.GetMySubmissions
 import io.ntole.wyr.core.domain.submission.Submission
 import io.ntole.wyr.core.domain.submission.SubmissionStatus
@@ -38,7 +37,7 @@ class DefaultSubmissionRepositoryTest {
             val sessions = DefaultSessionRepository(AuthApi(client), store)
             val submitQuestion = SubmitQuestion(DefaultSubmissionRepository(SubmissionApi(client), sessions), sessions)
 
-            val stored = submitQuestion("Fly", "Swim", setOf(Category.SUPERPOWERS, Category.FOOD))
+            val stored = submitQuestion("Fly", "Swim", setOf("SUPERPOWERS", "FOOD"))
 
             // FakeServer's answer, decoded through the real client and mapped.
             assertEquals(
@@ -46,7 +45,7 @@ class DefaultSubmissionRepositoryTest {
                     id = "s1",
                     optionA = "Fly",
                     optionB = "Swim",
-                    categories = setOf(Category.FOOD, Category.SUPERPOWERS),
+                    categories = setOf("FOOD", "SUPERPOWERS"),
                     status = SubmissionStatus.PENDING,
                     rejectionReason = null,
                     submittedAt = Instant.fromEpochMilliseconds(FakeServer.SUBMITTED_AT),
@@ -63,7 +62,7 @@ class DefaultSubmissionRepositoryTest {
             // The server has never heard of "a": the state after a dev server restarts.
             val store = storeHolding(session("a"))
 
-            val stored = repositoryOver(store).submit("Fly", "Swim", setOf(Category.FOOD, Category.SUPERPOWERS))
+            val stored = repositoryOver(store).submit("Fly", "Swim", setOf("FOOD", "SUPERPOWERS"))
 
             assertEquals("s1", stored.id)
             assertEquals(1, server.guestsMinted)
@@ -89,7 +88,7 @@ class DefaultSubmissionRepositoryTest {
                         id = "s2",
                         optionA = "s2-a",
                         optionB = "s2-b",
-                        categories = setOf(Category.ETHICS),
+                        categories = setOf("ETHICS"),
                         status = SubmissionStatus.REJECTED,
                         rejectionReason = "a duplicate",
                         submittedAt = Instant.fromEpochMilliseconds(FakeServer.SUBMITTED_AT + 1),
@@ -98,7 +97,7 @@ class DefaultSubmissionRepositoryTest {
                         id = "s1",
                         optionA = "s1-a",
                         optionB = "s1-b",
-                        categories = setOf(Category.FOOD, Category.RANDOM),
+                        categories = setOf("FOOD", "ABSURD"),
                         status = SubmissionStatus.PENDING,
                         rejectionReason = null,
                         submittedAt = Instant.fromEpochMilliseconds(FakeServer.SUBMITTED_AT),
@@ -131,7 +130,7 @@ class DefaultSubmissionRepositoryTest {
 
             val failure =
                 assertFailsWith<WyrException> {
-                    repositoryOver(store).submit(" ", "Swim", setOf(Category.FOOD))
+                    repositoryOver(store).submit(" ", "Swim", setOf("FOOD"))
                 }
 
             assertEquals(DomainError.INVALID_SUBMISSION, failure.error)
@@ -152,7 +151,7 @@ class DefaultSubmissionRepositoryTest {
 
             val failure =
                 assertFailsWith<WyrException> {
-                    repositoryOver(store).submit("Fly", "Swim", setOf(Category.FOOD))
+                    repositoryOver(store).submit("Fly", "Swim", setOf("FOOD"))
                 }
 
             assertEquals(DomainError.SUBMISSION_LIMIT, failure.error)
@@ -170,7 +169,7 @@ class DefaultSubmissionRepositoryTest {
 
             val failure =
                 assertFailsWith<WyrException> {
-                    repositoryOver(store).submit("Fly", "Swim", setOf(Category.FOOD))
+                    repositoryOver(store).submit("Fly", "Swim", setOf("FOOD"))
                 }
 
             assertEquals(DomainError.NOT_ENOUGH_POINTS, failure.error)
@@ -181,15 +180,11 @@ class DefaultSubmissionRepositoryTest {
         }
 
     @Test
-    fun `a submission under no category or under OTHER is refused before anything is sent`() =
+    fun `a submission under no category is refused before anything is sent`() =
         runTest {
             val submissions = repositoryOver(storeHolding(session("a")))
 
-            listOf(emptySet(), setOf(Category.OTHER), setOf(Category.FOOD, Category.OTHER)).forEach { categories ->
-                assertFailsWith<IllegalArgumentException>("$categories") {
-                    submissions.submit("Fly", "Swim", categories)
-                }
-            }
+            assertFailsWith<IllegalArgumentException> { submissions.submit("Fly", "Swim", emptySet()) }
 
             // Not even a guest: nothing left the client.
             assertEquals(emptyList(), server.engine.requestHistory)

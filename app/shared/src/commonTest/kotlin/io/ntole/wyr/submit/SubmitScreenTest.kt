@@ -1,7 +1,7 @@
 package io.ntole.wyr.submit
 
+import io.ntole.wyr.core.domain.category.Category
 import io.ntole.wyr.core.domain.error.DomainError
-import io.ntole.wyr.core.domain.question.Category
 import io.ntole.wyr.core.domain.submission.OptionProblem
 import io.ntole.wyr.core.domain.submission.Submission
 import io.ntole.wyr.core.domain.submission.SubmissionStatus
@@ -40,9 +40,28 @@ class SubmitScreenTest {
     }
 
     @Test
-    fun `categories read in the player's words in declaration order`() {
-        assertEquals("Food, Ethics", categoryNames(setOf(Category.ETHICS, Category.FOOD)))
-        assertEquals("Superpowers, Other", categoryNames(setOf(Category.OTHER, Category.SUPERPOWERS)))
+    fun `categories read in Serbian in the order the question lists them`() {
+        val known =
+            listOf(
+                Category(id = "FOOD", nameSr = "Храна", nameEn = "Food"),
+                Category(id = "ETHICS", nameSr = "Етика", nameEn = "Ethics"),
+            )
+
+        assertEquals("Етика, Храна", categoryNames(linkedSetOf("ETHICS", "FOOD"), known))
+        // One not read yet, by its id.
+        assertEquals("Храна, ANIMALS", categoryNames(linkedSetOf("FOOD", "ANIMALS"), known))
+    }
+
+    @Test
+    fun `categories that cannot be read say so in the player's words`() {
+        assertEquals(
+            "Can't reach the game to list the categories. Check your connection.",
+            categoriesFailureMessage(SubmitFailure(DomainError.NETWORK)),
+        )
+        assertEquals(
+            "Couldn't list the categories. Try again.",
+            categoriesFailureMessage(SubmitFailure(DomainError.SERVER)),
+        )
     }
 
     @Test
@@ -81,7 +100,7 @@ class SubmitScreenTest {
                 id = "q1",
                 optionA = "Fly",
                 optionB = "Swim",
-                categories = setOf(Category.SUPERPOWERS),
+                categories = setOf("SUPERPOWERS"),
                 status = SubmissionStatus.PENDING,
                 rejectionReason = null,
                 submittedAt = Instant.parse("2026-09-25T12:00:00Z"),

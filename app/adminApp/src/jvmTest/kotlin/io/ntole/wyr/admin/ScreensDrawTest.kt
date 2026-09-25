@@ -3,8 +3,10 @@ package io.ntole.wyr.admin
 import androidx.compose.ui.ImageComposeScene
 import androidx.compose.ui.unit.Density
 import io.ntole.wyr.admin.moderation.Action
+import io.ntole.wyr.admin.moderation.CategoryList
 import io.ntole.wyr.admin.moderation.DecisionDraft
 import io.ntole.wyr.admin.moderation.Failure
+import io.ntole.wyr.admin.moderation.FakeCategories
 import io.ntole.wyr.admin.moderation.FakeModeration
 import io.ntole.wyr.admin.moderation.ItemFailure
 import io.ntole.wyr.admin.moderation.ModerationState
@@ -18,7 +20,6 @@ import io.ntole.wyr.admin.moderation.SecretText
 import io.ntole.wyr.core.domain.error.DomainError
 import io.ntole.wyr.core.domain.moderation.QuestionCursor
 import io.ntole.wyr.core.domain.moderation.QuestionFilter
-import io.ntole.wyr.core.domain.question.Category
 import io.ntole.wyr.core.domain.submission.SubmissionStatus
 import io.ntole.wyr.core.network.environment.WyrEnvironment
 import kotlin.test.Test
@@ -52,7 +53,9 @@ class ScreensDrawTest {
                         failure = Failure.Refused(DomainError.RATE_LIMITED, 42.seconds, "too many requests"),
                         outcomes = Outcomes(failures, notice = "Approved \"Tea\" or \"Coffee\" under FOOD."),
                     ),
-                drafts = mapOf("q1" to DecisionDraft(setOf(Category.FOOD), "not\none line")),
+                // The categories read before, and a read of them since that failed.
+                categories = CategoryList(FakeCategories.LISTED, Failure.Refused(DomainError.NETWORK)),
+                drafts = mapOf("q1" to DecisionDraft(setOf("FOOD"), "not\none line")),
                 running = Running(Action.APPROVE, "q2"),
             )
 
@@ -68,12 +71,13 @@ class ScreensDrawTest {
                 adminToken = SecretText("typed"),
                 questions =
                     QuestionList(
-                        filter = QuestionFilter(setOf(SubmissionStatus.RETIRED), setOf(Category.FOOD)),
+                        filter = QuestionFilter(setOf(SubmissionStatus.RETIRED), setOf("FOOD")),
                         questions = reviewed + FakeModeration.listed("q6", status = SubmissionStatus.OTHER),
                         next = QuestionCursor("6"),
                         failure = Failure.Refused(DomainError.UNKNOWN),
                         outcomes = Outcomes(failures, notice = "Restored \"Sea\" or \"Mountains\": served again."),
                     ),
+                categories = CategoryList(FakeCategories.LISTED),
                 drafts = mapOf("q1" to DecisionDraft(reason = "a duplicate")),
                 running = Running(Action.RETIRE, "seed-1"),
             )

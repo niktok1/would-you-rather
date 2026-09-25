@@ -1,6 +1,5 @@
 package io.ntole.wyr.core.data.mapper
 
-import io.ntole.wyr.core.domain.question.Category
 import io.ntole.wyr.core.domain.question.Question
 import io.ntole.wyr.core.question.QuestionDto
 
@@ -21,54 +20,9 @@ internal fun QuestionDto.toDomain(): Question =
     )
 
 /**
- * The categories a question is filed under, as the wire lists them, as the domain holds them: each
- * once, in declaration order. Shared by every DTO that carries a question's categories.
+ * The ids a DTO lists a question's categories by, as the domain holds them: each once, in the order
+ * the server sent them, which is the order of categories (CLAUDE.md §8d, *Categories*). Shared by
+ * every DTO that carries a question's categories. An id is kept whether or not this build has read a
+ * category of that id: a screen names what it can and shows the rest by id.
  */
-internal fun List<String>.toDomainCategories(): Set<Category> =
-    // An id this build cannot name is OTHER beside the rest, not dropped: the question is filed under
-    // something more. An empty list, which the server never sends but a payload without the field
-    // decodes as, is OTHER alone: no question is filed under nothing.
-    map { it.toDomainCategory() }
-        .sorted()
-        .toSet()
-        .ifEmpty { setOf(Category.OTHER) }
-
-/**
- * The domain's category for a category id (CLAUDE.md §8d, *Categories*). Categories are server data
- * now, and until the client lists them itself (`GET /v1/categories`) it knows the first ones by id:
- * ABSURD, which took RANDOM's questions, stands in as [Category.RANDOM], so the picker's Random plays
- * them, and every other id this build cannot name is [Category.OTHER].
- */
-internal fun String.toDomainCategory(): Category =
-    when (this) {
-        FOOD -> Category.FOOD
-        LIFESTYLE -> Category.LIFESTYLE
-        ETHICS -> Category.ETHICS
-        SUPERPOWERS -> Category.SUPERPOWERS
-        ABSURD -> Category.RANDOM
-        else -> Category.OTHER
-    }
-
-/**
- * Domain to wire, for category filters: the id each category goes by, [Category.RANDOM] as ABSURD
- * ([toDomainCategory]).
- *
- * [Category.OTHER] has no wire equivalent to ask for — it is a local bucket, not a server-side
- * category — so it maps to `null`. No feed is filtered to it: it is not in [Category.selectable],
- * and `QuestionRepository.setCategories` refuses it.
- */
-internal fun Category.toWireOrNull(): String? =
-    when (this) {
-        Category.FOOD -> FOOD
-        Category.LIFESTYLE -> LIFESTYLE
-        Category.ETHICS -> ETHICS
-        Category.SUPERPOWERS -> SUPERPOWERS
-        Category.RANDOM -> ABSURD
-        Category.OTHER -> null
-    }
-
-private const val FOOD = "FOOD"
-private const val LIFESTYLE = "LIFESTYLE"
-private const val ETHICS = "ETHICS"
-private const val SUPERPOWERS = "SUPERPOWERS"
-private const val ABSURD = "ABSURD"
+internal fun List<String>.toDomainCategories(): Set<String> = toSet()

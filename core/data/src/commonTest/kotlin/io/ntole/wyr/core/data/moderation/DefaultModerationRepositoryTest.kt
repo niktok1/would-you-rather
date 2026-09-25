@@ -24,7 +24,6 @@ import io.ntole.wyr.core.domain.moderation.ModerationRepository
 import io.ntole.wyr.core.domain.moderation.QuestionCursor
 import io.ntole.wyr.core.domain.moderation.QuestionFilter
 import io.ntole.wyr.core.domain.moderation.RejectionReason
-import io.ntole.wyr.core.domain.question.Category
 import io.ntole.wyr.core.domain.submission.Submission
 import io.ntole.wyr.core.domain.submission.SubmissionStatus
 import io.ntole.wyr.core.domain.vote.Tally
@@ -69,17 +68,17 @@ class DefaultModerationRepositoryTest {
                         id = "q1",
                         optionA = "Fly",
                         optionB = "Swim",
-                        categories = setOf(Category.SUPERPOWERS),
+                        categories = setOf("SUPERPOWERS"),
                         status = SubmissionStatus.PENDING,
                         rejectionReason = null,
                         submittedAt = Instant.fromEpochMilliseconds(SUBMITTED_AT),
                     ),
-                    // A category this build cannot name, beside one it can, as for the author's own list.
+                    // A category added after this build, kept by its id, as for the author's own list.
                     Submission(
                         id = "q2",
                         optionA = "Tea",
                         optionB = "Coffee",
-                        categories = setOf(Category.FOOD, Category.OTHER),
+                        categories = setOf("CATEGORY_FROM_THE_FUTURE", "FOOD"),
                         status = SubmissionStatus.PENDING,
                         rejectionReason = null,
                         submittedAt = Instant.fromEpochMilliseconds(SUBMITTED_AT + 1),
@@ -98,16 +97,16 @@ class DefaultModerationRepositoryTest {
         }
 
     @Test
-    fun `an approval sends its categories in declaration order and comes back filed under them`() =
+    fun `an approval sends its categories in id order and comes back filed under them`() =
         runTest {
             val approved =
                 repositoryOver(storeHolding(session("a")))
-                    .approve(token, "q1", setOf(Category.RANDOM, Category.FOOD))
+                    .approve(token, "q1", setOf("FOOD", "ABSURD"))
 
             assertEquals(SubmissionStatus.APPROVED, approved.status)
-            assertEquals(setOf(Category.FOOD, Category.RANDOM), approved.categories)
+            assertEquals(setOf("ABSURD", "FOOD"), approved.categories)
             assertEquals(
-                ApproveSubmissionRequest("q1", listOf("FOOD", "ABSURD")),
+                ApproveSubmissionRequest("q1", listOf("ABSURD", "FOOD")),
                 decode<ApproveSubmissionRequest>(engine.requestHistory.single()),
             )
             assertEquals(listOf(token.value), adminTokensSent())
@@ -118,19 +117,9 @@ class DefaultModerationRepositoryTest {
         runTest {
             val approved = repositoryOver(storeHolding(session("a"))).approve(token, "q1", emptySet())
 
-            assertEquals(setOf(Category.SUPERPOWERS), approved.categories)
+            assertEquals(setOf("SUPERPOWERS"), approved.categories)
             val sent = decode<ApproveSubmissionRequest>(engine.requestHistory.single())
             assertEquals(ApproveSubmissionRequest("q1"), sent)
-        }
-
-    @Test
-    fun `an approval under OTHER sends nothing`() =
-        runTest {
-            val moderation = repositoryOver(storeHolding(session("a")))
-
-            assertFailsWith<IllegalArgumentException> { moderation.approve(token, "q1", setOf(Category.OTHER)) }
-
-            assertEquals(emptyList(), engine.requestHistory)
         }
 
     @Test
@@ -259,7 +248,7 @@ class DefaultModerationRepositoryTest {
             val filter =
                 QuestionFilter(
                     statuses = setOf(SubmissionStatus.RETIRED, SubmissionStatus.PENDING),
-                    categories = setOf(Category.RANDOM, Category.FOOD),
+                    categories = setOf("FOOD", "ABSURD"),
                 )
 
             val page = repositoryOver(storeHolding(session("a"))).questions(token, filter, QuestionCursor("c1"))
@@ -267,7 +256,7 @@ class DefaultModerationRepositoryTest {
             val sent = engine.requestHistory.single()
             assertEquals(WyrApi.Paths.ADMIN_QUESTIONS, sent.url.encodedPath)
             assertEquals(listOf("PENDING", "RETIRED"), sent.url.parameters.getAll(WyrApi.Query.STATUS))
-            assertEquals(listOf("FOOD", "ABSURD"), sent.url.parameters.getAll(WyrApi.Query.CATEGORY))
+            assertEquals(listOf("ABSURD", "FOOD"), sent.url.parameters.getAll(WyrApi.Query.CATEGORY))
             assertEquals("c1", sent.url.parameters[WyrApi.Query.CURSOR])
             assertEquals("${ModerationRepository.PAGE_SIZE}", sent.url.parameters[WyrApi.Query.LIMIT])
             assertEquals(listOf(token.value), adminTokensSent())
@@ -276,11 +265,11 @@ class DefaultModerationRepositoryTest {
                     questions =
                         listOf(
                             LISTED_RETIRED,
-                            // A seed, filed under a category this build cannot name and at a status it
-                            // cannot name either: still listed, as OTHER.
+                            // A seed, filed under a category added after this build and at a status it
+                            // cannot name: still listed, the category by its id and the status as OTHER.
                             LISTED_RETIRED.copy(
                                 id = "seed-1",
-                                categories = setOf(Category.FOOD, Category.OTHER),
+                                categories = setOf("CATEGORY_FROM_THE_FUTURE", "FOOD"),
                                 status = SubmissionStatus.OTHER,
                                 isSeed = true,
                                 reviewedAt = null,
@@ -306,18 +295,12 @@ class DefaultModerationRepositoryTest {
         }
 
     @Test
-    fun `a filter by what this build cannot name sends nothing`() =
+    fun `a filter by a status this build cannot name sends nothing`() =
         runTest {
             val moderation = repositoryOver(storeHolding(session("a")))
+            val filter = QuestionFilter(statuses = setOf(SubmissionStatus.APPROVED, SubmissionStatus.OTHER))
 
-            listOf(
-                QuestionFilter(statuses = setOf(SubmissionStatus.APPROVED, SubmissionStatus.OTHER)),
-                QuestionFilter(categories = setOf(Category.FOOD, Category.OTHER)),
-            ).forEach { filter ->
-                assertFailsWith<IllegalArgumentException>(
-                    "$filter",
-                ) { moderation.questions(token, filter, after = null) }
-            }
+            assertFailsWith<IllegalArgumentException> { moderation.questions(token, filter, after = null) }
 
             assertEquals(emptyList(), engine.requestHistory)
         }
@@ -466,7 +449,7 @@ class DefaultModerationRepositoryTest {
                 id = "q1",
                 optionA = "Fly",
                 optionB = "Swim",
-                categories = setOf(Category.SUPERPOWERS),
+                categories = setOf("SUPERPOWERS"),
                 status = SubmissionStatus.RETIRED,
                 isSeed = false,
                 submittedAt = Instant.fromEpochMilliseconds(SUBMITTED_AT),

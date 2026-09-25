@@ -13,7 +13,6 @@ import io.ntole.wyr.core.domain.moderation.ModerationRepository
 import io.ntole.wyr.core.domain.moderation.QuestionCursor
 import io.ntole.wyr.core.domain.moderation.QuestionFilter
 import io.ntole.wyr.core.domain.moderation.RejectionReason
-import io.ntole.wyr.core.domain.question.Category
 import io.ntole.wyr.core.domain.submission.Submission
 import io.ntole.wyr.core.network.api.ModerationApi
 import io.ntole.wyr.core.question.RestoreQuestionRequest
@@ -38,14 +37,8 @@ public class DefaultModerationRepository(
     override suspend fun approve(
         token: AdminToken,
         questionId: String,
-        categories: Set<Category>,
-    ): Submission {
-        // Built before anything is sent, so a category no question can be filed under never leaves
-        // the client.
-        val request = approveSubmissionRequest(questionId, categories)
-
-        return runApi { api.approve(token.value, request) }.toDomain()
-    }
+        categories: Set<String>,
+    ): Submission = runApi { api.approve(token.value, approveSubmissionRequest(questionId, categories)) }.toDomain()
 
     override suspend fun reject(
         token: AdminToken,
@@ -58,7 +51,7 @@ public class DefaultModerationRepository(
         filter: QuestionFilter,
         after: QuestionCursor?,
     ): ModeratedQuestionPage {
-        // Mapped before anything is sent, so a filter by what this build cannot name never leaves it.
+        // Mapped before anything is sent, so a filter by a status this build cannot name never leaves it.
         val statuses = filter.wireStatuses()
         val categories = filter.wireCategories()
         val cursor = after?.value

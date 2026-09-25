@@ -230,7 +230,9 @@ property of a growable enum MUST be declared with a serializer that decodes an u
 list defaulting to empty. A category added server-side is then only an id an installed client has
 no name for, never a payload it fails to decode, so the rule above does not apply to them.
 `QuestionCategory` and its list serializer are gone; the first ids are the enum's own names, so the
-JSON for them is byte for byte what it was (`WyrJsonTest`, `ServerJsonTest`).
+JSON for them is byte for byte what it was (`WyrJsonTest`, `ServerJsonTest`). Nor is a category an
+enum on the client: the domain holds category ids, named from the list the server sends (§8d,
+*Categories*, *The client*), so there is no `OTHER` to land an unknown one in.
 
 The client half lives in `WyrJson` (`:core:network`); the server half is `encodeDefaults = true`
 in `ServerJson` (`:server`), because the client can only coerce into a default that is actually
@@ -867,15 +869,18 @@ Like (*Skipping* and *Likes*, below) and the category picker (*Categories*, belo
 - One action at a time (`PlayUiState.OnQuestion.isBusy`): while a vote, a skip or a like is in
   flight, every other control is off. A like that failed says why in one line under the cards, in the
   reveal's verdict's place, not beside it; a skip that failed moves on all the same (*Skipping*).
-- Under the title, in every state, the categories played: *All*, or their names in declaration
-  order, cut short on one line. A value over its label, as the reveal's points are, and in the same
+- Under the title, in every state, the categories played: *All*, or their names in the order the
+  server lists them (Serbian for now, `categoryName`; one not read yet by its id, after the rest),
+  cut short on one line. A value over its label, as the reveal's points are, and in the same
   row beside them, so the reveal is no taller for it (on this Mac it still needs 569 of the 599; a
   question not answered yet needs 56 more than before, from the height its cards had to spare:
   *provisional*, §8b, *The categories row on the Play screen*). The label is *change categories*:
   the value's accent colour is the title's too, and nothing else marks it as something to tap.
-- Tapping it opens a small dialog (`CategoryPicker`): *All categories* and every category but
-  `OTHER`, ticked or not, then *Cancel* and *Play*. Nothing changes until Play, so ticking several is
-  one change and one reload. A new selection drops the question on screen, answered or not, and
+- Tapping it opens a small dialog (`CategoryPicker`): *All categories* and every category the server
+  lists, ticked or not, then *Cancel* and *Play*. Opening it reads the categories again
+  (`GetCategories`, *Categories*): it lists those read before meanwhile, a line says it is loading
+  while there are none, and one says so if the read fails, when those read before stay to tick.
+  Nothing changes until Play, so ticking several is one change and one reload. A new selection drops the question on screen, answered or not, and
   shows the next from it (`PlayViewModel.applyCategories`); the selection already played keeps the
   question on screen.
 - One action at a time (`canChangeCategories`): not while a question loads, nor while a vote, a skip
@@ -983,17 +988,22 @@ lists the player's own (*Submitting*, below).
     never sizes the statement). The filter, and the due count beside it (`QuestionStore.dueCount`),
     is an `EXISTS` on that table, never a join, so a question in several of the categories asked for
     is served and counted once. A submission names one or more (*Submitting*).
-  - *The client, until it lists the categories itself*: the domain's `Category` still names the
-    first five, `ABSURD` standing in as `Category.RANDOM` both ways (`QuestionMapper`), so the picker's
-    Random plays the absurd questions, and every other id is `Category.OTHER`. The next client branch
-    replaces the enum with the server's list. A question holds every one (`Question.categories`, a
-    set that is never empty, mapped in `QuestionMapper`): an id this build
-    cannot name is `Category.OTHER` beside the rest, and an empty list is `OTHER` alone. A player's
-    selection is a set too (`QuestionRepository.categories`, empty for every category, never
-    `OTHER`), and every refill sends all of it; the Play screen's category picker ticks each category,
-    and *All categories* empties it (*The Play screen*). Selecting all of `Category.selectable` is not
-    selecting none: a question filed only under categories this build cannot name is in none of them.
-    A client submits under a set of one or more, never `OTHER` (*Submitting*).
+  - *The client* lists the categories from the server (*The list*, above) and names nothing itself:
+    the enum is gone, and so is `OTHER`, the bucket for what a build could not name. A question, a
+    submission and a moderated question hold the ids of their categories (`categories`, a set, in the
+    order the server sent them, mapped in `QuestionMapper`), whether or not a category of that id has
+    been read; a screen names each by the list last read (`CategoryRepository.categories`) and shows
+    one it has not read by its id. The server files every question under at least one; a payload
+    without them, which no server sends, reads as none rather than failing. A player's selection is a
+    set of ids too (`QuestionRepository.categories`, empty for every category), and every refill sends
+    all of it, in id order, so one selection is always one request; the Play screen's category picker
+    ticks each category the server lists, and *All categories* empties it (*The Play screen*).
+    Ticking every category is not selecting none: a category a moderator adds later is in none and
+    not in those ticked. Nothing checks an id against the list before sending it: an id no category
+    has is the server's 400, which only a stale client could send, since ids never change and no
+    category is deleted. A client submits under a set of one or more (*Submitting*). The game names
+    a category in Serbian for now (`categoryName` in `io.ntole.wyr.play`, the one place the language
+    is chosen); the moderation app names it in Serbian too (`nameOf`).
 - **Re-answering** *(built)*: a question can be answered again, whether or not the feed has
   served it again. It earns the point again **every time**, inside its cycle or not (farming is
   bounded by rate limiting, 120 votes a minute per player on average, §8b), and the player may
@@ -1118,13 +1128,15 @@ lists the player's own (*Submitting*, below).
   newest first, a rejected one with its reason and a retired one as `RETIRED`
   (`SubmissionStore.byAuthor`; `SubmissionStatus.RETIRED` on the client). On the client,
   `SubmitQuestion` and `GetMySubmissions` go through `withSessionRecovery`
-  (`DefaultSubmissionRepository`). `SubmitQuestion` refuses no category, or `OTHER`, before it
-  ensures a session, so nothing is sent, not even a guest's mint, and the repository refuses them
-  again before building the request; every other rule is the server's to enforce, and
+  (`DefaultSubmissionRepository`). `SubmitQuestion` refuses no category before it ensures a
+  session, so nothing is sent, not even a guest's mint, and the repository refuses it again before
+  building the request; every other rule is the server's to enforce, and
   `SubmissionRules` (`:core:domain`) copies the options' rules so a form can check what is typed, as
   `AccountRules` does for accounts (`SubmissionLimitsTest` pins its numbers to `WyrApi.Limits`). A
   status this build cannot name is `SubmissionStatus.OTHER`. The game's **Submit** tab drives both
-  (`SubmitViewModel`): two options and one or more categories of `Category.selectable`, what
+  (`SubmitViewModel`): two options and one or more of the categories the server lists, read
+  (`GetCategories`) each time the tab is shown, before the list, and named as on Play (a read that
+  fails says so under them, with Try again, and those read before stay to pick from), what
   `SubmissionRules` refuses in each option shown under it as it is typed, and Submit off until
   nothing is refused and a category is picked. A stored question clears the form; a refusal keeps it
   and says why under it, `INVALID_SUBMISSION`, `SUBMISSION_LIMIT` with the 20, `NOT_ENOUGH_POINTS`
@@ -1212,8 +1224,8 @@ lists the player's own (*Submitting*, below).
     `withSessionRecovery`, so nothing a moderator does can refresh or replace the player's session
     (the Auth plugin refreshes only on a 401). Each call sends the `AdminToken` it is given in the
     header, and only that call; nothing stores it, and `AdminToken.toString` shows none of it. The
-    queue and every decision come back as the author's `Submission`. An approval under
-    `Category.OTHER` is refused before anything is sent, and none keeps the author's categories.
+    queue and every decision come back as the author's `Submission`. An approval names its
+    categories by id, in id order, and none keeps the author's categories.
     `RejectionReason` holds only a reason the server accepts, by `checkedRejection`'s rules, so a
     rejection's 400 can only be a bug; its `MAX_LENGTH` copies the wire's limit, which `:core:domain`
     cannot see, and `ModerationMapperTest` pins the two equal.
@@ -1229,7 +1241,8 @@ lists the player's own (*Submitting*, below).
     the address's admin budget (§8b). A `ModeratedQuestion` holds its categories as a question does,
     its status as a `SubmissionStatus` (`RETIRED`, or `OTHER` for one this build cannot name),
     whether it is a seed, its times as instants, its `Tally` and its like count. A filter by
-    `SubmissionStatus.OTHER` or `Category.OTHER` is refused before anything is sent. `WRONG_STATUS`
+    `SubmissionStatus.OTHER` is refused before anything is sent; its categories are ids, in id
+    order. `WRONG_STATUS`
     is `DomainError.WRONG_STATUS`. `moderationDataModule(environment)` binds it, and only there, for a
     client that only moderates: an HTTP client of its own over an in-memory session store nothing
     writes, no `TokenStorage` needed, no session repository, so no bearer token goes out and no guest
@@ -1245,7 +1258,12 @@ lists the player's own (*Submitting*, below).
     anew on every Lock (`ModerationState.locks`): a text field keeps its undo history for as
     long as it is shown, so Undo in the one that held the token gave it back (`TokenBarTest`).
     Nothing is sent until what is typed can be a token (`AdminToken.of`), and one action runs at
-    a time. *Pending* lists the queue, oldest first, each submission with its options,
+    a time. Every Load, of either tab, reads the categories first (`GetCategories`, needing no
+    token), since a moderator adds them without a build: they are the approval's and the filter's
+    chips, and name a question's categories, in Serbian, one not listed by its id
+    (`ModerationState.categories`); a read that fails says so above the tab and keeps those read
+    before, and Lock keeps them, being the same for everybody. *Pending* lists the queue, oldest
+    first, each submission with its options,
     categories and age: Approve files it under the categories picked for it, none keeping the
     author's, and Reject sends the reason typed once it is a `RejectionReason`. The queue is
     read again after every decision, whatever became of it. A read lists at most

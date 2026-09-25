@@ -10,7 +10,6 @@ import io.ntole.wyr.core.domain.error.WyrException
 import io.ntole.wyr.core.domain.player.GetPlayerStats
 import io.ntole.wyr.core.domain.player.PlayerRepository
 import io.ntole.wyr.core.domain.player.PlayerStats
-import io.ntole.wyr.core.domain.question.Category
 import io.ntole.wyr.core.domain.question.Question
 import io.ntole.wyr.core.domain.question.QuestionRepository
 import io.ntole.wyr.core.domain.session.SessionRepository
@@ -436,13 +435,13 @@ class AccountViewModelTest {
             player = null
         }
 
-        override val categories: StateFlow<Set<Category>> = MutableStateFlow(emptySet())
+        override val categories: StateFlow<Set<String>> = MutableStateFlow(emptySet())
 
         override suspend fun next(): Question = error("the Account screen serves no question")
 
         override suspend fun prefetch() = Unit
 
-        override suspend fun setCategories(categories: Set<Category>) = Unit
+        override suspend fun setCategories(categories: Set<String>) = Unit
 
         override suspend fun skip(questionId: String) = Unit
 

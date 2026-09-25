@@ -13,6 +13,7 @@ import io.ktor.http.headers
 import io.ktor.http.headersOf
 import io.ntole.wyr.core.api.WyrApi
 import io.ntole.wyr.core.data.moderation.DefaultModerationRepository
+import io.ntole.wyr.core.domain.category.GetCategories
 import io.ntole.wyr.core.domain.error.DomainError
 import io.ntole.wyr.core.domain.moderation.ApproveSubmission
 import io.ntole.wyr.core.domain.moderation.GetPendingSubmissions
@@ -240,6 +241,8 @@ class ModerationOverHttpTest {
             getQuestions = GetQuestions(repository),
             retireQuestion = RetireQuestion(repository),
             restoreQuestion = RestoreQuestion(repository),
+            // Not over the engine: this is about the admin routes, and the categories are none.
+            getCategories = GetCategories(FakeCategories()),
         ).also {
             it.setAdminToken(FakeModeration.TOKEN)
             testScheduler.advanceUntilIdle()

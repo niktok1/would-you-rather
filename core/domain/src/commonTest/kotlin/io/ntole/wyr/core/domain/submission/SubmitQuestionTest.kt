@@ -1,6 +1,5 @@
 package io.ntole.wyr.core.domain.submission
 
-import io.ntole.wyr.core.domain.question.Category
 import io.ntole.wyr.core.domain.session.SessionRepository
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
@@ -16,7 +15,7 @@ class SubmitQuestionTest {
         runTest {
             val submitQuestion = SubmitQuestion(RecordingSubmissions(calls), RecordingSessions(calls))
 
-            val stored = submitQuestion(" Fly ", "Swim", setOf(Category.SUPERPOWERS, Category.FOOD))
+            val stored = submitQuestion(" Fly ", "Swim", setOf("SUPERPOWERS", "FOOD"))
 
             assertEquals(STORED, stored)
             // The options untouched: trimming, like every other content rule, is the server's.
@@ -24,15 +23,11 @@ class SubmitQuestionTest {
         }
 
     @Test
-    fun `a pick no question can be filed under is refused before the session is ensured`() =
+    fun `a pick of no category is refused before the session is ensured`() =
         runTest {
             val submitQuestion = SubmitQuestion(RecordingSubmissions(calls), RecordingSessions(calls))
 
-            listOf(emptySet(), setOf(Category.OTHER), setOf(Category.FOOD, Category.OTHER)).forEach { categories ->
-                assertFailsWith<IllegalArgumentException>("$categories") {
-                    submitQuestion("Fly", "Swim", categories)
-                }
-            }
+            assertFailsWith<IllegalArgumentException> { submitQuestion("Fly", "Swim", emptySet()) }
 
             // Not even the session: on a cold start ensuring it would have minted a guest.
             assertEquals(emptyList(), calls)
@@ -44,7 +39,7 @@ class SubmitQuestionTest {
         override suspend fun submit(
             optionA: String,
             optionB: String,
-            categories: Set<Category>,
+            categories: Set<String>,
         ): Submission {
             calls += "submit $optionA|$optionB|$categories"
             return STORED
@@ -68,7 +63,7 @@ class SubmitQuestionTest {
                 id = "q1",
                 optionA = "Fly",
                 optionB = "Swim",
-                categories = setOf(Category.FOOD, Category.SUPERPOWERS),
+                categories = setOf("FOOD", "SUPERPOWERS"),
                 status = SubmissionStatus.PENDING,
                 rejectionReason = null,
                 submittedAt = Instant.fromEpochMilliseconds(1_790_000_000_000L),

@@ -1,7 +1,7 @@
 package io.ntole.wyr.submit
 
+import io.ntole.wyr.core.domain.category.Category
 import io.ntole.wyr.core.domain.error.DomainError
-import io.ntole.wyr.core.domain.question.Category
 import io.ntole.wyr.core.domain.submission.OptionProblem
 import io.ntole.wyr.core.domain.submission.Submission
 import io.ntole.wyr.core.domain.submission.SubmissionRules
@@ -17,8 +17,15 @@ import kotlin.time.Duration
 data class SubmitState(
     val optionA: String = "",
     val optionB: String = "",
-    /** The categories the question is to be filed under, never [Category.OTHER]. */
-    val categories: Set<Category> = emptySet(),
+    /** The ids of the categories the question is to be filed under, picked from [categoryOptions]. */
+    val categories: Set<String> = emptySet(),
+    /** Every category a question can be filed under, as last read from the server, oldest first. */
+    val categoryOptions: List<Category> = emptyList(),
+    /**
+     * Why the last read of the categories failed, until one works. It shows under them, with Try
+     * again, and the categories read before, if any, stay to pick from.
+     */
+    val categoriesFailure: SubmitFailure? = null,
     /** The player's submissions, newest first, as last read, or null until a read works. */
     val submissions: List<Submission>? = null,
     /** Whether the last Submit stored its question, until the next action starts. */
