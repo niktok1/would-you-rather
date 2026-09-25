@@ -340,7 +340,7 @@ private fun FailureBody(
  *
  * Branching on the domain error, never on a server message: `ErrorDto.message` is diagnostic and
  * unlocalised, so it must never reach a screen. The Play tab never submits or moderates a
- * question; the submission and moderation errors have copy only because every [DomainError] does.
+ * question, nor registers or logs in; those errors have copy only because every [DomainError] does.
  */
 private fun message(error: DomainError): String =
     when (error) {
@@ -355,5 +355,10 @@ private fun message(error: DomainError): String =
         DomainError.ALREADY_DECIDED -> "That question has already been reviewed."
         DomainError.WRONG_STATUS -> "That question can't be changed that way right now."
         DomainError.FORBIDDEN -> "That needs a moderator."
+        DomainError.INVALID_USERNAME -> "That username can't be used."
+        DomainError.INVALID_PASSWORD -> "That password can't be used."
+        DomainError.USERNAME_TAKEN -> "That username is taken."
+        DomainError.ALREADY_REGISTERED -> "You're registered already."
+        DomainError.INVALID_LOGIN -> "Wrong username or password."
         DomainError.SERVER, DomainError.UNKNOWN -> "Something went wrong on our end."
     }

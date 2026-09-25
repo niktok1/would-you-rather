@@ -84,6 +84,11 @@ private fun describe(
         DomainError.INVALID_SUBMISSION,
         DomainError.SUBMISSION_LIMIT,
         DomainError.OUT_OF_QUESTIONS,
+        DomainError.INVALID_USERNAME,
+        DomainError.INVALID_PASSWORD,
+        DomainError.USERNAME_TAKEN,
+        DomainError.ALREADY_REGISTERED,
+        DomainError.INVALID_LOGIN,
         -> {
             "Unexpected answer from the server: $error."
         }

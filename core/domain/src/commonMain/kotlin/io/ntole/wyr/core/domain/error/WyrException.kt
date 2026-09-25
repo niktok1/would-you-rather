@@ -35,6 +35,31 @@ public enum class DomainError {
      */
     FORBIDDEN,
 
+    /**
+     * A registration's username breaks the account rules (`AccountRules`). The player's to put right,
+     * and a client checks the rules before it sends, so seeing this means the two disagree.
+     */
+    INVALID_USERNAME,
+
+    /** A registration's password breaks the account rules (`AccountRules`), as [INVALID_USERNAME]. */
+    INVALID_PASSWORD,
+
+    /** Another player has the username a registration asked for, compared ignoring case. */
+    USERNAME_TAKEN,
+
+    /**
+     * The player registering has an account already: a username and password never change, for now.
+     * A registration sent again after its answer was lost gets this too.
+     */
+    ALREADY_REGISTERED,
+
+    /**
+     * A login's username and password name no account, whichever of the two is wrong. Never
+     * [UNAUTHORIZED]: a mistyped password says nothing about the session this device holds, which
+     * stays as it was.
+     */
+    INVALID_LOGIN,
+
     /** Request never reached the server, or its answer did not arrive whole. */
     NETWORK,
 

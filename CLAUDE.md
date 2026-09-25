@@ -463,6 +463,9 @@ decided in §8b).
     change, and any lockout per username. The address's login budget is the one bound on guessing.
   - Neither a password nor its hash is ever logged, nor is either in any answer; `RegisterRequest`'s
     and `LoginRequest`'s `toString` hide the password (`AccountFlowTest`).
+  - On the client each of the five codes is a `DomainError` of its own (`ErrorMapper`), and
+    `INVALID_LOGIN` is never `UNAUTHORIZED`, which would throw this device's session away over a
+    mistyped password.
 
 **Known limitation, by design for now:** a guest account is bound to one device's storage. Lose
 the device, reinstall the app or clear its storage, and the account — and its points — are gone,
