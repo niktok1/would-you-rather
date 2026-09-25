@@ -467,7 +467,9 @@ decided in §8b).
     and `LoginRequest`'s `toString` hide the password (`AccountFlowTest`).
   - On the client each of the five codes is a `DomainError` of its own (`ErrorMapper`), and
     `INVALID_LOGIN` is never `UNAUTHORIZED`, which would throw this device's session away over a
-    mistyped password.
+    mistyped password. `AccountRules` (`:core:domain`) holds the username and password rules, so a
+    form says what is wrong before it sends; its numbers copy `WyrApi.Limits`, which the domain
+    cannot see, and `AccountLimitsTest` pins each copy.
 
 **Known limitation, by design for now:** a guest account is bound to one device's storage. Lose
 the device, reinstall the app or clear its storage, and the account — and its points — are gone,
