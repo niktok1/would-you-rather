@@ -9,7 +9,8 @@ import kotlinx.coroutines.withContext
  * Android's [RecoverySecretStorage]: Google Play services' Block Store (CLAUDE.md §2, §8a).
  *
  * Block Store keeps its entries outside the app's own data. They outlive the app being uninstalled
- * and installed again on this phone, and move to a new phone set up from this one by device-to-device
+ * and installed again on this phone, but only while the user has Google's Backup services on
+ * (Settings > Google > Backup), and move to a new phone set up from this one by device-to-device
  * transfer. They go to the cloud backup as well only when asked, and this asks only while the backup
  * is end-to-end encrypted (a screen lock set, among other things), so the secret never sits in a
  * backup Google could read; otherwise a phone restored from the cloud recovers nobody, and a new

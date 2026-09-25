@@ -393,16 +393,17 @@ automatically from every green commit on `main` (its URL is on its Render page).
   row with a `refresh_token_hash`.
 - **Recovery on a phone.** Nothing has been restored to a new phone, nor reinstalled on one. Block
   Store has run only behind `AndroidRecoverySecretStorageTest`'s stand-in: that it keeps an entry
-  across an uninstall on the same phone, hands it on in a device-to-device transfer, and backs it up
-  to the cloud when asked with end-to-end encryption available rests on Google's documentation. The
-  backup rules are checked only in the built APK (`aapt2`), not by a real backup and restore. The iOS
-  Keychain item is compiled only (CLAUDE.md §9): no test runs it, the simulator's test binary being
-  no signed app, and whether a synchronizable item needs anything of the app's signing beyond its
-  default access group, and how soon iCloud Keychain carries it to another iPhone, is for the first
-  run on a device. A guest from before V4 gets a secret only when a client of this build first opens
-  on it. Nothing here logs a secret or its hash, but a statement that fails on a unique key logs the
-  driver's message, which on PostgreSQL names the key's value, as it does a refresh token's hash;
-  none can collide with 256 random bits behind it.
+  across an uninstall on the same phone (with Google's Backup services on), hands it on in a
+  device-to-device transfer, and backs it up to the cloud when asked with end-to-end encryption
+  available rests on Google's documentation. The backup rules are checked only in the built APK
+  (`aapt2`), not by a real backup and restore. The iOS Keychain item is compiled only (CLAUDE.md
+  §9): no test runs it, the simulator's test binary being no signed app, and whether a
+  synchronizable item needs anything of the app's signing beyond its default access group, and how
+  soon iCloud Keychain carries it to another iPhone, is for the first run on a device. A guest from
+  before V4 gets a secret only when a client of this build first opens on it. Nothing here logs a
+  secret or its hash, but a statement that fails on a unique key logs the driver's message, which on
+  PostgreSQL names the key's value, as it does a refresh token's hash; none can collide with 256
+  random bits behind it.
 - **The `:core` modules' tests on iOS.** The ios CI job runs `:app:shared`'s tests on the simulator
   and only compiles `:core:data`'s and `:core:network`'s, which Kotlin/Native refused while their
   names held commas (`SharedSessionStoreTest`'s among them, from before this branch); their JVM and
@@ -592,9 +593,10 @@ secret; the last call answers a new secret and kills `$SECRET`, which then recov
   the dev service (a deploy, or its spin-down) forgets every secret: the next session opened sends
   the secret, gets 401 `INVALID_RECOVERY_SECRET`, and mints a guest whose secret is kept instead.
 - *A real reinstall* (Android, the `dev` flavor on a phone with Google Play services, installed from
-  Android Studio): play a little, note the player id in the header, uninstall, install the same build
-  again, from the same machine, so it carries the same debug signing key. The first session opened
-  should recover that player.
+  Android Studio): check that Settings > Google > Backup is on, since Block Store keeps nothing across
+  an uninstall without it; play a little, note the player id in the header, uninstall, install the
+  same build again, from the same machine, so it carries the same debug signing key. The first
+  session opened should recover that player. With Backup off it should mint a guest instead.
 - *A new phone.* Set up a second Android phone from the first, by cable or over Wi-Fi, with the app
   installed and a guest played on the first. The session stays behind (the backup rules), and the
   secret should move with Block Store. With Google Backup on and a screen lock set, a phone restored

@@ -518,20 +518,21 @@ auth SDK, satisfying §2.
     desktop and web, where it is *New guest*.
   - *Where it is kept* (*decided 2026-09-25*), bound in each platform's `platformModule`:
     - *Android* (built): Block Store (§2, `AndroidRecoverySecretStorage` in `:core:network`), which
-      keeps its entries across the app being uninstalled and installed again, and moves them to a
-      new phone set up from this one by device-to-device transfer. Its cloud copy is asked for only
-      while the backup is end-to-end encrypted (`isEndToEndEncryptionAvailable`; a phone that cannot
-      say counts as not), so a phone restored from any other cloud backup mints a guest. Block Store
-      decides that at each store, so a secret stored while the backup was not encrypted (before a
-      screen lock was set, say) is stored again into it by the first launch that finds it encrypted
-      (`backUp`), and never stored again out of it, which would delete the cloud's copy at the next
-      sync. Without Play services every call throws, and the phone plays as a guest. The session
-      store stays out of both the cloud backup and a device-to-device transfer, so a new phone gets
-      only the secret, and recovers with it into a session of its own: `data_extraction_rules.xml`
-      (Android 12 and later) and `backup_rules.xml` (`fullBackupContent`, Android 11 and earlier,
-      for both) in `:app:androidApp` exclude `AndroidTokenStorage`'s `wyr.auth.xml`, which holds the
-      session and the count of failed requests for a secret. `allowBackup` stays on, with nothing
-      else in it yet.
+      keeps its entries across the app being uninstalled and installed again only while Google's
+      Backup services are on (Settings > Google > Backup, per Google's Block Store guide), and moves
+      them to a new phone set up from this one by device-to-device transfer. Its cloud copy is asked
+      for only while the backup is end-to-end encrypted (`isEndToEndEncryptionAvailable`; a phone
+      that cannot say counts as not), so a phone restored from any other cloud backup mints a guest.
+      Block Store decides that at each store, so a secret stored while the backup was not encrypted
+      (before a screen lock was set, say) is stored again into it by the first launch that finds it
+      encrypted (`backUp`), and never stored again out of it, which would delete the cloud's copy at
+      the next sync. Without Play services every call throws, and the phone plays as a guest. The
+      session store stays out of both the cloud backup and a device-to-device transfer, so a new
+      phone gets only the secret, and recovers with it into a session of its own:
+      `data_extraction_rules.xml` (Android 12 and later) and `backup_rules.xml`
+      (`fullBackupContent`, Android 11 and earlier, for both) in `:app:androidApp` exclude
+      `AndroidTokenStorage`'s `wyr.auth.xml`, which holds the session and the count of failed
+      requests for a secret. `allowBackup` stays on, with nothing else in it yet.
     - *iOS* (built, compiled only: §9): a generic-password Keychain item per environment
       (`IosRecoverySecretStorage` in `:core:network`; service `io.ntole.wyr.recovery`, the key as its
       account), synced through iCloud Keychain (`kSecAttrSynchronizable`), so one person's iPhones
@@ -585,28 +586,31 @@ auth SDK, satisfying §2.
 **Known limitation, by design for now:** a guest account lives only while some store holds a live
 session of it or its recovery secret. An Android or iOS guest survives a reinstall and a move to a
 new phone through the secret (*Recovery*), none of which has yet run on a phone (NEXT-SESSION.md);
-one whose every copy of the secret is lost is gone all the same. A phone whose secret store could
-not be read when the app first started there plays as a new guest, and recovers the player only once
-that guest's session dies or the app is installed again, which leaves the guest behind. A desktop or
-web guest stays bound to its one storage: lose it and the account — and its points — are gone. A
-copy of the secret in the wrong hands owns the account until it is replaced. Session storage is
-ordinary preference storage (SharedPreferences / NSUserDefaults / JVM Preferences / localStorage),
-not Keychain or EncryptedSharedPreferences. All of it must be revisited before real accounts exist.
+one whose every copy of the secret is lost is gone all the same, as is an Android guest reinstalled
+with Google's Backup services off, where Block Store keeps nothing across it. A phone whose secret
+store could not be read when the app first started there plays as a new guest, and recovers the
+player only once that guest's session dies or the app is installed again, which leaves the guest
+behind. A desktop or web guest stays bound to its one storage: lose it and the account — and its
+points — are gone. A copy of the secret in the wrong hands owns the account until it is replaced.
+Session storage is ordinary preference storage (SharedPreferences / NSUserDefaults / JVM
+Preferences / localStorage), not Keychain or EncryptedSharedPreferences. All of it must be revisited
+before real accounts exist.
 
 ## 8b. Open decisions (resolve before relevant work)
 
 - **Provider linking** — *decided 2026-09-25: two phases.* Phase 1, free and zero-click, is the
-  recovery secret (§8a, *Recovery*): built, on the server and in the Android and iOS clients, and yet
-  to run on a phone. Phase 2, next, is a silent Play Games Services v2 link on Android, and Game
-  Center on iOS later; either needs OAuth client credentials, and Apple a paid developer account too. Passkeys have no desktop-JVM
-  story, so desktop would need a browser handoff. The decisions of 2026-09-25, every one the
-  research's default: phase 1 now and the store providers' links later; a long-lived recovery secret,
-  whose holder owns the account until it is replaced; a sessions table first, one refresh-token family
-  per device, with no cap per player (§8a, *Sessions*); the session store out of Android's cloud
-  backup and its device-to-device transfer, so only the secret moves between phones; Block Store's
-  cloud copy only where end-to-end encryption is available, else a same-device reinstall only; the
-  iOS Keychain item synced through iCloud Keychain; desktop and web guest-only; and Block Store
-  approved as a library exception (§2).
+  recovery secret (§8a, *Recovery*): built, on the server and in the Android and iOS clients, and
+  yet to run on a phone. Phase 2, next, is a silent Play Games Services v2 link on Android, and Game
+  Center on iOS later; either needs OAuth client credentials, and Apple a paid developer account
+  too. Passkeys have no desktop-JVM story, so desktop would need a browser handoff. The decisions of
+  2026-09-25, every one the research's default: phase 1 now and the store providers' links later; a
+  long-lived recovery secret, whose holder owns the account until it is replaced; a sessions table
+  first, one refresh-token family per device, with no cap per player (§8a, *Sessions*); the session
+  store out of Android's cloud backup and its device-to-device transfer, so only the secret moves
+  between phones; Block Store's cloud copy only where end-to-end encryption is available, else a
+  same-device reinstall only, and that only with Google's Backup services on (§8a); the iOS Keychain
+  item synced through iCloud Keychain; desktop and web guest-only; and Block Store approved as a
+  library exception (§2).
 - **SQLDelight cache** — see §4. Needs a per-platform split because of web. Lower priority now
   that the endless feed (§8d) makes the server the source of truth for what a player has answered:
   the client keeps no record of what it served, so a persisted queue would only save one fetch
