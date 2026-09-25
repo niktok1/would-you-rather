@@ -74,7 +74,7 @@ class DefaultSessionDiagnosticsTest {
         }
 
     @Test
-    fun `the recovery secret is reported as kept, none, or unreadable, and never as itself`() =
+    fun `the recovery secret is reported as kept or none or unreadable and never as itself`() =
         runTest {
             val secrets = FlakySecretStorage()
             val recovery = RecoverySecretStore(secrets, InMemoryTokenStorage(), WyrEnvironment.DEV)

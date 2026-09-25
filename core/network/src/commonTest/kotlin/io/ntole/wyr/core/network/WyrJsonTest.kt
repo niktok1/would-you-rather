@@ -144,7 +144,7 @@ class WyrJsonTest {
     }
 
     @Test
-    fun `a guest session decodes with its recovery secret, and without one from a server that has no recovery`() {
+    fun `a guest session decodes with its recovery secret and without one from a server that has no recovery`() {
         val guest = WyrJson.decodeFromString<GuestSessionDto>(GUEST_SESSION)
         val fromBeforeRecovery = WyrJson.decodeFromString<GuestSessionDto>(SESSION)
 
@@ -165,7 +165,7 @@ class WyrJsonTest {
 
     /** What makes the test above hold for every field a session will ever have. */
     @Test
-    fun `a guest session holds every field a session does, under the same name, and the secret`() {
+    fun `a guest session holds every field a session does under the same name and the secret`() {
         fun SerialDescriptor.names(): List<String> = (0 until elementsCount).map(::getElementName)
 
         assertEquals(
@@ -199,7 +199,7 @@ class WyrJsonTest {
     }
 
     @Test
-    fun `a refused recovery decodes as itself, and as UNKNOWN in a build from before recovery`() {
+    fun `a refused recovery decodes as itself and as UNKNOWN in a build from before recovery`() {
         val refused = """{"code":"INVALID_RECOVERY_SECRET","message":"m"}"""
 
         assertEquals(ErrorCode.INVALID_RECOVERY_SECRET, WyrJson.decodeFromString<ErrorDto>(refused).code)

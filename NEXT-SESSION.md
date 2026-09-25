@@ -403,11 +403,10 @@ automatically from every green commit on `main` (its URL is on its Render page).
   on it. Nothing here logs a secret or its hash, but a statement that fails on a unique key logs the
   driver's message, which on PostgreSQL names the key's value, as it does a refresh token's hash;
   none can collide with 256 random bits behind it.
-- **The `:core` modules' iOS test compiles.** The ios CI job compiles and runs `:app:shared`'s tests
-  alone. Kotlin/Native refuses a comma in a test's name, and `:core:data`'s and `:core:network`'s
-  common tests hold names with commas (some from before this branch, `SharedSessionStoreTest`'s
-  included), so compiling those modules' tests for the simulator fails; their JVM and Android host
-  runs are what cover them.
+- **The `:core` modules' tests on iOS.** The ios CI job runs `:app:shared`'s tests on the simulator
+  and only compiles `:core:data`'s and `:core:network`'s, which Kotlin/Native refused while their
+  names held commas (`SharedSessionStoreTest`'s among them, from before this branch); their JVM and
+  Android host runs are what cover them.
 - **The settling refresh in a real browser or desktop pair.** Two tabs sharing `localStorage`, or
   two desktop instances sharing JVM preferences, have raced a refresh only in
   `SharedSessionStoreTest` on `MockEngine`. JVM preferences sync between processes on their own

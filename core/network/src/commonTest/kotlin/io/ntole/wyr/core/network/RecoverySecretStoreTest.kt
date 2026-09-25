@@ -39,7 +39,7 @@ class RecoverySecretStoreTest {
 
     /** The names Block Store and the Keychain keep secrets under: renaming one strands them. */
     @Test
-    fun `each secret is kept under its environment's own name, in the secret store alone`() =
+    fun `each secret is kept under its environment's own name and in the secret store alone`() =
         runTest {
             WyrEnvironment.entries.forEach { store(it).write(it.name) }
 
@@ -51,7 +51,7 @@ class RecoverySecretStoreTest {
         }
 
     @Test
-    fun `failed requests are counted for one player, and another player's count reads as none`() =
+    fun `failed requests are counted for one player and another player's count reads as none`() =
         runTest {
             val store = store(WyrEnvironment.DEV)
             store.countFailedRequest("p1")
@@ -67,7 +67,7 @@ class RecoverySecretStoreTest {
         }
 
     @Test
-    fun `failed requests outlive the store, as they must a relaunch, until they are cleared`() =
+    fun `failed requests outlive the store as they must a relaunch until they are cleared`() =
         runTest {
             store(WyrEnvironment.DEV).countFailedRequest("p1")
 

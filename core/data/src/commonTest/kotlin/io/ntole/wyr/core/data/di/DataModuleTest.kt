@@ -50,7 +50,7 @@ class DataModuleTest {
      * (CLAUDE.md §8a, *Recovery*; §8e).
      */
     @Test
-    fun `a device recovers with its environment's secret where the platform keeps one, and mints where it does not`() =
+    fun `a device recovers with its environment's secret where the platform keeps one and mints where it does not`() =
         runTest {
             val devSecretOnly =
                 object : RecoverySecretStorage {

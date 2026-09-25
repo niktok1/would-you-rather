@@ -106,7 +106,7 @@ class RecoverySecretFlowTest {
         }
 
     @Test
-    fun `a recovery lost on the network mints nothing, and the next call recovers`() =
+    fun `a recovery lost on the network mints nothing and the next call recovers`() =
         runTest {
             server.knowPlayer("a", secret = "secret-a")
             recovery.write("secret-a")
@@ -170,7 +170,7 @@ class RecoverySecretFlowTest {
 
     /** A guest minted before recovery, or one whose secret could not be kept. */
     @Test
-    fun `a session with no secret asks for one once, and keeps it`() =
+    fun `a session with no secret asks for one once and keeps it`() =
         runTest {
             server.knowPlayer("a")
             store.write(session("a"))
@@ -188,7 +188,7 @@ class RecoverySecretFlowTest {
         }
 
     @Test
-    fun `a refused request for a secret is made once a launch, and no more once it has failed three times`() =
+    fun `a refused request for a secret is made once a launch and no more once it has failed three times`() =
         runTest {
             server.knowPlayer("a")
             store.write(session("a"))
@@ -206,7 +206,7 @@ class RecoverySecretFlowTest {
         }
 
     @Test
-    fun `a request for a secret is made once a launch, however often the session is asked for`() =
+    fun `a request for a secret is made once a launch however often the session is asked for`() =
         runTest {
             server.knowPlayer("a")
             store.write(session("a"))
@@ -232,7 +232,7 @@ class RecoverySecretFlowTest {
         }
 
     @Test
-    fun `a request for a secret lost on the network does not count, and a kept secret clears the count`() =
+    fun `a request for a secret lost on the network does not count and a kept secret clears the count`() =
         runTest {
             server.knowPlayer("a")
             store.write(session("a"))
@@ -293,7 +293,7 @@ class RecoverySecretFlowTest {
         }
 
     @Test
-    fun `a dead session is replaced by its own player through the secret, and no guest is minted`() =
+    fun `a dead session is replaced by its own player through the secret and no guest is minted`() =
         runTest {
             server.knowPlayer("a", secret = "secret-a")
             store.write(session("a"))
@@ -367,7 +367,7 @@ class RecoverySecretFlowTest {
         }
 
     @Test
-    fun `clearing drops the secret too, so the next session is a fresh guest`() =
+    fun `clearing drops the secret too so the next session is a fresh guest`() =
         runTest {
             server.knowPlayer("a", secret = "secret-a")
             store.write(session("a"))
@@ -382,7 +382,7 @@ class RecoverySecretFlowTest {
         }
 
     @Test
-    fun `a reinstall keeps the secret, so the next session recovers the player, and forgets the count`() =
+    fun `a reinstall keeps the secret so the next session recovers the player and forgets the count`() =
         runTest {
             server.knowPlayer("a", secret = "secret-a")
             store.write(session("a"))

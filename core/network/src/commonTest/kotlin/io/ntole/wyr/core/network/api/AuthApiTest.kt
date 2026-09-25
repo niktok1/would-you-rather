@@ -37,7 +37,7 @@ class AuthApiTest {
         }
 
     @Test
-    fun `a recovery posts the secret alone, with no bearer, and reads the session it opened`() =
+    fun `a recovery posts the secret alone with no bearer and reads the session it opened`() =
         runTest {
             val engine = MockEngine { respondSession(session("a")) }
 
