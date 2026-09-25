@@ -466,10 +466,10 @@ auth SDK, satisfying §2.
   - Both are rate-limited (§8b), and neither the secret nor its hash is ever logged: the refusal's
     line names the limit and a client address, and `RateLimitTest` scans a whole flow's log for both.
     Nor does a `toString` show it: the three DTOs that carry it say only whether it is there
-    (`WyrJsonTest`).
-    Each environment's server keeps secrets of its own (§8e): a DEV secret recovers nobody on PROD,
-    and DEV's in-memory database forgets every secret at each restart, where a client meets
-    `INVALID_RECOVERY_SECRET`. `RecoveryFlowTest` pins the routes and `SessionStoreTest` the store.
+    (`WyrJsonTest`). Each environment's server keeps secrets of its own (§8e): a DEV secret recovers
+    nobody on PROD, and DEV's in-memory database forgets every secret at each restart, where a client
+    meets `INVALID_RECOVERY_SECRET`. `RecoveryFlowTest` pins the routes and `SessionStoreTest` the
+    store.
   - *The client* (`DefaultSessionRepository`, built): a device with no session recovers with the
     secret it keeps before it mints a guest, and so does a dead session before `withSessionRecovery`
     opens another in its place, which makes a dead session cost nothing where a secret is kept. A
@@ -487,8 +487,8 @@ auth SDK, satisfying §2.
     request the server refused, or whose secret the store could not keep, counts, and after three
     (`MAX_FAILED_SECRET_REQUESTS`) the install asks no more for that player: a server without recovery
     refuses every one. One lost on the network does not count. The count is kept beside the session,
-    in the token storage (`RecoverySecretStore`), so it never moves to another phone and a reinstall
-    starts it again. `clear()`, the console's *New guest*, drops the secret with the session, which
+    in the token storage (`RecoverySecretStore`), so it goes where the session goes and never with the
+    secret, and a reinstall starts it again. `clear()`, the console's *New guest*, drops the secret with the session, which
     would otherwise recover the player being cleared away. `RecoverySecretFlowTest` pins every case.
   - *The console* shows whether a secret is kept (`SessionDiagnostics.recoverySecret`: kept, none,
     unreadable, or not kept on this platform), never the secret, and *Reinstall (keep secret)* does
@@ -571,9 +571,9 @@ or EncryptedSharedPreferences. All of it must be revisited before real accounts 
 ## 8b. Open decisions (resolve before relevant work)
 
 - **Provider linking** — *decided 2026-09-25: two phases.* Phase 1, free and zero-click, is the
-  recovery secret (§8a, *Recovery*): built on the server, the client half next. Phase 2, next after
-  it, is a silent Play Games Services v2 link on Android, and Game Center on iOS later; either needs
-  OAuth client credentials, and Apple a paid developer account too. Passkeys have no desktop-JVM
+  recovery secret (§8a, *Recovery*): built, on the server and in the Android and iOS clients, and yet
+  to run on a phone. Phase 2, next, is a silent Play Games Services v2 link on Android, and Game
+  Center on iOS later; either needs OAuth client credentials, and Apple a paid developer account too. Passkeys have no desktop-JVM
   story, so desktop would need a browser handoff. The decisions of 2026-09-25, every one the
   research's default: phase 1 now and the store providers' links later; a long-lived recovery secret,
   whose holder owns the account until it is replaced; a sessions table first, one refresh-token family
@@ -1049,6 +1049,9 @@ name one too.
 - *iOS*: the `WYR_ENV` build setting in `app/iosApp/Configuration/Config.xcconfig` (`local` by
   default). `Info.plist` carries it as its `WYR_ENV` key (`$(WYR_ENV)`), and `MainViewController`
   reads that from the main bundle; a missing key is LOCAL.
+- *Guest-only on desktop and web* (*decided 2026-09-25*): neither keeps a recovery secret (§8a,
+  *Recovery*), so a player there is bound to that one storage, and the console's *Reinstall (keep
+  secret)* mints a fresh guest there, as *New guest* does.
 - *In the app.* Koin binds the environment (`appModules`), and `dataModule` sends every request to
   that same environment's URL, so the dev console's header, which shows its name and URL, always says
   where requests go. The console tab is shown only where the environment shows developer

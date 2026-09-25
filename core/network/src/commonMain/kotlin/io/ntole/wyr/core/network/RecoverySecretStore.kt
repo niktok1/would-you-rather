@@ -14,8 +14,8 @@ import kotlinx.serialization.json.Json
  * to PROD recovers nobody, and PROD would answer that it is unknown, which drops it. On iOS the
  * environments' builds share one Keychain, so the key is what keeps them apart.
  *
- * The count of failed requests stays in [local] so it never moves to another phone with the secret,
- * and so a reinstall, which empties [local], starts it again.
+ * The count of failed requests stays in [local], so it goes where the session goes and never with
+ * the secret, and a reinstall, which empties [local], starts it again.
  */
 public class RecoverySecretStore(
     private val secrets: RecoverySecretStorage,
