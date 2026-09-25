@@ -245,6 +245,14 @@ Implemented as `WyrTheme` in `:app:shared` (`io.ntole.wyr.theme`): `WyrColors` +
 Material components inherit it instead of falling back to Material defaults. Adding a theme =
 adding another `WyrColors` value.
 
+**Icons** are drawn by hand in the theme too, as `ImageVector`s in `WyrIcons`, a few strokes each on
+a 24 by 24 grid, so no icon library is needed (§2): `Home`, `Account` and `Back` (an arrow pointing
+left) for moving between screens, and `Heart` and `HeartFilled`, the outline and the filled heart,
+for likes. They carry no colour of their own: `Icon` tints each from `WyrColors`, so they follow the
+light and dark themes as text does. Adding an icon = adding a `WyrIcons` value. `WyrIconsDrawTest`
+draws each off screen: every one a figure of the theme's size, no two the same, and the filled heart
+covering the outline and its inside.
+
 The moderation app has a theme of its own, `AdminTheme` in `:app:adminApp` (`io.ntole.wyr.admin.theme`),
 since it may not depend on `:app:shared` (§3): Material 3's default light and dark schemes and type
 scale, with `AdminDimens` and `AdminType` beside them. The same rule holds in its screens: no hex, dp
