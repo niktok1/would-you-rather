@@ -706,8 +706,9 @@ ALLOWED_WEB_ORIGINS=localhost:8081 ./gradlew :server:run
 Every client build targets one server environment, chosen when it is built, `local` unless it names
 another (CLAUDE.md §8e). `dev` is `wyr-server-dev` at https://wyr-server-dev.onrender.com (in-memory
 H2, reset on every deploy), `prod` is https://wyr-server.onrender.com; both answered `/health` with
-200 on 2026-09-24. The console's header shows the environment and its URL, and a `prod` build has no
-console at all, only Play and Account. Each environment keeps a guest of its own, so switching between them
+200 on 2026-09-24. The console's header shows the environment and its URL, and so does the last line
+of the **Account** tab in a `local` or `dev` build (*Server: Dev (https://wyr-server-dev.onrender.com)*);
+a `prod` build has no console at all, only Play, Submit and Account, and names no server. Each environment keeps a guest of its own, so switching between them
 loses neither.
 
 - **Android**: Android Studio's *Build Variants* panel, where `devDebug` is the default, since a

@@ -34,13 +34,15 @@ import io.ntole.wyr.core.domain.account.PasswordProblem
 import io.ntole.wyr.core.domain.account.UsernameProblem
 import io.ntole.wyr.core.domain.error.DomainError
 import io.ntole.wyr.core.domain.player.PlayerStats
+import io.ntole.wyr.core.network.environment.WyrEnvironment
 import io.ntole.wyr.theme.WyrThemeAccessors
 import io.ntole.wyr.theme.WyrTypeScale
 
 /**
  * The Account screen (CLAUDE.md §8d, *Current focus*): who is playing on this device and their
  * stats, the points first; for a guest, Register, which keeps the points, and Log in, to an account
- * registered anywhere; for a registered player, Log out.
+ * registered anywhere; for a registered player, Log out. A build for any server but production's
+ * names that server last ([serverLine]), [environment] being the one the build talks to.
  *
  * Plain on purpose while UI polish is paused, and every colour, space and size from the theme (§5b).
  * Each field names its autofill content type, so the platform's password manager can offer to fill
@@ -50,6 +52,7 @@ import io.ntole.wyr.theme.WyrTypeScale
 fun AccountScreen(
     state: AccountState,
     actions: AccountActions,
+    environment: WyrEnvironment,
     modifier: Modifier = Modifier,
 ) {
     val colors = WyrThemeAccessors.colors
@@ -85,6 +88,10 @@ fun AccountScreen(
                 else -> {
                     LogOutSection(state, actions)
                 }
+            }
+
+            serverLine(environment)?.let { line ->
+                Text(text = line, color = colors.muted, fontSize = WyrTypeScale.statLabel)
             }
         }
     }
@@ -286,6 +293,13 @@ internal fun statLines(stats: PlayerStats): List<String> =
         "Cycle ${stats.cycle}: ${counted(stats.dueThisCycle, "question")} left",
         "${counted(stats.likesReceived, "like")} on questions you submitted",
     )
+
+/**
+ * The server a LOCAL or DEV build talks to, by name and URL, so a tester can tell which one they are
+ * on (CLAUDE.md §8e), or null in a PROD build, whose players have no other server to tell it from.
+ */
+internal fun serverLine(environment: WyrEnvironment): String? =
+    if (environment == WyrEnvironment.PROD) null else "Server: ${environment.displayName} (${environment.apiBaseUrl})"
 
 /** The username rule, or what is wrong with the name typed by it. */
 internal fun usernameHint(problem: UsernameProblem?): String =

@@ -124,7 +124,7 @@ private fun Account() {
     // a login would leave behind.
     LaunchedEffect(viewModel) { viewModel.refresh() }
 
-    AccountScreen(state = state, actions = viewModel)
+    AccountScreen(state = state, actions = viewModel, environment = koinInject())
 }
 
 @Composable

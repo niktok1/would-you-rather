@@ -813,6 +813,10 @@ not moved yet still adds its section to the console. Navigation is the root tab 
 - One action at a time, and the player read again after every one, a failed one too: a registration
   whose answer was lost shows as the account it made. `AccountViewModelTest` drives it over fakes and
   `AccountScreenDrawTest` draws every state in both themes; theme tokens only (§5b).
+- Its last line, in a LOCAL or DEV build, names the server the build talks to and its URL, *Server:
+  Dev (https://wyr-server-dev.onrender.com)* (`serverLine`, §8e); a PROD build shows none.
+  `AccountScreenDrawTest` finds it under everything else in every state, and holds a registered
+  player's screen with it to 599 high.
 - The console has no account forms. Its Session section names the account by its last stats read,
   the username or `guest` (`accountOf`).
 - The fourth to move is the player's **stats** (*Stats*), onto this screen: under the points, a line
@@ -1229,7 +1233,8 @@ base URL, a display name, and whether a build for it shows the developer tools. 
   reads that from the main bundle; a missing key is LOCAL.
 - *In the app.* Koin binds the environment (`appModules`), and `dataModule` sends every request to
   that same environment's URL, so the dev console's header, which shows its name and URL, always says
-  where requests go. The console tab is shown only where the environment shows developer
+  where requests go, as does the Account screen's last line in a LOCAL or DEV build (`serverLine`); a
+  PROD build names no server there. The console tab is shown only where the environment shows developer
   tools (`rootScreensFor`): a PROD build shows the game's screens alone, Play, Submit and Account,
   with no tab to reach the console.
   The moderation app binds its environment the same way (`adminModules`), and names it on every

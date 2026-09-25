@@ -10,6 +10,7 @@ import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.unit.Density
 import io.ntole.wyr.core.domain.error.DomainError
 import io.ntole.wyr.core.domain.player.PlayerStats
+import io.ntole.wyr.core.network.environment.WyrEnvironment
 import io.ntole.wyr.theme.WyrTheme
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -20,7 +21,8 @@ import kotlin.time.Duration.Companion.seconds
  * The Account screen drawn off screen at two phones' sizes, in each theme, from every state it can be
  * in. Compose measures and draws it all, so a layout that cannot be measured fails here rather than
  * when the tab opens. Whether what it draws fits is asked separately: the screen scrolls, so it draws
- * whatever its height.
+ * whatever its height. It is drawn for DEV, whose server line is the longest, unless a test names
+ * another environment.
  */
 class AccountScreenDrawTest {
     @Test
@@ -43,14 +45,32 @@ class AccountScreenDrawTest {
     }
 
     /**
+     * A LOCAL or DEV build names the server it talks to under everything else the screen shows, in
+     * every state; a PROD build names none (CLAUDE.md §8e).
+     */
+    @Test
+    fun `the screen names its server last outside prod and none in prod`() {
+        listOf(WyrEnvironment.LOCAL, WyrEnvironment.DEV).forEach { environment ->
+            (GUEST_STATES + WITHOUT_FORMS).forEach { state ->
+                assertEquals(serverLine(environment), textsShown(state, environment).last(), "$environment: $state")
+            }
+        }
+        (GUEST_STATES + WITHOUT_FORMS).forEach { state ->
+            val shown = textsShown(state, WyrEnvironment.PROD)
+            assertTrue(shown.none { it.startsWith("Server") }, "$state shows $shown")
+        }
+    }
+
+    /**
      * A registered player's screen, and one with no player read yet, has no form, so it must not need
-     * scrolling: the stats and Log out all show at an iPhone SE's height. A guest's scrolls to its
-     * forms, which come under the same heading and the same lines as a registered player's, so its
-     * stats show before any scrolling too.
+     * scrolling: the stats, Log out and the server line all show at an iPhone SE's height. A guest's
+     * scrolls to its forms, which come under the same heading and the same lines as a registered
+     * player's, so its stats show before any scrolling too.
      *
      * Measured at the width drawn above, not 375, since CI's Linux fonts wrap wider than a phone's
-     * (as `PlayScreenDrawTest` explains). On this Mac the tallest, a registered player whose read
-     * again failed, needs 509 of the 599.
+     * (as `PlayScreenDrawTest` explains), and for DEV, whose server line is the longest. On this Mac
+     * the tallest, a registered player whose read again failed, needs 557 of the 599 (509 without
+     * the server line).
      */
     @Test
     fun `every state without a form fits a short phone whole`() {
@@ -103,17 +123,22 @@ class AccountScreenDrawTest {
         return needed
     }
 
-    /** Every text [state]'s screen draws, as its semantics hold it. */
+    /** Every text [state]'s screen draws, as its semantics hold it, from the top of the screen down. */
     @OptIn(ExperimentalComposeUiApi::class)
-    private fun textsShown(state: AccountState): List<String> {
+    private fun textsShown(
+        state: AccountState,
+        environment: WyrEnvironment = WyrEnvironment.DEV,
+    ): List<String> {
         val scene =
             ImageComposeScene(width = WIDTH, height = HEIGHT, density = Density(1f)) {
-                WyrTheme { Screen(state) }
+                WyrTheme { Screen(state, environment) }
             }
         try {
             scene.render()
             return scene.semanticsOwners
                 .flatMap { owner -> owner.getAllSemanticsNodes(mergingEnabled = false) }
+                // Where each is laid out, not where it is clipped to: a guest's forms run past the window.
+                .sortedBy { node -> node.positionInRoot.y }
                 .flatMap { node -> node.config.getOrNull(SemanticsProperties.Text).orEmpty() }
                 .map { it.text }
         } finally {
@@ -122,8 +147,11 @@ class AccountScreenDrawTest {
     }
 
     @Composable
-    private fun Screen(state: AccountState) {
-        AccountScreen(state = state, actions = NoActions)
+    private fun Screen(
+        state: AccountState,
+        environment: WyrEnvironment = WyrEnvironment.DEV,
+    ) {
+        AccountScreen(state = state, actions = NoActions, environment = environment)
     }
 
     private object NoActions : AccountActions {
