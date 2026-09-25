@@ -965,7 +965,13 @@ lists the player's own (*Submitting*, below).
     limited per address (§8b). *Decided*: ordered by when each was added, not by Serbian name, which
     would sort differently on H2 and PostgreSQL and by each database's collation; a client sorts by
     the name it shows, in the player's language, if it sorts at all. `CategoryStore.all`,
-    `CategoryFlowTest`.
+    `CategoryFlowTest`. On the client it is `CategoryApi.all`, behind `CategoryRepository`
+    (`:core:domain`, `DefaultCategoryRepository`) and `GetCategories`, a `Category` each (its id and
+    both names): read through `runApi` alone, never `withSessionRecovery`, so no read ensures,
+    recovers or mints a session, kept in memory for the app's life (`CategoryRepository.categories`,
+    empty until a read works, left as it was by one that fails) and read again whenever
+    `GetCategories` is asked, as a picker does when it opens. Both `dataModule` and
+    `moderationDataModule` bind it (`DataModuleTest`).
   - Built in `question_categories`, one row per question and category, written in the question's
     own transaction, each row held to a category by a foreign key (V6): `QuestionDto.categories`,
     `SubmissionDto.categories` and `AdminQuestionDto.categories` carry every one, each once, in the
