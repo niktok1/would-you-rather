@@ -11,7 +11,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.LocalContentColor
@@ -60,8 +59,6 @@ fun DevConsoleScreen(
     onRetryLastVote: () -> Unit,
     onAnswerMany: (count: Int) -> Unit,
     onReadStats: () -> Unit,
-    onToggleCategory: (Category) -> Unit,
-    onSelectAllCategories: () -> Unit,
     modifier: Modifier = Modifier,
     submitSection: @Composable () -> Unit = {},
 ) {
@@ -147,27 +144,6 @@ fun DevConsoleScreen(
                 Buttons {
                     Button(onClick = onNextQuestion, enabled = idle) { Text("Next question") }
                     OutlinedButton(onClick = onResetQueue, enabled = idle) { Text("Reset queue") }
-                }
-            }
-
-            Section("Category") {
-                Value("feed filtered to", feedFilterOf(state.categories))
-                Buttons {
-                    // None selected is every category, so All shows as selected then.
-                    FilterChip(
-                        selected = state.categories.isEmpty(),
-                        onClick = onSelectAllCategories,
-                        label = { Text("All") },
-                        enabled = idle,
-                    )
-                    Category.selectable.forEach { category ->
-                        FilterChip(
-                            selected = category in state.categories,
-                            onClick = { onToggleCategory(category) },
-                            label = { Text(category.name) },
-                            enabled = idle,
-                        )
-                    }
                 }
             }
 
@@ -333,10 +309,6 @@ internal fun accountOf(stats: PlayerStats?): String = if (stats == null) "stats 
 
 /** Every one of [categories], in the order the set holds them. */
 internal fun namesOf(categories: Set<Category>): String = categories.joinToString(", ") { it.name }
-
-/** What a feed filtered to [categories] serves: every category when there are none. */
-internal fun feedFilterOf(categories: Set<Category>): String =
-    if (categories.isEmpty()) "every category" else namesOf(categories)
 
 private fun tokenExpiry(session: SessionInfo?): String {
     if (session == null) return "no session"

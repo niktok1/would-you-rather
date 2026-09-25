@@ -17,16 +17,32 @@ import kotlin.test.assertTrue
 
 /**
  * The Play screen drawn off screen at two phones' sizes, in each theme, from every state it can be
- * in. Compose measures and draws it all, so a layout that cannot be measured fails here rather than
- * when the tab opens. Whether what it draws fits is asked separately, since a squeezed card draws.
+ * in, with every category played or a few, and with the category picker open. Compose measures and
+ * draws it all, so a layout that cannot be measured fails here rather than when the tab opens.
+ * Whether what it draws fits is asked separately, since a squeezed card draws.
  */
 class PlayScreenDrawTest {
     @Test
     fun `the screen draws in every state it can be in`() {
         statesOf(QUESTION).forEach { state ->
             listOf(false, true).forEach { dark ->
-                draw(state, dark, WIDTH, HEIGHT)
-                draw(state, dark, SHORT_PHONE_WIDTH, SHORT_PHONE_HEIGHT)
+                SELECTIONS.forEach { categories ->
+                    draw(state, dark, WIDTH, HEIGHT, categories)
+                    draw(state, dark, SHORT_PHONE_WIDTH, SHORT_PHONE_HEIGHT, categories)
+                }
+            }
+        }
+    }
+
+    /** The picker opens over whatever the screen shows, Play off while the screen cannot take a change. */
+    @Test
+    fun `the screen draws with the category picker open`() {
+        statesOf(QUESTION).forEach { state ->
+            listOf(false, true).forEach { dark ->
+                SELECTIONS.forEach { ticked ->
+                    draw(state, dark, WIDTH, HEIGHT, picking = ticked)
+                    draw(state, dark, SHORT_PHONE_WIDTH, SHORT_PHONE_HEIGHT, picking = ticked)
+                }
             }
         }
     }
@@ -46,8 +62,46 @@ class PlayScreenDrawTest {
     @Test
     fun `every state fits a short phone without squeezing the option cards`() {
         statesOf(ONE_LINE_QUESTION).forEach { state ->
-            val needed = heightNeeded(state, WIDTH)
-            assertTrue(needed <= SHORT_PHONE_HEIGHT, "$state needs $needed of $SHORT_PHONE_HEIGHT")
+            SELECTIONS.forEach { categories ->
+                val needed = heightNeeded(state, WIDTH, categories)
+                assertTrue(needed <= SHORT_PHONE_HEIGHT, "$state on $categories needs $needed of $SHORT_PHONE_HEIGHT")
+            }
+        }
+    }
+
+    /**
+     * The categories played share the header's one row with the reveal's points, so however many are
+     * selected they take one line of it, cut short at the narrow phone's width rather than wrapped.
+     */
+    @Test
+    fun `every category played takes no more height than none`() {
+        statesOf(QUESTION).forEach { state ->
+            listOf(WIDTH, SHORT_PHONE_WIDTH).forEach { width ->
+                assertEquals(
+                    heightNeeded(state, width, categories = emptySet()),
+                    heightNeeded(state, width, categories = Category.selectable.toSet()),
+                    "$state at $width wide",
+                )
+            }
+        }
+    }
+
+    /** Every category and All on one card, with Play under them, without scrolling. */
+    @Test
+    fun `the category picker fits a short phone`() {
+        SELECTIONS.forEach { ticked ->
+            val needed =
+                heightNeeded(SHORT_PHONE_WIDTH) {
+                    CategoryPicker(
+                        ticked = ticked,
+                        canApply = true,
+                        onToggle = {},
+                        onSelectAll = {},
+                        onApply = {},
+                        onClose = {},
+                    )
+                }
+            assertTrue(needed <= SHORT_PHONE_HEIGHT, "the picker on $ticked needs $needed of $SHORT_PHONE_HEIGHT")
         }
     }
 
@@ -69,10 +123,12 @@ class PlayScreenDrawTest {
         dark: Boolean,
         width: Int,
         height: Int,
+        categories: Set<Category> = emptySet(),
+        picking: Set<Category>? = null,
     ) {
         val scene =
             ImageComposeScene(width = width, height = height, density = Density(1f)) {
-                WyrTheme(darkTheme = dark) { Screen(state) }
+                WyrTheme(darkTheme = dark) { Screen(state, categories, picking) }
             }
         try {
             assertEquals(width, scene.render().width)
@@ -85,12 +141,20 @@ class PlayScreenDrawTest {
     private fun heightNeeded(
         state: PlayUiState,
         width: Int,
+        categories: Set<Category> = emptySet(),
+    ): Int = heightNeeded(width, "$state") { Screen(state, categories, picking = null) }
+
+    /** The least height [content] needs at [width] for nothing in it to be squeezed. */
+    private fun heightNeeded(
+        width: Int,
+        what: String = "the content",
+        content: @Composable () -> Unit,
     ): Int {
         var needed = -1
         val scene =
             ImageComposeScene(width = width, height = SHORT_PHONE_HEIGHT, density = Density(1f)) {
                 WyrTheme {
-                    Layout(content = { Screen(state) }) { measurables, constraints ->
+                    Layout(content = content) { measurables, constraints ->
                         val screen = measurables.single()
                         needed = screen.minIntrinsicHeight(constraints.maxWidth)
                         val placeable = screen.measure(constraints)
@@ -103,13 +167,31 @@ class PlayScreenDrawTest {
         } finally {
             scene.close()
         }
-        assertTrue(needed > 0, "$state was never measured")
+        assertTrue(needed > 0, "$what was never measured")
         return needed
     }
 
     @Composable
-    private fun Screen(state: PlayUiState) {
-        PlayScreen(state = state, onChoose = {}, onSkip = {}, onToggleLike = {}, onNext = {}, onRetry = {})
+    private fun Screen(
+        state: PlayUiState,
+        categories: Set<Category>,
+        picking: Set<Category>?,
+    ) {
+        PlayScreen(
+            state = state,
+            categories = categories,
+            picking = picking,
+            onChoose = {},
+            onSkip = {},
+            onToggleLike = {},
+            onNext = {},
+            onRetry = {},
+            onOpenCategories = {},
+            onToggleCategory = {},
+            onSelectAllCategories = {},
+            onApplyCategories = {},
+            onCloseCategories = {},
+        )
     }
 
     private companion object {
@@ -133,6 +215,10 @@ class PlayScreenDrawTest {
                 categories = setOf(Category.SUPERPOWERS),
             )
         val ONE_LINE_QUESTION = QUESTION.copy(optionA = "Fly", optionB = "Swim")
+
+        /** None, which is every category; one; and every one, the longest line the header can hold. */
+        val SELECTIONS: List<Set<Category>> =
+            listOf(emptySet(), setOf(Category.ETHICS), Category.selectable.toSet())
         val OUTCOME =
             VoteOutcome(
                 questionId = QUESTION.id,

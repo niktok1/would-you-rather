@@ -3,6 +3,7 @@ package io.ntole.wyr.play
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -14,37 +15,61 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeContentPadding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
 import io.ntole.wyr.core.domain.error.DomainError
+import io.ntole.wyr.core.domain.question.Category
 import io.ntole.wyr.core.domain.question.Question
 import io.ntole.wyr.core.domain.vote.Side
 import io.ntole.wyr.core.domain.vote.VoteOutcome
 import io.ntole.wyr.theme.WyrThemeAccessors
 import io.ntole.wyr.theme.WyrTypeScale
 
+/**
+ * The game: a question, its two options, and the reveal once it is answered.
+ *
+ * [categories] are the categories played, none for every category, shown in the header, where
+ * tapping them opens the category picker (CLAUDE.md §8d, *Categories*). [picking] is what the open
+ * picker has ticked, or `null` while it is closed.
+ */
 @Composable
 fun PlayScreen(
     state: PlayUiState,
+    categories: Set<Category>,
+    picking: Set<Category>?,
     onChoose: (Side) -> Unit,
     onSkip: () -> Unit,
     onToggleLike: () -> Unit,
     onNext: () -> Unit,
     onRetry: () -> Unit,
+    onOpenCategories: () -> Unit,
+    onToggleCategory: (Category) -> Unit,
+    onSelectAllCategories: () -> Unit,
+    onApplyCategories: () -> Unit,
+    onCloseCategories: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val colors = WyrThemeAccessors.colors
@@ -59,7 +84,7 @@ fun PlayScreen(
                     .padding(dimens.screenPadding),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Header(state)
+            Header(state, categories = categories, onOpenCategories = onOpenCategories)
 
             Spacer(Modifier.size(dimens.spaceMd))
 
@@ -101,11 +126,39 @@ fun PlayScreen(
                 Controls(state, onToggleLike = onToggleLike, onSkip = onSkip, onNext = onNext)
             }
         }
+
+        if (picking != null) {
+            Dialog(onDismissRequest = onCloseCategories) {
+                CategoryPicker(
+                    ticked = picking,
+                    canApply = state.canChangeCategories,
+                    onToggle = onToggleCategory,
+                    onSelectAll = onSelectAllCategories,
+                    onApply = onApplyCategories,
+                    onClose = onCloseCategories,
+                )
+            }
+        }
     }
 }
 
+/**
+ * The title, and one row under it: the categories played, in every state, so a selection with
+ * nothing to serve can be changed from the failure it leads to, and beside them, once a vote is
+ * scored, the points.
+ *
+ * The categories are a [Stat] like the points, a value over its label, one line of each, so the row
+ * is no taller for them than the reveal's points alone made it, and the reveal's option cards keep
+ * the height their tally needs on a short phone (CLAUDE.md §8d, *Current focus*). Their value is in
+ * the accent colour, since tapping it opens the picker. It looks the same while the categories
+ * cannot change, as it does for every question that loads: the tap then does nothing.
+ */
 @Composable
-private fun Header(state: PlayUiState) {
+private fun Header(
+    state: PlayUiState,
+    categories: Set<Category>,
+    onOpenCategories: () -> Unit,
+) {
     val colors = WyrThemeAccessors.colors
     val dimens = WyrThemeAccessors.dimens
 
@@ -118,16 +171,137 @@ private fun Header(state: PlayUiState) {
             textAlign = TextAlign.Center,
         )
 
-        // Points only mean something once the server has scored a vote, so they stay hidden
-        // until there is a real number to show rather than a placeholder zero.
-        val outcome = (state as? PlayUiState.Revealed)?.outcome
-        if (outcome != null) {
-            Spacer(Modifier.size(dimens.spaceSm))
-            Row(horizontalArrangement = Arrangement.spacedBy(dimens.spaceMd)) {
+        Spacer(Modifier.size(dimens.spaceSm))
+        Row(horizontalArrangement = Arrangement.spacedBy(dimens.spaceMd)) {
+            // Weighted, so a long selection is cut short on its one line rather than pushing the
+            // points off the row.
+            Stat(
+                label = "categories",
+                value = categoriesPlayed(categories),
+                valueColor = colors.headingAccent,
+                modifier =
+                    Modifier
+                        .weight(1f, fill = false)
+                        .clickable(
+                            enabled = state.canChangeCategories,
+                            onClickLabel = "Change categories",
+                            role = Role.Button,
+                            onClick = onOpenCategories,
+                        ),
+            )
+
+            // Points only mean something once the server has scored a vote, so they stay hidden
+            // until there is a real number to show rather than a placeholder zero.
+            val outcome = (state as? PlayUiState.Revealed)?.outcome
+            if (outcome != null) {
                 Stat(label = "points", value = outcome.totalPoints.toString())
                 pointsThisVote(outcome)?.let { points -> Stat(label = "this vote", value = points) }
             }
         }
+    }
+}
+
+/** The categories played, as the header names them: all of them while none is selected. */
+internal fun categoriesPlayed(categories: Set<Category>): String =
+    if (categories.isEmpty()) {
+        "All"
+    } else {
+        // In declaration order, as the picker lists them, whatever order the set holds them in.
+        Category.entries.filter { it in categories }.joinToString(", ", transform = ::categoryName)
+    }
+
+/** A category in the player's words, never its wire name. */
+internal fun categoryName(category: Category): String =
+    when (category) {
+        Category.FOOD -> "Food"
+        Category.LIFESTYLE -> "Lifestyle"
+        Category.ETHICS -> "Ethics"
+        Category.SUPERPOWERS -> "Superpowers"
+        Category.RANDOM -> "Random"
+        Category.OTHER -> "Other"
+    }
+
+/**
+ * The category picker's card, in a dialog over the screen: every category the feed can be filtered
+ * to, ticked or not, and All categories, ticked while none is. Nothing is played until Play, and
+ * Play is off while the screen cannot take a change ([canApply]), one action at a time.
+ *
+ * The list scrolls, so a window shorter than the card keeps Play on screen. Internal, not private,
+ * so a test can measure it.
+ */
+@Composable
+internal fun CategoryPicker(
+    ticked: Set<Category>,
+    canApply: Boolean,
+    onToggle: (Category) -> Unit,
+    onSelectAll: () -> Unit,
+    onApply: () -> Unit,
+    onClose: () -> Unit,
+) {
+    val colors = WyrThemeAccessors.colors
+    val dimens = WyrThemeAccessors.dimens
+
+    Surface(
+        shape = RoundedCornerShape(dimens.radiusCard),
+        color = colors.surface,
+        contentColor = colors.primaryText,
+    ) {
+        Column(modifier = Modifier.padding(dimens.spaceLg)) {
+            Text(
+                text = "Play these categories",
+                color = colors.headingAccent,
+                fontSize = WyrTypeScale.sectionTitle,
+                fontWeight = FontWeight.Bold,
+            )
+            Spacer(Modifier.size(dimens.spaceSm))
+
+            Column(modifier = Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState())) {
+                CategoryOption(label = "All categories", ticked = ticked.isEmpty(), onClick = onSelectAll)
+                Category.selectable.forEach { category ->
+                    CategoryOption(
+                        label = categoryName(category),
+                        ticked = category in ticked,
+                        onClick = { onToggle(category) },
+                    )
+                }
+            }
+
+            Spacer(Modifier.size(dimens.spaceMd))
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(dimens.spaceSm, Alignment.End),
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                TextButton(onClick = onClose) { Text("Cancel") }
+                Button(onClick = onApply, enabled = canApply) { Text("Play") }
+            }
+        }
+    }
+}
+
+/**
+ * One line of the picker, ticked or not; the whole line toggles it, and is at least as tall as a
+ * touch target, which a checkbox without a click of its own is not.
+ */
+@Composable
+private fun CategoryOption(
+    label: String,
+    ticked: Boolean,
+    onClick: () -> Unit,
+) {
+    val dimens = WyrThemeAccessors.dimens
+
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(dimens.spaceSm),
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .toggleable(value = ticked, role = Role.Checkbox, onValueChange = { onClick() })
+                .minimumInteractiveComponentSize(),
+    ) {
+        // No click of its own: the line's toggleable is the one.
+        Checkbox(checked = ticked, onCheckedChange = null)
+        Text(text = label)
     }
 }
 
@@ -138,16 +312,25 @@ private fun Header(state: PlayUiState) {
  */
 internal fun pointsThisVote(outcome: VoteOutcome): String? = if (outcome.replayed) null else "+${outcome.pointsAwarded}"
 
+/** A value over its label, one line each, the value cut short rather than wrapped. */
 @Composable
 private fun Stat(
     label: String,
     value: String,
+    modifier: Modifier = Modifier,
+    valueColor: Color = WyrThemeAccessors.colors.primaryText,
 ) {
     val colors = WyrThemeAccessors.colors
 
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(text = value, color = colors.primaryText, fontWeight = FontWeight.Bold)
-        Text(text = label, color = colors.muted, fontSize = WyrTypeScale.statLabel)
+    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = modifier) {
+        Text(
+            text = value,
+            color = valueColor,
+            fontWeight = FontWeight.Bold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        Text(text = label, color = colors.muted, fontSize = WyrTypeScale.statLabel, maxLines = 1)
     }
 }
 

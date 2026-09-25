@@ -2,7 +2,6 @@ package io.ntole.wyr.dev
 
 import io.ntole.wyr.core.domain.error.DomainError
 import io.ntole.wyr.core.domain.player.PlayerStats
-import io.ntole.wyr.core.domain.question.Category
 import io.ntole.wyr.core.domain.question.Question
 import io.ntole.wyr.core.domain.session.SessionInfo
 import io.ntole.wyr.core.domain.vote.AttemptId
@@ -28,11 +27,6 @@ data class DevConsoleState(
     val environment: WyrEnvironment,
     val session: SessionInfo? = null,
     val queueSize: Int? = null,
-    /**
-     * The categories the feed is filtered to, none for every category. Followed as the repository
-     * holds them rather than taken as a snapshot, so they always say what the next fetch asks for.
-     */
-    val categories: Set<Category> = emptySet(),
     val question: Question? = null,
     val lastOutcome: VoteOutcome? = null,
     /**

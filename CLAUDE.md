@@ -555,8 +555,9 @@ EncryptedSharedPreferences: enough for a game that stores nothing personal.
   rule as written, which predates recorded skips, and it changes neither rule; a filter of several
   categories carries it over unchanged. The options: keep it; serve again only the filter's
   answered questions, and its skipped ones only when it has nothing else; or answer an empty
-  batch, which the client reads as out of questions. The dev console's Category row sends the
-  categories selected, so this is reachable from there. `SkipStoreTest` pins what is built.
+  batch, which the client reads as out of questions. The Play screen's category picker sends the
+  categories selected (§8d, *Current focus*), so a player reaches this in every build, PROD's
+  included. `SkipStoreTest` pins what is built.
 - **Retrying a submission** — *decided 2026-09-24: keep it simple.* A submission carries no
   attempt id, so one sent again after its response was lost is stored twice, both pending; the
   moderator rejects the copy, and the 20-pending cap bounds how many there can be. Nothing resends
@@ -816,6 +817,27 @@ The second to move is **Skip and Like**, onto the Play screen (`io.ntole.wyr.pla
   the option cards and brand colors as they were (§5b).
 - The console has neither any more; its Play section keeps A/B, Answer N and Retry last vote for now.
 
+The third to move is the **category picker**, onto the Play screen (*Categories*, below):
+- Under the title, in every state, the categories played: *All*, or their names in declaration
+  order, cut short on one line. A value over its label, as the reveal's points are, and in the same
+  row beside them, so the reveal is no taller for it (on this Mac it still needs 569 of the 599; a
+  question not answered yet needs 56 more than before, from the height its cards had to spare).
+- Tapping it opens a small dialog (`CategoryPicker`): *All categories* and every category but
+  `OTHER`, ticked or not, then *Cancel* and *Play*. Nothing changes until Play, so ticking several is
+  one change and one reload. A new selection drops the question on screen, answered or not, and
+  shows the next from it (`PlayViewModel.applyCategories`); the selection already played keeps the
+  question on screen.
+- One action at a time (`canChangeCategories`): not while a question loads, nor while a vote, a skip
+  or a like is in flight. Play is off then, and a change refused keeps the picker open. From a
+  failure it goes: a selection the feed has nothing in shows the out-of-questions state, and changing
+  the categories is the way out of it.
+- The selection lives in the repository as before, in memory for the app's life: a launch plays
+  every category again, and New guest keeps it.
+- `PlayViewModelTest` drives it over fakes. `PlayScreenDrawTest` draws every state with none, one and
+  every category played, and with the picker open, in both themes; holds every state to 599 high
+  with each, every selection to the height of none, and the picker's card to 599 too.
+- The console has no Category row any more; its questions come from what the Play screen picked.
+
 - **Scoring** *(built; see §8c)*: every answer earns exactly **1 point**, whichever side
   it picks. There is no majority bonus and no streak: the streak is removed from the server, the
   contract, and the domain. The reveal still shows the split and whether the player sided with
@@ -844,9 +866,9 @@ The second to move is **Skip and Like**, onto the Play screen (`io.ntole.wyr.pla
     rest. The cycle starts only once nothing at all is due, whichever categories are asked for, and
     a request that finds no questions starts nothing. Questions skipped this cycle are served again
     this way too, so a skip does not hold through a category filter: *provisional — user decision*
-    (§8b). The client selects any number (`QuestionRepository.setCategories`, from the console's
-    Category row), none for every category; a change drops the queue, and New guest keeps the
-    selection.
+    (§8b). The client selects any number (`QuestionRepository.setCategories`, from the Play
+    screen's category picker), none for every category; a change drops the queue, and New guest
+    keeps the selection.
   - `answeredBefore` means the player has a vote on the question, from any cycle.
 - **Categories** *(decided 2026-09-24; built)*: a
   question is filed under **any number of categories, at least one**. A player may pick **several**
@@ -864,8 +886,8 @@ The second to move is **Skip and Like**, onto the Play screen (`io.ntole.wyr.pla
   (`Question.categories`, a set that is never empty, mapped in `QuestionMapper`): a name this build
   cannot read is `Category.OTHER` beside the rest, and an empty list is `OTHER` alone. A player's
   selection is a set too (`QuestionRepository.categories`, empty for every category, never `OTHER`),
-  and every refill sends all of it; the console's Category row toggles each category, and *All*
-  empties it. Selecting all of `Category.selectable` is not selecting none: a question filed only
+  and every refill sends all of it; the Play screen's category picker ticks each category, and *All
+  categories* empties it (*Current focus*). Selecting all of `Category.selectable` is not selecting none: a question filed only
   under categories this build cannot name is in none of them. A client submits under a set of one
   or more, never `OTHER` (*Submitting*).
 - **Re-answering** *(built)*: a question can be answered again, whether or not the feed has

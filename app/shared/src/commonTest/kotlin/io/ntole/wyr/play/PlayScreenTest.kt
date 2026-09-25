@@ -8,7 +8,9 @@ import io.ntole.wyr.core.domain.vote.Tally
 import io.ntole.wyr.core.domain.vote.VoteOutcome
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 class PlayScreenTest {
     @Test
@@ -42,6 +44,39 @@ class PlayScreenTest {
         // A retired question is 404 to like and to unlike alike.
         assertEquals("That question is no longer in the game.", likeFailureMessage(DomainError.QUESTION_NOT_FOUND))
         assertEquals("Something went wrong. Try again.", likeFailureMessage(DomainError.SERVER))
+    }
+
+    @Test
+    fun `no category selected is all of them`() {
+        assertEquals("All", categoriesPlayed(emptySet()))
+    }
+
+    @Test
+    fun `the categories played are named in the picker's order`() {
+        // Not in the order the set holds them: in declaration order, as the picker lists them.
+        assertEquals("Food, Ethics", categoriesPlayed(linkedSetOf(Category.ETHICS, Category.FOOD)))
+        assertEquals("Superpowers", categoriesPlayed(setOf(Category.SUPERPOWERS)))
+    }
+
+    @Test
+    fun `every category has a name in the player's words`() {
+        assertEquals(
+            listOf("Food", "Lifestyle", "Ethics", "Superpowers", "Random", "Other"),
+            Category.entries.map(::categoryName),
+        )
+    }
+
+    @Test
+    fun `the categories change only while nothing is loading or in flight`() {
+        assertFalse(PlayUiState.Loading.canChangeCategories)
+        assertTrue(PlayUiState.Asking(QUESTION).canChangeCategories)
+        assertFalse(PlayUiState.Asking(QUESTION, isSubmitting = true).canChangeCategories)
+        assertFalse(PlayUiState.Asking(QUESTION, isLiking = true).canChangeCategories)
+        val revealed = PlayUiState.Revealed(QUESTION, outcome(pointsAwarded = 1, replayed = false))
+        assertTrue(revealed.canChangeCategories)
+        assertFalse(revealed.copy(isLiking = true).canChangeCategories)
+        // Where a selection with nothing to serve leaves the player.
+        assertTrue(PlayUiState.Failed(DomainError.OUT_OF_QUESTIONS).canChangeCategories)
     }
 
     private fun outcome(

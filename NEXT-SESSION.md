@@ -23,10 +23,15 @@ in every build (§8d, *Current focus*; how to try it on a phone is under *Accoun
 build of the app on a phone that keeps a recovery secret fails every call against this server once
 its session dies, since the recovery it tries first is 404 here: install a newer build on it.
 
-**On `feat/play-skip-like`** (from b175247; not merged, nothing pushed): **Skip** and **Like** moved
+**`feat/play-skip-like` is on `main`**, and on `origin/main`, at b8d992c: **Skip** and **Like** moved
 from the dev console onto the game's **Play** tab, the second feature moved after the Account tab
-(CLAUDE.md §8d, *Current focus*, *Skipping*, *Likes*). The client alone changed; the server and the
-contract did not. How to try it on a phone is under *Skip and Like on Play*.
+(CLAUDE.md §8d, *Current focus*, *Skipping*, *Likes*). How to try it on a phone is under *Skip and
+Like on Play*.
+
+**On `feat/play-categories`** (from b8d992c; not merged, nothing pushed): the **category picker**
+moved from the console's Category row onto the Play tab, the third feature moved (CLAUDE.md §8d,
+*Current focus*, *Categories*). The client alone changed; the server and the contract did not. How
+to try it on a phone is under *Categories on Play*.
 
 ### Verified working
 
@@ -67,7 +72,11 @@ contract did not. How to try it on a phone is under *Skip and Like on Play*.
   `OTHER` alone; `QuestionApiTest`, one `?category=` per category, in declaration order;
   `DefaultQuestionRepositoryTest`, a selection of several sent whole with every refill, any change to
   it dropping the queue (a refill in flight included), the same set keeping it, and `OTHER` refused;
-  and `DevConsoleViewModelTest`, the Category row's toggles and *All*.
+  and `PlayViewModelTest`, the Play screen's category picker: ticking, *All categories*, the
+  selection sent to the repository before the next fetch, the question on screen dropped for one
+  from it, the same selection keeping it, and no change while anything is in flight
+  (`feat/play-categories`; the console's Category row, which it replaced, had
+  `DevConsoleViewModelTest`'s).
   Moderation (`feat/moderation`, server and contract only): `ModerationStoreTest` races two
   approvals of one submission, and an approval against a rejection, and exactly one decides it each
   time, with only the winner's categories written (dropping `PENDING` from the compare-and-set, or
@@ -547,6 +556,9 @@ contract did not. How to try it on a phone is under *Skip and Like on Play*.
   ViewModel is driven over fakes. Its renders on this Mac's Skia were looked at as images in review,
   in the light theme only, never on a phone. Nobody has sent a skip or a like from the app to a
   server. Android's 360x640 class (about 520 high) cuts the reveal's percentages as `main` did.
+- **The category picker on a device.** The same holds for it (`feat/play-categories`): drawn off
+  screen, and its renders on this Mac looked at as images in review, both themes, never on a phone.
+  Nobody has tapped it, nor seen a platform's dialog open and close it.
 - **The `:core` modules' tests on iOS.** The ios CI job runs `:app:shared`'s tests on the simulator
   and only compiles the `:core` modules' tests, which Kotlin/Native refused while their
   names held commas (`SharedSessionStoreTest`'s among them, from before `feat/recovery-secret`, and
@@ -595,7 +607,7 @@ contract did not. How to try it on a phone is under *Skip and Like on Play*.
 - **Multiple categories on Postgres, and in the client.** The `EXISTS ... IN` filter, the batch's
   second statement for its categories and the batch insert of a submission's categories have run
   only on H2. On the client, several categories per question and a selection of several have run
-  only against `MockEngine` and the console ViewModel's fakes, never against a live `:server:run`.
+  only against `MockEngine` and the Play ViewModel's fakes, never against a live `:server:run`.
 - **READ COMMITTED and the refresh compare-and-set on Postgres.** Every race and burst in
   `PlayerStoreTest` and `SessionStoreTest` runs on H2, even in the `server-postgres` job: each
   hardcodes `jdbc:h2:mem:`, because its wait-for-the-lock polling reads H2's
@@ -801,6 +813,29 @@ a deploy or a spin-down; the server needs nothing new):
    points go up by one; the reveal's total is the vote's, so it shows the point from the next vote
    on.
 
+### Categories on Play
+
+The game's **Play** tab picks the categories played (CLAUDE.md §8d, *Categories*), in every build,
+PROD's included; the console's Category row is gone. The selection lives in memory for the app's
+life, so a launch plays every category again.
+
+**To try it on a phone** (`devDebug`, as for *Skip and Like on Play*; the server needs nothing new):
+
+1. `./gradlew :app:androidApp:installDevDebug`, open *WYR Dev*, and go to the **Play** tab. Under the
+   title: **All** over *categories*.
+2. Tap it: a dialog of *All categories* (ticked) and the five categories. Tick *Food* and *Ethics*:
+   nothing changes behind the dialog yet. **Play**: the question on screen goes, and the next is filed
+   under Food or Ethics; the header reads *Food, Ethics*, beside the points once you answer. The
+   Console tab's HTTP trace shows the fetch with `category=FOOD&category=ETHICS`.
+3. Open it again and **Cancel**, or tap outside it: nothing changes. **Play** with what is already
+   played: the question stays.
+4. Tick every category: the header cuts the names short on its one line, and the reveal is as tall as
+   before (each side's vote count still shows on an iPhone SE).
+5. While a vote or a like is in flight the categories do nothing when tapped. *All categories*, then
+   **Play**, goes back to the whole feed. Categories the server has no questions in would show
+   *You've answered everything we have*, with the categories there as the way out; every category
+   has seeds, so only a server without them shows it.
+
 ### Moderating
 
 Moderation is off unless the server has an admin token (CLAUDE.md §8d): the admin routes are then
@@ -920,8 +955,9 @@ questions the list shows; nothing is read again after a 403 or a 429.
 ### The dev console
 
 The app opens on the **Console** tab (`io.ntole.wyr.dev`) in a LOCAL or DEV build. **Play** is the
-game screen, which has taken over the console's Skip and Like (CLAUDE.md §8d, *Skipping* and
-*Likes*).
+game screen, which has taken over the console's Skip, Like and Category row (CLAUDE.md §8d,
+*Skipping*, *Likes* and *Categories*). The two share one question repository, so the console's
+questions come from the categories the Play tab picked.
 
 - **Session.** *Ensure session* mints a guest, or reuses the stored one. The header then shows the
   player id and when its access token expires. Opening the console reads the stats, which ensures a
@@ -967,22 +1003,6 @@ game screen, which has taken over the console's Skip and Like (CLAUDE.md §8d, *
   console does when its queue is empty (*Next question*, or the next answer of *Answer N*).
   *Read stats* then shows it, with the whole pool due.
 - **Questions.** Fetch the next question, or empty the local queue, and see its size.
-- **Category.** A row of chips: *All*, then every category but `OTHER`, which no feed can be
-  filtered to. Each category chip toggles that category in or out of the selection, and *All*
-  empties it; *All* shows selected while nothing else is, since none selected is every category,
-  and taking out the last category selected is *All* too. The selected chips are the repository's
-  own selection (`QuestionRepository.categories`), so they show what the next fetch asks for, and
-  "feed filtered to" names them. A change switches the feed (one `?category=<NAME>` per category
-  selected, in declaration order, in the HTTP trace; none for *All*), drops the queue, and loads a
-  question from the new selection, logged as `selectCategories(categories=<NAME>,<NAME>)`, `all`
-  for none. It does not read the stats. *All* with nothing selected changes nothing: the queue
-  stays, and the next question comes from it, with a request only when it is empty. The categories
-  selected are one pool within the player's cycle: a question filed under several of them is served
-  once, and once nothing in any of them is due while other questions are, they are served again,
-  `looped` on what was answered, skipped questions included (provisional, CLAUDE.md §8b). A
-  selection the server has no questions in logs `OUT_OF_QUESTIONS`, and stays selected. *New guest*
-  and *Reset queue* keep the selection. The Play tab draws from the same repository, so it is
-  filtered too.
 - **Vote by id.** Sends a vote for whatever id is typed, as a new attempt. An unknown id provokes
   `QUESTION_NOT_FOUND` (404). A known one is simply answered again and pays 1: there is no
   "already voted" any more.
@@ -1065,10 +1085,13 @@ rules live in CLAUDE.md §8d. Each item is one short-lived branch, in order:
     the first feature moved out of the console, CLAUDE.md §8d). Still to do: read its CI run and try
     it on a phone (*Accounts*). No-click sign-in (Play Games Services, Game Center) comes later,
     once there is an Apple developer account.
-15. **Now:** `feat/play-skip-like` — Skip and Like move from the console onto the **Play** tab, the
-    second feature moved (CLAUDE.md §8d). Next: review, merge, push, CI, then try it on a phone
-    (*Skip and Like on Play*), and move the next feature: the console still has *Submit a question*
-    with the player's submissions, and the Category row.
+15. `feat/play-skip-like` *(on `main` and `origin/main` at b8d992c)* — Skip and Like move from the
+    console onto the **Play** tab, the second feature moved (CLAUDE.md §8d). Still to do: try it on a
+    phone (*Skip and Like on Play*).
+16. **Now:** `feat/play-categories` — the category picker moves from the console's Category row onto
+    the **Play** tab, the third feature moved (CLAUDE.md §8d). Next: review, merge, push, CI, then
+    try it on a phone (*Categories on Play*), and move the next feature: the console still has
+    *Submit a question* with the player's submissions.
 
 **For the moderation app.** Everything it needs is in `io.ntole.wyr.core.domain.moderation`, and
 none of it needs or makes a player session:

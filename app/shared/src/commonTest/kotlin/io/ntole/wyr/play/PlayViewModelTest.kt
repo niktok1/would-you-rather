@@ -31,6 +31,7 @@ import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -451,6 +452,272 @@ class PlayViewModelTest {
             assertEquals(PlayUiState.Asking(NEXT_QUESTION), viewModel.state.value)
         }
 
+    @Test
+    fun `the categories shown are the ones the repository plays`() =
+        runTest(dispatcher) {
+            // The repository outlives the screen, so it can open on a feed already filtered.
+            val questions = FakeQuestionRepository()
+            questions.categories.value = setOf(Category.ETHICS)
+            val viewModel = viewModel(questions)
+
+            assertEquals(setOf(Category.ETHICS), viewModel.categories.value)
+        }
+
+    @Test
+    fun `the picker opens on the categories played now`() =
+        runTest(dispatcher) {
+            val questions = FakeQuestionRepository()
+            questions.categories.value = setOf(Category.ETHICS)
+            val viewModel = viewModel(questions)
+            testScheduler.advanceUntilIdle()
+
+            viewModel.openCategories()
+
+            assertEquals(setOf(Category.ETHICS), viewModel.picking.value)
+        }
+
+    @Test
+    fun `ticking categories in the picker plays nothing until they are applied`() =
+        runTest(dispatcher) {
+            val questions = FakeQuestionRepository()
+            val viewModel = viewModel(questions)
+            testScheduler.advanceUntilIdle()
+            viewModel.openCategories()
+
+            viewModel.toggleCategory(Category.FOOD)
+            viewModel.toggleCategory(Category.ETHICS)
+            testScheduler.advanceUntilIdle()
+
+            assertEquals(setOf(Category.FOOD, Category.ETHICS), viewModel.picking.value)
+            assertEquals(listOf("next"), questions.calls, "no change and no fetch yet")
+            assertEquals(PlayUiState.Asking(QUESTION), viewModel.state.value)
+        }
+
+    @Test
+    fun `ticking a ticked category takes it out and leaves the rest`() =
+        runTest(dispatcher) {
+            val viewModel = viewModel()
+            testScheduler.advanceUntilIdle()
+            viewModel.openCategories()
+            viewModel.toggleCategory(Category.FOOD)
+            viewModel.toggleCategory(Category.ETHICS)
+
+            viewModel.toggleCategory(Category.FOOD)
+
+            assertEquals(setOf(Category.ETHICS), viewModel.picking.value)
+            viewModel.toggleCategory(Category.ETHICS)
+            // None ticked is every category (CLAUDE.md §8d).
+            assertEquals(emptySet(), viewModel.picking.value)
+        }
+
+    @Test
+    fun `All in the picker unticks every category`() =
+        runTest(dispatcher) {
+            val viewModel = viewModel()
+            testScheduler.advanceUntilIdle()
+            viewModel.openCategories()
+            viewModel.toggleCategory(Category.FOOD)
+            viewModel.toggleCategory(Category.RANDOM)
+
+            viewModel.selectAllCategories()
+
+            assertEquals(emptySet(), viewModel.picking.value)
+        }
+
+    @Test
+    fun `Other cannot be ticked`() =
+        runTest(dispatcher) {
+            // No feed can be filtered to it, and the repository refuses it.
+            val viewModel = viewModel()
+            testScheduler.advanceUntilIdle()
+            viewModel.openCategories()
+
+            viewModel.toggleCategory(Category.OTHER)
+
+            assertEquals(emptySet(), viewModel.picking.value)
+        }
+
+    @Test
+    fun `nothing is ticked or applied with the picker closed`() =
+        runTest(dispatcher) {
+            val questions = FakeQuestionRepository()
+            val viewModel = viewModel(questions)
+            testScheduler.advanceUntilIdle()
+
+            viewModel.toggleCategory(Category.FOOD)
+            viewModel.selectAllCategories()
+            viewModel.applyCategories()
+            testScheduler.advanceUntilIdle()
+
+            assertNull(viewModel.picking.value)
+            assertEquals(listOf("next"), questions.calls)
+        }
+
+    @Test
+    fun `applying new categories sends them to the repository then shows a question from them`() =
+        runTest(dispatcher) {
+            val questions = FakeQuestionRepository(servedFor = mapOf(setOf(Category.FOOD) to FOOD_QUESTION))
+            val viewModel = viewModel(questions)
+            testScheduler.advanceUntilIdle()
+            viewModel.openCategories()
+            viewModel.toggleCategory(Category.FOOD)
+
+            viewModel.applyCategories()
+            testScheduler.advanceUntilIdle()
+
+            // Changed first, so the question loaded is the new selection's.
+            assertEquals(listOf("next", "setCategories [FOOD]", "next"), questions.calls)
+            assertEquals(setOf(Category.FOOD), viewModel.categories.value)
+            assertEquals(PlayUiState.Asking(FOOD_QUESTION), viewModel.state.value)
+            assertNull(viewModel.picking.value, "the picker closes")
+        }
+
+    @Test
+    fun `new categories drop the answered question on screen too`() =
+        runTest(dispatcher) {
+            val questions = FakeQuestionRepository(servedFor = mapOf(setOf(Category.FOOD) to FOOD_QUESTION))
+            val viewModel = viewModel(questions)
+            testScheduler.advanceUntilIdle()
+            viewModel.choose(Side.A)
+            testScheduler.advanceUntilIdle()
+            viewModel.openCategories()
+            viewModel.toggleCategory(Category.FOOD)
+
+            viewModel.applyCategories()
+            testScheduler.advanceUntilIdle()
+
+            assertEquals(PlayUiState.Asking(FOOD_QUESTION), viewModel.state.value)
+        }
+
+    @Test
+    fun `applying the categories already played keeps the question on screen`() =
+        runTest(dispatcher) {
+            val questions = FakeQuestionRepository(QUESTION, NEXT_QUESTION)
+            val viewModel = viewModel(questions)
+            testScheduler.advanceUntilIdle()
+            viewModel.openCategories()
+            viewModel.toggleCategory(Category.FOOD)
+            viewModel.toggleCategory(Category.FOOD)
+
+            viewModel.applyCategories()
+            testScheduler.advanceUntilIdle()
+
+            assertEquals(listOf("next"), questions.calls, "no change and no fetch")
+            assertEquals(PlayUiState.Asking(QUESTION), viewModel.state.value)
+            assertNull(viewModel.picking.value, "the picker closes")
+        }
+
+    @Test
+    fun `closing the picker plays nothing it ticked`() =
+        runTest(dispatcher) {
+            val questions = FakeQuestionRepository()
+            val viewModel = viewModel(questions)
+            testScheduler.advanceUntilIdle()
+            viewModel.openCategories()
+            viewModel.toggleCategory(Category.FOOD)
+
+            viewModel.closeCategories()
+            testScheduler.advanceUntilIdle()
+
+            assertNull(viewModel.picking.value)
+            assertEquals(emptySet(), viewModel.categories.value)
+            assertEquals(listOf("next"), questions.calls)
+        }
+
+    @Test
+    fun `a second tap on Play sends one change`() =
+        runTest(dispatcher) {
+            val questions = FakeQuestionRepository()
+            val viewModel = viewModel(questions)
+            testScheduler.advanceUntilIdle()
+            viewModel.openCategories()
+            viewModel.toggleCategory(Category.FOOD)
+
+            // Both land before the first one's coroutine gets to run.
+            viewModel.applyCategories()
+            viewModel.applyCategories()
+            testScheduler.advanceUntilIdle()
+
+            assertEquals(listOf("next", "setCategories [FOOD]", "next"), questions.calls)
+        }
+
+    @Test
+    fun `the picker does not open while a question loads`() =
+        runTest(dispatcher) {
+            // Loading from creation until the first question arrives.
+            val viewModel = viewModel()
+
+            viewModel.openCategories()
+            testScheduler.advanceUntilIdle()
+
+            assertNull(viewModel.picking.value)
+        }
+
+    @Test
+    fun `the picker does not open while a vote is in flight`() =
+        runTest(dispatcher) {
+            val viewModel = viewModel()
+            testScheduler.advanceUntilIdle()
+
+            viewModel.choose(Side.A)
+            viewModel.openCategories()
+            testScheduler.advanceUntilIdle()
+
+            assertNull(viewModel.picking.value)
+            assertIs<PlayUiState.Revealed>(viewModel.state.value)
+        }
+
+    @Test
+    fun `new categories wait while a like is in flight and the picker stays open`() =
+        runTest(dispatcher) {
+            val gate = CompletableDeferred<Unit>()
+            val likes = FakeLikeRepository()
+            likes.answer = { questionId, liked ->
+                gate.await()
+                QuestionLikes(questionId, likeCount = 1, likedByMe = liked)
+            }
+            val questions = FakeQuestionRepository(servedFor = mapOf(setOf(Category.FOOD) to FOOD_QUESTION))
+            val viewModel = viewModel(questions, likes = likes)
+            testScheduler.advanceUntilIdle()
+            viewModel.openCategories()
+            viewModel.toggleCategory(Category.FOOD)
+            viewModel.toggleLike()
+            testScheduler.advanceUntilIdle()
+
+            viewModel.applyCategories()
+            testScheduler.advanceUntilIdle()
+
+            assertEquals(listOf("next"), questions.calls, "refused while the like is in flight")
+            assertEquals(setOf(Category.FOOD), viewModel.picking.value, "and kept to apply later")
+            gate.complete(Unit)
+            testScheduler.advanceUntilIdle()
+            viewModel.applyCategories()
+            testScheduler.advanceUntilIdle()
+            assertEquals(PlayUiState.Asking(FOOD_QUESTION), viewModel.state.value)
+        }
+
+    @Test
+    fun `categories with nothing to serve show out of questions and can be changed from there`() =
+        runTest(dispatcher) {
+            // Whatever the feed answers is the server's rule: here, no questions at all.
+            val questions = FakeQuestionRepository(servedFor = mapOf(setOf(Category.RANDOM) to null))
+            val viewModel = viewModel(questions)
+            testScheduler.advanceUntilIdle()
+            viewModel.openCategories()
+            viewModel.toggleCategory(Category.RANDOM)
+            viewModel.applyCategories()
+            testScheduler.advanceUntilIdle()
+            assertEquals(PlayUiState.Failed(DomainError.OUT_OF_QUESTIONS), viewModel.state.value)
+
+            viewModel.openCategories()
+            viewModel.selectAllCategories()
+            viewModel.applyCategories()
+            testScheduler.advanceUntilIdle()
+
+            assertEquals(emptySet(), viewModel.categories.value)
+            assertEquals(PlayUiState.Asking(QUESTION), viewModel.state.value)
+        }
+
     private fun viewModel(
         questions: QuestionRepository = FakeQuestionRepository(),
         votes: VoteRepository = FakeVoteRepository(),
@@ -480,6 +747,14 @@ class PlayViewModelTest {
                 categories = setOf(Category.LIFESTYLE),
             )
 
+        val FOOD_QUESTION =
+            Question(
+                id = "f1",
+                optionA = "Only eat soup",
+                optionB = "Never eat soup again",
+                categories = setOf(Category.FOOD),
+            )
+
         val OUTCOME =
             VoteOutcome(
                 questionId = QUESTION.id,
@@ -491,24 +766,39 @@ class PlayViewModelTest {
     }
 
     /**
-     * Serves [served] in order, then the last of them again and again. Records every skip, and
-     * refuses each with [skipFailure] when there is one.
+     * Serves [served] in order, then the last of them again and again, or, while the categories
+     * selected are a key of [servedFor], that key's question every time, and none is out of
+     * questions. Records every skip, and refuses each with [skipFailure] when there is one.
      */
     private class FakeQuestionRepository(
         vararg served: Question,
         private val skipFailure: DomainError? = null,
+        private val servedFor: Map<Set<Category>, Question?> = emptyMap(),
     ) : QuestionRepository {
         private val served = served.toMutableList().ifEmpty { mutableListOf(QUESTION) }
 
         val skipped = mutableListOf<String>()
 
-        override val categories: StateFlow<Set<Category>> = MutableStateFlow(emptySet())
+        /** Every fetch and every change of categories, in order, the categories in declaration order. */
+        val calls = mutableListOf<String>()
 
-        override suspend fun next(): Question = if (served.size > 1) served.removeAt(0) else served.first()
+        override val categories = MutableStateFlow<Set<Category>>(emptySet())
+
+        override suspend fun next(): Question {
+            calls += "next"
+            val selected = categories.value
+            if (selected in servedFor) {
+                return servedFor[selected] ?: throw WyrException(DomainError.OUT_OF_QUESTIONS)
+            }
+            return if (served.size > 1) served.removeAt(0) else served.first()
+        }
 
         override suspend fun prefetch() = Unit
 
-        override suspend fun setCategories(categories: Set<Category>) = Unit
+        override suspend fun setCategories(categories: Set<Category>) {
+            calls += "setCategories ${categories.sorted()}"
+            this.categories.value = categories
+        }
 
         override suspend fun skip(questionId: String) {
             skipped += questionId

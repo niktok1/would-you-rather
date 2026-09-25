@@ -109,8 +109,6 @@ private fun DevConsole() {
         onRetryLastVote = viewModel::retryLastVote,
         onAnswerMany = viewModel::answerMany,
         onReadStats = viewModel::readStats,
-        onToggleCategory = viewModel::toggleCategory,
-        onSelectAllCategories = viewModel::selectAllCategories,
         submitSection = { SubmissionConsole() },
     )
 }
@@ -131,13 +129,22 @@ private fun Account() {
 private fun Play() {
     val viewModel = koinViewModel<PlayViewModel>()
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val categories by viewModel.categories.collectAsStateWithLifecycle()
+    val picking by viewModel.picking.collectAsStateWithLifecycle()
 
     PlayScreen(
         state = state,
+        categories = categories,
+        picking = picking,
         onChoose = viewModel::choose,
         onSkip = viewModel::skip,
         onToggleLike = viewModel::toggleLike,
         onNext = viewModel::next,
         onRetry = viewModel::retry,
+        onOpenCategories = viewModel::openCategories,
+        onToggleCategory = viewModel::toggleCategory,
+        onSelectAllCategories = viewModel::selectAllCategories,
+        onApplyCategories = viewModel::applyCategories,
+        onCloseCategories = viewModel::closeCategories,
     )
 }

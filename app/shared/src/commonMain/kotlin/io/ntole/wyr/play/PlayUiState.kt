@@ -60,6 +60,20 @@ sealed interface PlayUiState {
     ) : PlayUiState
 }
 
+/**
+ * Whether the categories played may change now (CLAUDE.md §8d, *Categories*): on a question with
+ * nothing in flight, one action at a time as the rest of the screen goes, and on a failure, where a
+ * selection with nothing to serve leaves the player. Not while a question loads, since a change
+ * drops the question on screen and loads another.
+ */
+val PlayUiState.canChangeCategories: Boolean
+    get() =
+        when (this) {
+            PlayUiState.Loading -> false
+            is PlayUiState.Failed -> true
+            is PlayUiState.OnQuestion -> !isBusy
+        }
+
 /** One tap on a side, with the attempt made for it (CLAUDE.md §8d). */
 data class PendingVote(
     val question: Question,
