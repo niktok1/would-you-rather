@@ -25,6 +25,11 @@ import java.io.IOException
  * [ioDispatcher] runs one change at a time, in the order they were asked for. `Dispatchers.IO`
  * alone could commit a clear and a refreshed session the other way round, which the synchronous
  * `apply()` on the calling thread never did.
+ *
+ * The file is `shared_prefs/wyr.auth.xml`, which `:app:androidApp`'s backup rules keep out of the
+ * cloud backup and out of a device-to-device transfer (CLAUDE.md §8a, *Recovery*): a new phone gets
+ * the recovery secret alone, and opens a session of its own. Renaming the file lets the session into
+ * both, unless the rules are renamed with it.
  */
 public class AndroidTokenStorage internal constructor(
     private val prefs: SharedPreferences,

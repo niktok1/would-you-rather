@@ -496,9 +496,12 @@ auth SDK, satisfying §2.
       phone set up from this one by device-to-device transfer. Its cloud copy is asked for only while
       the backup is end-to-end encrypted (`isEndToEndEncryptionAvailable`; a phone that cannot say
       counts as not), so a phone restored from any other cloud backup mints a guest. Without Play
-      services every call throws, and the phone plays as a guest. The session store is to stay out of
-      both cloud backup and device-to-device transfer, so a new phone gets only the secret, and
-      recovers with it (not built yet).
+      services every call throws, and the phone plays as a guest. The session store stays out of both
+      the cloud backup and a device-to-device transfer, so a new phone gets only the secret, and
+      recovers with it into a session of its own: `data_extraction_rules.xml` (Android 12 and later)
+      and `backup_rules.xml` (`fullBackupContent`, Android 11 and earlier, for both) in
+      `:app:androidApp` exclude `AndroidTokenStorage`'s `wyr.auth.xml`, which holds the session and
+      the count of failed requests for a secret. `allowBackup` stays on, with nothing else in it yet.
     - *iOS* (built, compiled only: §9): a generic-password Keychain item per environment
       (`IosRecoverySecretStorage` in `:core:network`; service `io.ntole.wyr.recovery`, the key as its
       account), synced through iCloud Keychain (`kSecAttrSynchronizable`), so one person's iPhones
@@ -550,14 +553,14 @@ auth SDK, satisfying §2.
   layer writes the session through `runApi`, so no bare storage exception reaches a ViewModel.
 
 **Known limitation, by design for now:** a guest account lives only while some store holds a live
-session of it or its recovery secret. The server half of recovery is built, and until the client
-half is, every guest is still bound to one device's storage: lose the device or clear storage and the
-account — and its points — are gone. Once it is, an Android or iOS guest survives a reinstall and a
-move to a new phone through the secret (*Recovery*), and one whose every copy of the secret is lost
-is gone all the same; a desktop or web guest stays bound to its one storage. A copy of the secret in
-the wrong hands owns the account until it is replaced. Session storage is ordinary preference storage
-(SharedPreferences / NSUserDefaults / JVM Preferences / localStorage), not Keychain or
-EncryptedSharedPreferences. All of it must be revisited before real accounts exist.
+session of it or its recovery secret. An Android or iOS guest survives a reinstall and a move to a new
+phone through the secret (*Recovery*), none of which has yet run on a phone (NEXT-SESSION.md); one
+whose every copy of the secret is lost is gone all the same, as is one on a phone whose secret store
+failed when the app first started there, which mints a guest in its place. A desktop or web guest
+stays bound to its one storage: lose it and the account — and its points — are gone. A copy of the
+secret in the wrong hands owns the account until it is replaced. Session storage is ordinary
+preference storage (SharedPreferences / NSUserDefaults / JVM Preferences / localStorage), not Keychain
+or EncryptedSharedPreferences. All of it must be revisited before real accounts exist.
 
 ## 8b. Open decisions (resolve before relevant work)
 

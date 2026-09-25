@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Android 12 and later (CLAUDE.md §8a, Recovery): the session stays on this phone. Its refresh token
+    must never reach a second phone, from the cloud or by a device-to-device transfer, where the two
+    would share one token family and each refresh would put the other's token in the previous slot.
+    A new phone gets the recovery secret alone, which Block Store carries outside these rules, and
+    opens a session of its own with it. wyr.auth is AndroidTokenStorage's preferences file.
+-->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="sharedpref" path="wyr.auth.xml" />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="sharedpref" path="wyr.auth.xml" />
+    </device-transfer>
+</data-extraction-rules>

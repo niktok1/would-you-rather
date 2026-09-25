@@ -15,6 +15,10 @@ import kotlinx.coroutines.withContext
  * backup Google could read; otherwise a phone restored from the cloud recovers nobody, and a new
  * guest is minted there.
  *
+ * The session is kept apart from it on purpose: `AndroidTokenStorage`'s file stays on this phone
+ * (`:app:androidApp`'s `data_extraction_rules.xml`), so a new phone gets the secret alone, and opens
+ * a session of its own with it.
+ *
  * On a phone without Play services, or with one too old for Block Store, every call throws, and the
  * data layer carries on as it does with no secret.
  */
