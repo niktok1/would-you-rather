@@ -1,28 +1,40 @@
 package io.ntole.wyr.core.data.mapper
 
+import io.ntole.wyr.core.domain.reaction.Reaction
 import io.ntole.wyr.core.network.WyrJson
 import io.ntole.wyr.core.question.QuestionDto
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import io.ntole.wyr.core.reaction.Reaction as WireReaction
 
 class QuestionMapperTest {
     @Test
-    fun `a question's likes survive the mapping`() {
-        // Liked by others and not by the player too, so likedByMe cannot be read off the count.
-        listOf(0 to false, 3 to true, 2 to false).forEach { (likeCount, likedByMe) ->
+    fun `a question's reactions survive the mapping`() {
+        // Reacted to by others and not by the player too, so the player's own cannot be read off a count.
+        listOf(
+            Triple(0, 0, WireReaction.NONE) to Reaction.NONE,
+            Triple(3, 1, WireReaction.LIKE) to Reaction.LIKE,
+            Triple(2, 4, WireReaction.DISLIKE) to Reaction.DISLIKE,
+            Triple(2, 4, WireReaction.NONE) to Reaction.NONE,
+        ).forEach { (sent, mine) ->
+            val (likes, dislikes, myReaction) = sent
             val dto =
                 QuestionDto(
                     id = "q1",
                     optionA = "q1-a",
                     optionB = "q1-b",
                     categories = listOf("FOOD"),
-                    likeCount = likeCount,
-                    likedByMe = likedByMe,
+                    likeCount = likes,
+                    dislikeCount = dislikes,
+                    myReaction = myReaction,
                 )
 
             val question = dto.toDomain()
 
-            assertEquals(likeCount to likedByMe, question.likeCount to question.likedByMe)
+            assertEquals(
+                Triple(likes, dislikes, mine),
+                Triple(question.likeCount, question.dislikeCount, question.myReaction),
+            )
         }
     }
 

@@ -22,8 +22,6 @@ import io.ntole.wyr.core.category.CategoryDto
 import io.ntole.wyr.core.category.CategoryListDto
 import io.ntole.wyr.core.error.ErrorCode
 import io.ntole.wyr.core.error.ErrorDto
-import io.ntole.wyr.core.like.LikeRequest
-import io.ntole.wyr.core.like.LikeResultDto
 import io.ntole.wyr.core.network.WyrJson
 import io.ntole.wyr.core.player.PlayerStatsDto
 import io.ntole.wyr.core.question.QuestionDto
@@ -33,6 +31,9 @@ import io.ntole.wyr.core.question.SkipRequest
 import io.ntole.wyr.core.question.SubmissionDto
 import io.ntole.wyr.core.question.SubmissionListDto
 import io.ntole.wyr.core.question.SubmitQuestionRequest
+import io.ntole.wyr.core.reaction.Reaction
+import io.ntole.wyr.core.reaction.ReactionRequest
+import io.ntole.wyr.core.reaction.ReactionResultDto
 import io.ntole.wyr.core.vote.VoteRequest
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -52,8 +53,11 @@ internal class FakeServer {
     private var rotations = 0
     private var submissionsAnswered = 0
 
-    /** Who likes each question, by id. A like sets it, as the server's does, and never toggles it. */
-    private val likers = mutableMapOf<String, MutableSet<String>>()
+    /**
+     * What each player thinks of each question, by question id and then player. A reaction sets it, as
+     * the server's does, and never toggles it.
+     */
+    private val reactions = mutableMapOf<String, MutableMap<String, Reaction>>()
 
     /** When set, every vote is refused with this status and code, whoever sends it. */
     var refuseVotesWith: Pair<HttpStatusCode, ErrorCode>? = null
@@ -95,17 +99,17 @@ internal class FakeServer {
     /** The `Authorization` header of every read of the author's submissions, in arrival order. */
     val submissionListsSentAs = mutableListOf<String?>()
 
-    /** When set, every like is refused with this status and code, whoever sends it. */
-    var refuseLikesWith: Pair<HttpStatusCode, ErrorCode>? = null
+    /** When set, every reaction is refused with this status and code, whoever sends it. */
+    var refuseReactionsWith: Pair<HttpStatusCode, ErrorCode>? = null
 
     /**
-     * How many of the next likes are set and then have their answer lost, as when a read times out
-     * after the server committed: the client sees a failure for a like that was set.
+     * How many of the next reactions are set and then have their answer lost, as when a read times out
+     * after the server committed: the client sees a failure for a reaction that was set.
      */
-    var likeAnswersToLose = 0
+    var reactionAnswersToLose = 0
 
-    /** The `Authorization` header and body of every like, in arrival order. */
-    val likesSentAs = mutableListOf<Pair<String?, LikeRequest>>()
+    /** The `Authorization` header and body of every reaction, in arrival order. */
+    val reactionsSentAs = mutableListOf<Pair<String?, ReactionRequest>>()
 
     /** Each account's password and player, by its username as kept, lower-cased. */
     val accounts = mutableMapOf<String, Pair<String, String>>()
@@ -204,8 +208,8 @@ internal class FakeServer {
                 }
             }
 
-            WyrApi.Paths.LIKES -> {
-                like(request)
+            WyrApi.Paths.REACTIONS -> {
+                react(request)
             }
 
             // To anybody, with or without a session, as the server's does.
@@ -263,26 +267,35 @@ internal class FakeServer {
             }
         }
 
-    /** Sets a known player's like as asked for, and answers with the question's likes as they then stand. */
-    private suspend fun MockRequestHandleScope.like(request: HttpRequestData): HttpResponseData {
+    /**
+     * Sets a known player's reaction as asked for, and answers with the question's reactions as they
+     * then stand.
+     */
+    private suspend fun MockRequestHandleScope.react(request: HttpRequestData): HttpResponseData {
         val authorization = request.headers[HttpHeaders.Authorization]
-        val like = WyrJson.decodeFromString<LikeRequest>(request.body.toByteArray().decodeToString())
-        likesSentAs += authorization to like
+        val asked = WyrJson.decodeFromString<ReactionRequest>(request.body.toByteArray().decodeToString())
+        reactionsSentAs += authorization to asked
         val player = authorization?.removePrefix("Bearer access-")
-        val refusal = refuseLikesWith
+        val refusal = refuseReactionsWith
         if (refusal != null) return respondErrorDto(refusal.first, refusal.second)
         if (player == null || player !in players) {
             return respondErrorDto(HttpStatusCode.Unauthorized, ErrorCode.UNAUTHORIZED)
         }
 
-        val holders = likers.getOrPut(like.questionId) { mutableSetOf() }
-        if (like.liked) holders += player else holders -= player
-        if (likeAnswersToLose > 0) {
-            likeAnswersToLose--
+        val held = reactions.getOrPut(asked.questionId) { mutableMapOf() }
+        if (asked.reaction == Reaction.NONE) held -= player else held[player] = asked.reaction
+        if (reactionAnswersToLose > 0) {
+            reactionAnswersToLose--
             throw SocketTimeoutException("read timed out")
         }
-        val likes = LikeResultDto(questionId = like.questionId, likeCount = holders.size, likedByMe = player in holders)
-        return respondJson(WyrJson.encodeToString(likes))
+        val result =
+            ReactionResultDto(
+                questionId = asked.questionId,
+                likeCount = held.values.count { it == Reaction.LIKE },
+                dislikeCount = held.values.count { it == Reaction.DISLIKE },
+                myReaction = held[player] ?: Reaction.NONE,
+            )
+        return respondJson(WyrJson.encodeToString(result))
     }
 
     /** Registers a known player, a guest, under the name asked for, lower-cased, as the server's does. */

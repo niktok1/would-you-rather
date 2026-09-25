@@ -24,6 +24,9 @@ class SubmissionMapperTest {
                 status = QuestionStatus.REJECTED,
                 rejectionReason = "a duplicate",
                 submittedAt = 1_790_000_000_123L,
+                likeCount = 5,
+                dislikeCount = 2,
+                answerCount = 34,
             )
 
         assertEquals(
@@ -35,6 +38,9 @@ class SubmissionMapperTest {
                 status = SubmissionStatus.REJECTED,
                 rejectionReason = "a duplicate",
                 submittedAt = Instant.fromEpochMilliseconds(1_790_000_000_123L),
+                likeCount = 5,
+                dislikeCount = 2,
+                answerCount = 34,
             ),
             dto.toDomain(),
         )

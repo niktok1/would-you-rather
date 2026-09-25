@@ -55,6 +55,8 @@ class QuestionLabelsTest {
         assertEquals("No votes yet", tallyOf(listed("q").copy(tally = Tally(0, 0))))
         assertEquals("1 like", likesOf(1))
         assertEquals("0 likes", likesOf(0))
+        assertEquals("1 dislike", dislikesOf(1))
+        assertEquals("3 dislikes", dislikesOf(3))
     }
 
     @Test

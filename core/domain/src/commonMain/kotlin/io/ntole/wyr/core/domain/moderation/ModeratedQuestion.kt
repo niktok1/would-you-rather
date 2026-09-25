@@ -19,9 +19,9 @@ import kotlin.time.Instant
  *
  * [submittedAt] is when the server stored it, [reviewedAt] when a moderator approved or rejected it
  * (null for a seed and while pending), and [retiredAt] when a moderator retired it, null unless it is
- * retired. [rejectionReason] is the moderator's reason, only for a rejected one. [tally] and
- * [likeCount] are every player's latest answers to it and how many players like it, one moment's
- * numbers, which a retired question keeps.
+ * retired. [rejectionReason] is the moderator's reason, only for a rejected one. [tally],
+ * [likeCount] and [dislikeCount] are every player's latest answers to it and how many players like it
+ * and dislike it, one moment's numbers, which a retired question keeps.
  */
 public data class ModeratedQuestion(
     public val id: String,
@@ -36,4 +36,5 @@ public data class ModeratedQuestion(
     public val rejectionReason: String?,
     public val tally: Tally,
     public val likeCount: Int,
+    public val dislikeCount: Int = 0,
 )

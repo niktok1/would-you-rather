@@ -57,6 +57,7 @@ class ModerationMapperTest {
                 rejectionReason = "passed on as the server sent it",
                 tally = VoteTallyDto(votesA = 4, votesB = 1),
                 likeCount = 2,
+                dislikeCount = 3,
             )
 
         assertEquals(
@@ -73,6 +74,7 @@ class ModerationMapperTest {
                 rejectionReason = "passed on as the server sent it",
                 tally = Tally(votesA = 4, votesB = 1),
                 likeCount = 2,
+                dislikeCount = 3,
             ),
             listed.toDomain(),
         )

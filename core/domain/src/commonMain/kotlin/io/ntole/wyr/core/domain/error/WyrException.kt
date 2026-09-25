@@ -26,6 +26,13 @@ public enum class DomainError {
      */
     NOT_ENOUGH_POINTS,
 
+    /**
+     * A guest tried to submit a question: only a registered player may (CLAUDE.md §8d, *Submitting*).
+     * Nothing was stored or taken; registering, which keeps everything the guest has, is the way on.
+     * Never [UNAUTHORIZED]: the session is fine.
+     */
+    ACCOUNT_REQUIRED,
+
     /** A moderator tried to decide a submission that a moderator has already approved or rejected. */
     ALREADY_DECIDED,
 

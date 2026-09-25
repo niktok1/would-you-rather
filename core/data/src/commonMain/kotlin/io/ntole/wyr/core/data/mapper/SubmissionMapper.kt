@@ -21,6 +21,9 @@ internal fun SubmissionDto.toDomain(): Submission =
         status = status.toDomain(),
         rejectionReason = rejectionReason,
         submittedAt = Instant.fromEpochMilliseconds(submittedAt),
+        likeCount = likeCount,
+        dislikeCount = dislikeCount,
+        answerCount = answerCount,
     )
 
 internal fun QuestionStatus.toDomain(): SubmissionStatus =

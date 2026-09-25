@@ -34,7 +34,7 @@ import kotlin.time.Instant
 /**
  * Every question, seeds included, newest first (CLAUDE.md §8d, *Moderation*), at the statuses and
  * categories picked, a page at a time: each with its options, categories, status, where it came
- * from, its votes and likes, its times and a rejected one's reason, and what can be done with it
+ * from, its votes, likes and dislikes, its times and a rejected one's reason, and what can be done with it
  * where it stands. Retire asks first.
  */
 @Composable
@@ -157,7 +157,7 @@ private fun QuestionCard(
                 style = MaterialTheme.typography.bodyMedium,
             )
             Text(
-                text = "${tallyOf(question)} · ${likesOf(question.likeCount)}",
+                text = "${tallyOf(question)} · ${likesOf(question.likeCount)} · ${dislikesOf(question.dislikeCount)}",
                 style = MaterialTheme.typography.bodyMedium,
             )
             timesOf(question, now).forEach { line -> Text(text = line, style = MaterialTheme.typography.bodySmall) }
@@ -260,6 +260,8 @@ fun tallyOf(question: ModeratedQuestion): String {
 
 fun likesOf(count: Int): String = if (count == 1) "1 like" else "$count likes"
 
+fun dislikesOf(count: Int): String = if (count == 1) "1 dislike" else "$count dislikes"
+
 /** When [question] was stored, reviewed and retired, as far as each has happened. */
 fun timesOf(
     question: ModeratedQuestion,
@@ -275,6 +277,6 @@ fun timesOf(
 /** What retiring [question] does, for the moderator to confirm it. */
 fun retireWarningOf(question: ModeratedQuestion?): String {
     val named = question?.let { optionsOf(it.optionA, it.optionB) } ?: "This question"
-    return "$named will be served to nobody, and nobody can vote on, skip or like it, until it is " +
-        "restored. Its votes, its likes and the points they earned all stay."
+    return "$named will be served to nobody, and nobody can vote on, skip, like or dislike it, until " +
+        "it is restored. Its votes, its likes and dislikes and the points they earned all stay."
 }

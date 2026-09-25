@@ -6,6 +6,7 @@ import io.ntole.wyr.core.player.PlayerStatsDto
 import io.ntole.wyr.core.question.QuestionDto
 import io.ntole.wyr.core.question.QuestionStatus
 import io.ntole.wyr.core.question.SubmissionDto
+import io.ntole.wyr.core.reaction.Reaction
 import kotlinx.serialization.Serializable
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -146,11 +147,23 @@ class WyrJsonTest {
     }
 
     @Test
-    fun `a question sent without its likes decodes as liked by nobody`() {
+    fun `a question sent without its reactions decodes as one nobody has reacted to`() {
         val question = WyrJson.decodeFromString<QuestionDto>("""{"id":"q1","optionA":"fly","optionB":"swim"}""")
 
-        assertEquals(0, question.likeCount)
-        assertEquals(false, question.likedByMe)
+        assertEquals(
+            Triple(0, 0, Reaction.NONE),
+            Triple(question.likeCount, question.dislikeCount, question.myReaction),
+        )
+    }
+
+    @Test
+    fun `a submission sent without its counts decodes with none`() {
+        val submission =
+            WyrJson.decodeFromString<SubmissionDto>(
+                """{"id":"q1","optionA":"fly","optionB":"swim","status":"APPROVED","submittedAt":1}""",
+            )
+
+        assertEquals(Triple(0, 0, 0), Triple(submission.likeCount, submission.dislikeCount, submission.answerCount))
     }
 
     @Test

@@ -15,6 +15,11 @@ import kotlin.time.Instant
  *
  * [rejectionReason] is the moderator's short reason, which the server sends only for a
  * [SubmissionStatus.REJECTED] submission. [submittedAt] is when the server stored it.
+ *
+ * [likeCount] is how many players like the question, [dislikeCount] how many dislike it, and
+ * [answerCount] how many players have answered it, each once however often they answered, as the
+ * server counted them with the question, one moment's numbers (CLAUDE.md §8d, *The Account screen*).
+ * A question never served, pending or rejected, has none; a retired one keeps what it had.
  */
 public data class Submission(
     public val id: String,
@@ -24,6 +29,9 @@ public data class Submission(
     public val status: SubmissionStatus,
     public val rejectionReason: String?,
     public val submittedAt: Instant,
+    public val likeCount: Int = 0,
+    public val dislikeCount: Int = 0,
+    public val answerCount: Int = 0,
 )
 
 /**

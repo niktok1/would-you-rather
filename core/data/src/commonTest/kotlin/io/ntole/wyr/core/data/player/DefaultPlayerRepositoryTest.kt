@@ -29,17 +29,7 @@ class DefaultPlayerRepositoryTest {
             val stats = getPlayerStats()
 
             // FakeServer.STATS, decoded through the real client, for the player just minted.
-            assertEquals(
-                PlayerStats(
-                    totalPoints = 7,
-                    answersGiven = 9,
-                    questionsAnswered = 5,
-                    cycle = 2,
-                    dueThisCycle = 11,
-                    likesReceived = 3,
-                ),
-                stats,
-            )
+            assertEquals(PlayerStats(totalPoints = 7, questionsAnswered = 5), stats)
             // Not refused and then recovered: the session was ensured before the stats were asked for.
             assertEquals(listOf<String?>("Bearer access-guest1"), server.statsSentAs)
         }

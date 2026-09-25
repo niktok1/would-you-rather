@@ -24,6 +24,8 @@ class ErrorMapperTest {
                     ApiException(ErrorCode.SUBMISSION_LIMIT, status = 409) to DomainError.SUBMISSION_LIMIT,
                     // A 409 of its own: never SUBMISSION_LIMIT, which would say 20 are pending.
                     ApiException(ErrorCode.NOT_ENOUGH_POINTS, status = 409) to DomainError.NOT_ENOUGH_POINTS,
+                    // A guest's submission, with a 403: never UNAUTHORIZED, which would drop the session.
+                    ApiException(ErrorCode.ACCOUNT_REQUIRED, status = 403) to DomainError.ACCOUNT_REQUIRED,
                     ApiException(ErrorCode.ALREADY_DECIDED, status = 409) to DomainError.ALREADY_DECIDED,
                     ApiException(ErrorCode.WRONG_STATUS, status = 409) to DomainError.WRONG_STATUS,
                     // A moderator's, adding or renaming a category: never ALREADY_DECIDED or QUESTION_NOT_FOUND.

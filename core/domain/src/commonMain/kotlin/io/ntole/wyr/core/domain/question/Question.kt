@@ -1,5 +1,7 @@
 package io.ntole.wyr.core.domain.question
 
+import io.ntole.wyr.core.domain.reaction.Reaction
+
 /**
  * A question as the app understands it, independent of the wire format.
  *
@@ -12,11 +14,12 @@ package io.ntole.wyr.core.domain.question
  * names each. The server files every question under at least one; a payload without them, which no
  * server sends, reads as none.
  *
- * [likeCount] is how many players like the question, this one included when [likedByMe], as the
- * server counted them when it served the question (CLAUDE.md §8d), answered or not: a like count is
- * visible before answering. A queued question keeps the numbers it was fetched with, so the answer
- * to a like of the player's own, a [io.ntole.wyr.core.domain.like.QuestionLikes], is newer than
- * they are, and anyone else's like shows only when the feed next serves the question.
+ * [likeCount] is how many players like the question and [dislikeCount] how many dislike it, this one
+ * among them as [myReaction] says, as the server counted them when it served the question (CLAUDE.md
+ * §8d, *Reactions*), answered or not: the counts are visible before answering. A queued question keeps
+ * the numbers it was fetched with, so the answer to a reaction of the player's own, a
+ * [io.ntole.wyr.core.domain.reaction.QuestionReactions], is newer than they are, and anyone else's
+ * shows only when the feed next serves the question.
  */
 public data class Question(
     public val id: String,
@@ -24,5 +27,6 @@ public data class Question(
     public val optionB: String,
     public val categories: Set<String>,
     public val likeCount: Int = 0,
-    public val likedByMe: Boolean = false,
+    public val dislikeCount: Int = 0,
+    public val myReaction: Reaction = Reaction.NONE,
 )

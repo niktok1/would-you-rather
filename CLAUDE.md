@@ -1268,8 +1268,9 @@ listed on the Account screen.
   `pointsSpent`, for less text (*provisional — user decision*, §8b). The answers given and the likes
   received are terms of §8c's sum, so once a question has cost a point they add up to more than the
   points shown, and the card does not say why. That gap is accepted, and the cost shows where it is
-  paid, on the Submit form's button. No client reads `pointsSpent`, nor the player id
-  (`PlayerStatsDto.playerId`): the domain's `PlayerStats` has neither field.
+  paid, on the Submit form's button. The client reads only the points, the questions answered and
+  the username: the domain's `PlayerStats` has no field for the answers given, the cycle and what is
+  due in it, the likes received, the points spent or the player id, which the server still sends.
 - **Skipping** *(built; decided 2026-09-23)*: allowed, earns nothing, and never touches the
   tally. The server **records the skip for the player's current cycle only**, so the question is
   no longer due in that cycle and comes back in the **next** one, except through a category filter
@@ -1339,12 +1340,15 @@ listed on the Account screen.
     what is due.
   - No author travels on the wire, so the result carries no points: an author sees theirs in their
     stats.
-  - *The client* is `LikeRepository` in `:core:domain`, behind `SetLike`, which ensures a session
-    first. `DefaultLikeRepository` sends the `LikeRequest` through `withSessionRecovery`, as votes and
-    skips go, and the retry after a recovered session sends the same `liked`, so a resend can never
-    undo the like; nothing resends after any other failure. The answer is a `QuestionLikes`. A
-    `Question` carries `likeCount` and `likedByMe` as the feed served them (`QuestionMapper`), and a
-    queued one keeps them as fetched; `PlayerStats` carries `likesReceived`.
+  - *The client* is `ReactionRepository` in `:core:domain`, behind `SetReaction`, which ensures a
+    session first, over a domain `Reaction` of its own (`NONE`, `LIKE`, `DISLIKE`; `ReactionMapper`
+    maps it to the wire's and back). `DefaultReactionRepository` sends the `ReactionRequest` through
+    `withSessionRecovery`, as votes and skips go, and the retry after a recovered session sends the same
+    reaction, so a resend can never undo it; nothing resends after any other failure. The answer is a
+    `QuestionReactions`. A `Question` carries `likeCount`, `dislikeCount` and `myReaction` as the feed
+    served them (`QuestionMapper`), and a queued one keeps them as fetched. A `Submission` carries its
+    `likeCount`, `dislikeCount` and `answerCount`, and a `ModeratedQuestion` its `dislikeCount`, which
+    the moderation app shows beside the likes (`dislikesOf`).
   - *The Play screen* shows the like count between the cards, asked or revealed, beside the heart,
     filled while the player likes the question (`PlayViewModel.toggleLike`). It asks for the opposite
     of what the question on screen shows, then puts the server's answer on that question: only on
@@ -1382,7 +1386,9 @@ listed on the Account screen.
   on. `GET /v1/me/questions` lists the author's submissions of every status, newest first, a
   rejected one with its reason and a retired one as `RETIRED` (`SubmissionStore.byAuthor`;
   `SubmissionStatus.RETIRED` on the client). On the client, `SubmitQuestion` and `GetMySubmissions`
-  go through `withSessionRecovery` (`DefaultSubmissionRepository`). `SubmitQuestion` refuses no
+  go through `withSessionRecovery` (`DefaultSubmissionRepository`); a guest's refusal is
+  `DomainError.ACCOUNT_REQUIRED`, never `UNAUTHORIZED`, which would throw the session away.
+  `SubmitQuestion` refuses no
   category before it ensures a session, so nothing is sent, not even a guest's mint, and the
   repository refuses it again before building the request; every other rule is the server's to
   enforce, and `SubmissionRules` (`:core:domain`) copies the options' rules so a form can check what

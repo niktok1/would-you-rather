@@ -106,6 +106,10 @@ internal fun ErrorCode.toDomain(): DomainError =
 
         ErrorCode.NOT_ENOUGH_POINTS -> DomainError.NOT_ENOUGH_POINTS
 
+        // A guest's submission, which registering puts right. Never UNAUTHORIZED, which would throw
+        // the session away: it comes with a 403.
+        ErrorCode.ACCOUNT_REQUIRED -> DomainError.ACCOUNT_REQUIRED
+
         ErrorCode.ALREADY_DECIDED -> DomainError.ALREADY_DECIDED
 
         ErrorCode.WRONG_STATUS -> DomainError.WRONG_STATUS

@@ -50,6 +50,7 @@ internal fun AdminQuestionDto.toDomain(): ModeratedQuestion =
         rejectionReason = rejectionReason,
         tally = Tally(votesA = tally.votesA, votesB = tally.votesB),
         likeCount = likeCount,
+        dislikeCount = dislikeCount,
     )
 
 internal fun AdminQuestionPageDto.toDomain(): ModeratedQuestionPage =

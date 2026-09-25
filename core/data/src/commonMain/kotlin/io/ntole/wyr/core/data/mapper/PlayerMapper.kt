@@ -6,10 +6,6 @@ import io.ntole.wyr.core.player.PlayerStatsDto
 internal fun PlayerStatsDto.toDomain(): PlayerStats =
     PlayerStats(
         totalPoints = totalPoints,
-        answersGiven = answersGiven,
         questionsAnswered = questionsAnswered,
-        cycle = cycle,
-        dueThisCycle = dueThisCycle,
-        likesReceived = likesReceived,
         username = username,
     )

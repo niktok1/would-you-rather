@@ -37,13 +37,6 @@ class GetPlayerStatsTest {
 
     private companion object {
         val STATS =
-            PlayerStats(
-                totalPoints = 3,
-                answersGiven = 3,
-                questionsAnswered = 2,
-                cycle = 1,
-                dueThisCycle = 22,
-                likesReceived = 0,
-            )
+            PlayerStats(totalPoints = 3, questionsAnswered = 2)
     }
 }
