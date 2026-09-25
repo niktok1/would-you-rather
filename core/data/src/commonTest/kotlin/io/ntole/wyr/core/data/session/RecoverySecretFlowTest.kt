@@ -222,22 +222,36 @@ class RecoverySecretFlowTest {
             assertEquals(1, server.secretRequestsSent)
         }
 
+    /**
+     * A server without recovery answers the path it lacks with a bare 404, as production does until it
+     * is promoted, and it may have it by the next launch; a proxy's 503 and a 429 pass as well. None of
+     * them says the secret could not be kept here.
+     */
     @Test
-    fun `a refused request for a secret is made once a launch and no more once it has failed three times`() =
+    fun `a refused request for a secret is made again at every launch until the server gives one`() =
         runTest {
             server.knowPlayer("a")
             store.write(session("a"))
-            // A server without recovery answers the path it lacks with a bare 404.
-            server.refuseSecretRequestsWith = HttpStatusCode.NotFound to null
+            listOf(
+                HttpStatusCode.NotFound to null,
+                HttpStatusCode.ServiceUnavailable to null,
+                HttpStatusCode.TooManyRequests to ErrorCode.RATE_LIMITED,
+            ).forEachIndexed { index, refusal ->
+                recovery.clear()
+                val sentBefore = server.secretRequestsSent
+                server.refuseSecretRequestsWith = refusal
 
-            repeat(MAX_FAILED_SECRET_REQUESTS + 2) {
-                val launch = sessions()
-                launch.ensure()
-                launch.ensure()
+                repeat(MAX_FAILED_SECRET_REQUESTS + 2) {
+                    val launch = sessions()
+                    launch.ensure()
+                    launch.ensure()
+                }
+                server.refuseSecretRequestsWith = null
+                sessions().ensure()
+
+                assertEquals(MAX_FAILED_SECRET_REQUESTS + 3, server.secretRequestsSent - sentBefore, "$refusal")
+                assertEquals("secret-a-${index + 1}", recovery.read(), "$refusal")
             }
-
-            assertEquals(MAX_FAILED_SECRET_REQUESTS, server.secretRequestsSent)
-            assertNull(recovery.read())
         }
 
     @Test
@@ -271,16 +285,16 @@ class RecoverySecretFlowTest {
         runTest {
             server.knowPlayer("a")
             store.write(session("a"))
-            server.refuseSecretRequestsWith = HttpStatusCode.NotFound to null
+            secrets.writeFails = true
             sessions().ensure()
-            server.refuseSecretRequestsWith = null
+            secrets.writeFails = false
             server.secretRequestsToLose = MAX_FAILED_SECRET_REQUESTS
 
             // Counted, the losses would end the asking before the last launch.
             repeat(MAX_FAILED_SECRET_REQUESTS + 1) { sessions().ensure() }
 
             assertEquals(MAX_FAILED_SECRET_REQUESTS + 2, server.secretRequestsSent)
-            assertEquals("secret-a-1", recovery.read())
+            assertEquals("secret-a-2", recovery.read())
             assertEquals(0, recovery.failedRequests("a"))
         }
 
@@ -290,7 +304,7 @@ class RecoverySecretFlowTest {
             server.knowPlayer("a")
             server.knowPlayer("b")
             store.write(session("a"))
-            server.refuseSecretRequestsWith = HttpStatusCode.NotFound to null
+            secrets.writeFails = true
             repeat(MAX_FAILED_SECRET_REQUESTS) { sessions().ensure() }
 
             store.write(session("b"))

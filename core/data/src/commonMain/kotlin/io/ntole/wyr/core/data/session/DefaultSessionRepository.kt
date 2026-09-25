@@ -209,10 +209,13 @@ public class DefaultSessionRepository(
      * would take from them; this device's own guest then stays bound to it, and should its session
      * die, it recovers as that account.
      *
-     * Best effort, and never fails [ensure]. A request that failed on the network is tried again at
-     * the next launch. One the server refused, or whose secret the store could not keep, counts, and
-     * after [MAX_FAILED_SECRET_REQUESTS] of them this install asks no more for the player: a server
-     * without recovery refuses every one. A new player, or a reinstall, starts the count again.
+     * Best effort, and never fails [ensure]. A request that fails is made again at the next launch,
+     * whatever failed it: offline, a 5xx, a 429, a dead session, or the bare 404 of a server without
+     * recovery, which may have it by then (production once promoted, a rollback once rolled forward).
+     * Stopping for good there would leave this install's guest without a secret once the server could
+     * give one. A secret the store could not keep counts, since asking again is no cure for that, and
+     * after [MAX_FAILED_SECRET_REQUESTS] of them this install asks no more for the player. A new
+     * player, or a reinstall, starts the count again.
      */
     private suspend fun keepRecoverySecret(playerId: String) {
         val store = recovery ?: return
@@ -229,19 +232,25 @@ public class DefaultSessionRepository(
             }
         if (held != null || store.failedRequests(playerId) >= MAX_FAILED_SECRET_REQUESTS) return
 
-        val failure =
+        val secret =
             try {
-                store.write(runApi { authApi.newRecoverySecret() }.recoverySecret)
-                null
+                runApi { authApi.newRecoverySecret() }.recoverySecret
+            } catch (refused: WyrException) {
+                return
+            }
+        val kept =
+            try {
+                store.write(secret)
+                true
             } catch (cancellation: CancellationException) {
                 throw cancellation
             } catch (failed: Exception) {
-                failed
+                false
             }
-        when {
-            failure == null -> bestEffort { store.clearFailedRequests() }
-            (failure as? WyrException)?.error == DomainError.NETWORK -> Unit
-            else -> bestEffort { store.countFailedRequest(playerId) }
+        if (kept) {
+            bestEffort { store.clearFailedRequests() }
+        } else {
+            bestEffort { store.countFailedRequest(playerId) }
         }
     }
 
@@ -255,7 +264,7 @@ public class DefaultSessionRepository(
     private suspend fun persist(change: suspend () -> Unit): Unit = runApi(change)
 
     internal companion object {
-        /** How many requests for a secret one player's install makes in vain before it stops asking. */
+        /** How many secrets for one player an install fails to keep before it stops asking for them. */
         const val MAX_FAILED_SECRET_REQUESTS: Int = 3
     }
 }

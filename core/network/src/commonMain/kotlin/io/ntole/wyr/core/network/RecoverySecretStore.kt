@@ -6,8 +6,8 @@ import kotlinx.serialization.json.Json
 
 /**
  * The recovery secret for [environment]'s server as this device keeps it (CLAUDE.md §8a,
- * *Recovery*): the secret in the platform's [secrets], and beside the session in [local], how often
- * this install has asked the server for one in vain.
+ * *Recovery*): the secret in the platform's [secrets], and beside the session in [local], how many
+ * secrets the server gave this install that [secrets] could not keep.
  *
  * Each environment's secret is kept under a key of its own ([secretKeyFor]), as its session is
  * ([SessionStore]): each server's database holds its own secrets (CLAUDE.md §8e), so a DEV secret sent
@@ -40,8 +40,8 @@ public class RecoverySecretStore(
     }
 
     /**
-     * How many times this install has asked the server for a secret for [playerId] and not come away
-     * with one kept. Counted for one player at a time, so another player's count reads as none.
+     * How many secrets the server gave this install for [playerId] that it could not keep. Counted for
+     * one player at a time, so another player's count reads as none.
      */
     public fun failedRequests(playerId: String): Int {
         val raw = local.read(failedRequestsKey) ?: return 0

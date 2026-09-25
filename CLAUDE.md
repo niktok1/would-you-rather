@@ -487,12 +487,13 @@ auth SDK, satisfying §2.
     once a launch, and only while the store holds none and can be read: a new secret kills the one
     before, wherever it is kept. So a secret held for another player is left alone, since on iOS it
     is the account this person's other iPhones share; this device's guest then stays bound to it,
-    and recovers as that account should its session die. A request the server refused, or whose
-    secret the store could not keep, counts, and after three (`MAX_FAILED_SECRET_REQUESTS`) the
-    install asks no more for that player: a server without recovery refuses every one. One lost on
-    the network does not count. The count is kept beside the session, in the token storage
-    (`RecoverySecretStore`), so it goes where the session goes and never with the secret, and a
-    reinstall starts it again.
+    and recovers as that account should its session die. A request that fails is made again at the
+    next launch, whatever failed it: offline, a 5xx, a 429, or the bare 404 of a server without
+    recovery, as production answers until it is promoted, so a guest from before V4 gets its secret
+    once the server can give one. A secret the store could not keep counts, and after three
+    (`MAX_FAILED_SECRET_REQUESTS`) the install asks no more for that player. The count is kept
+    beside the session, in the token storage (`RecoverySecretStore`), so it goes where the session
+    goes and never with the secret, and a reinstall starts it again.
   - `clear()`, the console's *New guest*, drops the secret with the session, since it would otherwise
     recover the player being cleared away, and fails as NETWORK when it cannot, unless the store
     cannot read the secret back either, as without Play services, where nothing could recover with
