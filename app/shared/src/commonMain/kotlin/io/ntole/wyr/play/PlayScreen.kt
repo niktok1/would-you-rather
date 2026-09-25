@@ -18,12 +18,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeContentPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
-import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -32,7 +28,6 @@ import androidx.compose.material3.LocalMinimumInteractiveComponentSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -47,8 +42,6 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.window.Dialog
-import io.ntole.wyr.core.domain.category.Category
 import io.ntole.wyr.core.domain.error.DomainError
 import io.ntole.wyr.core.domain.question.Question
 import io.ntole.wyr.core.domain.vote.Side
@@ -56,7 +49,6 @@ import io.ntole.wyr.language.Language
 import io.ntole.wyr.language.LocalLanguage
 import io.ntole.wyr.language.LocalStrings
 import io.ntole.wyr.language.PlayStrings
-import io.ntole.wyr.language.Strings
 import io.ntole.wyr.language.categoryName
 import io.ntole.wyr.theme.WyrIcons
 import io.ntole.wyr.theme.WyrThemeAccessors
@@ -70,26 +62,21 @@ import kotlin.math.roundToInt
  * card goes on to the next question ([onNext]).
  *
  * [categories] are the categories played, none for every category, beside every category as last
- * read from the server, which names them; tapping them opens the category picker
- * ([onOpenCategories]), a dialog over the screen while [picking], the open picker, is not `null`.
- * [points] are the player's as the server last reported them, `null` until it has.
+ * read from the server, which names them; tapping them opens the Categories screen
+ * ([onOpenCategories]), where they are picked (CLAUDE.md §8d, *The Categories screen*). [points]
+ * are the player's as the server last reported them, `null` until it has.
  */
 @Composable
 fun PlayScreen(
     state: PlayUiState,
     categories: PlayedCategories,
     points: Int?,
-    picking: CategoryPicking?,
     onChoose: (Side) -> Unit,
     onSkip: () -> Unit,
     onNext: () -> Unit,
     onToggleLike: () -> Unit,
     onRetry: () -> Unit,
     onOpenCategories: () -> Unit,
-    onToggleCategory: (String) -> Unit,
-    onSelectAllCategories: () -> Unit,
-    onApplyCategories: () -> Unit,
-    onCloseCategories: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val colors = WyrThemeAccessors.colors
@@ -125,20 +112,6 @@ fun PlayScreen(
                         onOpenCategories = onOpenCategories,
                     )
                 }
-            }
-        }
-
-        if (picking != null) {
-            Dialog(onDismissRequest = onCloseCategories) {
-                CategoryPicker(
-                    categories = categories.known,
-                    picking = picking,
-                    canApply = state.canChangeCategories,
-                    onToggle = onToggleCategory,
-                    onSelectAll = onSelectAllCategories,
-                    onApply = onApplyCategories,
-                    onClose = onCloseCategories,
-                )
             }
         }
     }
@@ -212,7 +185,7 @@ private fun QuestionBody(
 
 /**
  * The one row between the cards (`CentredRow`): on the left the categories played, which open the
- * picker; in the middle the player's points, or how the last like failed; on the right the heart,
+ * Categories screen; in the middle the player's points, or how the last like failed; on the right the heart,
  * the player's own like, filled while they like the question, how many like it, as the server
  * counted them (CLAUDE.md §8d, *Likes*), before answering and after, and Skip ([onSkip]) while the
  * question is not answered yet, `null` once it is. Skip's place is kept once it is gone, so the
@@ -312,9 +285,9 @@ internal fun MiddleRow(
 }
 
 /**
- * The categories played, *All* while none is picked, with a small chevron: a tap opens the category
- * picker, the only way to choose them. It looks the same while the categories cannot change, as it
- * does for every question that loads: the tap then does nothing.
+ * The categories played, *All* while none is picked, with a small chevron: a tap opens the
+ * Categories screen, the only way to choose them. It looks the same while the categories cannot
+ * change, as it does for every question that loads: the tap then does nothing.
  */
 @Composable
 private fun CategoriesPlayed(
@@ -350,8 +323,8 @@ private fun CategoriesPlayed(
 
 /**
  * The categories played, as the Play screen names them: [all] while none is selected, or their names
- * in [language] ([categoryName]), in the order the picker lists them, the server's, and after them
- * any the app has not read, by id.
+ * in [language] ([categoryName]), in the order the server lists them, as the Categories screen
+ * does, and after them any the app has not read, by id.
  */
 internal fun categoriesPlayed(
     categories: PlayedCategories,
@@ -363,117 +336,6 @@ internal fun categoriesPlayed(
     val listed = categories.known.map { it.id }.filter { it in selected }
     val unread = (selected - listed.toSet()).sorted()
     return (listed + unread).joinToString(", ") { categoryName(it, categories.known, language) }
-}
-
-/**
- * The category picker's card, in a dialog over the screen: every one of [categories], the server's,
- * named in the language shown ([categoryName]), ticked or not, and *Све категорије*, ticked while none
- * is. A line under them says the list is being read, while nothing was read before, or that the read
- * failed. Nothing is played until Play, and Play is off while the screen cannot take a change
- * ([canApply]), one action at a time. Every word from [LocalStrings] (CLAUDE.md §8f).
- *
- * The list scrolls, so a window shorter than the card keeps Play on screen. Internal, not private,
- * so a test can measure it.
- */
-@Composable
-internal fun CategoryPicker(
-    categories: List<Category>,
-    picking: CategoryPicking,
-    canApply: Boolean,
-    onToggle: (String) -> Unit,
-    onSelectAll: () -> Unit,
-    onApply: () -> Unit,
-    onClose: () -> Unit,
-) {
-    val colors = WyrThemeAccessors.colors
-    val dimens = WyrThemeAccessors.dimens
-    val strings = LocalStrings.current
-    val language = LocalLanguage.current
-
-    Surface(
-        shape = RoundedCornerShape(dimens.radiusCard),
-        color = colors.surface,
-        contentColor = colors.primaryText,
-    ) {
-        Column(modifier = Modifier.padding(dimens.spaceLg)) {
-            Text(
-                text = strings.playScreen.pickerTitle,
-                color = colors.headingAccent,
-                fontSize = WyrTypeScale.sectionTitle,
-                fontWeight = FontWeight.Bold,
-            )
-            Spacer(Modifier.size(dimens.spaceSm))
-
-            Column(modifier = Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState())) {
-                val ticked = picking.ticked
-                CategoryOption(label = strings.playScreen.pickerAll, ticked = ticked.isEmpty(), onClick = onSelectAll)
-                categories.forEach { category ->
-                    CategoryOption(
-                        label = categoryName(category, language),
-                        ticked = category.id in ticked,
-                        onClick = { onToggle(category.id) },
-                    )
-                }
-            }
-            pickerNote(picking, listed = categories.isNotEmpty(), strings)?.let { note ->
-                Spacer(Modifier.size(dimens.spaceSm))
-                Text(text = note, color = colors.muted, fontSize = WyrTypeScale.statLabel)
-            }
-
-            Spacer(Modifier.size(dimens.spaceMd))
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(dimens.spaceSm, Alignment.End),
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                TextButton(onClick = onClose) { Text(strings.cancel) }
-                Button(onClick = onApply, enabled = canApply) { Text(strings.play) }
-            }
-        }
-    }
-}
-
-/**
- * What the picker says under its list, if anything, in one short line: that the categories are being
- * read while none was read before, or that the read failed, which leaves the ones read before listed;
- * opening the picker again reads them again.
- */
-internal fun pickerNote(
-    picking: CategoryPicking,
-    listed: Boolean,
-    strings: Strings,
-): String? =
-    when {
-        picking.failure == DomainError.NETWORK -> strings.playScreen.cannotReach
-        picking.failure != null -> strings.categoriesUnread
-        picking.isLoading && !listed -> strings.playScreen.pickerLoading
-        else -> null
-    }
-
-/**
- * One line of the picker, ticked or not; the whole line toggles it, and is at least as tall as a
- * touch target, which a checkbox without a click of its own is not.
- */
-@Composable
-private fun CategoryOption(
-    label: String,
-    ticked: Boolean,
-    onClick: () -> Unit,
-) {
-    val dimens = WyrThemeAccessors.dimens
-
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(dimens.spaceSm),
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .toggleable(value = ticked, role = Role.Checkbox, onValueChange = { onClick() })
-                .minimumInteractiveComponentSize(),
-    ) {
-        // No click of its own: the line's toggleable is the one.
-        Checkbox(checked = ticked, onCheckedChange = null)
-        Text(text = label)
-    }
 }
 
 /**

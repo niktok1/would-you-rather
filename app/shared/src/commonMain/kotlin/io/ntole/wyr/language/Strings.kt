@@ -29,13 +29,13 @@ data class Strings(
      */
     val tryAgain: String,
     /**
-     * The button that closes without doing anything, on the Auth page's guest-points warning and the
-     * Play screen's category picker. One text, so the game says it one way.
+     * The button that closes without doing anything, on the Auth page's guest-points warning. One
+     * text, for every screen that needs it, so the game says it one way.
      */
     val cancel: String,
     /**
      * Why the categories could not be read from the server, for any reason but being offline: under
-     * the Play screen's category picker and the Submit form's categories alike.
+     * the Submit form's categories.
      */
     val categoriesUnread: String,
     /** The Play screen's words. */

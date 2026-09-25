@@ -3,7 +3,6 @@ package io.ntole.wyr.play
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import io.ntole.wyr.core.domain.category.CategoryRepository
-import io.ntole.wyr.core.domain.category.GetCategories
 import io.ntole.wyr.core.domain.error.DomainError
 import io.ntole.wyr.core.domain.error.WyrException
 import io.ntole.wyr.core.domain.like.SetLike
@@ -42,7 +41,6 @@ class PlayViewModel(
     private val setLike: SetLike,
     private val getPlayerStats: GetPlayerStats,
     private val questions: QuestionRepository,
-    private val getCategories: GetCategories,
     categoryList: CategoryRepository,
 ) : ViewModel() {
     private val _state = MutableStateFlow<PlayUiState>(PlayUiState.Loading)
@@ -62,11 +60,6 @@ class PlayViewModel(
                 PlayedCategories(questions.categories.value, categoryList.categories.value),
             )
 
-    private val _picking = MutableStateFlow<CategoryPicking?>(null)
-
-    /** The open category picker, what it has ticked and its read of the categories, or `null` while it is closed. */
-    val picking: StateFlow<CategoryPicking?> = _picking.asStateFlow()
-
     private val _points = MutableStateFlow<Int?>(null)
 
     /**
@@ -84,13 +77,12 @@ class PlayViewModel(
 
     init {
         load()
-        // Categories played from elsewhere, the Categories screen's Play (CLAUDE.md §8d, *Categories*),
-        // drop the question on screen, asked or answered, or the failure, and a question from them
-        // loads: load, not next, which goes on only from the reveal. Only while the categories may
-        // change here too: a load or a vote, a skip or a like in flight goes on, and the question
-        // after it is the new selection's, since the change dropped the queue. So a change
-        // applyCategories makes, which shows Loading before it is made, loads one question.
-        // Undispatched, so a change made before this runs is not taken for the one played now.
+        // Categories played on the Categories screen (CLAUDE.md §8d, *Categories*) drop the question
+        // on screen, asked or answered, or the failure, and a question from them loads: load, not
+        // next, which goes on only from the reveal. Only while the categories may change here: a load
+        // or a vote, a skip or a like in flight goes on, and the question after it is the new
+        // selection's, since the change dropped the queue. Undispatched, so a change made before this
+        // runs is not taken for the one played now.
         viewModelScope.launch(start = CoroutineStart.UNDISPATCHED) {
             questions.categories.drop(1).collect { if (_state.value.canChangeCategories) load() }
         }
@@ -202,83 +194,6 @@ class PlayViewModel(
             // Unless the player has moved on meanwhile, when it is no longer the question on screen.
             _state.update { current -> if (current == liking) settled else current }
         }
-    }
-
-    /**
-     * Opens the category picker on the categories played now, and reads every category from the
-     * server again, since a moderator adds them without a build (CLAUDE.md §8d, *Categories*): the
-     * picker lists what was read before until the read lands, and says so if it fails. Nothing changes
-     * until [applyCategories]: one change, and so one reload, however many categories the player ticks
-     * on the way.
-     *
-     * Only when the categories may change ([canChangeCategories]), since applying them drops the
-     * question on screen: not while a question loads, nor while a vote, a skip or a like is in flight.
-     */
-    fun openCategories() {
-        if (!_state.value.canChangeCategories) return
-        _picking.value = CategoryPicking(ticked = questions.categories.value, isLoading = true)
-
-        viewModelScope.launch {
-            val failure =
-                try {
-                    getCategories()
-                    null
-                } catch (unread: WyrException) {
-                    unread.error
-                }
-            // Onto the picker open now, if one is: what it lists is the repository's either way.
-            _picking.update { it?.copy(isLoading = false, failure = failure) }
-        }
-    }
-
-    /**
-     * Ticks the category [id] in the open picker, or unticks it if it is ticked. Unticking the last one
-     * is every category, since none selected is every category (CLAUDE.md §8d, *Categories*).
-     */
-    fun toggleCategory(id: String) {
-        _picking.update { picking ->
-            picking?.copy(ticked = if (id in picking.ticked) picking.ticked - id else picking.ticked + id)
-        }
-    }
-
-    /** Unticks every category in the open picker, which is every category. */
-    fun selectAllCategories() {
-        _picking.update { it?.copy(ticked = emptySet()) }
-    }
-
-    /**
-     * Plays the categories ticked in the open picker, and closes it. A new selection drops the
-     * question on screen, answered or not, and loads the next one from it: the repository drops its
-     * queue on the change (CLAUDE.md §8d, *Categories*), so it is the new selection's. What the feed
-     * then serves is the server's rule; a selection it has nothing in shows as out of questions, where
-     * the categories can change again. The selection already played changes nothing, and the question
-     * on screen stays.
-     *
-     * A change the screen cannot take now ([canChangeCategories]) is refused and the picker stays open
-     * with what it has ticked, to be played once nothing is in flight. From a failure, the vote it lost,
-     * if any, is not sent again: the player has moved on.
-     */
-    fun applyCategories() {
-        val ticked = _picking.value?.ticked ?: return
-        if (ticked == questions.categories.value) {
-            _picking.value = null
-            return
-        }
-        if (!_state.value.canChangeCategories) return
-        _picking.value = null
-        // Loading at once, so nothing else goes, and a second tap finds nothing to apply.
-        _state.value = PlayUiState.Loading
-
-        viewModelScope.launch {
-            // Before the fetch, so the question loaded is already the new selection's.
-            questions.setCategories(ticked)
-            load()
-        }
-    }
-
-    /** Closes the category picker, and what it had ticked goes unplayed. */
-    fun closeCategories() {
-        _picking.value = null
     }
 
     /**

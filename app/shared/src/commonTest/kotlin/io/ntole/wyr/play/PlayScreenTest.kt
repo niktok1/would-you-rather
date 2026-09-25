@@ -13,7 +13,6 @@ import io.ntole.wyr.language.stringsOf
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
-import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class PlayScreenTest {
@@ -61,7 +60,7 @@ class PlayScreenTest {
 
     @Test
     fun `the categories played are named in the language shown in the order the server lists them`() {
-        // Not in the order the set holds them: in the server's, as the picker lists them.
+        // Not in the order the set holds them: in the server's, as the Categories screen lists them.
         val played = PlayedCategories(linkedSetOf("ETHICS", "FOOD"), KNOWN)
         assertEquals("Храна, Етика", categoriesPlayed(played, ALL, CYRILLIC))
         assertEquals("Hrana, Etika", categoriesPlayed(played, ALL, Language.SERBIAN_LATIN))
@@ -85,27 +84,6 @@ class PlayScreenTest {
         val every = PlayedCategories(KNOWN.map { it.id }.toSet(), KNOWN)
         assertEquals("Храна, Етика, Апсурдно", categoriesPlayed(every, ALL, CYRILLIC))
         assertEquals("Food, Ethics, Absurd", categoriesPlayed(every, ALL, Language.ENGLISH))
-    }
-
-    @Test
-    fun `the picker says it is reading the categories only while it has none to list`() {
-        val loading = CategoryPicking(emptySet(), isLoading = true)
-        assertEquals("Учитавање категорија…", pickerNote(loading, listed = false, SerbianCyrillicStrings))
-        assertEquals("Loading categories…", pickerNote(loading, listed = false, EnglishStrings))
-        assertNull(pickerNote(loading, listed = true, EnglishStrings))
-        assertNull(pickerNote(CategoryPicking(emptySet()), listed = true, EnglishStrings))
-    }
-
-    @Test
-    fun `a picker whose read failed says so in one line in every language`() {
-        Language.entries.map(::stringsOf).forEach { strings ->
-            val offline = CategoryPicking(emptySet(), failure = DomainError.NETWORK)
-            assertEquals(strings.playScreen.cannotReach, pickerNote(offline, listed = true, strings))
-            val failed = CategoryPicking(emptySet(), failure = DomainError.SERVER)
-            assertEquals(strings.categoriesUnread, pickerNote(failed, listed = false, strings))
-        }
-        val failed = CategoryPicking(emptySet(), failure = DomainError.SERVER)
-        assertEquals("Категорије нису учитане.", pickerNote(failed, listed = true, SerbianCyrillicStrings))
     }
 
     @Test

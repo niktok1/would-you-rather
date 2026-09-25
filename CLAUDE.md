@@ -576,9 +576,9 @@ EncryptedSharedPreferences: enough for a game that stores nothing personal.
   rule as written, which predates recorded skips, and it changes neither rule; a filter of several
   categories carries it over unchanged. The options: keep it; serve again only the filter's
   answered questions, and its skipped ones only when it has nothing else; or answer an empty
-  batch, which the client reads as out of questions. The Play screen's category picker sends the
-  categories selected (§8d, *The Play screen*), so a player reaches this in every build, PROD's
-  included. `SkipStoreTest` pins what is built.
+  batch, which the client reads as out of questions. The Categories screen sends the categories
+  selected (§8d, *The Categories screen*), so a player reaches this in every build, PROD's included.
+  `SkipStoreTest` pins what is built.
 - **The categories row on the Play screen** — *resolved 2026-09-25*: the user picked the redesign's
   one row between the cards (§8d, *The Play screen*), where the categories share the row with the
   points, the like and Skip in every question state, at one height, and the cards keep what is left.
@@ -842,13 +842,13 @@ answer what they think is popular instead of what they actually prefer. A mode t
 rewards reading the crowd may come later as a separate, opt-in mode, never as the default.
 
 **Current focus.** UI polish is paused. The game's own screens are the app: **Home**, **Play**,
-**Account**, and **Submit** and the **Auth** page opened from Account, reached from one another by
-buttons (*Navigation*, below), in every build, LOCAL, DEV and PROD alike, opening on Home. The
-engineering dev console functionality was first built behind is gone since `chore/remove-console`
-(*decided 2026-09-25*: the console is not needed), and nothing replaces it: a LOCAL or DEV build
-names its server on the Account screen (§8e), and a feature is tried through the game and the
-moderation app. A new feature gets a plain screen of the game's, or a place on one, theme tokens
-only (§5b), and its words in `Strings` (§8f).
+**Account**, **Submit** and the **Auth** page opened from Account, and the **Categories** screen
+opened from Play, reached from one another by buttons (*Navigation*, below), in every build, LOCAL,
+DEV and PROD alike, opening on Home. The engineering dev console functionality was first built
+behind is gone since `chore/remove-console` (*decided 2026-09-25*: the console is not needed), and
+nothing replaces it: a LOCAL or DEV build names its server on the Account screen (§8e), and a
+feature is tried through the game and the moderation app. A new feature gets a plain screen of the
+game's, or a place on one, theme tokens only (§5b), and its words in `Strings` (§8f).
 
 **Navigation** (*decided 2026-09-25*: no tabs; `App.kt`, `io.ntole.wyr.navigation`, `io.ntole.wyr.home`):
 - The app opens on **Home**: the game's name, a big **Play** button and the account icon top right,
@@ -856,9 +856,10 @@ only (§5b), and its words in `Strings` (§8f).
   the home icon, left, back to Home, and the account icon, right. The account icon, from Home or
   Play, opens the **Account** screen under a top bar of a back arrow. On it, a guest's one button
   opens the **Auth** page, to register or log in, and My questions' *Ново питање* the **Submit**
-  screen's form. The Account, Auth and Submit bars hold a back arrow alone (`BackTopBar`); the
-  Submit button the Account bar held before is gone. The icons are the theme's (§5b), each named for
-  a screen reader in the language shown (§8f).
+  screen's form. On Play, the categories played open the **Categories** screen (*Categories*, *The
+  Categories screen*), whose **Играј** goes back to Play. The Account, Auth, Submit and Categories
+  bars hold a back arrow alone (`BackTopBar`); the Submit button the Account bar held before is
+  gone. The icons are the theme's (§5b), each named for a screen reader in the language shown (§8f).
 - *The back stack* is made by hand, no navigation library: a sealed `Screen` and a `Navigator` of
   the screens opened, Home at the bottom. `open` shows a screen over the one shown, or goes back to
   it when it is on the stack already, so no screen is on it twice and the home icon is
@@ -875,10 +876,10 @@ only (§5b), and its words in `Strings` (§8f).
   they are shown; the Auth page is on the Account screen's. `AppNavigationTest` drives the whole
   `App` over fakes by tapping its buttons, and counts the questions asked.
 - *Heights*: each top bar is `WyrDimens.topBarHeight` high, 48, the tab row's height before it, so
-  the Play, Account, Auth and Submit screens keep the 599 of an iPhone SE's 667 their draw tests
-  hold them to. `TopBarsDrawTest` holds every bar to 48 at 375 wide with nothing cut short, in both
-  themes and every language; `HomeScreenDrawTest` holds Home to 599 at 375 wide (276 on this Mac)
-  and to its two texts and one icon.
+  the Play, Account, Auth, Submit and Categories screens keep the 599 of an iPhone SE's 667 their
+  draw tests hold them to. `TopBarsDrawTest` holds every bar to 48 at 375 wide with nothing cut
+  short, in both themes and every language; `HomeScreenDrawTest` holds Home to 599 at 375 wide (276
+  on this Mac) and to its two texts and one icon.
 
 **The Account screen** (`io.ntole.wyr.account`; §8a *Accounts*, *Stats* below):
 - *Its order* (*decided 2026-09-25*, the user's redesign, with less text overall): the player on a
@@ -945,14 +946,15 @@ only (§5b), and its words in `Strings` (§8f).
   language.
 
 **The Play screen** (`io.ntole.wyr.play`; the user's layout, *decided 2026-09-25*) asks a question
-and reveals its tally, and holds Skip, Like and the category picker (*Skipping*, *Likes* and
-*Categories*, below):
+and reveals its tally, holds Skip and Like, and opens the Categories screen (*Skipping*, *Likes*
+and *Categories*, below):
 - Two answer cards in the brand colours (§5b) and, between them, **one row**: on the left the
   categories played, *Све* or their names, cut to one line, with a small chevron, which opens the
-  picker; in the middle the player's points, *123 П*; on the right the heart, filled while the player
-  likes the question, beside its like count, before answering and after, and **Skip** while the
-  question is not answered yet (*Skipping*), its place kept empty in the reveal so nothing in the
-  row moves. No title, no *OR*, and nothing on the top bar but home and the account icon.
+  Categories screen; in the middle the player's points, *123 П*; on the right the heart, filled
+  while the player likes the question, beside its like count, before answering and after, and
+  **Skip** while the question is not answered yet (*Skipping*), its place kept empty in the reveal
+  so nothing in the row moves. No title, no *OR*, and nothing on the top bar but home and the
+  account icon.
 - *The categories' names* are the server's, in the language shown (`categoryName` in
   `io.ntole.wyr.language`, §8f), in the order the server lists them, and one not read yet by its id,
   after the rest (`categoriesPlayed`).
@@ -987,34 +989,28 @@ and reveals its tally, and holds Skip, Like and the category picker (*Skipping*,
 - Loading is a spinner; a failure is one short sentence, *Покушај поново* (`Strings.tryAgain`, §8f)
   and the categories played, the way out of a selection with nothing to serve. The words are
   `PlayStrings` (§8f).
-- The picker (`CategoryPicker`) is the dialog it was, its words in the language shown: *Изабери
-  категорије*, *Све категорије* and every category the server lists, ticked or not, then *Откажи* and
-  *Играј* (`Strings.cancel`, `Strings.play`). Opening it reads the categories again (`GetCategories`,
-  *Categories*): it lists those read before meanwhile, one line says it is loading while there are
-  none (*Учитавање категорија…*), and one says so if the read fails (*Игра није доступна.* offline,
-  *Категорије нису учитане.* otherwise), when those read before stay to tick. Nothing changes until
-  Play, a new selection drops the question on screen and shows the next from it
-  (`PlayViewModel.applyCategories`), a change refused keeps it open, and a change from a vote lost
-  to `NETWORK` never sends it again (*Retry safety*). The selection lives in the repository, in
-  memory for the app's life: a launch plays every category again, and a login or a logout keeps it.
-- `PlayViewModelTest` drives it over fakes, the picker's read on opening and its failure included.
+- The categories are picked on the Categories screen (*Categories*, *The Categories screen*), which
+  a tap on them opens; the dialog the Play screen had for them is gone. A selection played there
+  drops what is on screen, a question asked or answered or a failure, and loads a question from it
+  (`PlayViewModel`'s `init`); while a load, a vote, a skip or a like is in flight it changes
+  nothing on screen, and the question after it is the new selection's. A vote lost to `NETWORK` is
+  never sent again (*Retry safety*). The selection lives in the repository, in memory for the
+  app's life: a launch plays every category again, and a login or a logout keeps it.
+- `PlayViewModelTest` drives it over fakes, a selection played on the Categories screen included.
   `PlayScreenDrawTest` draws every state in both themes and every language at 400x900 and 375x599
   (an iPhone SE less its status bar and the top bar), with none, one and every one of the server's
-  first five categories played, and with the picker open; holds each state to 599 high with each
-  selection (376 on this Mac), measured 400 wide rather than 375 since CI's Linux fonts wrap wider
-  than a phone's, reads each state's texts and nothing else and what a screen reader hears a tap
-  does, taps the cards before and after the reveal, steps the scene's clock through the count up,
-  holds the row to 335 wide with only the categories cut, asked with Skip and answered with its
-  place kept, and to one height with a like's failure or without at font scales 1, 1.3 and 2, finds
-  Skip after the heart only while a question is asked, off and drawn muted while anything is in
-  flight (by its pixels' colours, in both themes and every language), and nothing in the row moved
-  by the reveal, shows *Начин живота*, *Супермоћи* and *Храна, Етика* whole beside the points and
-  the like (400 wide), names the categories played in each language, and holds `CentredRow` to its
-  rule on boxes of known widths, which no font changes. The picker: its words and the categories in
-  each language and in the server's order, its card within 599 in every language, its loading and
-  failure lines in every language and both themes, and, with no Compose UI test library in the tree,
-  the dialog by pixels (every state draws differently with it open, and again with a category
-  ticked). `AppNavigationTest` skips through it, under a bar of home and the account icon alone.
+  first five categories played; holds each state to 599 high with each selection (376 on this Mac),
+  measured 400 wide rather than 375 since CI's Linux fonts wrap wider than a phone's, reads each
+  state's texts and nothing else and what a screen reader hears a tap does, taps the cards before
+  and after the reveal, steps the scene's clock through the count up, holds the row to 335 wide with
+  only the categories cut, asked with Skip and answered with its place kept, and to one height with
+  a like's failure or without at font scales 1, 1.3 and 2, finds Skip after the heart only while a
+  question is asked, off and drawn muted while anything is in flight (by its pixels' colours, in
+  both themes and every language), and nothing in the row moved by the reveal, shows *Начин живота*,
+  *Супермоћи* and *Храна, Етика* whole beside the points and the like (400 wide), names the
+  categories played in each language, and holds `CentredRow` to its rule on boxes of known widths,
+  which no font changes. `AppNavigationTest` skips through it, under a bar of home and the account
+  icon alone, and plays categories picked on the Categories screen.
 
 **The Submit screen** (`io.ntole.wyr.submit`), opened from My questions on the Account screen
 (*Navigation*), is the form a question is written in (*Submitting*, below); the player's own are
@@ -1039,17 +1035,16 @@ listed on the Account screen.
   `DefaultQuestionRepository` keeps no record of what it served beyond one refill: it drops only
   questions still queued and those handed out since the refill went out, the one then on screen
   included.
-  - *Categories:* a cycle is **per player, not per category**. The categories a request is
-    filtered to are one pool, the questions filed under any of them: while anything in it is due,
-    only what is due is served. A request whose pool has nothing due, while other questions still
-    are, serves the pool's questions again, in random order and `answeredBefore` on those answered,
-    and leaves the cycle alone: starting the next one would cut short the player's pass over the
-    rest. The cycle starts only once nothing at all is due, whichever categories are asked for, and
-    a request that finds no questions starts nothing. Questions skipped this cycle are served again
-    this way too, so a skip does not hold through a category filter: *provisional — user decision*
-    (§8b). The client selects any number (`QuestionRepository.setCategories`, from the Play
-    screen's category picker), none for every category; a change drops the queue, and a login or a
-    logout keeps the selection.
+  - *Categories:* a cycle is **per player, not per category**. The categories a request is filtered
+    to are one pool, the questions filed under any of them: while anything in it is due, only what
+    is due is served. A request whose pool has nothing due, while other questions still are, serves
+    the pool's questions again, in random order and `answeredBefore` on those answered, and leaves
+    the cycle alone: starting the next one would cut short the player's pass over the rest. The
+    cycle starts only once nothing at all is due, whichever categories are asked for, and a request
+    that finds no questions starts nothing. Questions skipped this cycle are served again this way
+    too, so a skip does not hold through a category filter: *provisional — user decision* (§8b). The
+    client selects any number (`QuestionRepository.setCategories`, from the Categories screen), none
+    for every category; a change drops the queue, and a login or a logout keeps the selection.
   - `answeredBefore` (`QuestionDto`) means the player has a vote on the question, from any cycle. No
     client reads it: the domain's `Question` has no such field since the dev console went.
 - **Categories** *(decided 2026-09-24; server data since 2026-09-25; built)*: a
@@ -1101,8 +1096,8 @@ listed on the Account screen.
     both names): read through `runApi` alone, never `withSessionRecovery`, so no read ensures,
     recovers or mints a session, kept in memory for the app's life (`CategoryRepository.categories`,
     empty until a read works, left as it was by one that fails) and read again whenever
-    `GetCategories` is asked, as a picker does when it opens. Both `dataModule` and
-    `moderationDataModule` bind it (`DataModuleTest`).
+    `GetCategories` is asked, as the Categories screen and the Submit form do each time they are
+    shown. Both `dataModule` and `moderationDataModule` bind it (`DataModuleTest`).
   - Built in `question_categories`, one row per question and category, written in the question's
     own transaction, each row held to a category by a foreign key (V6): `QuestionDto.categories`,
     `SubmissionDto.categories` and `AdminQuestionDto.categories` carry every one, each once, in the
@@ -1143,19 +1138,19 @@ listed on the Account screen.
     picker, as there will be hundreds of categories, and players should be able to pick multiple,
     random is actually all. There should be also category search."): `io.ntole.wyr.categories`, a
     `Screen` of the navigator's own (`Screen.Categories`), opened by a tap on the categories played
-    on the Play screen, in place of the dialog *The Play screen* describes, which nothing opens now,
-    under a top bar of a back arrow (`BackTopBar`). Top down: a search field, then one lazy list (a
-    `LazyColumn`, so hundreds draw only the lines on screen) of **Све**, ticked while no category
-    is, and every category the search finds, each ticked or not, in the server's order; and at the
-    bottom how many are ticked (*Изабрано: 3*, nothing while Све is) and **Играј**. Ticking Све
-    unticks every category, ticking one unticks Све, and unticking the last is Све again: Све is none
-    ticked, as the repository holds it. The search filters as it is typed, by any part of either
-    name, whatever the script and the case of either: a query and each name are compared in Serbian
-    Latin, lower-cased (`searchKey`, through `SerbianScript.toLatin`), so *hra*, *Хра* and *HRA*
-    find *Храна*, *lj* finds *Љ* and *рок* a name typed in Latin. Accents count, so *nacin* does not
-    find *Начин живота* (*provisional — user decision*: Serbian Latin is often typed without them;
-    keep it, or fold č and ć into c, š into s, ž into z and đ into dj or d). A category the search
-    hides stays ticked, and a search that finds none says so under Све. Each visit starts from the
+    on the Play screen, in place of the dialog the Play screen had for them, under a top bar of a
+    back arrow (`BackTopBar`). Top down: a search field, then one lazy list (a `LazyColumn`, so
+    hundreds draw only the lines on screen) of **Све**, ticked while no category is, and every
+    category the search finds, each ticked or not, in the server's order; and at the bottom how many
+    are ticked (*Изабрано: 3*, nothing while Све is) and **Играј**. Ticking Све unticks every
+    category, ticking one unticks Све, and unticking the last is Све again: Све is none ticked, as
+    the repository holds it. The search filters as it is typed, by any part of either name, whatever
+    the script and the case of either: a query and each name are compared in Serbian Latin,
+    lower-cased (`searchKey`, through `SerbianScript.toLatin`), so *hra*, *Хра* and *HRA* find
+    *Храна*, *lj* finds *Љ* and *рок* a name typed in Latin. Accents count, so *nacin* does not find
+    *Начин живота* (*provisional — user decision*: Serbian Latin is often typed without them; keep
+    it, or fold č and ć into c, š into s, ž into z and đ into dj or d). A category the search hides
+    stays ticked, and a search that finds none says so under Све. Each visit starts from the
     categories played, nothing searched (`CategoriesViewModel.open`, called by the Play screen's
     tap, so a rotation keeps what is ticked), and reads the list (`GetCategories`) as it is shown: a
     read that fails says so above the list, with *Пробај опет*, the categories read before staying
@@ -1567,37 +1562,36 @@ hand, so the two cannot say different things; and **English** stands beside them
   every translated text, one value per `Language`: `SerbianCyrillicStrings` written by hand,
   `SerbianLatinStrings` made from it by `Strings.map(SerbianScript::toLatin)`, and `EnglishStrings`.
   `App` provides the one shown through `LocalStrings` (`WyrStrings`), and a screen reads its words
-  from there and writes none of its own. Plain Kotlin values, not compose resources: string resources
-  cannot express one language made from another by a function, and a text missing from a language is
-  then a constructor that does not compile, not a key that fails at run time. `StringsTest` compares
-  the data classes' `toString`, which names every text, so a text added later is checked too: the
-  Latin is the Cyrillic transliterated, every Serbian text is in Cyrillic, and no Latin or English
-  one has a Cyrillic letter. Translated so far: the Home screen, the game's name (*Шта би радије?*,
-  *Would You Rather?*) and *Играј*; the top bars and the icons' names (*Почетна*, *Налог*, *Назад*);
-  the switch's name, *Језик*; the Play screen's words, the category picker's included (`PlayStrings`,
+  from there and writes none of its own. Plain Kotlin values, not compose resources: string
+  resources cannot express one language made from another by a function, and a text missing from a
+  language is then a constructor that does not compile, not a key that fails at run time.
+  `StringsTest` compares the data classes' `toString`, which names every text, so a text added later
+  is checked too: the Latin is the Cyrillic transliterated, every Serbian text is in Cyrillic, and
+  no Latin or English one has a Cyrillic letter. Translated so far: the Home screen, the game's name
+  (*Шта би радије?*, *Would You Rather?*) and *Играј*; the top bars and the icons' names (*Почетна*,
+  *Налог*, *Назад*); the switch's name, *Језик*; the Play screen's words (`PlayStrings`,
   `Strings.playScreen`); the Categories screen (`CategoryStrings`, `Strings.categoriesScreen`:
   *Претражи категорије*, *Све*, *Изабрано: 3*, *Нема резултата*, *Категорије се нису учитале.*,
   *Пробај опет*, *Учитавање* for a screen reader, and *Играј*); the Account screen, whole, with My
   questions and the server line; the Auth page, whole; and the Submit screen's form, whole
-  (`Strings.accountScreens`, an `AccountStrings` of the Account screen's words and those of the pages
-  opened from it). **Try again** is one text of `Strings`, `tryAgain`, *Покушај поново*
+  (`Strings.accountScreens`, an `AccountStrings` of the Account screen's words and those of the
+  pages opened from it). **Try again** is one text of `Strings`, `tryAgain`, *Покушај поново*
   (*provisional*, §8b), under a failure on Play, the Account screen, My questions, the Auth page and
   the Submit form, so the game says it one way, but for the Categories screen's own *Пробај опет*;
   the Account screens' *Нешто није у реду. Покушај поново.* asks in its words, and `StringsTest`
-  holds the two together. So are *Откажи* (`cancel`), on the Auth page's warning and the Play
-  picker, and *Категорије нису учитане.* (`categoriesUnread`), under the Play picker and the Submit
-  form's categories alike, and the picker's Play is the Home screen's *Играј*.
+  holds the two together. So are *Откажи* (`cancel`), on the Auth page's warning, and *Категорије
+  нису учитане.* (`categoriesUnread`), under the Submit form's categories.
 - **The categories' names** *(built)*: the server's, not `Strings`, since a moderator adds and
   renames categories without a build (§8d, *Categories*): `nameSr` in Serbian Cyrillic,
   `SerbianScript.toLatin(nameSr)` in Serbian Latin, as every Latin text is made, and `nameEn` in
   English. A Serbian name a moderator typed in Latin reads as typed in both scripts, since `toLatin`
   leaves Latin letters alone. `categoryName(category, language)` (`io.ntole.wyr.language`) makes
-  that choice for the Play screen's row and picker and the Submit form's chips, a category not read
-  yet showing by its id in every language, and `Category.nameIn(language)`
-  (`io.ntole.wyr.categories`) makes it again for the Categories screen, until one of the two goes. A
-  screen finds the language shown in `LocalLanguage`, which `WyrStrings` provides beside
-  `LocalStrings`. `CategoryNamesTest`, `CategoryNameTest`, `PlayScreenTest`, `PlayScreenDrawTest`,
-  `SubmitScreenDrawTest` and `CategoriesScreenDrawTest` hold each language to it.
+  that choice for the Play screen's row and the Submit form's chips, a category not read yet showing
+  by its id in every language, and `Category.nameIn(language)` (`io.ntole.wyr.categories`) makes it
+  again for the Categories screen, until one of the two goes. A screen finds the language shown in
+  `LocalLanguage`, which `WyrStrings` provides beside `LocalStrings`. `CategoryNamesTest`,
+  `CategoryNameTest`, `PlayScreenTest`, `PlayScreenDrawTest`, `SubmitScreenDrawTest` and
+  `CategoriesScreenDrawTest` hold each language to it.
 - **Numbers and symbols** *(built)*: a text holding a number or a name is a template, `{0}` and on,
   filled in by `fill` (`Templates.kt`), so each language puts it where its grammar wants it, and
   `StringsTest` holds every language's copy of a template to the same placeholders. **Points** have

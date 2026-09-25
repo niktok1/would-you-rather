@@ -372,6 +372,23 @@ class CategoriesViewModelTest {
         }
 
     @Test
+    fun `every category ticked is played as all of them and not as none`() =
+        runTest(dispatcher) {
+            // Not the same selection (CLAUDE.md §8d, *Categories*): a category a moderator adds later
+            // is in none, and not in these.
+            val viewModel = listed()
+            viewModel.open()
+            val every = LISTED.map { it.id }.toSet()
+
+            every.forEach(viewModel::toggle)
+            assertEquals(every, viewModel.state.value.ticked, "ticked, not folded into All")
+            viewModel.play()
+            testScheduler.advanceUntilIdle()
+
+            assertEquals(listOf(every), questions.changes)
+        }
+
+    @Test
     fun `Play waits for the change to land before it goes back`() =
         runTest(dispatcher) {
             val gate = CompletableDeferred<Unit>()

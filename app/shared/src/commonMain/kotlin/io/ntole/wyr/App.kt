@@ -241,7 +241,6 @@ private fun Play(onOpenCategories: () -> Unit) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val categories by viewModel.categories.collectAsStateWithLifecycle()
     val points by viewModel.points.collectAsStateWithLifecycle()
-    val picking by viewModel.picking.collectAsStateWithLifecycle()
 
     // Every time the screen is shown: the points move on the Account and Submit screens meanwhile.
     LaunchedEffect(viewModel) { viewModel.refreshPoints() }
@@ -250,16 +249,11 @@ private fun Play(onOpenCategories: () -> Unit) {
         state = state,
         categories = categories,
         points = points,
-        picking = picking,
         onChoose = viewModel::choose,
         onSkip = viewModel::skip,
         onToggleLike = viewModel::toggleLike,
         onNext = viewModel::next,
         onRetry = viewModel::retry,
         onOpenCategories = onOpenCategories,
-        onToggleCategory = viewModel::toggleCategory,
-        onSelectAllCategories = viewModel::selectAllCategories,
-        onApplyCategories = viewModel::applyCategories,
-        onCloseCategories = viewModel::closeCategories,
     )
 }

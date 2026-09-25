@@ -33,7 +33,6 @@ import io.ntole.wyr.descriptions
 import io.ntole.wyr.language.Language
 import io.ntole.wyr.language.PlayStrings
 import io.ntole.wyr.language.WyrStrings
-import io.ntole.wyr.language.categoryName
 import io.ntole.wyr.language.stringsOf
 import io.ntole.wyr.nodes
 import io.ntole.wyr.sizeNeeded
@@ -44,7 +43,6 @@ import io.ntole.wyr.theme.WyrLightColors
 import io.ntole.wyr.theme.WyrTheme
 import kotlin.math.abs
 import kotlin.test.Test
-import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
@@ -53,12 +51,10 @@ import kotlin.test.assertTrue
 
 /**
  * The Play screen (CLAUDE.md §8d, *The Play screen*) drawn off screen at two phones' sizes, in each
- * theme and each language, from every state it can be in, with every category played or a few, and
- * with the category picker open; read through its semantics, as a screen reader reads it, and
- * tapped through them. Compose measures and draws it all, so a layout that cannot be measured fails
- * here rather than when the screen opens. Whether what it draws fits is asked separately, since a
- * squeezed card draws, and so is whether the picker is drawn at all, since the screen draws without
- * it too.
+ * theme and each language, from every state it can be in, with every category played or a few; read
+ * through its semantics, as a screen reader reads it, and tapped through them. Compose measures and
+ * draws it all, so a layout that cannot be measured fails here rather than when the screen opens.
+ * Whether what it draws fits is asked separately, since a squeezed card draws.
  */
 class PlayScreenDrawTest {
     @Test
@@ -81,39 +77,6 @@ class PlayScreenDrawTest {
                     draw(state, dark, SHORT_PHONE_WIDTH, SHORT_PHONE_HEIGHT, categories = categories)
                 }
             }
-        }
-    }
-
-    /** The picker opens over whatever the screen shows, Play off while the screen cannot take a change. */
-    @Test
-    fun `the screen draws with the category picker open`() {
-        statesOf(QUESTION).forEach { state ->
-            listOf(false, true).forEach { dark ->
-                SELECTIONS.forEach { ticked ->
-                    draw(state, dark, WIDTH, HEIGHT, picking = ticked)
-                    draw(state, dark, SHORT_PHONE_WIDTH, SHORT_PHONE_HEIGHT, picking = ticked)
-                }
-            }
-        }
-    }
-
-    /**
-     * Drawing cannot see a dialog that never opens, since the screen draws without it too, and there
-     * is no Compose UI test library in the tree to look for it. So this compares pixels: the screen
-     * must draw differently with the picker open, and differently again with a category ticked in
-     * it. Two draws of one screen are the same pixels, which is what makes a difference mean one.
-     */
-    @Test
-    fun `the category picker opens over the screen with what it has ticked`() {
-        statesOf(QUESTION).forEach { state ->
-            val closed = pixels(state, picking = null)
-            assertContentEquals(closed, pixels(state, picking = null), "$state drawn twice")
-            val open = pixels(state, picking = emptySet())
-            assertFalse(closed.contentEquals(open), "$state draws the same with the picker open")
-            assertFalse(
-                open.contentEquals(pixels(state, picking = setOf("ETHICS"))),
-                "$state's picker draws the same with Ethics ticked",
-            )
         }
     }
 
@@ -153,79 +116,6 @@ class PlayScreenDrawTest {
                 )
             }
         }
-    }
-
-    /** Every category and All on one card, with Play under them, without scrolling, in every language. */
-    @Test
-    fun `the category picker fits a short phone`() {
-        Language.entries.forEach { language ->
-            SELECTIONS.forEach { ticked ->
-                val needed =
-                    heightNeeded(SHORT_PHONE_WIDTH) { WyrStrings(language) { Picker(KNOWN, CategoryPicking(ticked)) } }
-                assertTrue(
-                    needed <= SHORT_PHONE_HEIGHT,
-                    "the picker on $ticked in $language needs $needed of $SHORT_PHONE_HEIGHT",
-                )
-            }
-        }
-    }
-
-    /**
-     * The picker while it reads the categories with none read before, and once a read failed, with
-     * and without the ones read before: each draws, in both themes and every language, and says so
-     * under what it lists in one line of the language shown.
-     */
-    @Test
-    fun `the category picker draws while it reads the categories and when the read failed`() {
-        val pickings =
-            listOf(
-                emptyList<Category>() to CategoryPicking(emptySet(), isLoading = true),
-                emptyList<Category>() to CategoryPicking(emptySet(), failure = DomainError.NETWORK),
-                KNOWN to CategoryPicking(setOf("ETHICS"), failure = DomainError.SERVER),
-            )
-        pickings.forEach { (known, picking) ->
-            listOf(false, true).forEach { dark ->
-                Language.entries.forEach { language ->
-                    val scene =
-                        ImageComposeScene(SHORT_PHONE_WIDTH, SHORT_PHONE_HEIGHT, density = Density(1f)) {
-                            WyrTheme(darkTheme = dark) { WyrStrings(language) { Picker(known, picking) } }
-                        }
-                    try {
-                        assertEquals(SHORT_PHONE_WIDTH, scene.render().width)
-                        val note = assertNotNull(pickerNote(picking, known.isNotEmpty(), stringsOf(language)))
-                        assertTrue(note in scene.texts(), "$picking in $language: ${scene.texts()}")
-                    } finally {
-                        scene.close()
-                    }
-                }
-            }
-        }
-    }
-
-    /**
-     * The picker's words are the language shown, and so are the categories' names, the server's
-     * Serbian made Latin in Serbian Latin (CLAUDE.md §8f), in the server's order; nothing else shows.
-     */
-    @Test
-    fun `the category picker says its words and the categories in the language shown`() {
-        Language.entries.forEach { language ->
-            val strings = stringsOf(language)
-            val scene =
-                ImageComposeScene(width = SHORT_PHONE_WIDTH, height = SHORT_PHONE_HEIGHT, density = Density(1f)) {
-                    WyrTheme { WyrStrings(language) { Picker(KNOWN, CategoryPicking(setOf("ETHICS"))) } }
-                }
-            try {
-                scene.render()
-                val names = KNOWN.map { categoryName(it, language) }
-                val expected =
-                    listOf(strings.playScreen.pickerTitle, strings.playScreen.pickerAll) + names +
-                        listOf(strings.cancel, strings.play)
-                assertEquals(expected, scene.texts(), "in $language")
-            } finally {
-                scene.close()
-            }
-        }
-        assertEquals("Način života", categoryName(KNOWN[1], Language.SERBIAN_LATIN))
     }
 
     /**
@@ -412,7 +302,7 @@ class PlayScreenDrawTest {
     /**
      * A screen reader hears what a tap does where the text does not say it: a card on the reveal goes
      * on to the next question, which its option alone would make sound like answering again, and the
-     * categories played open the picker. Before the reveal a card's option says it all.
+     * categories played open the Categories screen. Before the reveal a card's option says it all.
      */
     @Test
     fun `a screen reader hears what a tap on a revealed card and on the categories does`() {
@@ -543,7 +433,7 @@ class PlayScreenDrawTest {
 
     /**
      * The categories played are named in the language shown, the server's Serbian made Latin in
-     * Serbian Latin, and a tap on them opens the picker in each.
+     * Serbian Latin, and a tap on them opens the Categories screen in each.
      */
     @Test
     fun `the categories played are named in the language shown`() {
@@ -746,7 +636,7 @@ class PlayScreenDrawTest {
         val scene =
             ImageComposeScene(width = SHORT_PHONE_WIDTH, height = SHORT_PHONE_HEIGHT, density = Density(1f)) {
                 WyrTheme(darkTheme = dark) {
-                    WyrStrings(language) { Screen(state, categories, points, picking = null, actions) }
+                    WyrStrings(language) { Screen(state, categories, points, actions) }
                 }
             }
         try {
@@ -763,35 +653,14 @@ class PlayScreenDrawTest {
         width: Int,
         height: Int,
         categories: Set<String> = emptySet(),
-        picking: Set<String>? = null,
         language: Language = Language.DEFAULT,
     ) {
         val scene =
             ImageComposeScene(width = width, height = height, density = Density(1f)) {
-                WyrTheme(darkTheme = dark) { WyrStrings(language) { Screen(state, categories, POINTS, picking) } }
+                WyrTheme(darkTheme = dark) { WyrStrings(language) { Screen(state, categories, POINTS) } }
             }
         try {
             assertEquals(width, scene.render().width)
-        } finally {
-            scene.close()
-        }
-    }
-
-    /** Every pixel of [state]'s screen at the short phone's size, in the light theme. */
-    private fun pixels(
-        state: PlayUiState,
-        picking: Set<String>?,
-    ): IntArray {
-        val scene =
-            ImageComposeScene(width = SHORT_PHONE_WIDTH, height = SHORT_PHONE_HEIGHT, density = Density(1f)) {
-                WyrTheme(darkTheme = false) { Screen(state, categories = emptySet(), POINTS, picking = picking) }
-            }
-        return try {
-            scene
-                .render()
-                .toComposeImageBitmap()
-                .toPixelMap()
-                .buffer
         } finally {
             scene.close()
         }
@@ -809,7 +678,7 @@ class PlayScreenDrawTest {
         fontScale: Float = 1f,
     ): Int =
         heightNeeded(width, "$state", fontScale) {
-            WyrStrings(language) { Screen(state, categories, POINTS, picking = null) }
+            WyrStrings(language) { Screen(state, categories, POINTS) }
         }
 
     /** The least height [content] needs at [width] for nothing in it to be squeezed. */
@@ -840,39 +709,24 @@ class PlayScreenDrawTest {
         return needed
     }
 
-    /** The picker's card alone, listing [known], as the dialog over the screen shows it. */
-    @Composable
-    private fun Picker(
-        known: List<Category>,
-        picking: CategoryPicking,
-    ) {
-        CategoryPicker(known, picking, canApply = true, onToggle = {}, onSelectAll = {}, onApply = {}, onClose = {})
-    }
-
-    /** The screen with [categories] played and [picking] ticked in the open picker, [KNOWN] read. */
+    /** The screen with [categories] played, [KNOWN] read. */
     @Composable
     private fun Screen(
         state: PlayUiState,
         categories: Set<String>,
         points: Int?,
-        picking: Set<String>?,
         actions: Actions = Actions(),
     ) {
         PlayScreen(
             state = state,
             categories = PlayedCategories(selected = categories, known = KNOWN),
             points = points,
-            picking = picking?.let(::CategoryPicking),
             onChoose = { side -> actions.tapped += "choose $side" },
             onSkip = { actions.tapped += "skip" },
             onNext = { actions.tapped += "next" },
             onToggleLike = { actions.tapped += "like" },
             onRetry = { actions.tapped += "retry" },
             onOpenCategories = { actions.tapped += "categories" },
-            onToggleCategory = {},
-            onSelectAllCategories = {},
-            onApplyCategories = {},
-            onCloseCategories = {},
         )
     }
 
