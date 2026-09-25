@@ -105,7 +105,6 @@ private fun DevConsole() {
         onNextQuestion = viewModel::nextQuestion,
         onResetQueue = viewModel::resetQueue,
         onVote = viewModel::vote,
-        onToggleLike = viewModel::toggleLike,
         onVoteById = viewModel::voteById,
         onRetryLastVote = viewModel::retryLastVote,
         onAnswerMany = viewModel::answerMany,
@@ -137,6 +136,7 @@ private fun Play() {
         state = state,
         onChoose = viewModel::choose,
         onSkip = viewModel::skip,
+        onToggleLike = viewModel::toggleLike,
         onNext = viewModel::next,
         onRetry = viewModel::retry,
     )

@@ -551,7 +551,7 @@ here: install a build from this branch on it.
   unlikes on the like's row, the grouped count with its `COUNT(CASE ...)` and the stats' subquery
   have run only on H2 (`LikeStoreTest` polls H2's
   `SESSIONS`). The client has sent likes only from the JVM (the live run above), and nobody has
-  looked at the console's Like button or its likes lines on any platform.
+  pressed the Play tab's Like, which replaced the console's, on any platform.
 - **Multiple categories on Postgres, and in the client.** The `EXISTS ... IN` filter, the batch's
   second statement for its categories and the batch insert of a submission's categories have run
   only on H2. On the client, several categories per question and a selection of several have run
@@ -847,7 +847,8 @@ questions the list shows; nothing is read again after a 403 or a 429.
 ### The dev console
 
 The app opens on the **Console** tab (`io.ntole.wyr.dev`) in a LOCAL or DEV build. **Play** is the
-game screen, which has taken over the console's Skip (CLAUDE.md §8d, *Skipping*).
+game screen, which has taken over the console's Skip and Like (CLAUDE.md §8d, *Skipping* and
+*Likes*).
 
 - **Session.** *Ensure session* mints a guest, or reuses the stored one. The header then shows the
   player id and when its access token expires. Opening the console reads the stats, which ensures a
@@ -861,12 +862,7 @@ game screen, which has taken over the console's Skip (CLAUDE.md §8d, *Skipping*
   `VoteOutcome` appears below, `replayed` included. A question the feed looped back to shows
   `answeredBefore: true` and logs as `question=<id> looped`. The header's total points is the last
   outcome's `totalPoints`; the Stats section has the server's own count. The question shows its
-  `likeCount` and `likedByMe` too, answered or not. *Like* (*Unlike* while `likedByMe`) sets the
-  player's like of it (`POST /v1/likes`), logged as `setLike(questionId=<id> liked=<bool>)` with the
-  server's answer, `question=<id> likes=<n> likedByMe=<bool>`, which the question then shows; the
-  stats are read after. A like that fails leaves the question as it was, so pressing again asks for
-  the same, which the server holds once. Liking your own question pays you a point: submit one,
-  approve it (*Moderating*), and page *Next question* until it comes up.
+  `likeCount` and `likedByMe` too, as the feed served them; liking is the Play tab's now.
 - **Retry last vote (same attempt)**, under Play. Sends the last vote again unchanged, attempt id
   included, whether or not it got an answer. While it is still that question's latest answer the server
   replays it, logged as `+0 total=<n> replayed`. A vote that never landed is paid as an answer.
@@ -880,20 +876,18 @@ game screen, which has taken over the console's Skip (CLAUDE.md §8d, *Skipping*
 - **Stats.** Every number `GET /v1/me` returns: total points, answers given (re-answers count,
   replays do not), distinct questions answered, the cycle, how many questions are still due in it,
   and the likes the player's own questions hold (`likesReceived`). Read when the console opens, after
-  every vote, *Like*, *Answer N* and *New guest*, and on *Read stats*. *Read stats* is an action like any other, logged as `readStats` whether it works or
+  every vote, *Answer N* and *New guest*, and on *Read stats*. *Read stats* is an action like any other, logged as `readStats` whether it works or
   not. The other reads are logged only when they fail, as `refreshStats`. A read that fails keeps
   what was shown, which after a vote is nothing: a vote's outcome drops the stats it outdated. A red
   `MISMATCH totalPoints` line means the stats and the last outcome disagree: a vote landed whose
   answer was lost (*Retry last vote* replays it, and the flag goes), a vote from the Play tab, a
-  like of one of the player's questions from another client between a vote and the first read to
-  work after it, or a bug. The two are compared only for one player. A read the server refused as a
+  like of one of the player's questions, from the Play tab or anyone, between a vote and the first
+  read to work after it, or a bug. The two are compared only for one player. A read the server refused as a
   dead session (a restarted `:server:run` does that) recovers it, and the stats are then a fresh
   guest's: instead of the flag, Stats shows `lastOutcome: paid to <id>, not compared`. A like of one
   of the player's questions, theirs or anyone's, moves the total without a vote, so once
   `likesReceived` differs from what the first read after the last vote counted, Stats shows
-  `lastOutcome: likesReceived was <n> then, not compared` instead of the flag. A *Like* sent before
-  any read after the last vote worked leaves nothing to measure from, so until the next vote Stats
-  shows `lastOutcome: a like went out before likesReceived was read, not compared`.
+  `lastOutcome: likesReceived was <n> then, not compared` instead of the flag.
   **To see the lazy cycle start:**
   once the last due question is answered or skipped, Stats shows the finished cycle with
   `dueThisCycle: 0`. The next cycle starts only when the feed is next asked for questions, which the

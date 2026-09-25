@@ -42,8 +42,12 @@ class PlayScreenDrawTest {
                 PlayUiState.Failed(DomainError.OUT_OF_QUESTIONS),
                 PlayUiState.Asking(question),
                 PlayUiState.Asking(question, isSubmitting = true),
+                PlayUiState.Asking(question.copy(likeCount = 1, likedByMe = true), isLiking = true),
+                PlayUiState.Asking(question.copy(likeCount = 12), likeError = DomainError.NETWORK),
                 PlayUiState.Revealed(question, outcome),
                 PlayUiState.Revealed(question, outcome.copy(pointsAwarded = 0, replayed = true)),
+                PlayUiState.Revealed(question.copy(likeCount = 3), outcome, isLiking = true),
+                PlayUiState.Revealed(question, outcome, likeError = DomainError.QUESTION_NOT_FOUND),
             )
 
         states.forEach { state -> listOf(false, true).forEach { dark -> draw(state, dark) } }
@@ -56,7 +60,7 @@ class PlayScreenDrawTest {
         val scene =
             ImageComposeScene(width = WIDTH, height = HEIGHT, density = Density(1f)) {
                 WyrTheme(darkTheme = dark) {
-                    PlayScreen(state = state, onChoose = {}, onSkip = {}, onNext = {}, onRetry = {})
+                    PlayScreen(state = state, onChoose = {}, onSkip = {}, onToggleLike = {}, onNext = {}, onRetry = {})
                 }
             }
         try {

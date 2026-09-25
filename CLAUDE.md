@@ -799,11 +799,16 @@ not moved yet still adds its section to the console. Navigation is the root tab 
 - The console has no account forms. Its Session section names the account by its last stats read,
   the username or `guest` (`accountOf`).
 
-The second to move is **Skip**, onto the Play screen (`io.ntole.wyr.play`; *Skipping*, below): a Skip
-button under the question while it is asked, where Next question stands once it is answered.
-`PlayViewModelTest` drives it over fakes and `PlayScreenDrawTest` draws every state in both themes;
-theme tokens only, and the option cards as they were (§5b). The console has no Skip any more; its
-Play section keeps A/B, Answer N and Retry last vote for now.
+The second to move is **Skip and Like**, onto the Play screen (`io.ntole.wyr.play`; *Skipping* and
+*Likes*, below):
+- Under the question, asked or revealed, its like count and **Like** (**Unlike** while the player
+  likes it); under those, **Skip** while it is asked, and **Next question** once it is answered.
+- One action at a time (`PlayUiState.OnQuestion.isBusy`): while a vote, a skip or a like is in
+  flight, every other control is off. A like that failed says why in one line under it; a skip that
+  failed moves on all the same (*Skipping*).
+- `PlayViewModelTest` drives it over fakes and `PlayScreenDrawTest` draws every state in both themes;
+  theme tokens only, and the option cards and brand colors as they were (§5b).
+- The console has neither any more; its Play section keeps A/B, Answer N and Retry last vote for now.
 
 - **Scoring** *(built; see §8c)*: every answer earns exactly **1 point**, whichever side
   it picks. There is no majority bonus and no streak: the streak is removed from the server, the
@@ -929,15 +934,18 @@ Play section keeps A/B, Answer N and Retry last vote for now.
     undo the like; nothing resends after any other failure. The answer is a `QuestionLikes`. A
     `Question` carries `likeCount` and `likedByMe` as the feed served them (`QuestionMapper`), and a
     queued one keeps them as fetched; `PlayerStats` carries `likesReceived`.
-  - *The console* shows both on the question in its Play section, beside a Like button (Unlike while
-    the player likes it). It asks for the opposite of what the question on screen shows, then puts
-    the server's answer on that question, and only on the one it names. So a like lost to `NETWORK`
-    leaves the question as it was, and pressing again asks for the like again. It reads the stats
-    after every like, a failed one too, and shows `likesReceived`. Since a like moves its author's
-    total without a vote, the console compares its stats with the last vote's total only while they
-    count as many likes received as the first read after that vote did (`likesMovedSinceOutcome`),
-    and not at all until the next vote once it sent a like before any such read worked
-    (`likesUnmeasuredAtOutcome`). It works out no points itself.
+  - *The Play screen* shows the like count under the question, asked or revealed, beside a Like
+    button (Unlike while the player likes it; `PlayViewModel.toggleLike`). It asks for the opposite
+    of what the question on screen shows, then puts the server's answer on that question: only on
+    the one the answer names, and only while it is still on screen. Nothing changes before the
+    answer, so a like that failed, a like lost to `NETWORK` included, leaves the question as it was
+    with one line saying why under it, and pressing again asks for the same like again. It works
+    out no points itself: a like of the player's own question moves their total without a vote, so
+    the reveal's total, which is the vote's, shows it only from the next vote on.
+  - *The console* no longer likes. It shows a question's `likeCount` and `likedByMe` as the feed
+    served them, and `likesReceived` in its stats. Since a like moves its author's total without a
+    vote, it compares its stats with the last vote's total only while they count as many likes
+    received as the first read after that vote did (`likesMovedSinceOutcome`).
 - **Submitting** *(built; details decided 2026-09-23)*: earns no points
   directly, because authors earn through likes. The author writes both options and **picks one or
   more categories** (each a real one, not `UNKNOWN`; *Categories*). A player may have at most **20

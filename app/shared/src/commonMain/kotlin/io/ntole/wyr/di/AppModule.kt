@@ -30,7 +30,6 @@ internal val uiModule =
                 getNextQuestion = get(),
                 castVote = get(),
                 getPlayerStats = get(),
-                setLike = get(),
                 httpTrace = get(),
             )
         }

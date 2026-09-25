@@ -29,7 +29,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
 import io.ntole.wyr.core.domain.player.PlayerStats
 import io.ntole.wyr.core.domain.question.Category
-import io.ntole.wyr.core.domain.question.Question
 import io.ntole.wyr.core.domain.session.SessionInfo
 import io.ntole.wyr.core.domain.vote.Side
 import io.ntole.wyr.core.domain.vote.VoteOutcome
@@ -57,7 +56,6 @@ fun DevConsoleScreen(
     onNextQuestion: () -> Unit,
     onResetQueue: () -> Unit,
     onVote: (Side) -> Unit,
-    onToggleLike: () -> Unit,
     onVoteById: (questionId: String, side: Side) -> Unit,
     onRetryLastVote: () -> Unit,
     onAnswerMany: (count: Int) -> Unit,
@@ -97,9 +95,6 @@ fun DevConsoleScreen(
                 Buttons {
                     Button(onClick = { onVote(Side.A) }, enabled = idle && question != null) { Text("A") }
                     Button(onClick = { onVote(Side.B) }, enabled = idle && question != null) { Text("B") }
-                    OutlinedButton(onClick = onToggleLike, enabled = idle && question != null) {
-                        Text(likeActionOf(question))
-                    }
                 }
                 val lastVote = state.lastVote
                 Value(
@@ -248,9 +243,6 @@ private fun Stats(state: DevConsoleState) {
     if (state.likesMovedSinceOutcome) {
         Value("lastOutcome", "likesReceived was ${state.likesReceivedAtOutcome} then, not compared")
     }
-    if (state.likesUnmeasuredAtOutcome) {
-        Value("lastOutcome", "a like went out before likesReceived was read, not compared")
-    }
     if (state.pointsMismatch) {
         val outcomeTotal = state.lastOutcome?.totalPoints
         CodeLine("MISMATCH totalPoints: stats=${stats?.totalPoints} lastOutcome=$outcomeTotal", failed = true)
@@ -338,9 +330,6 @@ private fun Buttons(content: @Composable () -> Unit) {
  * Registering and logging in are the game's Account tab (CLAUDE.md §8d, *Current focus*), not this.
  */
 internal fun accountOf(stats: PlayerStats?): String = if (stats == null) "stats not read" else stats.username ?: "guest"
-
-/** What the Like button does to [question]: unlike it when the player likes it, like it otherwise. */
-internal fun likeActionOf(question: Question?): String = if (question?.likedByMe == true) "Unlike" else "Like"
 
 /** Every one of [categories], in the order the set holds them. */
 internal fun namesOf(categories: Set<Category>): String = categories.joinToString(", ") { it.name }

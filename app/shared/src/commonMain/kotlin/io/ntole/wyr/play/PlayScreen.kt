@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -41,6 +42,7 @@ fun PlayScreen(
     state: PlayUiState,
     onChoose: (Side) -> Unit,
     onSkip: () -> Unit,
+    onToggleLike: () -> Unit,
     onNext: () -> Unit,
     onRetry: () -> Unit,
     modifier: Modifier = Modifier,
@@ -70,12 +72,12 @@ fun PlayScreen(
                     FailureBody(state.error, onRetry)
                 }
 
-                // Weighted, not filling: the Skip and Next buttons below need the height that is left.
+                // Weighted, not filling: the likes and the buttons below need the height that is left.
                 is PlayUiState.Asking -> {
                     QuestionBody(
                         question = state.question,
                         outcome = null,
-                        enabled = !state.isSubmitting,
+                        enabled = !state.isBusy,
                         onChoose = onChoose,
                         modifier = Modifier.weight(1f),
                     )
@@ -92,17 +94,23 @@ fun PlayScreen(
                 }
             }
 
+            // Before answering and after it alike: a like count is visible before answering (§8d).
+            if (state is PlayUiState.OnQuestion) {
+                Spacer(Modifier.size(dimens.spaceSm))
+                Likes(state, onToggleLike)
+            }
+
             // Before answering the way on is to skip the question, and after it the next question.
             if (state is PlayUiState.Asking) {
                 Spacer(Modifier.size(dimens.spaceMd))
-                OutlinedButton(onClick = onSkip, enabled = !state.isSubmitting, modifier = Modifier.fillMaxWidth()) {
+                OutlinedButton(onClick = onSkip, enabled = !state.isBusy, modifier = Modifier.fillMaxWidth()) {
                     Text("Skip")
                 }
             }
 
             if (state is PlayUiState.Revealed) {
                 Spacer(Modifier.size(dimens.spaceMd))
-                Button(onClick = onNext, modifier = Modifier.fillMaxWidth()) {
+                Button(onClick = onNext, enabled = !state.isBusy, modifier = Modifier.fillMaxWidth()) {
                     Text("Next question")
                 }
             }
@@ -284,6 +292,64 @@ private fun OptionCard(
         }
     }
 }
+
+/**
+ * The question's like count and the player's Like, or Unlike while they like it, with how the last
+ * one failed under them. The count is the server's (CLAUDE.md §8d, *Likes*), never worked out here.
+ */
+@Composable
+private fun Likes(
+    state: PlayUiState.OnQuestion,
+    onToggleLike: () -> Unit,
+) {
+    val colors = WyrThemeAccessors.colors
+    val dimens = WyrThemeAccessors.dimens
+
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(dimens.spaceSm),
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text(
+                text = likeCountOf(state.question),
+                color = colors.primaryText,
+                fontWeight = FontWeight.Medium,
+                modifier = Modifier.weight(1f),
+            )
+            OutlinedButton(onClick = onToggleLike, enabled = !state.isBusy) {
+                Text(likeActionOf(state.question))
+            }
+        }
+
+        state.likeError?.let { error ->
+            Text(
+                text = likeFailureMessage(error),
+                color = MaterialTheme.colorScheme.error,
+                fontSize = WyrTypeScale.statLabel,
+            )
+        }
+    }
+}
+
+/** How many players like [question], this one included, as the server counted them. */
+internal fun likeCountOf(question: Question): String =
+    if (question.likeCount == 1) "1 like" else "${question.likeCount} likes"
+
+/** What the Like button does to [question]: unlike it when the player likes it, like it otherwise. */
+internal fun likeActionOf(question: Question): String = if (question.likedByMe) "Unlike" else "Like"
+
+/**
+ * Player-facing copy for a like or unlike that failed, by its [DomainError], never the server's
+ * message. The question stays as it was on screen, so pressing again is always the way to retry.
+ */
+internal fun likeFailureMessage(error: DomainError): String =
+    when (error) {
+        DomainError.NETWORK -> "Can't reach the game right now. Try again."
+        DomainError.RATE_LIMITED -> "Slow down a moment, then try again."
+        DomainError.QUESTION_NOT_FOUND -> "That question is no longer in the game."
+        else -> "Something went wrong. Try again."
+    }
 
 @Composable
 private fun OrPill() {

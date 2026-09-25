@@ -15,15 +15,40 @@ import io.ntole.wyr.core.domain.vote.VoteOutcome
 sealed interface PlayUiState {
     data object Loading : PlayUiState
 
+    /**
+     * A question on screen, asked or revealed, with its likes as the server last counted them
+     * (CLAUDE.md §8d, *Likes*): the feed's, until the answer to a like of the player's own.
+     *
+     * [isLiking] while the player's like or unlike of it is in flight. [likeError] is how the last
+     * one failed, shown until the next is asked for or the question is answered.
+     */
+    sealed interface OnQuestion : PlayUiState {
+        val question: Question
+        val isLiking: Boolean
+        val likeError: DomainError?
+
+        /** While anything is in flight, when nothing else goes: one action at a time. */
+        val isBusy: Boolean
+    }
+
+    /** [isSubmitting] while the vote on [question] is in flight. */
     data class Asking(
-        val question: Question,
+        override val question: Question,
         val isSubmitting: Boolean = false,
-    ) : PlayUiState
+        override val isLiking: Boolean = false,
+        override val likeError: DomainError? = null,
+    ) : OnQuestion {
+        override val isBusy: Boolean get() = isSubmitting || isLiking
+    }
 
     data class Revealed(
-        val question: Question,
+        override val question: Question,
         val outcome: VoteOutcome,
-    ) : PlayUiState
+        override val isLiking: Boolean = false,
+        override val likeError: DomainError? = null,
+    ) : OnQuestion {
+        override val isBusy: Boolean get() = isLiking
+    }
 
     /**
      * [lostVote] is the vote that failed when it is unknown whether it landed. Try again sends it

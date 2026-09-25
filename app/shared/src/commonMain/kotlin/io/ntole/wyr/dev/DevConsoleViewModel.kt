@@ -3,8 +3,6 @@ package io.ntole.wyr.dev
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import io.ntole.wyr.core.domain.error.WyrException
-import io.ntole.wyr.core.domain.like.QuestionLikes
-import io.ntole.wyr.core.domain.like.SetLike
 import io.ntole.wyr.core.domain.player.GetPlayerStats
 import io.ntole.wyr.core.domain.player.PlayerStats
 import io.ntole.wyr.core.domain.question.Category
@@ -44,7 +42,6 @@ class DevConsoleViewModel(
     private val getNextQuestion: GetNextQuestion,
     private val castVote: CastVote,
     private val getPlayerStats: GetPlayerStats,
-    private val setLike: SetLike,
     httpTrace: HttpTrace,
     private val timeSource: TimeSource = TimeSource.Monotonic,
 ) : ViewModel() {
@@ -93,41 +90,6 @@ class DevConsoleViewModel(
         }
 
     fun nextQuestion() = perform("nextQuestion") { loadQuestion().summary() }
-
-    /**
-     * Likes the question on screen, or unlikes it if the player likes it (CLAUDE.md §8d), then shows
-     * it with its likes as the server answered them. A like pays the question's author, who may be
-     * this player, so the stats are read again after, a failed like's too: its answer may be what was
-     * lost.
-     *
-     * Which to ask for is read off the question on screen, and the request sets the like rather than
-     * toggling it. So a like whose answer was lost leaves the question as it was, and pressing again
-     * asks for the like again, which the server holds once however many times it lands.
-     */
-    fun toggleLike() {
-        val question = _state.value.question ?: return
-        val liked = !question.likedByMe
-        perform("setLike", args = "questionId=${question.id} liked=$liked", readsStats = true) {
-            // Before it goes out, since a like whose answer is lost may still have landed. With no
-            // read yet to have measured the likes since the last outcome, the first to work would
-            // count this one too.
-            _state.update {
-                val unmeasured = it.lastOutcome != null && it.likesReceivedAtOutcome == null
-                it.copy(likeSentBeforeMeasure = it.likeSentBeforeMeasure || unmeasured)
-            }
-            val likes = setLike(question.id, liked)
-            _state.update { state ->
-                val shown = state.question
-                // Only ever onto the question the server says it answered for.
-                if (shown?.id != likes.questionId) {
-                    state
-                } else {
-                    state.copy(question = shown.copy(likeCount = likes.likeCount, likedByMe = likes.likedByMe))
-                }
-            }
-            likes.summary()
-        }
-    }
 
     /**
      * Adds [category] to the categories the feed is filtered to, or takes it out if it is in them,
@@ -228,15 +190,13 @@ class DevConsoleViewModel(
         val paidTo = sessions.currentPlayerId()
         // The stats read before this outcome no longer describe the server, so they go rather than
         // be compared with it, until the read that follows every vote brings them back. The likes
-        // received are measured from that read on, so the previous outcome's measure goes too, and
-        // with it any like sent before one was taken.
+        // received are measured from that read on, so the previous outcome's measure goes too.
         _state.update {
             it.copy(
                 lastOutcome = outcome,
                 lastOutcomePlayerId = paidTo,
                 stats = null,
                 likesReceivedAtOutcome = null,
-                likeSentBeforeMeasure = false,
             )
         }
         return outcome
@@ -251,10 +211,8 @@ class DevConsoleViewModel(
     private suspend fun loadStats(): PlayerStats {
         val stats = getPlayerStats()
         _state.update {
-            // The first read after an outcome sets the likes later reads are measured against, unless
-            // a like went out before it, which it may count already.
-            val measures = it.lastOutcome != null && !it.likeSentBeforeMeasure
-            val atOutcome = it.likesReceivedAtOutcome ?: if (measures) stats.likesReceived else null
+            // The first read after an outcome sets the likes later reads are measured against.
+            val atOutcome = it.likesReceivedAtOutcome ?: if (it.lastOutcome != null) stats.likesReceived else null
             it.copy(stats = stats, likesReceivedAtOutcome = atOutcome)
         }
         return stats
@@ -355,8 +313,6 @@ class DevConsoleViewModel(
     private fun SentVote.args(): String = "questionId=$questionId side=$side attempt=${attempt.value}"
 
     private fun VoteOutcome.summary(): String = "+$pointsAwarded total=$totalPoints" + if (replayed) " replayed" else ""
-
-    private fun QuestionLikes.summary(): String = "question=$questionId likes=$likeCount likedByMe=$likedByMe"
 
     private fun PlayerStats.summary(): String =
         "total=$totalPoints answers=$answersGiven questions=$questionsAnswered cycle=$cycle due=$dueThisCycle " +

@@ -4,7 +4,9 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import io.ntole.wyr.core.domain.error.DomainError
 import io.ntole.wyr.core.domain.error.WyrException
+import io.ntole.wyr.core.domain.like.SetLike
 import io.ntole.wyr.core.domain.question.GetNextQuestion
+import io.ntole.wyr.core.domain.question.Question
 import io.ntole.wyr.core.domain.question.QuestionRepository
 import io.ntole.wyr.core.domain.question.SkipQuestion
 import io.ntole.wyr.core.domain.vote.AttemptId
@@ -13,12 +15,14 @@ import io.ntole.wyr.core.domain.vote.Side
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 class PlayViewModel(
     private val getNextQuestion: GetNextQuestion,
     private val castVote: CastVote,
     private val skipQuestion: SkipQuestion,
+    private val setLike: SetLike,
     private val questions: QuestionRepository,
 ) : ViewModel() {
     private val _state = MutableStateFlow<PlayUiState>(PlayUiState.Loading)
@@ -48,8 +52,8 @@ class PlayViewModel(
     fun choose(side: Side) {
         val asking = _state.value as? PlayUiState.Asking ?: return
 
-        // Guard against a double tap turning into two answers.
-        if (asking.isSubmitting) return
+        // Guard against a double tap turning into two answers, and against answering mid-like.
+        if (asking.isBusy) return
         // One attempt per tap (CLAUDE.md §8d), kept for any retry of this vote.
         submit(PendingVote(asking.question, side, AttemptId.random()))
     }
@@ -68,8 +72,8 @@ class PlayViewModel(
      */
     fun skip() {
         val asking = _state.value as? PlayUiState.Asking ?: return
-        // Not while its vote is in flight: the question is being answered, not skipped.
-        if (asking.isSubmitting) return
+        // Not while its vote is in flight, when it is being answered, nor while its like is.
+        if (asking.isBusy) return
         // Loading at once, so a second tap finds nothing to skip.
         _state.value = PlayUiState.Loading
 
@@ -80,6 +84,43 @@ class PlayViewModel(
                 // Moved on all the same (above). Only a WyrException: a cancellation must go on up.
             }
             next()
+        }
+    }
+
+    /**
+     * Likes the question on screen, or unlikes it if the player likes it (CLAUDE.md §8d, *Likes*),
+     * before answering or after, then shows it with its likes as the server answered them.
+     *
+     * Which to ask for is read off the question on screen, and the request sets the like rather
+     * than toggling it. Nothing changes on screen until the server answers, so a like that failed
+     * leaves the question as it was, with the failure beside it, and pressing again asks for the
+     * same like again, which the server holds once however many times it lands. Nothing else goes
+     * while it is in flight.
+     */
+    fun toggleLike() {
+        val shown = _state.value as? PlayUiState.OnQuestion ?: return
+        if (shown.isBusy) return
+        val question = shown.question
+        val liking = shown.withLike(isLiking = true, likeError = null)
+        _state.value = liking
+
+        viewModelScope.launch {
+            val settled =
+                try {
+                    val likes = setLike(question.id, !question.likedByMe)
+                    // Only ever onto the question the server says it answered for.
+                    val answered =
+                        if (likes.questionId == question.id) {
+                            question.copy(likeCount = likes.likeCount, likedByMe = likes.likedByMe)
+                        } else {
+                            question
+                        }
+                    liking.withLike(question = answered, isLiking = false, likeError = null)
+                } catch (failure: WyrException) {
+                    liking.withLike(isLiking = false, likeError = failure.error)
+                }
+            // Unless the player has moved on meanwhile, when it is no longer the question on screen.
+            _state.update { current -> if (current == liking) settled else current }
         }
     }
 
@@ -118,4 +159,14 @@ class PlayViewModel(
                 }
         }
     }
+
+    private fun PlayUiState.OnQuestion.withLike(
+        question: Question = this.question,
+        isLiking: Boolean,
+        likeError: DomainError?,
+    ): PlayUiState.OnQuestion =
+        when (this) {
+            is PlayUiState.Asking -> copy(question = question, isLiking = isLiking, likeError = likeError)
+            is PlayUiState.Revealed -> copy(question = question, isLiking = isLiking, likeError = likeError)
+        }
 }
