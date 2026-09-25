@@ -192,6 +192,7 @@ jobs:
           ./gradlew --no-daemon \
             :app:shared:linkDebugFrameworkIosSimulatorArm64 \
             :app:shared:iosSimulatorArm64Test \
+            :core:domain:compileTestKotlinIosSimulatorArm64 \
             :core:network:compileTestKotlinIosSimulatorArm64 \
             :core:data:compileTestKotlinIosSimulatorArm64
 

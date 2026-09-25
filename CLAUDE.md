@@ -1286,8 +1286,8 @@ base URL, a display name, and whether a build for it shows the developer tools. 
 - Verify with `./gradlew ktlintCheck` plus the test and compile tasks listed in
   `.github/workflows/ci.yml`. That workflow is the definition of "green". Besides `verify` it runs
   `server-postgres` (the server suite against a Postgres service container), `docker-smoke` (builds
-  the image and polls `/health`), and `ios` (framework link, simulator tests, `:core:network`'s and
-  `:core:data`'s test compiles, and an `xcodebuild` simulator build on macOS). All four passed on
+  the image and polls `/health`), and `ios` (framework link, simulator tests, the three `:core`
+  modules' test compiles, and an `xcodebuild` simulator build on macOS). All four passed on
   their first run, 2026-09-24. None of those three
   can run on this machine: read their results with `gh run list -R niktok1/would-you-rather`,
   through a login to the personal account only (§7). `:server:test` uses H2 unless `WYR_TEST_JDBC_URL` (plus
@@ -1299,6 +1299,6 @@ base URL, a display name, and whether a build for it shows the developer tools. 
   run `./gradlew :app:shared:compileKotlinIosSimulatorArm64 :app:shared:compileTestKotlinIosSimulatorArm64`
   locally, and before pushing a common test in `:core:domain`, `:core:network` or `:core:data`, that
   module's `compileTestKotlinIosSimulatorArm64`: Kotlin/Native refuses a comma in a test's name, which
-  the JVM takes. No CI job compiles `:core:domain`'s, so for it this local compile is the only check.
+  the JVM takes. The ios job compiles all three, so CI catches it too, but only after the push.
   Framework linking, the simulator tests and the Xcode app stay unverified until the
   `ios` CI job or a machine with full Xcode runs them.

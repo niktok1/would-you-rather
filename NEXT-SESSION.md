@@ -543,11 +543,11 @@ automatically from every green commit on `main` (its URL is on its Render page).
   statement that fails on a unique key logs the driver's message, which on PostgreSQL names the
   key's value, as it does a refresh token's hash; none can collide with 256 random bits behind it.
 - **The `:core` modules' tests on iOS.** The ios CI job runs `:app:shared`'s tests on the simulator
-  and only compiles `:core:data`'s and `:core:network`'s, which Kotlin/Native refused while their
+  and only compiles the `:core` modules' tests, which Kotlin/Native refused while their
   names held commas (`SharedSessionStoreTest`'s among them, from before `feat/recovery-secret`, and
   five the moderation app's branch added, renamed at the merge); their JVM and Android host runs are
-  what cover them. `:core:domain`'s iOS test compile is in no job: it passes here since the merge
-  renamed the one name with a comma the moderation branch gave it.
+  what cover them. `:core:domain`'s iOS test compile joined the job after the merge, which renamed
+  the one name with a comma the moderation branch gave it.
 - **The settling refresh in a real browser or desktop pair.** Two tabs sharing `localStorage`, or
   two desktop instances sharing JVM preferences, have raced a refresh only in
   `SharedSessionStoreTest` on `MockEngine`. JVM preferences sync between processes on their own
