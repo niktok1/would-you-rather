@@ -413,21 +413,47 @@ class SessionStoreTest {
 
     /**
      * A device whose last refresh by a build without sessions never got its answer still holds its
-     * session's token, and goes on from the session. Its rotation rewrites the mirror, which holds only
-     * the token that answer carried and nobody received, so that token is dead: a session's rotation
-     * never leaves the mirror to a build without sessions.
+     * session's token, which that build left as the mirror's previous one. It is spent there, as that
+     * build would have spent it, and folded back into the session, whose previous token is then the
+     * one the lost answer carried, as after any refresh whose answer was lost.
      */
     @Test
-    fun `a device whose refresh by a build without sessions was lost goes on from its session`() {
+    fun `a device whose refresh by a build without sessions was lost goes on through the mirror`() {
         val database = connectH2(h2Url("wyr-session-store-fold-lost"), Connection.TRANSACTION_READ_COMMITTED)
         val player = transaction(database) { createPlayer(refreshTokenHash = "phone") }
+        val opened = sessionIdsOf(database, player.id)
         transaction(database) { rotateAsBuildWithoutSessions("phone", newHash = "never-received") }
 
         val rotated = transaction(database) { rotate("phone", newHash = "forward", now = ROTATED_AT) }
 
         assertEquals(player.id, rotated)
-        assertEquals(Mirror("forward", "phone", ROTATED_AT, marked = "forward"), mirrorOf(database, player.id))
-        assertNull(transaction(database) { rotate("never-received", newHash = "late") })
+        assertEquals(opened, sessionIdsOf(database, player.id), "the same session, and no other")
+        assertEquals(setOf(StoredTokens("forward", "never-received", ROTATED_AT)), sessionsOf(database, player.id))
+        assertEquals(Mirror("forward", "never-received", ROTATED_AT, marked = "forward"), mirrorOf(database, player.id))
+    }
+
+    /**
+     * After a rollback whose build without sessions rotated the mirror twice, the session the mirror
+     * copied still holds tokens that build displaced, both dead by its rules. A stale copy of either
+     * stays dead: spent in the session, it would work a third time, and the mirror written from it
+     * would refuse the token the device went on with.
+     */
+    @Test
+    fun `a session's own tokens stay dead once a build without sessions has moved the mirror on from it`() {
+        val database = connectH2(h2Url("wyr-session-store-moved-on"), Connection.TRANSACTION_READ_COMMITTED)
+        val player = transaction(database) { createPlayer(refreshTokenHash = "phone") }
+        transaction(database) { rotate("phone", newHash = "phone-1", now = ROTATED_AT) }
+        transaction(database) { rotateAsBuildWithoutSessions("phone-1", newHash = "old-1") }
+        transaction(database) { rotateAsBuildWithoutSessions("old-1", newHash = "old-2") }
+
+        val current = transaction(database) { rotate("phone-1", newHash = "stale-current") }
+        val previous = transaction(database) { rotate("phone", newHash = "stale-previous") }
+
+        assertNull(current, "the session's current token")
+        assertNull(previous, "the session's previous one")
+        val device = transaction(database) { rotate("old-2", newHash = "forward", now = ROTATED_AT + 1) }
+        assertEquals(player.id, device, "the device's own token still refreshes")
+        assertEquals(setOf(StoredTokens("forward", "old-2", ROTATED_AT + 1)), sessionsOf(database, player.id))
     }
 
     /**

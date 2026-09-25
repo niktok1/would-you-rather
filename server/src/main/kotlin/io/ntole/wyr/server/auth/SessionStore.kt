@@ -10,6 +10,7 @@ import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.core.greater
 import org.jetbrains.exposed.v1.core.isDistinctFrom
 import org.jetbrains.exposed.v1.core.isNull
+import org.jetbrains.exposed.v1.core.notExists
 import org.jetbrains.exposed.v1.core.or
 import org.jetbrains.exposed.v1.core.statements.UpdateBuilder
 import org.jetbrains.exposed.v1.core.stringParam
@@ -128,6 +129,13 @@ object SessionStore {
      * folded back into a session ([foldMirror]), so the player keeps it across the roll-forward too.
      * And a token that became a session's while this refresh looked, because a refresh racing it
      * folded it first, is spent there after all, as two refreshes racing with one session's token are.
+     *
+     * The session the mirror copied is not spent while such a build has moved the mirror on from it
+     * ([notMovedOnWithoutSessions]): the device went on with the mirror's tokens, and by that build's
+     * rules the session's are ones it displaced, dead once it rotated twice. Spent in the session, a
+     * stale copy of one would work again, and the mirror written from it would refuse the device's own.
+     * Where that build rotated only once, the session's current token is the mirror's previous one,
+     * and the fold spends it there, as that build would have.
      */
     fun rotate(
         presentedHash: String,
@@ -147,8 +155,9 @@ object SessionStore {
         graceMillis: Long?,
         now: Long,
     ): String? {
+        val spendable = sessionColumns.spendable(presentedHash, graceMillis, now) and notMovedOnWithoutSessions()
         val swapped =
-            Sessions.update({ sessionColumns.spendable(presentedHash, graceMillis, now) }) { row ->
+            Sessions.update({ spendable }) { row ->
                 // The right-hand columns are the row as it stood before this update, on both engines,
                 // so whichever token was presented, the one current until now becomes the previous one.
                 row[previousRefreshTokenHash] = refreshTokenHash
@@ -168,6 +177,22 @@ object SessionStore {
         mirror(session)
         return session.playerId
     }
+
+    /**
+     * Whether the session being updated is not the one a build without sessions moved its player's
+     * mirror on from: the session whose current token is the mark, while the mirror's current token is
+     * no longer it. Read in the rotation's own `UPDATE`, by the player's key.
+     */
+    private fun notMovedOnWithoutSessions(): Op<Boolean> =
+        notExists(
+            Players
+                .select(Players.id)
+                .where {
+                    (Players.id eq Sessions.playerId) and
+                        (Players.mirroredRefreshTokenHash eq Sessions.refreshTokenHash) and
+                        (Players.refreshTokenHash isDistinctFrom Players.mirroredRefreshTokenHash)
+                },
+        )
 
     /**
      * Spends [presentedHash] in the mirror of a player whose mirror a build without sessions has moved,

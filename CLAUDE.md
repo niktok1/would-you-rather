@@ -430,15 +430,21 @@ auth SDK, satisfying §2.
     client replaces its player with a fresh guest: the build before has no recovery. It never reads
     or writes the recovery secret either, so once rolled forward a refused device that kept its secret
     can recover its player. The guests it mints have no session, no mark and no secret.
-  - *Rolling forward* needs nothing by hand. A mirror whose current token is not its mark was moved by
-    a build without sessions: during a rollback, or while the build before still serves as a deploy's
-    new instance starts, which the first deploy of V4 goes through too. A refresh no session takes is
-    tried there by the same rules and, spent, folded back into the session the mark names, the device
-    the build without sessions went on refreshing, or into a new session for a guest minted there
-    (`SessionStore.foldMirror`). The mark is read first so that session is locked before the player,
-    and the player's update is a compare-and-set on it (§4). Two refreshes racing with such a token
-    behave as two with a session's token. `SessionStoreTest` pins the mirror, a build without sessions
-    refreshing from it, both folds and their races.
+  - *Rolling forward* needs nothing by hand. A mirror whose current token is not its mark was moved
+    by a build without sessions: during a rollback, or while the build before still serves as a
+    deploy's new instance starts, which the first deploy of V4 goes through too. A refresh no
+    session takes is tried there by the same rules and, spent, folded back into the session the mark
+    names, the device the build without sessions went on refreshing, or into a new session for a
+    guest minted there (`SessionStore.foldMirror`). The mark is read first so that session is locked
+    before the player, and the player's update is a compare-and-set on it (§4). Two refreshes racing
+    with such a token behave as two with a session's token. Until the fold, the session the mark
+    names spends none of its own tokens (`notMovedOnWithoutSessions`, in the rotation's `UPDATE`):
+    the device went on with the mirror's, and by that build's rules the session's were displaced, so
+    a stale copy of one stays dead rather than work a third time and rewrite the mirror over the
+    device's token. A device whose answer from that build was lost still holds the session's current
+    token, which is the mirror's previous one, and the fold spends it there, under the grace this
+    build gives it. `SessionStoreTest` pins the mirror, a build without sessions refreshing from it,
+    both folds and their races.
   - *What a rollback still costs:* every device but the one used last, as above; and, for a player
     with more than one session, the chain a build without sessions moved in the mirror, if another of
     their sessions refreshes first once rolled forward, since a session's rotation always rewrites the
