@@ -917,56 +917,56 @@ Locally the same works against `ADMIN_TOKEN=... ./gradlew :server:run` (*Moderat
 
 ### Skip and Like on Play
 
-The game's **Play** tab skips and likes (CLAUDE.md §8d, *Skipping* and *Likes*), in every build,
-PROD's included.
+The game's **Play** screen skips and likes (CLAUDE.md §8d, *The Play screen*, *Skipping* and
+*Likes*), in every build, PROD's included, laid out as `feat/play-redesign` left it: two cards and
+one row between them, the phone in Serbian Cyrillic as it opens.
 
 **To try it on a phone** (`devDebug`, against the dev server, whose in-memory H2 forgets everything on
 a deploy or a spin-down; the server needs nothing new):
 
-1. `./gradlew :app:androidApp:installDevDebug` and open *WYR Dev*: it opens on the **Play** tab, as
-   every build does.
-2. One row under the two options: the like count (`0 likes` on a question nobody likes), **Like**
-   and **Skip**.
-   Press **Like**: the count goes up by one and the button reads **Unlike**; press it again and both
-   go back. The count is the server's, so another player's like shows only when the question is
+1. `./gradlew :app:androidApp:installDevDebug`, open *WYR Dev*, and tap **Играј** on Home.
+2. On the right of the row between the cards: the heart and the like count, empty and `0` on a
+   question nobody likes. Tap the heart: it fills and the count goes up by one; tap it again and
+   both go back. The count is the server's, so another player's like shows only when the question is
    served again.
-3. Press **Skip**: the next question comes, and no points. The skipped one is not served again this
-   cycle: with only the 24 seeds and no category picked, it comes back once the other 23 are answered
-   or skipped, in the next cycle.
-4. Answer a question: the reveal keeps the like count and **Like**, and **Next question** stands where
-   Skip was. A like there works the same. The reveal is as tall as it was before Skip and Like, so
-   what fitted a phone then fits it now: on an iPhone SE, each side's vote count.
-5. Airplane mode, then **Like**: the question stays as it was and the line under the cards says
-   *Can't reach the game right now. Try again.*, where the reveal's verdict stands once the question
-   is answered. Network back on, **Like** again: it goes through. **Skip** offline
-   moves on all the same while questions are queued, and shows *Can't reach the game* with *Try again*
-   once they run out.
-6. A like of your own question pays you a point: submit one on the **Submit** tab (*Submit on its
-   own tab*), approve it in the moderation app, and play until it comes up. Like it, and the
-   **Account** tab's points go up by one; the reveal's total is the vote's, so it shows the point
-   from the next vote on.
+3. Tap the skip icon in the middle of the top bar: the next question comes, and no points. The
+   skipped one is not served again this cycle: with only the 24 seeds and no category picked, it
+   comes back once the other 23 are answered or skipped, in the next cycle.
+4. Tap a card: both percentages count up over 2.5 seconds, your pick outlined, the points in the
+   middle of the row move to the vote's total, and Skip leaves the top bar. The heart works the same
+   there. A card does nothing for half a second after the reveal lands, so a double tap cannot skip
+   it; then either card is the next question. With TalkBack on, a revealed card says *Следеће
+   питање*, and the categories *Промени категорије*.
+5. Airplane mode, then the heart: the question stays as it was and the points' place says *Игра није
+   доступна.* without moving the cards, at a larger font size in the phone's settings too. Network
+   back on, the heart again: it goes through. Skip offline moves on all the same while questions are
+   queued, and shows *Игра није доступна.* with **Пробај опет** once they run out.
+6. A like of your own question pays you a point: submit one (the account icon, then *Пошаљи
+   питање*), approve it in the moderation app, and play until it comes up. Like it: the points in
+   the row show the point from the next vote on, or once Play is shown again (the home icon, then
+   **Играј**).
 
 ### Categories on Play
 
-The game's **Play** tab picks the categories played (CLAUDE.md §8d, *Categories*), in every build,
-PROD's included. The selection lives in memory for the app's
-life, so a launch plays every category again.
+The game's **Play** screen picks the categories played (CLAUDE.md §8d, *The Play screen* and
+*Categories*), in every build, PROD's included. The selection lives in memory for the app's life, so
+a launch plays every category again.
 
 **To try it on a phone** (`devDebug`, as for *Skip and Like on Play*; the server needs nothing new):
 
-1. `./gradlew :app:androidApp:installDevDebug`, open *WYR Dev*, and go to the **Play** tab. Under the
-   title: **All** over *change categories*, which should read as something to tap.
-2. Tap it: a dialog of *All categories* (ticked) and the five categories. Tick *Food* and *Ethics*:
-   nothing changes behind the dialog yet. **Play**: the question on screen goes, and the next is filed
-   under Food or Ethics; the header reads *Food, Ethics*, beside the points once you answer.
+1. `./gradlew :app:androidApp:installDevDebug`, open *WYR Dev*, and tap **Играј**. On the left of the
+   row between the cards: **Све** and a small chevron, which should read as something to tap.
+2. Tap it: a dialog, in English for now, of *All categories* (ticked) and the five categories. Tick
+   *Food* and *Ethics*: nothing changes behind the dialog yet. **Play**: the question on screen goes,
+   and the next is filed under Food or Ethics; the row reads *Food, Ethics*.
 3. Open it again and **Cancel**, or tap outside it: nothing changes. **Play** with what is already
    played: the question stays.
-4. Tick every category: the header cuts the names short on its one line, and the reveal is as tall as
-   before (each side's vote count still shows on an iPhone SE).
+4. Tick every category: the row cuts the names short on its one line, and the points and the like
+   count stay whole, in their places.
 5. While a vote or a like is in flight the categories do nothing when tapped. *All categories*, then
-   **Play**, goes back to the whole feed. Categories the server has no questions in would show
-   *You've answered everything we have*, with the categories there as the way out; every category
-   has seeds, so only a server without them shows it.
+   **Play**, goes back to the whole feed. Categories the server has no questions in would show *Нема
+   више питања.* with **Пробај опет** and the categories as the way out; every category has seeds,
+   so only a server without them shows it.
 
 ### Moderating
 
