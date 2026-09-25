@@ -12,6 +12,7 @@ import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import java.util.UUID
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 
 class SeedTest {
     /**
@@ -100,6 +101,19 @@ class SeedTest {
         Categories.selectAll().orderBy(Categories.id).map { row ->
             listOf(row[Categories.id], row[Categories.nameSr], row[Categories.nameEn], row[Categories.createdAt])
         }
+
+    /**
+     * Every seed starts with made-up votes, so its split looks like a crowd's from the first answer,
+     * and no two alike: a different total and a different split each.
+     */
+    @Test
+    fun `every seed has made-up votes of its own`() {
+        val votes = Seed.SEEDS.map { (_, seed) -> seed.votes }
+
+        assertTrue(votes.all { (a, b) -> a > 0 && b > 0 }, "both sides of every seed")
+        assertEquals(votes.size, votes.map { (a, b) -> a + b }.toSet().size, "no two totals alike")
+        assertEquals(votes.size, votes.map { (a, b) -> a * 1_000 / (a + b) }.toSet().size, "no two splits alike")
+    }
 
     /** What one seed writes, on a database of its own. */
     private fun seededOnce(): Map<String, Long> =

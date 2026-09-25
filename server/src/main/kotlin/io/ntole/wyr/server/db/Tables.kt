@@ -193,6 +193,15 @@ object Questions : Table("questions") {
      */
     val submissionCost = integer("submission_cost").default(0)
 
+    /**
+     * Made-up votes for each side, which every tally the server reports adds to the players' own
+     * (CLAUDE.md §8d, *Seeds*): a seed starts with some (V8, `Seed`), so its split looks like a crowd's
+     * from the first answer, and every other question with none. Nothing writes them after that, and
+     * they are no player's: a player still holds one vote per question, their latest.
+     */
+    val baseVotesA = integer("base_votes_a").default(0)
+    val baseVotesB = integer("base_votes_b").default(0)
+
     override val primaryKey = PrimaryKey(id)
 
     init {

@@ -13,6 +13,7 @@ import io.ntole.wyr.server.db.appTables
 import io.ntole.wyr.server.db.connectH2
 import io.ntole.wyr.server.db.filedUnder
 import io.ntole.wyr.server.db.h2Url
+import io.ntole.wyr.server.db.tallyOf
 import io.ntole.wyr.server.like.LikeStore
 import io.ntole.wyr.server.player.PlayerStore
 import io.ntole.wyr.server.question.SubmissionStore
@@ -184,9 +185,9 @@ class QuestionListTest {
 
         val listed = everything().associateBy { it.id }
 
-        assertEquals(VoteTallyDto(votesA = 3, votesB = 0) to 2, listed.getValue(question.id).numbers())
-        assertEquals(VoteTallyDto(votesA = 0, votesB = 1) to 0, listed.getValue(SEED).numbers())
-        assertEquals(VoteTallyDto(votesA = 0, votesB = 0) to 0, listed.getValue("seed-2").numbers())
+        assertEquals(VoteTallyDto(votesA = 3, votesB = 0) to 2, listed.getValue(question.id).numbers(), "none made up")
+        assertEquals(tallyOf(SEED, votesA = 0, votesB = 1) to 0, listed.getValue(SEED).numbers())
+        assertEquals(tallyOf("seed-2", votesA = 0, votesB = 0) to 0, listed.getValue("seed-2").numbers())
     }
 
     @Test
@@ -209,8 +210,8 @@ class QuestionListTest {
                     ModerationStore.questions(emptySet(), emptySet(), after = null, limit = 100).questions
                 }
 
-            assertEquals(VoteTallyDto(votesA = 1, votesB = 0), listed.single { it.id == SEED }.tally, "from before it")
-            assertEquals(VoteTallyDto(votesA = 0, votesB = 1), everything().single { it.id == SEED }.tally)
+            assertEquals(tallyOf(SEED, votesA = 1, votesB = 0), listed.single { it.id == SEED }.tally, "from before it")
+            assertEquals(tallyOf(SEED, votesA = 0, votesB = 1), everything().single { it.id == SEED }.tally)
         } finally {
             elsewhere.shutdownNow()
         }
@@ -229,7 +230,7 @@ class QuestionListTest {
                 transaction(database) {
                     val listed = ModerationStore.questions(emptySet(), emptySet(), after = null, limit = limit)
                     assertEquals(limit, listed.questions.size)
-                    assertTrue(listed.questions.all { it.numbers() == (VoteTallyDto(1, 0) to 1) })
+                    assertTrue(listed.questions.all { it.numbers() == (tallyOf(it.id, votesA = 1, votesB = 0) to 1) })
                     assertTrue(listed.questions.all { it.categories.isNotEmpty() })
                     statementCount
                 }

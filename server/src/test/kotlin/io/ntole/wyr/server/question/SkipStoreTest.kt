@@ -5,7 +5,6 @@ import io.ntole.wyr.core.player.PlayerStatsDto
 import io.ntole.wyr.core.question.QuestionDto
 import io.ntole.wyr.core.vote.OptionSide
 import io.ntole.wyr.core.vote.VoteResultDto
-import io.ntole.wyr.core.vote.VoteTallyDto
 import io.ntole.wyr.server.db.INSERTING_INTO_SKIPS
 import io.ntole.wyr.server.db.Questions
 import io.ntole.wyr.server.db.Seed
@@ -15,6 +14,7 @@ import io.ntole.wyr.server.db.connectH2
 import io.ntole.wyr.server.db.filedUnder
 import io.ntole.wyr.server.db.h2Url
 import io.ntole.wyr.server.db.raceBehindFirst
+import io.ntole.wyr.server.db.tallyOf
 import io.ntole.wyr.server.player.PlayerStore
 import io.ntole.wyr.server.player.StatsStore
 import io.ntole.wyr.server.vote.Scoring
@@ -136,7 +136,11 @@ class SkipStoreTest {
             statsOf(player),
             "only the unanswered one stops being due; the answered one already was not",
         )
-        assertEquals(VoteTallyDto(votesA = 3, votesB = 0), answer(newPlayer(), answered).tally, "two votes, no skip")
+        assertEquals(
+            tallyOf(answered, votesA = 3, votesB = 0),
+            answer(newPlayer(), answered).tally,
+            "two votes, no skip",
+        )
         (pool - answered - unanswered).forEach { id -> answer(player, id) }
         val nextCycle = feed(player).associateBy { it.id }
         assertEquals(true, nextCycle[answered]?.answeredBefore, "its vote is still the player's")
@@ -152,7 +156,7 @@ class SkipStoreTest {
 
         assertEquals(Scoring.POINTS_PER_ANSWER, answered.pointsAwarded)
         assertEquals(false, answered.replayed)
-        assertEquals(VoteTallyDto(votesA = 1, votesB = 0), answered.tally)
+        assertEquals(tallyOf(QUESTION, votesA = 1, votesB = 0), answered.tally)
         val stats = statsOf(player)
         assertEquals(1, stats.answersGiven)
         assertEquals(1, stats.questionsAnswered)

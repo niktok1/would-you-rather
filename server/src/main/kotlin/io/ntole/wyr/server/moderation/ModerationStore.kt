@@ -4,18 +4,16 @@ import io.ntole.wyr.core.question.AdminQuestionDto
 import io.ntole.wyr.core.question.AdminQuestionPageDto
 import io.ntole.wyr.core.question.QuestionStatus
 import io.ntole.wyr.core.question.SubmissionDto
-import io.ntole.wyr.core.vote.OptionSide
-import io.ntole.wyr.core.vote.VoteTallyDto
 import io.ntole.wyr.server.db.Likes
 import io.ntole.wyr.server.db.QuestionCategories
 import io.ntole.wyr.server.db.Questions
-import io.ntole.wyr.server.db.Votes
 import io.ntole.wyr.server.player.PlayerStore
 import io.ntole.wyr.server.plugins.ApiFailure
 import io.ntole.wyr.server.question.QuestionStore
 import io.ntole.wyr.server.question.SubmissionStore
 import io.ntole.wyr.server.question.standsAt
 import io.ntole.wyr.server.question.statusOf
+import io.ntole.wyr.server.vote.QuestionTally
 import org.jetbrains.exposed.v1.core.Expression
 import org.jetbrains.exposed.v1.core.Op
 import org.jetbrains.exposed.v1.core.ResultRow
@@ -299,10 +297,11 @@ object ModerationStore {
     }
 
     /**
-     * The questions [where] picks, as [query] reads them: their own columns, both sides' vote counts
-     * and their like count, in this one statement. So the numbers of a question are one committed
-     * moment's, as the tally's two counts are in a vote's answer (CLAUDE.md §4): read apart, a
-     * re-answer committing in between could count one player's vote on both sides, or on neither.
+     * The questions [where] picks, as [query] reads them: their own columns, their tally as a vote's
+     * answer reports it, made-up votes included ([QuestionTally]), and their like count, in this one
+     * statement. So the numbers of a question are one committed moment's, as the tally's two sides are
+     * in a vote's answer (CLAUDE.md §4): read apart, a re-answer committing in between could count one
+     * player's vote on both sides, or on neither.
      *
      * The counts are subqueries on the row's own id, each found through an index: the vote counts
      * through `votes (question_id, side)` and the like count through `likes (question_id, player_id)`.
@@ -312,12 +311,11 @@ object ModerationStore {
     private class Listing(
         where: Op<Boolean>,
     ) {
-        private val votesForA = votesFor(OptionSide.A)
-        private val votesForB = votesFor(OptionSide.B)
+        private val tally = QuestionTally()
         private val likes: Expression<Long?> =
             wrapAsExpression(Likes.select(Likes.playerId.count()).where { Likes.questionId eq Questions.id })
 
-        val query: Query = Questions.select(ADMIN_COLUMNS + listOf(votesForA, votesForB, likes)).where(where)
+        val query: Query = Questions.select(ADMIN_COLUMNS + tally.columns + likes).where(where)
 
         /** [rows], read by [query], with their categories. */
         fun toAdminQuestions(rows: List<ResultRow>): List<AdminQuestionDto> {
@@ -338,23 +336,11 @@ object ModerationStore {
                     retiredAt = row[Questions.retiredAt],
                     // As in a submission: only with a rejected question, whatever the column holds.
                     rejectionReason = row[Questions.rejectionReason].takeIf { status == QuestionStatus.REJECTED },
-                    tally = VoteTallyDto(votesA = row.countOf(votesForA), votesB = row.countOf(votesForB)),
-                    likeCount = row.countOf(likes).toInt(),
+                    tally = tally.of(row),
+                    likeCount = checkNotNull(row[likes]) { "a COUNT subquery came back null" }.toInt(),
                 )
             }
         }
-
-        /** How many players' latest answer to the row's question is [side]. */
-        private fun votesFor(side: OptionSide): Expression<Long?> =
-            wrapAsExpression(
-                Votes
-                    .select(Votes.playerId.count())
-                    .where { (Votes.questionId eq Questions.id) and (Votes.side eq side.name) },
-            )
-
-        /** A `COUNT` subquery's value. It always yields one row, so it is never null. */
-        private fun ResultRow.countOf(expression: Expression<Long?>): Long =
-            checkNotNull(this[expression]) { "a COUNT subquery came back null" }
 
         private companion object {
             /** What [toAdminQuestions] reads of a question's own row. */

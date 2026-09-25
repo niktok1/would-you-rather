@@ -988,8 +988,8 @@ lists the player's own (*Submitting*, below).
   served it again. It earns the point again **every time**, inside its cycle or not (farming is
   bounded by rate limiting, 120 votes a minute per player on average, §8b), and the player may
   change their pick. Every answer, first or not, counts for the player's current cycle. The tally
-  always holds **one vote per player per question**, their latest. Built in `VoteStore.cast`, which
-  moves the player's vote.
+  always holds **one vote per player per question**, their latest, beside a seed's made-up votes
+  (*Seeds*). Built in `VoteStore.cast`, which moves the player's vote.
 - **Retry safety** *(built)*: every vote carries a client-generated idempotency key. A repeat
   of the key last recorded for that question is replayed: nothing is written, it pays nothing, and
   it reports the stored side with the current tally and total, not the result first returned. Any
@@ -1031,6 +1031,15 @@ lists the player's own (*Submitting*, below).
   `QuestionStore.servable` is the one predicate the feed, the due count and votes, skips and likes
   (`QuestionStore.isServable`) read, and it asks only that a moderator approved the question and has
   not retired it (*Moderation*).
+- **Seeds** *(decided 2026-09-25; built)*: the server's starter questions (`Seed`), approved from
+  the start, authored by nobody. Each comes with **made-up votes**, a count for each side
+  (`questions.base_votes_a` and `base_votes_b`, V8), so its split looks like a crowd's from the first
+  answer: a different total and split for each (`SeedTest`), 105 to 523 votes. **Every tally the
+  server reports adds them** to the players' votes, a vote's answer and the moderator's list alike,
+  read in the tally's one statement (`QuestionTally`, §4); every other question has none. They are
+  no player's: a player still holds one vote per question, and nothing writes them after V8 and the
+  seed. V8 gives the seeds of a database seeded before theirs by id, the same counts `Seed` writes
+  into a new one (`MigrationsTest` holds the two equal). No client can tell them from real votes.
 - **Likes** *(built)*: any player may like any question, **their own
   included**, at any time (before or after answering), once each, and may unlike it. Each like
   currently held is **+1 point to the author**, and unliking takes that point back. The like count

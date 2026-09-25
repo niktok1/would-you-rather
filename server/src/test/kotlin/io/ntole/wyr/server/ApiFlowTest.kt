@@ -50,6 +50,7 @@ import io.ntole.wyr.server.config.ServerConfig
 import io.ntole.wyr.server.db.Sessions
 import io.ntole.wyr.server.db.inTransaction
 import io.ntole.wyr.server.db.serverPool
+import io.ntole.wyr.server.db.tallyOf
 import io.ntole.wyr.server.player.PlayerStore
 import io.ntole.wyr.server.vote.Scoring
 import kotlinx.serialization.json.Json
@@ -102,9 +103,8 @@ class ApiFlowTest {
 
             assertEquals(question.id, result.questionId)
             assertEquals(OptionSide.A, result.yourChoice)
-            // The voter's own vote is included in the tally they are shown.
-            assertEquals(1L, result.tally.votesA)
-            assertEquals(0L, result.tally.votesB)
+            // The voter's own vote is included in the tally they are shown, beside a seed's made-up votes.
+            assertEquals(tallyOf(question.id, votesA = 1, votesB = 0), result.tally)
             // A first answer earns the flat point, and that point is the whole running total.
             assertEquals(Scoring.POINTS_PER_ANSWER, result.pointsAwarded)
             assertEquals(Scoring.POINTS_PER_ANSWER, result.totalPoints)
@@ -175,8 +175,8 @@ class ApiFlowTest {
 
             val majority = client.vote(player, opened.id, OptionSide.A)
             val minority = client.vote(player, contested.id, OptionSide.B)
-            assertEquals(VoteTallyDto(votesA = 1, votesB = 0), majority.tally)
-            assertEquals(VoteTallyDto(votesA = 2, votesB = 1), minority.tally)
+            assertEquals(tallyOf(opened.id, votesA = 1, votesB = 0), majority.tally)
+            assertEquals(tallyOf(contested.id, votesA = 2, votesB = 1), minority.tally)
 
             assertEquals(Scoring.POINTS_PER_ANSWER, majority.pointsAwarded)
             assertEquals(Scoring.POINTS_PER_ANSWER, minority.pointsAwarded)
@@ -194,10 +194,10 @@ class ApiFlowTest {
             val first = client.vote(player, question.id, OptionSide.A)
             val again = client.vote(player, question.id, OptionSide.B)
 
-            assertEquals(VoteTallyDto(votesA = 2, votesB = 0), first.tally)
+            assertEquals(tallyOf(question.id, votesA = 2, votesB = 0), first.tally)
             assertEquals(OptionSide.B, again.yourChoice, "the pick may change")
             assertEquals(
-                VoteTallyDto(votesA = 1, votesB = 1),
+                tallyOf(question.id, votesA = 1, votesB = 1),
                 again.tally,
                 "the player's vote moved rather than doubled",
             )
@@ -228,7 +228,7 @@ class ApiFlowTest {
             val replayOfSwitch = client.vote(player, question.id, OptionSide.A, attemptId = "attempt-2")
             assertTrue(replayOfSwitch.replayed)
             assertEquals(OptionSide.B, replayOfSwitch.yourChoice)
-            assertEquals(VoteTallyDto(votesA = 0, votesB = 1), replayOfSwitch.tally)
+            assertEquals(tallyOf(question.id, votesA = 0, votesB = 1), replayOfSwitch.tally)
             assertEquals(switched.totalPoints, replayOfSwitch.totalPoints)
         }
 
@@ -744,7 +744,11 @@ class ApiFlowTest {
             val answered = client.vote(player, question.id, OptionSide.B)
 
             assertEquals(Scoring.POINTS_PER_ANSWER, answered.pointsAwarded)
-            assertEquals(VoteTallyDto(votesA = 0, votesB = 1), answered.tally, "the vote, and nothing for the skips")
+            assertEquals(
+                tallyOf(question.id, votesA = 0, votesB = 1),
+                answered.tally,
+                "the vote, and nothing for the skips",
+            )
             val stats = client.stats(player)
             assertEquals(Scoring.POINTS_PER_ANSWER, stats.totalPoints)
             assertEquals(1, stats.answersGiven)

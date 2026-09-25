@@ -482,8 +482,8 @@ internal class MigrationsTest(
      * player who holds a refresh token a session holding it, under the player's own id and creation
      * time, and marks their row, the mirror, with that session's token. V5 leaves every player a guest,
      * with no username and no password. V6 adds the first categories ([Seed.CATEGORIES]) and files what
-     * was under RANDOM under ABSURD instead. V7 gives every question a cost of 0. None changes anything
-     * else. A later script that changes
+     * was under RANDOM under ABSURD instead. V7 gives every question a cost of 0. V8 gives every
+     * question no made-up votes, then each seed those `Seed` gives it. None changes anything else. A later script that changes
      * the rows already there adds what it does to them here.
      */
     private fun afterLaterScripts(before: Contents): Contents {
@@ -523,6 +523,12 @@ internal class MigrationsTest(
                     "created_at" to category.createdAt.toString(),
                 )
             }
+        val seeds = Seed.SEEDS.toMap()
+        val questions =
+            widened.getValue(Questions.tableName).map { row ->
+                val seed = seeds[row["id"]] ?: return@map row
+                row + mapOf("base_votes_a" to "${seed.votes.first}", "base_votes_b" to "${seed.votes.second}")
+            }
         val filings =
             widened.getValue(QuestionCategories.tableName).map { row ->
                 if (row["category"] == "RANDOM") row + ("category" to Seed.ABSURD) else row
@@ -534,6 +540,7 @@ internal class MigrationsTest(
                     Sessions.tableName to sessions,
                     Categories.tableName to categories,
                     QuestionCategories.tableName to filings,
+                    Questions.tableName to questions,
                 )
         ).mapValues { (_, rows) -> rows.canonical() }
     }
@@ -550,7 +557,8 @@ internal class MigrationsTest(
          * The history of a database built before migrations once a boot has migrated it: V1 recorded
          * without running it, then every later script run.
          */
-        private val BASELINED_HISTORY = listOf("1 BASELINE", "2 SQL", "3 SQL", "4 SQL", "5 SQL", "6 SQL", "7 SQL")
+        private val BASELINED_HISTORY =
+            listOf("1 BASELINE", "2 SQL", "3 SQL", "4 SQL", "5 SQL", "6 SQL", "7 SQL", "8 SQL")
 
         /**
          * The columns the scripts after V1 add, by table, empty in every row already there but for
@@ -575,11 +583,12 @@ internal class MigrationsTest(
 
         /**
          * The columns the scripts after V1 add with a default, by table, each at that default in every
-         * row already there, as JDBC reads it back as a string: V7's cost on questions.
+         * row already there, as JDBC reads it back as a string: V7's cost and V8's made-up votes on
+         * questions, before V8 gives the seeds theirs ([afterLaterScripts]).
          */
         private val DEFAULTED_COLUMNS =
             mapOf(
-                Questions.tableName to mapOf("submission_cost" to "0"),
+                Questions.tableName to mapOf("submission_cost" to "0", "base_votes_a" to "0", "base_votes_b" to "0"),
             )
 
         /** Past Flyway's own wait for its lock, 50 tries a second apart, so Flyway gives up first. */

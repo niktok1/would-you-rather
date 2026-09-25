@@ -67,7 +67,9 @@ and renames one (`POST /v1/admin/category-renames`, 404 `CATEGORY_NOT_FOUND`); n
 Submitting costs `Scoring.SUBMISSION_COST`, 1 point until release (CLAUDE.md §8c): too few is 409
 `NOT_ENOUGH_POINTS`, a rejection pays back what the question cost (V7 keeps it on the question,
 `submission_cost`), and `GET /v1/me` reports `pointsSpent`, so the total is what the answers and likes
-earned less that. The client maps `NOT_ENOUGH_POINTS` to `DomainError.UNKNOWN` for now.
+earned less that. The client maps `NOT_ENOUGH_POINTS` to `DomainError.UNKNOWN` for now. Every seed
+comes with made-up votes (V8, `questions.base_votes_a`/`_b`, CLAUDE.md §8d *Seeds*), which every
+tally the server reports adds to the players' own.
 
 ### Verified working
 
