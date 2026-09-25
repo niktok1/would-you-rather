@@ -55,6 +55,14 @@ class ApiFailure(
         fun alreadyRegistered() =
             ApiFailure(HttpStatusCode.Conflict, ErrorCode.ALREADY_REGISTERED, "player already registered")
 
+        /** A login naming no account, whichever half was wrong: the message never says. */
+        fun invalidLogin() =
+            ApiFailure(
+                HttpStatusCode.Unauthorized,
+                ErrorCode.INVALID_LOGIN,
+                "no account has that username and password",
+            )
+
         fun unauthorized(message: String = "missing or invalid credentials") =
             ApiFailure(HttpStatusCode.Unauthorized, ErrorCode.UNAUTHORIZED, message)
 

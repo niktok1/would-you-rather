@@ -10,6 +10,26 @@ import org.jetbrains.exposed.v1.jdbc.update
 
 /** Accounts (CLAUDE.md §8b, *Accounts*): a player's username and the hash of their password. */
 object AccountStore {
+    /** A registered player, and the hash a login checks their password against. */
+    data class Credentials(
+        val playerId: String,
+        val passwordHash: String,
+    )
+
+    /**
+     * The account [username], lower-cased already, names, or null when no player has it, a guest
+     * never. Must run inside a transaction.
+     */
+    fun credentialsOf(username: String): Credentials? =
+        Players
+            .select(Players.id, Players.passwordHash)
+            .where { Players.username eq username }
+            .singleOrNull()
+            ?.let { row ->
+                val hash = checkNotNull(row[Players.passwordHash]) { "a player with a username has no password hash" }
+                Credentials(playerId = row[Players.id], passwordHash = hash)
+            }
+
     /**
      * Gives [playerId], a guest, the account [username], lower-cased already ([checkedUsername]), with
      * the password [passwordHash] is the hash of ([Passwords]). Everything else the player has stays as

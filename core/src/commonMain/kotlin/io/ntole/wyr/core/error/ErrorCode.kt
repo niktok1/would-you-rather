@@ -81,6 +81,13 @@ public enum class ErrorCode {
      */
     ALREADY_REGISTERED,
 
+    /**
+     * A login's username and password name no account: the username is no player's, or the password is
+     * not theirs, and the answer never says which. Sent with 401, which a client must not take for an
+     * expired access token: a login spends no session, so there is nothing to refresh.
+     */
+    INVALID_LOGIN,
+
     /** Caller is not authenticated, or the credential is expired. */
     UNAUTHORIZED,
 

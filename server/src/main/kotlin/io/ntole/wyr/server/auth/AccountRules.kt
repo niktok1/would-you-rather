@@ -37,6 +37,16 @@ internal fun checkPassword(password: String) {
     }
 }
 
+/**
+ * [raw] as [checkedUsername] keeps it, or null for one it refuses: a name no account can have. For a
+ * login, which refuses such a name as it refuses any unknown one.
+ */
+internal fun usernameOrNull(raw: String): String? =
+    raw.lowercase().takeIf { username -> username.length in USERNAME_LENGTHS && username.all(::isUsernameChar) }
+
+/** Whether [checkPassword] takes [password]: one that breaks the rules is no account's. */
+internal fun isPassword(password: String): Boolean = password.length in PASSWORD_LENGTHS
+
 private fun isUsernameChar(char: Char): Boolean = char in 'a'..'z' || char in '0'..'9' || char == '_'
 
 private val USERNAME_LENGTHS = WyrApi.Limits.MIN_USERNAME_LENGTH..WyrApi.Limits.MAX_USERNAME_LENGTH

@@ -36,6 +36,22 @@ public object WyrApi {
         public const val AUTH_REGISTER: String = "/$VERSION/auth/register"
 
         /**
+         * POST: logs in to a registered account on this device (CLAUDE.md §8b, *Accounts*), with a
+         * [io.ntole.wyr.core.auth.LoginRequest], answered with a [io.ntole.wyr.core.auth.SessionDto] for
+         * a new session of that player, this device's own: the player's other devices stay logged in.
+         * Needs no session, and reads none: a bearer token sent beside it plays no part, and the
+         * session it names, a guest's, is left as it is.
+         *
+         * A username and password that name no account are 401
+         * [io.ntole.wyr.core.error.ErrorCode.INVALID_LOGIN], alike whether the name is no player's or
+         * the password is wrong. A client must send it so that its 401 is never taken for an expired
+         * access token, which would refresh and send it again for nothing. A malformed body is 400
+         * [io.ntole.wyr.core.error.ErrorCode.VALIDATION_FAILED]. Limited per client address, before
+         * anything is read: what bounds guessing a password.
+         */
+        public const val AUTH_LOGIN: String = "/$VERSION/auth/login"
+
+        /**
          * POST, with no body: ends the session the bearer token was issued for, this device's, and
          * answers 204 (CLAUDE.md §8a, *Sessions*). Its refresh token never works again, the one the
          * grace keeps included, and the player's sessions on other devices are left alone; the client

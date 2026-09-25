@@ -110,12 +110,14 @@ internal fun ErrorCode.toDomain(): DomainError =
         // Never UNAUTHORIZED: that would throw the player's session away over a moderator's token.
         ErrorCode.FORBIDDEN -> DomainError.FORBIDDEN
 
-        // Answered only to a registration, which this build never sends: the client's account stage
-        // gives them domain errors of their own.
+        // Answered only to a registration or a login, which this build never sends: the client's
+        // account stage gives them domain errors of their own. INVALID_LOGIN comes with a 401, but is
+        // never UNAUTHORIZED, which would throw the session away over a mistyped password.
         ErrorCode.INVALID_USERNAME,
         ErrorCode.INVALID_PASSWORD,
         ErrorCode.USERNAME_TAKEN,
         ErrorCode.ALREADY_REGISTERED,
+        ErrorCode.INVALID_LOGIN,
         -> DomainError.UNKNOWN
 
         ErrorCode.UNKNOWN -> DomainError.UNKNOWN

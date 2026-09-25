@@ -63,6 +63,19 @@ class AccountStoreTest {
     }
 
     @Test
+    fun `a registered name gives the player and their hash, and no other name anything`() {
+        val (registered, guest) = newPlayer() to newPlayer()
+        transaction(database) { AccountStore.register(registered, "bob", passwordHash = "hash-of-bob") }
+
+        assertEquals(
+            AccountStore.Credentials(registered, "hash-of-bob"),
+            transaction(database) { AccountStore.credentialsOf("bob") },
+        )
+        assertEquals(null, transaction(database) { AccountStore.credentialsOf("nobody") }, "no player has it")
+        assertEquals(Account(null, null), accountOf(guest), "and a guest has none to find")
+    }
+
+    @Test
     fun `an unknown player cannot register`() {
         assertEquals(ErrorCode.UNAUTHORIZED, refusalOf { AccountStore.register("no-such-player", "bob", "hash") })
     }

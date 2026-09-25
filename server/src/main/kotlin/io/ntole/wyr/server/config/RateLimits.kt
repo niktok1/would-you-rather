@@ -31,6 +31,11 @@ data class RateLimits(
     /** `POST /v1/auth/refresh`, per address. A player refreshes about once per access token. */
     val refreshes: RequestBudget,
     /**
+     * `POST /v1/auth/login`, per address: what bounds guessing a password, and the hashes a login costs.
+     * Enough for a room of players behind one address all logging in at once.
+     */
+    val logins: RequestBudget,
+    /**
      * `POST /v1/auth/register`. A player registers once, but a name they want may be taken, and every
      * try but one that breaks a rule costs a password hash.
      */
@@ -70,6 +75,7 @@ data class RateLimits(
             RateLimits(
                 guests = RequestBudget(requests = 10, per = 1.hours),
                 refreshes = RequestBudget(requests = 30, per = 1.minutes),
+                logins = RequestBudget(requests = 20, per = 1.minutes),
                 registrations = RequestBudget(requests = 20, per = 1.hours),
                 logouts = RequestBudget(requests = 30, per = 1.minutes),
                 feed = RequestBudget(requests = 120, per = 1.minutes),
@@ -105,6 +111,7 @@ data class RateLimits(
                 RateLimits(
                     guests = budget("RATE_LIMIT_GUESTS_PER_HOUR", guests),
                     refreshes = budget("RATE_LIMIT_REFRESHES_PER_MINUTE", refreshes),
+                    logins = budget("RATE_LIMIT_LOGINS_PER_MINUTE", logins),
                     registrations = budget("RATE_LIMIT_REGISTRATIONS_PER_HOUR", registrations),
                     logouts = budget("RATE_LIMIT_LOGOUTS_PER_MINUTE", logouts),
                     feed = budget("RATE_LIMIT_FEED_PER_MINUTE", feed),

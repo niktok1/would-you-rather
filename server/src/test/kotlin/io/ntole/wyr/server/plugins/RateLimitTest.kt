@@ -17,6 +17,7 @@ import io.ktor.http.contentType
 import io.ktor.serialization.kotlinx.json.json
 import io.ktor.server.testing.testApplication
 import io.ntole.wyr.core.api.WyrApi
+import io.ntole.wyr.core.auth.LoginRequest
 import io.ntole.wyr.core.auth.RefreshRequest
 import io.ntole.wyr.core.auth.RegisterRequest
 import io.ntole.wyr.core.auth.SessionDto
@@ -114,6 +115,18 @@ class RateLimitTest {
             val again = client.refresh(refreshed.refreshToken)
             assertEquals(HttpStatusCode.OK, again.status, "the refused refresh left the token live")
             assertEquals(session.playerId, again.body<SessionDto>().playerId)
+        }
+
+    /** Before anything is read or hashed: the right password past the budget is refused as a wrong one is. */
+    @Test
+    fun `a login past its budget is refused before its password is checked`() =
+        runServer("login-refused", NO_PRACTICAL_LIMIT.copy(logins = TWO_A_MINUTE)) { client ->
+            val guest = client.guest()
+            client.post(WyrApi.Paths.AUTH_REGISTER) { json(guest, RegisterRequest("bob", "the password")) }
+
+            repeat(2) { assertEquals(HttpStatusCode.Unauthorized, client.login("bob", "a wrong one").status) }
+
+            assertRateLimited(client.login("bob", "the password"), "the right password past the budget")
         }
 
     @Test
@@ -424,6 +437,15 @@ class RateLimitTest {
             Group("logouts", { copy(logouts = it) }, allowed = HttpStatusCode.NoContent) { caller ->
                 caller.client.post(WyrApi.Paths.AUTH_LOGOUT) { bearerAuth(caller.player.accessToken) }
             },
+            // A name with no account, so every one is answered alike.
+            Group(
+                "logins",
+                { copy(logins = it) },
+                allowed = HttpStatusCode.Unauthorized,
+                needsSession = false,
+            ) { caller ->
+                caller.client.login("nobody", "password")
+            },
             Group("feed", { copy(feed = it) }) { caller ->
                 caller.client.get(WyrApi.Paths.QUESTIONS) { bearerAuth(caller.player.accessToken) }
             },
@@ -586,6 +608,15 @@ class RateLimitTest {
             return TokenService(ServerConfig.fromEnvironment(env::get))
                 .issueAccessToken(playerId, "no-such-session", now = issuedAt)
         }
+
+        suspend fun HttpClient.login(
+            username: String,
+            password: String,
+        ): HttpResponse =
+            post(WyrApi.Paths.AUTH_LOGIN) {
+                contentType(ContentType.Application.Json)
+                setBody(LoginRequest(username, password))
+            }
 
         suspend fun HttpClient.refresh(refreshToken: String): HttpResponse =
             post(WyrApi.Paths.AUTH_REFRESH) {

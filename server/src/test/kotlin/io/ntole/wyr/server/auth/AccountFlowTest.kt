@@ -10,6 +10,7 @@ import io.ktor.client.request.get
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
 import io.ktor.client.statement.HttpResponse
+import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.contentType
@@ -17,6 +18,7 @@ import io.ktor.serialization.kotlinx.json.json
 import io.ktor.server.testing.testApplication
 import io.ntole.wyr.core.api.WyrApi
 import io.ntole.wyr.core.auth.AccountDto
+import io.ntole.wyr.core.auth.LoginRequest
 import io.ntole.wyr.core.auth.RefreshRequest
 import io.ntole.wyr.core.auth.RegisterRequest
 import io.ntole.wyr.core.auth.SessionDto
@@ -38,10 +40,11 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
+import kotlin.time.measureTime
 
 /**
  * Accounts and the sessions they log into, end to end (CLAUDE.md §8a, *Accounts* and *Sessions*):
- * registering a guest, and logging a device out.
+ * registering a guest, logging in on another device, and logging a device out.
  */
 class AccountFlowTest {
     @Test
@@ -192,7 +195,7 @@ class AccountFlowTest {
         }
 
     @Test
-    fun `no password or hash of one reaches the log, whatever a registration is answered`() =
+    fun `no password or hash of one reaches the log, whatever a registration or a login is answered`() =
         withLogCapture { logged ->
             runServer("register-log") { client ->
                 val (first, second) = client.guest() to client.guest()
@@ -200,11 +203,129 @@ class AccountFlowTest {
                 client.register(second, "bob", PASSWORD)
                 client.register(second, "carol", TOO_SHORT)
                 client.register(first, "bob", PASSWORD)
+                client.login("bob", PASSWORD)
+                client.login("bob", TOO_SHORT)
+                client.login("bob", "$PASSWORD!")
+                client.login("nobody", PASSWORD)
             }
 
             val printed = logged.printed()
             assertTrue(printed.isNotEmpty(), "the calls are logged")
             assertFalse(printed.any { PASSWORD in it || TOO_SHORT in it || "pbkdf2" in it }, "$printed")
+        }
+
+    @Test
+    fun `logging in on another device opens a session of its own and both play on as one player`() =
+        runServer("login") { client ->
+            val phone = client.guest()
+            client.vote(phone)
+            client.register(phone, "bob", PASSWORD)
+
+            val loggedIn = client.login("BoB", PASSWORD)
+
+            assertEquals(HttpStatusCode.OK, loggedIn.status, "the name in any case")
+            val tablet = loggedIn.body<SessionDto>()
+            assertEquals(phone.playerId, tablet.playerId)
+            assertTrue(sessionIdIn(tablet) != sessionIdIn(phone), "a session of its own")
+            assertEquals(1, client.stats(tablet).totalPoints, "with everything the player has")
+            client.vote(tablet)
+            assertEquals(2, client.stats(phone).totalPoints, "one player on both")
+            listOf("the phone" to phone, "the tablet" to tablet).forEach { (device, session) ->
+                assertEquals(HttpStatusCode.OK, client.refresh(session.refreshToken).status, device)
+            }
+        }
+
+    @Test
+    fun `logging out one device leaves the other logged in`() =
+        runServer("login-logout") { client ->
+            val phone = client.guest()
+            client.register(phone, "bob", PASSWORD)
+            val tablet = client.login("bob", PASSWORD).body<SessionDto>()
+
+            assertEquals(HttpStatusCode.NoContent, client.logout(phone.accessToken).status)
+
+            assertRefused(
+                client.refresh(phone.refreshToken),
+                HttpStatusCode.Unauthorized,
+                ErrorCode.INVALID_REFRESH_TOKEN,
+                "the phone",
+            )
+            assertEquals(HttpStatusCode.OK, client.refresh(tablet.refreshToken).status, "the tablet")
+            assertEquals(HttpStatusCode.OK, client.login("bob", PASSWORD).status, "and the phone can log in again")
+        }
+
+    /** Alike to the byte, so nothing in the answer tells a name with no account from a wrong password. */
+    @Test
+    fun `a wrong password and a name with no account are one and the same 401 INVALID_LOGIN`() =
+        runServer("login-refused") { client ->
+            client.register(client.guest(), "bob", PASSWORD)
+
+            val refusals =
+                listOf(
+                    "a wrong password" to client.login("bob", "not the password"),
+                    "the password in another case" to client.login("bob", PASSWORD.uppercase()),
+                    "a name with no account" to client.login("nobody", PASSWORD),
+                    "a name no account can have" to client.login("x", PASSWORD),
+                    "a password no account can have" to client.login("bob", "short"),
+                    "one too long to be anyone's" to
+                        client.login("bob", "x".repeat(WyrApi.Limits.MAX_PASSWORD_LENGTH + 1)),
+                ).map { (case, response) ->
+                    assertRefused(response, HttpStatusCode.Unauthorized, ErrorCode.INVALID_LOGIN, case)
+                    response.bodyAsText()
+                }
+
+            assertEquals(1, refusals.distinct().size, "$refusals")
+        }
+
+    /**
+     * An unknown name is checked against a hash all the same. Each refusal's quickest time against a
+     * hash's own quickest here: without the hash, a refusal takes a lookup, a fraction of it.
+     */
+    @Test
+    fun `a name with no account is refused only after a password hash's time`() =
+        runServer("login-timing") { client ->
+            client.register(client.guest(), "bob", PASSWORD)
+            repeat(3) { client.login("nobody", PASSWORD) }
+            val hash = (1..5).minOf { measureTime { Passwords.verify(PASSWORD, Passwords.UNMATCHABLE) } }
+
+            val refusal = (1..5).minOf { measureTime { client.login("nobody", PASSWORD) } }
+
+            assertTrue(refusal >= hash * 0.8, "a refusal took $refusal, a hash $hash")
+        }
+
+    @Test
+    fun `a login needs no session and leaves one sent beside it alone`() =
+        runServer("login-bearer") { client ->
+            val account = client.guest()
+            client.register(account, "bob", PASSWORD)
+            val guest = client.guest()
+
+            val loggedIn =
+                client.post(WyrApi.Paths.AUTH_LOGIN) {
+                    bearerAuth(guest.accessToken)
+                    contentType(ContentType.Application.Json)
+                    setBody(LoginRequest("bob", PASSWORD))
+                }
+
+            assertEquals(account.playerId, loggedIn.body<SessionDto>().playerId, "the account's, not the guest's")
+            assertEquals(
+                guest.playerId,
+                client.refresh(guest.refreshToken).body<SessionDto>().playerId,
+                "the guest lives on",
+            )
+        }
+
+    @Test
+    fun `a login body the server cannot use is a validation error`() =
+        runServer("login-malformed") { client ->
+            listOf("", "not json", "{}", """{"username":"bob"}""", """{"password":"$PASSWORD"}""").forEach { body ->
+                val response =
+                    client.post(WyrApi.Paths.AUTH_LOGIN) {
+                        contentType(ContentType.Application.Json)
+                        setBody(body)
+                    }
+                assertRefused(response, HttpStatusCode.BadRequest, ErrorCode.VALIDATION_FAILED, body)
+            }
         }
 
     /**
@@ -258,11 +379,12 @@ class AccountFlowTest {
         }
 
     @Test
-    fun `a registration request prints no password`() {
-        val printed = RegisterRequest("bob", PASSWORD).toString()
-
-        assertTrue("bob" in printed)
-        assertFalse(PASSWORD in printed, printed)
+    fun `a registration or login request prints no password`() {
+        val requests = listOf(RegisterRequest("bob", PASSWORD), LoginRequest("bob", PASSWORD))
+        requests.map { it.toString() }.forEach { printed ->
+            assertTrue("bob" in printed)
+            assertFalse(PASSWORD in printed, printed)
+        }
     }
 
     private suspend fun assertRefused(
@@ -332,6 +454,16 @@ class AccountFlowTest {
             JWT.decode(session.accessToken).getClaim(TokenService.CLAIM_SESSION_ID).asString()
 
         suspend fun HttpClient.guest(): SessionDto = post(WyrApi.Paths.AUTH_GUEST).body()
+
+        /** A login as a client sends one, with no bearer token. */
+        suspend fun HttpClient.login(
+            username: String,
+            password: String,
+        ): HttpResponse =
+            post(WyrApi.Paths.AUTH_LOGIN) {
+                contentType(ContentType.Application.Json)
+                setBody(LoginRequest(username, password))
+            }
 
         suspend fun HttpClient.logout(accessToken: String): HttpResponse =
             post(WyrApi.Paths.AUTH_LOGOUT) { bearerAuth(accessToken) }

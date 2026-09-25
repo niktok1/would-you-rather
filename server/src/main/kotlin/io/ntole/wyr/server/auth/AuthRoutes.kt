@@ -7,6 +7,7 @@ import io.ktor.server.routing.Route
 import io.ktor.server.routing.post
 import io.ntole.wyr.core.api.WyrApi
 import io.ntole.wyr.core.auth.AccountDto
+import io.ntole.wyr.core.auth.LoginRequest
 import io.ntole.wyr.core.auth.RefreshRequest
 import io.ntole.wyr.core.auth.RegisterRequest
 import io.ntole.wyr.core.auth.SessionDto
@@ -21,9 +22,10 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 /**
- * Session and account endpoints. [WyrApi.Paths.AUTH_GUEST] and [WyrApi.Paths.AUTH_REFRESH] are public:
- * the first has no credential to present yet, and the refresh token is itself the credential for the
- * second. [WyrApi.Paths.AUTH_REGISTER] needs a session, the guest's it registers, and
+ * Session and account endpoints. [WyrApi.Paths.AUTH_GUEST], [WyrApi.Paths.AUTH_REFRESH] and
+ * [WyrApi.Paths.AUTH_LOGIN] are public: the first has no credential to present yet, and the second's
+ * refresh token and the third's username and password are credentials of their own.
+ * [WyrApi.Paths.AUTH_REGISTER] needs a session, the guest's it registers, and
  * [WyrApi.Paths.AUTH_LOGOUT] the one it ends.
  */
 fun Route.authRoutes(
@@ -74,6 +76,34 @@ fun Route.authRoutes(
                 }
 
             call.respond(tokens.answer(session, rotated, config))
+        }
+    }
+
+    // A registered player's account on this device, in a session of its own, so their other devices stay
+    // logged in (CLAUDE.md §8a, *Accounts*). Per address, as the caller has no session of the account,
+    // and before anything is read or hashed: what bounds guessing a password.
+    rateLimit(RouteLimit.LOGINS) {
+        post(WyrApi.Paths.AUTH_LOGIN) {
+            val body = call.receiveOrReject<LoginRequest>("login")
+            // A name or a password no registration could have set names no account, and the rules are
+            // public, so refusing it at once, unhashed, gives nothing away.
+            val username = usernameOrNull(body.username)
+            if (username == null || !isPassword(body.password)) throw ApiFailure.invalidLogin()
+
+            val account = db.query { AccountStore.credentialsOf(username) }
+            // Checked against a hash whether or not the name has an account, so a name without one is
+            // refused as slowly as a wrong password, and the time tells neither apart.
+            val matches =
+                withContext(Dispatchers.Default) {
+                    Passwords.verify(body.password, account?.passwordHash ?: Passwords.UNMATCHABLE)
+                }
+            if (account == null || !matches) throw ApiFailure.invalidLogin()
+
+            val refresh = tokens.issueRefreshToken()
+            val expiresAt = System.currentTimeMillis() + config.refreshTokenTtlSeconds * 1_000L
+            val session = db.query { SessionStore.open(account.playerId, refresh.hash, expiresAt) }
+
+            call.respond(tokens.answer(session, refresh, config))
         }
     }
 

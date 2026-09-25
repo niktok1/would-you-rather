@@ -432,11 +432,12 @@ decided in §8b).
     and later, `backup_rules.xml` before, in `:app:androidApp`) keep `AndroidTokenStorage`'s
     `wyr.auth.xml` out of the cloud backup and a device-to-device transfer: a copy would share a
     refresh-token family with its source, and whichever refreshed less would end up a fresh guest. A
-    new phone starts as a guest of its own. `allowBackup` stays on, with nothing else in it yet.
-
+    new phone starts as a guest of its own, and a registered player logs in there. `allowBackup` stays
+    on, with nothing else in it yet.
 - **Accounts** (*decided 2026-09-25*, §8b): a username and a password on a player, which a guest may
-  add, keeping everything it has. Built on the server: `players.username`, lower-cased, under a unique
-  constraint, and `players.password_hash` (V5), both null for a guest. No client sends them yet.
+  add, keeping everything it has, and log in with on another device. Built on the server:
+  `players.username`, lower-cased, under a unique constraint, and `players.password_hash` (V5), both
+  null for a guest. No client registers or logs in yet.
   - *Registering* is `POST /v1/auth/register` with a `RegisterRequest`, bearer required, answered with
     an `AccountDto`: the player the token names gets the username and the password's hash
     (`Passwords`, §8b) and keeps its points, sessions and all else. The username, lower-cased and never
@@ -447,23 +448,34 @@ decided in §8b).
     username nor the password changes for now; so is a registration sent again after its answer was
     lost. `AccountStore.register`, under §4's rules: the unique constraint decides two players racing
     for one name, a compare-and-set two registrations of one player (`AccountStoreTest`).
+  - *Logging in* is `POST /v1/auth/login` with a `LoginRequest`, no bearer needed, answered with a
+    `SessionDto` for a new session of that player (`SessionStore.open`), this device's own, so the
+    player's other devices stay logged in. A bearer token sent beside it plays no part, and the session
+    it names is left alone. The username is compared lower-cased. A name with no account, a wrong
+    password, and a name or password no account can have (refused at once, unhashed: the rules are
+    public) are one and the same 401 `INVALID_LOGIN`, and a name with no account is checked against
+    `Passwords.UNMATCHABLE`, so it is refused only after a hash's time, as a wrong password is. A
+    client must send a login so that this 401 is never taken for an expired access token, which would
+    refresh the session it holds and send the login again. Limited per address (§8b).
   - `GET /v1/me` names the username (`PlayerStatsDto.username`), null for a guest; a client from
     before accounts ignores it (§8d, *Stats*).
+  - Not built, by design for now: a password reset (no email is collected), a rename, a password
+    change, and any lockout per username. The address's login budget is the one bound on guessing.
   - Neither a password nor its hash is ever logged, nor is either in any answer; `RegisterRequest`'s
-    `toString` hides the password (`AccountFlowTest`).
+    and `LoginRequest`'s `toString` hide the password (`AccountFlowTest`).
 
 **Known limitation, by design for now:** a guest account is bound to one device's storage. Lose
 the device, reinstall the app or clear its storage, and the account — and its points — are gone,
-until accounts exist (§8b, *Accounts*). Session storage is ordinary preference storage
+unless the guest registered (*Accounts*, above), and then only until it logs in again. Session storage is ordinary preference storage
 (SharedPreferences / NSUserDefaults / JVM Preferences / localStorage), not Keychain or
 EncryptedSharedPreferences: enough for a game that stores nothing personal.
 
 ## 8b. Open decisions (resolve before relevant work)
 
-- **Accounts** — *decided 2026-09-25; registering built on the server (§8a, *Accounts*).* This is a
-  simple game that stores nothing personal, and most players stay a day or a few, so the simplest
-  design that is correct enough wins over maximum security. A new player plays at once as a guest
-  (§8a). **Register** is optional and keeps the guest's points; **log in** is how a registered
+- **Accounts** — *decided 2026-09-25; built on the server (§8a, *Accounts*), the client next.* This
+  is a simple game that stores nothing personal, and most players stay a day or a few, so the
+  simplest design that is correct enough wins over maximum security. A new player plays at once as a
+  guest (§8a). **Register** is optional and keeps the guest's points; **log in** is how a registered
   player gets their account on another device, and the app saves the credentials by itself.
   Passwords are hashed on the server and never logged (`Passwords`: PBKDF2-HMAC-SHA256 from the JDK,
   no library, 100,000 iterations over a 16-byte salt of each password's own, about 9 ms warm on the
@@ -531,15 +543,16 @@ EncryptedSharedPreferences: enough for a game that stores nothing personal.
   fails at boot, naming it). Each is a fixed window (`RequestBudget`): it starts at a key's first
   request and refills whole when its period ends, so up to twice a budget can pass in moments where
   one window ends and the next begins, while over any longer span the average holds:
-  - *Per client address* (on Render, Cloudflare's `CF-Connecting-IP`: `CLIENT_IP_HEADER`, §8), for
-    a caller with no session to name: guest minting 10 an hour, refreshes 30 a minute, the admin
-    routes 60 a minute together, and on top of that, admin requests with a wrong or missing token 10
-    a minute. A request with the right token spends none of that
-    last budget, but once an address has spent it, every admin request from the address is refused
-    until the budget is back, the right token's too (`LockingOut`): were that one let in, its 200
-    among the 429s would give it away, and guessing would be bounded by nothing. So a guesser
-    behind the moderator's address can lock the moderator out, a minute at a time. It is asked
-    first, so guesses refused by it spend none of the moderator's 60.
+  - *Per client address* (on Render, Cloudflare's `CF-Connecting-IP`: `CLIENT_IP_HEADER`, §8), for a
+    caller with no session to name: guest minting 10 an hour, refreshes 30 a minute, logins 20 a
+    minute (what bounds guessing a password, as each costs a hash), the admin routes 60 a minute
+    together, and on top of that, admin requests with a wrong or missing token 10 a minute. A
+    request with the right token spends none of that last budget, but once an address has spent it,
+    every admin request from the address is refused until the budget is back, the right token's too
+    (`LockingOut`): were that one let in, its 200 among the 429s would give it away, and guessing
+    would be bounded by nothing. So a guesser behind the moderator's address can lock the moderator
+    out, a minute at a time. It is asked first, so guesses refused by it spend none of the
+    moderator's 60.
   - *Per player*, so players behind one address do not share a budget: registrations 20 an hour
     (every one the rules take costs a password hash), logouts 30 a minute, the feed, votes and skips 120 a minute each (the console's *Answer N* sends at most 50 votes in a row), likes 60 a minute,
     submissions 30 an hour (the 20-pending cap still applies), `GET /v1/me` and
