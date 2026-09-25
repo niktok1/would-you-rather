@@ -573,7 +573,7 @@ internal fun failureText(
     strings: PlayStrings,
 ): String =
     when (error) {
-        DomainError.NETWORK -> strings.noInternet
+        DomainError.NETWORK -> strings.cannotReach
         DomainError.OUT_OF_QUESTIONS -> strings.outOfQuestions
         DomainError.RATE_LIMITED -> strings.slowDown
         DomainError.QUESTION_NOT_FOUND -> strings.questionGone

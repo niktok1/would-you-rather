@@ -20,8 +20,11 @@ data class PlayStrings(
     val skip: String,
     /** The spinner's name, for a screen reader, while a question loads. */
     val loading: String,
-    /** No answer from the server: offline, or it cannot be reached. */
-    val noInternet: String,
+    /**
+     * No answer from the server, worded for both of the reasons it can have: the phone is offline,
+     * or the server is down or too slow to answer.
+     */
+    val cannotReach: String,
     /** Nothing to serve, in the categories played or at all. */
     val outOfQuestions: String,
     /** Rate limited. */
@@ -49,7 +52,7 @@ data class PlayStrings(
             like = transform(like),
             skip = transform(skip),
             loading = transform(loading),
-            noInternet = transform(noInternet),
+            cannotReach = transform(cannotReach),
             outOfQuestions = transform(outOfQuestions),
             slowDown = transform(slowDown),
             questionGone = transform(questionGone),
@@ -68,7 +71,7 @@ internal val SerbianCyrillicPlayStrings: PlayStrings =
         like = "Свиђа ми се",
         skip = "Прескочи",
         loading = "Учитавање",
-        noInternet = "Нема интернета.",
+        cannotReach = "Игра није доступна.",
         outOfQuestions = "Нема више питања.",
         slowDown = "Сачекај мало.",
         questionGone = "Тог питања више нема.",
@@ -85,7 +88,7 @@ internal val EnglishPlayStrings: PlayStrings =
         like = "Like",
         skip = "Skip",
         loading = "Loading",
-        noInternet = "No internet.",
+        cannotReach = "Can't reach the game.",
         outOfQuestions = "No more questions.",
         slowDown = "Wait a moment.",
         questionGone = "That question is gone.",

@@ -32,12 +32,15 @@ class PlayScreenTest {
     @Test
     fun `each failure is worded in the language shown`() {
         val strings = SerbianCyrillicStrings.playScreen
-        assertEquals(strings.noInternet, failureText(DomainError.NETWORK, strings))
+        assertEquals(strings.cannotReach, failureText(DomainError.NETWORK, strings))
         assertEquals(strings.outOfQuestions, failureText(DomainError.OUT_OF_QUESTIONS, strings))
         assertEquals(strings.slowDown, failureText(DomainError.RATE_LIMITED, strings))
         // A retired question is 404 to answer and to like alike.
         assertEquals(strings.questionGone, failureText(DomainError.QUESTION_NOT_FOUND, strings))
         assertEquals("That question is gone.", failureText(DomainError.QUESTION_NOT_FOUND, EnglishStrings.playScreen))
+        // Offline, or the server down or past the request timeout: runApi calls them all NETWORK.
+        assertEquals("Игра није доступна.", failureText(DomainError.NETWORK, strings))
+        assertEquals("Can't reach the game.", failureText(DomainError.NETWORK, EnglishStrings.playScreen))
     }
 
     /** The Play screen never submits, moderates or logs in, so those have the one short sentence. */

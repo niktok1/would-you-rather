@@ -635,14 +635,14 @@ class PlayScreenDrawTest {
             return listOf(
                 PlayUiState.Loading to (emptyList<String>() to listOf(strings.loading)),
                 PlayUiState.Failed(DomainError.NETWORK) to
-                    (listOf(strings.noInternet, strings.tryAgain, all) to emptyList()),
+                    (listOf(strings.cannotReach, strings.tryAgain, all) to emptyList()),
                 PlayUiState.Failed(DomainError.OUT_OF_QUESTIONS) to
                     (listOf(strings.outOfQuestions, strings.tryAgain, all) to emptyList()),
                 PlayUiState.Failed(DomainError.SERVER) to
                     (listOf(strings.somethingWrong, strings.tryAgain, all) to emptyList()),
                 PlayUiState.Asking(QUESTION) to (listOf(a, all, points, "0", b) to like),
                 PlayUiState.Asking(QUESTION.copy(likeCount = 12), likeError = DomainError.NETWORK) to
-                    (listOf(a, all, strings.noInternet, "12", b) to like),
+                    (listOf(a, all, strings.cannotReach, "12", b) to like),
                 PlayUiState.Revealed(QUESTION, OUTCOME) to
                     (listOf(a, revealedA, all, points, "0", b, revealedB) to like),
                 PlayUiState.Revealed(QUESTION, OUTCOME.copy(pointsAwarded = 0, replayed = true)) to
