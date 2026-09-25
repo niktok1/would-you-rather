@@ -14,15 +14,19 @@ Postgres, promoted by hand with *Manual Deploy*, runs `d4a9dbf` since 2026-09-25
 applied; **dev** `wyr-server-dev` on in-memory H2, deployed automatically from every green commit on
 `main` (its URL is on its Render page).
 
-**On `feat/simple-accounts`** (not merged): stage 1 took the recovery secret, Block Store, the
-Keychain, the rollback mirror and the question's row lock out (CLAUDE.md §8a, §8b). Stage 2 built
-simple accounts on the server (§8a, *Accounts*): V5, register, log in, log out, and the username in
-`GET /v1/me` (*Accounts*, under *Running it locally*). Stage 3 built the client: an account
-repository behind `RegisterAccount`, `LogIn` and `LogOut`, and the game's **Account** tab, in every
-build (§8d, *Current focus*; how to try it on a phone is under *Accounts*). The branch is ready for
-review and CI; nothing of it is pushed. A `d4a9dbf` build of the app on a phone that keeps a recovery secret
-fails every call against this server once its session dies, since the recovery it tries first is 404
-here: install a build from this branch on it.
+**`feat/simple-accounts` is on `main`**, and on `origin/main`, at b175247: stage 1 took the recovery
+secret, Block Store, the Keychain, the rollback mirror and the question's row lock out (CLAUDE.md §8a,
+§8b). Stage 2 built simple accounts on the server (§8a, *Accounts*): V5, register, log in, log out,
+and the username in `GET /v1/me` (*Accounts*, under *Running it locally*). Stage 3 built the client:
+an account repository behind `RegisterAccount`, `LogIn` and `LogOut`, and the game's **Account** tab,
+in every build (§8d, *Current focus*; how to try it on a phone is under *Accounts*). A `d4a9dbf`
+build of the app on a phone that keeps a recovery secret fails every call against this server once
+its session dies, since the recovery it tries first is 404 here: install a newer build on it.
+
+**On `feat/play-skip-like`** (from b175247; not merged, nothing pushed): **Skip** and **Like** moved
+from the dev console onto the game's **Play** tab, the second feature moved after the Account tab
+(CLAUDE.md §8d, *Current focus*, *Skipping*, *Likes*). The client alone changed; the server and the
+contract did not. How to try it on a phone is under *Skip and Like on Play*.
 
 ### Verified working
 
@@ -461,6 +465,25 @@ here: install a build from this branch on it.
   space) from a second device answered the same player, both refreshed, the first logged out (204)
   and its token was 401 after, the second refreshed with the point kept. No password or refresh
   token in the log. The server was stopped.
+- Skip and Like on the Play tab (`feat/play-skip-like`). `PlayViewModelTest` (23, 9 before): Skip
+  records the skip and shows the next question with no vote cast; a skip that fails moves on all the
+  same and is not sent again; a second tap sends one skip; Skip does nothing while the vote is in
+  flight or once the question is answered; the like count as served before answering; a like shows
+  the server's count; a like then an unlike each put the server's answer on the question, the
+  opposite of what it showed each time; a failed like leaves the question as it was with the error,
+  and the next press asks for the like again; an answer naming another question is not put on the
+  one shown; a like after answering keeps the reveal; nothing else goes while a like is in flight,
+  nor a like while the vote is; and a like answered once the player pressed Next is not put on the
+  next question. Each guard, the id check, the moved-on check, the failure and the like's direction
+  were broken one at a time, and each broke its test. `PlayScreenDrawTest` draws the Play screen in
+  every state, the like states among them, in both themes, and `PlayScreenTest` the count, the
+  button and the failure copy. The console lost its Skip and Like and their tests (`:app:shared`'s
+  `DevConsoleViewModelTest` 49, 62 before), and the bookkeeping only its likes needed
+  (`likeSentBeforeMeasure`, `likesUnmeasuredAtOutcome`). Counts: `:server` 311, 2 skipped (from the
+  build cache: untouched); `:core:domain` 47; `:core:data` 146; `:core:network` 82 (88 as Android
+  host tests); `:app:shared` 127; `:app:adminApp` 87. Lint (forced), the verify job's tests (each
+  client test task forced to rerun) and client compiles, `assembleDebug` included, and the ios job's
+  Kotlin compiles pass. Nothing was run on a device or against a server.
 - `:app:androidApp:assembleDebug` produces a real APK.
 - `ktlintCheck` clean across every module.
 
@@ -507,6 +530,11 @@ here: install a build from this branch on it.
   with them. The real client has run against a real server only on the JVM, against the local fat
   jar; not from a phone, not against dev, and not through the refresh that turns a `d4a9dbf` access
   token (no `sessionId`) into one a logout takes.
+- **Skip and Like on the Play tab on a device.** No build with them has been installed or run: the
+  screen is drawn off screen on the desktop (`PlayScreenDrawTest`), which proves it measures and draws
+  but not what it shows (there is no Compose UI test library in the tree), and its ViewModel is driven
+  over fakes. Nobody has seen the like row, the Skip button or a like's failure line on a phone, nor
+  sent a skip or a like from the app to a server.
 - **The `:core` modules' tests on iOS.** The ios CI job runs `:app:shared`'s tests on the simulator
   and only compiles the `:core` modules' tests, which Kotlin/Native refused while their
   names held commas (`SharedSessionStoreTest`'s among them, from before `feat/recovery-secret`, and
@@ -727,6 +755,35 @@ password and a name with no account are the same 401 `INVALID_LOGIN`. The logout
 ends only the session `$ACCESS` was issued for: that session's refresh token is 401 from then on, and
 the login's session lives on. Logins are 20 a minute per address (`RATE_LIMIT_LOGINS_PER_MINUTE`),
 registrations 20 an hour per player.
+
+### Skip and Like on Play
+
+The game's **Play** tab skips and likes (CLAUDE.md §8d, *Skipping* and *Likes*), in every build,
+PROD's included; the console does neither any more.
+
+**To try it on a phone** (`devDebug`, against the dev server, whose in-memory H2 forgets everything on
+a deploy or a spin-down; the server needs nothing new):
+
+1. `./gradlew :app:androidApp:installDevDebug`, open *WYR Dev*, and go to the **Play** tab (a PROD
+   build opens on it).
+2. Under the two options: the like count (`0 likes` on a question nobody likes) and **Like**, then
+   **Skip**.
+   Press **Like**: the count goes up by one and the button reads **Unlike**; press it again and both
+   go back. The count is the server's, so another player's like shows only when the question is
+   served again.
+3. Press **Skip**: the next question comes, and no points. The skipped one is not served again this
+   cycle: with only the 24 seeds and no category picked, it comes back once the other 23 are answered
+   or skipped, in the next cycle.
+4. Answer a question: the reveal keeps the like count and **Like**, and **Next question** stands where
+   Skip was. A like there works the same.
+5. Airplane mode, then **Like**: the question stays as it was and one line under it says *Can't reach
+   the game right now. Try again.* Network back on, **Like** again: it goes through. **Skip** offline
+   moves on all the same while questions are queued, and shows *Can't reach the game* with *Try again*
+   once they run out.
+6. A like of your own question pays you a point: submit one on the console (*Submit a question*),
+   approve it in the moderation app, and play until it comes up. Like it, and the **Account** tab's
+   points go up by one; the reveal's total is the vote's, so it shows the point from the next vote
+   on.
 
 ### Moderating
 
@@ -985,14 +1042,17 @@ rules live in CLAUDE.md §8d. Each item is one short-lived branch, in order:
     sessions per device (V4) and a recovery secret. The user found the secret, Block Store, the
     Keychain and the rollback mirror too much for a simple game (2026-09-25), so
     `feat/simple-accounts` takes them out again, keeping per-device sessions and the grace.
-14. **Now:** `feat/simple-accounts` goes on to simple accounts (CLAUDE.md §8b, *Accounts*): play as a
-    guest at once, register optionally and keep the points, log in on another device. Built on the
-    server (stage 2: V5, register, log in, log out, the username in the stats) and in the game
-    (stage 3: the account repository and the **Account** tab, the first feature moved out of the
-    console, CLAUDE.md §8d). Next: review, push, CI (`server-postgres`, `docker-smoke` and `ios`
-    have not run on the branch), the dev deploy, then try it on a phone (*Accounts*), and move the
-    next feature from the console into the game. No-click sign-in (Play Games Services, Game
-    Center) comes later, once there is an Apple developer account.
+14. `feat/simple-accounts` *(on `main` and `origin/main` at b175247)* goes on to simple accounts
+    (CLAUDE.md §8b, *Accounts*): play as a guest at once, register optionally and keep the points,
+    log in on another device. Built on the server (stage 2: V5, register, log in, log out, the
+    username in the stats) and in the game (stage 3: the account repository and the **Account** tab,
+    the first feature moved out of the console, CLAUDE.md §8d). Still to do: read its CI run and try
+    it on a phone (*Accounts*). No-click sign-in (Play Games Services, Game Center) comes later,
+    once there is an Apple developer account.
+15. **Now:** `feat/play-skip-like` — Skip and Like move from the console onto the **Play** tab, the
+    second feature moved (CLAUDE.md §8d). Next: review, merge, push, CI, then try it on a phone
+    (*Skip and Like on Play*), and move the next feature: the console still has *Submit a question*
+    with the player's submissions, and the Category row.
 
 **For the moderation app.** Everything it needs is in `io.ntole.wyr.core.domain.moderation`, and
 none of it needs or makes a player session:
