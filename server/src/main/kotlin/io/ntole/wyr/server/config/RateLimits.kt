@@ -18,9 +18,9 @@ data class RequestBudget(
 
 /**
  * What one client may send (CLAUDE.md §8b, *Rate limiting*): a budget for each group of routes, spent
- * apart from every other group's. The feed, votes, skips, likes, submissions and the two reads of the
- * player's own are per player, so players behind one address do not share them; the rest, whose
- * caller has no session to name, per client address.
+ * apart from every other group's. Registrations, the feed, votes, skips, likes, submissions and the two
+ * reads of the player's own are per player, so players behind one address do not share them; the
+ * rest, whose caller has no session to name, per client address.
  *
  * Each is overridable by the environment variable [fromEnvironment] names, a count per the period the
  * name ends in. The periods are fixed.
@@ -30,6 +30,11 @@ data class RateLimits(
     val guests: RequestBudget,
     /** `POST /v1/auth/refresh`, per address. A player refreshes about once per access token. */
     val refreshes: RequestBudget,
+    /**
+     * `POST /v1/auth/register`. A player registers once, but a name they want may be taken, and every
+     * try but one that breaks a rule costs a password hash.
+     */
+    val registrations: RequestBudget,
     /** `GET /v1/questions`. */
     val feed: RequestBudget,
     /** `POST /v1/votes`. Every re-answer pays (CLAUDE.md §8d), so this bounds what one player can farm. */
@@ -63,6 +68,7 @@ data class RateLimits(
             RateLimits(
                 guests = RequestBudget(requests = 10, per = 1.hours),
                 refreshes = RequestBudget(requests = 30, per = 1.minutes),
+                registrations = RequestBudget(requests = 20, per = 1.hours),
                 feed = RequestBudget(requests = 120, per = 1.minutes),
                 votes = RequestBudget(requests = 120, per = 1.minutes),
                 skips = RequestBudget(requests = 120, per = 1.minutes),
@@ -96,6 +102,7 @@ data class RateLimits(
                 RateLimits(
                     guests = budget("RATE_LIMIT_GUESTS_PER_HOUR", guests),
                     refreshes = budget("RATE_LIMIT_REFRESHES_PER_MINUTE", refreshes),
+                    registrations = budget("RATE_LIMIT_REGISTRATIONS_PER_HOUR", registrations),
                     feed = budget("RATE_LIMIT_FEED_PER_MINUTE", feed),
                     votes = budget("RATE_LIMIT_VOTES_PER_MINUTE", votes),
                     skips = budget("RATE_LIMIT_SKIPS_PER_MINUTE", skips),

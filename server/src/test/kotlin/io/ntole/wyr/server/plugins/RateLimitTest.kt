@@ -1,8 +1,5 @@
 package io.ntole.wyr.server.plugins
 
-import ch.qos.logback.classic.Logger
-import ch.qos.logback.classic.spi.ILoggingEvent
-import ch.qos.logback.core.read.ListAppender
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
@@ -21,6 +18,7 @@ import io.ktor.serialization.kotlinx.json.json
 import io.ktor.server.testing.testApplication
 import io.ntole.wyr.core.api.WyrApi
 import io.ntole.wyr.core.auth.RefreshRequest
+import io.ntole.wyr.core.auth.RegisterRequest
 import io.ntole.wyr.core.auth.SessionDto
 import io.ntole.wyr.core.error.ErrorCode
 import io.ntole.wyr.core.error.ErrorDto
@@ -44,10 +42,10 @@ import io.ntole.wyr.server.config.RequestBudget
 import io.ntole.wyr.server.config.ServerConfig
 import io.ntole.wyr.server.rateLimitsOf
 import io.ntole.wyr.server.testDatabaseFor
+import io.ntole.wyr.server.withLogCapture
 import io.ntole.wyr.server.wyrModule
 import kotlinx.coroutines.delay
 import kotlinx.serialization.json.Json
-import org.slf4j.LoggerFactory
 import java.util.UUID
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -414,6 +412,14 @@ class RateLimitTest {
                     }
                 }
             },
+            // A name the rules refuse, so every one is answered alike and hashes nothing.
+            Group(
+                "registrations",
+                { copy(registrations = it) },
+                allowed = HttpStatusCode.UnprocessableEntity,
+            ) { caller ->
+                caller.client.post(WyrApi.Paths.AUTH_REGISTER) { json(caller.player, RegisterRequest("x", "password")) }
+            },
             Group("feed", { copy(feed = it) }) { caller ->
                 caller.client.get(WyrApi.Paths.QUESTIONS) { bearerAuth(caller.player.accessToken) }
             },
@@ -544,18 +550,6 @@ class RateLimitTest {
 
         fun HttpRequestBuilder.forwardedFor(vararg entries: String) {
             header(HttpHeaders.XForwardedFor, entries.joinToString(", "))
-        }
-
-        /** Runs [block] with every log event recorded, from any logger. */
-        fun withLogCapture(block: (ListAppender<ILoggingEvent>) -> Unit) {
-            val logged = ListAppender<ILoggingEvent>().apply { start() }
-            val root = LoggerFactory.getLogger(org.slf4j.Logger.ROOT_LOGGER_NAME) as Logger
-            root.addAppender(logged)
-            try {
-                block(logged)
-            } finally {
-                root.detachAppender(logged)
-            }
         }
 
         /** An access token for [playerId] as the server under test would issue it, but for its secret. */

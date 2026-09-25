@@ -153,7 +153,8 @@ failing:
   A burst on one row then just queues on its lock; `PlayerStoreTest` pins 8 at once.
 - Any other read-then-write is a compare-and-set: the `UPDATE`'s `WHERE` repeats what the read
   relied on, and 0 rows updated means another transaction won (`PlayerStore.startNextCycle`,
-  `ModerationStore.decide`, and a retirement or restoration, `ModerationStore.move`). Where the
+  `ModerationStore.decide`, a retirement or restoration, `ModerationStore.move`, and a registration
+  naming a player who has no username, `AccountStore.register`). Where the
   `WHERE` can hold the whole check, nothing need be read first (`SessionStore.rotate`, whose second
   racer re-checks it against the first's commit).
   Or the read takes the row lock (`SELECT ... FOR UPDATE`), so a concurrent writer waits and then
@@ -165,10 +166,11 @@ failing:
   The one exception is a value copied from another row, which may be a plain read where a stale
   copy is provably harmless, with the proof at the read (`VoteStore.currentCycle`: the feed moves
   the cycle on only once the answer's question is already answered or skipped in the one read).
-- Uniqueness is a constraint (the `Votes`, `Skips` and `Likes` primary keys), never a prior
-  `SELECT`. A violation is never caught and carried on from: PostgreSQL aborts a transaction at its
-  first error. It propagates, and Exposed rolls back and reruns the whole transaction, which then
-  sees the committed row (`VoteStore.cast`, `SkipStore.skip`, `LikeStore.setLiked`, and
+- Uniqueness is a constraint (the `Votes`, `Skips` and `Likes` primary keys, `players.username`'s
+  unique constraint), never a prior `SELECT`. A violation is never caught and carried on from:
+  PostgreSQL aborts a transaction at its first error. It propagates, and Exposed rolls back and reruns
+  the whole transaction, which then sees the committed row (`VoteStore.cast`, `SkipStore.skip`,
+  `LikeStore.setLiked`, `AccountStore.register`, which `AccountStoreTest` races, and
   `Seed.questionsIfEmpty`, which `SeedTest` races). A plain read before such an insert only spares
   a certain violation, and needs no lock when finding the row writes nothing (a like already held).
 - Numbers that must agree with one another are read in one statement, which sees one committed
@@ -360,8 +362,8 @@ This project must never be attributed to any employer identity.
 ## 8a. Authentication — resolved
 
 **Guests first: zero-click, server-issued guest sessions with a custom Kotlin implementation.** No
-third-party auth SDK, satisfying §2. Accounts to register and log back into come next (§8b,
-*Accounts*).
+third-party auth SDK, satisfying §2. A guest may then register as an account (*Accounts*, below;
+decided in §8b).
 
 - `POST /v1/auth/guest` mints the player server-side and answers a `SessionDto`: a signed access JWT
   and an opaque refresh token. Nothing is asked of the player. Identity is **server-issued**, which
@@ -424,6 +426,22 @@ third-party auth SDK, satisfying §2. Accounts to register and log back into com
     refresh-token family with its source, and whichever refreshed less would end up a fresh guest. A
     new phone starts as a guest of its own. `allowBackup` stays on, with nothing else in it yet.
 
+- **Accounts** (*decided 2026-09-25*, §8b): a username and a password on a player, which a guest may
+  add, keeping everything it has. Built on the server: `players.username`, lower-cased, under a unique
+  constraint, and `players.password_hash` (V5), both null for a guest. No client sends them yet.
+  - *Registering* is `POST /v1/auth/register` with a `RegisterRequest`, bearer required, answered with
+    an `AccountDto`: the player the token names gets the username and the password's hash
+    (`Passwords`, §8b) and keeps its points, sessions and all else. The username, lower-cased and never
+    trimmed, must be 3 to 20 of `a`-`z`, `0`-`9` and `_`, the password 6 to 128 characters of any kind
+    (`WyrApi.Limits`; `checkedUsername`, `checkPassword`), or it is 422 `INVALID_USERNAME` or
+    `INVALID_PASSWORD`, the username checked first. A username another player has, in any case, is
+    409 `USERNAME_TAKEN`. A player registered already is 409 `ALREADY_REGISTERED`, since neither the
+    username nor the password changes for now; so is a registration sent again after its answer was
+    lost. `AccountStore.register`, under §4's rules: the unique constraint decides two players racing
+    for one name, a compare-and-set two registrations of one player (`AccountStoreTest`).
+  - Neither a password nor its hash is ever logged, nor is either in any answer; `RegisterRequest`'s
+    `toString` hides the password (`AccountFlowTest`).
+
 **Known limitation, by design for now:** a guest account is bound to one device's storage. Lose
 the device, reinstall the app or clear its storage, and the account — and its points — are gone,
 until accounts exist (§8b, *Accounts*). Session storage is ordinary preference storage
@@ -432,17 +450,18 @@ EncryptedSharedPreferences: enough for a game that stores nothing personal.
 
 ## 8b. Open decisions (resolve before relevant work)
 
-- **Accounts** — *decided 2026-09-25, not built yet.* This is a simple game that stores nothing
-  personal, and most players stay a day or a few, so the simplest design that is correct enough
-  wins over maximum security. A new player plays at once as a guest (§8a). **Register** is optional
-  and keeps the guest's points; **log in** is how a registered player gets their account on another
-  device, and the app saves the credentials by itself. Passwords are hashed on the server and never
-  logged (`Passwords`: PBKDF2-HMAC-SHA256 from the JDK, no library, 100,000 iterations over a 16-byte
-  salt of each password's own, about 9 ms warm on the development machine and so, by estimate, 0.1 to
-  0.2 s on Render's tenth of a CPU). A stored hash names its algorithm and cost,
-  `pbkdf2-sha256$<iterations>$<salt>$<hash>`, so the cost can be raised later and the hashes already
-  stored still verify; nothing rehashes one at a new cost yet. No email is collected, so there is
-  **no password reset**: a forgotten password means a new account. No-click sign-in (Play Games Services on Android, Game Center on iOS) comes later, once
+- **Accounts** — *decided 2026-09-25; registering built on the server (§8a, *Accounts*).* This is a
+  simple game that stores nothing personal, and most players stay a day or a few, so the simplest
+  design that is correct enough wins over maximum security. A new player plays at once as a guest
+  (§8a). **Register** is optional and keeps the guest's points; **log in** is how a registered
+  player gets their account on another device, and the app saves the credentials by itself.
+  Passwords are hashed on the server and never logged (`Passwords`: PBKDF2-HMAC-SHA256 from the JDK,
+  no library, 100,000 iterations over a 16-byte salt of each password's own, about 9 ms warm on the
+  development machine and so, by estimate, 0.1 to 0.2 s on Render's tenth of a CPU). A stored hash
+  names its algorithm and cost, `pbkdf2-sha256$<iterations>$<salt>$<hash>`, so the cost can be
+  raised later and the hashes already stored still verify; nothing rehashes one at a new cost yet.
+  No email is collected, so there is **no password reset**: a forgotten password means a new
+  account. No-click sign-in (Play Games Services on Android, Game Center on iOS) comes later, once
   there is an Apple developer account. This replaces the recovery secret (V4), which is gone from
   the server and every client; its column stays, unused, until a later migration drops it.
 - **SQLDelight cache** — see §4. Needs a per-platform split because of web. Lower priority now
@@ -511,8 +530,8 @@ EncryptedSharedPreferences: enough for a game that stores nothing personal.
     among the 429s would give it away, and guessing would be bounded by nothing. So a guesser
     behind the moderator's address can lock the moderator out, a minute at a time. It is asked
     first, so guesses refused by it spend none of the moderator's 60.
-  - *Per player*, so players behind one address do not share a budget: the feed, votes and skips
-    120 a minute each (the console's *Answer N* sends at most 50 votes in a row), likes 60 a minute,
+  - *Per player*, so players behind one address do not share a budget: registrations 20 an hour
+    (every one the rules take costs a password hash), the feed, votes and skips 120 a minute each (the console's *Answer N* sends at most 50 votes in a row), likes 60 a minute,
     submissions 30 an hour (the 20-pending cap still applies), `GET /v1/me` and
     `GET /v1/me/questions` 120 a minute each. The key is the player id in the bearer token, which the
     limiter verifies itself (`verifiedPlayerId`): it runs before authentication, so no principal is

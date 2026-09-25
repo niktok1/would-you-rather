@@ -104,6 +104,7 @@ class ServerConfigTest {
         assertEquals(RateLimits.DEFAULT, limits)
         assertEquals(RequestBudget(10, 1.hours), limits.guests)
         assertEquals(RequestBudget(30, 1.minutes), limits.refreshes)
+        assertEquals(RequestBudget(20, 1.hours), limits.registrations)
         listOf(limits.feed, limits.votes, limits.skips, limits.stats, limits.mySubmissions).forEach { budget ->
             assertEquals(RequestBudget(120, 1.minutes), budget)
         }
@@ -119,6 +120,7 @@ class ServerConfigTest {
             listOf(
                 Triple("RATE_LIMIT_GUESTS_PER_HOUR", RateLimits::guests, 1.hours),
                 Triple("RATE_LIMIT_REFRESHES_PER_MINUTE", RateLimits::refreshes, 1.minutes),
+                Triple("RATE_LIMIT_REGISTRATIONS_PER_HOUR", RateLimits::registrations, 1.hours),
                 Triple("RATE_LIMIT_FEED_PER_MINUTE", RateLimits::feed, 1.minutes),
                 Triple("RATE_LIMIT_VOTES_PER_MINUTE", RateLimits::votes, 1.minutes),
                 Triple("RATE_LIMIT_SKIPS_PER_MINUTE", RateLimits::skips, 1.minutes),

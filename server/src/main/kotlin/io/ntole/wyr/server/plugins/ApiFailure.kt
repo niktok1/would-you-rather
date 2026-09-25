@@ -42,6 +42,19 @@ class ApiFailure(
             expected: QuestionStatus,
         ) = ApiFailure(HttpStatusCode.Conflict, ErrorCode.WRONG_STATUS, "question $id is not ${expected.name}")
 
+        /** A registration's username the rules refuse, the player's to put right. */
+        fun invalidUsername(message: String) =
+            ApiFailure(HttpStatusCode.UnprocessableEntity, ErrorCode.INVALID_USERNAME, message)
+
+        /** A registration's password the rules refuse. The message never holds the password. */
+        fun invalidPassword(message: String) =
+            ApiFailure(HttpStatusCode.UnprocessableEntity, ErrorCode.INVALID_PASSWORD, message)
+
+        fun usernameTaken() = ApiFailure(HttpStatusCode.Conflict, ErrorCode.USERNAME_TAKEN, "username taken")
+
+        fun alreadyRegistered() =
+            ApiFailure(HttpStatusCode.Conflict, ErrorCode.ALREADY_REGISTERED, "player already registered")
+
         fun unauthorized(message: String = "missing or invalid credentials") =
             ApiFailure(HttpStatusCode.Unauthorized, ErrorCode.UNAUTHORIZED, message)
 

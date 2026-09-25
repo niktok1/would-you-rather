@@ -59,6 +59,28 @@ public enum class ErrorCode {
      */
     WRONG_STATUS,
 
+    /**
+     * A registration's username breaks the rules of [io.ntole.wyr.core.auth.RegisterRequest]: lower-cased,
+     * it is too short, too long or holds a character other than `a` to `z`, `0` to `9` and `_`. The
+     * player's to put right. Sent with 422.
+     */
+    INVALID_USERNAME,
+
+    /**
+     * A registration's password is too short or too long (see [io.ntole.wyr.core.auth.RegisterRequest]).
+     * The player's to put right. Sent with 422.
+     */
+    INVALID_PASSWORD,
+
+    /** Another player has the username a registration asked for, compared ignoring case. Sent with 409. */
+    USERNAME_TAKEN,
+
+    /**
+     * The player registering has a username and password already. Neither can change, for now. Sent
+     * with 409.
+     */
+    ALREADY_REGISTERED,
+
     /** Caller is not authenticated, or the credential is expired. */
     UNAUTHORIZED,
 

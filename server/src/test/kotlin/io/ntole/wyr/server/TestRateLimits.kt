@@ -9,6 +9,7 @@ internal fun rateLimitsOf(budget: RequestBudget): RateLimits =
     RateLimits(
         guests = budget,
         refreshes = budget,
+        registrations = budget,
         feed = budget,
         votes = budget,
         skips = budget,

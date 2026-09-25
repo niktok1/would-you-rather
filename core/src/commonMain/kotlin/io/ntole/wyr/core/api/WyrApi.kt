@@ -18,6 +18,24 @@ public object WyrApi {
         public const val AUTH_REFRESH: String = "/$VERSION/auth/refresh"
 
         /**
+         * POST: registers the player the bearer token names, a guest, as an account (CLAUDE.md §8b,
+         * *Accounts*), with a [io.ntole.wyr.core.auth.RegisterRequest], answered with an
+         * [io.ntole.wyr.core.auth.AccountDto]. Requires a session. The player keeps everything they
+         * have, points and sessions included; only the username and password are new.
+         *
+         * A username or password the rules refuse is 422
+         * [io.ntole.wyr.core.error.ErrorCode.INVALID_USERNAME] or
+         * [io.ntole.wyr.core.error.ErrorCode.INVALID_PASSWORD], the username checked first. A username
+         * another player has, ignoring case, is 409 [io.ntole.wyr.core.error.ErrorCode.USERNAME_TAKEN],
+         * and of two registrations racing for one exactly one gets it. A player registered already is
+         * 409 [io.ntole.wyr.core.error.ErrorCode.ALREADY_REGISTERED], whatever the request says: a
+         * username and password never change, for now, so a registration sent again after its answer
+         * was lost gets this too, and [ME] then names the username. A malformed body is 400
+         * [io.ntole.wyr.core.error.ErrorCode.VALIDATION_FAILED]. Limited per player.
+         */
+        public const val AUTH_REGISTER: String = "/$VERSION/auth/register"
+
+        /**
          * GET: the next batch of questions for the player the bearer token names. Requires a
          * session, because the feed is per player (CLAUDE.md §8d): it runs in cycles, serving each
          * question once per cycle in a new random order, and a batch holds only what the player has
@@ -248,9 +266,22 @@ public object WyrApi {
         public const val MAX_PENDING_SUBMISSIONS: Int = 20
 
         /**
+         * Shortest username an account can have, once lower-cased
+         * ([io.ntole.wyr.core.auth.RegisterRequest]). Here, with the rest of the account's limits, so
+         * a client can check what the player types against the numbers the server checks it by.
+         */
+        public const val MIN_USERNAME_LENGTH: Int = 3
+
+        /**
          * Longest username an account can have, once lower-cased. Here rather than on the server so a
          * client can check a name against the same number the server's column is sized by.
          */
         public const val MAX_USERNAME_LENGTH: Int = 20
+
+        /** Shortest password an account can have, counted as [MAX_OPTION_LENGTH] counts. */
+        public const val MIN_PASSWORD_LENGTH: Int = 6
+
+        /** Longest password an account can have, counted as [MAX_OPTION_LENGTH] counts. */
+        public const val MAX_PASSWORD_LENGTH: Int = 128
     }
 }

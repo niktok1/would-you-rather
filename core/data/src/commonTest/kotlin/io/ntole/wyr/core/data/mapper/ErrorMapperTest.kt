@@ -30,6 +30,11 @@ class ErrorMapperTest {
                     // No longer sent, and a 401 too: still never UNAUTHORIZED, which would drop the session.
                     ApiException(ErrorCode.INVALID_RECOVERY_SECRET, status = 401) to DomainError.UNKNOWN,
                     ApiException(ErrorCode.RATE_LIMITED, status = 429) to DomainError.RATE_LIMITED,
+                    // Answered only to a registration, which this build never sends.
+                    ApiException(ErrorCode.INVALID_USERNAME, status = 422) to DomainError.UNKNOWN,
+                    ApiException(ErrorCode.INVALID_PASSWORD, status = 422) to DomainError.UNKNOWN,
+                    ApiException(ErrorCode.USERNAME_TAKEN, status = 409) to DomainError.UNKNOWN,
+                    ApiException(ErrorCode.ALREADY_REGISTERED, status = 409) to DomainError.UNKNOWN,
                     ApiException(ErrorCode.INTERNAL, status = 500) to DomainError.SERVER,
                     // The code wins over the status whenever there is one.
                     ApiException(ErrorCode.ALREADY_VOTED, status = 503) to DomainError.ALREADY_VOTED,
