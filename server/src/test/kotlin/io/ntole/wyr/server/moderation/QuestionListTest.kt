@@ -16,6 +16,7 @@ import io.ntole.wyr.server.db.h2Url
 import io.ntole.wyr.server.like.LikeStore
 import io.ntole.wyr.server.player.PlayerStore
 import io.ntole.wyr.server.question.SubmissionStore
+import io.ntole.wyr.server.question.paidSubmission
 import io.ntole.wyr.server.vote.VoteStore
 import org.jetbrains.exposed.v1.core.Transaction
 import org.jetbrains.exposed.v1.core.statements.StatementContext
@@ -246,7 +247,7 @@ class QuestionListTest {
     ): SubmissionDto {
         val tag = UUID.randomUUID().toString().take(8)
         val request = SubmitQuestionRequest("Option $tag", "Other $tag", categories)
-        return transaction(database) { SubmissionStore.submit(author, request, now = at) }
+        return transaction(database) { paidSubmission(author, request, now = at) }
     }
 
     private fun answer(

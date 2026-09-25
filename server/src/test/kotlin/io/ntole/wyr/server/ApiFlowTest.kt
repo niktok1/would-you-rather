@@ -50,6 +50,7 @@ import io.ntole.wyr.server.config.ServerConfig
 import io.ntole.wyr.server.db.Sessions
 import io.ntole.wyr.server.db.inTransaction
 import io.ntole.wyr.server.db.serverPool
+import io.ntole.wyr.server.player.PlayerStore
 import io.ntole.wyr.server.vote.Scoring
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonNull
@@ -76,6 +77,9 @@ import kotlin.time.Duration.Companion.minutes
  * bleed into another's tally assertions.
  */
 class ApiFlowTest {
+    /** The database of the server [runServer] started for this test. */
+    private var serverDatabase: TestDatabaseSettings? = null
+
     @Test
     fun `guest session, question fetch, and vote all work with no player interaction`() =
         runServer("happy-path") { client ->
@@ -829,6 +833,7 @@ class ApiFlowTest {
                     cycle = 1,
                     dueThisCycle = pool.size,
                     likesReceived = 0,
+                    pointsSpent = 0,
                 ),
                 response.body<PlayerStatsDto>(),
             )
@@ -845,6 +850,7 @@ class ApiFlowTest {
                     "cycle",
                     "dueThisCycle",
                     "likesReceived",
+                    "pointsSpent",
                     "username",
                 ),
                 sent.keys,
@@ -1087,6 +1093,33 @@ class ApiFlowTest {
         }
 
     @Test
+    fun `submitting costs a point which a rejection pays back and an approval keeps`() =
+        runServer("submit-cost") { client ->
+            val author = client.guest()
+            // Straight with the token, so nothing gives the author the points first.
+            val refused = client.submit(author.accessToken, question("Broke"))
+            assertEquals(HttpStatusCode.Conflict, refused.status)
+            assertEquals(ErrorCode.NOT_ENOUGH_POINTS, refused.body<ErrorDto>().code)
+            assertEquals(emptyList(), client.mySubmissions(author), "nothing stored")
+
+            repeat(2) { client.vote(author, "seed-1", OptionSide.A) }
+            val (kept, paidBack) =
+                listOf("Kept", "Paid back").map { text ->
+                    client.submit(author.accessToken, question(text)).body<SubmissionDto>()
+                }
+            assertEquals(0, client.stats(author).totalPoints, "two answers paid for two submissions")
+            assertEquals(2 * Scoring.SUBMISSION_COST, client.stats(author).pointsSpent)
+            assertEquals(HttpStatusCode.Conflict, client.submit(author.accessToken, question("Broke again")).status)
+
+            client.approve(kept.id)
+            client.reject(paidBack.id, "No")
+
+            val stats = client.stats(author)
+            assertEquals(Scoring.SUBMISSION_COST, stats.totalPoints, "the rejected one's cost is back")
+            assertEquals(Scoring.SUBMISSION_COST, stats.pointsSpent, "the approved one's is kept")
+        }
+
+    @Test
     fun `a player may have only so many submissions pending at once`() =
         runServer("submit-limit") { client ->
             val author = client.guest()
@@ -1183,6 +1216,7 @@ class ApiFlowTest {
             // As for the ghost-player vote, the helper's token for a real player has to pass first.
             val real = client.guest()
             val request = SubmitQuestionRequest("Fly", "Swim", listOf("FOOD"))
+            grantPoints(real.playerId, Scoring.SUBMISSION_COST)
             assertEquals(HttpStatusCode.Created, client.submit(signAccessToken(real.playerId), request).status)
 
             val response = client.submit(signAccessToken("no-such-player"), request)
@@ -1775,6 +1809,7 @@ class ApiFlowTest {
             val pending = client.submitted(author, question("Pending"))
             val rejected = client.submitted(author, question("Rejected"))
             assertEquals(HttpStatusCode.OK, client.reject(rejected.id, "No").status)
+            val before = client.stats(author).totalPoints
 
             listOf("no-such-question", LONGER_THAN_ANY_ID, pending.id, rejected.id).forEach { questionId ->
                 listOf(author, player).forEach { session ->
@@ -1786,7 +1821,7 @@ class ApiFlowTest {
                     }
                 }
             }
-            assertEquals(0, client.stats(author).totalPoints)
+            assertEquals(before, client.stats(author).totalPoints, "none of them paid the author")
         }
 
     @Test
@@ -1856,6 +1891,7 @@ class ApiFlowTest {
         database: TestDatabaseSettings = testDatabaseFor(databaseName),
         block: suspend ApplicationTestBuilder.(HttpClient) -> Unit,
     ) = testApplication {
+        serverDatabase = database
         val config =
             ServerConfig(
                 port = 0,
@@ -1979,10 +2015,25 @@ class ApiFlowTest {
             setBody(SkipRequest(questionId))
         }
 
+    /**
+     * Submits [request] as [session]'s player, given the points it costs first (CLAUDE.md §8c), so the
+     * player's total ends where it began: what a test submits for when it is not about the cost.
+     */
     private suspend fun HttpClient.submit(
         session: SessionDto,
         request: SubmitQuestionRequest,
-    ): HttpResponse = submit(session.accessToken, request)
+    ): HttpResponse {
+        grantPoints(session.playerId, Scoring.SUBMISSION_COST)
+        return submit(session.accessToken, request)
+    }
+
+    /** Adds [points] to [playerId]'s total straight in the database of the server under test. */
+    private fun grantPoints(
+        playerId: String,
+        points: Int,
+    ) = checkNotNull(serverDatabase) { "no server is running" }.serverPool().use { pool ->
+        pool.inTransaction { PlayerStore.addPoints(playerId, points) }
+    }
 
     private suspend fun HttpClient.mySubmissions(session: SessionDto): List<SubmissionDto> =
         get(WyrApi.Paths.MY_QUESTIONS) { bearerAuth(session.accessToken) }.body<SubmissionListDto>().submissions

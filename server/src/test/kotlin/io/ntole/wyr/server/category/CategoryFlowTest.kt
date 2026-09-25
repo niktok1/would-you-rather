@@ -28,6 +28,8 @@ import io.ntole.wyr.core.question.QuestionDto
 import io.ntole.wyr.core.question.QuestionPageDto
 import io.ntole.wyr.core.question.SubmissionDto
 import io.ntole.wyr.core.question.SubmitQuestionRequest
+import io.ntole.wyr.core.vote.OptionSide
+import io.ntole.wyr.core.vote.VoteRequest
 import io.ntole.wyr.server.NO_PRACTICAL_LIMIT
 import io.ntole.wyr.server.config.ServerConfig
 import io.ntole.wyr.server.testDatabaseFor
@@ -151,6 +153,13 @@ class CategoryFlowTest {
         runServer("create-played") { client ->
             client.createCategory(CreateCategoryRequest(nameSr = "Животиње", nameEn = "Animals"))
             val author = client.guest()
+            // The point the submission costs.
+            val vote = VoteRequest("seed-1", OptionSide.A, attemptId = "earn")
+            client.post(WyrApi.Paths.VOTES) {
+                bearerAuth(author.accessToken)
+                contentType(ContentType.Application.Json)
+                setBody(vote)
+            }
 
             val submitted =
                 client.post(WyrApi.Paths.QUESTIONS) {

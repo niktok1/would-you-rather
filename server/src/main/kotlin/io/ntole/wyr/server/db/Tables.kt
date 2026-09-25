@@ -185,6 +185,14 @@ object Questions : Table("questions") {
      */
     val retiredAt = long("retired_at").nullable()
 
+    /**
+     * The points the author paid to submit the question (CLAUDE.md §8c), 0 for a seed and for every
+     * question submitted before submitting cost anything (V7). A rejection pays it back
+     * (`ModerationStore.reject`) and leaves it here, so what a player's questions cost them is this
+     * over those not rejected.
+     */
+    val submissionCost = integer("submission_cost").default(0)
+
     override val primaryKey = PrimaryKey(id)
 
     init {

@@ -482,14 +482,16 @@ internal class MigrationsTest(
      * player who holds a refresh token a session holding it, under the player's own id and creation
      * time, and marks their row, the mirror, with that session's token. V5 leaves every player a guest,
      * with no username and no password. V6 adds the first categories ([Seed.CATEGORIES]) and files what
-     * was under RANDOM under ABSURD instead. None changes anything else. A later script that changes
+     * was under RANDOM under ABSURD instead. V7 gives every question a cost of 0. None changes anything
+     * else. A later script that changes
      * the rows already there adds what it does to them here.
      */
     private fun afterLaterScripts(before: Contents): Contents {
         val widened =
             before.mapValues { (table, rows) ->
                 val added = ADDED_COLUMNS[table].orEmpty()
-                rows.map { row -> row + added.associateWith { null } }
+                val defaulted = DEFAULTED_COLUMNS[table].orEmpty()
+                rows.map { row -> row + added.associateWith { null } + defaulted }
             }
         val players = widened.getValue(Players.tableName)
         val sessions =
@@ -548,7 +550,7 @@ internal class MigrationsTest(
          * The history of a database built before migrations once a boot has migrated it: V1 recorded
          * without running it, then every later script run.
          */
-        private val BASELINED_HISTORY = listOf("1 BASELINE", "2 SQL", "3 SQL", "4 SQL", "5 SQL", "6 SQL")
+        private val BASELINED_HISTORY = listOf("1 BASELINE", "2 SQL", "3 SQL", "4 SQL", "5 SQL", "6 SQL", "7 SQL")
 
         /**
          * The columns the scripts after V1 add, by table, empty in every row already there but for
@@ -569,6 +571,15 @@ internal class MigrationsTest(
                         "password_hash",
                     ),
                 Questions.tableName to listOf("retired_at"),
+            )
+
+        /**
+         * The columns the scripts after V1 add with a default, by table, each at that default in every
+         * row already there, as JDBC reads it back as a string: V7's cost on questions.
+         */
+        private val DEFAULTED_COLUMNS =
+            mapOf(
+                Questions.tableName to mapOf("submission_cost" to "0"),
             )
 
         /** Past Flyway's own wait for its lock, 50 tries a second apart, so Flyway gives up first. */

@@ -88,12 +88,14 @@ class RateLimitTest {
 
             repeat(2) { assertEquals(HttpStatusCode.OK, client.vote(player).status) }
             assertRateLimited(client.vote(player), "the third vote")
+            // The two votes' points pay for the two submissions.
             repeat(2) { index -> assertEquals(HttpStatusCode.Created, client.submit(player, "Paid $index").status) }
             assertRateLimited(client.submit(player, "Refused"), "the third submission")
 
             val stats = client.stats(player)
-            assertEquals(2, stats.totalPoints, "the refused vote paid nothing")
-            assertEquals(2, stats.answersGiven, "and was no answer")
+            assertEquals(2, stats.answersGiven, "the refused vote was no answer")
+            assertEquals(2, stats.pointsSpent, "the refused submission cost nothing")
+            assertEquals(0, stats.totalPoints, "and the refused vote paid nothing")
             // Sorted: two submitted in one millisecond are listed in their ids' order, which is random.
             val submitted =
                 client
@@ -457,7 +459,9 @@ class RateLimitTest {
             Group("likes", { copy(likes = it) }) { caller ->
                 caller.client.post(WyrApi.Paths.LIKES) { json(caller.player, LikeRequest(SEED, liked = true)) }
             },
+            // A vote first, outside this group, earns the point each submission costs.
             Group("submissions", { copy(submissions = it) }, allowed = HttpStatusCode.Created) {
+                it.client.vote(it.player)
                 it.client.submit(it.player, "Question ${it.sent++}")
             },
             Group("stats", { copy(stats = it) }) { caller ->

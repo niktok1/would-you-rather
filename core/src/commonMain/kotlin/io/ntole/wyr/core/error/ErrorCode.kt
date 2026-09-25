@@ -46,6 +46,12 @@ public enum class ErrorCode {
     SUBMISSION_LIMIT,
 
     /**
+     * The player has fewer points than submitting a question costs (CLAUDE.md §8c), so it is refused
+     * and costs nothing. Answering questions earns more. Sent with 409.
+     */
+    NOT_ENOUGH_POINTS,
+
+    /**
      * A moderator tried to approve or reject a submission that is not pending: a moderator decided
      * it already, or it is a seed, approved from the start. Sent with 409.
      */

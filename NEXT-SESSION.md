@@ -64,6 +64,10 @@ categories from the server. `GET /v1/categories` lists every category, with its 
 oldest first, to anybody (no bearer), limited per address. The moderator adds a category
 (`POST /v1/admin/categories`, the id given or derived from the English name, 409 `CATEGORY_EXISTS`)
 and renames one (`POST /v1/admin/category-renames`, 404 `CATEGORY_NOT_FOUND`); no delete.
+Submitting costs `Scoring.SUBMISSION_COST`, 1 point until release (CLAUDE.md §8c): too few is 409
+`NOT_ENOUGH_POINTS`, a rejection pays back what the question cost (V7 keeps it on the question,
+`submission_cost`), and `GET /v1/me` reports `pointsSpent`, so the total is what the answers and likes
+earned less that. The client maps `NOT_ENOUGH_POINTS` to `DomainError.UNKNOWN` for now.
 
 ### Verified working
 

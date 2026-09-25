@@ -14,11 +14,14 @@ import io.ntole.wyr.server.db.storedCategories
 import io.ntole.wyr.server.player.PlayerStore
 import io.ntole.wyr.server.plugins.ApiFailure
 import io.ntole.wyr.server.question.SubmissionStore
+import io.ntole.wyr.server.question.paidSubmission
+import io.ntole.wyr.server.vote.Scoring
 import org.jetbrains.exposed.v1.core.ResultRow
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.SchemaUtils
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
+import org.jetbrains.exposed.v1.jdbc.update
 import java.sql.Connection
 import java.util.UUID
 import kotlin.test.Test
@@ -164,6 +167,51 @@ class ModerationStoreTest {
     }
 
     @Test
+    fun `a rejection pays the author back what the question cost and an approval keeps it`() {
+        val author = newPlayer()
+        val (rejected, approved) = submit(author, listOf("FOOD")) to submit(author, listOf("FOOD"))
+        val before = totalOf(author)
+
+        transaction(database) { ModerationStore.reject(rejected.id, "Not a dilemma") }
+        assertEquals(before + Scoring.SUBMISSION_COST, totalOf(author), "the rejection paid it back")
+
+        transaction(database) { ModerationStore.approve(approved.id, emptyList()) }
+        assertEquals(before + Scoring.SUBMISSION_COST, totalOf(author), "the approval kept it")
+    }
+
+    @Test
+    fun `a rejection pays back what the question cost and no more`() {
+        // As V7 leaves a question submitted before submitting cost anything: it cost nothing.
+        val author = newPlayer()
+        val submitted = submit(author, listOf("FOOD"))
+        transaction(database) { Questions.update({ Questions.id eq submitted.id }) { it[submissionCost] = 0 } }
+        val before = totalOf(author)
+
+        transaction(database) { ModerationStore.reject(submitted.id, "Not a dilemma") }
+
+        assertEquals(before, totalOf(author))
+    }
+
+    @Test
+    fun `two moderators rejecting one submission at once pay it back once`() {
+        val author = newPlayer()
+        val submitted = submit(author, listOf("FOOD"))
+        val before = totalOf(author)
+
+        val (first, second) =
+            raceBehindFirst(
+                url,
+                database,
+                { runCatching { ModerationStore.reject(submitted.id, "Not a dilemma") } },
+                { runCatching { ModerationStore.reject(submitted.id, "A duplicate") } },
+            )
+
+        assertEquals(true, first.isSuccess)
+        assertEquals(ErrorCode.ALREADY_DECIDED, (second.exceptionOrNull() as? ApiFailure)?.code)
+        assertEquals(before + Scoring.SUBMISSION_COST, totalOf(author), "only the rejection that won paid")
+    }
+
+    @Test
     fun `the queue lists pending submissions oldest first and only players' own`() {
         val (one, other) = newPlayer() to newPlayer()
         val newest = submit(one, listOf("FOOD"), at = 3_000L)
@@ -214,6 +262,9 @@ class ModerationStoreTest {
         assertEquals(statements.first(), statements.last(), "one statement per submission would grow with the queue")
     }
 
+    private fun totalOf(player: String): Int =
+        transaction(database) { checkNotNull(PlayerStore.find(player)).totalPoints }
+
     private fun newPlayer(): String = transaction(database) { PlayerStore.createGuest().id }
 
     private fun submit(
@@ -223,7 +274,7 @@ class ModerationStoreTest {
     ): SubmissionDto {
         val tag = UUID.randomUUID().toString().take(8)
         val request = SubmitQuestionRequest("Option $tag", "Other $tag", categories)
-        return transaction(database) { SubmissionStore.submit(author, request, now = at) }
+        return transaction(database) { paidSubmission(author, request, now = at) }
     }
 
     private fun queue(

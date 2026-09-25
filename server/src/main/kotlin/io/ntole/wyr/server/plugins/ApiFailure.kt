@@ -32,6 +32,9 @@ class ApiFailure(
         fun submissionLimit(limit: Int) =
             ApiFailure(HttpStatusCode.Conflict, ErrorCode.SUBMISSION_LIMIT, "already $limit submissions pending")
 
+        fun notEnoughPoints(cost: Int) =
+            ApiFailure(HttpStatusCode.Conflict, ErrorCode.NOT_ENOUGH_POINTS, "submitting costs $cost points")
+
         /** A moderator's decision on a question that is no longer, or never was, pending. */
         fun alreadyDecided(id: String) =
             ApiFailure(HttpStatusCode.Conflict, ErrorCode.ALREADY_DECIDED, "question $id is not pending")

@@ -10,6 +10,7 @@ import io.ntole.wyr.server.db.Likes
 import io.ntole.wyr.server.db.QuestionCategories
 import io.ntole.wyr.server.db.Questions
 import io.ntole.wyr.server.db.Votes
+import io.ntole.wyr.server.player.PlayerStore
 import io.ntole.wyr.server.plugins.ApiFailure
 import io.ntole.wyr.server.question.QuestionStore
 import io.ntole.wyr.server.question.SubmissionStore
@@ -105,6 +106,11 @@ object ModerationStore {
      * Rejects the pending question [questionId] for [reason], already checked (`checkedRejection`),
      * and returns it as its author now sees it, with the reason (CLAUDE.md §8d). Must run inside a
      * transaction. It is served to nobody, ever: nothing moves a question on from rejected.
+     *
+     * The author gets back what the question cost them ([Questions.submissionCost], CLAUDE.md §8c), in
+     * this transaction, as an SQL increment ([PlayerStore.addPoints]). [decide]'s update holds the
+     * question's row lock until the transaction ends, so the cost read here is the one decided on, and
+     * only the one rejection that wins pays it back.
      */
     fun reject(
         questionId: String,
@@ -112,6 +118,17 @@ object ModerationStore {
         now: Long = System.currentTimeMillis(),
     ): SubmissionDto {
         decide(questionId, QuestionStatus.REJECTED, reason, now)
+
+        val paid =
+            Questions
+                .select(Questions.authorPlayerId, Questions.submissionCost)
+                .where { Questions.id eq questionId }
+                .single()
+        val author = paid[Questions.authorPlayerId]
+        if (author != null && paid[Questions.submissionCost] > 0) {
+            PlayerStore.addPoints(author, points = paid[Questions.submissionCost])
+        }
+
         return decided(questionId)
     }
 

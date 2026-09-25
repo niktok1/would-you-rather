@@ -103,6 +103,10 @@ internal fun ErrorCode.toDomain(): DomainError =
 
         ErrorCode.SUBMISSION_LIMIT -> DomainError.SUBMISSION_LIMIT
 
+        // The player's to put right, by answering, but no DomainError names it yet: the next client
+        // branch gives it one, and shows the cost before the player submits.
+        ErrorCode.NOT_ENOUGH_POINTS -> DomainError.UNKNOWN
+
         ErrorCode.ALREADY_DECIDED -> DomainError.ALREADY_DECIDED
 
         ErrorCode.WRONG_STATUS -> DomainError.WRONG_STATUS

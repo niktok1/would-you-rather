@@ -3,6 +3,7 @@ package io.ntole.wyr.server.player
 import io.ntole.wyr.core.like.LikeResultDto
 import io.ntole.wyr.core.player.PlayerStatsDto
 import io.ntole.wyr.core.question.QuestionStatus
+import io.ntole.wyr.core.question.SubmitQuestionRequest
 import io.ntole.wyr.core.vote.OptionSide
 import io.ntole.wyr.core.vote.VoteResultDto
 import io.ntole.wyr.server.auth.AccountStore
@@ -14,6 +15,8 @@ import io.ntole.wyr.server.db.appTables
 import io.ntole.wyr.server.db.connectH2
 import io.ntole.wyr.server.db.h2Url
 import io.ntole.wyr.server.like.LikeStore
+import io.ntole.wyr.server.moderation.ModerationStore
+import io.ntole.wyr.server.question.SubmissionStore
 import io.ntole.wyr.server.vote.Scoring
 import io.ntole.wyr.server.vote.VoteStore
 import org.jetbrains.exposed.v1.core.Transaction
@@ -103,6 +106,59 @@ class StatsStoreTest {
     }
 
     @Test
+    fun `a submission committed while the stats are read shows in the points and the points spent or in neither`() {
+        val author = newPlayer()
+        transaction(database) { PlayerStore.addPoints(author, points = Scoring.SUBMISSION_COST) }
+        val elsewhere = Executors.newSingleThreadExecutor()
+        try {
+            val stats =
+                transaction(database) {
+                    // Commits a submission right after this transaction's first statement. Read apart from
+                    // the total, the points spent would count its cost and the total would still hold it.
+                    registerInterceptor(
+                        afterFirstStatement {
+                            elsewhere
+                                .submit(Callable { submit(author) })
+                                .get(TIMEOUT_SECONDS, TimeUnit.SECONDS)
+                        },
+                    )
+                    StatsStore.of(author)
+                }
+
+            assertEquals(fresh(author).copy(totalPoints = Scoring.SUBMISSION_COST), stats, "all from before it")
+            val spent = statsOf(author)
+            assertEquals(0, spent?.totalPoints, "and it did land")
+            assertEquals(Scoring.SUBMISSION_COST, spent?.pointsSpent)
+        } finally {
+            elsewhere.shutdownNow()
+        }
+    }
+
+    @Test
+    fun `the points spent are what the questions not rejected cost and the total is what is left`() {
+        val author = newPlayer()
+        answer(author, pool.first())
+        transaction(database) { PlayerStore.addPoints(author, points = 2 * Scoring.SUBMISSION_COST) }
+        val (_, approved, rejected) = Triple(submit(author), submit(author), submit(author))
+        transaction(database) { ModerationStore.approve(approved, emptyList()) }
+        like(newPlayer(), approved)
+        transaction(database) {
+            ModerationStore.reject(rejected, "Not a dilemma")
+            ModerationStore.retire(approved)
+        }
+
+        val stats = checkNotNull(statsOf(author))
+
+        assertEquals(2 * Scoring.SUBMISSION_COST, stats.pointsSpent, "the pending one and the retired one")
+        assertEquals(
+            stats.answersGiven * Scoring.POINTS_PER_ANSWER + stats.likesReceived * Scoring.POINTS_PER_LIKE -
+                stats.pointsSpent + 2 * Scoring.SUBMISSION_COST,
+            stats.totalPoints,
+            "what the answers and likes earned, less what was spent, besides the points given here",
+        )
+    }
+
+    @Test
     fun `answers given are counted apart from points`() {
         val player = newPlayer()
         // What a like does: pay the player a point with no answer behind it.
@@ -186,6 +242,13 @@ class StatsStoreTest {
     ): LikeResultDto = transaction(database) { LikeStore.setLiked(player, questionId, liked = true) }
 
     private fun statsOf(player: String): PlayerStatsDto? = transaction(database) { StatsStore.of(player) }
+
+    /** Submits a question as [author], who must have the points it costs, and returns its id. */
+    private fun submit(author: String): String {
+        val tag = UUID.randomUUID().toString().take(8)
+        val request = SubmitQuestionRequest("Option $tag", "Other $tag", listOf("FOOD"))
+        return transaction(database) { SubmissionStore.submit(author, request).id }
+    }
 
     /** Runs [action] once, after the first statement the transaction executes. */
     private fun afterFirstStatement(action: () -> Unit): StatementInterceptor =

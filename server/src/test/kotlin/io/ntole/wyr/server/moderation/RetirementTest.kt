@@ -25,6 +25,7 @@ import io.ntole.wyr.server.plugins.ApiFailure
 import io.ntole.wyr.server.question.QuestionStore
 import io.ntole.wyr.server.question.SkipStore
 import io.ntole.wyr.server.question.SubmissionStore
+import io.ntole.wyr.server.question.paidSubmission
 import io.ntole.wyr.server.vote.Scoring
 import io.ntole.wyr.server.vote.VoteStore
 import org.jetbrains.exposed.v1.core.Transaction
@@ -271,7 +272,7 @@ class RetirementTest {
     private fun submit(author: String): String {
         val tag = UUID.randomUUID().toString().take(8)
         val request = SubmitQuestionRequest("Option $tag", "Other $tag", listOf("FOOD"))
-        return transaction(database) { SubmissionStore.submit(author, request).id }
+        return transaction(database) { paidSubmission(author, request).id }
     }
 
     /** A food question by [author], approved. */

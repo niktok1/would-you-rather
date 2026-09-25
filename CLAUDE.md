@@ -153,8 +153,10 @@ failing:
   A burst on one row then just queues on its lock; `PlayerStoreTest` pins 8 at once.
 - Any other read-then-write is a compare-and-set: the `UPDATE`'s `WHERE` repeats what the read
   relied on, and 0 rows updated means another transaction won (`PlayerStore.startNextCycle`,
-  `ModerationStore.decide`, a retirement or restoration, `ModerationStore.move`, and a registration
-  naming a player who has no username, `AccountStore.register`). Where the
+  `ModerationStore.decide`, a retirement or restoration, `ModerationStore.move`, a registration
+  naming a player who has no username, `AccountStore.register`, and a submission's cost,
+  `PlayerStore.spend`, whose `WHERE total_points >= cost` holds even an author's last point to one
+  submission). Where the
   `WHERE` can hold the whole check, nothing need be read first (`SessionStore.rotate`, whose second
   racer re-checks it against the first's commit).
   Or the read takes the row lock (`SELECT ... FOR UPDATE`), so a concurrent writer waits and then
@@ -779,14 +781,27 @@ returns and never recomputes points, so the two cannot disagree.
   (§8d). There is no majority bonus and no streak.
 - Every like a question holds earns its author `Scoring.POINTS_PER_LIKE`, which is **1 point**,
   their own likes included, paid when the like is added and taken back when it is removed (§8d,
-  *Likes*). A seed has no author and pays nobody. So a player's total is always what their answers
-  earned plus a point for each like their questions hold, which `GET /v1/me` reports in one read.
-  Retiring a question takes nothing back (§8d, *Moderation*): its answers' points stay, and so do
-  its likes, held and paid and counted in its author's likes received, so the sum holds over every
-  question, retired or not.
+  *Likes*). A seed has no author and pays nobody.
+- Submitting a question **costs** its author `Scoring.SUBMISSION_COST`, **1 point** until the game is
+  released (*decided 2026-09-25*), taken in the submission's own transaction (§8d, *Submitting*). A
+  player needs at least that many points to submit, or it is 409 `NOT_ENOUGH_POINTS` and costs
+  nothing. A rejection pays the cost back, in the decision's transaction; an approval keeps it, and
+  so does a retirement. Each question keeps what it cost (`questions.submission_cost`, V7), and a
+  rejection pays back that, not the constant, so a question submitted before submitting cost
+  anything (V7 gave every question there 0) pays back nothing, and one submitted at 1 pays back 1
+  whatever the cost is by then. A seed costs nothing and pays nobody.
+- So a player's total is always what their answers earned, plus a point for each like their
+  questions hold, less what their questions not rejected cost them (`PlayerStatsDto.pointsSpent`),
+  which `GET /v1/me` reports in one read. Retiring a question takes nothing back (§8d,
+  *Moderation*): its answers' points stay, and so do its likes, held and paid and counted in its
+  author's likes received, so the sum holds over every question, retired or not. Two edge cases,
+  accepted: an unlike can take an author who spent their points below 0, and a submission can then
+  wait until they earn it back; and after a rollback to a build before V7, a rejection made there
+  pays nothing back, so its author is short that point for good.
 - `PlayerStore.addPoints` adds in SQL (`total_points = total_points + n`), never as a read then a
   write, so two votes by one player landing together cannot lose a point, nor a burst of likes for
-  one author.
+  one author. `PlayerStore.spend` takes a cost the same way, as a compare-and-set on having it
+  (§4).
 - The reveal's "with the crowd" verdict is `VoteOutcome.agreedWithMajority` on the client (an
   exact tie counts as agreeing). It is display only: no points depend on it, so the server keeps
   no copy of the rule.
@@ -991,10 +1006,11 @@ lists the player's own (*Submitting*, below).
   increment beside the points), distinct questions answered, current cycle, and how many questions
   are still due in it, counted by the feed's own predicate (`QuestionStore.dueCount`), and the
   likes received: how many likes the questions the player submitted hold now, their own included
-  (`LikeStore.receivedBy`, *Likes*), and the player's username, null for a guest (§8a, *Accounts*;
-  `PlayerStats.username` on the client, so a screen reads the name with the points). Built in
-  `StatsStore.of`, as one statement, so the total always agrees with the answers given and
-  the likes received (§8c). It only reads, and the cycle starts lazily on the next feed request, so
+  (`LikeStore.receivedBy`, *Likes*), the points spent: what the player's questions not rejected
+  cost them (`pointsSpent`, *Submitting*; no client reads it yet), and the player's username, null
+  for a guest (§8a, *Accounts*; `PlayerStats.username` on the client, so a screen reads the name with
+  the points). Built in `StatsStore.of`, as one statement, so the total always agrees with the
+  answers given, the likes received and the points spent (§8c). It only reads, and the cycle starts lazily on the next feed request, so
   between the answer that finishes a cycle and that request it reports the finished cycle with
   nothing due. The Account screen shows every number (above). No client reads the player id
   (`PlayerStatsDto.playerId`): the domain's `PlayerStats` has no such field since the dev console
@@ -1053,8 +1069,9 @@ lists the player's own (*Submitting*, below).
     with one line saying why under the cards (*The Play screen*), and pressing again asks for the same
     like again. It works out no points itself: a like of the player's own question moves their total
     without a vote, so the reveal's total, which is the vote's, shows it only from the next vote on.
-- **Submitting** *(built; details decided 2026-09-23)*: earns no points
-  directly, because authors earn through likes. The author writes both options and **picks one or
+- **Submitting** *(built; details decided 2026-09-23; the cost 2026-09-25)*: **costs a point**
+  (§8c) and earns no points directly, because authors earn through likes. The author writes both
+  options and **picks one or
   more categories** (each a category's id; *Categories*). A player may have at most **20
   submissions pending** moderation at once. A submitted question is served only after a moderator
   approves it; once approved it is due for every player in their current cycle. Built as
@@ -1067,7 +1084,10 @@ lists the player's own (*Submitting*, below).
   before it lets the player submit, and offers only categories the server has. A category named
   twice is filed once, and the question's categories are stored in the submission's own
   transaction. The 21st pending submission is 409
-  `SUBMISSION_LIMIT`, counted under the author's row lock (§4). A submission is stored `PENDING`
+  `SUBMISSION_LIMIT`, counted under the author's row lock (§4). Then the cost is taken, under the same
+  lock and as a compare-and-set (`PlayerStore.spend`, §4): an author with fewer points is 409
+  `NOT_ENOUGH_POINTS`, and nothing is stored or taken; the question keeps what it cost. A rejection
+  pays it back (*Moderation*). A submission is stored `PENDING`
   until a moderator decides it (*Moderation*). Questions carry an author and a
   `QuestionStatus`, and `QuestionStore.servable` serves only approved ones, due at once in whatever
   cycle each player is on. `GET /v1/me/questions` lists the author's submissions of every status,
@@ -1137,8 +1157,9 @@ lists the player's own (*Submitting*, below).
     not pending, a seed included, is 409 `ALREADY_DECIDED` and changes nothing, an unknown id is 404,
     and of two moderators deciding one submission exactly one wins (`ModerationStoreTest` races
     both kinds). A decision sets `reviewed_at`, and a rejection its reason, which an approval clears.
-    New categories are written after the decision is made and in its transaction, so they commit
-    with it or not at all. An approved question is servable from the commit on: due at once for
+    A rejection pays the author back what the question cost (§8c), in its transaction and under the
+    row lock the decision took, so of two racing only the winner pays it. New categories are written
+    after the decision is made and in its transaction, so they commit with it or not at all. An approved question is servable from the commit on: due at once for
     every player in their current cycle, its author included. Nothing moves a decided question on
     but retirement, below: no second look at a rejection, and no approval undone.
   - *Retiring* (*built; provisional, §8b*): `POST /v1/admin/retirements` takes a
