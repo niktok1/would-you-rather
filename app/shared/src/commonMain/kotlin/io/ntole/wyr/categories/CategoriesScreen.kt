@@ -30,8 +30,9 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
-import io.ntole.wyr.language.Language
+import io.ntole.wyr.language.LocalLanguage
 import io.ntole.wyr.language.LocalStrings
+import io.ntole.wyr.language.categoryName
 import io.ntole.wyr.theme.WyrThemeAccessors
 import io.ntole.wyr.theme.WyrTypeScale
 
@@ -39,7 +40,7 @@ import io.ntole.wyr.theme.WyrTypeScale
  * The Categories screen (CLAUDE.md §8d, *Categories*), opened from the Play screen under a top bar of
  * a back arrow, which leaves it without playing anything: the search field, then one list, All first
  * and every category the search finds under it, each ticked or not, and at the bottom how many are
- * ticked and Play. Categories are named in [language] (`nameIn`).
+ * ticked and Play. Categories are named in the language shown ([categoryName], [LocalLanguage]).
  *
  * The list is lazy, so hundreds of categories draw only the lines on screen, and it scrolls between
  * the search field and Play, which stay where they are.
@@ -47,13 +48,13 @@ import io.ntole.wyr.theme.WyrTypeScale
 @Composable
 fun CategoriesScreen(
     state: CategoriesState,
-    language: Language,
     actions: CategoriesActions,
     modifier: Modifier = Modifier,
 ) {
     val colors = WyrThemeAccessors.colors
     val dimens = WyrThemeAccessors.dimens
     val strings = LocalStrings.current.categoriesScreen
+    val language = LocalLanguage.current
 
     Surface(color = colors.pageBackground, contentColor = colors.primaryText, modifier = modifier.fillMaxSize()) {
         Column(modifier = Modifier.fillMaxSize().padding(horizontal = dimens.screenPadding)) {
@@ -90,7 +91,7 @@ fun CategoriesScreen(
                 }
                 items(state.found, key = { it.id }) { category ->
                     Option(
-                        label = category.nameIn(language),
+                        label = categoryName(category, language),
                         ticked = category.id in state.ticked,
                         enabled = !state.isPlaying,
                         onClick = { actions.toggle(category.id) },

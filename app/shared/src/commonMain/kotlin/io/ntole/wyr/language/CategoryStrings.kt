@@ -3,7 +3,7 @@ package io.ntole.wyr.language
 /**
  * The Categories screen's words (CLAUDE.md §8d, *Categories*; §8f), a part of [Strings] of their own
  * so the screen's texts stand together. Short, the user asking for less text: the category names
- * themselves are the server's, named by `nameIn`, not these.
+ * themselves are the server's, named by [categoryName], not these.
  */
 data class CategoryStrings(
     /** The search field's hint, and the screen's only title. */

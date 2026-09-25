@@ -122,7 +122,7 @@ private fun Screens(
 
                 Screen.Categories -> {
                     BackTopBar(onBack = { navigator.back() })
-                    Below { Categories(language, onPlayed = { navigator.back() }) }
+                    Below { Categories(onPlayed = { navigator.back() }) }
                 }
             }
         }
@@ -220,10 +220,7 @@ private fun Submit(onSent: () -> Unit) {
  * arrow, or Android's back, leaves it with nothing played (CLAUDE.md §8d, *Categories*).
  */
 @Composable
-private fun Categories(
-    language: Language,
-    onPlayed: () -> Unit,
-) {
+private fun Categories(onPlayed: () -> Unit) {
     val viewModel = koinViewModel<CategoriesViewModel>()
     val state by viewModel.state.collectAsStateWithLifecycle()
 
@@ -231,7 +228,7 @@ private fun Categories(
     LaunchedEffect(viewModel) { viewModel.refresh() }
     LaunchedEffect(state.played) { if (state.played) onPlayed() }
 
-    CategoriesScreen(state = state, language = language, actions = viewModel)
+    CategoriesScreen(state = state, actions = viewModel)
 }
 
 /** The Play screen; its categories, tapped, open the Categories screen ([onOpenCategories]). */

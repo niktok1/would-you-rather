@@ -16,6 +16,7 @@ import io.ntole.wyr.core.domain.error.DomainError
 import io.ntole.wyr.descriptions
 import io.ntole.wyr.language.Language
 import io.ntole.wyr.language.WyrStrings
+import io.ntole.wyr.language.categoryName
 import io.ntole.wyr.language.stringsOf
 import io.ntole.wyr.nodes
 import io.ntole.wyr.settle
@@ -76,7 +77,7 @@ class CategoriesScreenDrawTest {
                 assertTrue(strings.tryAgain in scene.texts(), "$language")
                 assertEquals(emptyList(), scene.cutShort(), "$language")
 
-                val shown = MANY.count { it.nameIn(language) in scene.texts() }
+                val shown = MANY.count { categoryName(it, language) in scene.texts() }
                 assertTrue(shown in 1 until MANY.size, "$language composes $shown of ${MANY.size} lines")
             } finally {
                 scene.close()
@@ -89,7 +90,7 @@ class CategoriesScreenDrawTest {
         val language = Language.SERBIAN_LATIN
         val scene = scene(CategoriesState(categories = MANY, found = MANY), language)
         try {
-            val last = MANY.last().nameIn(language)
+            val last = categoryName(MANY.last(), language)
             assertFalse(last in scene.texts(), "the last line is composed before it is scrolled to")
 
             val list = scene.nodes().single { it.config.getOrNull(SemanticsActions.ScrollToIndex) != null }
@@ -113,7 +114,8 @@ class CategoriesScreenDrawTest {
             val scene =
                 scene(CategoriesState(categories = KNOWN, found = KNOWN), language, width = WIDTH, height = HEIGHT)
             try {
-                val expected = listOf(strings.search, strings.all) + KNOWN.map { it.nameIn(language) } + strings.play
+                val names = KNOWN.map { categoryName(it, language) }
+                val expected = listOf(strings.search, strings.all) + names + strings.play
                 assertEquals(expected, scene.allTexts(), "$language")
                 assertEquals(emptyList(), scene.descriptions(), "$language")
             } finally {
@@ -226,15 +228,8 @@ class CategoriesScreenDrawTest {
                     val texts = scene.texts().filter { it != strings.search }
                     assertEquals(setOf(strings.cannotLoad, strings.tryAgain), texts.take(2).toSet(), "$language")
                     assertEquals(strings.all, texts[2], "$language")
-                    assertEquals(
-                        known.map { it.nameIn(language) },
-                        texts.filter { name ->
-                            known.any {
-                                it.nameIn(language) ==
-                                    name
-                            }
-                        },
-                    )
+                    val names = known.map { categoryName(it, language) }
+                    assertEquals(names, texts.filter { it in names }, "$language")
                 } finally {
                     scene.close()
                 }
@@ -250,7 +245,7 @@ class CategoriesScreenDrawTest {
             val state = CategoriesState(categories = KNOWN, found = KNOWN, failure = DomainError.SERVER)
             val scene = scene(state, language, actions = actions)
             try {
-                scene.tap(KNOWN[2].nameIn(language))
+                scene.tap(categoryName(KNOWN[2], language))
                 scene.tap(strings.all)
                 scene.tap(strings.tryAgain)
                 scene.type("хр")
@@ -318,7 +313,7 @@ class CategoriesScreenDrawTest {
     ): ImageComposeScene =
         ImageComposeScene(width = width, height = height, density = Density(1f)) {
             WyrTheme(darkTheme = dark) {
-                WyrStrings(language) { CategoriesScreen(state = state, language = language, actions = actions) }
+                WyrStrings(language) { CategoriesScreen(state = state, actions = actions) }
             }
         }.also { it.settle() }
 

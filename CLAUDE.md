@@ -1130,12 +1130,11 @@ listed on the Account screen.
     adds later is in none and not in those ticked. Nothing checks an id against the list before
     sending it: an id no category has is the server's 400, which only a stale client could send,
     since ids never change and no category is deleted. A client submits under a set of one or more
-    (*Submitting*). The game names a category in the language shown (§8f): the Play screen's row and
-    the Submit form's chips through `categoryName` in `io.ntole.wyr.language`, the Categories screen
-    through `Category.nameIn` in `io.ntole.wyr.categories`, the same choice made twice until one of
-    them goes: the Serbian name as the server keeps it in Serbian Cyrillic, that name through
-    `SerbianScript.toLatin` in Serbian Latin, and the English name in English. The moderation app
-    names it in Serbian (`nameOf`).
+    (*Submitting*). The game names a category in the language shown (§8f), through one function,
+    `categoryName` in `io.ntole.wyr.language`, the one place the language is chosen, on the Play
+    screen's row, the Categories screen and the Submit form's chips alike: the Serbian name as the
+    server keeps it in Serbian Cyrillic, that name through `SerbianScript.toLatin` in Serbian Latin,
+    and the English name in English. The moderation app names it in Serbian (`nameOf`).
   - *The Categories screen* (*built 2026-09-25*; the user: "Category needs its own screen for
     picker, as there will be hundreds of categories, and players should be able to pick multiple,
     random is actually all. There should be also category search."): `io.ntole.wyr.categories`, a
@@ -1587,13 +1586,12 @@ hand, so the two cannot say different things; and **English** stands beside them
   renames categories without a build (§8d, *Categories*): `nameSr` in Serbian Cyrillic,
   `SerbianScript.toLatin(nameSr)` in Serbian Latin, as every Latin text is made, and `nameEn` in
   English. A Serbian name a moderator typed in Latin reads as typed in both scripts, since `toLatin`
-  leaves Latin letters alone. `categoryName(category, language)` (`io.ntole.wyr.language`) makes
-  that choice for the Play screen's row and the Submit form's chips, a category not read yet showing
-  by its id in every language, and `Category.nameIn(language)` (`io.ntole.wyr.categories`) makes it
-  again for the Categories screen, until one of the two goes. A screen finds the language shown in
-  `LocalLanguage`, which `WyrStrings` provides beside `LocalStrings`. `CategoryNamesTest`,
-  `CategoryNameTest`, `PlayScreenTest`, `PlayScreenDrawTest`, `SubmitScreenDrawTest` and
-  `CategoriesScreenDrawTest` hold each language to it.
+  leaves Latin letters alone. One function makes that choice, `categoryName(category, language)`
+  (`io.ntole.wyr.language`), for the Play screen's row, the Categories screen and the Submit form's
+  chips, a category not read yet showing by its id in every language. A screen finds the language
+  shown in `LocalLanguage`, which `WyrStrings` provides beside `LocalStrings`. `CategoryNamesTest`,
+  `PlayScreenTest`, `PlayScreenDrawTest`, `CategoriesScreenDrawTest` and `SubmitScreenDrawTest` hold
+  each language to it.
 - **Numbers and symbols** *(built)*: a text holding a number or a name is a template, `{0}` and on,
   filled in by `fill` (`Templates.kt`), so each language puts it where its grammar wants it, and
   `StringsTest` holds every language's copy of a template to the same placeholders. **Points** have

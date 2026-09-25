@@ -16,6 +16,19 @@ class CategoryNamesTest {
         assertEquals("Lifestyle", categoryName(LIFESTYLE, Language.ENGLISH))
         // Capitals and the digraphs as SerbianScript writes them.
         assertEquals("Džungla", categoryName(JUNGLE, Language.SERBIAN_LATIN))
+        assertEquals(
+            "Džungla i ljubav",
+            categoryName(Category("X", "Џунгла и љубав", "Jungle and love"), Language.SERBIAN_LATIN),
+        )
+    }
+
+    @Test
+    fun `a Serbian name a moderator wrote in Latin stays as written in both scripts`() {
+        val rock = Category("ROCK", "Rok muzika", "Rock music")
+
+        assertEquals("Rok muzika", categoryName(rock, Language.SERBIAN_CYRILLIC))
+        assertEquals("Rok muzika", categoryName(rock, Language.SERBIAN_LATIN))
+        assertEquals("Rock music", categoryName(rock, Language.ENGLISH))
     }
 
     @Test
