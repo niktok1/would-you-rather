@@ -71,7 +71,7 @@ internal fun MyQuestions(
         // again reads both.
         if (failure != null && state.failure?.action != AccountAction.LOAD) {
             FailureText(failure)
-            OutlinedButton(onClick = actions::refresh, enabled = !state.isBusy) { Text(strings.tryAgain) }
+            OutlinedButton(onClick = actions::refresh, enabled = !state.isBusy) { Text(LocalStrings.current.tryAgain) }
         }
     }
 }

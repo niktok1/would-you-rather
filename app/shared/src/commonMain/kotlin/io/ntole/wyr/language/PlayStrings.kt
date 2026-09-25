@@ -31,8 +31,6 @@ data class PlayStrings(
     val questionGone: String,
     /** Anything else. */
     val somethingWrong: String,
-    /** The button under a failure. */
-    val tryAgain: String,
 ) {
     /** A side's share of the answers, as the reveal shows it: *70%*. */
     fun percent(value: Int): String = "$value%"
@@ -51,7 +49,6 @@ data class PlayStrings(
             slowDown = transform(slowDown),
             questionGone = transform(questionGone),
             somethingWrong = transform(somethingWrong),
-            tryAgain = transform(tryAgain),
         )
 }
 
@@ -69,7 +66,6 @@ internal val SerbianCyrillicPlayStrings: PlayStrings =
         slowDown = "Сачекај мало.",
         questionGone = "Тог питања више нема.",
         somethingWrong = "Нешто није успело.",
-        tryAgain = "Пробај опет",
     )
 
 internal val EnglishPlayStrings: PlayStrings =
@@ -85,5 +81,4 @@ internal val EnglishPlayStrings: PlayStrings =
         slowDown = "Wait a moment.",
         questionGone = "That question is gone.",
         somethingWrong = "Something went wrong.",
-        tryAgain = "Try again",
     )

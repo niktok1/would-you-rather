@@ -66,6 +66,21 @@ class StringsTest {
     }
 
     /**
+     * The button under a failure is one text on every screen, so the game says it one way, and the
+     * failure that asks the player to try again asks in the button's words.
+     */
+    @Test
+    fun `Try again is one text and the failure asking for it says it the same way`() {
+        assertEquals("Покушај поново", SerbianCyrillicStrings.tryAgain)
+        assertEquals("Pokušaj ponovo", SerbianLatinStrings.tryAgain)
+        assertEquals("Try again", EnglishStrings.tryAgain)
+        Language.entries.map(::stringsOf).forEach { strings ->
+            val failure = strings.accountScreens.somethingWrong
+            assertTrue(failure.endsWith("${strings.tryAgain}."), "\"$failure\" for \"${strings.tryAgain}\"")
+        }
+    }
+
+    /**
      * A template's numbers and names go where its language puts them, but every language must have
      * each of them: a translation that dropped `{0}` would show a rate limit without its wait.
      */

@@ -135,7 +135,7 @@ private fun Form(
         }
         state.pointsFailure?.let { failure ->
             FailureText(failure)
-            OutlinedButton(onClick = actions::refresh, enabled = !state.isBusy) { Text(strings.tryAgain) }
+            OutlinedButton(onClick = actions::refresh, enabled = !state.isBusy) { Text(LocalStrings.current.tryAgain) }
         }
     }
 }

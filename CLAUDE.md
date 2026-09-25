@@ -577,6 +577,11 @@ EncryptedSharedPreferences: enough for a game that stores nothing personal.
   Play screen*), where the points stand in the middle only while the categories played leave them
   room, so a long name shows whole at 375 wide. The options: keep it; or the points always in the
   middle, and a long name cut short.
+- **One Try again** — *provisional — user decision.* The Play and Account redesigns said Try again
+  two ways in Serbian, *Пробај опет* and *Покушај поново*; it is one text now (§8f, *The strings*),
+  *Покушај поново*, which four of the five screens and the Account screens' *Нешто није у реду.
+  Покушај поново.* already used. The options: keep it; or *Пробај опет*, a little shorter, in
+  `Strings.tryAgain` and that sentence both.
 - **Retrying a submission** — *decided 2026-09-24: keep it simple.* A submission carries no
   attempt id, so one sent again after its response was lost is stored twice, both pending; the
   moderator rejects the copy, and the 20-pending cap bounds how many there can be. Nothing resends
@@ -928,8 +933,9 @@ and reveals its tally, and holds Skip, Like and the category picker (*Skipping*,
   (`WyrColors.muted`), as it was on the top bar. A like that failed says why in the points' place,
   in two short lines at most, in a slot as high as the heart's touch target at any font size, so it
   moves nothing; a skip that failed moves on all the same.
-- Loading is a spinner; a failure is one short sentence, *Пробај опет* and the categories played,
-  the way out of a selection with nothing to serve. The words are `PlayStrings` (§8f).
+- Loading is a spinner; a failure is one short sentence, *Покушај поново* (`Strings.tryAgain`, §8f)
+  and the categories played, the way out of a selection with nothing to serve. The words are
+  `PlayStrings` (§8f).
 - The picker (`CategoryPicker`) is the dialog it was: nothing changes until Play, a new selection
   drops the question on screen and shows the next from it (`PlayViewModel.applyCategories`), a change
   refused keeps it open, and a change from a vote lost to `NETWORK` never sends it again (*Retry
@@ -1361,7 +1367,10 @@ hand, so the two cannot say different things; and **English** stands beside them
   the category picker's and the category names; the Account screen, whole, with My questions and the
   server line; the Auth page, whole; and the Submit screen's form but its categories' names
   (`Strings.accountScreens`, an `AccountStrings` of the Account screen's words and those of the pages
-  opened from it).
+  opened from it). **Try again** is one text of `Strings`, `tryAgain`, *Покушај поново*
+  (*provisional*, §8b), under a failure on Play, the Account screen, My questions, the Auth page and
+  the Submit form, so the game says it one way; the Account screens' *Нешто није у реду. Покушај
+  поново.* asks in its words, and `StringsTest` holds the two together.
 - **Numbers and symbols** *(built)*: a text holding a number or a name is a template, `{0}` and on,
   filled in by `fill` (`Templates.kt`), so each language puts it where its grammar wants it, and
   `StringsTest` holds every language's copy of a template to the same placeholders. **Points** have

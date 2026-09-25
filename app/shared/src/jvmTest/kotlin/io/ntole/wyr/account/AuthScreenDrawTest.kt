@@ -187,13 +187,13 @@ class AuthScreenDrawTest {
 
             listOf(failed, failed.copy(authMode = AuthMode.LOG_IN)).forEach { state ->
                 val shown = textsOf(state, language)
-                assertEquals(listOf(strings.offline, strings.tryAgain), shown.take(2), "$language: $shown")
+                assertEquals(listOf(strings.offline, stringsOf(language).tryAgain), shown.take(2), "$language: $shown")
             }
-            tapping(failed, language, actions) { it.tap(strings.tryAgain) }
+            tapping(failed, language, actions) { it.tap(stringsOf(language).tryAgain) }
             assertEquals(listOf("refresh"), actions.calls, "$language")
 
             val read = textsOf(AccountState(stats = GUEST, failure = READ_FAILED), language)
-            assertFalse(strings.tryAgain in read, "$language: the player is read: $read")
+            assertFalse(stringsOf(language).tryAgain in read, "$language: the player is read: $read")
         }
     }
 

@@ -571,7 +571,7 @@ private fun FailureBody(
                 textAlign = TextAlign.Center,
                 fontWeight = FontWeight.Medium,
             )
-            Button(onClick = onRetry) { Text(strings.tryAgain) }
+            Button(onClick = onRetry) { Text(LocalStrings.current.tryAgain) }
             CategoriesPlayed(
                 text = categoriesPlayed(categories, all = strings.allCategories),
                 enabled = true,

@@ -213,8 +213,9 @@ class PlayScreenDrawTest {
     @Test
     fun `every state shows its texts and nothing else in every language`() {
         Language.entries.forEach { language ->
-            val strings = stringsOf(language).playScreen
-            expectedOf(strings, stringsOf(language).points(POINTS)).forEach { (state, expected) ->
+            val shown = stringsOf(language)
+            val strings = shown.playScreen
+            expectedOf(strings, shown.points(POINTS), shown.tryAgain).forEach { (state, expected) ->
                 val (texts, names) = expected
                 withScreen(state, language = language) { scene, _ ->
                     scene.renderAt(COUNTED_UP)
@@ -478,7 +479,7 @@ class PlayScreenDrawTest {
         Language.entries.forEach { language ->
             val strings = stringsOf(language).playScreen
             withScreen(PlayUiState.Failed(DomainError.OUT_OF_QUESTIONS), language = language) { scene, actions ->
-                scene.tap(strings.tryAgain)
+                scene.tap(stringsOf(language).tryAgain)
                 scene.tap(strings.allCategories)
                 assertEquals(listOf("retry", "categories"), actions.tapped, "in $language")
             }
@@ -875,12 +876,14 @@ class PlayScreenDrawTest {
             )
 
         /**
-         * What some states show in [strings], with [points] as the points, each its texts in any order,
-         * and then the names it gives a screen reader for what has no text, from the top down.
+         * What some states show in [strings], with [points] as the points and [tryAgain] under a
+         * failure, each its texts in any order, and then the names it gives a screen reader for what
+         * has no text, from the top down.
          */
         fun expectedOf(
             strings: PlayStrings,
             points: String,
+            tryAgain: String,
         ): List<Pair<PlayUiState, Pair<List<String>, List<String>>>> {
             val all = strings.allCategories
             val a = QUESTION.optionA
@@ -892,11 +895,11 @@ class PlayScreenDrawTest {
             return listOf(
                 PlayUiState.Loading to (emptyList<String>() to listOf(strings.loading)),
                 PlayUiState.Failed(DomainError.NETWORK) to
-                    (listOf(strings.cannotReach, strings.tryAgain, all) to emptyList()),
+                    (listOf(strings.cannotReach, tryAgain, all) to emptyList()),
                 PlayUiState.Failed(DomainError.OUT_OF_QUESTIONS) to
-                    (listOf(strings.outOfQuestions, strings.tryAgain, all) to emptyList()),
+                    (listOf(strings.outOfQuestions, tryAgain, all) to emptyList()),
                 PlayUiState.Failed(DomainError.SERVER) to
-                    (listOf(strings.somethingWrong, strings.tryAgain, all) to emptyList()),
+                    (listOf(strings.somethingWrong, tryAgain, all) to emptyList()),
                 PlayUiState.Asking(QUESTION) to (listOf(a, all, points, "0", b) to likeAndSkip),
                 PlayUiState.Asking(QUESTION.copy(likeCount = 12), likeError = DomainError.NETWORK) to
                     (listOf(a, all, strings.cannotReach, "12", b) to likeAndSkip),

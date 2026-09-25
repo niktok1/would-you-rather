@@ -186,7 +186,7 @@ private fun ReadFailure(
     val failure = state.failure?.takeIf { it.action == AccountAction.LOAD } ?: return
     FailureText(failure)
     OutlinedButton(onClick = actions::refresh, enabled = !state.isBusy) {
-        Text(LocalStrings.current.accountScreens.tryAgain)
+        Text(LocalStrings.current.tryAgain)
     }
 }
 

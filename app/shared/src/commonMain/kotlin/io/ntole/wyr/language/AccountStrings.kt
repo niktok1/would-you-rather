@@ -47,7 +47,6 @@ data class AccountStrings(
     val guestPointsWarning: String,
     val logInAnyway: String,
     val cancel: String,
-    val tryAgain: String,
     val usernameTaken: String,
     val wrongLogin: String,
     val alreadyRegistered: String,
@@ -58,6 +57,7 @@ data class AccountStrings(
     /** A rate limit with no wait named. */
     val tooManyTriesNoWait: String,
     val offline: String,
+    /** Anything else, asking to try again in the words of [Strings.tryAgain], the button's. */
     val somethingWrong: String,
     /** The heading of the player's own submissions on the Account screen. */
     val myQuestions: String,
@@ -122,7 +122,6 @@ data class AccountStrings(
             guestPointsWarning = transform(guestPointsWarning),
             logInAnyway = transform(logInAnyway),
             cancel = transform(cancel),
-            tryAgain = transform(tryAgain),
             usernameTaken = transform(usernameTaken),
             wrongLogin = transform(wrongLogin),
             alreadyRegistered = transform(alreadyRegistered),
@@ -184,7 +183,6 @@ internal val SerbianCyrillicAccountStrings: AccountStrings =
         guestPointsWarning = "Поени госта ({0}) неће прећи на налог.",
         logInAnyway = "Ипак се пријави",
         cancel = "Откажи",
-        tryAgain = "Покушај поново",
         usernameTaken = "То име је заузето.",
         wrongLogin = "Погрешно име или лозинка.",
         alreadyRegistered = "Већ имаш налог.",
@@ -244,7 +242,6 @@ internal val EnglishAccountStrings: AccountStrings =
         guestPointsWarning = "Your guest points ({0}) won't carry over.",
         logInAnyway = "Log in anyway",
         cancel = "Cancel",
-        tryAgain = "Try again",
         usernameTaken = "That name is taken.",
         wrongLogin = "Wrong username or password.",
         alreadyRegistered = "Already registered.",

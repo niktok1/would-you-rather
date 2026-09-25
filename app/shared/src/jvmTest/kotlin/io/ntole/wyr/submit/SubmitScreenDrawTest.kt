@@ -122,7 +122,7 @@ class SubmitScreenDrawTest {
             val scene = scene(SubmitState(pointsFailure = SubmitFailure(DomainError.NETWORK)), language, actions)
             try {
                 assertTrue(strings.offline in scene.everyText(), "$language")
-                scene.tap(strings.tryAgain)
+                scene.tap(stringsOf(language).tryAgain)
                 assertEquals(listOf("refresh"), actions.calls, "$language")
             } finally {
                 scene.close()

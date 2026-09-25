@@ -210,7 +210,7 @@ class AccountScreenDrawTest {
             val scene = scene(failed, language, actions = actions)
             try {
                 assertTrue(strings.offline in scene.everyText(), "$language")
-                scene.tap(strings.tryAgain)
+                scene.tap(stringsOf(language).tryAgain)
             } finally {
                 scene.close()
             }
@@ -255,7 +255,7 @@ class AccountScreenDrawTest {
             val scene = scene(AccountState(stats = GUEST, listFailure = failure), language, actions = actions)
             try {
                 assertTrue(strings.offline in scene.everyText(), "$language")
-                scene.tap(strings.tryAgain)
+                scene.tap(stringsOf(language).tryAgain)
             } finally {
                 scene.close()
             }
@@ -272,7 +272,7 @@ class AccountScreenDrawTest {
             val shown = textsOf(AccountState(stats = GUEST, failure = failure, listFailure = failure), language)
 
             assertEquals(1, shown.count { it == strings.offline }, "$language: $shown")
-            assertEquals(1, shown.count { it == strings.tryAgain }, "$language: $shown")
+            assertEquals(1, shown.count { it == stringsOf(language).tryAgain }, "$language: $shown")
         }
     }
 

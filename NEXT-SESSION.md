@@ -81,15 +81,19 @@ option is the points always in the middle). And **one points unit**, a text of `
 (`pointsUnit`, written by `Strings.points`): *П* in Serbian, *P* in Serbian Latin by the
 transliteration and in English, on the Play row, the Account card, the Auth page's guest-points
 warning and Send's cost, *Пошаљи · 1 П* (§8f, *Numbers and symbols*); the Account branch's constant
-Latin *P* (`POINTS_SYMBOL`, `pointsText`), and its *123 P* below, are gone. The client alone
-changed. Verified here: ktlint, the verify job's tests and client compiles, and the iOS Kotlin
+Latin *P* (`POINTS_SYMBOL`, `pointsText`), and its *123 P* below, are gone. And **one Try again**,
+`Strings.tryAgain`, *Покушај поново* under a failure on every screen, where Play said *Пробај опет*
+(*provisional*, §8b: ask the user; offline is still said two ways, *Игра није доступна.* on Play,
+which a server that is down fits too, and *Нема интернет везе.* on the Account screens). The client
+alone changed. Verified here: ktlint, the verify job's tests and client compiles, and the iOS Kotlin
 compiles; `:server:test` came from the cache, the server untouched. Tests: `:app:shared` 248
 (`PlayScreenDrawTest` 21, `AppNavigationTest` 16, `TopBarsDrawTest` 4, `StringsTest` 7),
 `:core:domain` 70, `:core:data` 139, `:core:network` 73 and 79 Android host, `:app:adminApp` 87,
 `:server` 311 (2 skipped). For `feat/server-categories`: `PlayScreen.kt` conflicts again, now with
 `CentredRow`'s `MiddleRow`, which takes the categories played as text, so its
 `categoriesPlayed(PlayedCategories)` keeps the `all` it is given; `sendText` takes the whole
-`Strings`, and the rest of the Account paragraph's merge notes hold. Not seen on a device.
+`Strings`, and the rest of the Account paragraph's merge notes hold. For `feat/category-picker`: its
+`CategoryStrings.tryAgain` goes, for `Strings.tryAgain`. Not seen on a device.
 
 **On `feat/play-redesign`** (from 4821c05; merged into `merge/redesign`, nothing pushed): the user's
 **Play screen** redesign (CLAUDE.md §8d, *The Play screen*). Two cards and one row between them: the
@@ -991,7 +995,7 @@ a deploy or a spin-down; the server needs nothing new):
 5. Airplane mode, then the heart: the question stays as it was and the points' place says *Игра није
    доступна.* without moving the cards, at a larger font size in the phone's settings too. Network
    back on, the heart again: it goes through. Skip offline moves on all the same while questions are
-   queued, and shows *Игра није доступна.* with **Пробај опет** once they run out.
+   queued, and shows *Игра није доступна.* with **Покушај поново** once they run out.
 6. A like of your own question pays you a point: submit one (the account icon, then *Ново питање*
    under *Моја питања*), approve it in the moderation app, and play until it comes up. Like it: the points in
    the row show the point from the next vote on, or once Play is shown again (the home icon, then
@@ -1018,7 +1022,7 @@ a launch plays every category again.
    in the middle and the names cut shorter.
 5. While a vote or a like is in flight the categories do nothing when tapped. *All categories*, then
    **Play**, goes back to the whole feed. Categories the server has no questions in would show *Нема
-   више питања.* with **Пробај опет** and the categories as the way out; every category has seeds,
+   више питања.* with **Покушај поново** and the categories as the way out; every category has seeds,
    so only a server without them shows it.
 
 ### Moderating

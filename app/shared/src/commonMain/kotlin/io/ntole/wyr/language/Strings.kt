@@ -23,6 +23,11 @@ data class Strings(
      * Cyrillic, so Serbian Latin's is made from it as every other text is.
      */
     val pointsUnit: String,
+    /**
+     * The button under a failure, on every screen that has one: the Play screen, the Account screen,
+     * My questions, the Auth page and the Submit form. One text, so the game says it one way.
+     */
+    val tryAgain: String,
     /** The Play screen's words. */
     val playScreen: PlayStrings,
     /** The home icon's name, for a screen reader: back to the Home screen. */
@@ -46,6 +51,7 @@ data class Strings(
             gameName = transform(gameName),
             play = transform(play),
             pointsUnit = transform(pointsUnit),
+            tryAgain = transform(tryAgain),
             playScreen = playScreen.map(transform),
             home = transform(home),
             account = transform(account),
@@ -67,6 +73,7 @@ val SerbianCyrillicStrings: Strings =
         gameName = "Шта би радије?",
         play = "Играј",
         pointsUnit = "П",
+        tryAgain = "Покушај поново",
         playScreen = SerbianCyrillicPlayStrings,
         home = "Почетна",
         account = "Налог",
@@ -83,6 +90,7 @@ val EnglishStrings: Strings =
         gameName = "Would You Rather?",
         play = "Play",
         pointsUnit = "P",
+        tryAgain = "Try again",
         playScreen = EnglishPlayStrings,
         home = "Home",
         account = "Account",
