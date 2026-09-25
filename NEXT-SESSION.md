@@ -1316,20 +1316,21 @@ Deferred: SQLDelight, a leaderboard, UI polish and WCAG. The game's tabs are the
 
 ## Things worth knowing before you touch the code
 
-- **The wire enum rule (§5) is load-bearing and easy to break silently.** It only works because
-  `WyrJson` sets `coerceInputValues = true` *and* `ServerJson` sets `encodeDefaults = true`.
-  Remove either and the `UNKNOWN` defaults become decorative. `WyrJsonTest` in `:core:network`
-  pins the client half. The server's `encodeDefaults` is pinned by `ApiFlowTest`'s fresh-guest
-  stats test, which checks every stats field is sent at its default, and by `ServerJsonTest`, which
-  checks an empty list of categories is sent too; a server-side slip only breaks client builds older
-  than the server. A **list** of categories needs `QuestionCategoryListSerializer` on top, because
-  coercion never reaches a list's elements: drop it from a property and one new category fails a
-  whole batch on every older client. It decodes an unknown name as `UNKNOWN`, never dropping it,
-  since the server decodes submissions with it too and a dropped name would let `[FOOD, NEWCAT]`
-  through as `[FOOD]`; a missing list decodes as an empty one. The client then maps each `UNKNOWN`
-  to `Category.OTHER`, beside the categories it can name, and an empty list to `OTHER` alone
-  (`QuestionMapper`), because `Question.categories` is never empty. `WyrJsonTest` and
-  `QuestionMapperTest` pin the two halves.
+- **The wire enum rule (§5) is load-bearing and easy to break silently.** It covers the growable
+  enums on the wire, `QuestionStatus` and `ErrorCode`, and only works because `WyrJson` sets
+  `coerceInputValues = true` *and* `ServerJson` sets `encodeDefaults = true`. Remove either and the
+  `UNKNOWN` defaults become decorative. `WyrJsonTest` in `:core:network` pins the client half. The
+  server's `encodeDefaults` is pinned by `ApiFlowTest`'s fresh-guest stats test, which checks every
+  stats field is sent at its default, and by `ServerJsonTest`, which checks an empty list of
+  categories is sent too; a server-side slip only breaks client builds older than the server.
+  Categories are no enum on the wire since `feat/server-categories` (§5): every categories field is
+  a list of plain string ids, empty by default, so a category added server-side is an id an
+  installed client has no name for, never a payload it fails to decode, and needs no serializer of
+  its own. The client keeps the ids as sent, in the server's order (`QuestionMapper`), and a payload
+  without them reads as filed under none; a screen names each id by the list `GET /v1/categories`
+  last gave, and one not in it by its id. `WyrJsonTest` and `QuestionMapperTest` pin the decoding
+  and the mapping. Should a list of a growable enum ever go on the wire, it needs a serializer that
+  decodes an unknown element as `UNKNOWN` (§5), since coercion never reaches a list's elements.
 - **Exposed 1.x renamed everything.** Packages are `org.jetbrains.exposed.v1.*`, and
   `SqlExpressionBuilder.eq` is deprecated *as an error* — import the top-level `eq` instead.
   Expect to hit this again the first time you write a new query.

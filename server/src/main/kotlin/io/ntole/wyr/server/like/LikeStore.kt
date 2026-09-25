@@ -41,8 +41,9 @@ object LikeStore {
      * is [Scoring.POINTS_PER_LIKE] to the question's author, paid in the transaction that adds the
      * like and taken back in the one that removes it. Only a like actually added pays and only one
      * actually removed takes back, so an author's total is always what their answers earned plus a
-     * point for each like their questions hold. A seed has no author: its likes count and pay
-     * nobody. An author may like their own question, and is paid for it like for anyone's like.
+     * point for each like their questions hold, less what their questions not rejected cost them
+     * ([Scoring]). A seed has no author: its likes count and pay nobody. An author may like their
+     * own question, and is paid for it like for anyone's like.
      *
      * Any question the player may be served can be liked, answered or not, and no other: one a
      * moderator has not approved, or has retired, is not found, as for a vote

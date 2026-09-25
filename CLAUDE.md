@@ -935,7 +935,7 @@ lists the player's own (*Submitting*, below).
     logout keeps the selection.
   - `answeredBefore` (`QuestionDto`) means the player has a vote on the question, from any cycle. No
     client reads it: the domain's `Question` has no such field since the dev console went.
-- **Categories** *(decided 2026-09-24; server data since 2026-09-25; built on the server)*: a
+- **Categories** *(decided 2026-09-24; server data since 2026-09-25; built)*: a
   question is filed under **any number of categories, at least one**. A player may pick **several**
   categories to play, and a question matches when it is filed under **any** of them; none picked
   means every category. The author picks one or more when submitting, and the moderator may change
@@ -1036,12 +1036,14 @@ lists the player's own (*Submitting*, below).
   are still due in it, counted by the feed's own predicate (`QuestionStore.dueCount`), and the
   likes received: how many likes the questions the player submitted hold now, their own included
   (`LikeStore.receivedBy`, *Likes*), the points spent: what the player's questions not rejected
-  cost them (`pointsSpent`, *Submitting*; no client reads it yet), and the player's username, null
-  for a guest (§8a, *Accounts*; `PlayerStats.username` on the client, so a screen reads the name with
-  the points). Built in `StatsStore.of`, as one statement, so the total always agrees with the
-  answers given, the likes received and the points spent (§8c). It only reads, and the cycle starts lazily on the next feed request, so
-  between the answer that finishes a cycle and that request it reports the finished cycle with
-  nothing due. The Account screen shows every number (above). No client reads the player id
+  cost them (`pointsSpent`, *Submitting*), and the player's username, null for a guest (§8a,
+  *Accounts*; `PlayerStats.username` on the client, so a screen reads the name with the points).
+  Built in `StatsStore.of`, as one statement, so the total always agrees with the answers given, the
+  likes received and the points spent (§8c). It only reads, and the cycle starts lazily on the next
+  feed request, so between the answer that finishes a cycle and that request it reports the finished
+  cycle with nothing due. The Account screen shows every number but `pointsSpent` (above), which no
+  client reads yet, so once a question has cost a point its lines of answers and likes no longer add
+  up to its points, until the Account redesign shows what was spent. No client reads the player id
   (`PlayerStatsDto.playerId`): the domain's `PlayerStats` has no such field since the dev console
   went.
 - **Skipping** *(built; decided 2026-09-23)*: allowed, earns nothing, and never touches the

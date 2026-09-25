@@ -19,8 +19,10 @@ public class SubmissionApi(
 ) {
     /**
      * Submits [request], answered 201 with the submission as stored: options trimmed, categories
-     * each once in declaration order, and pending. A refusal throws, as every non-2xx does, with the
-     * server's code: 422 for options the rules refuse, 409 for one pending submission too many.
+     * each once in the order of categories, and pending. A refusal throws, as every non-2xx does,
+     * with the server's code: 400 for no category or an id no category has, 422 for options the
+     * rules refuse, 409 for one pending submission too many (`SUBMISSION_LIMIT`) or for fewer points
+     * than submitting costs (`NOT_ENOUGH_POINTS`).
      */
     public suspend fun submit(request: SubmitQuestionRequest): SubmissionDto =
         client
