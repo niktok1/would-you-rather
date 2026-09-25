@@ -266,8 +266,7 @@ class RetirementTest {
         assertEquals(listOf(player), likersOf(liked), "the like landed")
     }
 
-    private fun newPlayer(): String =
-        transaction(database) { PlayerStore.createGuest(UUID.randomUUID().toString(), Long.MAX_VALUE).id }
+    private fun newPlayer(): String = transaction(database) { PlayerStore.createGuest().id }
 
     /** A food question by [author], waiting for a moderator. */
     private fun submit(author: String): String {

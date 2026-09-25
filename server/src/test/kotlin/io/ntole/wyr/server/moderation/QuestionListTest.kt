@@ -238,8 +238,7 @@ class QuestionListTest {
         assertEquals(statements.first(), statements.last(), "one statement per question would grow with the page")
     }
 
-    private fun newPlayer(): String =
-        transaction(database) { PlayerStore.createGuest(UUID.randomUUID().toString(), Long.MAX_VALUE).id }
+    private fun newPlayer(): String = transaction(database) { PlayerStore.createGuest().id }
 
     private fun submit(
         author: String,

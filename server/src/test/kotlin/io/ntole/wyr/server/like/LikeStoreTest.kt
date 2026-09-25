@@ -338,8 +338,7 @@ class LikeStoreTest {
         assertEquals(0, pointsOf(author), "taken back once, not twice")
     }
 
-    private fun newPlayer(): String =
-        transaction(database) { PlayerStore.createGuest(UUID.randomUUID().toString(), Long.MAX_VALUE).id }
+    private fun newPlayer(): String = transaction(database) { PlayerStore.createGuest().id }
 
     /** A food question by [author], stored as a moderator's decision of [status] would leave it. */
     private fun submitted(

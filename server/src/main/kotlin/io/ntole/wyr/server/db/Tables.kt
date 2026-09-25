@@ -93,8 +93,8 @@ object Players : Table("players") {
  * Every session a player has (CLAUDE.md §8a, *Sessions*): one refresh-token family per device, each
  * rotating on its own, so a refresh on one device never touches another's tokens. A guest's mint
  * opens the first (`SessionStore.open`), and V4 opened one for every player who held a refresh token
- * then. No row is ever deleted: a session whose tokens have expired is dead where it lies, and nothing
- * caps how many a player has.
+ * then. Only a logout deletes a row (`SessionStore.close`): a session whose tokens have expired is dead
+ * where it lies, and nothing caps how many a player has.
  */
 object Sessions : Table("sessions") {
     val id = varchar("id", 36)

@@ -301,8 +301,7 @@ class QuestionStoreTest {
         assertEquals(1, cycleOf(player), "nor does their cycle")
     }
 
-    private fun newPlayer(): String =
-        transaction(database) { PlayerStore.createGuest(UUID.randomUUID().toString(), Long.MAX_VALUE).id }
+    private fun newPlayer(): String = transaction(database) { PlayerStore.createGuest().id }
 
     /** An approved question by [author], filed under the stored [names] as they are, known or not. */
     private fun storedUnder(

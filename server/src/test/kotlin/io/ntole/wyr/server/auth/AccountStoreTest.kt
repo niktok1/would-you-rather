@@ -114,8 +114,7 @@ class AccountStoreTest {
         assertEquals(Account("bob", "first"), accountOf(player))
     }
 
-    private fun newPlayer(): String =
-        transaction(database) { PlayerStore.createGuest(UUID.randomUUID().toString(), Long.MAX_VALUE).id }
+    private fun newPlayer(): String = transaction(database) { PlayerStore.createGuest().id }
 
     /** A player's username and password hash, both null for a guest. */
     private data class Account(

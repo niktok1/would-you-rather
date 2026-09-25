@@ -27,6 +27,15 @@ fun ApplicationCall.authenticatedPlayerId(): String =
     principal<JWTPrincipal>()?.payload?.playerId() ?: throw ApiFailure.unauthorized("token carries no player id")
 
 /**
+ * The session the request's access token was issued for (CLAUDE.md §8a, *Sessions*). Only meaningful
+ * inside `authenticate(JWT_AUTH)`. A token from a build before tokens named their session carries none
+ * and is refused 401, which a client answers by refreshing, and the refreshed token names it.
+ */
+fun ApplicationCall.authenticatedSessionId(): String =
+    principal<JWTPrincipal>()?.payload?.getClaim(TokenService.CLAIM_SESSION_ID)?.asString()
+        ?: throw ApiFailure.unauthorized("token names no session")
+
+/**
  * The player the request's bearer token names, verified as `authenticate(JWT_AUTH)` verifies it but
  * for its expiry ([TokenService.expiredTokenVerifier]), or null when it carries none this server signed.
  *

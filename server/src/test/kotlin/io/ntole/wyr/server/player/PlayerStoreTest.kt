@@ -4,7 +4,6 @@ import com.zaxxer.hikari.HikariDataSource
 import io.ntole.wyr.server.config.ServerConfig
 import io.ntole.wyr.server.db.DatabaseFactory
 import io.ntole.wyr.server.db.Players
-import io.ntole.wyr.server.db.Sessions
 import io.ntole.wyr.server.db.connectH2
 import io.ntole.wyr.server.db.h2Url
 import io.ntole.wyr.server.db.raceBehindFirst
@@ -81,10 +80,10 @@ class PlayerStoreTest {
         }
     }
 
-    /** Creates the players and sessions tables and one player in them. Must run inside a transaction. */
+    /** Creates the players table and one player in it. Must run inside a transaction. */
     private fun createPlayer(): PlayerStore.Player {
-        SchemaUtils.create(Players, Sessions)
-        return PlayerStore.createGuest(refreshTokenHash = "unused", refreshExpiresAt = Long.MAX_VALUE)
+        SchemaUtils.create(Players)
+        return PlayerStore.createGuest()
     }
 
     private fun storedAnswersGiven(

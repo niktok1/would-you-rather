@@ -1,5 +1,6 @@
 package io.ntole.wyr.server.auth
 
+import io.ktor.http.HttpStatusCode
 import io.ktor.server.auth.authenticate
 import io.ktor.server.response.respond
 import io.ktor.server.routing.Route
@@ -22,7 +23,8 @@ import kotlinx.coroutines.withContext
 /**
  * Session and account endpoints. [WyrApi.Paths.AUTH_GUEST] and [WyrApi.Paths.AUTH_REFRESH] are public:
  * the first has no credential to present yet, and the refresh token is itself the credential for the
- * second. [WyrApi.Paths.AUTH_REGISTER] needs a session, the guest's it registers.
+ * second. [WyrApi.Paths.AUTH_REGISTER] needs a session, the guest's it registers, and
+ * [WyrApi.Paths.AUTH_LOGOUT] the one it ends.
  */
 fun Route.authRoutes(
     db: Db,
@@ -37,19 +39,10 @@ fun Route.authRoutes(
             val refresh = tokens.issueRefreshToken()
             val expiresAt = System.currentTimeMillis() + config.refreshTokenTtlSeconds * 1_000L
 
-            val player =
-                db.query {
-                    PlayerStore.createGuest(refreshTokenHash = refresh.hash, refreshExpiresAt = expiresAt)
-                }
+            // The guest and its first session, in one transaction.
+            val session = db.query { SessionStore.open(PlayerStore.createGuest().id, refresh.hash, expiresAt) }
 
-            call.respond(
-                SessionDto(
-                    playerId = player.id,
-                    accessToken = tokens.issueAccessToken(player.id),
-                    refreshToken = refresh.value,
-                    accessTokenExpiresInSeconds = config.accessTokenTtlSeconds,
-                ),
-            )
+            call.respond(tokens.answer(session, refresh, config))
         }
     }
 
@@ -70,7 +63,7 @@ fun Route.authRoutes(
             // after this one (the grace), and never past its own expiry. So a refresh whose answer was lost
             // can be sent again with it, however much later, and then never again: a token replayed a
             // second time is refused.
-            val playerId =
+            val session =
                 db.query {
                     SessionStore.rotate(
                         presentedHash = tokens.hash(body.refreshToken),
@@ -80,14 +73,7 @@ fun Route.authRoutes(
                     ) ?: throw ApiFailure.invalidRefreshToken()
                 }
 
-            call.respond(
-                SessionDto(
-                    playerId = playerId,
-                    accessToken = tokens.issueAccessToken(playerId),
-                    refreshToken = rotated.value,
-                    accessTokenExpiresInSeconds = config.accessTokenTtlSeconds,
-                ),
-            )
+            call.respond(tokens.answer(session, rotated, config))
         }
     }
 
@@ -110,4 +96,32 @@ fun Route.authRoutes(
             }
         }
     }
+
+    // Ends the session the token was issued for, this device's, and no other (CLAUDE.md §8a,
+    // *Sessions*). Per player, as it needs a session.
+    authenticate(JWT_AUTH) {
+        rateLimit(RouteLimit.LOGOUTS) {
+            post(WyrApi.Paths.AUTH_LOGOUT) {
+                val playerId = call.authenticatedPlayerId()
+                val sessionId = call.authenticatedSessionId()
+
+                db.query { SessionStore.close(sessionId, playerId) }
+
+                call.respond(HttpStatusCode.NoContent)
+            }
+        }
+    }
 }
+
+/** What a mint, a refresh and a login answer: [session]'s credentials, its new [refresh] token among them. */
+private fun TokenService.answer(
+    session: SessionStore.Session,
+    refresh: TokenService.Opaque,
+    config: ServerConfig,
+): SessionDto =
+    SessionDto(
+        playerId = session.playerId,
+        accessToken = issueAccessToken(session.playerId, session.id),
+        refreshToken = refresh.value,
+        accessTokenExpiresInSeconds = config.accessTokenTtlSeconds,
+    )

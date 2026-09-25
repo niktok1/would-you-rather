@@ -420,6 +420,10 @@ class RateLimitTest {
             ) { caller ->
                 caller.client.post(WyrApi.Paths.AUTH_REGISTER) { json(caller.player, RegisterRequest("x", "password")) }
             },
+            // One session, ended by the first and answered alike by every one after.
+            Group("logouts", { copy(logouts = it) }, allowed = HttpStatusCode.NoContent) { caller ->
+                caller.client.post(WyrApi.Paths.AUTH_LOGOUT) { bearerAuth(caller.player.accessToken) }
+            },
             Group("feed", { copy(feed = it) }) { caller ->
                 caller.client.get(WyrApi.Paths.QUESTIONS) { bearerAuth(caller.player.accessToken) }
             },
@@ -560,7 +564,7 @@ class RateLimitTest {
                     "JWT_ISSUER" to "wyr-test",
                     "JWT_AUDIENCE" to "wyr-test-client",
                 )
-            return TokenService(ServerConfig.fromEnvironment(env::get)).issueAccessToken(playerId)
+            return TokenService(ServerConfig.fromEnvironment(env::get)).issueAccessToken(playerId, "no-such-session")
         }
 
         /**
@@ -579,7 +583,8 @@ class RateLimitTest {
                     "ACCESS_TTL_SECONDS" to "300",
                 )
             val issuedAt = System.currentTimeMillis() - ago.inWholeMilliseconds
-            return TokenService(ServerConfig.fromEnvironment(env::get)).issueAccessToken(playerId, now = issuedAt)
+            return TokenService(ServerConfig.fromEnvironment(env::get))
+                .issueAccessToken(playerId, "no-such-session", now = issuedAt)
         }
 
         suspend fun HttpClient.refresh(refreshToken: String): HttpResponse =

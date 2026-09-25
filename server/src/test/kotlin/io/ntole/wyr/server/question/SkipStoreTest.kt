@@ -224,8 +224,7 @@ class SkipStoreTest {
         assertEquals((pool - QUESTION).sorted(), feed(player).ids().sorted(), "skipped in cycle 2, so not due in it")
     }
 
-    private fun newPlayer(): String =
-        transaction(database) { PlayerStore.createGuest(UUID.randomUUID().toString(), Long.MAX_VALUE).id }
+    private fun newPlayer(): String = transaction(database) { PlayerStore.createGuest().id }
 
     private fun skip(
         player: String,

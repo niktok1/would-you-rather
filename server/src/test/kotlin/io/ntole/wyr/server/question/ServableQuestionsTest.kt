@@ -139,8 +139,7 @@ class ServableQuestionsTest {
         assertEquals(1, cycleOf(player))
     }
 
-    private fun newPlayer(): String =
-        transaction(database) { PlayerStore.createGuest(UUID.randomUUID().toString(), Long.MAX_VALUE).id }
+    private fun newPlayer(): String = transaction(database) { PlayerStore.createGuest().id }
 
     /** A food question by [author], stored as a moderator's decision of [status] would leave it. */
     private fun submitted(

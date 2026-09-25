@@ -373,11 +373,19 @@ decided in §8b).
   does not change when auth evolves.
 - **Sessions** (*decided 2026-09-25*): a player's refresh tokens live in `sessions`, **one
   refresh-token family per device**, each rotating on its own row, so a refresh on one device never
-  touches another's tokens. Nothing caps how many a player has, and no row is deleted: an expired
-  session is dead where it lies. A mint opens a player's first session (`SessionStore.open`); V4
-  opened one for every player who held a refresh token then. A refresh reads and writes its session
-  alone. The players row's old refresh columns, V4's mirror for a rollback to a build from before
-  sessions, are unused since `feat/simple-accounts` (§8b, *Rollbacks*).
+  touches another's tokens. Nothing caps how many a player has, and only a logout deletes one: an
+  expired session is dead where it lies. A mint opens a player's first session (`SessionStore.open`);
+  V4 opened one for every player who held a refresh token then. A refresh reads and writes its session
+  alone. Every access token names its session beside its player (the `sessionId` claim), and a
+  refresh keeps it. The players row's old refresh columns, V4's mirror for a rollback to a build from
+  before sessions, are unused since `feat/simple-accounts` (§8b, *Rollbacks*).
+  - *Logging out* is `POST /v1/auth/logout`, bearer required, no body, answered 204: the session the
+    token names is deleted (`SessionStore.close`), so neither its current refresh token nor the one the
+    grace keeps works again, and the player's sessions on other devices are left alone; the client then
+    plays on as a fresh guest. A session already gone is 204 too. Its access tokens still work until
+    each expires, at most 15 minutes: nothing reads a session to let a request in. A token from a build
+    before tokens named their session, `d4a9dbf`'s, is 401 `UNAUTHORIZED`, which the client answers by
+    refreshing into one that does.
 - **Refresh tokens rotate on every use, with a grace** (*decided 2026-09-24*, with no time bound).
   Only a SHA-256 hash is stored. The token a rotation displaces stays as its session's previous one,
   with the expiry it had and when it was displaced, and a refresh presenting it still succeeds until
@@ -533,7 +541,7 @@ EncryptedSharedPreferences: enough for a game that stores nothing personal.
     behind the moderator's address can lock the moderator out, a minute at a time. It is asked
     first, so guesses refused by it spend none of the moderator's 60.
   - *Per player*, so players behind one address do not share a budget: registrations 20 an hour
-    (every one the rules take costs a password hash), the feed, votes and skips 120 a minute each (the console's *Answer N* sends at most 50 votes in a row), likes 60 a minute,
+    (every one the rules take costs a password hash), logouts 30 a minute, the feed, votes and skips 120 a minute each (the console's *Answer N* sends at most 50 votes in a row), likes 60 a minute,
     submissions 30 an hour (the 20-pending cap still applies), `GET /v1/me` and
     `GET /v1/me/questions` 120 a minute each. The key is the player id in the bearer token, which the
     limiter verifies itself (`verifiedPlayerId`): it runs before authentication, so no principal is

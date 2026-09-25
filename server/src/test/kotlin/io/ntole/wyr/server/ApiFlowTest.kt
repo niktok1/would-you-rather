@@ -2173,7 +2173,8 @@ class ApiFlowTest {
                 "JWT_ISSUER" to "wyr-test",
                 "JWT_AUDIENCE" to "wyr-test-client",
             )
-        return TokenService(ServerConfig.fromEnvironment(env::get)).issueAccessToken(playerId)
+        // No route these tokens reach reads the session, so it need not exist.
+        return TokenService(ServerConfig.fromEnvironment(env::get)).issueAccessToken(playerId, "no-such-session")
     }
 
     private companion object {

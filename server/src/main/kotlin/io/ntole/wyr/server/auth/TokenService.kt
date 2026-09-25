@@ -49,8 +49,13 @@ class TokenService(
             .acceptExpiresAt(config.refreshTokenTtlSeconds)
             .build()
 
+    /**
+     * An access token for [playerId], naming [sessionId], the session its refresh token belongs to, so
+     * a logout knows which device's session to end (`authenticatedSessionId`).
+     */
     fun issueAccessToken(
         playerId: String,
+        sessionId: String,
         now: Long = System.currentTimeMillis(),
     ): String =
         JWT
@@ -59,6 +64,7 @@ class TokenService(
             .withAudience(config.jwtAudience)
             .withSubject(playerId)
             .withClaim(CLAIM_PLAYER_ID, playerId)
+            .withClaim(CLAIM_SESSION_ID, sessionId)
             .withIssuedAt(Date(now))
             .withExpiresAt(Date(now + config.accessTokenTtlSeconds * 1_000L))
             .sign(algorithm)
@@ -86,6 +92,7 @@ class TokenService(
 
     companion object {
         const val CLAIM_PLAYER_ID: String = "playerId"
+        const val CLAIM_SESSION_ID: String = "sessionId"
         private const val OPAQUE_BYTES = 32
         private val secureRandom = SecureRandom()
     }

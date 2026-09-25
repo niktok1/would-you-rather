@@ -6,6 +6,7 @@ import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.core.greater
 import org.jetbrains.exposed.v1.core.or
+import org.jetbrains.exposed.v1.jdbc.deleteWhere
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.select
 import org.jetbrains.exposed.v1.jdbc.update
@@ -16,29 +17,53 @@ import java.util.UUID
  * on its own.
  */
 object SessionStore {
+    /** One device's session of a player: what an access token names beside the player. */
+    data class Session(
+        val id: String,
+        val playerId: String,
+    )
+
     /**
      * Opens a session for [playerId] with the refresh token whose hash is [refreshTokenHash], valid
-     * until [expiresAt]. Must run inside a transaction.
+     * until [expiresAt], and returns it. Must run inside a transaction.
      */
     fun open(
         playerId: String,
         refreshTokenHash: String,
         expiresAt: Long,
         now: Long = System.currentTimeMillis(),
-    ) {
+    ): Session {
+        val session = Session(id = UUID.randomUUID().toString(), playerId = playerId)
         Sessions.insert { row ->
-            row[Sessions.id] = UUID.randomUUID().toString()
+            row[Sessions.id] = session.id
             row[Sessions.playerId] = playerId
             row[Sessions.refreshTokenHash] = refreshTokenHash
             row[Sessions.refreshTokenExpiresAt] = expiresAt
             row[Sessions.createdAt] = now
         }
+        return session
+    }
+
+    /**
+     * Ends [playerId]'s session [sessionId], a logout (CLAUDE.md §8a, *Sessions*): its row is deleted,
+     * so neither of its refresh tokens works again. The player's other sessions, on other devices, are
+     * left alone. A session that is already gone, or another player's, is left as it is. Must run
+     * inside a transaction.
+     *
+     * The access tokens issued to it still work until each expires: nothing reads a session to let a
+     * request in.
+     */
+    fun close(
+        sessionId: String,
+        playerId: String,
+    ) {
+        Sessions.deleteWhere { (Sessions.id eq sessionId) and (Sessions.playerId eq playerId) }
     }
 
     /**
      * Spends the refresh token whose hash is [presentedHash]: swaps it for [newHash], valid until
-     * [expiresAt], in the session it belongs to, and returns that session's player, or `null` when no
-     * refresh may spend it. Must run inside a transaction.
+     * [expiresAt], in the session it belongs to, and returns that session, or `null` when no refresh may
+     * spend it. Must run inside a transaction.
      *
      * A refresh may spend a session's current token until it expires, and the token the session's last
      * rotation displaced (CLAUDE.md §8a) until the next rotation displaces it in turn, never past its
@@ -72,7 +97,7 @@ object SessionStore {
         expiresAt: Long,
         graceMillis: Long?,
         now: Long = System.currentTimeMillis(),
-    ): String? {
+    ): Session? {
         val swapped =
             Sessions.update({ spendable(presentedHash, graceMillis, now) }) { row ->
                 // The right-hand columns are the row as it stood before this update, on both engines,
@@ -86,9 +111,10 @@ object SessionStore {
         if (swapped == 0) return null
 
         return Sessions
-            .select(Sessions.playerId)
+            .select(Sessions.id, Sessions.playerId)
             .where { Sessions.refreshTokenHash eq newHash }
-            .single()[Sessions.playerId]
+            .single()
+            .let { row -> Session(id = row[Sessions.id], playerId = row[Sessions.playerId]) }
     }
 
     /** Whether a refresh may spend [presentedHash] at [now], as [rotate] describes. */

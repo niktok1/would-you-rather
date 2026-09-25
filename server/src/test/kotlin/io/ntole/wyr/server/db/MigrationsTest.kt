@@ -147,12 +147,18 @@ internal class MigrationsTest(
                     )
                     assertEquals(
                         refreshing,
-                        SessionStore.rotate("current", "after-current", Long.MAX_VALUE, graceMillis = null),
+                        SessionStore.rotate("current", "after-current", Long.MAX_VALUE, graceMillis = null)?.playerId,
                         "from V$from",
                     )
                     assertEquals(
                         displaced,
-                        SessionStore.rotate("displaced", "after-displaced", Long.MAX_VALUE, graceMillis = null),
+                        SessionStore
+                            .rotate(
+                                "displaced",
+                                "after-displaced",
+                                Long.MAX_VALUE,
+                                graceMillis = null,
+                            )?.playerId,
                         "from V$from",
                     )
                 }

@@ -215,8 +215,7 @@ class ModerationStoreTest {
         assertEquals(statements.first(), statements.last(), "one statement per submission would grow with the queue")
     }
 
-    private fun newPlayer(): String =
-        transaction(database) { PlayerStore.createGuest(UUID.randomUUID().toString(), Long.MAX_VALUE).id }
+    private fun newPlayer(): String = transaction(database) { PlayerStore.createGuest().id }
 
     private fun submit(
         author: String,

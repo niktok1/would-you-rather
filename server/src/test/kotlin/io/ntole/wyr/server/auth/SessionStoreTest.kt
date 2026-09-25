@@ -260,6 +260,53 @@ class SessionStoreTest {
         )
     }
 
+    /** A rotation answers the session the token belongs to, which the new access token then names. */
+    @Test
+    fun `a rotation answers the session the presented token belongs to`() {
+        val database = connectH2(h2Url("wyr-session-store-answer"), Connection.TRANSACTION_READ_COMMITTED)
+        val player = transaction(database) { createPlayer(refreshTokenHash = "phone") }
+        val tablet = transaction(database) { SessionStore.open(player.id, "tablet", Long.MAX_VALUE) }
+
+        val rotated =
+            transaction(database) { SessionStore.rotate("tablet", "tablet-1", Long.MAX_VALUE, graceMillis = null) }
+
+        assertEquals(tablet, rotated)
+    }
+
+    /**
+     * A logout (CLAUDE.md §8a, *Sessions*): the session's current token and the previous one the grace
+     * keeps both die, and the player's session on another device refreshes as before.
+     */
+    @Test
+    fun `closing a session ends both its tokens and leaves the player's other sessions alone`() {
+        val database = connectH2(h2Url("wyr-session-store-close"), Connection.TRANSACTION_READ_COMMITTED)
+        val player = transaction(database) { createPlayer(refreshTokenHash = "tablet") }
+        val phone = transaction(database) { SessionStore.open(player.id, "phone", Long.MAX_VALUE) }
+        transaction(database) { rotate("phone", newHash = "phone-1", now = ROTATED_AT) }
+
+        transaction(database) { SessionStore.close(phone.id, player.id) }
+
+        assertNull(transaction(database) { rotate("phone-1", newHash = "phone-2") }, "the current token")
+        assertNull(transaction(database) { rotate("phone", newHash = "phone-3") }, "the previous token")
+        assertEquals(player.id, transaction(database) { rotate("tablet", newHash = "tablet-1") }, "the other device")
+    }
+
+    @Test
+    fun `closing another player's session or one closed already changes nothing`() {
+        val database = connectH2(h2Url("wyr-session-store-close-other"), Connection.TRANSACTION_READ_COMMITTED)
+        val player = transaction(database) { createPlayer(refreshTokenHash = "own") }
+        val other = transaction(database) { PlayerStore.createGuest() }
+        val session = transaction(database) { SessionStore.open(player.id, "kept", Long.MAX_VALUE) }
+
+        transaction(database) { SessionStore.close(session.id, other.id) }
+        transaction(database) { SessionStore.close("no-such-session", player.id) }
+
+        assertEquals(player.id, transaction(database) { rotate("kept", newHash = "kept-1") }, "another player's close")
+        transaction(database) { SessionStore.close(session.id, player.id) }
+        transaction(database) { SessionStore.close(session.id, player.id) }
+        assertEquals(player.id, transaction(database) { rotate("own", newHash = "own-1") }, "a close twice")
+    }
+
     /**
      * The players row's old refresh-token columns are unused (CLAUDE.md §8a, *Sessions*): neither a mint
      * nor an opened session nor a rotation writes them, and a rotation touches no players row at all.
@@ -284,13 +331,14 @@ class SessionStoreTest {
         now: Long = System.currentTimeMillis(),
         graceMillis: Long? = null,
     ): String? =
-        SessionStore.rotate(
-            presentedHash = presentedHash,
-            newHash = newHash,
-            expiresAt = Long.MAX_VALUE,
-            graceMillis = graceMillis,
-            now = now,
-        )
+        SessionStore
+            .rotate(
+                presentedHash = presentedHash,
+                newHash = newHash,
+                expiresAt = Long.MAX_VALUE,
+                graceMillis = graceMillis,
+                now = now,
+            )?.playerId
 
     /** [rotate] under the time bound [BOUND_MILLIS]. */
     private fun rotateUnderBound(
@@ -299,13 +347,18 @@ class SessionStoreTest {
         now: Long,
     ): String? = rotate(presentedHash, newHash, now, graceMillis = BOUND_MILLIS)
 
-    /** Creates the players and sessions tables and one player in them. Must run inside a transaction. */
+    /**
+     * Creates the players and sessions tables and one player in them, with a session holding
+     * [refreshTokenHash], as a mint leaves them. Must run inside a transaction.
+     */
     private fun createPlayer(
         refreshTokenHash: String = "unused",
         refreshExpiresAt: Long = Long.MAX_VALUE,
     ): PlayerStore.Player {
         SchemaUtils.create(Players, Sessions)
-        return PlayerStore.createGuest(refreshTokenHash, refreshExpiresAt)
+        return PlayerStore.createGuest().also { player ->
+            SessionStore.open(player.id, refreshTokenHash, refreshExpiresAt)
+        }
     }
 
     /** The hashes a session holds, and when the previous one was displaced. */

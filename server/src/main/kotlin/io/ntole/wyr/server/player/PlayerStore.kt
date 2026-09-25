@@ -1,6 +1,5 @@
 package io.ntole.wyr.server.player
 
-import io.ntole.wyr.server.auth.SessionStore
 import io.ntole.wyr.server.db.Players
 import org.jetbrains.exposed.v1.core.ResultRow
 import org.jetbrains.exposed.v1.core.and
@@ -20,24 +19,19 @@ object PlayerStore {
     )
 
     /**
-     * Mints a guest with a first session, on the refresh token whose hash is [refreshTokenHash], valid
-     * until [refreshExpiresAt] ([SessionStore.open]). Must run inside a transaction.
+     * Mints a guest, with no session yet: the mint opens its first in the same transaction
+     * (`SessionStore.open`). Must run inside a transaction.
      */
-    fun createGuest(
-        refreshTokenHash: String,
-        refreshExpiresAt: Long,
-    ): Player {
+    fun createGuest(): Player {
         val id = UUID.randomUUID().toString()
-        val now = System.currentTimeMillis()
 
         Players.insert { row ->
             row[Players.id] = id
-            row[Players.createdAt] = now
+            row[Players.createdAt] = System.currentTimeMillis()
             row[Players.totalPoints] = 0
             row[Players.answersGiven] = 0
             row[Players.currentCycle] = Players.FIRST_CYCLE
         }
-        SessionStore.open(id, refreshTokenHash, refreshExpiresAt, now)
 
         return Player(id = id, totalPoints = 0, cycle = Players.FIRST_CYCLE)
     }

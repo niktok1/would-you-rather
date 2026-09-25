@@ -36,6 +36,17 @@ public object WyrApi {
         public const val AUTH_REGISTER: String = "/$VERSION/auth/register"
 
         /**
+         * POST, with no body: ends the session the bearer token was issued for, this device's, and
+         * answers 204 (CLAUDE.md §8a, *Sessions*). Its refresh token never works again, the one the
+         * grace keeps included, and the player's sessions on other devices are left alone; the client
+         * then plays on as a fresh guest ([AUTH_GUEST]). A session already ended is answered 204 too.
+         * The access tokens issued to it still work until each expires. A token from a build before
+         * tokens named their session is 401 [io.ntole.wyr.core.error.ErrorCode.UNAUTHORIZED], which a
+         * refresh answers with one that does. Limited per player.
+         */
+        public const val AUTH_LOGOUT: String = "/$VERSION/auth/logout"
+
+        /**
          * GET: the next batch of questions for the player the bearer token names. Requires a
          * session, because the feed is per player (CLAUDE.md §8d): it runs in cycles, serving each
          * question once per cycle in a new random order, and a batch holds only what the player has

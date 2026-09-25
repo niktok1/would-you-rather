@@ -1,5 +1,7 @@
 package io.ntole.wyr.server.auth
 
+import com.auth0.jwt.JWT
+import com.auth0.jwt.algorithms.Algorithm
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
@@ -30,13 +32,17 @@ import io.ntole.wyr.server.testDatabaseFor
 import io.ntole.wyr.server.withLogCapture
 import io.ntole.wyr.server.wyrModule
 import kotlinx.serialization.json.Json
+import java.util.Date
 import java.util.UUID
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
-/** Accounts end to end (CLAUDE.md §8b, *Accounts*): registering a guest. */
+/**
+ * Accounts and the sessions they log into, end to end (CLAUDE.md §8a, *Accounts* and *Sessions*):
+ * registering a guest, and logging a device out.
+ */
 class AccountFlowTest {
     @Test
     fun `a guest registers under its name lower-cased and keeps its points and its session`() =
@@ -201,6 +207,56 @@ class AccountFlowTest {
             assertFalse(printed.any { PASSWORD in it || TOO_SHORT in it || "pbkdf2" in it }, "$printed")
         }
 
+    /**
+     * The access token names its session, which a refresh keeps, so the mint's token, still valid,
+     * logs out the session the refresh rotated.
+     */
+    @Test
+    fun `logging out ends this device's session, so neither its token nor the one the grace keeps works again`() =
+        runServer("logout") { client ->
+            val minted = client.guest()
+            val refreshed = client.refresh(minted.refreshToken).body<SessionDto>()
+            assertEquals(sessionIdIn(minted), sessionIdIn(refreshed), "a refresh keeps the session")
+
+            val loggedOut = client.logout(minted.accessToken)
+
+            assertEquals(HttpStatusCode.NoContent, loggedOut.status)
+            val tokens = listOf("its current token" to refreshed.refreshToken, "the one before" to minted.refreshToken)
+            tokens.forEach { (case, token) ->
+                assertRefused(client.refresh(token), HttpStatusCode.Unauthorized, ErrorCode.INVALID_REFRESH_TOKEN, case)
+            }
+            assertEquals(HttpStatusCode.NoContent, client.logout(refreshed.accessToken).status, "a second logout")
+        }
+
+    @Test
+    fun `every mint opens a session of its own`() =
+        runServer("logout-sessions") { client ->
+            val (first, second) = client.guest() to client.guest()
+            assertTrue(sessionIdIn(first) != sessionIdIn(second))
+
+            assertEquals(HttpStatusCode.NoContent, client.logout(first.accessToken).status)
+
+            assertEquals(HttpStatusCode.OK, client.refresh(second.refreshToken).status, "another's session lives on")
+        }
+
+    /**
+     * A token from a build before tokens named their session, such as one production's `d4a9dbf`
+     * issued: refused 401, which a client answers by refreshing, and the refreshed token names it.
+     */
+    @Test
+    fun `logging out needs a token that names a session`() =
+        runServer("logout-unauthorized") { client ->
+            val guest = client.guest()
+            val nobody = client.post(WyrApi.Paths.AUTH_LOGOUT)
+            val unnamed = client.logout(accessTokenNamingNoSession(guest.playerId))
+
+            assertRefused(nobody, HttpStatusCode.Unauthorized, ErrorCode.UNAUTHORIZED, "no token")
+            assertRefused(unnamed, HttpStatusCode.Unauthorized, ErrorCode.UNAUTHORIZED, "a token naming no session")
+            val refreshed = client.refresh(guest.refreshToken)
+            assertEquals(HttpStatusCode.OK, refreshed.status, "the session lives on")
+            assertEquals(HttpStatusCode.NoContent, client.logout(refreshed.body<SessionDto>().accessToken).status)
+        }
+
     @Test
     fun `a registration request prints no password`() {
         val printed = RegisterRequest("bob", PASSWORD).toString()
@@ -258,9 +314,27 @@ class AccountFlowTest {
 
         /** An access token for [playerId] as the server under test signs one. */
         fun accessTokenFor(playerId: String): String =
-            TokenService(config("jdbc:h2:mem:unused", null, null)).issueAccessToken(playerId)
+            TokenService(config("jdbc:h2:mem:unused", null, null)).issueAccessToken(playerId, "no-such-session")
+
+        /** An access token as a build before tokens named their session signed one, for [playerId]. */
+        fun accessTokenNamingNoSession(playerId: String): String =
+            JWT
+                .create()
+                .withIssuer("wyr-test")
+                .withAudience("wyr-test-client")
+                .withSubject(playerId)
+                .withClaim(TokenService.CLAIM_PLAYER_ID, playerId)
+                .withExpiresAt(Date(System.currentTimeMillis() + 60_000))
+                .sign(Algorithm.HMAC256("test-secret"))
+
+        /** The session [session]'s access token names. */
+        fun sessionIdIn(session: SessionDto): String? =
+            JWT.decode(session.accessToken).getClaim(TokenService.CLAIM_SESSION_ID).asString()
 
         suspend fun HttpClient.guest(): SessionDto = post(WyrApi.Paths.AUTH_GUEST).body()
+
+        suspend fun HttpClient.logout(accessToken: String): HttpResponse =
+            post(WyrApi.Paths.AUTH_LOGOUT) { bearerAuth(accessToken) }
 
         suspend fun HttpClient.register(
             session: SessionDto,

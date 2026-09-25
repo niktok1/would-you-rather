@@ -35,6 +35,7 @@ enum class RouteLimit(
     GUESTS(RateLimits::guests, KeyedBy.ADDRESS),
     REFRESHES(RateLimits::refreshes, KeyedBy.ADDRESS),
     REGISTRATIONS(RateLimits::registrations, KeyedBy.PLAYER),
+    LOGOUTS(RateLimits::logouts, KeyedBy.PLAYER),
     FEED(RateLimits::feed, KeyedBy.PLAYER),
     VOTES(RateLimits::votes, KeyedBy.PLAYER),
     SKIPS(RateLimits::skips, KeyedBy.PLAYER),
