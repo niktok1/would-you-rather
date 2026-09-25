@@ -928,9 +928,5 @@ class PlayViewModelTest {
 
     private object NoOpSessionRepository : SessionRepository {
         override suspend fun ensure(): String = "player-1"
-
-        override suspend fun currentPlayerId(): String = "player-1"
-
-        override suspend fun clear() = Unit
     }
 }

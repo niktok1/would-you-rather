@@ -389,12 +389,6 @@ class AccountViewModelTest {
 
         override suspend fun ensure(): String = player ?: "guest${++guestsMinted}".also { player = it }
 
-        override suspend fun currentPlayerId(): String? = player
-
-        override suspend fun clear() {
-            player = null
-        }
-
         override suspend fun stats(): PlayerStats {
             calls += "stats"
             statsFailWith?.let { throw WyrException(it) }

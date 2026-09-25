@@ -53,7 +53,7 @@ class SessionStorageFailureTest {
             val failure = assertFailsWith<WyrException> { sessions.clear() }
 
             assertEquals(DomainError.NETWORK, failure.error)
-            assertNull(sessions.currentPlayerId())
+            assertNull(store.read())
         }
 
     @Test

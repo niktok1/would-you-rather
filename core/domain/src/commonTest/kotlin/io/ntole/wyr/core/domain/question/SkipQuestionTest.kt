@@ -45,9 +45,5 @@ class SkipQuestionTest {
             calls += "ensure"
             return "p1"
         }
-
-        override suspend fun currentPlayerId(): String = "p1"
-
-        override suspend fun clear() = Unit
     }
 }

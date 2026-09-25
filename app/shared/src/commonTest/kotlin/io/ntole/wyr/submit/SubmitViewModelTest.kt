@@ -480,10 +480,6 @@ class SubmitViewModelTest {
             return "p1"
         }
 
-        override suspend fun currentPlayerId(): String = "p1"
-
-        override suspend fun clear() = Unit
-
         override suspend fun submit(
             optionA: String,
             optionB: String,

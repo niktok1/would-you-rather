@@ -44,8 +44,9 @@ the contract did not. How to try it on a phone is under *Submit on its own tab*.
 Submit and Account and opens on Play (CLAUDE.md §8d, *Current focus*); a LOCAL or DEV build names its
 server on the Account tab's last line (§8e). Changes are tried through the game and the moderation
 app (*Trying a change*, below). What only the console read went with it: the HTTP trace
-(`HttpTrace`, `HttpTracing`), and `SessionDiagnostics`, the session and token expiry its header
-showed. The client alone changed; the server only in a comment and a test's name.
+(`HttpTrace`, `HttpTracing`); `SessionDiagnostics`, the session and token expiry its header
+showed; and the session port's `currentPlayerId` and `clear`, which only it called through the port
+(a logout clears the session through `DefaultSessionRepository` itself). The client alone changed; the server only in a comment and a test's name.
 
 ### Verified working
 

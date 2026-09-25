@@ -26,9 +26,8 @@ public class DefaultSessionRepository(
             sessionStore.read()?.playerId ?: mintGuest()
         }
 
-    override suspend fun currentPlayerId(): String? = sessionStore.read()?.playerId
-
-    override suspend fun clear(): Unit = mutex.withLock { persist { sessionStore.clear() } }
+    /** Drops the stored session, for a logout: the next [ensure] mints a fresh guest. */
+    internal suspend fun clear(): Unit = mutex.withLock { persist { sessionStore.clear() } }
 
     /** The session as stored right now, for [withSessionRecovery] to capture before a call. */
     internal fun storedSession(): SessionDto? = sessionStore.read()
