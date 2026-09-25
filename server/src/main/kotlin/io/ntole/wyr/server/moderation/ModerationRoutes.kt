@@ -1,11 +1,14 @@
 package io.ntole.wyr.server.moderation
 
+import io.ktor.http.HttpStatusCode
 import io.ktor.http.Parameters
 import io.ktor.server.response.respond
 import io.ktor.server.routing.Route
 import io.ktor.server.routing.get
 import io.ktor.server.routing.post
 import io.ntole.wyr.core.api.WyrApi
+import io.ntole.wyr.core.category.CreateCategoryRequest
+import io.ntole.wyr.core.category.RenameCategoryRequest
 import io.ntole.wyr.core.question.ApproveSubmissionRequest
 import io.ntole.wyr.core.question.QuestionStatus
 import io.ntole.wyr.core.question.RejectSubmissionRequest
@@ -13,6 +16,8 @@ import io.ntole.wyr.core.question.RestoreQuestionRequest
 import io.ntole.wyr.core.question.RetireQuestionRequest
 import io.ntole.wyr.core.question.SubmissionListDto
 import io.ntole.wyr.server.category.CategoryStore
+import io.ntole.wyr.server.category.checkedCreation
+import io.ntole.wyr.server.category.checkedRenaming
 import io.ntole.wyr.server.db.Db
 import io.ntole.wyr.server.plugins.ApiFailure
 import io.ntole.wyr.server.plugins.RouteLimit
@@ -106,6 +111,23 @@ fun Route.moderationRoutes(
                 requireValidId("questionId", restoration.questionId)
 
                 call.respond(db.query { ModerationStore.restore(restoration.questionId) })
+            }
+
+            post(WyrApi.Paths.ADMIN_CATEGORIES) {
+                call.requireAdmin(adminToken)
+
+                // Checked before the transaction: a refusal needs no database.
+                val category = checkedCreation(call.receiveOrReject<CreateCategoryRequest>("category"))
+
+                call.respond(HttpStatusCode.Created, db.query { CategoryStore.create(category) })
+            }
+
+            post(WyrApi.Paths.ADMIN_CATEGORY_RENAMES) {
+                call.requireAdmin(adminToken)
+
+                val category = checkedRenaming(call.receiveOrReject<RenameCategoryRequest>("category rename"))
+
+                call.respond(db.query { CategoryStore.rename(category) })
             }
         }
     }

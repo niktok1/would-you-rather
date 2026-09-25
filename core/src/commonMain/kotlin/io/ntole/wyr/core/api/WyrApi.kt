@@ -216,6 +216,27 @@ public object WyrApi {
          * refuses. An admin route: needs [Headers.ADMIN_TOKEN].
          */
         public const val ADMIN_RESTORATIONS: String = "/$VERSION/admin/restorations"
+
+        /**
+         * Adds a category, with an [io.ntole.wyr.core.category.CreateCategoryRequest], answered 201
+         * with its [io.ntole.wyr.core.category.CategoryDto] (CLAUDE.md §8d, *Categories*). From then on
+         * it is in [CATEGORIES], after every category before it, and a submission, an approval and a
+         * filter may name it. An id a category has already is 409
+         * [io.ntole.wyr.core.error.ErrorCode.CATEGORY_EXISTS]; names or an id the rules refuse, or a
+         * malformed body, 400 [io.ntole.wyr.core.error.ErrorCode.VALIDATION_FAILED]. Nothing deletes
+         * a category. An admin route: needs [Headers.ADMIN_TOKEN].
+         */
+        public const val ADMIN_CATEGORIES: String = "/$VERSION/admin/categories"
+
+        /**
+         * Sets both names of a category, with an [io.ntole.wyr.core.category.RenameCategoryRequest],
+         * answered with its [io.ntole.wyr.core.category.CategoryDto] as it now stands. Its id never
+         * changes. An id no category has is 404
+         * [io.ntole.wyr.core.error.ErrorCode.CATEGORY_NOT_FOUND]; names the rules refuse, or a
+         * malformed body, 400 [io.ntole.wyr.core.error.ErrorCode.VALIDATION_FAILED]. An admin route:
+         * needs [Headers.ADMIN_TOKEN].
+         */
+        public const val ADMIN_CATEGORY_RENAMES: String = "/$VERSION/admin/category-renames"
     }
 
     public object Headers {

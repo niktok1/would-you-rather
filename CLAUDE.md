@@ -166,12 +166,13 @@ failing:
   The one exception is a value copied from another row, which may be a plain read where a stale
   copy is provably harmless, with the proof at the read (`VoteStore.currentCycle`: the feed moves
   the cycle on only once the answer's question is already answered or skipped in the one read).
-- Uniqueness is a constraint (the `Votes`, `Skips` and `Likes` primary keys, `players.username`'s
-  unique constraint), never a prior `SELECT`. A violation is never caught and carried on from:
-  PostgreSQL aborts a transaction at its first error. It propagates, and Exposed rolls back and reruns
-  the whole transaction, which then sees the committed row (`VoteStore.cast`, `SkipStore.skip`,
-  `LikeStore.setLiked`, `AccountStore.register`, which `AccountStoreTest` races, and
-  `Seed.questionsIfEmpty`, which `SeedTest` races). A plain read before such an insert only spares
+- Uniqueness is a constraint (the `Votes`, `Skips`, `Likes` and `Categories` primary keys,
+  `players.username`'s unique constraint), never a prior `SELECT`. A violation is never caught and
+  carried on from: PostgreSQL aborts a transaction at its first error. It propagates, and Exposed
+  rolls back and reruns the whole transaction, which then sees the committed row (`VoteStore.cast`,
+  `SkipStore.skip`, `LikeStore.setLiked`, `AccountStore.register`, which `AccountStoreTest` races,
+  `CategoryStore.create`, which `CategoryStoreTest` races, and `Seed.questionsIfEmpty`, which
+  `SeedTest` races). A plain read before such an insert only spares
   a certain violation, and needs no lock when finding the row writes nothing (a like already held).
 - Numbers that must agree with one another are read in one statement, which sees one committed
   state; two statements can straddle another transaction's commit (the tally in `VoteStore`,
@@ -527,10 +528,12 @@ EncryptedSharedPreferences: enough for a game that stores nothing personal.
   player lists only their own. The game's Submit tab submits and lists them. The moderation
   contract is settled and built on the server too: the admin routes, `ApproveSubmissionRequest`,
   `RejectSubmissionRequest`, the question list's `AdminQuestionPageDto` and `AdminQuestionDto`
-  (paged by `WyrApi.Query.CURSOR`), `RetireQuestionRequest` and `RestoreQuestionRequest`, the
-  `X-Admin-Token` header (`WyrApi.Headers`), `QuestionStatus.RETIRED` and the error codes `FORBIDDEN`,
-  `ALREADY_DECIDED` and `WRONG_STATUS`. The moderator's client (`ModerationApi` calls every admin
-  route) and the moderation app are built on it (§8d, *Moderation*).
+  (paged by `WyrApi.Query.CURSOR`), `RetireQuestionRequest` and `RestoreQuestionRequest`,
+  `CreateCategoryRequest` and `RenameCategoryRequest`, the `X-Admin-Token` header (`WyrApi.Headers`),
+  `QuestionStatus.RETIRED` and the error codes `FORBIDDEN`, `ALREADY_DECIDED`, `WRONG_STATUS`,
+  `CATEGORY_EXISTS` and `CATEGORY_NOT_FOUND`. The moderator's client (`ModerationApi` calls every
+  admin route but the two for categories, which the next client branch adds) and the moderation app
+  are built on it (§8d, *Moderation*).
 - **A rejection reason is one line** — *provisional — user decision.* §8d asks for a short reason;
   the server also holds it to one line, as it does an option: no control character, nor U+2028 or
   U+2029 (`checkedRejection`). Chosen as the stricter reading, since a reason is shown to its author
@@ -924,6 +927,19 @@ lists the player's own (*Submitting*, below).
     (*Апсурдно*, *Absurd*), which took every question filed under RANDOM (§8b: RANDOM is no category
     now, *All* is no filter). Nothing deletes a category. On the wire a category is its id, a plain
     string (§5).
+  - *The moderator* adds a category with `POST /v1/admin/categories` (`CreateCategoryRequest`,
+    answered 201 with its `CategoryDto`) and sets both its names with
+    `POST /v1/admin/category-renames` (`RenameCategoryRequest`, answered with it as it now stands),
+    both admin routes (*Moderation*: the admin token, the admin rate limits). Each name is trimmed,
+    then 1 to 40 and one line, as an option is. The id is given, or derived from the English name:
+    accents off, upper-cased, every run of anything but `A`-`Z` and `0`-`9` one `_`, none at either
+    end, cut to 32 (`categoryIdFor`: *Fast food* is `FAST_FOOD`); a name of no Latin letter or digit
+    needs one given. Anything the rules refuse is 400 `VALIDATION_FAILED`, as a rejection's reason is,
+    since the moderation app checks first; an id a category has already, given or derived, 409
+    `CATEGORY_EXISTS`, the primary key deciding two creations racing (§4); a rename of an id no
+    category has 404 `CATEGORY_NOT_FOUND`. A rename never changes the id, so what is filed under it
+    stays. No delete, for now. `CategoryRules`, `CategoryStore.create` and `rename`,
+    `CategoryRulesTest`, `CategoryStoreTest`, `CategoryFlowTest`.
   - *The list*: `GET /v1/categories` (`WyrApi.Paths.CATEGORIES`) answers every category, a
     `CategoryListDto` of `CategoryDto`s (`id`, `nameSr`, `nameEn`), in the order of categories. It
     needs no session and reads none, so a client can have it before it has a player, and it is
@@ -1079,7 +1095,8 @@ lists the player's own (*Submitting*, below).
 - **Moderation** *(built)*: a moderator approves or rejects each pending submission, **may change
   its categories** when approving (*Categories*: at least one stays, and a change replaces the
   question's `question_categories` rows in one transaction), and **may retire an approved question
-  and restore it** (*Retiring*, below; provisional, §8b), and sees every question (the list). A
+  and restore it** (*Retiring*, below; provisional, §8b), sees every question (the list), and **adds
+  categories and puts their names right** (*Categories*, on the server only so far). A
   rejection carries a **short reason**, and the author sees the status of each of their submissions
   and, for a rejected one, that reason (`GET /v1/me/questions`, *Submitting*). The moderator is
   whoever holds the server's admin token (`ADMIN_TOKEN`, §8), not a role on a player account. Built

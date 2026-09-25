@@ -1,11 +1,14 @@
 package io.ntole.wyr.server.category
 
+import io.ntole.wyr.core.category.CategoryDto
 import io.ntole.wyr.core.error.ErrorCode
 import io.ntole.wyr.server.db.Categories
+import io.ntole.wyr.server.db.INSERTING_INTO_CATEGORIES
 import io.ntole.wyr.server.db.Seed
 import io.ntole.wyr.server.db.appTables
 import io.ntole.wyr.server.db.connectH2
 import io.ntole.wyr.server.db.h2Url
+import io.ntole.wyr.server.db.raceBehindFirst
 import io.ntole.wyr.server.plugins.ApiFailure
 import org.jetbrains.exposed.v1.jdbc.SchemaUtils
 import org.jetbrains.exposed.v1.jdbc.insert
@@ -18,8 +21,8 @@ import kotlin.test.assertFailsWith
 
 /** The categories as the server checks and orders what a request names (CLAUDE.md §8d, *Categories*). */
 class CategoryStoreTest {
-    private val database =
-        connectH2(h2Url("wyr-category-store-${UUID.randomUUID()}"), Connection.TRANSACTION_READ_COMMITTED)
+    private val url = h2Url("wyr-category-store-${UUID.randomUUID()}")
+    private val database = connectH2(url, Connection.TRANSACTION_READ_COMMITTED)
 
     init {
         transaction(database) {
@@ -66,6 +69,79 @@ class CategoryStoreTest {
             assertEquals(ErrorCode.VALIDATION_FAILED, refusal.code, "$named")
         }
     }
+
+    @Test
+    fun `a category added comes after every one before it`() {
+        val added = CategoryDto("ANIMALS", "Животиње", "Animals")
+
+        assertEquals(added, transaction(database) { CategoryStore.create(added, now = ADDED_AT) })
+
+        assertEquals(added, transaction(database) { CategoryStore.all() }.last())
+    }
+
+    @Test
+    fun `an id a category has already is refused and nothing changes`() {
+        val before = transaction(database) { CategoryStore.all() }
+
+        val refusal =
+            assertFailsWith<ApiFailure> {
+                transaction(database) { CategoryStore.create(CategoryDto("FOOD", "Јело", "Meals")) }
+            }
+
+        assertEquals(ErrorCode.CATEGORY_EXISTS, refusal.code)
+        assertEquals(before, transaction(database) { CategoryStore.all() })
+    }
+
+    @Test
+    fun `two creations racing for one id make exactly one`() {
+        // The second inserts while the first holds its key uncommitted: only the key can refuse it, and
+        // Exposed's rerun then finds the first's row. Only the refusal is caught, not the key's failure,
+        // which must reach Exposed for the rerun.
+        val (first, second) =
+            raceBehindFirst(
+                url,
+                database,
+                { refusalOf { CategoryStore.create(CategoryDto("ANIMALS", "Животиње", "Animals")) } },
+                { refusalOf { CategoryStore.create(CategoryDto("ANIMALS", "Звери", "Beasts")) } },
+                queued = INSERTING_INTO_CATEGORIES,
+            )
+
+        assertEquals(null, first, "the first is made")
+        assertEquals(ErrorCode.CATEGORY_EXISTS, second)
+        assertEquals(
+            CategoryDto("ANIMALS", "Животиње", "Animals"),
+            transaction(database) { CategoryStore.all() }.single { it.id == "ANIMALS" },
+        )
+    }
+
+    @Test
+    fun `a rename sets both names and keeps the id and the place`() {
+        val renamed = CategoryDto("ETHICS", "Морал", "Morals")
+
+        assertEquals(renamed, transaction(database) { CategoryStore.rename(renamed) })
+
+        val all = transaction(database) { CategoryStore.all() }
+        assertEquals(renamed, all[2], "third, as it was")
+    }
+
+    @Test
+    fun `renaming an id no category has is not found`() {
+        val refusal =
+            assertFailsWith<ApiFailure> {
+                transaction(database) { CategoryStore.rename(CategoryDto("RANDOM", "Насумично", "Random")) }
+            }
+
+        assertEquals(ErrorCode.CATEGORY_NOT_FOUND, refusal.code)
+    }
+
+    /** The code [block] is refused with, or null when it is not. */
+    private fun refusalOf(block: () -> Unit): ErrorCode? =
+        try {
+            block()
+            null
+        } catch (refusal: ApiFailure) {
+            refusal.code
+        }
 
     private fun add(
         id: String,

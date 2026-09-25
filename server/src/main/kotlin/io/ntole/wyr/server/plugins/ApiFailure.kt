@@ -42,6 +42,13 @@ class ApiFailure(
             expected: QuestionStatus,
         ) = ApiFailure(HttpStatusCode.Conflict, ErrorCode.WRONG_STATUS, "question $id is not ${expected.name}")
 
+        /** A category added under an id a category has already. */
+        fun categoryExists(id: String) =
+            ApiFailure(HttpStatusCode.Conflict, ErrorCode.CATEGORY_EXISTS, "a category is $id already")
+
+        fun categoryNotFound(id: String) =
+            ApiFailure(HttpStatusCode.NotFound, ErrorCode.CATEGORY_NOT_FOUND, "no category $id")
+
         /** A registration's username the rules refuse, the player's to put right. */
         fun invalidUsername(message: String) =
             ApiFailure(HttpStatusCode.UnprocessableEntity, ErrorCode.INVALID_USERNAME, message)

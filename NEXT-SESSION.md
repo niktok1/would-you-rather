@@ -61,7 +61,9 @@ RANDOM is no category any more (§8b: *All* is no filter). Every categories fiel
 plain ids, `QuestionCategory` and its list serializer are gone (§5), and the JSON for the first ids
 is what it was. The client maps ABSURD to its `Category.RANDOM` until the next branch lists the
 categories from the server. `GET /v1/categories` lists every category, with its id and both names,
-oldest first, to anybody (no bearer), limited per address.
+oldest first, to anybody (no bearer), limited per address. The moderator adds a category
+(`POST /v1/admin/categories`, the id given or derived from the English name, 409 `CATEGORY_EXISTS`)
+and renames one (`POST /v1/admin/category-renames`, 404 `CATEGORY_NOT_FOUND`); no delete.
 
 ### Verified working
 

@@ -24,6 +24,9 @@ class ErrorMapperTest {
                     ApiException(ErrorCode.SUBMISSION_LIMIT, status = 409) to DomainError.SUBMISSION_LIMIT,
                     ApiException(ErrorCode.ALREADY_DECIDED, status = 409) to DomainError.ALREADY_DECIDED,
                     ApiException(ErrorCode.WRONG_STATUS, status = 409) to DomainError.WRONG_STATUS,
+                    // No client adds or renames a category yet.
+                    ApiException(ErrorCode.CATEGORY_EXISTS, status = 409) to DomainError.UNKNOWN,
+                    ApiException(ErrorCode.CATEGORY_NOT_FOUND, status = 404) to DomainError.UNKNOWN,
                     ApiException(ErrorCode.FORBIDDEN, status = 403) to DomainError.FORBIDDEN,
                     ApiException(ErrorCode.UNAUTHORIZED, status = 401) to DomainError.UNAUTHORIZED,
                     ApiException(ErrorCode.INVALID_REFRESH_TOKEN, status = 401) to DomainError.UNAUTHORIZED,

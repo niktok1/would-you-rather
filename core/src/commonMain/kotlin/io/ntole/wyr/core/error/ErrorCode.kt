@@ -60,6 +60,16 @@ public enum class ErrorCode {
     WRONG_STATUS,
 
     /**
+     * A moderator tried to add a category under an id a category has already, given or derived from
+     * its English name ([io.ntole.wyr.core.category.CreateCategoryRequest]). Nothing changed. Sent with
+     * 409.
+     */
+    CATEGORY_EXISTS,
+
+    /** A moderator tried to rename a category no category has the id of. Sent with 404. */
+    CATEGORY_NOT_FOUND,
+
+    /**
      * A registration's username breaks the rules of [io.ntole.wyr.core.auth.RegisterRequest]: lower-cased,
      * it is too short, too long or holds a character other than `a` to `z`, `0` to `9` and `_`. The
      * player's to put right. Sent with 422.

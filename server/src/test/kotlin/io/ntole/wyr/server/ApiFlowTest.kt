@@ -21,6 +21,8 @@ import io.ktor.server.testing.testApplication
 import io.ntole.wyr.core.api.WyrApi
 import io.ntole.wyr.core.auth.RefreshRequest
 import io.ntole.wyr.core.auth.SessionDto
+import io.ntole.wyr.core.category.CreateCategoryRequest
+import io.ntole.wyr.core.category.RenameCategoryRequest
 import io.ntole.wyr.core.error.ErrorCode
 import io.ntole.wyr.core.error.ErrorDto
 import io.ntole.wyr.core.like.LikeRequest
@@ -2054,6 +2056,18 @@ class ApiFlowTest {
                     credentials()
                     contentType(ContentType.Application.Json)
                     setBody(RestoreQuestionRequest("no-such-question"))
+                },
+            "a new category" to
+                post(WyrApi.Paths.ADMIN_CATEGORIES) {
+                    credentials()
+                    contentType(ContentType.Application.Json)
+                    setBody(CreateCategoryRequest(nameSr = "Животиње", nameEn = "Animals"))
+                },
+            "a category's names" to
+                post(WyrApi.Paths.ADMIN_CATEGORY_RENAMES) {
+                    credentials()
+                    contentType(ContentType.Application.Json)
+                    setBody(RenameCategoryRequest("FOOD", nameSr = "Јело", nameEn = "Meals"))
                 },
         )
 

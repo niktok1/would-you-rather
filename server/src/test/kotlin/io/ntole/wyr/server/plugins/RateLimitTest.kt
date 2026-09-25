@@ -21,6 +21,8 @@ import io.ntole.wyr.core.auth.LoginRequest
 import io.ntole.wyr.core.auth.RefreshRequest
 import io.ntole.wyr.core.auth.RegisterRequest
 import io.ntole.wyr.core.auth.SessionDto
+import io.ntole.wyr.core.category.CreateCategoryRequest
+import io.ntole.wyr.core.category.RenameCategoryRequest
 import io.ntole.wyr.core.error.ErrorCode
 import io.ntole.wyr.core.error.ErrorDto
 import io.ntole.wyr.core.like.LikeRequest
@@ -560,9 +562,22 @@ class RateLimitTest {
                 AdminRoute("a restoration", HttpStatusCode.NotFound) { client, token ->
                     client.post(WyrApi.Paths.ADMIN_RESTORATIONS) { admin(token, RestoreQuestionRequest(NO_SUBMISSION)) }
                 },
+                // An id no category has, so it changes nothing that the next test's server would see.
+                AdminRoute("a category's names", HttpStatusCode.NotFound) { client, token ->
+                    client.post(WyrApi.Paths.ADMIN_CATEGORY_RENAMES) {
+                        admin(token, RenameCategoryRequest(NO_CATEGORY, nameSr = "Ништа", nameEn = "Nothing"))
+                    }
+                },
+                // One a category has, answered alike by every one.
+                AdminRoute("a new category", HttpStatusCode.Conflict) { client, token ->
+                    client.post(WyrApi.Paths.ADMIN_CATEGORIES) {
+                        admin(token, CreateCategoryRequest(id = "FOOD", nameSr = "Храна", nameEn = "Food"))
+                    }
+                },
             )
         val ADMIN_ROUTE_BUDGET = RequestBudget(requests = ADMIN_ROUTES.size, per = 1.minutes)
         const val NO_SUBMISSION = "no-such-submission"
+        const val NO_CATEGORY = "NO_SUCH_CATEGORY"
 
         /** The header Render's proxy, Cloudflare, sets to the client's address, and two clients' addresses. */
         const val CLIENT_IP_HEADER = "CF-Connecting-IP"
