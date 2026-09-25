@@ -2,16 +2,21 @@ package io.ntole.wyr.core.network.api
 
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
+import io.ktor.client.plugins.auth.AuthCircuitBreaker
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
 import io.ntole.wyr.core.api.WyrApi
+import io.ntole.wyr.core.auth.AccountDto
+import io.ntole.wyr.core.auth.LoginRequest
 import io.ntole.wyr.core.auth.RefreshRequest
+import io.ntole.wyr.core.auth.RegisterRequest
 import io.ntole.wyr.core.auth.SessionDto
 import io.ntole.wyr.core.network.refreshTimeout
 
 /**
- * Session endpoints. Both are unauthenticated — [guest] has no credential yet and [refresh]
- * carries its credential in the body.
+ * Session and account endpoints (CLAUDE.md §8a). [guest], [refresh] and [logIn] need no session:
+ * [guest] has no credential yet, and [refresh] and [logIn] carry theirs in the body. [register] and
+ * [logOut] go with the session's bearer, as any other call does.
  */
 public class AuthApi(
     private val client: HttpClient,
@@ -32,4 +37,34 @@ public class AuthApi(
                 refreshTimeout()
                 setBody(RefreshRequest(refreshToken))
             }.body()
+
+    /**
+     * Registers the session player, a guest, as an account, keeping everything they have, answered
+     * with the username as the server keeps it, lower-cased.
+     */
+    public suspend fun register(request: RegisterRequest): AccountDto =
+        client.post(WyrApi.Paths.AUTH_REGISTER) { setBody(request) }.body()
+
+    /**
+     * Logs in to [request]'s account, answered with a new session of that player, this device's own.
+     *
+     * Sent past the Auth plugin (`AuthCircuitBreaker`), as its own refresh is: a wrong password is a
+     * 401 too, which the plugin would take for an expired access token and answer by refreshing the
+     * session this device holds and sending the login again. So the 401 comes back as it is, and no
+     * bearer goes out with the login, which reads none.
+     */
+    public suspend fun logIn(request: LoginRequest): SessionDto =
+        client
+            .post(WyrApi.Paths.AUTH_LOGIN) {
+                attributes.put(AuthCircuitBreaker, Unit)
+                setBody(request)
+            }.body()
+
+    /**
+     * Ends the session the bearer names, this device's, and no other. Answered 204, as it is for a
+     * session already ended. An expired access token is refreshed first, as for any call.
+     */
+    public suspend fun logOut() {
+        client.post(WyrApi.Paths.AUTH_LOGOUT)
+    }
 }

@@ -456,7 +456,9 @@ decided in §8b).
     public) are one and the same 401 `INVALID_LOGIN`, and a name with no account is checked against
     `Passwords.UNMATCHABLE`, so it is refused only after a hash's time, as a wrong password is. A
     client must send a login so that this 401 is never taken for an expired access token, which would
-    refresh the session it holds and send the login again. Limited per address (§8b).
+    refresh the session it holds and send the login again: `AuthApi.logIn` sends it past the Auth
+    plugin (`AuthCircuitBreaker`, as the plugin's own refresh goes), so no bearer goes with it either
+    (`AuthApiTest`). Limited per address (§8b).
   - `GET /v1/me` names the username (`PlayerStatsDto.username`), null for a guest; a client from
     before accounts ignores it (§8d, *Stats*).
   - Not built, by design for now: a password reset (no email is collected), a rename, a password
