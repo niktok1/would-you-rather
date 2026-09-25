@@ -399,11 +399,11 @@ automatically from every green commit on `main` (its URL is on its Render page).
   (`aapt2`), not by a real backup and restore. The iOS Keychain item is compiled only (CLAUDE.md
   §9): no test runs it, the simulator's test binary being no signed app, and whether a
   synchronizable item needs anything of the app's signing beyond its default access group, and how
-  soon iCloud Keychain carries it to another iPhone, is for the first run on a device. A guest from
-  before V4 gets a secret only when a client of this build first opens on it. Nothing here logs a
-  secret or its hash, but a statement that fails on a unique key logs the driver's message, which on
-  PostgreSQL names the key's value, as it does a refresh token's hash; none can collide with 256
-  random bits behind it.
+  soon iCloud Keychain carries it to another iPhone, and which of two iPhones' writes it keeps, is
+  for the first run on a device. A guest from before V4 gets a secret only when a client of this
+  build first opens on it. Nothing here logs a secret or its hash, but a statement that fails on a
+  unique key logs the driver's message, which on PostgreSQL names the key's value, as it does a
+  refresh token's hash; none can collide with 256 random bits behind it.
 - **The `:core` modules' tests on iOS.** The ios CI job runs `:app:shared`'s tests on the simulator
   and only compiles `:core:data`'s and `:core:network`'s, which Kotlin/Native refused while their
   names held commas (`SharedSessionStoreTest`'s among them, from before this branch); their JVM and
@@ -604,9 +604,11 @@ secret; the last call answers a new secret and kills `$SECRET`, which then recov
   the cloud and a restored phone mints a guest. Both restore flows reinstall apps from Google Play,
   so they are to be tried once the app is on a Play testing track (internal testing will do);
   whether a build installed by hand after setup gets the entry the restore brought is untested. On
-  iOS, a second
-  iPhone on the same Apple account with iCloud Keychain on should recover the same player, each in
-  a session of its own, once the Keychain item has synced.
+  iOS, a second iPhone on the same Apple account with iCloud Keychain on should recover the same
+  player, each in a session of its own, once the Keychain item has synced. Open the app there only
+  after that: opened sooner, it mints a guest whose secret goes into the same item, and should
+  iCloud Keychain keep the guest's, the first iPhone's player is left with a secret on neither
+  (CLAUDE.md §8a, *Where it is kept*). Which of the two it keeps is itself worth a look.
 
 ### Moderating
 

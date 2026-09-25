@@ -539,7 +539,15 @@ auth SDK, satisfying §2.
       share one account, each with a session of its own. It is readable once the phone has been
       unlocked after starting (`kSecAttrAccessibleAfterFirstUnlock`, never a `ThisDeviceOnly` class,
       which would not sync), and the Keychain keeps it when the app is deleted. No test runs it: the
-      simulator's test binary is no signed app, so the app on a phone is the first to call it.
+      simulator's test binary is no signed app, so the app on a phone is the first to call it. The
+      one item holds one secret, whoever's: an iPhone that opens the app before the item has synced
+      to it (a new iPhone opened before iCloud Keychain catches up, or iCloud Keychain off and turned
+      on later) reads none, mints a guest and writes the guest's secret into the same item, and once
+      the two meet iCloud Keychain keeps one of them on every iPhone. Should it keep the guest's, the
+      other iPhone's player has no secret left anywhere: that iPhone plays on as its player, holding
+      the guest's secret, which it never replaces since the store holds one, and a reinstall or a
+      dead session there turns it into the guest. An item per player would avoid it, a change of
+      design not yet made.
     - *Desktop and web* keep none: they bind no `RecoverySecretStorage` (`dataModule`), so they mint as
       before and never ask for a secret.
 - Provider linking (Play Games Services on Android, Game Center on iOS) is phase 2 (§8b, *Provider
@@ -590,11 +598,12 @@ one whose every copy of the secret is lost is gone all the same, as is an Androi
 with Google's Backup services off, where Block Store keeps nothing across it. A phone whose secret
 store could not be read when the app first started there plays as a new guest, and recovers the
 player only once that guest's session dies or the app is installed again, which leaves the guest
-behind. A desktop or web guest stays bound to its one storage: lose it and the account — and its
-points — are gone. A copy of the secret in the wrong hands owns the account until it is replaced.
-Session storage is ordinary preference storage (SharedPreferences / NSUserDefaults / JVM
-Preferences / localStorage), not Keychain or EncryptedSharedPreferences. All of it must be revisited
-before real accounts exist.
+behind. An iPhone that mints before the Keychain item has synced to it can take another iPhone's
+secret from it for good (*Where it is kept*, iOS). A desktop or web guest stays bound to its one
+storage: lose it and the account — and its points — are gone. A copy of the secret in the wrong
+hands owns the account until it is replaced. Session storage is ordinary preference storage
+(SharedPreferences / NSUserDefaults / JVM Preferences / localStorage), not Keychain or
+EncryptedSharedPreferences. All of it must be revisited before real accounts exist.
 
 ## 8b. Open decisions (resolve before relevant work)
 
