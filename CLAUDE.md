@@ -1028,8 +1028,10 @@ The third to move is the **category picker**, onto the Play screen (*Categories*
   `SubmitQuestion` and `GetMySubmissions` go through `withSessionRecovery`
   (`DefaultSubmissionRepository`). `SubmitQuestion` refuses no category, or `OTHER`, before it
   ensures a session, so nothing is sent, not even a guest's mint, and the repository refuses them
-  again before building the request; every other rule is the server's. A status this build cannot
-  name is `SubmissionStatus.OTHER`. The console's *Submit a question* section drives both.
+  again before building the request; every other rule is the server's to enforce, and
+  `SubmissionRules` (`:core:domain`) copies the options' rules so a form can check what is typed, as
+  `AccountRules` does for accounts (`SubmissionLimitsTest` pins its numbers to `WyrApi.Limits`). A
+  status this build cannot name is `SubmissionStatus.OTHER`. The console's *Submit a question* section drives both.
 - **Moderation** *(built)*: a moderator approves or rejects each pending submission, **may change
   its categories** when approving (*Categories*: at least one stays, and a change replaces the
   question's `question_categories` rows in one transaction), and **may retire an approved question
