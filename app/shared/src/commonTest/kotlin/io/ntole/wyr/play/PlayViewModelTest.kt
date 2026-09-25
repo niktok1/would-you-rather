@@ -475,6 +475,33 @@ class PlayViewModelTest {
             assertEquals(PlayUiState.Asking(NEXT_QUESTION), viewModel.state.value)
         }
 
+    /**
+     * The second tap of a double tap on a card can land after a quick answer. Until a moment after the
+     * reveal lands it is not the way on, so it cannot skip the reveal it brought; then a tap is.
+     */
+    @Test
+    fun `Next just after the reveal lands does nothing`() =
+        runTest(dispatcher) {
+            val questions = FakeQuestionRepository(QUESTION, NEXT_QUESTION)
+            val viewModel = viewModel(questions)
+            testScheduler.advanceUntilIdle()
+            viewModel.choose(Side.A)
+            testScheduler.runCurrent()
+            val revealed = assertIs<PlayUiState.Revealed>(viewModel.state.value)
+
+            testScheduler.advanceTimeBy(REVEAL_HOLD_MILLIS - 1)
+            viewModel.next()
+            testScheduler.runCurrent()
+            assertEquals(revealed, viewModel.state.value, "just before the hold ends")
+            assertEquals(listOf("next"), questions.calls)
+
+            testScheduler.advanceTimeBy(1)
+            testScheduler.runCurrent()
+            viewModel.next()
+            testScheduler.advanceUntilIdle()
+            assertEquals(PlayUiState.Asking(NEXT_QUESTION), viewModel.state.value, "once it has")
+        }
+
     /** Before the reveal a card is an answer and Skip the way past it: never the next question. */
     @Test
     fun `Next before answering does nothing`() =

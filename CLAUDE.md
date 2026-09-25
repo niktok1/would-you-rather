@@ -867,10 +867,12 @@ and reveals its tally, and holds Skip, Like and the category picker (*Skipping*,
   in flight; none until the first.
 - Tapping a card answers. In the reveal both cards count their percentage up from 0 to its value
   over 2.5 seconds, both at once (`COUNT_UP_MILLIS`), and tapping either card again is the next
-  question (`PlayViewModel.next`, from the reveal only). Nothing else shows: no verdict, no points of
-  the vote, no vote counts (the domain still has `VoteOutcome.agreedWithMajority`). A screen reader
-  hears what a tap does where no text says it: *Следеће питање* on a revealed card, *Промени
-  категорије* on the categories played.
+  question (`PlayViewModel.next`, from the reveal only), once the reveal has shown for half a second
+  (`REVEAL_HOLD_MILLIS`), so a double tap cannot answer and skip the reveal: *provisional — user
+  decision*, the other option being no hold. Nothing else shows: no verdict, no points of the vote,
+  no vote counts (the domain still has `VoteOutcome.agreedWithMajority`). A screen reader hears what
+  a tap does where no text says it: *Следеће питање* on a revealed card, *Промени категорије* on the
+  categories played.
 - **Skip** is an icon in the middle of the top bar (`PlayTopBar`), there only while a question is
   asked and not answered: the bar has the room, and the row keeps its three things legible at 375
   wide.
