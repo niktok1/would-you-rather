@@ -1012,8 +1012,10 @@ a launch plays every category again.
    and the next is filed under Food or Ethics; the row reads *Food, Ethics*.
 3. Open it again and **Cancel**, or tap outside it: nothing changes. **Play** with what is already
    played: the question stays.
-4. Tick every category: the row cuts the names short on its one line, and the points and the like
-   count stay whole, in their places.
+4. Tick every category: the names are cut short on their one line, and the points move right of the
+   middle only as far as the names need; the points, the like count and Skip stay whole. That is the
+   arrangement to judge (CLAUDE.md §8b, *The Play row's arrangement*): keep it, or the points always
+   in the middle and the names cut shorter.
 5. While a vote or a like is in flight the categories do nothing when tapped. *All categories*, then
    **Play**, goes back to the whole feed. Categories the server has no questions in would show *Нема
    више питања.* with **Пробај опет** and the categories as the way out; every category has seeds,
