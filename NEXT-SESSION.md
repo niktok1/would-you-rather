@@ -89,7 +89,9 @@ in `Strings.pointsUnit`, *Пошаљи · 1 П*, off while the points are fewer;
 the categories and then the points each time it is shown; a failed read of the categories says
 *Категорије нису учитане.* (`Strings.categoriesUnread`, the picker's too), or offline, under the
 chips with Try again, unless the points failed too. **`pointsSpent`** is not shown: the Account card
-keeps its four counts, none of them a term of a sum (CLAUDE.md §8b, *What submitting cost, on the
+keeps its four counts, and two of them, the answers and the likes, are terms of CLAUDE.md §8c's
+sum, so once a question has cost a point they add up to more than the points shown. That gap is
+accepted for less text, and the cost shows on Send (CLAUDE.md §8b, *What submitting cost, on the
 Account screen*: ask the user; the other option is a fifth number). Every string translated; no
 English literal left from main's side in `:app:shared`. The moderation app stays English (§8f).
 Verified here at the merge (*Verified working*): lint, the verify job's tests and client compiles,

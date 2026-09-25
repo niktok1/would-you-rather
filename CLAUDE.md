@@ -591,11 +591,11 @@ EncryptedSharedPreferences: enough for a game that stores nothing personal.
   *Покушај поново*, which four of the five screens and the Account screens' *Нешто није у реду.
   Покушај поново.* already used. The options: keep it; or *Пробај опет*, a little shorter, in
   `Strings.tryAgain` and that sentence both.
-- **What submitting cost, on the Account screen** — *provisional — user decision.* Since submitting
-  costs a point (§8c), a player's answers and likes can count more than their points. The Account
-  card shows the points and its four counts and not `pointsSpent` (§8d, *Stats*), for less text: no
-  number on it is a term of a sum, and the cost shows on the Submit form's button. The options: keep
-  it; or a fifth number on the card, what was spent.
+- **What submitting cost, on the Account screen** — *provisional — user decision.* The Account card
+  shows the points and its four counts and not `pointsSpent` (§8d, *Stats*). Two of the four, the
+  answers given and the likes received, are terms of §8c's sum, so once a question has cost a point
+  they add up to more than the points shown. That gap is accepted for less text, and the cost shows
+  on the Submit form's button. The options: keep it; or a fifth number on the card, what was spent.
 - **Retrying a submission** — *decided 2026-09-24: keep it simple.* A submission carries no
   attempt id, so one sent again after its response was lost is stored twice, both pending; the
   moderator rejects the copy, and the 20-pending cap bounds how many there can be. Nothing resends
@@ -1166,12 +1166,11 @@ listed on the Account screen.
   feed request, so between the answer that finishes a cycle and that request it reports the finished
   cycle with nothing due. The Account screen shows the points and four counts, the answers given,
   the questions they went to, the cycle and the likes received (*The Account screen*), and not
-  `pointsSpent`, for less text (*provisional — user decision*, §8b). The four are counts of what the
-  player did, each over its word, not the terms of a sum, and nothing on the card adds them up, so
-  none of them disagrees with the points once a question has cost one: the answers and likes then
-  count more than the points, and the cost shows where it is paid, on the Submit form's button. No
-  client reads `pointsSpent`, nor the player id (`PlayerStatsDto.playerId`): the domain's
-  `PlayerStats` has neither field.
+  `pointsSpent`, for less text (*provisional — user decision*, §8b). The answers given and the likes
+  received are terms of §8c's sum, so once a question has cost a point they add up to more than the
+  points shown, and the card does not say why. That gap is accepted, and the cost shows where it is
+  paid, on the Submit form's button. No client reads `pointsSpent`, nor the player id
+  (`PlayerStatsDto.playerId`): the domain's `PlayerStats` has neither field.
 - **Skipping** *(built; decided 2026-09-23)*: allowed, earns nothing, and never touches the
   tally. The server **records the skip for the player's current cycle only**, so the question is
   no longer due in that cycle and comes back in the **next** one, except through a category filter
