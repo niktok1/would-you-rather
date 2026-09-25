@@ -13,7 +13,9 @@ import io.ntole.wyr.core.domain.error.WyrException
  * that refreshes only the device used last) or the server no longer knows the player. Without it, a
  * player in that state would see every authenticated call fail forever with no way out but
  * reinstalling. The session opened in its place is the same player's where this device keeps their
- * recovery secret, and a fresh guest's where it keeps none (CLAUDE.md §8a, *Recovery*).
+ * recovery secret, and a fresh guest's where it keeps none (CLAUDE.md §8a, *Recovery*). During a
+ * rollback to a build from before recovery, which answers the recovery with a bare 404, a device that
+ * keeps a secret opens none: its every call fails until the roll-forward, when it recovers.
  *
  * Exactly one retry: if the session opened in its place is refused as well, the failure is real and
  * goes to the caller. So does a failure to open one: a recovery that fails on the network mints no

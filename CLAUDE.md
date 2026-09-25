@@ -427,9 +427,13 @@ auth SDK, satisfying §2.
     (§8b, *Rollbacks*).
   - *A rollback* to such a build refreshes, for each player, the device that opened or refreshed a
     session last, with the grace this build gave its token, and refuses every other device, whose
-    client replaces its player with a fresh guest: the build before has no recovery. It never reads
-    or writes the recovery secret either, so once rolled forward a refused device that kept its secret
-    can recover its player. The guests it mints have no session, no mark and no secret.
+    client throws the session away and opens another. A phone that keeps a recovery secret recovers
+    before it mints, and the build before answers the recovery with a bare 404, which mints nothing
+    (*Recovery*): so that phone fails every call until the roll-forward, and so does a phone first
+    installed meanwhile with a restored secret. Desktop, web and a phone with no secret replace their
+    player with a fresh guest. The build before never reads or writes the recovery secret, so once
+    rolled forward a phone that kept its secret recovers its player. The guests it mints have no
+    session, no mark and no secret.
   - *Rolling forward* needs nothing by hand. A mirror whose current token is not its mark was moved
     by a build without sessions: during a rollback, or while the build before still serves as a
     deploy's new instance starts, which the first deploy of V4 goes through too. A refresh no
@@ -445,11 +449,13 @@ auth SDK, satisfying §2.
     token, which is the mirror's previous one, and the fold spends it there, under the grace this
     build gives it. `SessionStoreTest` pins the mirror, a build without sessions refreshing from it,
     both folds and their races.
-  - *What a rollback still costs:* every device but the one used last, as above; and, for a player
-    with more than one session, the chain a build without sessions moved in the mirror, if another of
-    their sessions refreshes first once rolled forward, since a session's rotation always rewrites the
-    mirror: that device is refused, and recovers with its secret. A rollback past V2 still needs the
-    mirror's previous token cleared before rolling forward (*The rotation*, above).
+  - *What a rollback still costs:* every device but the one used last, as above: a phone keeping a
+    secret cannot play until the roll-forward, and any other device loses its player to a fresh
+    guest. And, for a player with more than one session, the chain a build without sessions moved in
+    the mirror, if another of their sessions refreshes first once rolled forward, since a session's
+    rotation always rewrites the mirror: that device is refused, and a phone recovers with its
+    secret, any other device minting a guest. A rollback past V2 still needs the mirror's previous
+    token cleared before rolling forward (*The rotation*, above).
 - **Recovery** (*decided 2026-09-25*, phase 1 of making a guest durable, §8b *Provider linking*): a
   guest's account survives a reinstall and a phone restore with no click. The mint answers a
   `GuestSessionDto`, the session's fields with the player's **recovery secret** beside them: 256

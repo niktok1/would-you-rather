@@ -374,8 +374,8 @@ class RecoverySecretFlowTest {
 
             val result =
                 sessions.withSessionRecovery {
-                    // The refresh refused, as a rollback to a build that refreshes only the device used
-                    // last refuses this one's.
+                    // The refresh refused, as once a rollback that refreshed another of the player's
+                    // devices is rolled forward.
                     if (attempts++ == 0) throw ApiException(ErrorCode.INVALID_REFRESH_TOKEN, status = 401)
                     "ok as ${store.read()?.playerId} with ${store.read()?.refreshToken}"
                 }
