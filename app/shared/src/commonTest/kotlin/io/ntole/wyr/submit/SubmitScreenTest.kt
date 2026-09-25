@@ -7,7 +7,6 @@ import io.ntole.wyr.core.domain.submission.Submission
 import io.ntole.wyr.core.domain.submission.SubmissionStatus
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertTrue
 import kotlin.time.Instant
 
 /** What the Submit screen says, in the player's words. */
@@ -47,8 +46,21 @@ class SubmitScreenTest {
     }
 
     @Test
-    fun `the screen says submitting earns no points`() {
-        assertTrue(POINTS_NOTE.startsWith("Submitting earns no points"), POINTS_NOTE)
+    fun `the screen says submitting costs a point that a rejection pays back`() {
+        assertEquals(
+            "Submitting a question costs 1 point, paid back if it is rejected. " +
+                "Once approved, each like it gets earns you 1.",
+            POINTS_NOTE,
+        )
+    }
+
+    @Test
+    fun `too few points reads as what submitting costs and how to earn it`() {
+        // Its own line: never the catch-all, which would ask the player to try the same again.
+        assertEquals(
+            "You need 1 point to submit. Answer a question to earn it.",
+            failureMessage(SubmitFailure(DomainError.NOT_ENOUGH_POINTS)),
+        )
     }
 
     @Test

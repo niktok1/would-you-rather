@@ -1121,14 +1121,18 @@ lists the player's own (*Submitting*, below).
   (`SubmitViewModel`): two options and one or more categories of `Category.selectable`, what
   `SubmissionRules` refuses in each option shown under it as it is typed, and Submit off until
   nothing is refused and a category is picked. A stored question clears the form; a refusal keeps it
-  and says why under it, `INVALID_SUBMISSION`, `SUBMISSION_LIMIT` with the 20, a rate limit with its
-  wait, or offline. *My submissions*, below the form, lists the player's own, each with its options,
+  and says why under it, `INVALID_SUBMISSION`, `SUBMISSION_LIMIT` with the 20, `NOT_ENOUGH_POINTS`
+  (`DomainError.NOT_ENOUGH_POINTS`) as the point it needs and that answering earns it, a rate limit
+  with its wait, or offline. *My submissions*, below the form, lists the player's own, each with its options,
   categories and status, a rejected one with its reason, read each time the tab is shown and after
   every submit, a failed one too. A read that fails says why under the list, with Try again,
   whatever the submit before it ended in: each part keeps its own failure
   (`SubmitState.submitFailure`, `listFailure`), so a list never read cannot be left spinning on a
   read nobody makes. One action at a time, and the form cannot change while it is sent. One line
-  says submitting earns no points. `SubmitViewModelTest` drives it over fakes, and
+  says submitting costs a point, paid back if it is rejected, and that each like of an approved one
+  earns 1: the number is the screen's copy of `Scoring.SUBMISSION_COST` (`SUBMISSION_COST` in
+  `SubmitScreen.kt`), which no client can see, so a change to the cost changes it too; the server
+  charges whatever it says. `SubmitViewModelTest` drives it over fakes, and
   `SubmitScreenDrawTest` draws every state in both themes at 400x900 and 375x599; the screen scrolls.
 - **Moderation** *(built)*: a moderator approves or rejects each pending submission, **may change
   its categories** when approving (*Categories*: at least one stays, and a change replaces the

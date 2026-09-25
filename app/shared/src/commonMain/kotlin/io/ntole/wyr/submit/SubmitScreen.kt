@@ -245,9 +245,20 @@ private fun FailureText(failure: SubmitFailure) {
     Text(text = failureMessage(failure), color = MaterialTheme.colorScheme.error)
 }
 
-/** Submitting pays nothing by itself (CLAUDE.md §8c): an author earns through likes. */
+/**
+ * What submitting a question costs, in points (CLAUDE.md §8c): the server's `Scoring.SUBMISSION_COST`,
+ * which no client can see, copied for the screen's words alone. The server charges it, and says
+ * `NOT_ENOUGH_POINTS` whatever this says, so a change to the one is a change to the other.
+ */
+internal const val SUBMISSION_COST: Int = 1
+
+/**
+ * Submitting costs a point, paid back on a rejection, and earns nothing by itself (CLAUDE.md §8c): an
+ * author earns through likes.
+ */
 internal const val POINTS_NOTE: String =
-    "Submitting earns no points, but once approved, each like your question gets earns you 1."
+    "Submitting a question costs $SUBMISSION_COST point, paid back if it is rejected. " +
+        "Once approved, each like it gets earns you 1."
 
 internal const val SENT_NOTE: String = "Sent. It waits below for a moderator to review it."
 
@@ -291,6 +302,10 @@ internal fun failureMessage(failure: SubmitFailure): String =
         DomainError.SUBMISSION_LIMIT -> {
             "You have ${SubmissionRules.MAX_PENDING_SUBMISSIONS} questions waiting for review already. " +
                 "Send more once one is reviewed."
+        }
+
+        DomainError.NOT_ENOUGH_POINTS -> {
+            "You need $SUBMISSION_COST point to submit. Answer a question to earn it."
         }
 
         DomainError.RATE_LIMITED -> {

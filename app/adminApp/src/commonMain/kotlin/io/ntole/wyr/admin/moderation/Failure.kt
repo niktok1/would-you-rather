@@ -83,6 +83,7 @@ private fun describe(
         DomainError.ALREADY_VOTED,
         DomainError.INVALID_SUBMISSION,
         DomainError.SUBMISSION_LIMIT,
+        DomainError.NOT_ENOUGH_POINTS,
         DomainError.OUT_OF_QUESTIONS,
         DomainError.INVALID_USERNAME,
         DomainError.INVALID_PASSWORD,

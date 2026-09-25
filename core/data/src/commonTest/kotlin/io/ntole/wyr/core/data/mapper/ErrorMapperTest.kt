@@ -22,8 +22,8 @@ class ErrorMapperTest {
                     ApiException(ErrorCode.VALIDATION_FAILED, status = 400) to DomainError.SERVER,
                     ApiException(ErrorCode.INVALID_SUBMISSION, status = 422) to DomainError.INVALID_SUBMISSION,
                     ApiException(ErrorCode.SUBMISSION_LIMIT, status = 409) to DomainError.SUBMISSION_LIMIT,
-                    // Until a client names it: never SUBMISSION_LIMIT, which would say 20 are pending.
-                    ApiException(ErrorCode.NOT_ENOUGH_POINTS, status = 409) to DomainError.UNKNOWN,
+                    // A 409 of its own: never SUBMISSION_LIMIT, which would say 20 are pending.
+                    ApiException(ErrorCode.NOT_ENOUGH_POINTS, status = 409) to DomainError.NOT_ENOUGH_POINTS,
                     ApiException(ErrorCode.ALREADY_DECIDED, status = 409) to DomainError.ALREADY_DECIDED,
                     ApiException(ErrorCode.WRONG_STATUS, status = 409) to DomainError.WRONG_STATUS,
                     // No client adds or renames a category yet.

@@ -610,6 +610,7 @@ private fun message(error: DomainError): String =
         DomainError.ALREADY_VOTED -> "You've already answered that one."
         DomainError.INVALID_SUBMISSION -> "That question can't be sent as written."
         DomainError.SUBMISSION_LIMIT -> "You have too many questions waiting for review."
+        DomainError.NOT_ENOUGH_POINTS -> "You need more points for that."
         DomainError.ALREADY_DECIDED -> "That question has already been reviewed."
         DomainError.WRONG_STATUS -> "That question can't be changed that way right now."
         DomainError.FORBIDDEN -> "That needs a moderator."

@@ -162,6 +162,25 @@ class DefaultSubmissionRepositoryTest {
         }
 
     @Test
+    fun `a submission its author cannot pay for is NOT_ENOUGH_POINTS`() =
+        runTest {
+            server.refuseSubmissionsWith =
+                HttpStatusCode.Conflict to ErrorDto("submitting costs 1 points", ErrorCode.NOT_ENOUGH_POINTS)
+            val store = storeHolding(session("a"))
+
+            val failure =
+                assertFailsWith<WyrException> {
+                    repositoryOver(store).submit("Fly", "Swim", setOf(Category.FOOD))
+                }
+
+            assertEquals(DomainError.NOT_ENOUGH_POINTS, failure.error)
+            // Sent once and the session left alone: the player's to put right, by answering.
+            assertEquals(1, server.submissionsSentAs.size)
+            assertEquals(0, server.guestsMinted)
+            assertEquals(session("a"), store.read())
+        }
+
+    @Test
     fun `a submission under no category or under OTHER is refused before anything is sent`() =
         runTest {
             val submissions = repositoryOver(storeHolding(session("a")))

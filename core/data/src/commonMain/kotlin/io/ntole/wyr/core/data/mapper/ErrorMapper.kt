@@ -98,14 +98,13 @@ internal fun ErrorCode.toDomain(): DomainError =
         // side, not something a player did.
         ErrorCode.VALIDATION_FAILED -> DomainError.SERVER
 
-        // Unlike VALIDATION_FAILED, both are the player's to put right, so they keep their own.
+        // Unlike VALIDATION_FAILED, all three are the player's to put right, so they keep their own:
+        // NOT_ENOUGH_POINTS by answering, which earns what submitting costs.
         ErrorCode.INVALID_SUBMISSION -> DomainError.INVALID_SUBMISSION
 
         ErrorCode.SUBMISSION_LIMIT -> DomainError.SUBMISSION_LIMIT
 
-        // The player's to put right, by answering, but no DomainError names it yet: the next client
-        // branch gives it one, and shows the cost before the player submits.
-        ErrorCode.NOT_ENOUGH_POINTS -> DomainError.UNKNOWN
+        ErrorCode.NOT_ENOUGH_POINTS -> DomainError.NOT_ENOUGH_POINTS
 
         ErrorCode.ALREADY_DECIDED -> DomainError.ALREADY_DECIDED
 

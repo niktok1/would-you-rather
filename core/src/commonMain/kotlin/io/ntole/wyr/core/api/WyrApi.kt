@@ -76,11 +76,14 @@ public object WyrApi {
          *
          * POST: submits a question of the session player's own, with a
          * [io.ntole.wyr.core.question.SubmitQuestionRequest], answered 201 with its
-         * [io.ntole.wyr.core.question.SubmissionDto]. Requires a session, and earns nothing. The
+         * [io.ntole.wyr.core.question.SubmissionDto]. Requires a session, earns nothing, and costs
+         * its author a point (CLAUDE.md §8c), which a rejection pays back. The
          * question is stored pending and served to nobody until a moderator approves it, and then to
          * every player, its author included (CLAUDE.md §8d). A player may have at most
          * [Limits.MAX_PENDING_SUBMISSIONS] pending at once, and one more is refused with 409
-         * [io.ntole.wyr.core.error.ErrorCode.SUBMISSION_LIMIT]. Options the rules refuse are 422
+         * [io.ntole.wyr.core.error.ErrorCode.SUBMISSION_LIMIT]; an author with fewer points than it
+         * costs, with 409 [io.ntole.wyr.core.error.ErrorCode.NOT_ENOUGH_POINTS], nothing stored or
+         * taken. Options the rules refuse are 422
          * [io.ntole.wyr.core.error.ErrorCode.INVALID_SUBMISSION]; a malformed body, or one naming no
          * category or an id no category has, is 400
          * [io.ntole.wyr.core.error.ErrorCode.VALIDATION_FAILED].

@@ -20,6 +20,12 @@ public enum class DomainError {
     /** The player has as many submissions waiting for a moderator as they may have at once. */
     SUBMISSION_LIMIT,
 
+    /**
+     * The player has fewer points than submitting a question costs (CLAUDE.md §8c). Nothing was
+     * stored or taken; answering earns the points.
+     */
+    NOT_ENOUGH_POINTS,
+
     /** A moderator tried to decide a submission that a moderator has already approved or rejected. */
     ALREADY_DECIDED,
 

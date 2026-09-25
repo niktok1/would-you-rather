@@ -17,8 +17,10 @@ public interface SubmissionRepository {
      *   sent nothing.
      * @throws io.ntole.wyr.core.domain.error.WyrException on any other failure, with
      *   [io.ntole.wyr.core.domain.error.DomainError.INVALID_SUBMISSION] for options the server's
-     *   rules refuse and [io.ntole.wyr.core.domain.error.DomainError.SUBMISSION_LIMIT] when the
-     *   player already has as many submissions pending as they may.
+     *   rules refuse, [io.ntole.wyr.core.domain.error.DomainError.SUBMISSION_LIMIT] when the
+     *   player already has as many submissions pending as they may, and
+     *   [io.ntole.wyr.core.domain.error.DomainError.NOT_ENOUGH_POINTS] when they have fewer points
+     *   than submitting costs (CLAUDE.md §8c), which a stored question has taken from them.
      */
     public suspend fun submit(
         optionA: String,
