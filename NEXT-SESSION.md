@@ -630,7 +630,29 @@ RATE_LIMIT_GUESTS_PER_HOUR=1000 ./gradlew :server:run
 ### Accounts
 
 A guest registers to keep its points and logs in with the same name and password on another device
-(CLAUDE.md §8a, *Accounts*). No client does either yet, so by curl, against `./gradlew :server:run`:
+(CLAUDE.md §8a, *Accounts*). The game's **Account** tab does both, in every build, PROD's included
+(§8d, *Current focus*).
+
+**To try it on a phone** (`devDebug`, Android Studio's default variant, against the dev server; dev
+is in-memory H2, so a deploy or a free-tier spin-down forgets every account):
+
+1. Install and open *WYR Dev*: `./gradlew :app:androidApp:installDevDebug`. The first read mints a
+   guest. Answer a few questions on **Play**.
+2. **Account** shows *Playing as guest* and the points. Under *Register*, type a username (3 to 20 of
+   letters, digits and `_`; the hint under the field turns red at a space or a bad length and
+   Register stays off) and a password (6 or more; *Show* reveals it), then **Register**. The tab
+   shows *Logged in as* the name, lower-cased, with the same points. Android's password manager
+   offers to save the two as the form goes.
+3. Uninstall the app and install it again: a fresh guest with no points.
+4. **Account** → *Log in* with the same name (any case) and password (the password manager offers
+   to fill them). With points as a guest, the first *Log in* shows the warning that they stay
+   behind, and *Log in anyway* goes ahead. The tab then shows the account and its points, and Play
+   goes on as it.
+5. **Log out**: the device plays on as a fresh guest, and the account is only a login away. A wrong
+   password shows *Wrong username or password.* under Log in; a name another player has shows
+   *That username is taken.* under Register.
+
+The same by curl, against `./gradlew :server:run`:
 
 ```bash
 ACCESS=$(curl -s -X POST localhost:8080/v1/auth/guest | python3 -c 'import sys,json; print(json.load(sys.stdin)["accessToken"])')

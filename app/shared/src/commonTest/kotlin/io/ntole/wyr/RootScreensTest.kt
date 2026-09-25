@@ -4,12 +4,13 @@ import io.ntole.wyr.core.network.environment.WyrEnvironment
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 
 /** Which root screens each environment's build shows, and which it opens on. */
 class RootScreensTest {
     @Test
-    fun `a prod build shows the Play screen alone`() {
-        assertEquals(listOf(RootScreen.Play), rootScreensFor(WyrEnvironment.PROD))
+    fun `a prod build opens on Play with Account beside it`() {
+        assertEquals(listOf(RootScreen.Play, RootScreen.Account), rootScreensFor(WyrEnvironment.PROD))
     }
 
     @Test
@@ -20,9 +21,20 @@ class RootScreensTest {
     }
 
     @Test
-    fun `local and dev builds open on the console with Play beside it`() {
+    fun `every build can reach the Account screen`() {
+        WyrEnvironment.entries.forEach { environment ->
+            assertTrue(RootScreen.Account in rootScreensFor(environment), environment.name)
+        }
+    }
+
+    @Test
+    fun `local and dev builds open on the console with the game beside it`() {
         listOf(WyrEnvironment.LOCAL, WyrEnvironment.DEV).forEach { environment ->
-            assertEquals(listOf(RootScreen.Console, RootScreen.Play), rootScreensFor(environment), environment.name)
+            assertEquals(
+                listOf(RootScreen.Console, RootScreen.Play, RootScreen.Account),
+                rootScreensFor(environment),
+                environment.name,
+            )
         }
     }
 }

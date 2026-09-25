@@ -1,5 +1,6 @@
 package io.ntole.wyr.di
 
+import io.ntole.wyr.account.AccountViewModel
 import io.ntole.wyr.core.data.di.dataModule
 import io.ntole.wyr.core.network.environment.WyrEnvironment
 import io.ntole.wyr.dev.DevConsoleViewModel
@@ -16,6 +17,7 @@ import org.koin.dsl.module
 internal val uiModule =
     module {
         viewModelOf(::PlayViewModel)
+        viewModelOf(::AccountViewModel)
 
         // Not viewModelOf: the time source is a default, not a binding.
         viewModel {

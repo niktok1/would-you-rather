@@ -492,7 +492,7 @@ EncryptedSharedPreferences: enough for a game that stores nothing personal.
 
 ## 8b. Open decisions (resolve before relevant work)
 
-- **Accounts** — *decided 2026-09-25; built on the server (§8a, *Accounts*), the client next.* This
+- **Accounts** — *decided 2026-09-25; built (§8a, *Accounts*; the Account screen, §8d).* This
   is a simple game that stores nothing personal, and most players stay a day or a few, so the
   simplest design that is correct enough wins over maximum security. A new player plays at once as a
   guest (§8a). **Register** is optional and keeps the guest's points; **log in** is how a registered
@@ -765,11 +765,33 @@ it here (and §8c, for scoring) in the same commit.
 answer what they think is popular instead of what they actually prefer. A mode that explicitly
 rewards reading the crowd may come later as a separate, opt-in mode, never as the default.
 
-**Current focus.** UI polish is paused. Functionality ships behind a plain engineering dev
-console, the default root screen of a LOCAL or DEV build, where `PlayScreen` stays as a frozen second
-tab; a PROD build shows `PlayScreen` alone (§8e).
-The console is built, in `io.ntole.wyr.dev` (`:app:shared`). A feature adds its section there,
-and every request shows in its HTTP trace (`HttpTrace` in `:core:network`, never headers or bodies).
+**Current focus.** UI polish is paused. Functionality was built behind a plain engineering dev
+console, the default root screen of a LOCAL or DEV build, with the game's screens as further tabs; a
+PROD build shows the game's screens alone, opening on the frozen `PlayScreen` (§8e). The console is
+in `io.ntole.wyr.dev` (`:app:shared`), and every request shows in its HTTP trace (`HttpTrace` in
+`:core:network`, never headers or bodies). **Features now move into the game one by one**
+(*decided 2026-09-25*): each gets a plain screen of the game's, reachable in every build, PROD's
+included, and its console section is retired; once the last has moved, a small Diagnostics screen
+(the environment, the session, the HTTP trace) stays in dev builds and the console goes. A feature
+not moved yet still adds its section to the console. Navigation is the root tab row (`App.kt`,
+`rootScreensFor`), no library. The first to move is the **Account screen** (`io.ntole.wyr.account`,
+§8a *Accounts*), which the console never had forms for:
+- It shows *Playing as guest* or *Logged in as* the username, and the player's points, read through
+  `GetPlayerStats` each time the tab is shown, since the points move on Play meanwhile. A guest gets
+  **Register** (username, and password with a show/hide toggle), which keeps the points, and **Log
+  in**; a registered player gets **Log out**, after which the device plays on as a fresh guest.
+- Register says what `AccountRules` refuses as it is typed, and sends nothing until both fields
+  pass. A refusal from the server shows under the form that sent it: a taken name, a wrong login, a
+  rate limit with its wait, offline. A guest with points who logs in is warned once that the
+  guest's points stay behind (register first to keep them), and the next *Log in anyway* goes ahead.
+- Each field names its autofill content type (`NewUsername` and `NewPassword` to register,
+  `Username` and `Password` to log in), so the phone's password manager can fill them and offer to
+  save them once a register or login that worked takes the forms off the screen (Compose on Android
+  commits autofill when no autofillable field is left, so nothing typed is cleared before then).
+  What is typed lives in `AccountViewModel`'s memory only, never in saved state.
+- One action at a time, and the player read again after every one, a failed one too: a registration
+  whose answer was lost shows as the account it made. `AccountViewModelTest` drives it over fakes and
+  `AccountScreenDrawTest` draws every state in both themes; theme tokens only (§5b).
 
 - **Scoring** *(built; see §8c)*: every answer earns exactly **1 point**, whichever side
   it picks. There is no majority bonus and no streak: the streak is removed from the server, the
@@ -1107,7 +1129,8 @@ base URL, a display name, and whether a build for it shows the developer tools. 
 - *In the app.* Koin binds the environment (`appModules`), and `dataModule` sends every request to
   that same environment's URL, so the dev console's header, which shows its name and URL, always says
   where requests go. The console tab is shown only where the environment shows developer
-  tools (`rootScreensFor`): a PROD build shows the Play screen alone, with no tab to reach the console.
+  tools (`rootScreensFor`): a PROD build shows the game's screens alone, Play and Account, with no tab
+  to reach the console.
   The moderation app binds its environment the same way (`adminModules`), and names it on every
   screen, whatever the environment: its header shows the server's name and URL, production's in the
   error colors, and the desktop window's title shows both too (`windowTitleOf`).

@@ -89,6 +89,10 @@ kotlin {
             implementation(libs.kotlin.test)
             implementation(libs.kotlinx.coroutinesTest)
         }
+        jvmTest.dependencies {
+            // This machine's Skia, so a test can draw a screen off screen (ImageComposeScene).
+            implementation(compose.desktop.currentOs)
+        }
     }
 }
 
