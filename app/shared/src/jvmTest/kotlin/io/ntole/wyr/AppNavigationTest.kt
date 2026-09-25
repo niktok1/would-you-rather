@@ -327,7 +327,7 @@ class AppNavigationTest {
 
             scene.tap("Храна")
             scene.tap("Етика")
-            scene.tap(CYRILLIC.categoriesScreen.play)
+            scene.tap(CYRILLIC.play)
 
             assertEquals(listOf(CYRILLIC.home, CYRILLIC.account), scene.descriptions().take(2))
             assertEquals(listOf(setOf("FOOD", "ETHICS")), game.categoryChanges)

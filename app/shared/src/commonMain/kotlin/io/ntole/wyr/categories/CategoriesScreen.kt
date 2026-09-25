@@ -30,8 +30,10 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
+import io.ntole.wyr.core.domain.error.DomainError
 import io.ntole.wyr.language.LocalLanguage
 import io.ntole.wyr.language.LocalStrings
+import io.ntole.wyr.language.Strings
 import io.ntole.wyr.language.categoryName
 import io.ntole.wyr.theme.WyrThemeAccessors
 import io.ntole.wyr.theme.WyrTypeScale
@@ -53,7 +55,8 @@ fun CategoriesScreen(
 ) {
     val colors = WyrThemeAccessors.colors
     val dimens = WyrThemeAccessors.dimens
-    val strings = LocalStrings.current.categoriesScreen
+    val shared = LocalStrings.current
+    val strings = shared.categoriesScreen
     val language = LocalLanguage.current
 
     Surface(color = colors.pageBackground, contentColor = colors.primaryText, modifier = modifier.fillMaxSize()) {
@@ -70,12 +73,12 @@ fun CategoriesScreen(
             if (state.failure != null) {
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                     Text(
-                        text = strings.cannotLoad,
+                        text = unreadText(state.failure, shared),
                         color = MaterialTheme.colorScheme.error,
                         fontSize = WyrTypeScale.statLabel,
                         modifier = Modifier.weight(1f),
                     )
-                    TextButton(onClick = actions::refresh, enabled = !state.isLoading) { Text(strings.tryAgain) }
+                    TextButton(onClick = actions::refresh, enabled = !state.isLoading) { Text(shared.tryAgain) }
                 }
             }
 
@@ -123,11 +126,24 @@ fun CategoriesScreen(
                         modifier = Modifier.weight(1f),
                     )
                 }
-                Button(onClick = actions::play, enabled = !state.isPlaying) { Text(strings.play, maxLines = 1) }
+                Button(onClick = actions::play, enabled = !state.isPlaying) { Text(shared.play, maxLines = 1) }
             }
         }
     }
 }
+
+/**
+ * Why the categories could not be read, in one short sentence of the game's own: offline as the Play
+ * screen it is opened from says it, and anything else as the Submit form says it of its categories.
+ */
+internal fun unreadText(
+    error: DomainError,
+    strings: Strings,
+): String =
+    when (error) {
+        DomainError.NETWORK -> strings.playScreen.cannotReach
+        else -> strings.categoriesUnread
+    }
 
 /** A line under All when nothing is listed, [content] in its middle. */
 @Composable

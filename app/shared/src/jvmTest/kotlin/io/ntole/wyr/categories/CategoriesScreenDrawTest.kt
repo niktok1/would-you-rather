@@ -64,17 +64,18 @@ class CategoriesScreenDrawTest {
     @Test
     fun `the screen fits a short phone with hundreds of categories`() {
         Language.entries.forEach { language ->
-            val strings = stringsOf(language).categoriesScreen
+            val shared = stringsOf(language)
+            val strings = shared.categoriesScreen
             val state =
                 CategoriesState(ticked = MANY_TICKED, categories = MANY, found = MANY, failure = DomainError.NETWORK)
             val scene = scene(state, language)
             try {
-                val play = assertNotNull(scene.nodes().singleOrNull { strings.play in it.texts }, "$language")
+                val play = assertNotNull(scene.nodes().singleOrNull { shared.play in it.texts }, "$language")
                 assertTrue(play.boundsInRoot.bottom <= SHORT_PHONE_HEIGHT, "$language: Play at ${play.boundsInRoot}")
                 assertTrue(play.boundsInRoot.right <= SHORT_PHONE_WIDTH, "$language: Play at ${play.boundsInRoot}")
                 assertTrue(scene.searchField().boundsInRoot.top >= 0f, "$language")
                 assertTrue(strings.selectedCount(MANY_TICKED.size) in scene.allTexts(), "$language")
-                assertTrue(strings.tryAgain in scene.texts(), "$language")
+                assertTrue(shared.tryAgain in scene.texts(), "$language")
                 assertEquals(emptyList(), scene.cutShort(), "$language")
 
                 val shown = MANY.count { categoryName(it, language) in scene.texts() }
@@ -99,7 +100,7 @@ class CategoriesScreenDrawTest {
             scene.settle()
 
             assertTrue(last in scene.texts(), "${scene.texts()}")
-            val play = scene.nodes().single { stringsOf(language).categoriesScreen.play in it.texts }
+            val play = scene.nodes().single { stringsOf(language).play in it.texts }
             assertTrue(play.boundsInRoot.bottom <= SHORT_PHONE_HEIGHT)
         } finally {
             scene.close()
@@ -115,7 +116,7 @@ class CategoriesScreenDrawTest {
                 scene(CategoriesState(categories = KNOWN, found = KNOWN), language, width = WIDTH, height = HEIGHT)
             try {
                 val names = KNOWN.map { categoryName(it, language) }
-                val expected = listOf(strings.search, strings.all) + names + strings.play
+                val expected = listOf(strings.search, strings.all) + names + stringsOf(language).play
                 assertEquals(expected, scene.allTexts(), "$language")
                 assertEquals(emptyList(), scene.descriptions(), "$language")
             } finally {
@@ -195,7 +196,7 @@ class CategoriesScreenDrawTest {
             val scene = scene(CategoriesState(query = "xyz", categories = KNOWN, found = emptyList()), language)
             try {
                 // The search field shows what is typed, not its hint, and says it as no text of its own.
-                assertEquals(listOf(strings.all, strings.noMatch, strings.play), scene.texts(), "$language")
+                assertEquals(listOf(strings.all, strings.noMatch, stringsOf(language).play), scene.texts(), "$language")
             } finally {
                 scene.close()
             }
@@ -216,40 +217,51 @@ class CategoriesScreenDrawTest {
         }
     }
 
+    /** Offline as the Play screen says it, anything else as the Submit form does, beside the game's Try again. */
     @Test
     fun `a failed read says so above the list with Try again`() {
         Language.entries.forEach { language ->
-            val strings = stringsOf(language).categoriesScreen
-            listOf(emptyList(), KNOWN).forEach { known ->
-                val state = CategoriesState(categories = known, found = known, failure = DomainError.NETWORK)
-                val scene = scene(state, language)
-                try {
-                    // One line, the button's text drawn a little higher than the failure's: either first.
-                    val texts = scene.texts().filter { it != strings.search }
-                    assertEquals(setOf(strings.cannotLoad, strings.tryAgain), texts.take(2).toSet(), "$language")
-                    assertEquals(strings.all, texts[2], "$language")
-                    val names = known.map { categoryName(it, language) }
-                    assertEquals(names, texts.filter { it in names }, "$language")
-                } finally {
-                    scene.close()
+            val shared = stringsOf(language)
+            val failures =
+                mapOf(
+                    DomainError.NETWORK to shared.playScreen.cannotReach,
+                    DomainError.SERVER to shared.categoriesUnread,
+                )
+            failures.forEach { (failure, said) ->
+                listOf(emptyList(), KNOWN).forEach { known ->
+                    val state = CategoriesState(categories = known, found = known, failure = failure)
+                    val scene = scene(state, language)
+                    try {
+                        // One line, the button's text drawn a little higher than the failure's: either first.
+                        val texts = scene.texts().filter { it != shared.categoriesScreen.search }
+                        assertEquals(setOf(said, shared.tryAgain), texts.take(2).toSet(), "$failure in $language")
+                        assertEquals(shared.categoriesScreen.all, texts[2], "$language")
+                        val names = known.map { categoryName(it, language) }
+                        assertEquals(names, texts.filter { it in names }, "$language")
+                    } finally {
+                        scene.close()
+                    }
                 }
             }
         }
+        assertEquals("Игра није доступна.", unreadText(DomainError.NETWORK, stringsOf(Language.SERBIAN_CYRILLIC)))
+        assertEquals("Kategorije nisu učitane.", unreadText(DomainError.SERVER, stringsOf(Language.SERBIAN_LATIN)))
+        assertEquals("Couldn't load the categories.", unreadText(DomainError.SERVER, stringsOf(Language.ENGLISH)))
     }
 
     @Test
     fun `every line and button does what it says`() {
         Language.entries.forEach { language ->
-            val strings = stringsOf(language).categoriesScreen
+            val shared = stringsOf(language)
             val actions = RecordedActions()
             val state = CategoriesState(categories = KNOWN, found = KNOWN, failure = DomainError.SERVER)
             val scene = scene(state, language, actions = actions)
             try {
                 scene.tap(categoryName(KNOWN[2], language))
-                scene.tap(strings.all)
-                scene.tap(strings.tryAgain)
+                scene.tap(shared.categoriesScreen.all)
+                scene.tap(shared.tryAgain)
                 scene.type("хр")
-                scene.tap(strings.play)
+                scene.tap(shared.play)
 
                 assertEquals(
                     listOf("toggle ETHICS", "selectAll", "refresh", "search хр", "play"),
@@ -265,11 +277,11 @@ class CategoriesScreenDrawTest {
     @Test
     fun `nothing can be ticked or played again while Play is sent`() {
         val language = Language.SERBIAN_CYRILLIC
-        val strings = stringsOf(language).categoriesScreen
+        val strings = stringsOf(language)
         val state = CategoriesState(ticked = setOf("FOOD"), categories = KNOWN, found = KNOWN, isPlaying = true)
         val scene = scene(state, language)
         try {
-            val offs = listOf(strings.all, "Храна", "Етика", strings.play)
+            val offs = listOf(strings.categoriesScreen.all, "Храна", "Етика", strings.play)
             offs.forEach { text ->
                 val node = scene.nodes().single { text in it.texts }
                 assertTrue(node.config.contains(SemanticsProperties.Disabled), "$text is on")

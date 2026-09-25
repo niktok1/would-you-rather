@@ -22,7 +22,8 @@ data class PlayStrings(
     val loading: String,
     /**
      * No answer from the server, worded for both of the reasons it can have: the phone is offline,
-     * or the server is down or too slow to answer.
+     * or the server is down or too slow to answer. The Categories screen, opened from this one, says
+     * it too.
      */
     val cannotReach: String,
     /** Nothing to serve, in the categories played or at all. */

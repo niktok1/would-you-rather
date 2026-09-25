@@ -587,10 +587,11 @@ EncryptedSharedPreferences: enough for a game that stores nothing personal.
   room, so a long name shows whole at 375 wide. The options: keep it; or the points always in the
   middle, and a long name cut short.
 - **One Try again** — *provisional — user decision.* The Play and Account redesigns said Try again
-  two ways in Serbian, *Пробај опет* and *Покушај поново*; it is one text now (§8f, *The strings*),
-  *Покушај поново*, which four of the five screens and the Account screens' *Нешто није у реду.
-  Покушај поново.* already used. The options: keep it; or *Пробај опет*, a little shorter, in
-  `Strings.tryAgain` and that sentence both.
+  two ways in Serbian, *Пробај опет* and *Покушај поново*, and so did the Categories screen, with
+  *Пробај опет*; it is one text now (§8f, *The strings*), *Покушај поново*, which four of the five
+  screens before it and the Account screens' *Нешто није у реду. Покушај поново.* already used. The
+  options: keep it; or *Пробај опет*, a little shorter, in `Strings.tryAgain` and that sentence
+  both.
 - **What submitting cost, on the Account screen** — *provisional — user decision.* The Account card
   shows the points and its four counts and not `pointsSpent` (§8d, *Stats*). Two of the four, the
   answers given and the likes received, are terms of §8c's sum, so once a question has cost a point
@@ -1154,16 +1155,18 @@ listed on the Account screen.
     stays ticked, and a search that finds none says so under Све. Each visit starts from the
     categories played, nothing searched (`CategoriesViewModel.open`, called by the Play screen's
     tap, so a rotation keeps what is ticked), and reads the list (`GetCategories`) as it is shown: a
-    read that fails says so above the list, with *Пробај опет*, the categories read before staying
-    to tick, and with none read before a spinner shows while it reads. **Играј** sets what is ticked
-    in one `QuestionRepository.setCategories`, waits for it to land, the list and Играј off
-    meanwhile, then goes back to the Play screen, which shows a question from it (*The client*,
-    above); what is played already is not sent again, so the question stays. Back, the arrow or
-    Android's, plays nothing. `CategoriesViewModelTest`, `CategoriesScreenDrawTest` (every state in
-    both themes and every language at 400x900 and 375x599; with 301 categories at 375x599 the search
-    field and Play on screen, nothing cut short, only the lines that fit composed, and the list
-    scrolled to its last), `AppNavigationTest` (Play, Categories and back, played or not),
-    `NavigatorTest`, `TopBarsDrawTest`.
+    read that fails says so above the list, *Игра није доступна.* offline, as the Play screen says
+    it, and *Категорије нису учитане.* otherwise (`unreadText`), with *Покушај поново*
+    (`Strings.tryAgain`), the categories read before staying to tick, and with none read before a
+    spinner shows while it reads. **Играј** sets what is ticked in one
+    `QuestionRepository.setCategories`, waits for it to land, the list and Играј off meanwhile, then
+    goes back to the Play screen, which shows a question from it (*The client*, above); what is
+    played already is not sent again, so the question stays. Back, the arrow or Android's, plays
+    nothing. `CategoriesViewModelTest`, `CategoriesScreenDrawTest` (every state in both themes and
+    every language at 400x900 and 375x599; with 301 categories at 375x599 the search field and Play
+    on screen, nothing cut short, only the lines that fit composed, and the list scrolled to its
+    last), `AppNavigationTest` (Play, Categories and back, played or not), `NavigatorTest`,
+    `TopBarsDrawTest`.
   - *A known limit:* the game's picker is a screen of its own, searched and lazy (*The Categories
     screen*), but the Submit form, the moderation app's category filter and each pending card lay out
     every chip in place, to be scrolled past, which suits tens of categories, not the hundreds
@@ -1572,16 +1575,16 @@ hand, so the two cannot say different things; and **English** stands beside them
   (*Шта би радије?*, *Would You Rather?*) and *Играј*; the top bars and the icons' names (*Почетна*,
   *Налог*, *Назад*); the switch's name, *Језик*; the Play screen's words (`PlayStrings`,
   `Strings.playScreen`); the Categories screen (`CategoryStrings`, `Strings.categoriesScreen`:
-  *Претражи категорије*, *Све*, *Изабрано: 3*, *Нема резултата*, *Категорије се нису учитале.*,
-  *Пробај опет*, *Учитавање* for a screen reader, and *Играј*); the Account screen, whole, with My
-  questions and the server line; the Auth page, whole; and the Submit screen's form, whole
-  (`Strings.accountScreens`, an `AccountStrings` of the Account screen's words and those of the
-  pages opened from it). **Try again** is one text of `Strings`, `tryAgain`, *Покушај поново*
-  (*provisional*, §8b), under a failure on Play, the Account screen, My questions, the Auth page and
-  the Submit form, so the game says it one way, but for the Categories screen's own *Пробај опет*;
+  *Претражи категорије*, *Све*, *Изабрано: 3*, *Нема резултата* and *Учитавање* for a screen
+  reader); the Account screen, whole, with My questions and the server line; the Auth page, whole;
+  and the Submit screen's form, whole (`Strings.accountScreens`, an `AccountStrings` of the Account
+  screen's words and those of the pages opened from it). **Try again** is one text of `Strings`,
+  `tryAgain`, *Покушај поново* (*provisional*, §8b), under a failure on Play, the Categories screen,
+  the Account screen, My questions, the Auth page and the Submit form, so the game says it one way;
   the Account screens' *Нешто није у реду. Покушај поново.* asks in its words, and `StringsTest`
   holds the two together. So are *Откажи* (`cancel`), on the Auth page's warning, and *Категорије
-  нису учитане.* (`categoriesUnread`), under the Submit form's categories.
+  нису учитане.* (`categoriesUnread`), on the Categories screen and under the Submit form's
+  categories alike, and the Categories screen's Play is the Home screen's *Играј* (`Strings.play`).
 - **The categories' names** *(built)*: the server's, not `Strings`, since a moderator adds and
   renames categories without a build (§8d, *Categories*): `nameSr` in Serbian Cyrillic,
   `SerbianScript.toLatin(nameSr)` in Serbian Latin, as every Latin text is made, and `nameEn` in

@@ -16,7 +16,10 @@ import io.ntole.wyr.core.domain.language.SerbianScript
 data class Strings(
     /** The game's name, on the Home screen. */
     val gameName: String,
-    /** The Home screen's one button, into the game. */
+    /**
+     * The Home screen's one button, into the game, and the Categories screen's, which plays what is
+     * ticked. One text, so the game says it one way.
+     */
     val play: String,
     /**
      * After a number of points, their unit, the one the whole game writes: *123 П*. Serbian's is
@@ -24,8 +27,9 @@ data class Strings(
      */
     val pointsUnit: String,
     /**
-     * The button under a failure, on every screen that has one: the Play screen, the Account screen,
-     * My questions, the Auth page and the Submit form. One text, so the game says it one way.
+     * The button under a failure, on every screen that has one: the Play screen, the Categories
+     * screen, the Account screen, My questions, the Auth page and the Submit form. One text, so the
+     * game says it one way.
      */
     val tryAgain: String,
     /**
@@ -34,8 +38,8 @@ data class Strings(
      */
     val cancel: String,
     /**
-     * Why the categories could not be read from the server, for any reason but being offline: under
-     * the Submit form's categories.
+     * Why the categories could not be read from the server, for any reason but being offline: on the
+     * Categories screen and under the Submit form's categories alike.
      */
     val categoriesUnread: String,
     /** The Play screen's words. */

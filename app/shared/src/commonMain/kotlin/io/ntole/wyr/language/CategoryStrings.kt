@@ -3,7 +3,9 @@ package io.ntole.wyr.language
 /**
  * The Categories screen's words (CLAUDE.md §8d, *Categories*; §8f), a part of [Strings] of their own
  * so the screen's texts stand together. Short, the user asking for less text: the category names
- * themselves are the server's, named by [categoryName], not these.
+ * themselves are the server's, named by [categoryName], not these, and its Play, Try again and the
+ * failure beside it are the game's, [Strings.play], [Strings.tryAgain], [Strings.categoriesUnread]
+ * and [PlayStrings.cannotReach].
  */
 data class CategoryStrings(
     /** The search field's hint, and the screen's only title. */
@@ -14,14 +16,8 @@ data class CategoryStrings(
     val selected: String,
     /** Under All, when the search finds no category. */
     val noMatch: String,
-    /** The read of the categories failed. */
-    val cannotLoad: String,
-    /** The button beside that failure, which reads them again. */
-    val tryAgain: String,
     /** The spinner's name, for a screen reader, while the categories are read with none read before. */
     val loading: String,
-    /** The one action: play the categories ticked, and back to the Play screen. */
-    val play: String,
 ) {
     /** How many categories are ticked, as the screen shows it beside Play: *Изабрано: 3*. */
     fun selectedCount(count: Int): String = "$selected: $count"
@@ -33,10 +29,7 @@ data class CategoryStrings(
             all = transform(all),
             selected = transform(selected),
             noMatch = transform(noMatch),
-            cannotLoad = transform(cannotLoad),
-            tryAgain = transform(tryAgain),
             loading = transform(loading),
-            play = transform(play),
         )
 }
 
@@ -47,10 +40,7 @@ internal val SerbianCyrillicCategoryStrings: CategoryStrings =
         all = "Све",
         selected = "Изабрано",
         noMatch = "Нема резултата",
-        cannotLoad = "Категорије се нису учитале.",
-        tryAgain = "Пробај опет",
         loading = "Учитавање",
-        play = "Играј",
     )
 
 internal val EnglishCategoryStrings: CategoryStrings =
@@ -59,8 +49,5 @@ internal val EnglishCategoryStrings: CategoryStrings =
         all = "All",
         selected = "Selected",
         noMatch = "No results",
-        cannotLoad = "Couldn't load the categories.",
-        tryAgain = "Try again",
         loading = "Loading",
-        play = "Play",
     )
