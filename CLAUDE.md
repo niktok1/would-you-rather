@@ -437,8 +437,12 @@ EncryptedSharedPreferences: enough for a game that stores nothing personal.
   wins over maximum security. A new player plays at once as a guest (§8a). **Register** is optional
   and keeps the guest's points; **log in** is how a registered player gets their account on another
   device, and the app saves the credentials by itself. Passwords are hashed on the server and never
-  logged. No email is collected, so there is **no password reset**: a forgotten password means a new
-  account. No-click sign-in (Play Games Services on Android, Game Center on iOS) comes later, once
+  logged (`Passwords`: PBKDF2-HMAC-SHA256 from the JDK, no library, 100,000 iterations over a 16-byte
+  salt of each password's own, about 9 ms warm on the development machine and so, by estimate, 0.1 to
+  0.2 s on Render's tenth of a CPU). A stored hash names its algorithm and cost,
+  `pbkdf2-sha256$<iterations>$<salt>$<hash>`, so the cost can be raised later and the hashes already
+  stored still verify; nothing rehashes one at a new cost yet. No email is collected, so there is
+  **no password reset**: a forgotten password means a new account. No-click sign-in (Play Games Services on Android, Game Center on iOS) comes later, once
   there is an Apple developer account. This replaces the recovery secret (V4), which is gone from
   the server and every client; its column stays, unused, until a later migration drops it.
 - **SQLDelight cache** — see §4. Needs a per-platform split because of web. Lower priority now
