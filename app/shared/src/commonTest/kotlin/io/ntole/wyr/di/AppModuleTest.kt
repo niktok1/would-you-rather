@@ -1,6 +1,7 @@
 package io.ntole.wyr.di
 
 import io.ntole.wyr.account.AccountViewModel
+import io.ntole.wyr.categories.CategoriesViewModel
 import io.ntole.wyr.core.auth.SessionDto
 import io.ntole.wyr.core.network.InMemoryTokenStorage
 import io.ntole.wyr.core.network.SessionStore
@@ -57,6 +58,7 @@ class AppModuleTest {
         koin.get<AccountViewModel>()
         koin.get<SubmitViewModel>()
         koin.get<LanguageViewModel>()
+        koin.get<CategoriesViewModel>()
     }
 
     @Test

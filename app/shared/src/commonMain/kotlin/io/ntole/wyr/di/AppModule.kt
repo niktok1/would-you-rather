@@ -1,6 +1,7 @@
 package io.ntole.wyr.di
 
 import io.ntole.wyr.account.AccountViewModel
+import io.ntole.wyr.categories.CategoriesViewModel
 import io.ntole.wyr.core.data.di.dataModule
 import io.ntole.wyr.core.network.environment.WyrEnvironment
 import io.ntole.wyr.language.LanguageViewModel
@@ -19,6 +20,7 @@ internal val uiModule =
         viewModelOf(::AccountViewModel)
         viewModelOf(::SubmitViewModel)
         viewModelOf(::LanguageViewModel)
+        viewModelOf(::CategoriesViewModel)
     }
 
 /**

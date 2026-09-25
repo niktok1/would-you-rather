@@ -1055,20 +1055,53 @@ Like (*Skipping* and *Likes*, below) and the category picker (*Categories*, belo
     all of it, in id order, so one selection is always one request. The Play screen plays the
     selection whoever sets it (`PlayViewModel`'s `init`): a new one drops the question on screen,
     answered or not, a vote lost to `NETWORK` included, which is never sent again (*Retry safety*),
-    and shows one from it; a load, a vote, a skip or a like in flight there goes on, and the question
-    after it is the new selection's, since the change dropped the queue (`PlayViewModelTest`). The
-    Play screen's category picker ticks each category the server lists, and *All categories* empties
-    it (*The Play screen*).
-    Ticking every category is not selecting none: a category a moderator adds later is in none and
-    not in those ticked. Nothing checks an id against the list before sending it: an id no category
-    has is the server's 400, which only a stale client could send, since ids never change and no
-    category is deleted. A client submits under a set of one or more (*Submitting*). The game names
-    a category in Serbian for now (`categoryName` in `io.ntole.wyr.play`, the one place the language
-    is chosen); the moderation app names it in Serbian too (`nameOf`).
-  - *A known limit:* every picker shows every category, a chip or a row each. The Play picker
-    scrolls inside its dialog, but the Submit form, the moderation app's category filter and each
-    pending card lay out every chip in place, to be scrolled past, which suits tens of categories,
-    not the hundreds planned; a searchable or collapsible picker comes with UI polish.
+    and shows one from it; a load, a vote, a skip or a like in flight there goes on, and the
+    question after it is the new selection's, since the change dropped the queue
+    (`PlayViewModelTest`). The Categories screen ticks any of the categories the server lists, and
+    *All* empties it (*The Categories screen*, below). Ticking every category is not selecting none:
+    a category a moderator adds later is in none and not in those ticked. Nothing checks an id
+    against the list before sending it: an id no category has is the server's 400, which only a
+    stale client could send, since ids never change and no category is deleted. A client submits
+    under a set of one or more (*Submitting*). The Categories screen names a category in the
+    language shown (`nameIn`, §8f); the Play screen's header and the Submit screen's chips still
+    name it in Serbian (`categoryName` in `io.ntole.wyr.play`), and so does the moderation app
+    (`nameOf`).
+  - *The Categories screen* (*built 2026-09-25*; the user: "Category needs its own screen for
+    picker, as there will be hundreds of categories, and players should be able to pick multiple,
+    random is actually all. There should be also category search."): `io.ntole.wyr.categories`, a
+    `Screen` of the navigator's own (`Screen.Categories`), opened by a tap on the categories played
+    on the Play screen, in place of the dialog *The Play screen* describes, under a top bar of a
+    back arrow (`BackTopBar`). Top down: a search field, then one lazy list (a `LazyColumn`, so
+    hundreds draw only the lines on screen) of **All**, ticked while no category is, and every
+    category the search finds, each ticked or not, in the server's order; and at the bottom how many
+    are ticked (*Изабрано: 3*, nothing while All is) and **Play**. Ticking All unticks every
+    category, ticking one unticks All, and unticking the last is All again: All is none ticked, as
+    the repository holds it. The search filters as it is typed, by any part of either name, whatever
+    the script and the case of either: a query and each name are compared in Serbian Latin,
+    lower-cased (`searchKey`, through `SerbianScript.toLatin`), so *hra*, *Хра* and *HRA* find
+    *Храна*, *lj* finds *Љ* and *рок* a name typed in Latin. Accents count, so *nacin* does not find
+    *Начин живота* (*provisional — user decision*: Serbian Latin is often typed without them; keep
+    it, or fold č and ć into c, š into s, ž into z and đ into dj or d). A category the search hides
+    stays ticked, and a search that finds none says so under All. Each visit starts from the
+    categories played, nothing searched (`CategoriesViewModel.open`, called by the Play screen's
+    tap, so a rotation keeps what is ticked), and reads the list (`GetCategories`) as it is shown: a
+    read that fails says so above the list, with *Пробај опет*, the categories read before staying
+    to tick, and with none read before a spinner shows while it reads. **Play** sets what is ticked
+    in one `QuestionRepository.setCategories`, waits for it to land, the list and Play off
+    meanwhile, then goes back to the Play screen, which shows a question from it (*The client*,
+    above); what is played already is not sent again, so the question stays. Back, the arrow or
+    Android's, plays nothing. The dialog (`CategoryPicker`, `PlayViewModel.openCategories` and the
+    rest) is no longer opened by anything and stays in `io.ntole.wyr.play` only until the merge with
+    the Play redesign deletes it and brings *The Play screen* and *Navigation* up to date.
+    `CategoriesViewModelTest`, `CategoriesScreenDrawTest` (every state in both themes and every
+    language at 400x900 and 375x599; with 301 categories at 375x599 the search field and Play on
+    screen, nothing cut short, only the lines that fit composed, and the list scrolled to its last),
+    `AppNavigationTest` (Play, Categories and back, played or not), `NavigatorTest`,
+    `TopBarsDrawTest`.
+  - *A known limit:* the game's picker is a screen of its own, searched and lazy (*The Categories
+    screen*), but the Submit form, the moderation app's category filter and each pending card lay out
+    every chip in place, to be scrolled past, which suits tens of categories, not the hundreds
+    planned; a searchable or collapsible picker for them comes with UI polish.
 - **Re-answering** *(built)*: a question can be answered again, whether or not the feed has
   served it again. It earns the point again **every time**, inside its cycle or not (farming is
   bounded by rate limiting, 120 votes a minute per player on average, §8b), and the player may
@@ -1457,15 +1490,17 @@ hand, so the two cannot say different things; and **English** stands beside them
   Latin is the Cyrillic transliterated, every Serbian text is in Cyrillic, and no Latin or English
   one has a Cyrillic letter. Translated so far: the Home screen, the game's name (*Шта би радије?*,
   *Would You Rather?*) and *Играј*; the top bars, the icons' names (*Почетна*, *Налог*, *Назад*) and
-  the Account bar's *Пошаљи питање*; and the switch's name, *Језик*.
+  the Account bar's *Пошаљи питање*; the switch's name, *Језик*; and the Categories screen
+  (`CategoryStrings`: *Претражи категорије*, *Све*, *Изабрано: 3*, *Нема резултата*, *Категорије се
+  нису учитале.*, *Пробај опет*, *Учитавање* for a screen reader, and *Играј*).
 - **Category names** *(built)*: a category is server data, with a name in Serbian, in Cyrillic, and
   one in English (§8d, *Categories*), and `Category.nameIn(language)` (`io.ntole.wyr.categories`) is
   the one function that picks which to show: the Serbian name in Serbian Cyrillic, that name through
   `SerbianScript.toLatin` in Serbian Latin, as every Latin text of the game is made, and the English
   name in English. A Serbian name a moderator typed in Latin reads as typed in both scripts, since
-  `toLatin` leaves Latin letters alone. `CategoryNameTest`. The game's screens still name categories
-  in Serbian (`categoryName` in `io.ntole.wyr.play`), and the moderation app too (`nameOf`), until
-  each uses it.
+  `toLatin` leaves Latin letters alone. `CategoryNameTest`. The Categories screen names them so; the
+  Play screen's header and the Submit screen's chips still name them in Serbian (`categoryName` in
+  `io.ntole.wyr.play`), and the moderation app too (`nameOf`), until each uses it.
 - **The default** *(built)*: Serbian Cyrillic on a first launch, whatever the device's language:
   nothing reads the device's locale (`Language.DEFAULT`; `LanguageSwitchTest` sets an English, a
   German and a Serbian Latin locale on the JVM and still opens in Cyrillic).

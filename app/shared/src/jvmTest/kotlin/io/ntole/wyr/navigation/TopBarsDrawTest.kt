@@ -18,8 +18,8 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 /**
- * The top bars above the Play, Account and Submit screens (CLAUDE.md §8d, *Navigation*), drawn off
- * screen at a short phone's width, in each theme and each language, and read through their
+ * The top bars above the Play, Account, Submit and Categories screens (CLAUDE.md §8d, *Navigation*),
+ * drawn off screen at a short phone's width, in each theme and each language, and read through their
  * semantics. Home's is drawn with the Home screen (`HomeScreenDrawTest`).
  */
 class TopBarsDrawTest {
@@ -152,6 +152,13 @@ class TopBarsDrawTest {
                     texts = { emptyList() },
                     taps = listOf("back"),
                     draw = { SubmitTopBar(onBack = it.record("back")) },
+                ),
+                Bar(
+                    name = "the Categories screen's",
+                    icons = { listOf(it.back) },
+                    texts = { emptyList() },
+                    taps = listOf("back"),
+                    draw = { BackTopBar(onBack = it.record("back")) },
                 ),
             )
     }

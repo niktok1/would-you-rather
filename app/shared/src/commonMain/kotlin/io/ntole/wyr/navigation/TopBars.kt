@@ -55,6 +55,12 @@ fun SubmitTopBar(onBack: () -> Unit) {
     TopBar(start = { BackButton(onBack) })
 }
 
+/** A back arrow alone, to the screen this one was opened from: the Categories screen's, to Play. */
+@Composable
+fun BackTopBar(onBack: () -> Unit) {
+    TopBar(start = { BackButton(onBack) })
+}
+
 @Composable
 private fun TopBar(
     start: @Composable RowScope.() -> Unit = {},
