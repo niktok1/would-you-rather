@@ -14,11 +14,13 @@ import io.ntole.wyr.core.domain.question.SkipQuestion
 import io.ntole.wyr.core.domain.vote.AttemptId
 import io.ntole.wyr.core.domain.vote.CastVote
 import io.ntole.wyr.core.domain.vote.Side
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -56,6 +58,15 @@ class PlayViewModel(
 
     init {
         next()
+        // Categories played from elsewhere, the Categories screen's Play (CLAUDE.md §8d, *Categories*),
+        // drop the question on screen, answered or not, and the next comes from them. Only while the
+        // categories may change here too: a load or a vote, a skip or a like in flight goes on, and
+        // the question after it is the new selection's, since the change dropped the queue. So a
+        // change applyCategories makes, which shows Loading before it is made, loads one question.
+        // Undispatched, so a change made before this runs is not taken for the one played now.
+        viewModelScope.launch(start = CoroutineStart.UNDISPATCHED) {
+            questions.categories.drop(1).collect { if (_state.value.canChangeCategories) next() }
+        }
     }
 
     fun next() {

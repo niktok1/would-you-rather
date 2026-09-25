@@ -1052,8 +1052,13 @@ Like (*Skipping* and *Likes*, below) and the category picker (*Categories*, belo
     one it has not read by its id. The server files every question under at least one; a payload
     without them, which no server sends, reads as none rather than failing. A player's selection is a
     set of ids too (`QuestionRepository.categories`, empty for every category), and every refill sends
-    all of it, in id order, so one selection is always one request; the Play screen's category picker
-    ticks each category the server lists, and *All categories* empties it (*The Play screen*).
+    all of it, in id order, so one selection is always one request. The Play screen plays the
+    selection whoever sets it (`PlayViewModel`'s `init`): a new one drops the question on screen,
+    answered or not, a vote lost to `NETWORK` included, which is never sent again (*Retry safety*),
+    and shows one from it; a load, a vote, a skip or a like in flight there goes on, and the question
+    after it is the new selection's, since the change dropped the queue (`PlayViewModelTest`). The
+    Play screen's category picker ticks each category the server lists, and *All categories* empties
+    it (*The Play screen*).
     Ticking every category is not selecting none: a category a moderator adds later is in none and
     not in those ticked. Nothing checks an id against the list before sending it: an id no category
     has is the server's 400, which only a stale client could send, since ids never change and no
