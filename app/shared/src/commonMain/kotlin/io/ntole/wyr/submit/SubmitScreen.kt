@@ -31,6 +31,7 @@ import io.ntole.wyr.core.domain.submission.OptionProblem
 import io.ntole.wyr.core.domain.submission.Submission
 import io.ntole.wyr.core.domain.submission.SubmissionRules
 import io.ntole.wyr.core.domain.submission.SubmissionStatus
+import io.ntole.wyr.play.categoryName
 import io.ntole.wyr.theme.WyrThemeAccessors
 import io.ntole.wyr.theme.WyrTypeScale
 
@@ -276,17 +277,6 @@ internal fun statusLine(submission: Submission): String =
 /** The categories a question is filed under, in the player's words and in declaration order. */
 internal fun categoryNames(categories: Set<Category>): String =
     Category.entries.filter { it in categories }.joinToString(", ", transform = ::categoryName)
-
-/** A category in the player's words, never its wire name. */
-private fun categoryName(category: Category): String =
-    when (category) {
-        Category.FOOD -> "Food"
-        Category.LIFESTYLE -> "Lifestyle"
-        Category.ETHICS -> "Ethics"
-        Category.SUPERPOWERS -> "Superpowers"
-        Category.RANDOM -> "Random"
-        Category.OTHER -> "Other"
-    }
 
 /**
  * Player-facing copy for a failed action, by its [DomainError], never the server's message, which is
