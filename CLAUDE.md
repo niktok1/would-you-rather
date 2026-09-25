@@ -313,7 +313,7 @@ This project must never be attributed to any employer identity.
     "off"`. It deploys **only by hand**, with Render's *Manual Deploy → Deploy a specific commit*,
     and only a commit that is green in CI and already live on dev. That is the one exception to
     "never hand-deploy": promoting to production is a person's decision. First deployed 2026-09-24
-    (`4cdc819`).
+    (`4cdc819`); it runs `d4a9dbf` since 2026-09-25, with V1 to V4 applied.
   - Not `commit` for either, which is what the deprecated `autoDeploy: true` means: it deploys every
     commit whether or not CI is green.
 - PostgreSQL (prod only) is a **Render managed Postgres** instance in the **same region** as the web
@@ -359,108 +359,74 @@ This project must never be attributed to any employer identity.
 
 ## 8a. Authentication — resolved
 
-**Zero-click, server-issued guest sessions with a custom Kotlin implementation.** No third-party
-auth SDK, satisfying §2.
+**Guests first: zero-click, server-issued guest sessions with a custom Kotlin implementation.** No
+third-party auth SDK, satisfying §2. Accounts to register and log back into come next (§8b,
+*Accounts*).
 
-- `POST /v1/auth/guest` mints the player server-side and returns a signed access JWT plus an
-  opaque refresh token. Nothing is asked of the player.
-- Identity is **server-issued**, which is the whole point: a client-supplied device id would be
-  forgeable and would let one device stuff the ballot.
+- `POST /v1/auth/guest` mints the player server-side and answers a `SessionDto`: a signed access JWT
+  and an opaque refresh token. Nothing is asked of the player. Identity is **server-issued**, which
+  is the whole point: a client-supplied device id would be forgeable and would let one device stuff
+  the ballot.
 - The access token travels in `Authorization: Bearer`, never in a request body, so `VoteRequest`
   does not change when auth evolves.
-- Only a SHA-256 hash of the refresh token is stored. Refresh tokens **rotate on every use**, with a
-  **grace window** (*decided 2026-09-24*) that has **no time bound** (*decided 2026-09-24*, replacing
-  the 10 minutes built first). The token a rotation displaces is kept as its session's previous one
-  (*Sessions*, below), with the expiry it had and when it was displaced, and a refresh presenting it
-  still succeeds until the next rotation displaces it, never past the token's own expiry.
-  `REFRESH_GRACE_SECONDS` can bound it in time: unset, the default, sets no bound; 0 turns the grace
-  off; any other number of seconds accepts the previous token only that long after the rotation that
-  displaced it. It rotates by the same rule, so the token it presented is dead afterwards and the one
-  it displaced becomes the previous one; a refresh with the current token displaces the previous one
-  for good the same way. A token therefore works twice at most, once while current and once more as
-  the previous one; anything else is 401 `INVALID_REFRESH_TOKEN`.
+- **Sessions** (*decided 2026-09-25*): a player's refresh tokens live in `sessions`, **one
+  refresh-token family per device**, each rotating on its own row, so a refresh on one device never
+  touches another's tokens. Nothing caps how many a player has, and no row is deleted: an expired
+  session is dead where it lies. A mint opens a player's first session (`SessionStore.open`); V4
+  opened one for every player who held a refresh token then. A refresh reads and writes its session
+  alone. The players row's old refresh columns, V4's mirror for a rollback to a build from before
+  sessions, are unused since `feat/simple-accounts` (§8b, *Rollbacks*).
+- **Refresh tokens rotate on every use, with a grace** (*decided 2026-09-24*, with no time bound).
+  Only a SHA-256 hash is stored. The token a rotation displaces stays as its session's previous one,
+  with the expiry it had and when it was displaced, and a refresh presenting it still succeeds until
+  the next rotation displaces it, never past its own expiry. So a token works twice at most, once
+  while current and once more as the previous one; anything else is 401 `INVALID_REFRESH_TOKEN`.
+  `REFRESH_GRACE_SECONDS` can bound the grace: unset, the default, sets no bound; 0 turns it off; a
+  number of seconds takes the previous token only that long after the rotation that displaced it.
   - *Why:* a refresh the server ran whose answer never arrived (a dropped connection, a Render cold
     start, the client's 5-minute refresh timeout, the app killed mid-refresh) leaves the client with
-    only the token the server rotated out. Without the grace its next refresh is refused and session
-    recovery replaces the player with a fresh guest, their points gone. With it, the client's next
-    refresh sends that token again and keeps the player. Nothing resends a refresh that failed on the
-    network: the call fails as `NETWORK`, and the token goes again only with a later call's 401, which
-    for a player who put the app away comes whenever they are back. The 10-minute bound replaced
-    that player all the same, which is why the user dropped it (§8b, *Refresh answers lost past the
-    grace*).
-  - *The cost* is a copy's. A refresh token copied to a second device, or stolen, keeps working beside
-    the original once used, for as long as the two take turns refreshing, as two clients each
-    refreshing once per access token do: each refresh leaves the other's token in the previous slot,
-    where nothing times it out. One drops out when the other refreshes twice in a row, and it need not
-    be the copy. A copy of a token its player's own refresh already rotated out still gets in once if
-    it comes before their next refresh, which for a player away from the app can be as late as the
-    token's own expiry. A time bound parts the two only when one waits in the previous slot longer
-    than the bound: the 10 minutes did whenever one refreshed more than 10 minutes after the other,
-    and a bound under half the access token's 15 minutes always would. Accepted for guest accounts,
-    whose only credential this is (the user's decision, 2026-09-24); account linking changes the
-    picture. `ServerConfig.refreshGraceSeconds` says so.
+    only the token the server rotated out. Without the grace its next refresh is refused and the
+    player becomes a fresh guest. Nothing resends a refresh that failed on the network: the token
+    goes again with a later call's 401, whenever the player is back, which is why the 10-minute bound
+    built first was dropped (§8b, *Refresh answers lost past the grace*).
+  - *The cost* is a copy's: a refresh token copied to a second device, or stolen, keeps working
+    beside the original for as long as the two take turns refreshing, each leaving the other's token
+    in the previous slot. Accepted for a game that stores nothing personal (the user's decision,
+    2026-09-24).
   - *The rotation* is one `UPDATE` of the session whose `WHERE` is the whole check, nothing read
-    before it (`SessionStore.rotate`, §4): the presented hash as the current one and unexpired,
-    or as the previous one, unexpired and, under a bound, displaced within it. Of two refreshes racing
-    with the current token, the second waits on the first's row lock, finds the token the previous one
-    by then and goes through too, the first's new token becoming the previous one; of two racing with
-    the previous token, exactly one goes through. `SessionStoreTest` races both and pins every rule.
-    It stamps every rotation, bound or not: a bound set later reads the stamp.
-- **Sessions** (*decided 2026-09-25*): a player's refresh tokens live in `sessions`, **one
-  refresh-token family per device**, each rotating on its own row by the rules above, so a refresh on
-  one device never touches another's tokens, and nothing caps how many a player has. A mint opens a
-  player's first session (`SessionStore.open`). V4 opened one for every player who held a refresh
-  token, under the player's own id and with their previous token and its grace, so every client kept
-  refreshing across the deploy. No row is deleted: an expired session is dead where it lies. A refresh
-  reads and writes its session alone, never the player's row. The players row's own refresh-token
-  columns, which V4 kept as a mirror for a rollback to a build from before sessions, are unused since
-  `feat/simple-accounts` (*decided 2026-09-25*: that rollback is not supported, §8b *Rollbacks*).
-- Every device keeps its session to itself. On Android the backup rules
-  (`data_extraction_rules.xml`, Android 12 and later, and `backup_rules.xml`, Android 11 and
-  earlier, in `:app:androidApp`) keep `AndroidTokenStorage`'s `wyr.auth.xml` out of the cloud backup
-  and out of a device-to-device transfer: a copy would share one refresh-token family with the phone
-  it came from, and whichever refreshed less would be refused and become a fresh guest. A new phone
-  starts as a guest of its own. `allowBackup` stays on, with nothing else in it yet.
-- On the client, `SessionStore` is the only copy of the credentials: Ktor's bearer cache is off
-  (`cacheTokens = false`), so a session change applies to the very next request. A dead session
-  is replaced through `withSessionRecovery` in `:core:data`, which mints at most one guest for it.
-- *Clients sharing one store* (browser tabs, desktop instances) can both refresh one token, and the
-  server lets both through, so the store may end up holding the displaced token of the two. The
-  server takes that one once more, but a previous token survives only one refresh: the clients share
-  an access token too, so they may well refresh at once again, and of two refreshes with the previous
-  token one is refused, which replaces the player if it comes before the other's answer is stored
-  (`DefaultSessionRepository.resetIfStill`); under a time bound it also dies with the bound. So a
-  refresh that finds the store moved on to another session of the same player refreshes once more as
-  the stored one, which the server takes either way, and keeps that answer, the latest rotation
-  (`refreshAs` in `WyrHttpClient`, `SharedSessionStoreTest`); the once more is never repeated. A
-  session of another player, or none, is the data layer's change and is kept as it was. A settling
-  refresh that reached the server but whose answer was lost leaves the store holding the other
-  client's session beside a fresh access token. If that session's token was the current one, the
-  settling refresh made it the previous one, which the next refresh can still spend; if it was
-  already the previous one, the usual case, the settling refresh spent it, and the next refresh, once
-  that access token expires (15 minutes by default), is refused (§8b, *Refresh answers lost past the
-  grace*). The lost-answer case needed no client change, bound or none: the store still holds the
-  token it sent, and the next 401 sends it again. Nor did session recovery: it acts only on a
-  refusal, which the grace makes rarer.
-- Every client request is bounded (`HttpTimeout` in `WyrHttpClient`: 60 s), past a Render cold
-  start. Android and desktop also give up on a connect after 30 s; iOS applies only the 60 s socket
-  timeout, which covers connecting, and a browser only the request timeout. A request that spends
-  the refresh token takes `refreshTimeout()` instead, 5 minutes: a timeout abandons a refresh as a
-  cancellation does, and with it a token the server has already rotated, which the next call's
-  refresh can still send once more (the grace, above) unless it was already the previous one; a time
-  bound on the grace must outlast the 5 minutes for that. It stays bounded because every call
-  rejected meanwhile waits on it, uncancellably.
-- `TokenStorage.write` returns only once the session would survive the app being killed, for the
-  same reason: after a refresh, the rotated token is the one sure to work, the token sent working
-  once more at most, and not at all if it was already the previous one. It suspends so a blocking
-  write can leave the caller's thread (Android `commit()`s on `Dispatchers.IO`, one change at a time
-  and in the order asked, never `apply()`s), and a write asked for lands even if its caller is
-  cancelled meanwhile. A write that cannot be made durable fails the call as `NETWORK`: the data
-  layer writes the session through `runApi`, so no bare storage exception reaches a ViewModel.
+    before it (`SessionStore.rotate`, §4). Of two refreshes racing with the current token, both go
+    through, the first's new token becoming the previous one; of two racing with the previous token,
+    exactly one. It stamps every rotation, bound or not: a bound set later reads the stamp.
+    `SessionStoreTest` races both and pins every rule.
+- **On the client**, `SessionStore` (`:core:network`) is the only copy of the credentials, one per
+  environment (§8e), and Ktor's bearer cache is off (`cacheTokens = false`), so a session change
+  applies to the very next request. A dead session is replaced through `withSessionRecovery` in
+  `:core:data`, which mints at most one guest for it (`DefaultSessionRepository.resetIfStill`).
+  - *Clients sharing one store* (browser tabs, desktop instances) can both refresh one token, and the
+    server lets both through. A refresh that finds the store moved on to another session of the same
+    player refreshes once more as the stored one and keeps that answer, the latest rotation
+    (`refreshAs` in `WyrHttpClient`, `SharedSessionStoreTest`); the once more is never repeated, and
+    a session of another player, or none, is kept as it was.
+  - Every request is bounded (`HttpTimeout` in `WyrHttpClient`: 60 s, past a Render cold start;
+    Android and desktop also give up on a connect after 30 s; iOS applies only the socket timeout, a
+    browser only the request timeout). A request that spends the refresh token takes
+    `refreshTimeout()`, 5 minutes, since abandoning it abandons a token the server may already have
+    rotated; a time bound on the grace must outlast the 5 minutes. It stays bounded because every
+    call rejected meanwhile waits on it, uncancellably.
+  - `TokenStorage.write` returns only once the session would survive the app being killed, since
+    after a refresh the rotated token is the one sure to work (Android `commit()`s on
+    `Dispatchers.IO`, one change at a time and in the order asked, never `apply()`s), and a write
+    asked for lands even if its caller is cancelled. A write that cannot be made durable fails the
+    call as `NETWORK`: the data layer writes the session through `runApi`.
+  - The session stays on its device. Android's backup rules (`data_extraction_rules.xml`, Android 12
+    and later, `backup_rules.xml` before, in `:app:androidApp`) keep `AndroidTokenStorage`'s
+    `wyr.auth.xml` out of the cloud backup and a device-to-device transfer: a copy would share a
+    refresh-token family with its source, and whichever refreshed less would end up a fresh guest. A
+    new phone starts as a guest of its own. `allowBackup` stays on, with nothing else in it yet.
 
 **Known limitation, by design for now:** a guest account is bound to one device's storage. Lose
-the device, reinstall the app or clear its storage, and the account — and its points — are gone
-(§8b, *Accounts*, is the way out). Session storage is ordinary preference storage
+the device, reinstall the app or clear its storage, and the account — and its points — are gone,
+until accounts exist (§8b, *Accounts*). Session storage is ordinary preference storage
 (SharedPreferences / NSUserDefaults / JVM Preferences / localStorage), not Keychain or
 EncryptedSharedPreferences: enough for a game that stores nothing personal.
 
@@ -579,19 +545,12 @@ EncryptedSharedPreferences: enough for a game that stores nothing personal.
   once per player (§8d, *Likes*), and guests cost nothing to mint (§8a), so a script minting guests
   could pay one author a point per guest for each of their questions. The user accepted that: every
   like held pays, whoever holds it, and the only bound is guest minting's per-address budget.
-- **Refresh answers lost past the grace** — *decided 2026-09-24: no time bound.* The grace (§8a) had
-  a 10-minute bound, and nothing resends a refresh that failed on the network, so a player whose
-  refresh answer was lost and who came back later (the app backgrounded after a refresh timed out,
-  or killed mid-refresh) became a fresh guest. The user dropped the bound: a displaced token now
-  works until the next rotation, short of its own expiry, and `REFRESH_GRACE_SECONDS` still sets one
-  where it is wanted. That also saves the rarer cases that left the stored token the previous one
-  beside a fresh access token, refreshed only once that expired, past the 10 minutes: a refresh
-  abandoned at its timeout that the server ran only after the next one, and a settling refresh
-  (`refreshAs`) whose answer was lost when the stored token was the current one. What remains is a
-  refresh that spends the previous token and whose answer is lost too, which leaves the client a
-  spent token, refused at its next refresh: two lost answers in a row, or a settling refresh whose
-  answer is lost when the stored token was already the previous one, its usual case (§8a, *Clients
-  sharing one store*). What it costs is §8a's *The cost*.
+- **Refresh answers lost past the grace** — *decided 2026-09-24: no time bound* (§8a). The 10
+  minutes built first turned a player whose refresh answer was lost, and who came back later, into a
+  fresh guest. What remains, accepted: a refresh that spends the previous token and whose answer is lost
+  too leaves a spent token, refused at the next refresh. That takes two lost answers in a row, or a
+  settling refresh (`refreshAs`, §8a) whose answer is lost when the stored token was already the
+  previous one.
 - **WCAG AA contrast audit** — see §5b. Paused along with UI polish (§8d).
 
 `RANDOM` was an open item and is resolved: it is a content category (the absurd questions), not a
@@ -618,11 +577,10 @@ seed (`Migrations`, `DatabaseFactory.init`). Nothing builds a table any other wa
   `1 BASELINE`, where an empty database runs V1 and reads `1 SQL`. The Render production database
   is the first kind: `4cdc819` built it on 2026-09-24, the first deploy, and `Tables.kt` changed no
   column, key or index between then and V1, so it holds exactly V1, and the first migrating build to
-  boot on it records `1 BASELINE`. §8 records no such deploy yet, so its next Manual Deploy may
-  baseline it and run V2 (the refresh-token grace window, §8a), V3 (a question's `retired_at`, §8d
-  *Moderation*) and V4 (sessions and the recovery secret, §8a) in one boot, or run what it lacks on an
-  earlier baseline, V2 or V3; either way its history then reads `1 BASELINE`, `2 SQL`, `3 SQL`,
-  `4 SQL`.
+  boot on it records `1 BASELINE`. That was `d4a9dbf`, deployed 2026-09-25, which ran V2 (the
+  refresh-token grace window, §8a), V3 (a question's `retired_at`, §8d *Moderation*) and V4
+  (sessions and the recovery secret, since dropped) there; the next Manual Deploy runs whatever
+  script comes after V4 there.
   `Migrations.migrate` takes the baseline itself (`baselineVersion` 1), and only for a database
   holding every table V1 builds (`TABLES_BEFORE_MIGRATIONS`) and no history table; Flyway's
   `baselineOnMigrate` is off. Any other database with tables and no history fails the boot, rather

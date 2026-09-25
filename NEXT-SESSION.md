@@ -10,13 +10,20 @@ the tally and points**. Server and all client targets except iOS are verified on
 Repo initialized on `main` with the personal identity and `user.useConfigOnly = true` (§7).
 
 **Deployed** (CLAUDE.md §8): **prod** `wyr-server` at https://wyr-server.onrender.com on Render
-Postgres, promoted by hand with *Manual Deploy*; **dev** `wyr-server-dev` on in-memory H2, deployed
-automatically from every green commit on `main` (its URL is on its Render page).
+Postgres, promoted by hand with *Manual Deploy*, runs `d4a9dbf` since 2026-09-25, with V1 to V4
+applied; **dev** `wyr-server-dev` on in-memory H2, deployed automatically from every green commit on
+`main` (its URL is on its Render page).
+
+**On `feat/simple-accounts`** (not merged): stage 1 took the recovery secret, Block Store, the
+Keychain, the rollback mirror and the question's row lock out (CLAUDE.md §8a, §8b). Stages 2 and 3
+add simple accounts (§8b, *Accounts*). A `d4a9dbf` build of the app on a phone that keeps a recovery
+secret fails every call against this server once its session dies, since the recovery it tries
+first is 404 here: install a build from this branch on it.
 
 ### Verified working
 
-- `:server` on H2: 292 tests, 290 green and 2 skipped (the PostgreSQL-only boot races), including
-  76 end-to-end flow tests in `ApiFlowTest`. Flat scoring is covered there (every vote pays 1,
+- `:server` on H2: 272 tests, 270 green and 2 skipped (the PostgreSQL-only boot races), including
+  78 end-to-end flow tests in `ApiFlowTest`. Flat scoring is covered there (every vote pays 1,
   majority and minority alike, and the total accumulates) and by `PlayerStoreTest`, which races
   awards for one player, and `SessionStoreTest`, which races refreshes of one token. The endless
   feed, re-answering and attempt replay are covered there too, and by
@@ -266,115 +273,11 @@ automatically from every green commit on `main` (its URL is on its Render page).
   guest's first refresh token 200, 200 as the same player, then 401. The client changed in comments
   only. Counts on the branch: `:server` 240 (2 skipped), `:core:domain` 34, `:core:data` 121,
   `:core:network` 70 (76 as Android host tests), `:app:shared` 127.
-- Sessions (`feat/recovery-secret`, CLAUDE.md §8a, *Sessions*), on H2: V4 moves refresh tokens into
-  `sessions`, one family per device, and keeps the `players` columns as the mirror of the session
-  written last. `SessionStoreTest` carries every rotation rule and race `PlayerStoreTest` had, now
-  per session, and adds a player's sessions rotating apart; two devices refreshing at once, both
-  through and the mirror copying the later; the mirror after a mint, an open and a rotation, and a
-  build without sessions (its old statement, copied into the test) refreshing the device used last
-  and refusing the other; a token such a build rotated folded back into its session, and a guest it
-  minted given one; two refreshes racing with a token only the mirror holds, both through with no
-  bound and one with the grace off, for both folds; and a device whose refresh by such a build was
-  lost going on from its session. `MigrationsTest` inserts its player from before migrations as the
-  old builds minted one, expects V4's sessions, marks and empty recovery secrets on every path, and
-  migrates a V2 database holding a current and a displaced token, both of which refresh after V4.
-  Dropping the third rotation attempt, the mirror write, the compare-and-set on the mark or the fold
-  into the mark's session (opening a new one instead), or V4's backfill or its marks, each fails
-  them. `LockRace` now polls again when H2 2.4's `SESSIONS` view throws its NullPointerException,
-  which one of the new races hit once.
-- Recovery (`feat/recovery-secret`, server and contract only, CLAUDE.md §8a, *Recovery*), on H2. The
-  contract: `GuestSessionDto`, `RecoverRequest`, `RecoverySecretDto`, `INVALID_RECOVERY_SECRET` and
-  its `DomainError`, `AUTH_RECOVER` and `MY_RECOVERY_SECRET`; `WyrJsonTest` pins a guest session read
-  with its secret and without one, read by a build from before recovery as the session it knew, every
-  session field a guest session's, and the new code as `UNKNOWN` in an older build; `ServerJsonTest`
-  the secret sent with a mint's session and never with a plain one; `ErrorMapperTest` the code never
-  `UNAUTHORIZED`. `SessionStoreTest` pins a secret opening a session each time, unspent, the mirror
-  the one opened last, and one never issued or replaced opening none, while the replaced one's
-  sessions live on. `RecoveryFlowTest` pins the mint's secret (its own per guest, 43 characters, in
-  no refresh's or recovery's answer, which carry a session's four fields alone), a recovery keeping
-  the player and their point, devices refreshing apart, a secret recovering three times, the 401 for
-  a secret never issued, one replaced and a refresh token, the 400s, a new secret killing the old one
-  and not its sessions, a guest from before V4 asking for one, and the new secret's 401s.
-  `RateLimitTest` adds both groups, a right secret spending the address's budget as a wrong one does,
-  and the recovery refusal's log line, with no secret or hash in any line of a whole flow.
-  `ServerConfigTest` the two new variables. Minting with no secret, the recovery route in the refresh
-  group, refusing with `INVALID_REFRESH_TOKEN`, a recovery opening no session, and a log line with a
-  secret's hash each fail them.
-- Live run of sessions and recovery against the fat jar on Netty (JDK 21, `PORT=18094`, no
-  `DATABASE_URL`): Flyway ran V1, V2 and V4 on the in-memory H2 and `/health` was 200. A guest's
-  mint carried a 43-character secret beside the session's four fields; recovering with it answered
-  the same player in a session of its own, with no secret; that session refreshed twice, the mint's
-  first token twice after it, and the recovered one again. A new secret was a different one, the old
-  was then 401 `INVALID_RECOVERY_SECRET` and the new recovered; an unknown secret was 401
-  `INVALID_RECOVERY_SECRET`, and a new secret without a session 401 `UNAUTHORIZED`. No 43-character
-  token appeared in the server's log. Counts on the branch: `:server` 262 (2 skipped),
-  `:core:domain` 34, `:core:data` 121, `:core:network` 74 (80 as Android host tests), `:app:shared`
-  127; every client target compiles, the iOS simulator's included.
-- Recovery, the client half (`feat/recovery-secret`, CLAUDE.md §8a, *Recovery*). `AuthApiTest` pins
-  the mint read with its secret, a recovery posting the secret alone with no bearer, and its 401
-  setting off no refresh, and a new secret asked for with the bearer. `RecoverySecretStoreTest` pins
-  a key per environment (`wyr.recovery.local`, `.dev`, `.prod`) in one store, and the count of failed
-  requests per player, in the local storage alone. `RecoverySecretFlowTest` (29, on `FakeServer`)
-  pins a fresh install recovering and minting nothing; an unknown secret dropped for a guest whose
-  secret is kept, even when the guest's cannot be; a recovery lost on the network, refused with a
-  bare 404 as a build from before recovery answers, or rate-limited, minting nothing; an unreadable
-  store minting; a session with no secret asking once a launch and keeping what it gets, three
-  refusals ending the asking (since changed: only a secret the store could not keep counts, below)
-  and losses on the network not counting; a held secret, another
-  player's included, and an unreadable store asking nothing; a dead session recovered before any
-  mint, once for two resets at once, and failing the call when its recovery is lost; `clear()`
-  dropping the secret, and letting it through where the store can neither clear nor read, and
-  `clearKeepingSecret()` keeping it; a platform without a store as before;
-  and no secret in the HTTP trace. `DataModuleTest` pins the storage taken only where a platform
-  binds one, under its own environment's key. `AndroidRecoverySecretStorageTest` (host) pins the
-  cloud backup asked for only while it is encrypted end to end, an unknown answer taken as not,
-  failures thrown rather than read as none, and a write made whole though its caller is cancelled.
-  `WyrJsonTest` pins that no DTO's `toString` shows the secret; the console's tests, *Reinstall
-  (keep secret)* and the secret's line in the header. Mutation checks, each failing a test: never
-  recovering, minting on any failed recovery, keeping a refused secret, asking while one is held or
-  unreadable, counting network losses, no bound, asking more than once a launch, a dead session
-  minting, `clear()` keeping the secret, the mint keeping none, a kept secret keeping the count, no
-  store wired or one environment's key for all, Block Store's cloud copy always on, an unknown
-  encryption failing the write, a cancellable write, a failed read answered as none, the reinstall
-  clearing the secret or keeping the count, an unreadable store reported as none, and `clear()`
-  failing on every failed drop or on none.
-- Live run of the client half against the fat jar (JDK 21, `PORT=18094`, no `DATABASE_URL`): Flyway
-  ran V1, V2 and V4 and `/health` was 200. By curl, the mint carried a 43-character secret, a
-  recovery with it answered the same player with no secret, the mint's session and a recovered one
-  each refreshed twice, apart and in turn, and an unknown secret was 401 `INVALID_RECOVERY_SECRET`.
-  Then the real client (`DefaultSessionRepository` over `WyrHttpClient` on CIO, an in-memory secret
-  store, a scratch test not committed): a fresh device minted and kept the secret; *reinstall*
-  (`clearKeepingSecret`) recovered the same player; a stats read on a forged dead session went 401,
-  refresh 401, recovery 200, retry 200, as the same player, with one mint in the whole run; and a
-  session whose secret store was emptied asked for a new secret, kept it, and the old one was then
-  refused. No secret appeared in the trace, and no 43-character token in the server's log. Counts on
-  the branch: `:server` 262 (2 skipped), `:core:domain` 34, `:core:data` 153, `:core:network` 86 (99
-  as Android host tests), `:app:shared` 132; every client target compiles, the iOS simulator's and
-  its `:app:shared` tests included, and `aapt2` shows each flavor's manifest naming both backup rule
-  files, which exclude `wyr.auth.xml` from the cloud backup and the device transfer.
-- Review fixes on `feat/recovery-secret` (CLAUDE.md §8a). `RecoverySecretFlowTest` (32) now pins a
-  guest minted while the store could not be read keeping no secret, so the secret the store held
-  still recovers its player, and asking for its own at the next launch if the store then reads
-  empty; a refused request for a secret (a bare 404, a 503, a 429) made again at every launch until
-  the server gives one, with only a secret the store could not keep counting toward the three; and a
-  held secret stored again once a launch (`backUp`), a failure there failing nothing.
-  `AndroidRecoverySecretStorageTest` (host) pins that store going into the cloud backup once it is
-  encrypted end to end, and never out of it, unknown included; `RecoverySecretStoreTest` its key.
-  `SessionStoreTest` pins a session's own tokens refused while a build without sessions has moved
-  its mirror on from it, the device's token folding as before, and a device whose answer from such a
-  build was lost going on through the mirror's previous slot. Mutation checks, each failing a test:
-  the mint keeping its secret after a failed read, counting the server's refusals again, never
-  storing a held secret again, storing it again out of the cloud backup, and rotating the session a
-  moved mirror names. The eighteen test names with commas are gone, so `:core:network`'s and
-  `:core:data`'s iOS test compiles pass (both failed before), and the ios CI job now compiles them.
-  Live run against the fat jar (JDK 21, `PORT=18094`, no `DATABASE_URL`): Flyway ran V1, V2 and V4,
-  `/health` was 200, the mint carried a 43-character secret, a recovery with it answered the same
-  player with no secret, both sessions refreshed twice, apart and in turn, the mint's first token
-  was then 401 as twice displaced, an unknown secret 401 `INVALID_RECOVERY_SECRET`, and the secret
-  was not in the log. Counts: `:server` 263 (2 skipped), `:core:domain` 34, `:core:data` 156,
-  `:core:network` 87 (102 as Android host tests), `:app:shared` 132; every client target compiles,
-  the iOS simulator's included, and so do `:app:shared`'s, `:core:network`'s and `:core:data`'s
-  tests for it.
+- Sessions and the recovery secret (`feat/recovery-secret`, merged as 9c9be37, deployed to prod as
+  `d4a9dbf`) were verified on H2 at the time: V4, per-device sessions, the rollback mirror and its
+  fold, the secret on the server, Block Store, the iCloud Keychain and the recovery flow on the
+  client. `feat/simple-accounts` took the secret, Block Store, the Keychain and the mirror out
+  again; of that work, per-device sessions and their races (`SessionStoreTest`) remain.
 - Client tests: `:core:domain` 34, `:core:data` 120, `:core:network` 58 (64 as Android host tests:
   the common ones and `AndroidTokenStorageTest`), `:app:shared` 122 (the ViewModels, the Koin graph
   and the desktop base URL); `:server` 235, 2 of them skipped. 569 JVM tests in all, those 2
@@ -466,27 +369,24 @@ automatically from every green commit on `main` (its URL is on its Render page).
   too), as do the iOS simulator main and test, and `:app:androidApp:assembleDebug` builds;
   `WYR_SERVER_ONLY=1` still configures `:core` and `:server` alone.
   `DesktopEnvironmentNameTest` pins `WYR_ENV`. Its JVM, JS and wasmJs compiles run.
-- The merge of `feat/recovery-secret` onto the moderation app (`merge/recovery-secret`, 9c9be37),
-  on H2. `MigrationsTest` holds every path to `1 BASELINE`, `2 SQL`, `3 SQL`, `4 SQL` with the rows
-  kept (V3's `retired_at` and V4's sessions, marks and empty secrets together), the build-by-build
-  path among them, and runs V4's backfill from V2 and from V3; `SchemaDriftTest` holds V3 and V4 to
-  `Tables.kt` together. `AdminModuleTest` pins that the moderation app binds no
-  `RecoverySecretStorage`, and `FailureTest` that `INVALID_RECOVERY_SECRET` has words of its own
-  there. The six test names with commas the moderation branch had added to the `:core` modules are
-  gone, so `:core:domain`'s, `:core:network`'s and `:core:data`'s iOS test compiles pass. Counts:
-  `:server` 292, 2 skipped (76 flows); `:core:domain` 37; `:core:data` 169; `:core:network` 94 (109
-  as Android host tests); `:app:shared` 111; `:app:adminApp` 87. ci.yml's verify job's three steps
-  pass as written; every client target compiles, the web app's, the desktop app's and the
-  moderation app's JVM, JS and wasmJs included, as do `:app:shared`'s iOS simulator main and test,
-  and `:app:androidApp:assembleDebug` builds. The fat jar (`WYR_SERVER_ONLY=1`) on JDK 21,
-  `PORT=18095`, no `DATABASE_URL` and a throwaway `ADMIN_TOKEN`: Flyway ran V1, V2, V3 and V4 in
-  order and `/health` was 200; a mint carried a 43-character secret, a recovery with it answered the
-  same player in a session of its own and with no secret, and both sessions refreshed; an unknown
-  secret was 401 `INVALID_RECOVERY_SECRET`; the admin list was 200 with the 24 seeds and no
-  `nextCursor`, and 403 `FORBIDDEN` with a wrong token; `seed-1` retired 200, again 409
-  `WRONG_STATUS`, and restored 200; a new secret killed the old one (401) and recovered the same
-  player; neither secret nor the admin token was in the server's log. The `server-postgres`,
-  `docker-smoke` and `ios` jobs have not run on the merge.
+- `feat/simple-accounts`, stage 1 (simplify; CLAUDE.md §8a, §8b), on H2. Votes, skips and likes read
+  servability without the question's row lock: the key races take their `INSERTING_INTO_*` waits
+  back in `VoteStoreTest`, `SkipStoreTest` and `LikeStoreTest`, and `RetirementTest` pins a vote,
+  skip and like in flight as a retirement commits landing all the same (putting the lock back fails
+  six tests). No client keeps a recovery secret: `AuthApiTest` reads a mint that still carries one,
+  as `d4a9dbf` sends, as its session. The server's mint answers the session's four fields alone and
+  both recovery routes are 404 (`ApiFlowTest`). The mirror is gone: `SessionStoreTest` pins that
+  nothing writes the players row's refresh columns, and `ApiFlowTest` drops all seven unused
+  players columns and plays a guest through mint, refresh, feed, vote and stats (reading `Players`
+  with `selectAll()` fails it). Counts: `:server` 272, 2 skipped (78 flows); `:core:domain` 37;
+  `:core:data` 134; `:core:network` 78 (84 as Android host tests); `:app:shared` 106;
+  `:app:adminApp` 87. ci.yml's verify job's three steps pass as written, as do the ios job's Kotlin
+  compiles that need no Xcode (`:app:shared`'s main and test, and the three `:core` modules' tests).
+  The fat jar (`WYR_SERVER_ONLY=1`) on JDK 21, `PORT=18096`, no `DATABASE_URL`: Flyway ran V1 to V4,
+  `/health` 200, a mint answered four fields, its refresh token refreshed 200 as the same player,
+  200 again (the grace) and 401 a third time, a vote 200 and the stats 1 point, and
+  `POST /v1/auth/recover` and `POST /v1/me/recovery-secret` were 404; no token was in the log. The
+  `server-postgres`, `docker-smoke` and `ios` jobs have not run on the branch.
 - `:app:androidApp:assembleDebug` produces a real APK.
 - `ktlintCheck` clean across every module.
 
@@ -514,17 +414,11 @@ automatically from every green commit on `main` (its URL is on its Render page).
   (above), never on Render, so its races are proven by tests only. The 1-point rule has been seen
   live, in the client run above.
 - **V2, V3 and V4 on PostgreSQL, and on production.** `SchemaDriftTest` and `MigrationsTest` run
-  the scripts on PostgreSQL only in the `server-postgres` CI job. It has passed V2 and V3 on `main`
-  (9a7902f, `feat/moderation-app` fast-forwarded onto `main`); V4 (`feat/recovery-secret`, H2's
-  draft rewritten by hand, plus the backfill) has run on H2 alone, since the branch never ran CI
-  before this merge, which is its first. V2 is the same statements V1 used for its unique
-  constraint, and V3 one nullable `BIGINT` with no default. Production (`wyr-postgres`, provably V1;
-  nothing here records a migrating build booting on it yet) runs what it lacks at its next Manual
-  Deploy, baselining it in the same boot if no earlier one did: nullable columns, a new table filled
-  from a few rows and unique constraints on tables of a few rows, so no rewrite and a moment's lock.
-  Check, read-only, that its history reads `1 BASELINE`, `2 SQL`, `3 SQL`, `4 SQL` afterwards
-  (without the last while the build promoted predates V4), and once V4 has run, that `sessions` has
-  a row for every `players` row with a `refresh_token_hash`.
+  the scripts on PostgreSQL only in the `server-postgres` CI job, which passed V2 and V3 on `main`
+  (9a7902f). Production runs `d4a9dbf` with V1 to V4 applied (the user's deploy of 2026-09-25);
+  nothing here has read its history. Check, read-only, that it reads `1 BASELINE`, `2 SQL`,
+  `3 SQL`, `4 SQL`, and that `sessions` has a row for every `players` row with a
+  `refresh_token_hash`. The next script after V4 runs there at the next Manual Deploy.
 - **The `:core` modules' tests on iOS.** The ios CI job runs `:app:shared`'s tests on the simulator
   and only compiles the `:core` modules' tests, which Kotlin/Native refused while their
   names held commas (`SharedSessionStoreTest`'s among them, from before `feat/recovery-secret`, and
