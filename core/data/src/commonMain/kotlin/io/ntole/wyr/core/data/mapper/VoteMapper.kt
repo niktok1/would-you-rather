@@ -9,7 +9,6 @@ import io.ntole.wyr.core.vote.VoteTallyDto
 
 internal fun VoteResultDto.toDomain(): VoteOutcome =
     VoteOutcome(
-        questionId = questionId,
         yourSide = yourChoice.toDomain(),
         tally = tally.toDomain(),
         pointsAwarded = pointsAwarded,

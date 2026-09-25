@@ -38,7 +38,7 @@ class DefaultVoteRepositoryTest {
         runTest {
             val outcome = votes.cast("q1", Side.A, AttemptId.random())
 
-            assertEquals("q1", outcome.questionId)
+            assertEquals(Side.A, outcome.yourSide, "the fresh guest's vote, as the server answered it")
             assertEquals(1, server.guestsMinted)
             assertEquals("guest1", store.read()?.playerId)
             assertEquals(listOf<String?>("Bearer access-a", "Bearer access-guest1"), server.votesSentAs)

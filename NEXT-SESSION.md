@@ -41,13 +41,15 @@ the contract did not. How to try it on a phone is under *Submit on its own tab*.
 
 **On `chore/remove-console`** (from 61bfcad; not merged, nothing pushed): the dev console is gone
 (the user, 2026-09-25: "console is not needed"). Every build, LOCAL, DEV and PROD alike, shows Play,
-Submit and Account and opens on Play (CLAUDE.md §8d, *Current focus*); a LOCAL or DEV build names its
-server on the Account tab's last line (§8e). Changes are tried through the game and the moderation
-app (*Trying a change*, below). What only the console read went with it: the HTTP trace
+Submit and Account and opens on Play (CLAUDE.md §8d, *Current focus*); a LOCAL or DEV build names
+its server on the Account tab's last line (§8e). Changes are tried through the game and the
+moderation app (*Trying a change*, below). What only the console read went with it: the HTTP trace
 (`HttpTrace`, `HttpTracing`); `SessionDiagnostics`, the session and token expiry its header
 showed; the session port's `currentPlayerId` and `clear`, which only it called through the port (a
-logout clears the session through `DefaultSessionRepository` itself); and `Question.answeredBefore`,
-which only it showed (the wire's `QuestionDto` still carries it). The client alone changed; the server only in a comment and a test's name.
+logout clears the session through `DefaultSessionRepository` itself); `Question.answeredBefore`,
+which only it showed; and `VoteOutcome.questionId`, which only it read (the wire's `QuestionDto`
+and `VoteResultDto` still carry both). The client alone changed; the server only in a comment and a
+test's name.
 
 ### Verified working
 

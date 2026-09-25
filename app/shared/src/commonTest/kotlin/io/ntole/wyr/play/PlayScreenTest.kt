@@ -93,7 +93,6 @@ class PlayScreenTest {
         replayed: Boolean,
     ): VoteOutcome =
         VoteOutcome(
-            questionId = "q1",
             yourSide = Side.A,
             tally = Tally(votesA = 1, votesB = 0),
             pointsAwarded = pointsAwarded,

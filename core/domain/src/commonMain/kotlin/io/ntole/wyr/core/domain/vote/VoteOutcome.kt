@@ -11,7 +11,6 @@ package io.ntole.wyr.core.domain.vote
  * [yourSide] is the side that attempt stored, whatever the repeat asked for.
  */
 public data class VoteOutcome(
-    public val questionId: String,
     public val yourSide: Side,
     public val tally: Tally,
     public val pointsAwarded: Int,

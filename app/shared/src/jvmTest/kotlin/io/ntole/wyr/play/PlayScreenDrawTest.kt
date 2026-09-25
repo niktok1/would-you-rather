@@ -268,7 +268,6 @@ class PlayScreenDrawTest {
             listOf(emptySet(), setOf(Category.ETHICS), Category.selectable.toSet())
         val OUTCOME =
             VoteOutcome(
-                questionId = QUESTION.id,
                 yourSide = Side.B,
                 tally = Tally(votesA = 7, votesB = 3),
                 pointsAwarded = 1,

@@ -62,7 +62,6 @@ class TallyTest {
     fun `a tie counts as agreeing with the majority`() {
         val outcome =
             VoteOutcome(
-                questionId = "q1",
                 yourSide = Side.A,
                 tally = Tally(votesA = 5, votesB = 5),
                 pointsAwarded = 10,

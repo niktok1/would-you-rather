@@ -29,7 +29,7 @@ class CastVoteTest {
             attempt: AttemptId,
         ): VoteOutcome {
             calls += "cast $questionId $side ${attempt.value}"
-            return VoteOutcome(questionId, side, Tally(votesA = 0, votesB = 1), pointsAwarded = 1, totalPoints = 1)
+            return VoteOutcome(side, Tally(votesA = 0, votesB = 1), pointsAwarded = 1, totalPoints = 1)
         }
     }
 

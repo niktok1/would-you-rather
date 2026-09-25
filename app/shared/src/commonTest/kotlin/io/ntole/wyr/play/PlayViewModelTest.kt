@@ -799,7 +799,6 @@ class PlayViewModelTest {
 
         val OUTCOME =
             VoteOutcome(
-                questionId = QUESTION.id,
                 yourSide = Side.A,
                 tally = Tally(votesA = 7, votesB = 3),
                 pointsAwarded = 17,
