@@ -664,6 +664,48 @@ EncryptedSharedPreferences: enough for a game that stores nothing personal.
   settling refresh (`refreshAs`, §8a) whose answer is lost when the stored token was already the
   previous one.
 - **WCAG AA contrast audit** — see §5b. Paused along with UI polish (§8d).
+- **Local questions** — *design decided 2026-09-26; not built.* The game is for Serbia first and
+  more countries later. Most questions translate, but some matter only in one place: a region of
+  several countries (the former Yugoslavia), one country, or one city. Such a question reaches only
+  the players it concerns, and no player is ever asked to pick a region. It is not a category: no
+  player sees it or filters by it. Build it with question translation (§8f, *Not translated yet*),
+  since both decide which questions a player is served and in what text; nothing needs it until a
+  second country plays.
+  - *Places* are server data the moderator manages, as categories are (§8d, *Categories*): each an
+    id, a kind, and a name in Serbian and in English. A **region** is a named group of countries
+    (`EX_YU`: RS, HR, BA, ME, MK, SI), and a country may be in several (`EX_YU`, `BALKAN`); a
+    **country** is its ISO 3166-1 code, seeded; a **city** belongs to one country (`RS_NOVI_SAD`).
+    On the wire a place is its id, a plain string, never an enum (§5).
+  - *A question's audience* is any number of places, none being global, the default. A local
+    question is written once, in its place's language, and never translated. The moderator sets
+    the audience when approving, as they may change categories, and may change it later; the author
+    is not asked. The players' DTOs never carry it, the moderator's do. Most questions about a city
+    are known across its country (every Serb knows Knez Mihailova), so the moderator gives those
+    the country and keeps a city for the truly local. The questions there when it lands stay global
+    until the moderator gives them an audience.
+  - *A player's places*: their country, detected (below) and kept on the player
+    (`players.country`) once set, so travelling changes nothing and a registered player carries it
+    to a new device; every region that country is in; their city, if they set one; and the country
+    of the language they play in, where it has one (Serbian, either script, → RS; English none), so
+    Serbian questions reach Serbs abroad who play in Serbian (the user: yes). A player of no known
+    country gets what their language and city bring them, and every global question.
+  - *The feed* serves a question when its audience is empty or shares a place with the player's:
+    one more predicate beside the category filter. Local questions join each cycle's random order
+    like any other (§8d, *Endless feed*).
+  - *A city is never detected*: an address's city is unreliable (Serbia's mobile networks mostly
+    read as Belgrade), and GPS needs a permission prompt. So it is opt-in, a quiet *Град* row on the
+    Account screen, beside a *Земља* row that overrides a wrong country; neither is asked up front.
+    Later, once a city has enough questions, a one-time *Одакле си?* card in the feed, which the
+    player can skip.
+  - *Open — user decision: detecting the country.* Recommended: the country Cloudflare reads from
+    the client's address, `CF-IPCountry`, taken once when the guest is minted: the same on all four
+    platforms, and in one place on the server. Whether Render passes that header on is to be checked
+    on dev with one log line; if not, an offline IP-to-country database, a new dependency to decide
+    then (§2, §4). Weaker: the device's region, which on Android usually comes with the language (a
+    Serb with an English phone reads as `US`), which a browser rarely has at all, and which departs
+    from §8f's *nothing reads the device's locale*.
+  - *Rollbacks*: a build before the migration ignores audiences and serves local questions to
+    everyone. Accepted (the user: the game is not released yet).
 
 `RANDOM` was an open item, resolved twice. First as a content category (the absurd questions), not a
 "surprise me" filter. Then, *decided 2026-09-25*: "RANDOM is actually all", so RANDOM is no category
@@ -1626,7 +1668,8 @@ hand, so the two cannot say different things; and **English** stands beside them
   fails leaves the language this run's only, silently. `LanguageViewModelTest` and `AppModuleTest`
   pin it, the sessions beside it in one storage untouched.
 - **Not translated yet**: question texts stay as their authors wrote them (server data; a later
-  change may put Serbian ones through `SerbianScript.toLatin`), and the moderation app
+  change may put Serbian ones through `SerbianScript.toLatin`; a local question is never
+  translated, §8b *Local questions*), and the moderation app
   (`:app:adminApp`) stays English, naming categories in Serbian (`nameOf`).
 ---
 
