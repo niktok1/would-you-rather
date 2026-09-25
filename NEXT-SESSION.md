@@ -28,16 +28,16 @@ from the dev console onto the game's **Play** tab, the second feature moved afte
 (CLAUDE.md §8d, *Current focus*, *Skipping*, *Likes*). How to try it on a phone is under *Skip and
 Like on Play*.
 
-**On `feat/play-categories`** (from b8d992c; not merged, nothing pushed): the **category picker**
+**`feat/play-categories` is on `main`**, and on `origin/main`, at 63e38ce: the **category picker**
 moved from the console's Category row onto the Play tab, the third feature moved (CLAUDE.md §8d,
 *Current focus*, *Categories*). The client alone changed; the server and the contract did not. How
 to try it on a phone is under *Categories on Play*.
 
-**On `feat/submit-screen`** (from b8d992c; not merged, nothing pushed): **submitting** moved from the
-console's *Submit a question* section onto a **Submit** tab of the game's own, in every build, the
-fifth feature moved (CLAUDE.md §8d, *Current focus*, *Submitting*). The client alone changed, with
-`SubmissionRules` in `:core:domain` so the form checks the options as they are typed; the server and
-the contract did not. How to try it on a phone is under *Submit on its own tab*.
+**`feat/submit-screen` is on `main`**, and on `origin/main`, at 61bfcad: **submitting** moved from
+the console's *Submit a question* section onto a **Submit** tab of the game's own, in every build,
+the fifth feature moved (CLAUDE.md §8d, *Current focus*, *Submitting*). The client alone changed,
+with `SubmissionRules` in `:core:domain` so the form checks the options as they are typed; the
+server and the contract did not. How to try it on a phone is under *Submit on its own tab*.
 
 **On `chore/remove-console`** (from 61bfcad; not merged, nothing pushed): the dev console is gone
 (the user, 2026-09-25: "console is not needed"). Every build, LOCAL, DEV and PROD alike, shows Play,
@@ -771,17 +771,18 @@ they went to, the cycle and the questions left in it, and the likes the question
 submitted hold, as `GET /v1/me` counts them, read each time the tab is shown. The server needs
 nothing new.
 
-**On `feat/account-stats`** (from b8d992c; not merged, nothing pushed), the fourth feature moved; the
-client alone changed. Verified on this Mac: `AccountViewModelTest` (17, 14 before) reads a guest's
-stats and a registered player's, and again on each showing; `AccountScreenDrawTest` (3, 1 before)
-draws every state at 400x900 and 375x599 in both themes, reads every line off the screen's semantics,
-and holds every state without a form to 599 high (509 at most); `DevConsoleScreenTest` the console's
-likes-moved line. A screen showing only the points, and the cycle swapped with what is left, each
-broke a test. Counts: `:server` 311, 2 skipped (from the build cache: untouched); `:core:domain` 47;
-`:core:data` 146; `:core:network` 82 (88 as Android host tests); `:app:shared` 135 (129 before);
-`:app:adminApp` 87. Lint, the verify job's tests (client tasks forced to rerun) and client compiles,
-`assembleDebug` included, and the ios job's Kotlin compiles pass. **Not verified:** nothing has run
-on a device or against a server, and the renders were looked at on this Mac only.
+**`feat/account-stats` is on `main`**, and on `origin/main`, at 52f36bb: the fourth feature moved;
+the client alone changed. Verified on this Mac: `AccountViewModelTest` (17, 14 before) reads a
+guest's stats and a registered player's, and again on each showing; `AccountScreenDrawTest` (3, 1
+before) draws every state at 400x900 and 375x599 in both themes, reads every line off the screen's
+semantics, and holds every state without a form to 599 high (509 at most); `DevConsoleScreenTest`
+the console's likes-moved line. A screen showing only the points, and the cycle swapped with what is
+left, each broke a test. Counts: `:server` 311, 2 skipped (from the build cache: untouched);
+`:core:domain` 47; `:core:data` 146; `:core:network` 82 (88 as Android host tests); `:app:shared`
+135 (129 before); `:app:adminApp` 87. Lint, the verify job's tests (client tasks forced to rerun)
+and client compiles, `assembleDebug` included, and the ios job's Kotlin compiles pass. **Not
+verified:** nothing has run on a device or against a server, and the renders were looked at on this
+Mac only.
 
 **To try it on a phone** (`devDebug`, against the dev server, whose in-memory H2 forgets everything
 on a deploy or a spin-down). The numbers are a fresh guest's, with only the 24 seeds on the server
@@ -1124,11 +1125,13 @@ item is one short-lived branch, in order:
 15. `feat/play-skip-like` *(on `main` and `origin/main` at b8d992c)* — Skip and Like move from the
     console onto the **Play** tab, the second feature moved (CLAUDE.md §8d). Still to do: try it on a
     phone (*Skip and Like on Play*).
-16. `feat/play-categories` — the category picker moves from the console's Category row onto the
-    **Play** tab, the third feature moved (CLAUDE.md §8d). Still to do: the user's call on the
-    categories row, which takes 56 from a question not answered yet (CLAUDE.md §8b, *The categories
-    row on the Play screen*), then try it on a phone (*Categories on Play*). Then `feat/account-stats`
-    and `feat/submit-screen` moved the stats and submitting, the last of the console's features.
+16. `feat/play-categories` *(on `main` and `origin/main` at 63e38ce)* — the category picker moves
+    from the console's Category row onto the **Play** tab, the third feature moved (CLAUDE.md §8d).
+    Still to do: the user's call on the categories row, which takes 56 from a question not answered
+    yet (CLAUDE.md §8b, *The categories row on the Play screen*), then try it on a phone
+    (*Categories on Play*). Then `feat/account-stats` (at 52f36bb) and `feat/submit-screen` (at
+    61bfcad), both on `main` and `origin/main` too, moved the stats and submitting, the last of the
+    console's features.
 17. **Now:** `chore/remove-console` — the console goes, with nothing in its place; every build shows
     Play, Submit and Account, and a LOCAL or DEV build names its server on Account. Next: review,
     merge, push, CI, then try it on a phone (*Trying a change*).
