@@ -830,7 +830,8 @@ The third to move is the **category picker**, onto the Play screen (*Categories*
 - One action at a time (`canChangeCategories`): not while a question loads, nor while a vote, a skip
   or a like is in flight. Play is off then, and a change refused keeps the picker open. From a
   failure it goes: a selection the feed has nothing in shows the out-of-questions state, and changing
-  the categories is the way out of it.
+  the categories is the way out of it. From a vote lost to `NETWORK` it goes too, and the lost
+  attempt is never sent again (*Retry safety*).
 - The selection lives in the repository as before, in memory for the app's life: a launch plays
   every category again, and New guest keeps it.
 - `PlayViewModelTest` drives it over fakes. `PlayScreenDrawTest` draws every state with none, one and
@@ -904,7 +905,9 @@ The third to move is the **category picker**, onto the Play screen (*Categories*
   The app never resends an older attempt after a newer one, so only a duplicate from the network
   or a modified client can do that. Built in `VoteStore.cast` and in `AttemptId`, made once per
   tap: the Play tab resends a vote lost to `NETWORK` as the same attempt, as `withSessionRecovery`
-  does its retry.
+  does its retry, when the player taps *Try again*. Changing the categories from that failure moves
+  on instead (*Current focus*) and abandons the attempt: the vote counts only if the first send
+  landed, and nothing pays twice.
 - **Stats** *(built)*: `GET /v1/me` reports the session player's total points, answers given
   (every paid answer, re-answers included and replays not, in `players.answers_given`, an SQL
   increment beside the points), distinct questions answered, current cycle, and how many questions

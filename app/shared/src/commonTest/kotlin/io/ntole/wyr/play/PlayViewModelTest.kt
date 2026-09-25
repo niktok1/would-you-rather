@@ -592,6 +592,29 @@ class PlayViewModelTest {
         }
 
     @Test
+    fun `new categories from a vote lost to the network move on without sending it again`() =
+        runTest(dispatcher) {
+            // The player moved on instead of trying again: the vote counts only if it landed the
+            // first time, and nothing can pay for it twice (CLAUDE.md §8d, *Retry safety*).
+            val votes = RecordingVoteRepository(DomainError.NETWORK)
+            val questions = FakeQuestionRepository(servedFor = mapOf(setOf(Category.FOOD) to FOOD_QUESTION))
+            val viewModel = viewModel(questions, votes = votes)
+            testScheduler.advanceUntilIdle()
+            viewModel.choose(Side.A)
+            testScheduler.advanceUntilIdle()
+            val failed = assertIs<PlayUiState.Failed>(viewModel.state.value)
+            assertEquals(QUESTION, failed.lostVote?.question, "a vote Try again would send again")
+
+            viewModel.openCategories()
+            viewModel.toggleCategory(Category.FOOD)
+            viewModel.applyCategories()
+            testScheduler.advanceUntilIdle()
+
+            assertEquals(1, votes.callCount, "the lost vote is not sent again")
+            assertEquals(PlayUiState.Asking(FOOD_QUESTION), viewModel.state.value)
+        }
+
+    @Test
     fun `new categories drop the answered question on screen too`() =
         runTest(dispatcher) {
             val questions = FakeQuestionRepository(servedFor = mapOf(setOf(Category.FOOD) to FOOD_QUESTION))

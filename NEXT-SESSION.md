@@ -75,7 +75,8 @@ to try it on a phone is under *Categories on Play*.
   and `PlayViewModelTest`, the Play screen's category picker: ticking, *All categories*, every
   category ticked played as all five and never as none (`PlayScreenTest` names them, not *All*), the
   selection sent to the repository before the next fetch, the question on screen dropped for one
-  from it, the same selection keeping it, and no change while anything is in flight
+  from it, the same selection keeping it, a vote lost to `NETWORK` never sent again once the
+  categories change from its failure, and no change while anything is in flight
   (`feat/play-categories`; the console's Category row, which it replaced, had
   `DevConsoleViewModelTest`'s).
   Moderation (`feat/moderation`, server and contract only): `ModerationStoreTest` races two
