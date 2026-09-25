@@ -68,7 +68,11 @@ own copy stays English for the branches that redesign them. The client alone cha
 tests; `RootScreensTest` went with the tabs). Not seen on a device: Android's back, and any screen of
 it on a phone; nor whether the web build's default font draws Cyrillic.
 
-**On `feat/play-redesign`** (from 4821c05; not merged, nothing pushed): the user's **Play screen**
+**On `merge/redesign`** (from 4821c05; not on `main`, nothing pushed): `feat/play-redesign`, then
+`feat/account-redesign`, each merged whole with `--no-ff`. The two paragraphs below say what each
+brought.
+
+**On `feat/play-redesign`** (from 4821c05; merged into `merge/redesign`, nothing pushed): the user's **Play screen**
 redesign (CLAUDE.md §8d, *The Play screen*). Two cards and one row between them: the categories
 played (*Све*, a chevron, the picker dialog as before), the points (*123 П*, read each time the
 screen is shown and moved by each vote's answer, `PlayViewModel.points`) and the heart with the like
@@ -84,6 +88,33 @@ re-read of the points after a like (a like of one's own question shows from the 
 visit), and the half second after a reveal lands in which a card does not go on, so a double tap
 cannot skip the reveal (`REVEAL_HOLD_MILLIS`; or no hold). The count-up plays again when Play is
 shown again on a revealed question. Not seen on a device.
+
+**On `feat/account-redesign`** (from 4821c05; merged into `merge/redesign`, nothing pushed): the user's Account
+redesign (2026-09-25; CLAUDE.md §8d, *The Account screen*, *Submitting*; §8f). The Account screen,
+top down: a card of the player (the username or *Гост*, the points as *123 P*, four stats as numbers),
+**My questions** (the player's submissions, each option and its status in a word, and *Ново питање*),
+the language switch, Log out, and the server line, all in the three languages. A guest's one button
+opens the **Auth** page: Register only, with a link that switches it to Log in and back; the rules,
+the short failures and the guest-points warning kept, and back to Account once one works, or once
+the read after one whose answer was lost names the account. Shown before any player is read, a read
+that failed says so on top with Try again, and Log in waits for one. The Submit screen is only the
+form now, opened from My questions and back there once a question is stored (one stored after the
+player went back is read again if Account is shown then); Send shows the cost, *Пошаљи · 1 P*
+(`SubmissionRules.COST`, 1 until release), and is off with *Немаш довољно поена.* while the points
+are fewer. The client alone changed: the server here charges nothing. *Accounts* and *Submit on its
+own tab* below still walk the flows as they were before it. For the merge: `SubmitScreen.kt` and
+`SubmitScreenTest.kt` conflict with `feat/server-categories`' 4ceb426, which adds
+`SUBMISSION_COST = 1`, a cost `POINTS_NOTE` and an English `NOT_ENOUGH_POINTS` line; keep
+`SubmissionRules.COST` as the only copy, drop `SUBMISSION_COST` and `POINTS_NOTE` (this branch has
+no note), map `NOT_ENOUGH_POINTS` to an `AccountStrings` text in all three languages (until then the
+form shows it as *Нешто није у реду*), and drop §8d *Submitting*'s "the server on this branch
+charges nothing". The chips still call `categoryName`; `Strings.kt` and CLAUDE.md §8f will conflict
+with `feat/play-redesign`, both adding texts. To ask the user: the Auth page has no heading (read
+literally, it "shows only Register"), and the form's line that submitting earns no points is gone.
+Tests: `:app:shared` 225 (`AuthScreenDrawTest` 9, `TemplatesTest` 4 new; `AccountScreenDrawTest` 14,
+`AccountViewModelTest` 33, `SubmitViewModelTest` 25, `SubmitScreenDrawTest` 6, `AppNavigationTest`
+14). Android's back is covered only by `NavigatorTest`: on the JVM `SystemBack` binds nothing. Not
+seen on a device: any of it on a phone, autofill on the Auth page and Android's back included.
 
 ### Verified working
 
@@ -941,8 +972,8 @@ a deploy or a spin-down; the server needs nothing new):
    доступна.* without moving the cards, at a larger font size in the phone's settings too. Network
    back on, the heart again: it goes through. Skip offline moves on all the same while questions are
    queued, and shows *Игра није доступна.* with **Пробај опет** once they run out.
-6. A like of your own question pays you a point: submit one (the account icon, then *Пошаљи
-   питање*), approve it in the moderation app, and play until it comes up. Like it: the points in
+6. A like of your own question pays you a point: submit one (the account icon, then *Ново питање*
+   under *Моја питања*), approve it in the moderation app, and play until it comes up. Like it: the points in
    the row show the point from the next vote on, or once Play is shown again (the home icon, then
    **Играј**).
 

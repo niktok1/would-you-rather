@@ -7,11 +7,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.LinearProgressIndicator
@@ -28,21 +26,24 @@ import androidx.compose.ui.text.input.KeyboardCapitalization
 import io.ntole.wyr.core.domain.error.DomainError
 import io.ntole.wyr.core.domain.question.Category
 import io.ntole.wyr.core.domain.submission.OptionProblem
-import io.ntole.wyr.core.domain.submission.Submission
 import io.ntole.wyr.core.domain.submission.SubmissionRules
-import io.ntole.wyr.core.domain.submission.SubmissionStatus
+import io.ntole.wyr.language.AccountStrings
+import io.ntole.wyr.language.LocalStrings
+import io.ntole.wyr.language.fill
+import io.ntole.wyr.language.pointsText
 import io.ntole.wyr.play.categoryName
 import io.ntole.wyr.theme.WyrThemeAccessors
 import io.ntole.wyr.theme.WyrTypeScale
 
 /**
- * The Submit screen (CLAUDE.md §8d, *Submitting*): a question of the player's own, its two options
- * and the categories it is filed under, sent for a moderator to review; below it, the player's own
- * submissions, newest first, and where each stands.
+ * The Submit screen (CLAUDE.md §8d, *Submitting*), opened from My questions on the Account screen: a
+ * question of the player's own, its two options and the categories it is filed under, sent for a
+ * moderator to review. Send names what it costs, [SubmissionRules.COST], and stays off while the
+ * player has fewer points; once a question is stored the app goes back to My questions.
  *
- * Plain on purpose while UI polish is paused, and every colour, space and size from the theme (§5b).
- * Each option says what [SubmissionRules] refuses in it as it is typed, and Submit stays off until
- * nothing is refused and a category is picked. The form scrolls with the list under it.
+ * Plain on purpose while UI polish is paused, every colour, space and size from the theme (§5b) and
+ * every word from [LocalStrings] (§8f). Each option says what [SubmissionRules] refuses in it as it is
+ * typed, and Send stays off until nothing is refused and a category is picked. The form scrolls.
  */
 @Composable
 fun SubmitScreen(
@@ -60,20 +61,8 @@ fun SubmitScreen(
                     .fillMaxSize()
                     .verticalScroll(rememberScrollState())
                     .padding(dimens.screenPadding),
-            verticalArrangement = Arrangement.spacedBy(dimens.spaceLg),
         ) {
-            Column(verticalArrangement = Arrangement.spacedBy(dimens.spaceSm)) {
-                Text(
-                    text = "Submit a question",
-                    color = colors.headingAccent,
-                    fontSize = WyrTypeScale.heading,
-                    fontWeight = FontWeight.ExtraBold,
-                )
-                Text(text = POINTS_NOTE, color = colors.muted, fontSize = WyrTypeScale.statLabel)
-            }
-
             Form(state, actions)
-            MySubmissions(state, actions)
         }
     }
 }
@@ -85,16 +74,22 @@ private fun Form(
 ) {
     val colors = WyrThemeAccessors.colors
     val dimens = WyrThemeAccessors.dimens
+    val strings = LocalStrings.current.accountScreens
     // What is typed is not to change while it is being sent: it is cleared once it is stored.
     val editable = !state.isSubmitting
 
     Column(verticalArrangement = Arrangement.spacedBy(dimens.spaceSm)) {
-        SectionTitle("Would you rather…")
+        Text(
+            text = strings.wouldYouRather,
+            color = colors.headingAccent,
+            fontSize = WyrTypeScale.heading,
+            fontWeight = FontWeight.ExtraBold,
+        )
         OptionField(
             value = state.optionA,
             onValueChange = actions::setOptionA,
-            label = "Option A",
-            hint = optionHint(state.optionAProblem, same = false),
+            label = strings.optionA,
+            hint = optionHint(state.optionAProblem, same = false, strings),
             isError = state.optionAProblem != null,
             enabled = editable,
             imeAction = ImeAction.Next,
@@ -102,14 +97,14 @@ private fun Form(
         OptionField(
             value = state.optionB,
             onValueChange = actions::setOptionB,
-            label = "Option B",
-            hint = optionHint(state.optionBProblem, same = state.sameOptions),
+            label = strings.optionB,
+            hint = optionHint(state.optionBProblem, same = state.sameOptions, strings),
             isError = state.optionBProblem != null || state.sameOptions,
             enabled = editable,
             imeAction = ImeAction.Done,
         )
 
-        SectionTitle("Categories")
+        SectionTitle(strings.categories)
         // No vertical spacing: each chip's touch target already stands clear of the row below.
         FlowRow(horizontalArrangement = Arrangement.spacedBy(dimens.spaceSm)) {
             Category.selectable.forEach { category ->
@@ -128,15 +123,19 @@ private fun Form(
                 )
             }
         }
-        Text(text = "Pick one or more.", color = colors.muted, fontSize = WyrTypeScale.statLabel)
+        Text(text = strings.pickCategories, color = colors.muted, fontSize = WyrTypeScale.statLabel)
 
         state.submitFailure?.let { FailureText(it) }
-        if (state.sent) Text(text = SENT_NOTE, color = colors.primaryText)
+        if (state.tooFewPoints) Text(text = strings.notEnoughPoints, color = colors.primaryText)
         Button(onClick = actions::submit, enabled = state.canSubmit, modifier = Modifier.fillMaxWidth()) {
-            Text("Submit")
+            Text(sendText(strings))
         }
-        if (state.isSubmitting) {
+        if (state.isBusy) {
             LinearProgressIndicator(color = colors.headingAccent, modifier = Modifier.fillMaxWidth())
+        }
+        state.pointsFailure?.let { failure ->
+            FailureText(failure)
+            OutlinedButton(onClick = actions::refresh, enabled = !state.isBusy) { Text(strings.tryAgain) }
         }
     }
 }
@@ -166,71 +165,6 @@ private fun OptionField(
 }
 
 @Composable
-private fun MySubmissions(
-    state: SubmitState,
-    actions: SubmitActions,
-) {
-    val colors = WyrThemeAccessors.colors
-    val dimens = WyrThemeAccessors.dimens
-
-    Column(verticalArrangement = Arrangement.spacedBy(dimens.spaceSm)) {
-        SectionTitle("My submissions")
-
-        val submissions = state.submissions
-        val failure = state.listFailure
-        when {
-            // With no failure a read is on its way: every action ends in one, and a read that fails
-            // says so here, whatever the action before it ended in.
-            submissions == null -> {
-                if (failure == null) CircularProgressIndicator(color = colors.headingAccent)
-            }
-
-            submissions.isEmpty() -> {
-                Text(text = "None yet. The questions you send show here.", color = colors.muted)
-            }
-
-            else -> {
-                if (state.running == SubmitAction.LOAD) {
-                    LinearProgressIndicator(color = colors.headingAccent, modifier = Modifier.fillMaxWidth())
-                }
-                submissions.forEach { SubmissionCard(it) }
-            }
-        }
-        if (failure != null) {
-            FailureText(failure)
-            OutlinedButton(onClick = actions::refresh, enabled = !state.isBusy) { Text("Try again") }
-        }
-    }
-}
-
-@Composable
-private fun SubmissionCard(submission: Submission) {
-    val colors = WyrThemeAccessors.colors
-    val dimens = WyrThemeAccessors.dimens
-
-    Surface(
-        color = colors.surface,
-        shape = RoundedCornerShape(dimens.radiusCard),
-        modifier = Modifier.fillMaxWidth(),
-    ) {
-        Column(
-            modifier = Modifier.padding(dimens.spaceMd),
-            verticalArrangement = Arrangement.spacedBy(dimens.spaceXs),
-        ) {
-            Text(text = statusLine(submission), color = colors.headingAccent, fontWeight = FontWeight.Bold)
-            Text(text = submission.optionA, color = colors.primaryText)
-            Text(text = "or", color = colors.muted, fontSize = WyrTypeScale.statLabel)
-            Text(text = submission.optionB, color = colors.primaryText)
-            Text(
-                text = categoryNames(submission.categories),
-                color = colors.muted,
-                fontSize = WyrTypeScale.statLabel,
-            )
-        }
-    }
-}
-
-@Composable
 private fun SectionTitle(text: String) {
     Text(
         text = text,
@@ -242,67 +176,55 @@ private fun SectionTitle(text: String) {
 
 @Composable
 private fun FailureText(failure: SubmitFailure) {
-    Text(text = failureMessage(failure), color = MaterialTheme.colorScheme.error)
+    Text(
+        text = failureMessage(failure, LocalStrings.current.accountScreens),
+        color = MaterialTheme.colorScheme.error,
+    )
 }
 
-/** Submitting pays nothing by itself (CLAUDE.md §8c): an author earns through likes. */
-internal const val POINTS_NOTE: String =
-    "Submitting earns no points, but once approved, each like your question gets earns you 1."
-
-internal const val SENT_NOTE: String = "Sent. It waits below for a moderator to review it."
+/** Send, and what sending costs: *Пошаљи · 1 P*. */
+internal fun sendText(strings: AccountStrings): String = strings.send.fill(pointsText(SubmissionRules.COST))
 
 /** The rule an option is held to, what is wrong with the one typed by it, or that the two are the same. */
 internal fun optionHint(
     problem: OptionProblem?,
     same: Boolean,
+    strings: AccountStrings,
 ): String =
     when {
-        problem == OptionProblem.BLANK -> "Write something here."
-        problem == OptionProblem.TOO_LONG -> "At most ${SubmissionRules.MAX_OPTION_LENGTH} characters."
-        problem == OptionProblem.NOT_ONE_LINE -> "One line, with no line breaks or tabs."
-        same -> "The two options must be different."
-        else -> "One line, up to ${SubmissionRules.MAX_OPTION_LENGTH} characters."
+        problem == OptionProblem.BLANK -> strings.optionBlank
+        problem == OptionProblem.TOO_LONG -> strings.optionTooLong.fill(SubmissionRules.MAX_OPTION_LENGTH)
+        problem == OptionProblem.NOT_ONE_LINE -> strings.optionNotOneLine
+        same -> strings.optionsSame
+        else -> strings.optionRule.fill(SubmissionRules.MAX_OPTION_LENGTH)
     }
-
-/** Where [submission] stands with the moderator, a rejected one with the moderator's reason. */
-internal fun statusLine(submission: Submission): String =
-    when (submission.status) {
-        SubmissionStatus.PENDING -> "Pending: waiting for a moderator"
-        SubmissionStatus.APPROVED -> "Approved: in the game"
-        SubmissionStatus.REJECTED -> submission.rejectionReason?.let { "Rejected: $it" } ?: "Rejected"
-        SubmissionStatus.RETIRED -> "Retired: out of the game for now"
-        SubmissionStatus.OTHER -> "Its status is one this version of the app can't show"
-    }
-
-/** The categories a question is filed under, in the player's words and in declaration order. */
-internal fun categoryNames(categories: Set<Category>): String =
-    Category.entries.filter { it in categories }.joinToString(", ", transform = ::categoryName)
 
 /**
  * Player-facing copy for a failed action, by its [DomainError], never the server's message, which is
  * diagnostic only.
  */
-internal fun failureMessage(failure: SubmitFailure): String =
+internal fun failureMessage(
+    failure: SubmitFailure,
+    strings: AccountStrings,
+): String =
     when (failure.error) {
         DomainError.INVALID_SUBMISSION -> {
-            "The game can't take that question as written. Check both options."
+            strings.invalidSubmission
         }
 
         DomainError.SUBMISSION_LIMIT -> {
-            "You have ${SubmissionRules.MAX_PENDING_SUBMISSIONS} questions waiting for review already. " +
-                "Send more once one is reviewed."
+            strings.submissionLimit.fill(SubmissionRules.MAX_PENDING_SUBMISSIONS)
         }
 
         DomainError.RATE_LIMITED -> {
-            val wait = failure.retryAfter?.let { "Wait ${it.inWholeSeconds} s" } ?: "Wait a moment"
-            "Too many tries. $wait, then try again."
+            failure.retryAfter?.let { strings.tooManyTries.fill(it.inWholeSeconds) } ?: strings.tooManyTriesNoWait
         }
 
         DomainError.NETWORK -> {
-            "Can't reach the game. Check your connection."
+            strings.offline
         }
 
         else -> {
-            "Something went wrong. Try again."
+            strings.somethingWrong
         }
     }

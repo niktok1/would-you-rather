@@ -31,6 +31,7 @@ import io.ntole.wyr.core.domain.session.SessionRepository
 import io.ntole.wyr.core.domain.submission.GetMySubmissions
 import io.ntole.wyr.core.domain.submission.Submission
 import io.ntole.wyr.core.domain.submission.SubmissionRepository
+import io.ntole.wyr.core.domain.submission.SubmissionStatus
 import io.ntole.wyr.core.domain.submission.SubmitQuestion
 import io.ntole.wyr.core.domain.vote.AttemptId
 import io.ntole.wyr.core.domain.vote.CastVote
@@ -45,6 +46,9 @@ import io.ntole.wyr.language.EnglishStrings
 import io.ntole.wyr.language.Language
 import io.ntole.wyr.language.LanguageViewModel
 import io.ntole.wyr.language.SerbianCyrillicStrings
+import io.ntole.wyr.play.categoryName
+import io.ntole.wyr.submit.sendText
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -60,7 +64,9 @@ import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
+import kotlin.time.Instant
 
 /**
  * The whole app, [App] as every platform shows it, drawn off screen over fakes of the game and driven
@@ -128,7 +134,7 @@ class AppNavigationTest {
         withApp { scene ->
             scene.tap(CYRILLIC.play)
             scene.tap(CYRILLIC.account)
-            assertTrue(CYRILLIC.submitQuestion in scene.texts(), "the Account screen is not shown")
+            assertTrue(CYRILLIC.accountScreens.newQuestion in scene.texts(), "the Account screen is not shown")
 
             scene.tap(CYRILLIC.back)
 
@@ -173,17 +179,134 @@ class AppNavigationTest {
             assertEquals(listOf(CYRILLIC.gameName, CYRILLIC.play), scene.texts())
         }
 
+    /** The Account screen reads the player and My questions each time it is shown; the form reads the points. */
     @Test
-    fun `Submit opens from Account and its back arrow returns to Account`() =
+    fun `the Submit form opens from My questions and its back arrow returns to Account`() =
         withApp { scene ->
             scene.tap(CYRILLIC.account)
-            scene.tap(CYRILLIC.submitQuestion)
+            assertEquals(1, game.statsRead)
             assertEquals(1, game.submissionsRead)
+
+            scene.tap(CYRILLIC.accountScreens.newQuestion)
+            assertTrue(sendText(CYRILLIC.accountScreens) in scene.texts(), "the form is not shown")
             assertEquals(listOf(CYRILLIC.back), scene.descriptions().take(1))
+            assertEquals(2, game.statsRead)
 
             scene.tap(CYRILLIC.back)
 
-            assertTrue(CYRILLIC.submitQuestion in scene.texts(), "the Account screen is not shown")
+            assertTrue(CYRILLIC.accountScreens.newQuestion in scene.texts(), "the Account screen is not shown")
+            assertEquals(2, game.submissionsRead)
+        }
+
+    /** After a question sent, My questions again, which reads the list and lists it. */
+    @Test
+    fun `a question sent goes back to My questions which lists it`() =
+        withApp { scene ->
+            scene.tap(CYRILLIC.account)
+            scene.tap(CYRILLIC.accountScreens.newQuestion)
+            scene.type(0, "Fly")
+            scene.type(1, "Swim")
+            scene.tap(categoryName(Category.FOOD))
+
+            scene.tap(sendText(CYRILLIC.accountScreens))
+            scene.settle()
+
+            assertEquals(listOf("Fly"), game.sent.map { it.optionA })
+            val shown = scene.everyText()
+            assertTrue(CYRILLIC.accountScreens.newQuestion in shown, "the Account screen is not shown: $shown")
+            assertTrue("Fly" in shown && CYRILLIC.accountScreens.pending in shown, "the question is not listed: $shown")
+            assertEquals(2, game.submissionsRead)
+        }
+
+    /** Sent and then left before its answer came: My questions reads the list again once it is stored. */
+    @Test
+    fun `a question stored after the player went back is listed on My questions`() =
+        withApp { scene ->
+            val answer = CompletableDeferred<Unit>()
+            game.submitWaitsFor = answer
+            scene.tap(CYRILLIC.account)
+            scene.tap(CYRILLIC.accountScreens.newQuestion)
+            scene.type(0, "Fly")
+            scene.type(1, "Swim")
+            scene.tap(categoryName(Category.FOOD))
+            scene.tap(sendText(CYRILLIC.accountScreens))
+
+            scene.tap(CYRILLIC.back)
+            assertEquals(2, game.submissionsRead, "read as the Account screen is shown again")
+            answer.complete(Unit)
+            scene.settle()
+
+            val shown = scene.everyText()
+            assertTrue(CYRILLIC.accountScreens.newQuestion in shown, "the Account screen is not shown: $shown")
+            assertTrue("Fly" in shown && CYRILLIC.accountScreens.pending in shown, "the question is not listed: $shown")
+            assertEquals(3, game.submissionsRead)
+        }
+
+    @Test
+    fun `the Auth page opens from Account and its back arrow returns to Account`() =
+        withApp { scene ->
+            scene.tap(CYRILLIC.account)
+            scene.tap(CYRILLIC.accountScreens.openAuth)
+            assertTrue(CYRILLIC.accountScreens.toLogIn in scene.everyText(), "the Auth page is not shown")
+
+            scene.tap(CYRILLIC.back)
+
+            assertTrue(CYRILLIC.accountScreens.openAuth in scene.texts(), "the Account screen is not shown")
+        }
+
+    /** After a register that worked, the Account screen again, which reads the player it now names. */
+    @Test
+    fun `a registration that worked goes back to Account as the account`() =
+        withApp { scene ->
+            scene.tap(CYRILLIC.account)
+            scene.tap(CYRILLIC.accountScreens.openAuth)
+            scene.type(0, "bob_1")
+            scene.type(1, "correct horse")
+
+            scene.tap(CYRILLIC.accountScreens.register)
+            scene.settle()
+
+            assertEquals("bob_1", game.username)
+            val shown = scene.everyText()
+            assertFalse(CYRILLIC.accountScreens.register in shown, "the Auth page is still shown: $shown")
+            assertFalse(CYRILLIC.accountScreens.openAuth in shown, "a registered player has no way to register: $shown")
+            assertTrue(shown.any { "bob_1" in it }, "the account is not named: $shown")
+        }
+
+    /** A registration whose answer was lost made the account all the same: the page goes back as for one that came. */
+    @Test
+    fun `a registration whose answer was lost goes back to Account as the account`() =
+        withApp { scene ->
+            game.registerAnswerLost = true
+            scene.tap(CYRILLIC.account)
+            scene.tap(CYRILLIC.accountScreens.openAuth)
+            scene.type(0, "bob_1")
+            scene.type(1, "correct horse")
+
+            scene.tap(CYRILLIC.accountScreens.register)
+            scene.settle()
+
+            assertEquals("bob_1", game.username)
+            val shown = scene.everyText()
+            assertFalse(CYRILLIC.accountScreens.register in shown, "the Auth page is still shown: $shown")
+            assertFalse(CYRILLIC.accountScreens.offline in shown, "the account was made: $shown")
+            assertTrue(shown.any { "bob_1" in it }, "the account is not named: $shown")
+        }
+
+    /**
+     * The back stack unwinds a screen at a tap: Auth, then Account, then Home. Android's back goes
+     * through the same navigator (`SystemBack`), which binds nothing on the JVM: only `NavigatorTest`
+     * and a device run cover it.
+     */
+    @Test
+    fun `the back arrow from the Auth page and then from Account returns to Home`() =
+        withApp { scene ->
+            scene.tap(CYRILLIC.account)
+            scene.tap(CYRILLIC.accountScreens.openAuth)
+            scene.tap(CYRILLIC.back)
+            scene.tap(CYRILLIC.back)
+
+            assertEquals(listOf(CYRILLIC.gameName, CYRILLIC.play), scene.texts())
         }
 
     /** The switch changes the screen it is on at once, and every screen after it, and is kept. */
@@ -194,7 +317,7 @@ class AppNavigationTest {
 
             scene.tap(Language.ENGLISH.ownName)
 
-            assertTrue(ENGLISH.submitQuestion in scene.texts(), "${scene.texts()}")
+            assertTrue(ENGLISH.accountScreens.newQuestion in scene.texts(), "${scene.texts()}")
             assertEquals(listOf(ENGLISH.back), scene.descriptions().take(1))
             scene.tap(ENGLISH.back)
             assertEquals(listOf(ENGLISH.gameName, ENGLISH.play), scene.texts())
@@ -260,7 +383,8 @@ class AppNavigationTest {
 
     /**
      * The game, counting what the screens ask of it. Out of questions unless it is [serving] one, so
-     * the Play screen shows a failure; nothing here votes, likes or registers.
+     * the Play screen shows a failure; nothing here votes or likes, and a registration and a
+     * submission always work.
      */
     private class FakeGame :
         QuestionRepository,
@@ -278,6 +402,18 @@ class AppNavigationTest {
         var serving: Question? = null
 
         val skipped = mutableListOf<String>()
+
+        /** The account the guest registered as, or null while none. */
+        var username: String? = null
+
+        /** When set, a registration makes the account and then fails as offline, its answer lost. */
+        var registerAnswerLost = false
+
+        /** The questions submitted, newest first. */
+        val sent = mutableListOf<Submission>()
+
+        /** When set, a submission waits for it before it is stored. */
+        var submitWaitsFor: CompletableDeferred<Unit>? = null
 
         override val categories: StateFlow<Set<Category>> = MutableStateFlow(emptySet())
 
@@ -311,13 +447,17 @@ class AppNavigationTest {
 
         override suspend fun stats(): PlayerStats {
             statsRead++
-            return PlayerStats(0, 0, 0, 1, 10, 0)
+            return PlayerStats(5, 5, 5, 1, 10, 0, username = username)
         }
 
         override suspend fun register(
             username: String,
             password: String,
-        ): String = error("nothing registers here")
+        ): String =
+            username.lowercase().also {
+                this.username = it
+                if (registerAnswerLost) throw WyrException(DomainError.NETWORK)
+            }
 
         override suspend fun logIn(
             username: String,
@@ -330,11 +470,22 @@ class AppNavigationTest {
             optionA: String,
             optionB: String,
             categories: Set<Category>,
-        ): Submission = error("nothing submits here")
+        ): Submission {
+            submitWaitsFor?.await()
+            return Submission(
+                id = "q${sent.size + 1}",
+                optionA = optionA,
+                optionB = optionB,
+                categories = categories,
+                status = SubmissionStatus.PENDING,
+                rejectionReason = null,
+                submittedAt = Instant.fromEpochMilliseconds(1_790_000_000_000L),
+            ).also { sent.add(0, it) }
+        }
 
         override suspend fun mine(): List<Submission> {
             submissionsRead++
-            return emptyList()
+            return sent.toList()
         }
     }
 

@@ -15,15 +15,15 @@ import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.ntole.wyr.account.AccountScreen
 import io.ntole.wyr.account.AccountViewModel
+import io.ntole.wyr.account.AuthScreen
 import io.ntole.wyr.home.HomeScreen
 import io.ntole.wyr.language.Language
 import io.ntole.wyr.language.LanguageViewModel
 import io.ntole.wyr.language.WyrStrings
-import io.ntole.wyr.navigation.AccountTopBar
+import io.ntole.wyr.navigation.BackTopBar
 import io.ntole.wyr.navigation.Navigator
 import io.ntole.wyr.navigation.PlayTopBar
 import io.ntole.wyr.navigation.Screen
-import io.ntole.wyr.navigation.SubmitTopBar
 import io.ntole.wyr.navigation.SystemBack
 import io.ntole.wyr.play.PlayScreen
 import io.ntole.wyr.play.PlayUiState
@@ -85,13 +85,25 @@ private fun Screens(
                 }
 
                 Screen.Account -> {
-                    AccountTopBar(onBack = { navigator.back() }, onSubmit = { navigator.open(Screen.Submit) })
-                    Below { Account(language, onSelectLanguage) }
+                    BackTopBar(onBack = { navigator.back() })
+                    Below {
+                        Account(
+                            language = language,
+                            onSelectLanguage = onSelectLanguage,
+                            onOpenAuth = { navigator.open(Screen.Auth) },
+                            onNewQuestion = { navigator.open(Screen.Submit) },
+                        )
+                    }
+                }
+
+                Screen.Auth -> {
+                    BackTopBar(onBack = { navigator.back() })
+                    Below { Auth(onSignedIn = { navigator.back() }) }
                 }
 
                 Screen.Submit -> {
-                    SubmitTopBar(onBack = { navigator.back() })
-                    Below { Submit() }
+                    BackTopBar(onBack = { navigator.back() })
+                    Below { Submit(onSent = { navigator.back() }) }
                 }
             }
         }
@@ -108,13 +120,25 @@ private fun ColumnScope.Below(screen: @Composable () -> Unit) {
 private fun Account(
     language: Language,
     onSelectLanguage: (Language) -> Unit,
+    onOpenAuth: () -> Unit,
+    onNewQuestion: () -> Unit,
 ) {
     val viewModel = koinViewModel<AccountViewModel>()
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val submit = koinViewModel<SubmitViewModel>()
+    val submitState by submit.state.collectAsStateWithLifecycle()
 
-    // Every time the screen is shown: the points move on the Play screen meanwhile, and a guest's are
-    // what a login would leave behind.
+    // Every time the screen is shown: the points move on the Play screen meanwhile, a guest's are what
+    // a login would leave behind, and a moderator decides the player's questions.
     LaunchedEffect(viewModel) { viewModel.refresh() }
+    // A question sent from the form whose answer came once the player had come back here: My questions
+    // was read before it was stored, so it is read again, once no read is in flight.
+    LaunchedEffect(submitState.sent, state.isBusy) {
+        if (submitState.sent && !state.isBusy) {
+            submit.leftForm()
+            viewModel.refresh()
+        }
+    }
 
     AccountScreen(
         state = state,
@@ -122,16 +146,51 @@ private fun Account(
         environment = koinInject(),
         language = language,
         onSelectLanguage = onSelectLanguage,
+        onOpenAuth = onOpenAuth,
+        onNewQuestion = onNewQuestion,
     )
 }
 
+/**
+ * The Auth page, on the Account screen's ViewModel: what it reads and what is typed are the Account
+ * screen's. A register or a login that worked goes back to the Account screen, [onSignedIn], which
+ * reads the player again as it is shown.
+ */
 @Composable
-private fun Submit() {
+private fun Auth(onSignedIn: () -> Unit) {
+    val viewModel = koinViewModel<AccountViewModel>()
+    val state by viewModel.state.collectAsStateWithLifecycle()
+
+    LaunchedEffect(viewModel) { viewModel.authShown() }
+    LaunchedEffect(state.signedIn) {
+        if (state.signedIn) {
+            viewModel.leftAuth()
+            onSignedIn()
+        }
+    }
+
+    AuthScreen(state = state, actions = viewModel)
+}
+
+/**
+ * The Submit screen's form, opened from My questions. A question stored goes back to My questions,
+ * [onSent], which reads the list again as the Account screen is shown; one stored once the player had
+ * gone back is read again by the Account screen, if it is shown then.
+ */
+@Composable
+private fun Submit(onSent: () -> Unit) {
     val viewModel = koinViewModel<SubmitViewModel>()
     val state by viewModel.state.collectAsStateWithLifecycle()
 
-    // Every time the screen is shown: a moderator decides the player's submissions meanwhile.
+    // Every time the form is shown: the points move meanwhile. Declared first, so it takes down a
+    // `sent` left from a showing before, of a question whose answer came after the player went back.
     LaunchedEffect(viewModel) { viewModel.refresh() }
+    LaunchedEffect(state.sent) {
+        if (state.sent) {
+            viewModel.leftForm()
+            onSent()
+        }
+    }
 
     SubmitScreen(state = state, actions = viewModel)
 }

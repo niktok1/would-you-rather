@@ -22,7 +22,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 /**
- * The top bars above the Play, Account and Submit screens (CLAUDE.md §8d, *Navigation*), drawn off
+ * The top bars above the Play, Account, Auth and Submit screens (CLAUDE.md §8d, *Navigation*), drawn off
  * screen at a short phone's width, in each theme and each language, and read through their
  * semantics. Home's is drawn with the Home screen (`HomeScreenDrawTest`).
  */
@@ -46,8 +46,7 @@ class TopBarsDrawTest {
     /**
      * Each bar takes the tab row's height, 48, and no more, so the screen under it keeps the 599 of
      * an iPhone SE's 667 its own draw test holds it to (667 less the status bar's 20 and the bar's
-     * 48); and at 375 wide it needs no more width than it has, so nothing in it is cut short, the
-     * Submit screen's name in every language included.
+     * 48); and at 375 wide it needs no more width than it has, so nothing in it is cut short.
      */
     @Test
     fun `every top bar fits a short phone in every language`() {
@@ -196,18 +195,11 @@ class TopBarsDrawTest {
                     draw = { PlayTopBar(onHome = it.record("home"), onAccount = it.record("account")) },
                 ),
                 Bar(
-                    name = "Account's",
-                    icons = { listOf(it.back) },
-                    texts = { listOf(it.submitQuestion) },
-                    taps = listOf("back", "submit"),
-                    draw = { AccountTopBar(onBack = it.record("back"), onSubmit = it.record("submit")) },
-                ),
-                Bar(
-                    name = "Submit's",
+                    name = "Account's, the Auth page's and Submit's",
                     icons = { listOf(it.back) },
                     texts = { emptyList() },
                     taps = listOf("back"),
-                    draw = { SubmitTopBar(onBack = it.record("back")) },
+                    draw = { BackTopBar(onBack = it.record("back")) },
                 ),
             )
     }

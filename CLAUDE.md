@@ -493,8 +493,8 @@ decided in §8b).
     (`QuestionRepository.reset`), which the player before filled. The session is kept as a guest's
     is, so a logged-in player stays logged in across launches while the device refreshes within a
     refresh token's 30 days; one idle longer plays on as a fresh guest, and logs in again. No
-    password is stored, anywhere: the phone's password manager may keep it (§8d, *The Account
-    screen*).
+    password is stored, anywhere: the phone's password manager may keep it, offered as the Auth page,
+    where the game's client registers and logs in, leaves the screen (§8d, *The Account screen*).
 
 **Known limitation, by design for now:** a guest account is bound to one device's storage. Lose
 the device, reinstall the app or clear its storage, and the account — and its points — are gone,
@@ -531,9 +531,10 @@ EncryptedSharedPreferences: enough for a game that stores nothing personal.
   moderator model (an admin token). The submission contract is settled and built on the server:
   `SubmitQuestionRequest`, `SubmissionDto`, `SubmissionListDto` and `QuestionStatus` in `:core`.
   No author travels on the wire: a submission's author is whoever its bearer token names, and a
-  player lists only their own. The game's Submit tab submits and lists them. The moderation
-  contract is settled and built on the server too: the admin routes, `ApproveSubmissionRequest`,
-  `RejectSubmissionRequest`, the question list's `AdminQuestionPageDto` and `AdminQuestionDto`
+  player lists only their own. The game's Submit form submits them, and the Account screen's My
+  questions lists them. The moderation contract is settled and built on the server too: the admin
+  routes, `ApproveSubmissionRequest`, `RejectSubmissionRequest`, the question list's
+  `AdminQuestionPageDto` and `AdminQuestionDto`
   (paged by `WyrApi.Query.CURSOR`), `RetireQuestionRequest` and `RestoreQuestionRequest`, the
   `X-Admin-Token` header (`WyrApi.Headers`), `QuestionStatus.RETIRED` and the error codes `FORBIDDEN`,
   `ALREADY_DECIDED` and `WRONG_STATUS`. The moderator's client (`ModerationApi` calls every admin
@@ -785,7 +786,8 @@ answer what they think is popular instead of what they actually prefer. A mode t
 rewards reading the crowd may come later as a separate, opt-in mode, never as the default.
 
 **Current focus.** UI polish is paused. The game's own screens are the app: **Home**, **Play**,
-**Account** and **Submit**, reached from one another by icon buttons (*Navigation*, below), in every
+**Account**, and **Submit** and the **Auth** page opened from Account, reached from one another by
+buttons (*Navigation*, below), in every
 build, LOCAL, DEV and PROD alike, opening on Home. The engineering dev console functionality was first
 built behind is gone since `chore/remove-console` (*decided 2026-09-25*: the console is not needed),
 and nothing replaces it: a LOCAL or DEV build names its server on the Account screen (§8e), and a
@@ -797,9 +799,11 @@ game's, or a place on one, theme tokens only (§5b), and its words in `Strings` 
   and nothing else, the user asking for less text. Play opens the **Play** screen under a top bar of
   the home icon, left, back to Home, and the account icon, right, with Skip between them while a
   question is asked (*The Play screen*). The account icon, from Home or Play, opens the **Account**
-  screen under a top bar of a back arrow and, on the right for now, the way to the **Submit**
-  screen, whose own bar has a back arrow. The icons are the theme's (§5b), each named for a screen
-  reader in the language shown (§8f).
+  screen under a top bar of a back arrow. On it, a guest's one button opens the **Auth** page, to
+  register or log in, and My questions' *Ново питање* the **Submit** screen's form. The Account, Auth
+  and Submit bars hold a back arrow alone (`BackTopBar`); the Submit button the Account bar held
+  before is gone. The icons are the theme's (§5b), each named for a screen reader in the language
+  shown (§8f).
 - *The back stack* is made by hand, no navigation library: a sealed `Screen` and a `Navigator` of
   the screens opened, Home at the bottom. `open` shows a screen over the one shown, or goes back to
   it when it is on the stack already, so no screen is on it twice and the home icon is
@@ -813,47 +817,76 @@ game's, or a place on one, theme tokens only (§5b), and its words in `Strings` 
 - *ViewModels* belong to the platform's owner, the activity's or the window's, as under the tabs,
   never to the back stack: each screen's lives as long as the app, so Play keeps its question through
   Account and back, or Home and back, and Account and Submit read the server again each time they
-  are shown. `AppNavigationTest` drives the whole `App` over fakes by tapping its buttons, and counts
+  are shown; the Auth page is on the Account screen's. `AppNavigationTest` drives the whole `App` over fakes by tapping its buttons, and counts
   the questions asked.
 - *Heights*: each top bar is `WyrDimens.topBarHeight` high, 48, the tab row's height before it, so
-  the Play, Account and Submit screens keep the 599 of an iPhone SE's 667 their draw tests hold them
+  the Play, Account, Auth and Submit screens keep the 599 of an iPhone SE's 667 their draw tests hold them
   to. `TopBarsDrawTest` holds every bar to 48 at 375 wide with nothing cut short, in both themes and
   every language; `HomeScreenDrawTest` holds Home to 599 at 375 wide (276 on this Mac) and to its two
   texts and one icon.
 
 **The Account screen** (`io.ntole.wyr.account`; §8a *Accounts*, *Stats* below):
-- First, the language switch (§8f, `LanguageSwitch`), where the screen's *Account* heading stood
-  (*provisional — user decision*: the user asked only for a switch on this screen): on top, it is
-  the first thing a player who cannot read the language shown finds, a guest's forms included, and
-  a registered player's screen still fits 599 high with it (572 of it on this Mac, where it was 557
-  with the heading). The options: keep it; or keep the heading too, above the switch, which takes
-  that screen past 599 (the heading and its gap come back on top of the 572), so it scrolls unless
-  something else leaves it.
-- It shows *Playing as guest* or *Logged in as* the username, and the player's points, read through
-  `GetPlayerStats` each time the screen is shown, since the points move on Play meanwhile. A guest gets
-  **Register** (username, and password with a show/hide toggle), which keeps the points, and **Log
-  in**; a registered player gets **Log out**, after which the device plays on as a fresh guest.
-- Under the points, a line each for the answers given and the questions they went to, the cycle and
-  the questions left in it, and the likes received. `AccountScreenDrawTest` holds every state without
-  a form, a registered player's among them, to 599 high, measured 400 wide as `PlayScreenDrawTest`
-  measures, and a guest's screen has the same lines above its forms, so its stats show before any
-  scrolling too.
-- Register says what `AccountRules` refuses as it is typed, and sends nothing until both fields
-  pass. A refusal from the server shows under the form that sent it: a taken name, a wrong login, a
-  rate limit with its wait, offline. A guest with points who logs in is warned once that the
-  guest's points stay behind (register first to keep them), and the next *Log in anyway* goes ahead.
+- *Its order* (*decided 2026-09-25*, the user's redesign, with less text overall): the player on a
+  card, with a guest's one button to the Auth page; **My questions**; the **language switch** (§8f,
+  `LanguageSwitch`); **Log out**, for a registered player; and the server line, outside PROD. The
+  switch was on top before, in the heading's place (provisional), and is where the user put it now:
+  a player who cannot read the language shown still finds it by its three names, each in itself,
+  under the list when the list is long.
+- *The card*: the username, or *Гост*, and the points as **123 P** (`pointsText`), read through
+  `GetPlayerStats` each time the screen is shown, since the points move on Play meanwhile; under them
+  the stats, four numbers each over a word (`statCells`): *Одговори*, the answers given, re-answers
+  included; *Питања*, the questions they went to; *Циклус*, with *још 4* under it, the questions
+  still due in it; and *Лајкови*, the likes received. A screen reader reads each number with its
+  word. A guest gets **one button** on the card, *Региструј се или се пријави*, to the Auth page
+  (below), instead of the forms; a registered player gets **Log out** further down, after which the
+  device plays on as a fresh guest. A read that fails says so under the card, or in its place before
+  any read worked, with *Покушај поново*; a read that failed whole, the list's too, says so once.
+- `AccountScreenDrawTest` holds every state with no question listed to 599 high in every language,
+  measured 400 wide as `PlayScreenDrawTest` measures and for DEV, whose server line is the longest
+  (569 on this Mac at the tallest, a registered player whose read again failed), and New question
+  above 599 however long the list (401 at most); a list scrolls with the screen.
+- **The Auth page** (`AuthScreen`, *decided 2026-09-25*), on the Account screen's ViewModel, shows
+  **Register** only (username, and password with a show/hide toggle), which keeps the points, and a
+  link, *Већ имаш налог? Пријави се*, that switches the same page to **Log in** (username, password),
+  with a link back, *Немаш налог? Региструј се* (`AccountState.authMode`, Register on a first
+  showing; not while an action runs). No heading and no notes, the user asking for less text. Under
+  each register field its rule, *3–20 знакова: a–z, 0–9, _* and *6–128 знакова*, in the error colour
+  while what is typed breaks it, and Register sends nothing until both pass. A register or a login
+  that worked goes back to the Account screen, which reads the player again (`AccountState.signedIn`,
+  which the page takes down as it goes and the next action takes down too, so a page left before its
+  answer came is not sent back later). Shown with no player read yet (an Android process brought
+  back on it), it reads the player first (`authShown`), so the warning below knows the points: a read
+  that fails says so on top, with *Покушај поново*, and Log in stays off until a player is read
+  (`AccountState.canLogIn`). `AuthScreenDrawTest` holds every state to 599 high, measured 400 wide,
+  in every language.
+- A refusal from the server shows under the form that sent it, in a few words: a taken name, a wrong
+  login, a rate limit with its wait, offline. A guest with points who logs in is warned once that the
+  guest's points stay behind, *Поени госта (12 P) неће прећи на налог.*, and the next *Ипак се
+  пријави* goes ahead; switching forms takes the warning down, and a form's failure with it.
 - Each field names its autofill content type (`NewUsername` and `NewPassword` to register,
   `Username` and `Password` to log in), so the phone's password manager can fill them and offer to
-  save them once a register or login that worked takes the forms off the screen (Compose on Android
+  save them once a register or login that worked takes the page off the screen (Compose on Android
   commits autofill when no autofillable field is left, so nothing typed is cleared before then).
   What is typed lives in `AccountViewModel`'s memory only, never in saved state.
 - One action at a time, and the player read again after every one, a failed one too: a registration
-  whose answer was lost shows as the account it made. `AccountViewModelTest` drives it over fakes and
-  `AccountScreenDrawTest` draws every state in both themes and every language; theme tokens only (§5b).
-- Its last line, in a LOCAL or DEV build, names the server the build talks to and its URL, *Server:
-  Dev (https://wyr-server-dev.onrender.com)* (`serverLine`, §8e); a PROD build shows none.
-  `AccountScreenDrawTest` finds it under everything else in every state, and holds a registered
-  player's screen with it to 599 high.
+  whose answer was lost shows as the account it made. A register or a login whose read after it
+  names an account goes back to the Account screen as one that answered does, its failure dropped;
+  what was typed is gone by then, so the password manager has nothing to save. `AccountViewModelTest`
+  drives it over fakes, `AccountScreenDrawTest` and `AuthScreenDrawTest` draw every state in both
+  themes and every language, and `AppNavigationTest` registers through the page, an answer lost
+  too, and lands back on Account; theme tokens only (§5b).
+- **My questions** (`MyQuestions`, *decided 2026-09-25*), for guests and registered players alike:
+  the player's submissions, newest first, each with its two options and its status in a word, *На
+  чекању*, *Одобрено*, *Одбијено* with the moderator's reason as they wrote it, *Повучено* (and
+  *Непознато* for a status this build cannot name), read through `GetMySubmissions` after the stats
+  each time the screen is shown and after every action, a login's and a logout's included, since the
+  list is the player's (`AccountState.submissions`). Its heading holds **Ново питање**, which opens
+  the Submit screen's form (*Submitting*). A list that cannot be read says so under it, with Try
+  again, apart from the stats (`AccountState.listFailure`).
+- Its last line, in a LOCAL or DEV build, names the server the build talks to and its URL, in the
+  language shown, *Сервер: Dev (https://wyr-server-dev.onrender.com)* (`serverLine`, §8e); a PROD
+  build shows none. `AccountScreenDrawTest` finds it under everything else in every state and
+  language.
 
 **The Play screen** (`io.ntole.wyr.play`; the user's layout, *decided 2026-09-25*) asks a question
 and reveals its tally, and holds Skip, Like and the category picker (*Skipping*, *Likes* and
@@ -895,8 +928,9 @@ and reveals its tally, and holds Skip, Like and the category picker (*Skipping*,
   failure or without at font scales 1, 1.3 and 2; `TopBarsDrawTest` finds Skip in the bar's middle,
   and `AppNavigationTest` skips through it.
 
-**The Submit screen** (`io.ntole.wyr.submit`), opened from the Account screen's top bar for now
-(*Navigation*), writes a question and lists the player's own (*Submitting*, below).
+**The Submit screen** (`io.ntole.wyr.submit`), opened from My questions on the Account screen
+(*Navigation*), is the form a question is written in (*Submitting*, below); the player's own are
+listed on the Account screen.
 
 - **Scoring** *(built; see §8c)*: every answer earns exactly **1 point**, whichever side
   it picks. There is no majority bonus and no streak: the streak is removed from the server, the
@@ -1061,19 +1095,29 @@ and reveals its tally, and holds Skip, Like and the category picker (*Skipping*,
   again before building the request; every other rule is the server's to enforce, and
   `SubmissionRules` (`:core:domain`) copies the options' rules so a form can check what is typed, as
   `AccountRules` does for accounts (`SubmissionLimitsTest` pins its numbers to `WyrApi.Limits`). A
-  status this build cannot name is `SubmissionStatus.OTHER`. The game's **Submit** tab drives both
-  (`SubmitViewModel`): two options and one or more categories of `Category.selectable`, what
-  `SubmissionRules` refuses in each option shown under it as it is typed, and Submit off until
-  nothing is refused and a category is picked. A stored question clears the form; a refusal keeps it
-  and says why under it, `INVALID_SUBMISSION`, `SUBMISSION_LIMIT` with the 20, a rate limit with its
-  wait, or offline. *My submissions*, below the form, lists the player's own, each with its options,
-  categories and status, a rejected one with its reason, read each time the tab is shown and after
-  every submit, a failed one too. A read that fails says why under the list, with Try again,
-  whatever the submit before it ended in: each part keeps its own failure
-  (`SubmitState.submitFailure`, `listFailure`), so a list never read cannot be left spinning on a
-  read nobody makes. One action at a time, and the form cannot change while it is sent. One line
-  says submitting earns no points. `SubmitViewModelTest` drives it over fakes, and
-  `SubmitScreenDrawTest` draws every state in both themes at 400x900 and 375x599; the screen scrolls.
+  status this build cannot name is `SubmissionStatus.OTHER`. The game lists the player's own on the
+  Account screen, *My questions* (*The Account screen*), and writes one on the **Submit** screen's
+  form, opened from there (`SubmitViewModel`, *decided 2026-09-25*): under *Шта би радије…*, two
+  options and one or more categories of `Category.selectable`, what `SubmissionRules` refuses in each
+  option shown under it as it is typed, and Send off until nothing is refused and a category is
+  picked. **Submitting costs points** (*decided 2026-09-25*): the client keeps the cost in one place,
+  `SubmissionRules.COST`, 1 until release, shows it on the button, *Пошаљи · 1 P*, and holds the
+  button off while the player's points, read through `GetPlayerStats` each time the form is shown
+  and after every submit, are fewer, with one line saying so, *Немаш довољно поена.* The client
+  alone is built: the server on this branch charges nothing, and §8c still counts a total as answers
+  and likes. The charge, and the server's refusal of a question its author cannot pay for
+  (`NOT_ENOUGH_POINTS`), come with `feat/server-categories`. A stored question clears the form and
+  goes back to My questions, which reads the list again (`SubmitState.sent`, which the form takes
+  down as it goes and the next action takes down too), and one stored once the player had gone back
+  is read again by the Account screen if it is shown then, which takes `sent` down; a refusal keeps
+  it and says why under it, `INVALID_SUBMISSION`, `SUBMISSION_LIMIT` with the 20, a rate limit
+  with its wait, or offline. Points that cannot be read say so under Send, with Try again, apart
+  from a refusal (`SubmitState.submitFailure`, `pointsFailure`). One action at a time, and the form
+  cannot change while it is sent. `SubmitViewModelTest` drives it over fakes, `SubmitScreenDrawTest`
+  draws every state in both themes and every language at 400x900 and 375x599, and holds a written
+  question to 599 whole; a longer state scrolls. `AppNavigationTest` sends one and lands back on My
+  questions, and sends one whose answer comes after the player went back, which My questions then
+  lists.
 - **Moderation** *(built)*: a moderator approves or rejects each pending submission, **may change
   its categories** when approving (*Categories*: at least one stays, and a change replaces the
   question's `question_categories` rows in one transaction), and **may retire an approved question
@@ -1293,13 +1337,22 @@ hand, so the two cannot say different things; and **English** stands beside them
   the data classes' `toString`, which names every text, so a text added later is checked too: the
   Latin is the Cyrillic transliterated, every Serbian text is in Cyrillic, and no Latin or English
   one has a Cyrillic letter. Translated so far: the Home screen, the game's name (*Шта би радије?*,
-  *Would You Rather?*) and *Играј*; the top bars, the icons' names (*Почетна*, *Налог*, *Назад*) and
-  the Account bar's *Пошаљи питање*; the switch's name, *Језик*; and the Play screen's words
-  (`PlayStrings`, `Strings.playScreen`), all but the category picker's and the category names.
+  *Would You Rather?*) and *Играј*; the top bars and the icons' names (*Почетна*, *Налог*, *Назад*);
+  the switch's name, *Језик*; the Play screen's words (`PlayStrings`, `Strings.playScreen`), all but
+  the category picker's and the category names; the Account screen, whole, with My questions and the
+  server line; the Auth page, whole; and the Submit screen's form but its categories' names
+  (`Strings.accountScreens`, an `AccountStrings` of the Account screen's words and those of the pages
+  opened from it).
+- **Numbers and symbols** *(built)*: a text holding a number or a name is a template, `{0}` and on,
+  filled in by `fill` (`Templates.kt`), so each language puts it where its grammar wants it, and
+  `StringsTest` holds every language's copy of a template to the same placeholders. The points'
+  symbol, **P** (`POINTS_SYMBOL`, `pointsText`: *123 P*), and the characters a username may hold
+  (`USERNAME_CHARACTERS`, *a–z, 0–9, _*) are the same in every language, as a unit's symbol is, so
+  they are not `Strings`, whose Serbian texts hold no Latin letter.
 - **The default** *(built)*: Serbian Cyrillic on a first launch, whatever the device's language:
   nothing reads the device's locale (`Language.DEFAULT`; `LanguageSwitchTest` sets an English, a
   German and a Serbian Latin locale on the JVM and still opens in Cyrillic).
-- **The switch** *(built)*: first on the Account screen (§8d; provisional), a segmented row of the
+- **The switch** *(built)*: on the Account screen, under My questions (§8d), a segmented row of the
   three, **Ћирилица**, **Latinica** and **English**, each named in itself whatever the language
   shown, so a player who picked one they cannot read finds their own (`Language.ownName`, which is
   why the names are not `Strings`). No label on screen; a screen reader hears it named
@@ -1314,10 +1367,9 @@ hand, so the two cannot say different things; and **English** stands beside them
   pin it, the sessions beside it in one storage untouched.
 - **Not translated yet**: question texts stay as their authors wrote them (server data; a later
   change may put Serbian ones through `SerbianScript.toLatin`); the moderation app (`:app:adminApp`)
-  stays English; the Account and Submit screens' own copy, everything under their top bars but the
-  switch, stays English until the branches that redesign them translate it; and so do the Play
-  screen's category picker and the category names, until categories are server data (§8d,
-  *Categories*).
+  stays English; and so do the Play screen's category picker and the categories' names
+  (`categoryName`, which the picker and the Submit form's chips call), until categories are server
+  data (§8d, *Categories*).
 ---
 
 ## 9. How to work in this repo

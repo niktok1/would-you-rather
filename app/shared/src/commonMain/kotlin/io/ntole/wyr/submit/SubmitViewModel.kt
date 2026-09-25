@@ -3,8 +3,8 @@ package io.ntole.wyr.submit
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import io.ntole.wyr.core.domain.error.WyrException
+import io.ntole.wyr.core.domain.player.GetPlayerStats
 import io.ntole.wyr.core.domain.question.Category
-import io.ntole.wyr.core.domain.submission.GetMySubmissions
 import io.ntole.wyr.core.domain.submission.SubmitQuestion
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -14,8 +14,11 @@ import kotlinx.coroutines.launch
 
 /** What the Submit screen can ask for, so the screen takes one argument for all of it. */
 interface SubmitActions {
-    /** Reads the player's own submissions again. */
+    /** Reads the player's points again. */
     fun refresh()
+
+    /** The form went back to My questions for [SubmitState.sent]: takes it down. */
+    fun leftForm()
 
     fun setOptionA(text: String)
 
@@ -28,23 +31,28 @@ interface SubmitActions {
 }
 
 /**
- * Drives the Submit screen (CLAUDE.md §8d, *Submitting*): a question written and filed under the
- * categories picked, sent through [SubmitQuestion], and the player's own submissions read through
- * [GetMySubmissions].
+ * Drives the Submit screen's form (CLAUDE.md §8d, *Submitting*): a question written and filed under
+ * the categories picked, sent through [SubmitQuestion], and the player's points read through
+ * [GetPlayerStats], since a question costs [io.ntole.wyr.core.domain.submission.SubmissionRules.COST].
  *
- * One action at a time, and the list read again after every submit, a failed one too: a submission
- * whose answer was lost may have been stored, and the list is where it shows.
+ * One action at a time, and the points read again after every submit, a failed one too: a submission
+ * whose answer was lost may have been stored, and paid for.
  */
 class SubmitViewModel(
     private val submitQuestion: SubmitQuestion,
-    private val getMySubmissions: GetMySubmissions,
+    private val getPlayerStats: GetPlayerStats,
 ) : ViewModel(),
     SubmitActions {
     private val _state = MutableStateFlow(SubmitState())
     val state: StateFlow<SubmitState> = _state.asStateFlow()
 
-    /** Not read on creation: the screen asks every time it is shown, since a moderator decides meanwhile. */
+    /**
+     * Not read on creation: the form asks every time it is shown, since the points move meanwhile.
+     * Like every action, it takes down a [SubmitState.sent] left from a showing before.
+     */
     override fun refresh() = perform(SubmitAction.LOAD) {}
+
+    override fun leftForm() = _state.update { it.copy(sent = false) }
 
     override fun setOptionA(text: String) = edit { copy(optionA = text) }
 
@@ -57,9 +65,10 @@ class SubmitViewModel(
     }
 
     /**
-     * Sends the question as typed, then reads the list again. Nothing happens until
-     * [SubmitState.canSubmit]. Once the server stores it, the form is cleared for the next one; a
-     * refusal keeps it, to put right and send again.
+     * Sends the question as typed, then reads the points again. Nothing happens until
+     * [SubmitState.canSubmit]. Once the server stores it, the form is cleared for the next one and
+     * [SubmitState.sent] raised, for the form to go back to My questions on; a refusal keeps it, to
+     * put right and send again.
      */
     override fun submit() {
         val draft = _state.value
@@ -78,15 +87,15 @@ class SubmitViewModel(
     private fun edit(change: SubmitState.() -> SubmitState) = _state.update { if (it.isSubmitting) it else it.change() }
 
     /**
-     * Runs [block] as the one action in flight, then reads the list again, whatever [block] ended in:
-     * it records its own failure. A second action while one runs is ignored.
+     * Runs [block] as the one action in flight, then reads the points again, whatever [block] ended
+     * in: it records its own failure. A second action while one runs is ignored.
      */
     private fun perform(
         action: SubmitAction,
         block: suspend () -> Unit,
     ) {
         if (_state.value.isBusy) return
-        _state.update { it.copy(running = action, submitFailure = null, listFailure = null, sent = false) }
+        _state.update { it.copy(running = action, submitFailure = null, pointsFailure = null, sent = false) }
 
         viewModelScope.launch {
             try {
@@ -99,16 +108,16 @@ class SubmitViewModel(
     }
 
     /**
-     * Reads the player's submissions, minting a guest where there is none. A failed read keeps what
-     * was shown and says so under the list, whatever the action before it ended in, so a list never
-     * read is never left waiting on nothing.
+     * Reads the player's points, minting a guest where there is none. A failed read keeps what was
+     * shown and says so under Send, whatever the action before it ended in, so points never read are
+     * never left waiting on nothing.
      */
     private suspend fun load() {
         try {
-            val submissions = getMySubmissions()
-            _state.update { it.copy(submissions = submissions) }
+            val points = getPlayerStats().totalPoints
+            _state.update { it.copy(points = points) }
         } catch (failure: WyrException) {
-            _state.update { it.copy(listFailure = failure.toSubmitFailure()) }
+            _state.update { it.copy(pointsFailure = failure.toSubmitFailure()) }
         }
     }
 }

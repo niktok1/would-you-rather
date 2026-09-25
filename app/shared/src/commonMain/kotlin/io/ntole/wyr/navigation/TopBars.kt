@@ -8,8 +8,6 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -51,21 +49,12 @@ fun PlayTopBar(
     )
 }
 
-/** Account's: the back arrow, and for now the way to the Submit screen (§8d, *The Submit screen*). */
+/**
+ * Account's, the Auth page's and Submit's: the back arrow, to the screen each was opened from. The
+ * way to the Submit screen is on the Account screen itself, in My questions (§8d, *The Account screen*).
+ */
 @Composable
-fun AccountTopBar(
-    onBack: () -> Unit,
-    onSubmit: () -> Unit,
-) {
-    TopBar(
-        start = { BackButton(onBack) },
-        end = { TextButton(onClick = onSubmit) { Text(text = LocalStrings.current.submitQuestion, maxLines = 1) } },
-    )
-}
-
-/** Submit's: the back arrow, to the Account screen it was opened from. */
-@Composable
-fun SubmitTopBar(onBack: () -> Unit) {
+fun BackTopBar(onBack: () -> Unit) {
     TopBar(start = { BackButton(onBack) })
 }
 

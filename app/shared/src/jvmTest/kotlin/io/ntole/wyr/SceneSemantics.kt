@@ -10,6 +10,7 @@ import androidx.compose.ui.semantics.SemanticsNode
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getAllSemanticsNodes
 import androidx.compose.ui.semantics.getOrNull
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.Density
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
@@ -27,6 +28,18 @@ internal fun ImageComposeScene.nodes(): List<SemanticsNode> =
 /** Every text the scene shows, from the top down. */
 internal fun ImageComposeScene.texts(): List<String> = nodes().flatMap { it.texts }
 
+/**
+ * Every text the scene lays out, each on its own, a field's label and the text under it included,
+ * from the top down: where each is laid out, not where it is clipped to, so a screen that scrolls
+ * shows all of its texts here.
+ */
+@OptIn(ExperimentalComposeUiApi::class)
+internal fun ImageComposeScene.everyText(): List<String> =
+    semanticsOwners
+        .flatMap { owner -> owner.getAllSemanticsNodes(mergingEnabled = false) }
+        .sortedWith(compareBy({ it.positionInRoot.y }, { it.positionInRoot.x }))
+        .flatMap { it.texts }
+
 /** Every name the scene gives a screen reader for what has no text, an icon's, from the top down. */
 internal fun ImageComposeScene.descriptions(): List<String> = nodes().flatMap { it.descriptions }
 
@@ -41,6 +54,17 @@ internal fun ImageComposeScene.tap(text: String) {
     val node = nodes().singleOrNull { text in it.texts || text in it.descriptions }
     val tap = assertNotNull(node?.config?.getOrNull(SemanticsActions.OnClick)?.action, "nothing to tap shows \"$text\"")
     tap()
+    settle()
+}
+
+/** Types [text] into the [index]th text field from the top, as a keyboard would, and draws again. */
+internal fun ImageComposeScene.type(
+    index: Int,
+    text: String,
+) {
+    val fields = nodes().mapNotNull { it.config.getOrNull(SemanticsActions.SetText)?.action }
+    val setText = assertNotNull(fields.getOrNull(index), "no text field $index of ${fields.size}")
+    setText(AnnotatedString(text))
     settle()
 }
 
