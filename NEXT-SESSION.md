@@ -86,8 +86,8 @@ Latin *P* (`POINTS_SYMBOL`, `pointsText`), and its *123 P* below, are gone. And 
 (*provisional*, §8b: ask the user; offline is still said two ways, *Игра није доступна.* on Play,
 which a server that is down fits too, and *Нема интернет везе.* on the Account screens). The client
 alone changed. Verified here: ktlint, the verify job's tests and client compiles, and the iOS Kotlin
-compiles; `:server:test` came from the cache, the server untouched. Tests: `:app:shared` 248
-(`PlayScreenDrawTest` 21, `AppNavigationTest` 16, `TopBarsDrawTest` 4, `StringsTest` 7),
+compiles; `:server:test` came from the cache, the server untouched. Tests: `:app:shared` 250
+(`PlayScreenDrawTest` 22, `AppNavigationTest` 16, `TopBarsDrawTest` 4, `StringsTest` 8),
 `:core:domain` 70, `:core:data` 139, `:core:network` 73 and 79 Android host, `:app:adminApp` 87,
 `:server` 311 (2 skipped). For `feat/server-categories`: `PlayScreen.kt` conflicts again, now with
 `CentredRow`'s `MiddleRow`, which takes the categories played as text, so its
