@@ -15,29 +15,30 @@ applied; **dev** `wyr-server-dev` on in-memory H2, deployed automatically from e
 `main` (its URL is on its Render page).
 
 **`feat/simple-accounts` is on `main`**, and on `origin/main`, at b175247: stage 1 took the recovery
-secret, Block Store, the Keychain, the rollback mirror and the question's row lock out (CLAUDE.md §8a,
-§8b). Stage 2 built simple accounts on the server (§8a, *Accounts*): V5, register, log in, log out,
-and the username in `GET /v1/me` (*Accounts*, under *Running it locally*). Stage 3 built the client:
-an account repository behind `RegisterAccount`, `LogIn` and `LogOut`, and the game's **Account** tab,
-in every build (§8d, *Current focus*; how to try it on a phone is under *Accounts*). A `d4a9dbf`
-build of the app on a phone that keeps a recovery secret fails every call against this server once
-its session dies, since the recovery it tries first is 404 here: install a newer build on it.
+secret, Block Store, the Keychain, the rollback mirror and the question's row lock out (CLAUDE.md
+§8a, §8b). Stage 2 built simple accounts on the server (§8a, *Accounts*): V5, register, log in, log
+out, and the username in `GET /v1/me` (*Accounts*, under *Running it locally*). Stage 3 built the
+client: an account repository behind `RegisterAccount`, `LogIn` and `LogOut`, and the game's
+**Account** tab, in every build (§8d, *The Account screen*; how to try it on a phone is under
+*Accounts*). A `d4a9dbf` build of the app on a phone that keeps a recovery secret fails every call
+against this server once its session dies, since the recovery it tries first is 404 here: install a
+newer build on it.
 
-**`feat/play-skip-like` is on `main`**, and on `origin/main`, at b8d992c: **Skip** and **Like** moved
-from the dev console onto the game's **Play** tab, the second feature moved after the Account tab
-(CLAUDE.md §8d, *Current focus*, *Skipping*, *Likes*). How to try it on a phone is under *Skip and
-Like on Play*.
+**`feat/play-skip-like` is on `main`**, and on `origin/main`, at b8d992c: **Skip** and **Like**
+moved from the dev console onto the game's **Play** tab, the second feature moved after the Account
+tab (CLAUDE.md §8d, *The Play screen*, *Skipping*, *Likes*). How to try it on a phone is under *Skip
+and Like on Play*.
 
 **`feat/play-categories` is on `main`**, and on `origin/main`, at 63e38ce: the **category picker**
 moved from the console's Category row onto the Play tab, the third feature moved (CLAUDE.md §8d,
-*Current focus*, *Categories*). The client alone changed; the server and the contract did not. How
+*The Play screen*, *Categories*). The client alone changed; the server and the contract did not. How
 to try it on a phone is under *Categories on Play*.
 
 **`feat/submit-screen` is on `main`**, and on `origin/main`, at 61bfcad: **submitting** moved from
 the console's *Submit a question* section onto a **Submit** tab of the game's own, in every build,
-the fifth feature moved (CLAUDE.md §8d, *Current focus*, *Submitting*). The client alone changed,
-with `SubmissionRules` in `:core:domain` so the form checks the options as they are typed; the
-server and the contract did not. How to try it on a phone is under *Submit on its own tab*.
+the fifth feature moved (CLAUDE.md §8d, *The Submit screen*, *Submitting*). The client alone
+changed, with `SubmissionRules` in `:core:domain` so the form checks the options as they are typed;
+the server and the contract did not. How to try it on a phone is under *Submit on its own tab*.
 
 **On `chore/remove-console`** (from 61bfcad; not merged, nothing pushed): the dev console is gone
 (the user, 2026-09-25: "console is not needed"). Every build, LOCAL, DEV and PROD alike, shows Play,
@@ -766,10 +767,10 @@ RATE_LIMIT_GUESTS_PER_HOUR=1000 ./gradlew :server:run
 ### Stats on Account
 
 The game's **Account** tab (*Accounts*, below) shows the player's stats under the points (CLAUDE.md
-§8d, *Current focus*, *Stats*), in every build, PROD's included: the answers given and the questions
-they went to, the cycle and the questions left in it, and the likes the questions the player
-submitted hold, as `GET /v1/me` counts them, read each time the tab is shown. The server needs
-nothing new.
+§8d, *The Account screen*, *Stats*), in every build, PROD's included: the answers given and the
+questions they went to, the cycle and the questions left in it, and the likes the questions the
+player submitted hold, as `GET /v1/me` counts them, read each time the tab is shown. The server
+needs nothing new.
 
 **`feat/account-stats` is on `main`**, and on `origin/main`, at 52f36bb: the fourth feature moved;
 the client alone changed. Verified on this Mac: `AccountViewModelTest` (17, 14 before) reads a
@@ -802,7 +803,7 @@ and no category picked:
 
 A guest registers to keep its points and logs in with the same name and password on another device
 (CLAUDE.md §8a, *Accounts*). The game's **Account** tab does both, in every build, PROD's included
-(§8d, *Current focus*).
+(§8d, *The Account screen*).
 
 **To try it on a phone** (`devDebug`, Android Studio's default variant, against the dev server; dev
 is in-memory H2, so a deploy or a free-tier spin-down forgets every account):
