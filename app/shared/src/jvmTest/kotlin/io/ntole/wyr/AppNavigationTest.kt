@@ -14,6 +14,9 @@ import io.ntole.wyr.core.domain.account.AccountRepository
 import io.ntole.wyr.core.domain.account.LogIn
 import io.ntole.wyr.core.domain.account.LogOut
 import io.ntole.wyr.core.domain.account.RegisterAccount
+import io.ntole.wyr.core.domain.category.Category
+import io.ntole.wyr.core.domain.category.CategoryRepository
+import io.ntole.wyr.core.domain.category.GetCategories
 import io.ntole.wyr.core.domain.error.DomainError
 import io.ntole.wyr.core.domain.error.WyrException
 import io.ntole.wyr.core.domain.like.LikeRepository
@@ -22,7 +25,6 @@ import io.ntole.wyr.core.domain.like.SetLike
 import io.ntole.wyr.core.domain.player.GetPlayerStats
 import io.ntole.wyr.core.domain.player.PlayerRepository
 import io.ntole.wyr.core.domain.player.PlayerStats
-import io.ntole.wyr.core.domain.question.Category
 import io.ntole.wyr.core.domain.question.GetNextQuestion
 import io.ntole.wyr.core.domain.question.Question
 import io.ntole.wyr.core.domain.question.QuestionRepository
@@ -204,6 +206,7 @@ class AppNavigationTest {
             single<PlayerRepository> { game }
             single<AccountRepository> { game }
             single<SubmissionRepository> { game }
+            single<CategoryRepository> { NoCategories }
             factory { GetNextQuestion(questions = get(), session = get()) }
             factory { SkipQuestion(questions = get(), session = get()) }
             factory { CastVote(votes = get(), session = get()) }
@@ -214,7 +217,15 @@ class AppNavigationTest {
             factory { LogOut(accounts = get(), questions = get()) }
             factory { SubmitQuestion(submissions = get(), session = get()) }
             factory { GetMySubmissions(submissions = get(), session = get()) }
+            factory { GetCategories(categories = get()) }
         }
+
+    /** No categories, read or not: these tests never open a picker. */
+    private object NoCategories : CategoryRepository {
+        override val categories: StateFlow<List<Category>> = MutableStateFlow(emptyList())
+
+        override suspend fun refresh(): List<Category> = emptyList()
+    }
 
     /** A resumed lifecycle and a ViewModel store, as an activity or a window gives the app. */
     private class TestOwner :
@@ -242,7 +253,7 @@ class AppNavigationTest {
         var statsRead = 0
         var submissionsRead = 0
 
-        override val categories: StateFlow<Set<Category>> = MutableStateFlow(emptySet())
+        override val categories: StateFlow<Set<String>> = MutableStateFlow(emptySet())
 
         override suspend fun next(): Question {
             questionsAsked++
@@ -251,7 +262,7 @@ class AppNavigationTest {
 
         override suspend fun prefetch() = Unit
 
-        override suspend fun setCategories(categories: Set<Category>) = Unit
+        override suspend fun setCategories(categories: Set<String>) = Unit
 
         override suspend fun skip(questionId: String) = Unit
 
@@ -290,7 +301,7 @@ class AppNavigationTest {
         override suspend fun submit(
             optionA: String,
             optionB: String,
-            categories: Set<Category>,
+            categories: Set<String>,
         ): Submission = error("nothing submits here")
 
         override suspend fun mine(): List<Submission> {
