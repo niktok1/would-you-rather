@@ -817,11 +817,10 @@ returns and never recomputes points, so the two cannot disagree.
   author's likes received, so the sum holds over every question, retired or not. Two edge cases,
   accepted: an unlike can take an author who spent their points below 0, and a submission can then
   wait until they earn it back; and after a rollback to a build before V7, a rejection made there
-  pays nothing back, so its author is short that point for good. One more, *provisional — user
-  decision*, where two rules decided apart meet: an author is paid for their own like (§8d,
-  *Likes*), so liking their approved question gives its cost back, and an approval keeps the cost
-  only until then. The options: keep it, or let an author's like of their own question pay nothing,
-  which reopens *Likes*.
+  pays nothing back, so its author is short that point for good. One more, where two rules meet:
+  an author is paid for their own like (§8d, *Likes*), so liking their approved question gives its
+  cost back. *Decided 2026-09-25: keep it.* The cost is 1 point only until release and will rise,
+  and with thousands of questions an author rarely meets their own.
 - `PlayerStore.addPoints` adds in SQL (`total_points = total_points + n`), never as a read then a
   write, so two votes by one player landing together cannot lose a point, nor a burst of likes for
   one author. `PlayerStore.spend` takes a cost the same way, as a compare-and-set on having it
