@@ -572,7 +572,11 @@ EncryptedSharedPreferences: enough for a game that stores nothing personal.
   included. `SkipStoreTest` pins what is built.
 - **The categories row on the Play screen** — *resolved 2026-09-25*: the user picked the redesign's
   one row between the cards (§8d, *The Play screen*), where the categories share the row with the
-  points and the like in every question state, at one height, and the cards keep what is left.
+  points, the like and Skip in every question state, at one height, and the cards keep what is left.
+- **The Play row's arrangement** — *provisional — user decision.* Skip went into the row (§8d, *The
+  Play screen*), where the points stand in the middle only while the categories played leave them
+  room, so a long name shows whole at 375 wide. The options: keep it; or the points always in the
+  middle, and a long name cut short.
 - **Retrying a submission** — *decided 2026-09-24: keep it simple.* A submission carries no
   attempt id, so one sent again after its response was lost is stored twice, both pending; the
   moderator rejects the copy, and the 20-pending cap bounds how many there can be. Nothing resends
@@ -797,9 +801,8 @@ game's, or a place on one, theme tokens only (§5b), and its words in `Strings` 
 **Navigation** (*decided 2026-09-25*: no tabs; `App.kt`, `io.ntole.wyr.navigation`, `io.ntole.wyr.home`):
 - The app opens on **Home**: the game's name, a big **Play** button and the account icon top right,
   and nothing else, the user asking for less text. Play opens the **Play** screen under a top bar of
-  the home icon, left, back to Home, and the account icon, right, with Skip between them while a
-  question is asked (*The Play screen*). The account icon, from Home or Play, opens the **Account**
-  screen under a top bar of a back arrow. On it, a guest's one button opens the **Auth** page, to
+  the home icon, left, back to Home, and the account icon, right. The account icon, from Home or
+  Play, opens the **Account** screen under a top bar of a back arrow. On it, a guest's one button opens the **Auth** page, to
   register or log in, and My questions' *Ново питање* the **Submit** screen's form. The Account, Auth
   and Submit bars hold a back arrow alone (`BackTopBar`); the Submit button the Account bar held
   before is gone. The icons are the theme's (§5b), each named for a screen reader in the language
@@ -894,7 +897,21 @@ and reveals its tally, and holds Skip, Like and the category picker (*Skipping*,
 - Two answer cards in the brand colours (§5b) and, between them, **one row**: on the left the
   categories played, *Све* or their names, cut to one line, with a small chevron, which opens the
   picker; in the middle the player's points, *123 П*; on the right the heart, filled while the player
-  likes the question, beside its like count, before answering and after. No title, no *OR*.
+  likes the question, beside its like count, before answering and after, and **Skip** while the
+  question is not answered yet (*Skipping*), its place kept empty in the reveal so nothing in the
+  row moves. No title, no *OR*, and nothing on the top bar but home and the account icon.
+- *The row's arrangement* (`CentredRow`; the user asked for Skip in the row, not on the top bar,
+  readable at 375 wide with long Cyrillic category names, and left the arrangement open): the heart,
+  its count and Skip get their whole width first, then the points, no wider than
+  `WyrDimens.playRowMiddleMaxWidth` (104), and the categories what they leave. The points stand in
+  the middle of the screen while the categories leave them room, and move right only as far as a
+  longer selection needs. A plain row keeping the points in the middle gives the categories the same
+  room as the heart, its count and Skip: on this Mac at 375 wide, 115 for the text beside the
+  chevron, where *Начин живота*, the longest of the server's names (`feat/server-categories`), needs
+  125. As built, with *42 П* and 12 likes, it shows whole, the points 10 right of the middle, as do
+  *Супермоћи* and *Храна, Етика*, the points in the middle; *Храна, Начин живота* is cut short, and
+  so is *Начин живота* beside *12345 П*. *Provisional — user decision*: the other option is the
+  points always in the middle and a long name cut short.
 - The points are the server's (`PlayViewModel.points`, §8c): read through `GetPlayerStats` each time
   the screen is shown, and moved to a vote's total when its answer arrives, which drops a read still
   in flight; none until the first.
@@ -906,9 +923,6 @@ and reveals its tally, and holds Skip, Like and the category picker (*Skipping*,
   no vote counts (the domain still has `VoteOutcome.agreedWithMajority`). A screen reader hears what
   a tap does where no text says it: *Следеће питање* on a revealed card, *Промени категорије* on the
   categories played.
-- **Skip** is an icon in the middle of the top bar (`PlayTopBar`), there only while a question is
-  asked and not answered: the bar has the room, and the row keeps its three things legible at 375
-  wide.
 - One action at a time (`isBusy`, `canChangeCategories`): while a vote, a skip or a like is in
   flight, the cards, the heart, Skip and the categories are off. A like that failed says why in the
   points' place, in two short lines at most, in a slot as high as the heart's touch target at any
@@ -924,9 +938,13 @@ and reveals its tally, and holds Skip, Like and the category picker (*Skipping*,
   each to 599 high (376 on this Mac), measured 400 wide rather than 375 since CI's Linux fonts wrap
   wider than a phone's, reads each state's texts and nothing else and what a screen reader hears a
   tap does, taps the cards before and after the reveal, steps the scene's clock through the count
-  up, holds the row to 335 wide with only the categories cut, and to one height with a like's
-  failure or without at font scales 1, 1.3 and 2; `TopBarsDrawTest` finds Skip in the bar's middle,
-  and `AppNavigationTest` skips through it.
+  up, holds the row to 335 wide with only the categories cut, asked with Skip and answered with its
+  place kept, and to one height with a like's failure or without at font scales 1, 1.3 and 2, finds
+  Skip after the heart only while a question is asked, off while anything is in flight, and nothing
+  in the row moved by the reveal, shows *Начин живота*, *Супермоћи* and *Храна, Етика* whole beside
+  the points and the like (400 wide), and holds `CentredRow` to its rule on boxes of known widths,
+  which no font changes; `AppNavigationTest` skips through it, under a bar of home and the account
+  icon alone.
 
 **The Submit screen** (`io.ntole.wyr.submit`), opened from My questions on the Account screen
 (*Navigation*), is the form a question is written in (*Submitting*, below); the player's own are
@@ -1020,8 +1038,8 @@ listed on the Account screen.
   with nothing due in it (*Categories* above; provisional, §8b). A player is therefore never
   stuck at the end of a cycle on a question they keep skipping. Built as `POST /v1/skips` in
   `SkipStore.skip`, on `skips.skipped_in_cycle`, which the feed's due predicate compares with the
-  cycle as it does the vote's. The Play screen's Skip, on its top bar while a question is not
-  answered yet, sends it through `SkipQuestion` and then shows the next question
+  cycle as it does the vote's. The Play screen's Skip, in the row between the cards while a question
+  is not answered yet, sends it through `SkipQuestion` and then shows the next question
   (`PlayViewModel.skip`), even when the skip failed, and says nothing of it: the player asked not to
   answer that question, and an unrecorded skip only leaves it due, so the feed may serve it again
   this cycle, where Skip works on it again. Nothing else goes while a skip is in flight, and an

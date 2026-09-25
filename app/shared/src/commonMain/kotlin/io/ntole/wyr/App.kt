@@ -26,7 +26,6 @@ import io.ntole.wyr.navigation.PlayTopBar
 import io.ntole.wyr.navigation.Screen
 import io.ntole.wyr.navigation.SystemBack
 import io.ntole.wyr.play.PlayScreen
-import io.ntole.wyr.play.PlayUiState
 import io.ntole.wyr.play.PlayViewModel
 import io.ntole.wyr.submit.SubmitScreen
 import io.ntole.wyr.submit.SubmitViewModel
@@ -81,7 +80,11 @@ private fun Screens(
                 }
 
                 Screen.Play -> {
-                    Play(onHome = { navigator.open(Screen.Home) }, onAccount = { navigator.open(Screen.Account) })
+                    PlayTopBar(
+                        onHome = { navigator.open(Screen.Home) },
+                        onAccount = { navigator.open(Screen.Account) },
+                    )
+                    Below { Play() }
                 }
 
                 Screen.Account -> {
@@ -195,16 +198,8 @@ private fun Submit(onSent: () -> Unit) {
     SubmitScreen(state = state, actions = viewModel)
 }
 
-/**
- * The Play screen under its top bar, which holds Skip, so both read the one [PlayViewModel]: Skip is
- * offered only while a question is asked and not answered, and off while anything is in flight
- * (CLAUDE.md §8d, *The Play screen*).
- */
 @Composable
-private fun ColumnScope.Play(
-    onHome: () -> Unit,
-    onAccount: () -> Unit,
-) {
+private fun Play() {
     val viewModel = koinViewModel<PlayViewModel>()
     val state by viewModel.state.collectAsStateWithLifecycle()
     val categories by viewModel.categories.collectAsStateWithLifecycle()
@@ -214,28 +209,20 @@ private fun ColumnScope.Play(
     // Every time the screen is shown: the points move on the Account and Submit screens meanwhile.
     LaunchedEffect(viewModel) { viewModel.refreshPoints() }
 
-    val asking = state as? PlayUiState.Asking
-    PlayTopBar(
-        onHome = onHome,
-        onAccount = onAccount,
-        onSkip = if (asking != null) viewModel::skip else null,
-        canSkip = asking?.isBusy == false,
+    PlayScreen(
+        state = state,
+        categories = categories,
+        points = points,
+        picking = picking,
+        onChoose = viewModel::choose,
+        onSkip = viewModel::skip,
+        onToggleLike = viewModel::toggleLike,
+        onNext = viewModel::next,
+        onRetry = viewModel::retry,
+        onOpenCategories = viewModel::openCategories,
+        onToggleCategory = viewModel::toggleCategory,
+        onSelectAllCategories = viewModel::selectAllCategories,
+        onApplyCategories = viewModel::applyCategories,
+        onCloseCategories = viewModel::closeCategories,
     )
-    Below {
-        PlayScreen(
-            state = state,
-            categories = categories,
-            points = points,
-            picking = picking,
-            onChoose = viewModel::choose,
-            onNext = viewModel::next,
-            onToggleLike = viewModel::toggleLike,
-            onRetry = viewModel::retry,
-            onOpenCategories = viewModel::openCategories,
-            onToggleCategory = viewModel::toggleCategory,
-            onSelectAllCategories = viewModel::selectAllCategories,
-            onApplyCategories = viewModel::applyCategories,
-            onCloseCategories = viewModel::closeCategories,
-        )
-    }
 }

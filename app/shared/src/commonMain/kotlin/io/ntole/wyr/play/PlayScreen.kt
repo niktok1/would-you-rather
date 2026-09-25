@@ -26,6 +26,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconToggleButton
 import androidx.compose.material3.LocalMinimumInteractiveComponentSize
 import androidx.compose.material3.MaterialTheme
@@ -60,9 +61,9 @@ import kotlin.math.roundToInt
 
 /**
  * The game (CLAUDE.md §8d, *The Play screen*): two answer cards and, between them, one row of the
- * categories played, the player's points and the like. Tapping a card answers ([onChoose]); once the
- * answer is revealed, tapping either card goes on to the next question ([onNext]). Skip is on the
- * top bar (`PlayTopBar`), not here.
+ * categories played, the player's points, the like and Skip. Tapping a card answers ([onChoose]);
+ * Skip ([onSkip]) goes past a question not answered yet; once the answer is revealed, tapping either
+ * card goes on to the next question ([onNext]).
  *
  * [categories] are the categories played, none for every category, and tapping them opens the
  * category picker ([onOpenCategories]), a dialog over the screen while [picking], what it has
@@ -76,6 +77,7 @@ fun PlayScreen(
     points: Int?,
     picking: Set<Category>?,
     onChoose: (Side) -> Unit,
+    onSkip: () -> Unit,
     onNext: () -> Unit,
     onToggleLike: () -> Unit,
     onRetry: () -> Unit,
@@ -113,6 +115,7 @@ fun PlayScreen(
                         categories = categories,
                         points = points,
                         onChoose = onChoose,
+                        onSkip = onSkip,
                         onNext = onNext,
                         onToggleLike = onToggleLike,
                         onOpenCategories = onOpenCategories,
@@ -137,8 +140,9 @@ fun PlayScreen(
 }
 
 /**
- * The two cards and the row between them. Before the answer a card answers for its side; once it is
- * revealed, either card is the way on. Off while anything is in flight, one action at a time.
+ * The two cards and the row between them. Before the answer a card answers for its side, and Skip
+ * goes past it; once it is revealed, either card is the way on, and Skip is gone. Off while anything
+ * is in flight, one action at a time.
  */
 @Composable
 private fun QuestionBody(
@@ -146,6 +150,7 @@ private fun QuestionBody(
     categories: Set<Category>,
     points: Int?,
     onChoose: (Side) -> Unit,
+    onSkip: () -> Unit,
     onNext: () -> Unit,
     onToggleLike: () -> Unit,
     onOpenCategories: () -> Unit,
@@ -170,13 +175,15 @@ private fun QuestionBody(
 
         MiddleRow(
             question = state.question,
-            categories = categories,
+            categoriesPlayed = categoriesPlayed(categories, all = LocalStrings.current.playScreen.allCategories),
             points = points,
             likeError = state.likeError,
             canChangeCategories = state.canChangeCategories,
-            canLike = !state.isBusy,
+            idle = !state.isBusy,
             onOpenCategories = onOpenCategories,
             onToggleLike = onToggleLike,
+            // Only before answering (CLAUDE.md §8d, *Skipping*): once revealed, a card is the way on.
+            onSkip = if (state is PlayUiState.Asking) onSkip else null,
         )
 
         OptionCard(
@@ -194,96 +201,102 @@ private fun QuestionBody(
 }
 
 /**
- * The one row between the cards: on the left the categories played, which open the picker; in the
- * middle the player's points, or how the last like failed; on the right the heart, the player's own
- * like, filled while they like the question, and how many like it, as the server counted them
- * (CLAUDE.md §8d, *Likes*), before answering and after.
+ * The one row between the cards (`CentredRow`): on the left the categories played, which open the
+ * picker; in the middle the player's points, or how the last like failed; on the right the heart,
+ * the player's own like, filled while they like the question, how many like it, as the server
+ * counted them (CLAUDE.md §8d, *Likes*), before answering and after, and Skip ([onSkip]) while the
+ * question is not answered yet, `null` once it is. Skip's place is kept once it is gone, so the
+ * reveal moves nothing in the row. The heart and Skip are on only while the screen is [idle].
  *
  * It is the heart's height whatever it shows, at any font size, so a failed like moves nothing. The
- * two sides share what the middle leaves, so the points stand in the middle of the screen, and a
- * long selection is cut short on its one line, never the like count: the middle is no wider than
+ * points stand in the middle of the screen unless the categories played need their room, and a long
+ * selection is cut short on its one line, never the like count or Skip: the middle is no wider than
  * `WyrDimens.playRowMiddleMaxWidth`. Internal, not private, so a test can measure it.
  */
 @Composable
 internal fun MiddleRow(
     question: Question,
-    categories: Set<Category>,
+    categoriesPlayed: String,
     points: Int?,
     likeError: DomainError?,
     canChangeCategories: Boolean,
-    canLike: Boolean,
+    idle: Boolean,
     onOpenCategories: () -> Unit,
     onToggleLike: () -> Unit,
+    onSkip: (() -> Unit)?,
 ) {
     val colors = WyrThemeAccessors.colors
     val dimens = WyrThemeAccessors.dimens
     val strings = LocalStrings.current.playScreen
+    val touchTarget = LocalMinimumInteractiveComponentSize.current
 
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(dimens.spaceSm),
+    CentredRow(
+        gap = dimens.spaceSm,
         modifier =
             Modifier
                 .fillMaxWidth()
                 .padding(vertical = dimens.spaceXs),
-    ) {
-        Box(contentAlignment = Alignment.CenterStart, modifier = Modifier.weight(1f)) {
-            CategoriesPlayed(categories, enabled = canChangeCategories, onClick = onOpenCategories)
-        }
-
-        // No wider than its cap, so the like count always has its width, and exactly as high as the
-        // heart's touch target, which does not grow with the phone's font size as text does. How a
-        // like failed shows in the points' place, until the next like or the next question, in two
-        // short lines at most, set close enough to fit up to half again the font size and cut short
-        // inside it past that, never growing the row.
-        Box(
-            contentAlignment = Alignment.Center,
-            modifier =
-                Modifier
-                    .widthIn(max = dimens.playRowMiddleMaxWidth)
-                    .height(LocalMinimumInteractiveComponentSize.current),
-        ) {
-            if (likeError != null) {
+        start = { CategoriesPlayed(categoriesPlayed, enabled = canChangeCategories, onClick = onOpenCategories) },
+        middle = {
+            // No wider than its cap, so the like count and Skip always have their width, and exactly
+            // as high as the heart's touch target, which does not grow with the phone's font size as
+            // text does. How a like failed shows in the points' place, until the next like or the next
+            // question, in two short lines at most, set close enough to fit up to half again the font
+            // size and cut short inside it past that, never growing the row.
+            Box(
+                contentAlignment = Alignment.Center,
+                modifier = Modifier.widthIn(max = dimens.playRowMiddleMaxWidth).height(touchTarget),
+            ) {
+                if (likeError != null) {
+                    Text(
+                        text = failureText(likeError, strings),
+                        color = MaterialTheme.colorScheme.error,
+                        fontSize = WyrTypeScale.statLabel,
+                        lineHeight = WyrTypeScale.statLabelLineHeight,
+                        textAlign = TextAlign.Center,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                } else if (points != null) {
+                    Text(
+                        text = strings.points(points),
+                        color = colors.primaryText,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
+        },
+        end = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                IconToggleButton(checked = question.likedByMe, onCheckedChange = { onToggleLike() }, enabled = idle) {
+                    Icon(
+                        imageVector = if (question.likedByMe) WyrIcons.HeartFilled else WyrIcons.Heart,
+                        contentDescription = strings.like,
+                        tint = colors.headingAccent,
+                    )
+                }
                 Text(
-                    text = failureText(likeError, strings),
-                    color = MaterialTheme.colorScheme.error,
-                    fontSize = WyrTypeScale.statLabel,
-                    lineHeight = WyrTypeScale.statLabelLineHeight,
-                    textAlign = TextAlign.Center,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            } else if (points != null) {
-                Text(
-                    text = strings.points(points),
+                    text = question.likeCount.toString(),
                     color = colors.primaryText,
-                    fontWeight = FontWeight.Bold,
+                    fontWeight = FontWeight.Medium,
                     maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
                 )
+                if (onSkip != null) {
+                    IconButton(onClick = onSkip, enabled = idle) {
+                        Icon(
+                            imageVector = WyrIcons.Skip,
+                            contentDescription = strings.skip,
+                            tint = colors.headingAccent,
+                        )
+                    }
+                } else {
+                    Spacer(Modifier.size(touchTarget))
+                }
             }
-        }
-
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.End,
-            modifier = Modifier.weight(1f),
-        ) {
-            IconToggleButton(checked = question.likedByMe, onCheckedChange = { onToggleLike() }, enabled = canLike) {
-                Icon(
-                    imageVector = if (question.likedByMe) WyrIcons.HeartFilled else WyrIcons.Heart,
-                    contentDescription = strings.like,
-                    tint = colors.headingAccent,
-                )
-            }
-            Text(
-                text = question.likeCount.toString(),
-                color = colors.primaryText,
-                fontWeight = FontWeight.Medium,
-                maxLines = 1,
-            )
-        }
-    }
+        },
+    )
 }
 
 /**
@@ -293,7 +306,7 @@ internal fun MiddleRow(
  */
 @Composable
 private fun CategoriesPlayed(
-    categories: Set<Category>,
+    text: String,
     enabled: Boolean,
     onClick: () -> Unit,
 ) {
@@ -312,7 +325,7 @@ private fun CategoriesPlayed(
                 ).minimumInteractiveComponentSize(),
     ) {
         Text(
-            text = categoriesPlayed(categories, all = strings.allCategories),
+            text = text,
             color = colors.headingAccent,
             fontWeight = FontWeight.Bold,
             maxLines = 1,
@@ -557,7 +570,11 @@ private fun FailureBody(
                 fontWeight = FontWeight.Medium,
             )
             Button(onClick = onRetry) { Text(strings.tryAgain) }
-            CategoriesPlayed(categories, enabled = true, onClick = onOpenCategories)
+            CategoriesPlayed(
+                text = categoriesPlayed(categories, all = strings.allCategories),
+                enabled = true,
+                onClick = onOpenCategories,
+            )
         }
     }
 }

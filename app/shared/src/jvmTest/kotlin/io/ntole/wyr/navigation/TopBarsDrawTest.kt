@@ -2,21 +2,17 @@ package io.ntole.wyr.navigation
 
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.ImageComposeScene
-import androidx.compose.ui.semantics.SemanticsProperties
-import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.unit.Density
 import io.ntole.wyr.descriptions
 import io.ntole.wyr.language.Language
 import io.ntole.wyr.language.Strings
 import io.ntole.wyr.language.WyrStrings
 import io.ntole.wyr.language.stringsOf
-import io.ntole.wyr.nodes
 import io.ntole.wyr.sizeNeeded
 import io.ntole.wyr.tap
 import io.ntole.wyr.texts
 import io.ntole.wyr.theme.WyrDefaultDimens
 import io.ntole.wyr.theme.WyrTheme
-import kotlin.math.abs
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -96,45 +92,6 @@ class TopBarsDrawTest {
         }
     }
 
-    /**
-     * Skip stands in the middle of Play's bar, between home and account, the one place with room to
-     * spare; and while a vote, a skip or a like is in flight it is there and off.
-     */
-    @Test
-    fun `Skip stands in the middle of Play's bar and is off while it cannot skip`() {
-        listOf(true, false).forEach { canSkip ->
-            val actions = Actions()
-            val scene =
-                ImageComposeScene(width = SHORT_PHONE_WIDTH, height = TOP_BAR_HEIGHT, density = Density(1f)) {
-                    WyrTheme {
-                        PlayTopBar(onHome = {}, onAccount = {}, onSkip = actions.record("skip"), canSkip = canSkip)
-                    }
-                }
-            try {
-                scene.render()
-                val strings = stringsOf(Language.DEFAULT)
-                val (home, skip, account) =
-                    listOf(strings.home, strings.playScreen.skip, strings.account).map { name ->
-                        scene.nodes().single { name in it.descriptions }
-                    }
-                val middle = skip.boundsInRoot.center.x
-                // Within a pixel: an odd width has no whole middle.
-                assertTrue(abs(middle - SHORT_PHONE_WIDTH / 2f) <= 1f, "skip is at $middle")
-                assertTrue(
-                    home.boundsInRoot.right < skip.boundsInRoot.left &&
-                        skip.boundsInRoot.right < account.boundsInRoot.left,
-                )
-                assertEquals(
-                    !canSkip,
-                    skip.config.getOrNull(SemanticsProperties.Disabled) != null,
-                    "with canSkip $canSkip",
-                )
-            } finally {
-                scene.close()
-            }
-        }
-    }
-
     /** What the bars' buttons were tapped for, in order. */
     private class Actions {
         val tapped = mutableListOf<String>()
@@ -175,20 +132,7 @@ class TopBarsDrawTest {
         val BARS =
             listOf(
                 Bar(
-                    name = "Play's while a question is asked",
-                    icons = { listOf(it.home, it.playScreen.skip, it.account) },
-                    texts = { emptyList() },
-                    taps = listOf("home", "skip", "account"),
-                    draw = {
-                        PlayTopBar(
-                            onHome = it.record("home"),
-                            onAccount = it.record("account"),
-                            onSkip = it.record("skip"),
-                        )
-                    },
-                ),
-                Bar(
-                    name = "Play's once it is answered",
+                    name = "Play's",
                     icons = { listOf(it.home, it.account) },
                     texts = { emptyList() },
                     taps = listOf("home", "account"),

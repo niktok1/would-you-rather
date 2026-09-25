@@ -19,9 +19,9 @@ data class WyrDimens(
     val pickBorder: Dp = 4.dp,
     /**
      * The widest the middle of the Play screen's row between the cards may be, the points or how a
-     * like failed, so the like count on its right is never cut short at 375 wide.
+     * like failed, so the like count and Skip on its right are never cut short at 375 wide.
      */
-    val playRowMiddleMaxWidth: Dp = 120.dp,
+    val playRowMiddleMaxWidth: Dp = 104.dp,
     val screenPadding: Dp = 20.dp,
     /**
      * The top bar's height, the tab row's before it, so a screen under it keeps the 599 of an iPhone

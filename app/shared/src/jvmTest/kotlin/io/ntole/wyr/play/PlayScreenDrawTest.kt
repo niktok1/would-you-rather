@@ -1,17 +1,27 @@
 package io.ntole.wyr.play
 
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.snapshots.Snapshot
 import androidx.compose.ui.ImageComposeScene
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.toComposeImageBitmap
 import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsNode
 import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.getOrNull
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.state.ToggleableState
+import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.dp
 import io.ntole.wyr.core.domain.error.DomainError
 import io.ntole.wyr.core.domain.question.Category
 import io.ntole.wyr.core.domain.question.Question
@@ -194,8 +204,8 @@ class PlayScreenDrawTest {
 
     /**
      * What each state shows, and nothing else: no title, no *OR*, no *+1*, no verdict, no vote
-     * counts, and neither Next question nor Skip on the screen itself (Skip is the top bar's). Read
-     * once the reveal has counted up.
+     * counts and no Next question; Skip, named for a screen reader, only while a question is asked.
+     * Read once the reveal has counted up.
      */
     @Test
     fun `every state shows its texts and nothing else in every language`() {
@@ -234,20 +244,63 @@ class PlayScreenDrawTest {
         }
     }
 
-    /** One action at a time: while a vote or a like is in flight, the cards and the heart are off. */
+    /** One action at a time: while a vote or a like is in flight, the cards, the heart and Skip are off. */
     @Test
-    fun `the cards and the heart are off while anything is in flight`() {
-        val like = stringsOf(Language.DEFAULT).playScreen.like
-        val parts = listOf(QUESTION.optionA, QUESTION.optionB, like)
+    fun `the cards and the heart and Skip are off while anything is in flight`() {
+        val strings = stringsOf(Language.DEFAULT).playScreen
+        val parts = listOf(QUESTION.optionA, QUESTION.optionB, strings.like)
         listOf(
             PlayUiState.Asking(QUESTION, isSubmitting = true),
             PlayUiState.Asking(QUESTION, isLiking = true),
             PlayUiState.Revealed(QUESTION, OUTCOME, isLiking = true),
         ).forEach { state ->
-            withScreen(state) { scene, _ -> parts.forEach { assertTrue(scene.node(it).isOff, "$it in $state") } }
+            val off = if (state is PlayUiState.Asking) parts + strings.skip else parts
+            withScreen(state) { scene, _ -> off.forEach { assertTrue(scene.node(it).isOff, "$it in $state") } }
         }
         listOf(PlayUiState.Asking(QUESTION), PlayUiState.Revealed(QUESTION, OUTCOME)).forEach { state ->
-            withScreen(state) { scene, _ -> parts.forEach { assertFalse(scene.node(it).isOff, "$it in $state") } }
+            val on = if (state is PlayUiState.Asking) parts + strings.skip else parts
+            withScreen(state) { scene, _ -> on.forEach { assertFalse(scene.node(it).isOff, "$it in $state") } }
+        }
+    }
+
+    /**
+     * Skip is in the row between the cards (CLAUDE.md §8d, *Skipping*), after the heart, while a
+     * question is asked, in every language, and a tap on it skips; once the answer is revealed it is
+     * gone, since a card is then the way on.
+     */
+    @Test
+    fun `Skip is in the row while a question is asked and gone once it is answered`() {
+        Language.entries.forEach { language ->
+            val strings = stringsOf(language).playScreen
+            withScreen(PlayUiState.Asking(QUESTION), language = language) { scene, actions ->
+                val cardA = scene.node(QUESTION.optionA).boundsInRoot
+                val cardB = scene.node(QUESTION.optionB).boundsInRoot
+                val skip = scene.node(strings.skip).boundsInRoot
+                assertTrue(skip.center.y > cardA.bottom && skip.center.y < cardB.top, "Skip is at $skip in $language")
+                assertTrue(skip.left > scene.node(strings.like).boundsInRoot.right, "Skip is not after the heart")
+
+                scene.tap(strings.skip)
+
+                assertEquals(listOf("skip"), actions.tapped, "in $language")
+            }
+            withScreen(PlayUiState.Revealed(QUESTION, OUTCOME), language = language) { scene, _ ->
+                assertFalse(strings.skip in scene.descriptions(), "Skip on the reveal in $language")
+            }
+        }
+    }
+
+    /**
+     * Skip's place is kept once it is gone, so the reveal moves nothing in the row: not the
+     * categories, not the points, not the heart the player may tap next.
+     */
+    @Test
+    fun `the row does not move when the answer is revealed`() {
+        val strings = stringsOf(Language.DEFAULT).playScreen
+        val parts = listOf(strings.allCategories, strings.points(POINTS), strings.like, "0")
+        val asked = mutableListOf<Rect>()
+        withScreen(PlayUiState.Asking(QUESTION)) { scene, _ -> parts.mapTo(asked) { scene.node(it).boundsInRoot } }
+        withScreen(PlayUiState.Revealed(QUESTION, OUTCOME)) { scene, _ ->
+            assertEquals(asked, parts.map { scene.node(it).boundsInRoot })
         }
     }
 
@@ -294,7 +347,10 @@ class PlayScreenDrawTest {
         }
     }
 
-    /** The categories, the points and the heart sit in one row between the two cards, the points in the middle. */
+    /**
+     * The categories, the points, the heart and Skip sit in one row between the two cards, in that
+     * order, the points in the middle of the screen while the categories played leave them room.
+     */
     @Test
     fun `the row sits between the cards with the points in the middle`() {
         val strings = stringsOf(Language.DEFAULT).playScreen
@@ -306,12 +362,84 @@ class PlayScreenDrawTest {
                     strings.allCategories,
                     strings.points(POINTS),
                     strings.like,
+                    strings.skip,
                 ).map { scene.node(it).boundsInRoot }
             row.forEach { part -> assertTrue(part.center.y > cardA.bottom && part.center.y < cardB.top, "$part") }
 
-            val (categories, points, heart) = row
+            val (categories, points, heart, skip) = row
             assertTrue(abs(points.center.x - SHORT_PHONE_WIDTH / 2f) <= 1f, "the points are at ${points.center.x}")
-            assertTrue(categories.right < points.left && heart.left > points.right, "$row")
+            assertTrue(categories.right < points.left && heart.left > points.right && skip.left > heart.right, "$row")
+            assertTrue(categories.left >= cardA.left && skip.right <= cardA.right, "the row is wider than a card: $row")
+        }
+    }
+
+    /**
+     * The categories played take what the like, Skip and the points leave them, so a long Cyrillic
+     * name shows whole beside them, the server's names being Serbian (CLAUDE.md §8d, *The Play
+     * screen*); the points move aside only as far as it needs, never over it or the heart. A
+     * selection longer than the row is what is cut short, never the points, the like count or Skip.
+     *
+     * Measured 400 wide, as the fit test above is, since CI's Linux fonts run wider than a phone's.
+     * On this Mac the row at 375 leaves *Начин живота* its 125 with room to spare.
+     */
+    @Test
+    fun `a long Cyrillic selection shows whole beside the points and the like`() {
+        val strings = stringsOf(Language.DEFAULT).playScreen
+        LONG_SELECTIONS.forEach { selection ->
+            withRow(selection, WIDTH - 2 * PADDING) { scene ->
+                assertFalse(scene.isCutShort(selection), "\"$selection\" is cut short")
+                val (categories, points, heart) =
+                    listOf(selection, strings.points(POINTS), strings.like).map { scene.node(it).boundsInRoot }
+                assertTrue(categories.right < points.left && points.right < heart.left, "\"$selection\"")
+            }
+        }
+        withRow(EVERY_CATEGORY_IN_CYRILLIC, WIDTH - 2 * PADDING) { scene ->
+            assertTrue(scene.isCutShort(EVERY_CATEGORY_IN_CYRILLIC), "every category is not cut short")
+            listOf(strings.points(POINTS), LIKES.toString()).forEach { assertFalse(scene.isCutShort(it), it) }
+            assertTrue(strings.skip in scene.descriptions())
+        }
+    }
+
+    /**
+     * The row's own rule, measured on boxes of known widths rather than text, which differs from one
+     * font to another: the middle in the middle while the start leaves it room, moved right only as
+     * far as the start needs, and the start cut to what is left once it needs more than the row has.
+     */
+    @Test
+    fun `the row keeps the points in the middle until the categories need their room`() {
+        // In 335, a middle 50 wide is in the middle at 142, and an end 100 wide starts at 235, 8 apart.
+        mapOf(
+            60 to Triple(60, 142, 235),
+            134 to Triple(134, 142, 235),
+            150 to Triple(150, 158, 235),
+            300 to Triple(169, 177, 235),
+        ).forEach { (startWidth, expected) ->
+            val scene =
+                ImageComposeScene(width = ROW_WIDTH, height = ROW_HEIGHT, density = Density(1f)) {
+                    CentredRow(
+                        gap = 8.dp,
+                        start = { Probe("start", startWidth) },
+                        middle = { Probe("middle", 50) },
+                        end = { Probe("end", 100) },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+            try {
+                scene.render()
+                val (start, middle, end) =
+                    listOf("start", "middle", "end").map { name ->
+                        scene.nodes().single { name in it.descriptions }.boundsInRoot
+                    }
+                assertEquals(
+                    expected,
+                    Triple(start.width.toInt(), middle.left.toInt(), end.left.toInt()),
+                    "a start $startWidth wide",
+                )
+                assertEquals(0f, start.left)
+                assertEquals(ROW_WIDTH.toFloat(), end.right)
+            } finally {
+                scene.close()
+            }
         }
     }
 
@@ -355,26 +483,32 @@ class PlayScreenDrawTest {
     fun `nothing in the row is cut short at a short phone's width`() {
         val question = QUESTION.copy(likeCount = 1234, likedByMe = true)
         Language.entries.forEach { language ->
+            val all = stringsOf(language).playScreen.allCategories
             (LIKE_FAILURES + null).forEach { error ->
-                val (width, height) =
-                    sizeNeeded(ROW_WIDTH, SHORT_PHONE_HEIGHT) {
-                        WyrTheme {
-                            WyrStrings(language) {
-                                MiddleRow(
-                                    question = question,
-                                    categories = emptySet(),
-                                    points = 12345,
-                                    likeError = error,
-                                    canChangeCategories = true,
-                                    canLike = true,
-                                    onOpenCategories = {},
-                                    onToggleLike = {},
-                                )
+                // Asked, with Skip, and answered, with its place kept.
+                listOf<(() -> Unit)?>({}, null).forEach { onSkip ->
+                    val at = "with $error in $language ${if (onSkip == null) "answered" else "asked"}"
+                    val (width, height) =
+                        sizeNeeded(ROW_WIDTH, SHORT_PHONE_HEIGHT) {
+                            WyrTheme {
+                                WyrStrings(language) {
+                                    MiddleRow(
+                                        question = question,
+                                        categoriesPlayed = all,
+                                        points = 12345,
+                                        likeError = error,
+                                        canChangeCategories = true,
+                                        idle = true,
+                                        onOpenCategories = {},
+                                        onToggleLike = {},
+                                        onSkip = onSkip,
+                                    )
+                                }
                             }
                         }
-                    }
-                assertTrue(width <= ROW_WIDTH, "the row with $error in $language needs $width of $ROW_WIDTH")
-                assertEquals(ROW_HEIGHT, height, "the row with $error in $language")
+                    assertTrue(width <= ROW_WIDTH, "the row $at needs $width of $ROW_WIDTH")
+                    assertEquals(ROW_HEIGHT, height, "the row $at")
+                }
             }
         }
     }
@@ -407,6 +541,57 @@ class PlayScreenDrawTest {
                 text in shown || text in node.config.getOrNull(SemanticsProperties.ContentDescription).orEmpty()
             }
         return assertNotNull(node, "nothing shows \"$text\"")
+    }
+
+    /** A box [width] wide, named [name] for a test to find, which a row may make narrower. */
+    @Composable
+    private fun Probe(
+        name: String,
+        width: Int,
+    ) {
+        Box(Modifier.width(width.dp).height(48.dp).semantics { contentDescription = name })
+    }
+
+    /** Whether the one node showing [text] cuts it short: it needs more lines than it may take. */
+    private fun ImageComposeScene.isCutShort(text: String): Boolean {
+        val layouts = mutableListOf<TextLayoutResult>()
+        val layout = assertNotNull(node(text).config.getOrNull(SemanticsActions.GetTextLayoutResult)?.action, text)
+        layout(layouts)
+        // Skia's paragraphs on the desktop never report a line ellipsized, so the lines it needed.
+        return layouts.single().multiParagraph.didExceedMaxLines
+    }
+
+    /**
+     * [test] on the row alone, [width] wide, asked with Skip, the categories played named
+     * [categoriesPlayed], [POINTS] and [LIKES] likes.
+     */
+    private fun withRow(
+        categoriesPlayed: String,
+        width: Int,
+        test: (ImageComposeScene) -> Unit,
+    ) {
+        val scene =
+            ImageComposeScene(width = width, height = ROW_HEIGHT, density = Density(1f)) {
+                WyrTheme {
+                    MiddleRow(
+                        question = QUESTION.copy(likeCount = LIKES),
+                        categoriesPlayed = categoriesPlayed,
+                        points = POINTS,
+                        likeError = null,
+                        canChangeCategories = true,
+                        idle = true,
+                        onOpenCategories = {},
+                        onToggleLike = {},
+                        onSkip = {},
+                    )
+                }
+            }
+        try {
+            scene.render()
+            test(scene)
+        } finally {
+            scene.close()
+        }
     }
 
     /** What a screen reader says a tap on the one node showing [text] does, if anything. */
@@ -540,6 +725,7 @@ class PlayScreenDrawTest {
             points = points,
             picking = picking,
             onChoose = { side -> actions.tapped += "choose $side" },
+            onSkip = { actions.tapped += "skip" },
             onNext = { actions.tapped += "next" },
             onToggleLike = { actions.tapped += "like" },
             onRetry = { actions.tapped += "retry" },
@@ -559,8 +745,11 @@ class PlayScreenDrawTest {
         const val SHORT_PHONE_WIDTH = 375
         const val SHORT_PHONE_HEIGHT = 599
 
-        /** The short phone's width less the screen's padding on each side (`WyrDimens.screenPadding`). */
-        const val ROW_WIDTH = 335
+        /** The screen's padding on each side (`WyrDimens.screenPadding`). */
+        const val PADDING = 20
+
+        /** The short phone's width less the screen's padding on each side. */
+        const val ROW_WIDTH = SHORT_PHONE_WIDTH - 2 * PADDING
 
         /** The heart button's touch target and the row's padding above and below it. */
         const val ROW_HEIGHT = 56
@@ -569,6 +758,18 @@ class PlayScreenDrawTest {
         const val COUNTED_UP = COUNT_UP_MILLIS * 1_000_000L
 
         const val POINTS = 42
+
+        /** A like count of a question many like. */
+        const val LIKES = 12
+
+        /**
+         * The longest of the server's category names (`feat/server-categories`' V6), the two words
+         * of *Lifestyle*; another single one; and two short ones together.
+         */
+        val LONG_SELECTIONS = listOf("Начин живота", "Супермоћи", "Храна, Етика")
+
+        /** Every one of the server's categories played, longer than the row. */
+        const val EVERY_CATEGORY_IN_CYRILLIC = "Храна, Начин живота, Етика, Супермоћи, Апсурдно"
 
         /** Two lines an option on a phone, as most seeds are. */
         val QUESTION =
@@ -632,6 +833,7 @@ class PlayScreenDrawTest {
             val revealedA = strings.percent(70)
             val revealedB = strings.percent(30)
             val like = listOf(strings.like)
+            val likeAndSkip = listOf(strings.like, strings.skip)
             return listOf(
                 PlayUiState.Loading to (emptyList<String>() to listOf(strings.loading)),
                 PlayUiState.Failed(DomainError.NETWORK) to
@@ -640,9 +842,9 @@ class PlayScreenDrawTest {
                     (listOf(strings.outOfQuestions, strings.tryAgain, all) to emptyList()),
                 PlayUiState.Failed(DomainError.SERVER) to
                     (listOf(strings.somethingWrong, strings.tryAgain, all) to emptyList()),
-                PlayUiState.Asking(QUESTION) to (listOf(a, all, points, "0", b) to like),
+                PlayUiState.Asking(QUESTION) to (listOf(a, all, points, "0", b) to likeAndSkip),
                 PlayUiState.Asking(QUESTION.copy(likeCount = 12), likeError = DomainError.NETWORK) to
-                    (listOf(a, all, strings.cannotReach, "12", b) to like),
+                    (listOf(a, all, strings.cannotReach, "12", b) to likeAndSkip),
                 PlayUiState.Revealed(QUESTION, OUTCOME) to
                     (listOf(a, revealedA, all, points, "0", b, revealedB) to like),
                 PlayUiState.Revealed(QUESTION, OUTCOME.copy(pointsAwarded = 0, replayed = true)) to

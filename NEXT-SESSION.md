@@ -69,8 +69,13 @@ tests; `RootScreensTest` went with the tabs). Not seen on a device: Android's ba
 it on a phone; nor whether the web build's default font draws Cyrillic.
 
 **On `merge/redesign`** (from 4821c05; not on `main`, nothing pushed): `feat/play-redesign`, then
-`feat/account-redesign`, each merged whole with `--no-ff`. The two paragraphs below say what each
-brought.
+`feat/account-redesign`, each merged whole with `--no-ff`; the two paragraphs below say what each
+brought. Then, at the user's asking, **Skip moved from the top bar into the row between the cards**,
+after the like count, only while a question is asked, its place kept in the reveal (CLAUDE.md §8d,
+*The Play screen*): the top bar's centre slot went with it. `CentredRow` keeps the points in the
+middle of the screen while the categories played leave them room and moves them right only as far
+as a longer selection needs, so *Начин живота* shows whole at 375 wide on this Mac (*provisional*,
+§8b: ask the user, the other option being the points always in the middle).
 
 **On `feat/play-redesign`** (from 4821c05; merged into `merge/redesign`, nothing pushed): the user's **Play screen**
 redesign (CLAUDE.md §8d, *The Play screen*). Two cards and one row between them: the categories
@@ -960,12 +965,13 @@ a deploy or a spin-down; the server needs nothing new):
    question nobody likes. Tap the heart: it fills and the count goes up by one; tap it again and
    both go back. The count is the server's, so another player's like shows only when the question is
    served again.
-3. Tap the skip icon in the middle of the top bar: the next question comes, and no points. The
-   skipped one is not served again this cycle: with only the 24 seeds and no category picked, it
-   comes back once the other 23 are answered or skipped, in the next cycle.
+3. Tap the skip icon at the right end of the row, after the like count: the next question comes,
+   and no points. The top bar holds only home and the account icon. The skipped one is not served
+   again this cycle: with only the 24 seeds and no category picked, it comes back once the other 23
+   are answered or skipped, in the next cycle.
 4. Tap a card: both percentages count up over 2.5 seconds, your pick outlined, the points in the
-   middle of the row move to the vote's total, and Skip leaves the top bar. The heart works the same
-   there. A card does nothing for half a second after the reveal lands, so a double tap cannot skip
+   middle of the row move to the vote's total, and Skip goes, its place left empty, so the heart
+   and the count stay where they were. The heart works the same there. A card does nothing for half a second after the reveal lands, so a double tap cannot skip
    it; then either card is the next question. With TalkBack on, a revealed card says *Следеће
    питање*, and the categories *Промени категорије*.
 5. Airplane mode, then the heart: the question stays as it was and the points' place says *Игра није

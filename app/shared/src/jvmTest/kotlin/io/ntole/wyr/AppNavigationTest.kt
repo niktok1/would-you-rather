@@ -110,15 +110,18 @@ class AppNavigationTest {
             assertEquals(1, game.questionsAsked)
         }
 
-    /** Skip is on Play's top bar while a question is asked, and goes past it to the next. */
+    /**
+     * Skip is in the row between the cards while a question is asked, after the heart, and not on the
+     * top bar, which holds home and the account icon alone; it goes past the question to the next.
+     */
     @Test
-    fun `Skip on the Play screen's top bar skips the question asked`() {
+    fun `Skip between the cards skips the question asked`() {
         game.serving = QUESTION
         withApp { scene ->
             scene.tap(CYRILLIC.play)
             assertEquals(
-                listOf(CYRILLIC.home, CYRILLIC.playScreen.skip, CYRILLIC.account),
-                scene.descriptions().take(3),
+                listOf(CYRILLIC.home, CYRILLIC.account, CYRILLIC.playScreen.like, CYRILLIC.playScreen.skip),
+                scene.descriptions(),
             )
 
             scene.tap(CYRILLIC.playScreen.skip)
