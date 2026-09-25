@@ -13,6 +13,9 @@ import io.ktor.http.HttpMethod
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.headersOf
 import io.ntole.wyr.core.api.WyrApi
+import io.ntole.wyr.core.auth.GuestSessionDto
+import io.ntole.wyr.core.auth.RecoverRequest
+import io.ntole.wyr.core.auth.RecoverySecretDto
 import io.ntole.wyr.core.auth.RefreshRequest
 import io.ntole.wyr.core.auth.SessionDto
 import io.ntole.wyr.core.error.ErrorCode
@@ -37,7 +40,8 @@ import kotlinx.coroutines.sync.withLock
  * Just enough of the server, behind a [MockEngine], to put session recovery through the real
  * client: it mints guests, rotates refresh tokens, and rejects a feed request, a vote, a skip, a
  * like, a stats read, a submission or a read of the author's submissions from a player it does not
- * know — the state after a dev server restarts with an empty database.
+ * know — the state after a dev server restarts with an empty database. It issues recovery secrets,
+ * one live per player, and opens a session for whoever presents one (CLAUDE.md §8a, *Recovery*).
  */
 internal class FakeServer {
     private val lock = Mutex()
@@ -45,6 +49,10 @@ internal class FakeServer {
     private val liveRefreshTokens = mutableMapOf<String, String>()
     private var rotations = 0
     private var submissionsAnswered = 0
+
+    /** The player each live recovery secret recovers. A player's new secret kills the one before. */
+    private val liveSecrets = mutableMapOf<String, String>()
+    private var secretsIssued = 0
 
     /** Who likes each question, by id. A like sets it, as the server's does, and never toggles it. */
     private val likers = mutableMapOf<String, MutableSet<String>>()
@@ -101,13 +109,69 @@ internal class FakeServer {
     /** The `Authorization` header and body of every like, in arrival order. */
     val likesSentAs = mutableListOf<Pair<String?, LikeRequest>>()
 
+    /** When true, a mint answers the session alone, as a server from before recovery does. */
+    var mintsWithoutSecret = false
+
+    /** The secret of every recovery, in arrival order. */
+    val recoveriesSent = mutableListOf<String>()
+
+    /** The `Authorization` header of every recovery, in arrival order. */
+    val recoveriesSentAs = mutableListOf<String?>()
+
+    /**
+     * When set, every recovery is refused with this status and error code, or with no body at all
+     * when the code is null, as a server from before recovery answers a path it does not have.
+     */
+    var refuseRecoveriesWith: Pair<HttpStatusCode, ErrorCode?>? = null
+
+    /** How many of the next recoveries never get an answer, as when the connection drops first. */
+    var recoveriesToLose = 0
+
+    /** How many requests for a new recovery secret arrived, refused or not. */
+    var secretRequestsSent = 0
+        private set
+
+    /** When set, every request for a new secret is refused like [refuseRecoveriesWith]. */
+    var refuseSecretRequestsWith: Pair<HttpStatusCode, ErrorCode?>? = null
+
+    /** How many of the next requests for a new secret never get an answer. */
+    var secretRequestsToLose = 0
+
     val engine = MockEngine { request -> lock.withLock { handle(request) } }
+
+    /** A player the server already has, as another phone left them, with [secret] live when given. */
+    fun knowPlayer(
+        playerId: String,
+        secret: String? = null,
+    ) {
+        players += playerId
+        if (secret != null) liveSecrets[secret] = playerId
+    }
+
+    /** Whether [secret] still recovers anybody. */
+    fun isLive(secret: String): Boolean = secret in liveSecrets
+
+    /** Every player, token and secret gone, as when the dev server restarts on an empty database. */
+    fun forgetEverything() {
+        players.clear()
+        liveRefreshTokens.clear()
+        liveSecrets.clear()
+    }
 
     private suspend fun MockRequestHandleScope.handle(request: HttpRequestData): HttpResponseData =
         when (request.url.encodedPath) {
             WyrApi.Paths.AUTH_GUEST -> {
                 guestsMinted++
-                issueSession("guest$guestsMinted")
+                val playerId = "guest$guestsMinted"
+                issueSession(playerId, recoverySecret = if (mintsWithoutSecret) null else issueSecret(playerId))
+            }
+
+            WyrApi.Paths.AUTH_RECOVER -> {
+                recover(request)
+            }
+
+            WyrApi.Paths.MY_RECOVERY_SECRET -> {
+                replaceSecret(request)
             }
 
             WyrApi.Paths.AUTH_REFRESH -> {
@@ -194,6 +258,50 @@ internal class FakeServer {
             }
         }
 
+    /** Opens a session for the player [RecoverRequest.recoverySecret] recovers, and spends nothing. */
+    private suspend fun MockRequestHandleScope.recover(request: HttpRequestData): HttpResponseData {
+        val body = request.body.toByteArray().decodeToString()
+        val secret = WyrJson.decodeFromString<RecoverRequest>(body).recoverySecret
+        recoveriesSent += secret
+        recoveriesSentAs += request.headers[HttpHeaders.Authorization]
+        if (recoveriesToLose > 0) {
+            recoveriesToLose--
+            throw SocketTimeoutException("read timed out")
+        }
+        refuseRecoveriesWith?.let { return respondRefusal(it) }
+        val player = liveSecrets[secret]
+        return if (player == null) {
+            respondErrorDto(HttpStatusCode.Unauthorized, ErrorCode.INVALID_RECOVERY_SECRET)
+        } else {
+            issueSession(player)
+        }
+    }
+
+    /** Gives a known player a new secret, which kills the one before. */
+    private fun MockRequestHandleScope.replaceSecret(request: HttpRequestData): HttpResponseData {
+        secretRequestsSent++
+        if (secretRequestsToLose > 0) {
+            secretRequestsToLose--
+            throw SocketTimeoutException("read timed out")
+        }
+        refuseSecretRequestsWith?.let { return respondRefusal(it) }
+        val player = request.headers[HttpHeaders.Authorization]?.removePrefix("Bearer access-")
+        if (player == null || player !in players) {
+            return respondErrorDto(HttpStatusCode.Unauthorized, ErrorCode.UNAUTHORIZED)
+        }
+        return respondJson(WyrJson.encodeToString(RecoverySecretDto(issueSecret(player))))
+    }
+
+    private fun issueSecret(playerId: String): String {
+        liveSecrets.values.removeAll { it == playerId }
+        return "secret-$playerId-${++secretsIssued}".also { liveSecrets[it] = playerId }
+    }
+
+    private fun MockRequestHandleScope.respondRefusal(refusal: Pair<HttpStatusCode, ErrorCode?>): HttpResponseData {
+        val code = refusal.second ?: return respond("", refusal.first)
+        return respondErrorDto(refusal.first, code)
+    }
+
     /** Sets a known player's like as asked for, and answers with the question's likes as they then stand. */
     private suspend fun MockRequestHandleScope.like(request: HttpRequestData): HttpResponseData {
         val authorization = request.headers[HttpHeaders.Authorization]
@@ -247,7 +355,11 @@ internal class FakeServer {
         }
     }
 
-    private fun MockRequestHandleScope.issueSession(playerId: String): HttpResponseData {
+    /** A session for [playerId], answered as a mint's when it comes with a [recoverySecret]. */
+    private fun MockRequestHandleScope.issueSession(
+        playerId: String,
+        recoverySecret: String? = null,
+    ): HttpResponseData {
         players += playerId
         val refreshToken = "refresh-$playerId-${rotations++}"
         liveRefreshTokens[refreshToken] = playerId
@@ -258,7 +370,16 @@ internal class FakeServer {
                 refreshToken = refreshToken,
                 accessTokenExpiresInSeconds = 900,
             )
-        return respondJson(WyrJson.encodeToString(session))
+        if (recoverySecret == null) return respondJson(WyrJson.encodeToString(session))
+        val guest =
+            GuestSessionDto(
+                playerId = session.playerId,
+                accessToken = session.accessToken,
+                refreshToken = session.refreshToken,
+                accessTokenExpiresInSeconds = session.accessTokenExpiresInSeconds,
+                recoverySecret = recoverySecret,
+            )
+        return respondJson(WyrJson.encodeToString(guest))
     }
 
     companion object {

@@ -467,17 +467,40 @@ auth SDK, satisfying §2.
     Each environment's server keeps secrets of its own (§8e): a DEV secret recovers nobody on PROD,
     and DEV's in-memory database forgets every secret at each restart, where a client meets
     `INVALID_RECOVERY_SECRET`. `RecoveryFlowTest` pins the routes and `SessionStoreTest` the store.
-  - *The client half* (*decided 2026-09-25*, not built yet): Android keeps the secret in Block Store
+  - *The client* (`DefaultSessionRepository`, built): a device with no session recovers with the
+    secret it keeps before it mints a guest, and so does a dead session before `withSessionRecovery`
+    opens another in its place, which makes a dead session cost nothing where a secret is kept. A
+    secret the server does not know (`INVALID_RECOVERY_SECRET`: DEV after a restart, say) is dropped,
+    and a guest minted, whose secret is kept before its session. Any other failure of a recovery mints
+    nothing and fails the call, and the next call tries again: offline, a 5xx, a 429, or the 404 of a
+    build from before recovery, since a mint would keep its own secret in place of the one that
+    recovers the account. A store that cannot be read counts as empty there, so a phone without Play
+    services plays on as a guest.
+  - *A session with no secret kept* (a guest from before recovery, or a secret the store could not
+    keep) asks `POST /v1/me/recovery-secret` for one, once a launch, and only while the store holds
+    none and can be read: a new secret kills the one before, wherever it is kept. So a secret held for
+    another player is left alone, since on iOS it is the account this person's other iPhones share;
+    this device's guest then stays bound to it, and recovers as that account should its session die. A
+    request the server refused, or whose secret the store could not keep, counts, and after three
+    (`MAX_FAILED_SECRET_REQUESTS`) the install asks no more for that player: a server without recovery
+    refuses every one. One lost on the network does not count. The count is kept beside the session,
+    in the token storage (`RecoverySecretStore`), so it never moves to another phone and a reinstall
+    starts it again. `clear()`, the console's *New guest*, drops the secret with the session, which
+    would otherwise recover the player being cleared away. `RecoverySecretFlowTest` pins every case.
+  - *Where it is kept* (*decided 2026-09-25*, not built yet): Android keeps the secret in Block Store
     (§2), its cloud copy only where end-to-end encryption is available and a same-device reinstall
     alone otherwise, and keeps the session store out of both cloud backup and device-to-device
     transfer, so a new phone gets only the secret, and recovers with it. iOS keeps it in a Keychain
     item synced through iCloud Keychain (`kSecAttrSynchronizable`), so one person's iPhones share one
-    account, each with a session of its own. Desktop and web stay guest-only and store no secret.
+    account, each with a session of its own. Desktop and web keep none: they bind no
+    `RecoverySecretStorage` (`dataModule`), so they mint as before and never ask for a secret.
 - Provider linking (Play Games Services on Android, Game Center on iOS) is phase 2 (§8b, *Provider
   linking*); recovery alone already carries a phone's guest across a reinstall.
 - On the client, `SessionStore` is the only copy of the credentials: Ktor's bearer cache is off
   (`cacheTokens = false`), so a session change applies to the very next request. A dead session
-  is replaced through `withSessionRecovery` in `:core:data`, which mints at most one guest for it.
+  is replaced through `withSessionRecovery` in `:core:data`, which opens at most one session for it:
+  its own player's, through the recovery secret, where the device keeps one (*Recovery*), and else a
+  fresh guest's.
 - *Clients sharing one store* (browser tabs, desktop instances) can both refresh one token, and the
   server lets both through, so the store may end up holding the displaced token of the two. The
   server takes that one once more, but a previous token survives only one refresh: the clients share

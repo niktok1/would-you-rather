@@ -29,6 +29,8 @@ import io.ntole.wyr.core.domain.submission.SubmissionRepository
 import io.ntole.wyr.core.domain.submission.SubmitQuestion
 import io.ntole.wyr.core.domain.vote.CastVote
 import io.ntole.wyr.core.domain.vote.VoteRepository
+import io.ntole.wyr.core.network.RecoverySecretStorage
+import io.ntole.wyr.core.network.RecoverySecretStore
 import io.ntole.wyr.core.network.SessionStore
 import io.ntole.wyr.core.network.TokenStorage
 import io.ntole.wyr.core.network.WyrHttpClient
@@ -42,13 +44,16 @@ import io.ntole.wyr.core.network.api.VoteApi
 import io.ntole.wyr.core.network.environment.WyrEnvironment
 import io.ntole.wyr.core.network.trace.HttpTrace
 import org.koin.core.module.Module
+import org.koin.core.scope.Scope
 import org.koin.dsl.module
 
 /**
  * Wiring for the network + data layers.
  *
  * Expects a [TokenStorage] to already be registered — that is the one binding only a platform
- * can supply, so it comes from `:app:shared`'s platform module.
+ * can supply, so it comes from `:app:shared`'s platform module. So does a [RecoverySecretStorage],
+ * where the platform keeps a recovery secret at all: desktop and web register none, and their players
+ * stay guests bound to that one storage (CLAUDE.md §8a, *Recovery*).
  *
  * @param environment the server environment the build targets: every request goes to its
  *   [WyrEnvironment.apiBaseUrl], and its session is kept apart from every other environment's in
@@ -82,7 +87,9 @@ public fun dataModule(environment: WyrEnvironment): Module =
         // Bound as the concrete type as well: repositories recover a dead session through
         // withSessionRecovery, which is recovery machinery and deliberately not on the domain
         // interface.
-        single { DefaultSessionRepository(authApi = get(), sessionStore = get()) }
+        single {
+            DefaultSessionRepository(authApi = get(), sessionStore = get(), recovery = recoverySecretStore(environment))
+        }
         single<SessionRepository> { get<DefaultSessionRepository>() }
         single<SessionDiagnostics> { DefaultSessionDiagnostics(sessionStore = get()) }
 
@@ -100,3 +107,7 @@ public fun dataModule(environment: WyrEnvironment): Module =
         factory { GetMySubmissions(submissions = get(), session = get()) }
         factory { SetLike(likes = get(), session = get()) }
     }
+
+/** [environment]'s recovery secret, where the platform keeps one; null where it registers no storage for it. */
+private fun Scope.recoverySecretStore(environment: WyrEnvironment): RecoverySecretStore? =
+    getOrNull<RecoverySecretStorage>()?.let { secrets -> RecoverySecretStore(secrets, get(), environment) }
