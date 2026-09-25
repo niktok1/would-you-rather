@@ -308,7 +308,7 @@ automatically from every green commit on `main` (its URL is on its Render page).
   the mint read with its secret, a recovery posting the secret alone with no bearer, and its 401
   setting off no refresh, and a new secret asked for with the bearer. `RecoverySecretStoreTest` pins
   a key per environment (`wyr.recovery.local`, `.dev`, `.prod`) in one store, and the count of failed
-  requests per player, in the local storage alone. `RecoverySecretFlowTest` (28, on `FakeServer`)
+  requests per player, in the local storage alone. `RecoverySecretFlowTest` (29, on `FakeServer`)
   pins a fresh install recovering and minting nothing; an unknown secret dropped for a guest whose
   secret is kept, even when the guest's cannot be; a recovery lost on the network, refused with a
   bare 404 as a build from before recovery answers, or rate-limited, minting nothing; an unreadable
@@ -316,7 +316,8 @@ automatically from every green commit on `main` (its URL is on its Render page).
   refusals ending the asking and losses on the network not counting; a held secret, another
   player's included, and an unreadable store asking nothing; a dead session recovered before any
   mint, once for two resets at once, and failing the call when its recovery is lost; `clear()`
-  dropping the secret and `clearKeepingSecret()` keeping it; a platform without a store as before;
+  dropping the secret, and letting it through where the store can neither clear nor read, and
+  `clearKeepingSecret()` keeping it; a platform without a store as before;
   and no secret in the HTTP trace. `DataModuleTest` pins the storage taken only where a platform
   binds one, under its own environment's key. `AndroidRecoverySecretStorageTest` (host) pins the
   cloud backup asked for only while it is encrypted end to end, an unknown answer taken as not,
@@ -328,7 +329,8 @@ automatically from every green commit on `main` (its URL is on its Render page).
   minting, `clear()` keeping the secret, the mint keeping none, a kept secret keeping the count, no
   store wired or one environment's key for all, Block Store's cloud copy always on, an unknown
   encryption failing the write, a cancellable write, a failed read answered as none, the reinstall
-  clearing the secret or keeping the count, and an unreadable store reported as none.
+  clearing the secret or keeping the count, an unreadable store reported as none, and `clear()`
+  failing on every failed drop or on none.
 - Live run of the client half against the fat jar (JDK 21, `PORT=18094`, no `DATABASE_URL`): Flyway
   ran V1, V2 and V4 and `/health` was 200. By curl, the mint carried a 43-character secret, a
   recovery with it answered the same player with no secret, the mint's session and a recovered one
@@ -339,7 +341,7 @@ automatically from every green commit on `main` (its URL is on its Render page).
   refresh 401, recovery 200, retry 200, as the same player, with one mint in the whole run; and a
   session whose secret store was emptied asked for a new secret, kept it, and the old one was then
   refused. No secret appeared in the trace, and no 43-character token in the server's log. Counts on
-  the branch: `:server` 262 (2 skipped), `:core:domain` 34, `:core:data` 152, `:core:network` 86 (99
+  the branch: `:server` 262 (2 skipped), `:core:domain` 34, `:core:data` 153, `:core:network` 86 (99
   as Android host tests), `:app:shared` 132; every client target compiles, the iOS simulator's and
   its `:app:shared` tests included, and `aapt2` shows each flavor's manifest naming both backup rule
   files, which exclude `wyr.auth.xml` from the cloud backup and the device transfer.
