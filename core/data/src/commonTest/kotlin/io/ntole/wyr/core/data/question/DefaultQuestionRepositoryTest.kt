@@ -34,7 +34,6 @@ import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
-import kotlin.test.assertTrue
 
 class DefaultQuestionRepositoryTest {
     private val cache = InMemoryQuestionCache()
@@ -131,10 +130,7 @@ class DefaultQuestionRepositoryTest {
             repository.next()
             repository.next()
 
-            val question = repository.next()
-
-            assertEquals("q1", question.id)
-            assertTrue(question.answeredBefore)
+            assertEquals("q1", repository.next().id)
         }
 
     @Test

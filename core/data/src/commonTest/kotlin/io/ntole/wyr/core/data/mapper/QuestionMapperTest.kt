@@ -10,22 +10,6 @@ import kotlin.test.assertNull
 
 class QuestionMapperTest {
     @Test
-    fun `whether the feed looped back to a question survives the mapping`() {
-        listOf(true, false).forEach { answeredBefore ->
-            val dto =
-                QuestionDto(
-                    id = "q1",
-                    optionA = "q1-a",
-                    optionB = "q1-b",
-                    categories = listOf(QuestionCategory.FOOD),
-                    answeredBefore = answeredBefore,
-                )
-
-            assertEquals(answeredBefore, dto.toDomain().answeredBefore)
-        }
-    }
-
-    @Test
     fun `a question's likes survive the mapping`() {
         // Liked by others and not by the player too, so likedByMe cannot be read off the count.
         listOf(0 to false, 3 to true, 2 to false).forEach { (likeCount, likedByMe) ->

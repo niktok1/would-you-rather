@@ -18,8 +18,8 @@ import kotlinx.serialization.Serializable
  * reads one of nothing but [QuestionCategory.UNKNOWN]: a question filed under nothing it can name.
  *
  * [answeredBefore] is true when the requesting player has answered this question already and the
- * feed has looped back to it. It exists so the dev console can label a looped question; the
- * player-facing reveal does not show a previous pick (CLAUDE.md §8d).
+ * feed has looped back to it (CLAUDE.md §8d). No client reads it since the dev console, which
+ * labelled a looped question, went; the player-facing reveal does not show a previous pick.
  *
  * [likeCount] is how many players like the question, the requesting one included when [likedByMe]
  * (CLAUDE.md §8d). Both are sent whether or not the player has answered it, since a like count is

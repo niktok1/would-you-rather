@@ -892,7 +892,8 @@ lists the player's own (*Submitting*, below).
     (§8b). The client selects any number (`QuestionRepository.setCategories`, from the Play
     screen's category picker), none for every category; a change drops the queue, and a login or a
     logout keeps the selection.
-  - `answeredBefore` means the player has a vote on the question, from any cycle.
+  - `answeredBefore` (`QuestionDto`) means the player has a vote on the question, from any cycle. No
+    client reads it: the domain's `Question` has no such field since the dev console went.
 - **Categories** *(decided 2026-09-24; built)*: a
   question is filed under **any number of categories, at least one**. A player may pick **several**
   categories to play, and a question matches when it is filed under **any** of them; none picked

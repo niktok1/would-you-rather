@@ -10,10 +10,6 @@ package io.ntole.wyr.core.domain.question
  * a question is filed under at least one. Each one this build cannot name is [Category.OTHER], so a
  * question filed under none it can name is filed under [Category.OTHER] alone.
  *
- * [answeredBefore] is true when the player has answered this question already and the feed has
- * looped back to it (CLAUDE.md §8d). It is for diagnostics such as the dev console: the
- * player-facing reveal does not show a previous pick.
- *
  * [likeCount] is how many players like the question, this one included when [likedByMe], as the
  * server counted them when it served the question (CLAUDE.md §8d), answered or not: a like count is
  * visible before answering. A queued question keeps the numbers it was fetched with, so the answer
@@ -25,7 +21,6 @@ public data class Question(
     public val optionA: String,
     public val optionB: String,
     public val categories: Set<Category>,
-    public val answeredBefore: Boolean = false,
     public val likeCount: Int = 0,
     public val likedByMe: Boolean = false,
 ) {
