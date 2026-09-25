@@ -21,7 +21,6 @@ import io.ntole.wyr.core.domain.submission.SubmissionStatus
 import io.ntole.wyr.language.EnglishStrings
 import io.ntole.wyr.language.SerbianCyrillicStrings
 import io.ntole.wyr.language.SerbianLatinStrings
-import io.ntole.wyr.language.pointsText
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -145,7 +144,7 @@ class AccountViewModelTest {
 
             assertEquals("Guest", nameOf(state.shown(), ENGLISH))
             assertEquals("Гост", nameOf(state.shown(), CYRILLIC))
-            assertEquals("12 P", pointsText(state.shown().totalPoints))
+            assertEquals("12\u00A0П", SerbianCyrillicStrings.points(state.shown().totalPoints))
             assertNull(state.failure)
         }
 
@@ -197,7 +196,7 @@ class AccountViewModelTest {
             val state = open().state.value
 
             assertEquals("bob_1", nameOf(state.shown(), ENGLISH))
-            assertEquals("1 P", pointsText(state.shown().totalPoints))
+            assertEquals("1\u00A0P", EnglishStrings.points(state.shown().totalPoints))
             assertEquals(
                 listOf(
                     StatCell("1", "Answers"),

@@ -835,7 +835,7 @@ game's, or a place on one, theme tokens only (§5b), and its words in `Strings` 
   switch was on top before, in the heading's place (provisional), and is where the user put it now:
   a player who cannot read the language shown still finds it by its three names, each in itself,
   under the list when the list is long.
-- *The card*: the username, or *Гост*, and the points as **123 P** (`pointsText`), read through
+- *The card*: the username, or *Гост*, and the points as **123 П** (`Strings.points`), read through
   `GetPlayerStats` each time the screen is shown, since the points move on Play meanwhile; under them
   the stats, four numbers each over a word (`statCells`): *Одговори*, the answers given, re-answers
   included; *Питања*, the questions they went to; *Циклус*, with *још 4* under it, the questions
@@ -864,7 +864,7 @@ game's, or a place on one, theme tokens only (§5b), and its words in `Strings` 
   in every language.
 - A refusal from the server shows under the form that sent it, in a few words: a taken name, a wrong
   login, a rate limit with its wait, offline. A guest with points who logs in is warned once that the
-  guest's points stay behind, *Поени госта (12 P) неће прећи на налог.*, and the next *Ипак се
+  guest's points stay behind, *Поени госта (12 П) неће прећи на налог.*, and the next *Ипак се
   пријави* goes ahead; switching forms takes the warning down, and a form's failure with it.
 - Each field names its autofill content type (`NewUsername` and `NewPassword` to register,
   `Username` and `Password` to log in), so the phone's password manager can fill them and offer to
@@ -1119,7 +1119,7 @@ listed on the Account screen.
   options and one or more categories of `Category.selectable`, what `SubmissionRules` refuses in each
   option shown under it as it is typed, and Send off until nothing is refused and a category is
   picked. **Submitting costs points** (*decided 2026-09-25*): the client keeps the cost in one place,
-  `SubmissionRules.COST`, 1 until release, shows it on the button, *Пошаљи · 1 P*, and holds the
+  `SubmissionRules.COST`, 1 until release, shows it on the button, *Пошаљи · 1 П*, and holds the
   button off while the player's points, read through `GetPlayerStats` each time the form is shown
   and after every submit, are fewer, with one line saying so, *Немаш довољно поена.* The client
   alone is built: the server on this branch charges nothing, and §8c still counts a total as answers
@@ -1363,10 +1363,13 @@ hand, so the two cannot say different things; and **English** stands beside them
   opened from it).
 - **Numbers and symbols** *(built)*: a text holding a number or a name is a template, `{0}` and on,
   filled in by `fill` (`Templates.kt`), so each language puts it where its grammar wants it, and
-  `StringsTest` holds every language's copy of a template to the same placeholders. The points'
-  symbol, **P** (`POINTS_SYMBOL`, `pointsText`: *123 P*), and the characters a username may hold
-  (`USERNAME_CHARACTERS`, *a–z, 0–9, _*) are the same in every language, as a unit's symbol is, so
-  they are not `Strings`, whose Serbian texts hold no Latin letter.
+  `StringsTest` holds every language's copy of a template to the same placeholders. **Points** have
+  one unit in the whole game, one text of `Strings`, `pointsUnit`: Cyrillic *П* in Serbian, so
+  Serbian Latin's *P* is made from it, and *P* in English, written after the number with a no-break
+  space by `Strings.points` (*123 П*), on the Play screen's row, the Account card, the Auth page's
+  guest-points warning and the Submit form's cost (*Пошаљи · 1 П*, *Pošalji · 1 P*, *Send · 1 P*).
+  The characters a username may hold (`USERNAME_CHARACTERS`, *a–z, 0–9, _*) are the same in every
+  language, so they are not `Strings`, whose Serbian texts hold no Latin letter.
 - **The default** *(built)*: Serbian Cyrillic on a first launch, whatever the device's language:
   nothing reads the device's locale (`Language.DEFAULT`; `LanguageSwitchTest` sets an English, a
   German and a Serbian Latin locale on the JVM and still opens in Cyrillic).

@@ -89,7 +89,7 @@ data class AccountStrings(
     val optionsSame: String,
     val categories: String,
     val pickCategories: String,
-    /** The Submit form's button, and what submitting costs, `{0}`: *Пошаљи · 1 P*. */
+    /** The Submit form's button, and what submitting costs, `{0}`, in points: *Пошаљи · 1 П*. */
     val send: String,
     /** Under Send, while the player has fewer points than submitting costs. */
     val notEnoughPoints: String,

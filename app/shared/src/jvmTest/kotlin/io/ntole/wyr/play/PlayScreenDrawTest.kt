@@ -211,7 +211,7 @@ class PlayScreenDrawTest {
     fun `every state shows its texts and nothing else in every language`() {
         Language.entries.forEach { language ->
             val strings = stringsOf(language).playScreen
-            expectedOf(strings).forEach { (state, expected) ->
+            expectedOf(strings, stringsOf(language).points(POINTS)).forEach { (state, expected) ->
                 val (texts, names) = expected
                 withScreen(state, language = language) { scene, _ ->
                     scene.renderAt(COUNTED_UP)
@@ -296,7 +296,7 @@ class PlayScreenDrawTest {
     @Test
     fun `the row does not move when the answer is revealed`() {
         val strings = stringsOf(Language.DEFAULT).playScreen
-        val parts = listOf(strings.allCategories, strings.points(POINTS), strings.like, "0")
+        val parts = listOf(strings.allCategories, POINTS_SHOWN, strings.like, "0")
         val asked = mutableListOf<Rect>()
         withScreen(PlayUiState.Asking(QUESTION)) { scene, _ -> parts.mapTo(asked) { scene.node(it).boundsInRoot } }
         withScreen(PlayUiState.Revealed(QUESTION, OUTCOME)) { scene, _ ->
@@ -360,7 +360,7 @@ class PlayScreenDrawTest {
             val row =
                 listOf(
                     strings.allCategories,
-                    strings.points(POINTS),
+                    POINTS_SHOWN,
                     strings.like,
                     strings.skip,
                 ).map { scene.node(it).boundsInRoot }
@@ -389,13 +389,13 @@ class PlayScreenDrawTest {
             withRow(selection, WIDTH - 2 * PADDING) { scene ->
                 assertFalse(scene.isCutShort(selection), "\"$selection\" is cut short")
                 val (categories, points, heart) =
-                    listOf(selection, strings.points(POINTS), strings.like).map { scene.node(it).boundsInRoot }
+                    listOf(selection, POINTS_SHOWN, strings.like).map { scene.node(it).boundsInRoot }
                 assertTrue(categories.right < points.left && points.right < heart.left, "\"$selection\"")
             }
         }
         withRow(EVERY_CATEGORY_IN_CYRILLIC, WIDTH - 2 * PADDING) { scene ->
             assertTrue(scene.isCutShort(EVERY_CATEGORY_IN_CYRILLIC), "every category is not cut short")
-            listOf(strings.points(POINTS), LIKES.toString()).forEach { assertFalse(scene.isCutShort(it), it) }
+            listOf(POINTS_SHOWN, LIKES.toString()).forEach { assertFalse(scene.isCutShort(it), it) }
             assertTrue(strings.skip in scene.descriptions())
         }
     }
@@ -759,6 +759,9 @@ class PlayScreenDrawTest {
 
         const val POINTS = 42
 
+        /** [POINTS] as the default language shows them, which the scenes are drawn in unless told. */
+        val POINTS_SHOWN = stringsOf(Language.DEFAULT).points(POINTS)
+
         /** A like count of a question many like. */
         const val LIKES = 12
 
@@ -822,12 +825,14 @@ class PlayScreenDrawTest {
             )
 
         /**
-         * What some states show in [strings], each its texts in any order, and then the names it gives
-         * a screen reader for what has no text, from the top down.
+         * What some states show in [strings], with [points] as the points, each its texts in any order,
+         * and then the names it gives a screen reader for what has no text, from the top down.
          */
-        fun expectedOf(strings: PlayStrings): List<Pair<PlayUiState, Pair<List<String>, List<String>>>> {
+        fun expectedOf(
+            strings: PlayStrings,
+            points: String,
+        ): List<Pair<PlayUiState, Pair<List<String>, List<String>>>> {
             val all = strings.allCategories
-            val points = strings.points(POINTS)
             val a = QUESTION.optionA
             val b = QUESTION.optionB
             val revealedA = strings.percent(70)

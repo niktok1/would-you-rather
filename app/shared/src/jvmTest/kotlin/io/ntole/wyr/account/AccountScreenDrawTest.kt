@@ -13,7 +13,6 @@ import io.ntole.wyr.core.network.environment.WyrEnvironment
 import io.ntole.wyr.everyText
 import io.ntole.wyr.language.Language
 import io.ntole.wyr.language.WyrStrings
-import io.ntole.wyr.language.pointsText
 import io.ntole.wyr.language.stringsOf
 import io.ntole.wyr.nodes
 import io.ntole.wyr.sizeNeeded
@@ -54,7 +53,7 @@ class AccountScreenDrawTest {
         }
     }
 
-    /** The name, or Гост, the points as *123 P*, and each stat as a number over a word or two. */
+    /** The name, or Гост, the points as *123 П*, and each stat as a number over a word or two. */
     @Test
     fun `the screen shows who is playing and their points and every stat`() {
         Language.entries.forEach { language ->
@@ -62,7 +61,7 @@ class AccountScreenDrawTest {
             listOf(GUEST, REGISTERED).forEach { stats ->
                 val shown = textsOf(AccountState(stats = stats, submissions = emptyList()), language)
                 val expected =
-                    listOf(nameOf(stats, strings), pointsText(stats.totalPoints)) +
+                    listOf(nameOf(stats, strings), stringsOf(language).points(stats.totalPoints)) +
                         statCells(stats, strings).flatMap { listOfNotNull(it.value, it.label, it.note) }
                 expected.forEach { text -> assertTrue(text in shown, "$language: \"$text\" is not in $shown") }
             }
@@ -82,7 +81,8 @@ class AccountScreenDrawTest {
             val guest = textsOf(AccountState(stats = GUEST, submissions = listOf(QUESTION)), language)
             assertInOrder(
                 guest,
-                listOf(strings.guest, pointsText(GUEST.totalPoints), strings.answers, strings.openAuth) +
+                listOf(strings.guest, stringsOf(language).points(GUEST.totalPoints)) +
+                    listOf(strings.answers, strings.openAuth) +
                     listOf(strings.myQuestions, QUESTION.optionA, switch, serverLine(DEV, strings)),
                 "$language, a guest",
             )

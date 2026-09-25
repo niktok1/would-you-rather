@@ -8,7 +8,6 @@ import io.ntole.wyr.everyText
 import io.ntole.wyr.language.Language
 import io.ntole.wyr.language.WyrStrings
 import io.ntole.wyr.language.fill
-import io.ntole.wyr.language.pointsText
 import io.ntole.wyr.language.stringsOf
 import io.ntole.wyr.sizeNeeded
 import io.ntole.wyr.tap
@@ -150,7 +149,7 @@ class AuthScreenDrawTest {
                 )
 
             val shown = textsOf(warned, language)
-            assertTrue(strings.guestPointsWarning.fill(pointsText(12)) in shown, "$language: $shown")
+            assertTrue(strings.guestPointsWarning.fill(stringsOf(language).points(12)) in shown, "$language: $shown")
             assertFalse(strings.logIn in shown, "$language: $shown")
             tapping(warned, language, actions) {
                 it.tap(strings.logInAnyway)

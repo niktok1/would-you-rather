@@ -9,7 +9,6 @@ import io.ntole.wyr.core.domain.vote.VoteOutcome
 import io.ntole.wyr.language.EnglishStrings
 import io.ntole.wyr.language.Language
 import io.ntole.wyr.language.SerbianCyrillicStrings
-import io.ntole.wyr.language.SerbianLatinStrings
 import io.ntole.wyr.language.stringsOf
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -17,13 +16,6 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class PlayScreenTest {
-    @Test
-    fun `the points are the number and its unit never broken between them`() {
-        assertEquals("123 П", SerbianCyrillicStrings.playScreen.points(123))
-        assertEquals("123 P", SerbianLatinStrings.playScreen.points(123))
-        assertEquals("0 P", EnglishStrings.playScreen.points(0))
-    }
-
     @Test
     fun `a percentage is the number and its sign`() {
         Language.entries.forEach { language -> assertEquals("70%", stringsOf(language).playScreen.percent(70)) }

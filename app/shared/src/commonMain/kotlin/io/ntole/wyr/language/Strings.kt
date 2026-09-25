@@ -18,6 +18,11 @@ data class Strings(
     val gameName: String,
     /** The Home screen's one button, into the game. */
     val play: String,
+    /**
+     * After a number of points, their unit, the one the whole game writes: *123 П*. Serbian's is
+     * Cyrillic, so Serbian Latin's is made from it as every other text is.
+     */
+    val pointsUnit: String,
     /** The Play screen's words. */
     val playScreen: PlayStrings,
     /** The home icon's name, for a screen reader: back to the Home screen. */
@@ -40,6 +45,7 @@ data class Strings(
         Strings(
             gameName = transform(gameName),
             play = transform(play),
+            pointsUnit = transform(pointsUnit),
             playScreen = playScreen.map(transform),
             home = transform(home),
             account = transform(account),
@@ -47,6 +53,12 @@ data class Strings(
             language = transform(language),
             accountScreens = accountScreens.map(transform),
         )
+
+    /**
+     * [count] points as the whole game shows them, on the Play screen, the Account screen and the
+     * Submit form's cost alike: *123 П*, never broken between the two.
+     */
+    fun points(count: Int): String = "$count\u00A0$pointsUnit"
 }
 
 /** The source text, written by hand. */
@@ -54,6 +66,7 @@ val SerbianCyrillicStrings: Strings =
     Strings(
         gameName = "Шта би радије?",
         play = "Играј",
+        pointsUnit = "П",
         playScreen = SerbianCyrillicPlayStrings,
         home = "Почетна",
         account = "Налог",
@@ -69,6 +82,7 @@ val EnglishStrings: Strings =
     Strings(
         gameName = "Would You Rather?",
         play = "Play",
+        pointsUnit = "P",
         playScreen = EnglishPlayStrings,
         home = "Home",
         account = "Account",

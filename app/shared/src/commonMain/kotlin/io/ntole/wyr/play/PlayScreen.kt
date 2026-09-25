@@ -259,7 +259,7 @@ internal fun MiddleRow(
                     )
                 } else if (points != null) {
                     Text(
-                        text = strings.points(points),
+                        text = LocalStrings.current.points(points),
                         color = colors.primaryText,
                         fontWeight = FontWeight.Bold,
                         maxLines = 1,

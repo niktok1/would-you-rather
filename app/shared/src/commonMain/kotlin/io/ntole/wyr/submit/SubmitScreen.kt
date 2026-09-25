@@ -29,8 +29,8 @@ import io.ntole.wyr.core.domain.submission.OptionProblem
 import io.ntole.wyr.core.domain.submission.SubmissionRules
 import io.ntole.wyr.language.AccountStrings
 import io.ntole.wyr.language.LocalStrings
+import io.ntole.wyr.language.Strings
 import io.ntole.wyr.language.fill
-import io.ntole.wyr.language.pointsText
 import io.ntole.wyr.play.categoryName
 import io.ntole.wyr.theme.WyrThemeAccessors
 import io.ntole.wyr.theme.WyrTypeScale
@@ -128,7 +128,7 @@ private fun Form(
         state.submitFailure?.let { FailureText(it) }
         if (state.tooFewPoints) Text(text = strings.notEnoughPoints, color = colors.primaryText)
         Button(onClick = actions::submit, enabled = state.canSubmit, modifier = Modifier.fillMaxWidth()) {
-            Text(sendText(strings))
+            Text(sendText(LocalStrings.current))
         }
         if (state.isBusy) {
             LinearProgressIndicator(color = colors.headingAccent, modifier = Modifier.fillMaxWidth())
@@ -182,8 +182,8 @@ private fun FailureText(failure: SubmitFailure) {
     )
 }
 
-/** Send, and what sending costs: *Пошаљи · 1 P*. */
-internal fun sendText(strings: AccountStrings): String = strings.send.fill(pointsText(SubmissionRules.COST))
+/** Send, and what sending costs, in the points' one unit: *Пошаљи · 1 П*. */
+internal fun sendText(strings: Strings): String = strings.accountScreens.send.fill(strings.points(SubmissionRules.COST))
 
 /** The rule an option is held to, what is wrong with the one typed by it, or that the two are the same. */
 internal fun optionHint(

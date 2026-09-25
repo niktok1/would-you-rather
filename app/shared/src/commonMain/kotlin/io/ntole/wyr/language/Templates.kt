@@ -1,16 +1,6 @@
 package io.ntole.wyr.language
 
 /**
- * The points' symbol, written after a number: *123 P*. The same in every language, as a unit's
- * symbol is (Serbian Cyrillic text writes *5 km* too), so it is not one of [Strings], whose Serbian
- * texts hold no Latin letter (CLAUDE.md §8f).
- */
-const val POINTS_SYMBOL: String = "P"
-
-/** [count] points as the game writes them in every language: *123 P*. */
-fun pointsText(count: Int): String = "$count $POINTS_SYMBOL"
-
-/**
  * The characters a username may hold (`AccountRules`), written as themselves: the same in every
  * language, so not one of [Strings].
  */

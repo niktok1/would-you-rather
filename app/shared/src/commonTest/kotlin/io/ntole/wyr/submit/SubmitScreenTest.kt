@@ -10,12 +10,15 @@ import kotlin.test.assertEquals
 
 /** What the Submit screen's form says, in the player's words. */
 class SubmitScreenTest {
-    /** The cost is on the button, in every language, from the one constant the client keeps. */
+    /**
+     * The cost is on the button, in every language, from the one constant the client keeps, in the
+     * points' one unit, the Play screen's and the Account screen's.
+     */
     @Test
     fun `Send names what a question costs in every language`() {
-        assertEquals("Пошаљи · 1 P", sendText(SerbianCyrillicStrings.accountScreens))
-        assertEquals("Pošalji · 1 P", sendText(SerbianLatinStrings.accountScreens))
-        assertEquals("Send · 1 P", sendText(ENGLISH))
+        assertEquals("Пошаљи · 1\u00A0П", sendText(SerbianCyrillicStrings))
+        assertEquals("Pošalji · 1\u00A0P", sendText(SerbianLatinStrings))
+        assertEquals("Send · 1\u00A0P", sendText(EnglishStrings))
     }
 
     @Test

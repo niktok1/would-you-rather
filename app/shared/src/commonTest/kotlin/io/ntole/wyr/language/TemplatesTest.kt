@@ -20,10 +20,4 @@ class TemplatesTest {
     fun `a placeholder with no value is left as it is`() {
         assertEquals("Wait {0} s.", "Wait {0} s.".fill())
     }
-
-    @Test
-    fun `points read with their symbol in every language`() {
-        assertEquals("123 P", pointsText(123))
-        assertEquals("1 P", pointsText(1))
-    }
 }

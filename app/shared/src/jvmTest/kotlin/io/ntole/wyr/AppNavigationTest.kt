@@ -191,7 +191,7 @@ class AppNavigationTest {
             assertEquals(1, game.submissionsRead)
 
             scene.tap(CYRILLIC.accountScreens.newQuestion)
-            assertTrue(sendText(CYRILLIC.accountScreens) in scene.texts(), "the form is not shown")
+            assertTrue(sendText(CYRILLIC) in scene.texts(), "the form is not shown")
             assertEquals(listOf(CYRILLIC.back), scene.descriptions().take(1))
             assertEquals(2, game.statsRead)
 
@@ -211,7 +211,7 @@ class AppNavigationTest {
             scene.type(1, "Swim")
             scene.tap(categoryName(Category.FOOD))
 
-            scene.tap(sendText(CYRILLIC.accountScreens))
+            scene.tap(sendText(CYRILLIC))
             scene.settle()
 
             assertEquals(listOf("Fly"), game.sent.map { it.optionA })
@@ -232,7 +232,7 @@ class AppNavigationTest {
             scene.type(0, "Fly")
             scene.type(1, "Swim")
             scene.tap(categoryName(Category.FOOD))
-            scene.tap(sendText(CYRILLIC.accountScreens))
+            scene.tap(sendText(CYRILLIC))
 
             scene.tap(CYRILLIC.back)
             assertEquals(2, game.submissionsRead, "read as the Account screen is shown again")

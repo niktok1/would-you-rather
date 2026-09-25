@@ -26,7 +26,6 @@ import io.ntole.wyr.language.Language
 import io.ntole.wyr.language.LanguageSwitch
 import io.ntole.wyr.language.LocalStrings
 import io.ntole.wyr.language.fill
-import io.ntole.wyr.language.pointsText
 import io.ntole.wyr.theme.WyrThemeAccessors
 import io.ntole.wyr.theme.WyrTypeScale
 
@@ -128,7 +127,7 @@ private fun Player(
                         fontWeight = FontWeight.Bold,
                     )
                     Text(
-                        text = pointsText(stats.totalPoints),
+                        text = LocalStrings.current.points(stats.totalPoints),
                         color = colors.headingAccent,
                         fontSize = WyrTypeScale.heading,
                         fontWeight = FontWeight.ExtraBold,

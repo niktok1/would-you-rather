@@ -55,6 +55,17 @@ class StringsTest {
     }
 
     /**
+     * The whole game writes points in one unit, a text of its own: Cyrillic *П* in Serbian, so the
+     * Latin *P* is made from it, and *P* in English; after the number, never broken from it.
+     */
+    @Test
+    fun `points are the number and the one unit of the language shown`() {
+        assertEquals("123\u00A0П", SerbianCyrillicStrings.points(123))
+        assertEquals("123\u00A0P", SerbianLatinStrings.points(123))
+        assertEquals("0\u00A0P", EnglishStrings.points(0))
+    }
+
+    /**
      * A template's numbers and names go where its language puts them, but every language must have
      * each of them: a translation that dropped `{0}` would show a rate limit without its wait.
      */

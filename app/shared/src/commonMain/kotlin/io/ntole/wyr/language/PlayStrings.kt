@@ -12,8 +12,6 @@ data class PlayStrings(
     val changeCategories: String,
     /** What a tap on either card does once the answer is revealed, for a screen reader. */
     val nextQuestion: String,
-    /** After the player's points, their unit: *123 П*. */
-    val pointsUnit: String,
     /** The heart's name, for a screen reader: whether the player likes the question. */
     val like: String,
     /** The skip icon's name, for a screen reader: past the question without answering it. */
@@ -36,9 +34,6 @@ data class PlayStrings(
     /** The button under a failure. */
     val tryAgain: String,
 ) {
-    /** The player's points as the Play screen shows them, *123 П*, never broken between the two. */
-    fun points(count: Int): String = "$count\u00A0$pointsUnit"
-
     /** A side's share of the answers, as the reveal shows it: *70%*. */
     fun percent(value: Int): String = "$value%"
 
@@ -48,7 +43,6 @@ data class PlayStrings(
             allCategories = transform(allCategories),
             changeCategories = transform(changeCategories),
             nextQuestion = transform(nextQuestion),
-            pointsUnit = transform(pointsUnit),
             like = transform(like),
             skip = transform(skip),
             loading = transform(loading),
@@ -67,7 +61,6 @@ internal val SerbianCyrillicPlayStrings: PlayStrings =
         allCategories = "Све",
         changeCategories = "Промени категорије",
         nextQuestion = "Следеће питање",
-        pointsUnit = "П",
         like = "Свиђа ми се",
         skip = "Прескочи",
         loading = "Учитавање",
@@ -84,7 +77,6 @@ internal val EnglishPlayStrings: PlayStrings =
         allCategories = "All",
         changeCategories = "Change categories",
         nextQuestion = "Next question",
-        pointsUnit = "P",
         like = "Like",
         skip = "Skip",
         loading = "Loading",

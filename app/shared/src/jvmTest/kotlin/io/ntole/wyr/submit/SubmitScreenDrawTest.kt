@@ -72,10 +72,10 @@ class SubmitScreenDrawTest {
             val actions = Recorder()
             val scene = scene(WRITTEN, language, actions)
             try {
-                assertFalse(sendButton(scene, sendText(strings)).isOff, "$language")
+                assertFalse(sendButton(scene, sendText(stringsOf(language))).isOff, "$language")
                 assertFalse(strings.notEnoughPoints in scene.texts(), "$language")
 
-                scene.tap(sendText(strings))
+                scene.tap(sendText(stringsOf(language)))
 
                 assertEquals(listOf("submit"), actions.calls, "$language")
             } finally {
@@ -91,7 +91,7 @@ class SubmitScreenDrawTest {
             val strings = stringsOf(language).accountScreens
             val scene = scene(WRITTEN.copy(points = SubmissionRules.COST - 1), language)
             try {
-                assertTrue(sendButton(scene, sendText(strings)).isOff, "$language")
+                assertTrue(sendButton(scene, sendText(stringsOf(language))).isOff, "$language")
                 assertTrue(strings.notEnoughPoints in scene.texts(), "$language: ${scene.texts()}")
             } finally {
                 scene.close()
@@ -106,7 +106,7 @@ class SubmitScreenDrawTest {
             val strings = stringsOf(language).accountScreens
             val scene = scene(WRITTEN.copy(points = null), language)
             try {
-                assertTrue(sendButton(scene, sendText(strings)).isOff, "$language")
+                assertTrue(sendButton(scene, sendText(stringsOf(language))).isOff, "$language")
                 assertFalse(strings.notEnoughPoints in scene.texts(), "$language")
             } finally {
                 scene.close()

@@ -75,7 +75,12 @@ after the like count, only while a question is asked, its place kept in the reve
 *The Play screen*): the top bar's centre slot went with it. `CentredRow` keeps the points in the
 middle of the screen while the categories played leave them room and moves them right only as far
 as a longer selection needs, so *Начин живота* shows whole at 375 wide on this Mac (*provisional*,
-§8b: ask the user, the other option being the points always in the middle).
+§8b: ask the user, the other option being the points always in the middle). And **one points
+unit**, a text of `Strings` (`pointsUnit`, written by `Strings.points`): *П* in Serbian, *P* in
+Serbian Latin by the transliteration and in English, on the Play row, the Account card, the Auth
+page's guest-points warning and Send's cost, *Пошаљи · 1 П* (CLAUDE.md §8f, *Numbers and symbols*).
+The Account branch's constant Latin *P* (`POINTS_SYMBOL`, `pointsText`) is gone, and with it its
+*123 P* below.
 
 **On `feat/play-redesign`** (from 4821c05; merged into `merge/redesign`, nothing pushed): the user's **Play screen**
 redesign (CLAUDE.md §8d, *The Play screen*). Two cards and one row between them: the categories
