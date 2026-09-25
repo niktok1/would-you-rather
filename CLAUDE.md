@@ -1279,7 +1279,8 @@ listed on the Account screen.
   into a new one (`MigrationsTest` holds the two equal). No client can tell them from real votes.
   The seeds are in **Serbian**, in Cyrillic (*decided 2026-09-25*), written for Serbian and keeping
   the fun rather than put word for word from the English they began in (`SeedTest` holds every letter
-  to the Serbian Cyrillic alphabet). V9 rewrote the English seeds a database seeded before holds, by
+  to the Serbian Cyrillic alphabet), each option phrased as §8f, *How an option is phrased*, asks,
+  with no word agreeing with the player's gender. V9 rewrote the English seeds a database seeded before holds, by
   id, into the same texts, leaving their categories, votes and likes alone. A player's own question
   stays exactly as typed; putting questions into other languages is a later, bigger topic.
 - **Likes** *(built)*: any player may like any question, **their own
@@ -1323,7 +1324,8 @@ listed on the Account screen.
     time the Play screen is shown, which reads them again.
 - **Submitting** *(built; details decided 2026-09-23; the cost 2026-09-25)*: **costs a point**
   (§8c) and earns no points directly, because authors earn through likes. The author writes both
-  options and **picks one or more categories** (each a category's id; *Categories*). A player may
+  options (in Serbian, as §8f, *How an option is phrased*, asks, which the moderator holds them
+  to) and **picks one or more categories** (each a category's id; *Categories*). A player may
   have at most **20 submissions pending** moderation at once. A submitted question is served only
   after a moderator approves it; once approved it is due for every player in their current cycle.
   Built as `POST /v1/questions`, in `SubmissionStore.submit` after `checkedSubmission`. Both options
@@ -1667,6 +1669,27 @@ hand, so the two cannot say different things; and **English** stands beside them
   shows the one last picked there. A tag this build does not know opens in Cyrillic, and a write that
   fails leaves the language this run's only, silently. `LanguageViewModelTest` and `AppModuleTest`
   pin it, the sessions beside it in one storage untouched.
+- **How an option is phrased** *(decided 2026-09-26)*: in Serbian an option answers *Шта би
+  радије?*, the question the game's name asks and the Submit form's *Шта би радије…* begins, never
+  *Да ли би радије…?*, after which an infinitive is wrong. So an option is an infinitive (*Радити
+  четири дуга дана у недељи*) or a *да* clause (*Да ти храна увек буде мало пресољена*), each a
+  whole answer to it, and no word in it agrees with the player's gender: not *Бити богат*, a man's,
+  but *Имати много пара*. Then no question needs to know the player's gender. The game addresses the
+  player as *ти*, as its name does. Rejected: knowing the player's gender, which is personal data a
+  guest has none of, and every question in two forms; the formal *Да ли бисте радије радили*, cold
+  for a game; and every option as *да* with the present (*Да радиш четири дуга дана*), free of
+  gender too but longer, every option opening on one word, and a migration of the seeds: the
+  fallback, should the infinitive read wrong after all. Nothing checks it: the 24 seeds keep it
+  (V9), and the moderator holds a player's question to it when deciding, since an approval cannot
+  change the text.
+  - *Other languages* *(to settle when one gets questions)*: English's *Would you rather…* takes a
+    bare verb, with no gender and no formality, so none of this came up there. Before a language's
+    first question, settle three things and record them here beside Serbian's: which question the
+    game's name asks there, and what form an option takes to answer it; whether that form carries
+    the player's gender (a Slavic past tense or conditional, as Serbian's *радио*/*радила*; a
+    Romance adjective, *content*/*contente*), and how an option avoids it; and whether the game
+    says the familiar or the formal *you* (*du* or *Sie*, *tu* or *vous*). Croatian and Bosnian
+    would take Serbian's answers.
 - **Not translated yet**: question texts stay as their authors wrote them (server data; a later
   change may put Serbian ones through `SerbianScript.toLatin`; a local question is never
   translated, §8b *Local questions*), and the moderation app
