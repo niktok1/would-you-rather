@@ -37,7 +37,7 @@ import org.koin.compose.viewmodel.koinViewModel
  * publishes the Compose context, so no `KoinContext` wrapper is needed here.
  *
  * The root screens are the ones [rootScreensFor] gives the build's environment, behind a tab row.
- * The play screen is kept as it is, frozen.
+ * The game's screens take over the console's features one by one (CLAUDE.md §8d, *Current focus*).
  */
 @Composable
 fun App() {
@@ -105,7 +105,6 @@ private fun DevConsole() {
         onNextQuestion = viewModel::nextQuestion,
         onResetQueue = viewModel::resetQueue,
         onVote = viewModel::vote,
-        onSkip = viewModel::skip,
         onToggleLike = viewModel::toggleLike,
         onVoteById = viewModel::voteById,
         onRetryLastVote = viewModel::retryLastVote,
@@ -137,6 +136,7 @@ private fun Play() {
     PlayScreen(
         state = state,
         onChoose = viewModel::choose,
+        onSkip = viewModel::skip,
         onNext = viewModel::next,
         onRetry = viewModel::retry,
     )

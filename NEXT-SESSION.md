@@ -846,7 +846,8 @@ questions the list shows; nothing is read again after a 403 or a 429.
 
 ### The dev console
 
-The app opens on the **Console** tab (`io.ntole.wyr.dev`). **Play** is the frozen game screen.
+The app opens on the **Console** tab (`io.ntole.wyr.dev`) in a LOCAL or DEV build. **Play** is the
+game screen, which has taken over the console's Skip (CLAUDE.md §8d, *Skipping*).
 
 - **Session.** *Ensure session* mints a guest, or reuses the stored one. The header then shows the
   player id and when its access token expires. Opening the console reads the stats, which ensures a
@@ -855,12 +856,7 @@ The app opens on the **Console** tab (`io.ntole.wyr.dev`). **Play** is the froze
   `account: <username>` once the stats read names one, `guest` otherwise, `stats not read` before a
   read works. Registering and logging in are the game's **Account** tab; the console reads the stats
   only on its own actions, so after a change there, press *Read stats* to see it here.
-- **Play.** *Skip* records the skip of the question on screen (`POST /v1/skips`), then loads the
-  next question and reads the stats. The skipped one is not due for the rest of the cycle and
-  comes back in the next, `answeredBefore` only if it was ever answered. A skip that fails is
-  logged as `recordSkip` with its error, and the next question loads anyway, its entry ending
-  `skip=unrecorded`; that question stays due, so the feed can serve it again this cycle. Skip is
-  off until a question is loaded. The question shows every category it is filed under, `OTHER` for
+- **Play.** The question shows every category it is filed under, `OTHER` for
   each one this build cannot name. *A* / *B* answer it, each tap as a new attempt, and the raw
   `VoteOutcome` appears below, `replayed` included. A question the feed looped back to shows
   `answeredBefore: true` and logs as `question=<id> looped`. The header's total points is the last
@@ -884,8 +880,7 @@ The app opens on the **Console** tab (`io.ntole.wyr.dev`). **Play** is the froze
 - **Stats.** Every number `GET /v1/me` returns: total points, answers given (re-answers count,
   replays do not), distinct questions answered, the cycle, how many questions are still due in it,
   and the likes the player's own questions hold (`likesReceived`). Read when the console opens, after
-  every vote, *Skip*, *Like*, *Answer N* and *New guest*, and on
-  *Read stats*. *Read stats* is an action like any other, logged as `readStats` whether it works or
+  every vote, *Like*, *Answer N* and *New guest*, and on *Read stats*. *Read stats* is an action like any other, logged as `readStats` whether it works or
   not. The other reads are logged only when they fail, as `refreshStats`. A read that fails keeps
   what was shown, which after a vote is nothing: a vote's outcome drops the stats it outdated. A red
   `MISMATCH totalPoints` line means the stats and the last outcome disagree: a vote landed whose
@@ -902,9 +897,8 @@ The app opens on the **Console** tab (`io.ntole.wyr.dev`). **Play** is the froze
   **To see the lazy cycle start:**
   once the last due question is answered or skipped, Stats shows the finished cycle with
   `dueThisCycle: 0`. The next cycle starts only when the feed is next asked for questions, which the
-  console does when its queue is empty (*Next question*, *Skip*, or the next answer of *Answer N*).
-  *Read stats* then shows it, with the whole pool due; a *Skip* that asked the feed shows it at
-  once, since it reads the stats after its next question.
+  console does when its queue is empty (*Next question*, or the next answer of *Answer N*).
+  *Read stats* then shows it, with the whole pool due.
 - **Questions.** Fetch the next question, or empty the local queue, and see its size.
 - **Category.** A row of chips: *All*, then every category but `OTHER`, which no feed can be
   filtered to. Each category chip toggles that category in or out of the selection, and *All*
@@ -1039,8 +1033,8 @@ none of it needs or makes a player session:
 the personal account for reading CI. Render is set up from the blueprint (`wyr` on the personal
 account); its `ADMIN_TOKEN`s are set by hand in each service's Environment tab.
 
-Deferred: SQLDelight, a leaderboard, UI polish and WCAG, and the known `PlayViewModel` issues (the
-Play tab is frozen).
+Deferred: SQLDelight, a leaderboard, UI polish and WCAG. The Play tab is no longer frozen: features
+move onto it as they leave the console (CLAUDE.md §8d, *Current focus*).
 
 ## Things worth knowing before you touch the code
 

@@ -28,7 +28,6 @@ internal val uiModule =
                 questions = get(),
                 queue = get(),
                 getNextQuestion = get(),
-                skipQuestion = get(),
                 castVote = get(),
                 getPlayerStats = get(),
                 setLike = get(),

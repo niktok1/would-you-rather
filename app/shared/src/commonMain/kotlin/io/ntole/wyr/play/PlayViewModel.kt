@@ -6,6 +6,7 @@ import io.ntole.wyr.core.domain.error.DomainError
 import io.ntole.wyr.core.domain.error.WyrException
 import io.ntole.wyr.core.domain.question.GetNextQuestion
 import io.ntole.wyr.core.domain.question.QuestionRepository
+import io.ntole.wyr.core.domain.question.SkipQuestion
 import io.ntole.wyr.core.domain.vote.AttemptId
 import io.ntole.wyr.core.domain.vote.CastVote
 import io.ntole.wyr.core.domain.vote.Side
@@ -17,6 +18,7 @@ import kotlinx.coroutines.launch
 class PlayViewModel(
     private val getNextQuestion: GetNextQuestion,
     private val castVote: CastVote,
+    private val skipQuestion: SkipQuestion,
     private val questions: QuestionRepository,
 ) : ViewModel() {
     private val _state = MutableStateFlow<PlayUiState>(PlayUiState.Loading)
@@ -50,6 +52,35 @@ class PlayViewModel(
         if (asking.isSubmitting) return
         // One attempt per tap (CLAUDE.md §8d), kept for any retry of this vote.
         submit(PendingVote(asking.question, side, AttemptId.random()))
+    }
+
+    /**
+     * Skips the question being asked, then shows the next one (CLAUDE.md §8d, *Skipping*). A skip
+     * earns nothing and leaves the tally alone, and the server keeps the question out of the rest of
+     * the player's cycle, so it comes back in the next one.
+     *
+     * A skip that fails moves on all the same, and says nothing, as the dev console's did: the
+     * player asked not to answer this question, and keeping them on it, or on an error they can do
+     * nothing about, would make them deal with it anyway. All an unrecorded skip loses is that the
+     * question stays due, so the feed may serve it again this cycle, where Skip works on it again.
+     * A failure that is not the skip's alone, such as being offline, shows on the next question's
+     * fetch, or on its vote.
+     */
+    fun skip() {
+        val asking = _state.value as? PlayUiState.Asking ?: return
+        // Not while its vote is in flight: the question is being answered, not skipped.
+        if (asking.isSubmitting) return
+        // Loading at once, so a second tap finds nothing to skip.
+        _state.value = PlayUiState.Loading
+
+        viewModelScope.launch {
+            try {
+                skipQuestion(asking.question.id)
+            } catch (unrecorded: WyrException) {
+                // Moved on all the same (above). Only a WyrException: a cancellation must go on up.
+            }
+            next()
+        }
     }
 
     /**

@@ -771,7 +771,7 @@ rewards reading the crowd may come later as a separate, opt-in mode, never as th
 
 **Current focus.** UI polish is paused. Functionality was built behind a plain engineering dev
 console, the default root screen of a LOCAL or DEV build, with the game's screens as further tabs; a
-PROD build shows the game's screens alone, opening on the frozen `PlayScreen` (§8e). The console is
+PROD build shows the game's screens alone, opening on `PlayScreen` (§8e). The console is
 in `io.ntole.wyr.dev` (`:app:shared`), and every request shows in its HTTP trace (`HttpTrace` in
 `:core:network`, never headers or bodies). **Features now move into the game one by one**
 (*decided 2026-09-25*): each gets a plain screen of the game's, reachable in every build, PROD's
@@ -798,6 +798,12 @@ not moved yet still adds its section to the console. Navigation is the root tab 
   `AccountScreenDrawTest` draws every state in both themes; theme tokens only (§5b).
 - The console has no account forms. Its Session section names the account by its last stats read,
   the username or `guest` (`accountOf`).
+
+The second to move is **Skip**, onto the Play screen (`io.ntole.wyr.play`; *Skipping*, below): a Skip
+button under the question while it is asked, where Next question stands once it is answered.
+`PlayViewModelTest` drives it over fakes and `PlayScreenDrawTest` draws every state in both themes;
+theme tokens only, and the option cards as they were (§5b). The console has no Skip any more; its
+Play section keeps A/B, Answer N and Retry last vote for now.
 
 - **Scoring** *(built; see §8c)*: every answer earns exactly **1 point**, whichever side
   it picks. There is no majority bonus and no streak: the streak is removed from the server, the
@@ -883,8 +889,11 @@ not moved yet still adds its section to the console. Navigation is the root tab 
   with nothing due in it (*Categories* above; provisional, §8b). A player is therefore never
   stuck at the end of a cycle on a question they keep skipping. Built as `POST /v1/skips` in
   `SkipStore.skip`, on `skips.skipped_in_cycle`, which the feed's due predicate compares with the
-  cycle as it does the vote's. The console's Skip sends it through `SkipQuestion`, then loads the
-  next question even when the skip failed.
+  cycle as it does the vote's. The Play screen's Skip, under a question not answered yet, sends it
+  through `SkipQuestion` and then shows the next question (`PlayViewModel.skip`), even when the skip
+  failed, and says nothing of it: the player asked not to answer that question, and an unrecorded
+  skip only leaves it due, so the feed may serve it again this cycle, where Skip works on it again.
+  Nothing else goes while a skip is in flight, and an answered question offers Next question instead.
 - **Own questions** *(built; decided 2026-09-24)*: an author is served their own questions
   **like any other player** and may answer, skip and like them; the user chose the simpler logic.
   `QuestionStore.servable` is the one predicate the feed, the due count and votes, skips and likes

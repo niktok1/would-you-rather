@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -39,6 +40,7 @@ import io.ntole.wyr.theme.WyrTypeScale
 fun PlayScreen(
     state: PlayUiState,
     onChoose: (Side) -> Unit,
+    onSkip: () -> Unit,
     onNext: () -> Unit,
     onRetry: () -> Unit,
     modifier: Modifier = Modifier,
@@ -68,7 +70,7 @@ fun PlayScreen(
                     FailureBody(state.error, onRetry)
                 }
 
-                // Weighted, not filling: the Next button below needs the height that is left.
+                // Weighted, not filling: the Skip and Next buttons below need the height that is left.
                 is PlayUiState.Asking -> {
                     QuestionBody(
                         question = state.question,
@@ -87,6 +89,14 @@ fun PlayScreen(
                         onChoose = onChoose,
                         modifier = Modifier.weight(1f),
                     )
+                }
+            }
+
+            // Before answering the way on is to skip the question, and after it the next question.
+            if (state is PlayUiState.Asking) {
+                Spacer(Modifier.size(dimens.spaceMd))
+                OutlinedButton(onClick = onSkip, enabled = !state.isSubmitting, modifier = Modifier.fillMaxWidth()) {
+                    Text("Skip")
                 }
             }
 

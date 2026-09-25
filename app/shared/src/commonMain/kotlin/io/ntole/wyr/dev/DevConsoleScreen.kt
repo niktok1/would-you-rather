@@ -57,7 +57,6 @@ fun DevConsoleScreen(
     onNextQuestion: () -> Unit,
     onResetQueue: () -> Unit,
     onVote: (Side) -> Unit,
-    onSkip: () -> Unit,
     onToggleLike: () -> Unit,
     onVoteById: (questionId: String, side: Side) -> Unit,
     onRetryLastVote: () -> Unit,
@@ -98,7 +97,6 @@ fun DevConsoleScreen(
                 Buttons {
                     Button(onClick = { onVote(Side.A) }, enabled = idle && question != null) { Text("A") }
                     Button(onClick = { onVote(Side.B) }, enabled = idle && question != null) { Text("B") }
-                    OutlinedButton(onClick = onSkip, enabled = idle && question != null) { Text("Skip") }
                     OutlinedButton(onClick = onToggleLike, enabled = idle && question != null) {
                         Text(likeActionOf(question))
                     }

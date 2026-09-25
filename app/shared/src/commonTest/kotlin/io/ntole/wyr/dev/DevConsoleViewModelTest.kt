@@ -13,7 +13,6 @@ import io.ntole.wyr.core.domain.question.GetNextQuestion
 import io.ntole.wyr.core.domain.question.Question
 import io.ntole.wyr.core.domain.question.QuestionCache
 import io.ntole.wyr.core.domain.question.QuestionRepository
-import io.ntole.wyr.core.domain.question.SkipQuestion
 import io.ntole.wyr.core.domain.session.SessionDiagnostics
 import io.ntole.wyr.core.domain.session.SessionInfo
 import io.ntole.wyr.core.domain.session.SessionRepository
@@ -348,77 +347,6 @@ class DevConsoleViewModelTest {
                 viewModel.onlyResult(),
             )
             assertFalse(viewModel.state.value.isBusy)
-        }
-
-    @Test
-    fun `Skip records the skip then loads the next question then reads the stats`() =
-        runTest(dispatcher) {
-            val viewModel = openConsole()
-            viewModel.nextQuestion()
-            testScheduler.advanceUntilIdle()
-            questions.next = { QUESTION.copy(id = "q2") }
-            calls.clear()
-
-            viewModel.skip()
-            testScheduler.advanceUntilIdle()
-
-            // Each use case ensures the session first: the skip, the next question, then the stats.
-            assertEquals(listOf("ensure", "skip q1", "ensure", "next", "ensure", "stats"), calls)
-            assertEquals(QUESTION.copy(id = "q2"), viewModel.state.value.question)
-            assertEquals(LogEntry("skip", "questionId=q1", 0, LogResult.Ok("question=q2")), viewModel.log.first())
-            assertEquals(emptyList(), votes.sent, "a skip is no vote")
-        }
-
-    @Test
-    fun `a skip the server did not record is logged and the next question loads anyway`() =
-        runTest(dispatcher) {
-            val viewModel = openConsole()
-            viewModel.nextQuestion()
-            testScheduler.advanceUntilIdle()
-            questions.skip = { throw WyrException(DomainError.NETWORK, "read timed out") }
-            questions.next = { QUESTION.copy(id = "q2") }
-
-            viewModel.skip()
-            testScheduler.advanceUntilIdle()
-
-            assertEquals(QUESTION.copy(id = "q2"), viewModel.state.value.question, "the player is not kept on q1")
-            assertEquals(
-                listOf(
-                    Triple("skip", "questionId=q1", LogResult.Ok("question=q2 skip=unrecorded")),
-                    Triple("recordSkip", "questionId=q1", LogResult.Err(DomainError.NETWORK, "read timed out")),
-                ),
-                viewModel.log.take(2).map { Triple(it.action, it.args, it.result) },
-            )
-            assertFalse(viewModel.state.value.isBusy)
-        }
-
-    @Test
-    fun `a cancelled skip is not taken for one that failed`() =
-        runTest(dispatcher) {
-            val viewModel = openConsole()
-            viewModel.nextQuestion()
-            testScheduler.advanceUntilIdle()
-            questions.skip = { throw CancellationException("caller went away") }
-            calls.clear()
-
-            viewModel.skip()
-            testScheduler.advanceUntilIdle()
-
-            assertEquals(listOf("nextQuestion"), viewModel.log.map { it.action }, "neither the skip nor its send")
-            assertEquals(listOf("ensure", "skip q1"), calls, "and no next question after it")
-            assertFalse(viewModel.state.value.isBusy)
-        }
-
-    @Test
-    fun `Skip with no question on screen does nothing`() =
-        runTest(dispatcher) {
-            val viewModel = openConsole()
-
-            viewModel.skip()
-            testScheduler.advanceUntilIdle()
-
-            assertEquals(emptyList(), calls)
-            assertEquals(emptyList(), viewModel.log)
         }
 
     @Test
@@ -1170,7 +1098,6 @@ class DevConsoleViewModelTest {
             questions = questions,
             queue = queue,
             getNextQuestion = GetNextQuestion(questions, sessions),
-            skipQuestion = SkipQuestion(questions, sessions),
             castVote = CastVote(votes, sessions),
             getPlayerStats = GetPlayerStats(players, sessions),
             setLike = SetLike(likes, sessions),
@@ -1260,7 +1187,6 @@ class DevConsoleViewModelTest {
         private val queue: FakeQueue,
     ) : QuestionRepository {
         var next: suspend () -> Question = { QUESTION }
-        var skip: suspend (String) -> Unit = {}
 
         override val categories = MutableStateFlow<Set<Category>>(emptySet())
 
@@ -1278,7 +1204,6 @@ class DevConsoleViewModelTest {
 
         override suspend fun skip(questionId: String) {
             calls += "skip $questionId"
-            skip.invoke(questionId)
         }
 
         override suspend fun reset() {

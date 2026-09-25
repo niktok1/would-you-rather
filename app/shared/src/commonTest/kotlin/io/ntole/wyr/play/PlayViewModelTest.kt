@@ -6,6 +6,7 @@ import io.ntole.wyr.core.domain.question.Category
 import io.ntole.wyr.core.domain.question.GetNextQuestion
 import io.ntole.wyr.core.domain.question.Question
 import io.ntole.wyr.core.domain.question.QuestionRepository
+import io.ntole.wyr.core.domain.question.SkipQuestion
 import io.ntole.wyr.core.domain.session.SessionRepository
 import io.ntole.wyr.core.domain.vote.AttemptId
 import io.ntole.wyr.core.domain.vote.CastVote
@@ -186,12 +187,94 @@ class PlayViewModelTest {
             )
         }
 
+    @Test
+    fun `Skip records the skip then shows the next question and casts no vote`() =
+        runTest(dispatcher) {
+            val questions = FakeQuestionRepository(QUESTION, NEXT_QUESTION)
+            val votes = RecordingVoteRepository()
+            val viewModel = viewModel(questions = questions, votes = votes)
+            testScheduler.advanceUntilIdle()
+
+            viewModel.skip()
+            testScheduler.advanceUntilIdle()
+
+            assertEquals(listOf(QUESTION.id), questions.skipped)
+            // Asked, not revealed: a skip has no outcome, so no points and no tally to show.
+            assertEquals(PlayUiState.Asking(NEXT_QUESTION), viewModel.state.value)
+            assertEquals(0, votes.callCount, "a skip is no answer")
+        }
+
+    @Test
+    fun `a skip the server did not record moves on all the same`() =
+        runTest(dispatcher) {
+            val questions = FakeQuestionRepository(QUESTION, NEXT_QUESTION, skipFailure = DomainError.NETWORK)
+            val viewModel = viewModel(questions = questions)
+            testScheduler.advanceUntilIdle()
+
+            viewModel.skip()
+            testScheduler.advanceUntilIdle()
+
+            // Not kept on the question the player asked not to answer, nor on an error about it.
+            assertEquals(PlayUiState.Asking(NEXT_QUESTION), viewModel.state.value)
+            assertEquals(listOf(QUESTION.id), questions.skipped, "and not sent again")
+        }
+
+    @Test
+    fun `a second tap on Skip sends one skip`() =
+        runTest(dispatcher) {
+            val questions = FakeQuestionRepository(QUESTION, NEXT_QUESTION, QUESTION)
+            val viewModel = viewModel(questions = questions)
+            testScheduler.advanceUntilIdle()
+
+            // Both land before the first one's coroutine gets to run.
+            viewModel.skip()
+            viewModel.skip()
+            testScheduler.advanceUntilIdle()
+
+            assertEquals(listOf(QUESTION.id), questions.skipped)
+            assertEquals(PlayUiState.Asking(NEXT_QUESTION), viewModel.state.value, "one question skipped past")
+        }
+
+    @Test
+    fun `Skip while the vote is in flight does nothing`() =
+        runTest(dispatcher) {
+            val questions = FakeQuestionRepository(QUESTION, NEXT_QUESTION)
+            val viewModel = viewModel(questions = questions)
+            testScheduler.advanceUntilIdle()
+
+            viewModel.choose(Side.A)
+            viewModel.skip()
+            testScheduler.advanceUntilIdle()
+
+            assertEquals(emptyList(), questions.skipped)
+            val state = assertIs<PlayUiState.Revealed>(viewModel.state.value)
+            assertEquals(QUESTION, state.question)
+        }
+
+    @Test
+    fun `Skip after answering does nothing`() =
+        runTest(dispatcher) {
+            // The question is answered, and Next question is the way on.
+            val questions = FakeQuestionRepository(QUESTION, NEXT_QUESTION)
+            val viewModel = viewModel(questions = questions)
+            testScheduler.advanceUntilIdle()
+            viewModel.choose(Side.A)
+            testScheduler.advanceUntilIdle()
+
+            viewModel.skip()
+            testScheduler.advanceUntilIdle()
+
+            assertEquals(emptyList(), questions.skipped)
+            assertIs<PlayUiState.Revealed>(viewModel.state.value)
+        }
+
     private fun viewModel(
         questions: QuestionRepository = FakeQuestionRepository(),
         votes: VoteRepository = FakeVoteRepository(),
     ) = PlayViewModel(
         getNextQuestion = GetNextQuestion(questions, NoOpSessionRepository),
         castVote = CastVote(votes, NoOpSessionRepository),
+        skipQuestion = SkipQuestion(questions, NoOpSessionRepository),
         questions = questions,
     )
 
@@ -204,6 +287,14 @@ class PlayViewModelTest {
                 categories = setOf(Category.SUPERPOWERS),
             )
 
+        val NEXT_QUESTION =
+            Question(
+                id = "q2",
+                optionA = "Always be cold",
+                optionB = "Always be hot",
+                categories = setOf(Category.LIFESTYLE),
+            )
+
         val OUTCOME =
             VoteOutcome(
                 questionId = QUESTION.id,
@@ -214,16 +305,30 @@ class PlayViewModelTest {
             )
     }
 
-    private class FakeQuestionRepository : QuestionRepository {
+    /**
+     * Serves [served] in order, then the last of them again and again. Records every skip, and
+     * refuses each with [skipFailure] when there is one.
+     */
+    private class FakeQuestionRepository(
+        vararg served: Question,
+        private val skipFailure: DomainError? = null,
+    ) : QuestionRepository {
+        private val served = served.toMutableList().ifEmpty { mutableListOf(QUESTION) }
+
+        val skipped = mutableListOf<String>()
+
         override val categories: StateFlow<Set<Category>> = MutableStateFlow(emptySet())
 
-        override suspend fun next(): Question = QUESTION
+        override suspend fun next(): Question = if (served.size > 1) served.removeAt(0) else served.first()
 
         override suspend fun prefetch() = Unit
 
         override suspend fun setCategories(categories: Set<Category>) = Unit
 
-        override suspend fun skip(questionId: String) = Unit
+        override suspend fun skip(questionId: String) {
+            skipped += questionId
+            skipFailure?.let { throw WyrException(it) }
+        }
 
         override suspend fun reset() = Unit
     }
