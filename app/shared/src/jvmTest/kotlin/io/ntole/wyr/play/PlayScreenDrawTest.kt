@@ -1,14 +1,20 @@
 package io.ntole.wyr.play
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.width
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.snapshots.Snapshot
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.ImageComposeScene
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.PixelMap
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.toComposeImageBitmap
 import androidx.compose.ui.graphics.toPixelMap
@@ -21,8 +27,11 @@ import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.text.TextLayoutResult
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
+import io.ntole.wyr.CountedBy
+import io.ntole.wyr.Recompositions
 import io.ntole.wyr.core.domain.category.Category
 import io.ntole.wyr.core.domain.error.DomainError
 import io.ntole.wyr.core.domain.question.Question
@@ -30,17 +39,20 @@ import io.ntole.wyr.core.domain.vote.Side
 import io.ntole.wyr.core.domain.vote.Tally
 import io.ntole.wyr.core.domain.vote.VoteOutcome
 import io.ntole.wyr.descriptions
+import io.ntole.wyr.everyNode
 import io.ntole.wyr.language.Language
 import io.ntole.wyr.language.Strings
 import io.ntole.wyr.language.WyrStrings
 import io.ntole.wyr.language.stringsOf
 import io.ntole.wyr.nodes
+import io.ntole.wyr.renderAt
 import io.ntole.wyr.sizeNeeded
 import io.ntole.wyr.tap
 import io.ntole.wyr.texts
 import io.ntole.wyr.theme.WyrDarkColors
 import io.ntole.wyr.theme.WyrLightColors
 import io.ntole.wyr.theme.WyrTheme
+import io.ntole.wyr.theme.WyrTypeScale
 import kotlin.math.abs
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -453,21 +465,86 @@ class PlayScreenDrawTest {
         }
     }
 
-    /** Both percentages count up from 0 at once and reach their values at 2.5 seconds, on the scene's clock. */
+    /**
+     * Both percentages count up from 0 at once and reach their values at 2.5 seconds, on the scene's
+     * clock stepped a frame at a time as a phone's is, in both themes. The count is drawn, not a text
+     * that changes, so what each card shows is told by its pixels where its percentage is: *0%* at the
+     * start, centred there, a number between halfway, and at the end its value drawn exactly as the
+     * text it replaced drew it, the same font, size, weight, colour and place, and nothing moving after.
+     */
     @Test
     fun `the reveal's percentages count up from 0 over two and a half seconds`() {
-        withScreen(PlayUiState.Revealed(QUESTION, OUTCOME)) { scene, _ ->
-            scene.renderAt(0)
-            assertEquals(listOf("0%", "0%"), percentages(scene), "at the start")
+        val strings = stringsOf(Language.DEFAULT).playScreen
+        listOf(WyrLightColors, WyrDarkColors).forEach { colors ->
+            val theme = if (colors.isDark) "dark" else "light"
+            withScreen(PlayUiState.Revealed(QUESTION, OUTCOME), dark = colors.isDark) { scene, _ ->
+                val cards =
+                    listOf(
+                        Triple(strings.percent(70), colors.optionA, colors.onOptionA),
+                        Triple(strings.percent(30), colors.optionB, colors.onOptionB),
+                    )
+                val areas = cards.map { (shown, _, _) -> scene.everyNode().single { shown in it.texts }.boundsInRoot }
 
-            scene.renderAt(COUNTED_UP / 2)
-            val halfway = percentages(scene).map { it.removeSuffix("%").toInt() }
-            assertTrue(halfway[0] in 1 until 70 && halfway[1] in 1 until 30, "halfway: $halfway")
+                val start = scene.pixelsAt(0, areas)
+                val halfway = scene.pixelsAt(COUNTED_UP / 2, areas, from = 0)
+                val end = scene.pixelsAt(COUNTED_UP, areas, from = COUNTED_UP / 2)
+                cards.zip(areas).forEachIndexed { card, (colours, area) ->
+                    val (shown, background, text) = colours
+                    val at = "card ${card + 1} in the $theme theme"
+                    assertEquals(
+                        textPixels(strings.percent(0), area, background, text),
+                        start[card],
+                        "$at at the start",
+                    )
+                    assertTrue(halfway[card] != start[card] && halfway[card] != end[card], "$at halfway")
+                    assertEquals(textPixels(shown, area, background, text), end[card], "$at at 2.5 seconds")
+                }
+                val after = scene.pixelsAt(COUNTED_UP * 2, areas, from = COUNTED_UP)
+                assertEquals(end, after, "after, in the $theme theme")
+            }
+        }
+    }
 
-            scene.renderAt(COUNTED_UP)
-            assertEquals(listOf("70%", "30%"), percentages(scene), "at two and a half seconds")
-            scene.renderAt(COUNTED_UP * 2)
-            assertEquals(listOf("70%", "30%"), percentages(scene), "after")
+    /**
+     * A screen reader reads each card's share as it is, never a number the count passes through: the
+     * count is only drawn, and the text it stands for is the final percentage from its first frame.
+     */
+    @Test
+    fun `a screen reader reads each card's final percentage throughout the count up`() {
+        Language.entries.forEach { language ->
+            val strings = stringsOf(language).playScreen
+            withScreen(PlayUiState.Revealed(QUESTION, OUTCOME), language = language) { scene, _ ->
+                listOf(0L, COUNTED_UP / 4, COUNTED_UP / 2, COUNTED_UP).forEach { time ->
+                    scene.renderAt(time)
+                    assertEquals(
+                        listOf(strings.percent(70), strings.percent(30)),
+                        percentages(scene),
+                        "at ${time / 1_000_000} ms in $language",
+                    )
+                }
+            }
+        }
+    }
+
+    /**
+     * A frame of the count up only draws the two numbers again: nothing is composed again and nothing
+     * on the screen is measured anew or moved, however many frames it takes. A debug build, whose
+     * Compose runs several times slower, has no time for more in a frame at 60 a second. Before, the
+     * count was a text changed every frame, which recomposed both cards, laid their texts out again
+     * as they widened, and told any accessibility service on the phone of every change.
+     */
+    @Test
+    fun `a frame of the count up composes nothing and moves nothing`() {
+        val recompositions = Recompositions()
+        withScreen(PlayUiState.Revealed(QUESTION, OUTCOME), recompositions = recompositions) { scene, _ ->
+            scene.renderAt(FRAME)
+            val composed = recompositions.scopesEntered
+            val laidOut = scene.everyNode().map { it.boundsInRoot }
+            (2..COUNTED_UP / FRAME + 1).forEach { frame ->
+                scene.renderAt(frame * FRAME)
+                assertEquals(composed, recompositions.scopesEntered, "scopes composed by frame $frame")
+                assertEquals(laidOut, scene.everyNode().map { it.boundsInRoot }, "the screen at frame $frame")
+            }
         }
     }
 
@@ -510,21 +587,59 @@ class PlayScreenDrawTest {
         }
     }
 
+    /** The percentages the scene shows, card A's first. */
+    private fun percentages(scene: ImageComposeScene): List<String> = scene.texts().filter { it.endsWith("%") }
+
     /**
-     * Draws the scene at [nanoTime] until what that frame changed shows in its semantics. Drawn once,
-     * a frame can miss what the desktop's snapshot manager, on a thread of its own, does meanwhile:
-     * the count-up then starts a frame late, or its value reaches the texts a frame late, and the
-     * test fails now and then. The same frame drawn again changes nothing else.
+     * The colours, as ARGB, of every pixel inside each of [areas], drawn at [nanoTime], after every
+     * frame since [from] at 60 a second, as a phone draws them.
      */
-    private fun ImageComposeScene.renderAt(nanoTime: Long) {
-        repeat(3) {
-            Snapshot.sendApplyNotifications()
-            render(nanoTime)
+    private fun ImageComposeScene.pixelsAt(
+        nanoTime: Long,
+        areas: List<Rect>,
+        from: Long = nanoTime,
+    ): List<List<Int>> {
+        generateSequence(from + FRAME) { it + FRAME }.takeWhile { it < nanoTime }.forEach { renderAt(it) }
+        renderAt(nanoTime)
+        val pixels = render(nanoTime).toComposeImageBitmap().toPixelMap()
+        return areas.map { pixels.inside(it) }
+    }
+
+    /**
+     * The pixels of [text] as the cards drew a percentage before its count was drawn: a `Text` of the
+     * percentage's size and weight in [color], at the top of a box the size of [area] filled with
+     * [background], and in the middle of it.
+     */
+    private fun textPixels(
+        text: String,
+        area: Rect,
+        background: Color,
+        color: Color,
+    ): List<Int> {
+        val scene =
+            ImageComposeScene(width = area.width.toInt(), height = area.height.toInt(), density = Density(1f)) {
+                WyrTheme {
+                    Box(Modifier.fillMaxSize().background(background), contentAlignment = Alignment.TopCenter) {
+                        Text(text, color = color, fontSize = WyrTypeScale.percentage, fontWeight = FontWeight.ExtraBold)
+                    }
+                }
+            }
+        try {
+            return scene
+                .render()
+                .toComposeImageBitmap()
+                .toPixelMap()
+                .inside(Rect(Offset.Zero, area.size))
+        } finally {
+            scene.close()
         }
     }
 
-    /** The percentages the scene shows, card A's first. */
-    private fun percentages(scene: ImageComposeScene): List<String> = scene.texts().filter { it.endsWith("%") }
+    /** The colours, as ARGB, of every pixel inside [area], row by row. */
+    private fun PixelMap.inside(area: Rect): List<Int> =
+        (area.top.toInt() until area.bottom.toInt()).flatMap { y ->
+            (area.left.toInt() until area.right.toInt()).map { x -> this[x, y].toArgb() }
+        }
 
     /** The one node showing [text] or named [text]. */
     private fun ImageComposeScene.node(text: String): SemanticsNode {
@@ -622,7 +737,7 @@ class PlayScreenDrawTest {
 
     /**
      * [test] on [state]'s screen at the short phone's size, [categories] played, in the light theme
-     * unless [dark], drawn at time 0.
+     * unless [dark], drawn at time 0, its composition counted by [recompositions].
      */
     private fun withScreen(
         state: PlayUiState,
@@ -630,13 +745,16 @@ class PlayScreenDrawTest {
         categories: Set<String> = emptySet(),
         language: Language = Language.DEFAULT,
         dark: Boolean = false,
+        recompositions: Recompositions = Recompositions(),
         test: (ImageComposeScene, Actions) -> Unit,
     ) {
         val actions = Actions()
         val scene =
             ImageComposeScene(width = SHORT_PHONE_WIDTH, height = SHORT_PHONE_HEIGHT, density = Density(1f)) {
-                WyrTheme(darkTheme = dark) {
-                    WyrStrings(language) { Screen(state, categories, points, actions) }
+                CountedBy(recompositions) {
+                    WyrTheme(darkTheme = dark) {
+                        WyrStrings(language) { Screen(state, categories, points, actions) }
+                    }
                 }
             }
         try {
@@ -749,6 +867,9 @@ class PlayScreenDrawTest {
 
         /** The scene's clock, in nanoseconds, once the reveal has counted up. */
         const val COUNTED_UP = COUNT_UP_MILLIS * 1_000_000L
+
+        /** One frame of a phone drawing 60 a second, in nanoseconds. */
+        const val FRAME = 1_000_000_000L / 60
 
         const val POINTS = 42
 

@@ -1025,6 +1025,11 @@ and *Categories*, below):
   no vote counts (the domain still has `VoteOutcome.agreedWithMajority`). A screen reader hears what
   a tap does where no text says it: *Следеће питање* on a revealed card, *Промени категорије* on the
   categories played.
+- *The count up is drawn, not composed* (`CountedUpText`): the number reached is read only as it is
+  drawn, over the final percentage's own text, laid out once, which sizes it and is what a screen
+  reader reads. So a frame of it draws two numbers and nothing else, where a text changed every frame
+  recomposed both cards, laid them out again and told any accessibility service, too much for a debug
+  build, several times slower, to do 60 times a second.
 - One action at a time (`isBusy`, `canChangeCategories`): while a vote, a skip or a like is in
   flight, the cards, the heart, Skip and the categories are off, and Skip is drawn muted
   (`WyrColors.muted`), as it was on the top bar. A like that failed says why in the points' place,
@@ -1047,15 +1052,17 @@ and *Categories*, below):
   first five categories played; holds each state to 599 high with each selection (376 on this Mac),
   measured 400 wide rather than 375 since CI's Linux fonts wrap wider than a phone's, reads each
   state's texts and nothing else and what a screen reader hears a tap does, taps the cards before
-  and after the reveal, steps the scene's clock through the count up, holds the row to 335 wide with
-  only the categories cut, asked with Skip and answered with its place kept, and to one height with
-  a like's failure or without at font scales 1, 1.3 and 2, finds Skip after the heart only while a
-  question is asked, off and drawn muted while anything is in flight (by its pixels' colours, in
-  both themes and every language), and nothing in the row moved by the reveal, shows *Начин живота*,
-  *Супермоћи* and *Храна, Етика* whole beside the points and the like (400 wide), names the
-  categories played in each language, and holds `CentredRow` to its rule on boxes of known widths,
-  which no font changes. `AppNavigationTest` skips through it, under a bar of home and the account
-  icon alone, and plays categories picked on the Categories screen.
+  and after the reveal, steps the scene's clock through the count up, reading it by its pixels and
+  finding a frame of it composing and moving nothing (`CountedUpTextDrawTest`: each number drawn
+  once, in order), holds the row to 335 wide with only the categories cut, asked with Skip and
+  answered with its place kept, and to one height with a like's failure or without at font scales 1,
+  1.3 and 2, finds Skip after the heart only while a question is asked, off and drawn muted while
+  anything is in flight (by its pixels' colours, in both themes and every language), and nothing in
+  the row moved by the reveal, shows *Начин живота*, *Супермоћи* and *Храна, Етика* whole beside the
+  points and the like (400 wide), names the categories played in each language, and holds
+  `CentredRow` to its rule on boxes of known widths, which no font changes. `AppNavigationTest`
+  skips through it, under a bar of home and the account icon alone, and plays categories picked on
+  the Categories screen.
 
 **The Submit screen** (`io.ntole.wyr.submit`), opened from My questions on the Account screen
 (*Navigation*), is the form a question is written in (*Submitting*, below); the player's own are

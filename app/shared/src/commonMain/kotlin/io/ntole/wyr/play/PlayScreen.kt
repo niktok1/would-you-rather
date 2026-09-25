@@ -1,8 +1,5 @@
 package io.ntole.wyr.play
 
-import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.LinearOutSlowInEasing
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -24,21 +21,23 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconToggleButton
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.LocalMinimumInteractiveComponentSize
+import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.takeOrElse
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -53,7 +52,6 @@ import io.ntole.wyr.language.categoryName
 import io.ntole.wyr.theme.WyrIcons
 import io.ntole.wyr.theme.WyrThemeAccessors
 import io.ntole.wyr.theme.WyrTypeScale
-import kotlin.math.roundToInt
 
 /**
  * The game (CLAUDE.md §8d, *The Play screen*): two answer cards and, between them, one row of the
@@ -340,7 +338,7 @@ internal fun categoriesPlayed(
 
 /**
  * One answer card, in its side's brand colour (CLAUDE.md §5b), outlined once it is the player's pick.
- * Once the answer is revealed it shows its side's share, [percent], counted up from 0 ([countedUp]).
+ * Once the answer is revealed it shows its side's share, [percent], counted up from 0 ([CountedUpText]).
  * [clickLabel], if any, is what a screen reader says a tap on it does.
  */
 @Composable
@@ -392,10 +390,10 @@ private fun OptionCard(
 
                 if (percent != null) {
                     Spacer(Modifier.size(dimens.spaceSm))
-                    Text(
-                        text = LocalStrings.current.playScreen.percent(countedUp(percent)),
-                        fontSize = WyrTypeScale.percentage,
-                        fontWeight = FontWeight.ExtraBold,
+                    CountedUpText(
+                        target = percent,
+                        text = LocalStrings.current.playScreen::percent,
+                        style = percentStyle(),
                     )
                 }
             }
@@ -404,25 +402,17 @@ private fun OptionCard(
 }
 
 /**
- * How long the reveal's percentages take to count up from 0, both cards at once (CLAUDE.md §8d,
- * *The Play screen*). Internal, so a test can step the clock to it.
- */
-internal const val COUNT_UP_MILLIS = 2_500
-
-/**
- * [target] as the reveal shows it: counted up from 0 over [COUNT_UP_MILLIS], fast at first and
- * slowing into the value, once per reveal. The text alone counts; nothing moves.
+ * The style of the reveal's percentages, as a `Text` of their size and weight takes it on the card: the
+ * theme's text style, in the card's content colour.
  */
 @Composable
-private fun countedUp(target: Int): Int {
-    val counted = remember { Animatable(0f) }
-    LaunchedEffect(target) {
-        counted.animateTo(
-            targetValue = target.toFloat(),
-            animationSpec = tween(durationMillis = COUNT_UP_MILLIS, easing = LinearOutSlowInEasing),
-        )
-    }
-    return counted.value.roundToInt()
+private fun percentStyle(): TextStyle {
+    val style = LocalTextStyle.current
+    return style.merge(
+        color = style.color.takeOrElse { LocalContentColor.current },
+        fontSize = WyrTypeScale.percentage,
+        fontWeight = FontWeight.ExtraBold,
+    )
 }
 
 /** A spinner, named for a screen reader: no text to read while a question loads. */

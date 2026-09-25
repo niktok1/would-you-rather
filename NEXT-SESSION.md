@@ -279,6 +279,30 @@ moderation app's of the same name, `CategoryNameTest` 4; `PlayViewModelTest` 4, 
 bar). Not seen on a device: any of it on a phone, the keyboard over the list, and Android's back
 from it.
 
+**On `perf/play-animations`** (from f3bdce1; nothing pushed or merged): the reveal's count up is
+**drawn, not composed** (the user, 2026-09-25: the dev build lagged, and the animations were why;
+CLAUDE.md §8d, *The Play screen*). The count up used to read its animated value in composition, so
+every frame for 2.5 seconds it recomposed both cards, laid their percentages out again as they
+widened, and changed the semantics. The phone runs an accessibility service (Microsoft Launcher's),
+which Compose then tells of every change. Now `CountedUpText` reads the number only where it is drawn,
+over the final percentage laid out once. Nothing is composed or laid out per frame, and a screen
+reader reads the final share. The look and timing are unchanged: the end is pixel-identical to the old
+`Text`. The client alone changed. Tests: `:app:shared` 315 (309 before: `PlayScreenDrawTest` 2 more,
+its count-up test now read by pixels, and `CountedUpTextDrawTest` 4 new). The new
+`Recompositions` counts what a frame composes through the runtime's own `CompositionObserver`. The
+pixel test steps the clock a frame at a time, as a phone does: jumping from 0 to halfway failed now
+and then, when the desktop's snapshot manager, on Swing's thread, told the scene of the jump a
+drawing late. **`devRelease` is how fast the game really is**
+(`./gradlew :app:androidApp:assembleDevRelease`, not debuggable, and signed with the debug key since
+f3bdce1, so it installs over `devDebug` and back with `adb install -r`, keeping the data). A debug
+build's Compose is several times slower, and `devDebug` is now smooth enough to work in, not a measure
+of speed. To compare two builds on the phone: `adb shell dumpsys gfxinfo io.ntole.wyr.dev reset`, play
+about ten reveals, then `adb shell dumpsys gfxinfo io.ntole.wyr.dev`, and read *Janky frames*, the
+50th and 90th percentiles and *Number Slow UI thread*. Not yet measured on the phone after the change.
+Seen there before it, in `devRelease`, and not the count up's doing: the first frames after a launch
+take up to 750 ms on the UI thread (code not yet compiled, with no baseline profile), and the
+RenderThread sometimes waits 50 to 300 ms on the display's buffers.
+
 ### Verified working
 
 - **`merge/redesign` after the review of the `feat/category-picker` merge** (6b44dc4, 5a8adf7 and
@@ -1101,7 +1125,8 @@ guest of its own, so switching between them loses neither.
 - **Android**: Android Studio's *Build Variants* panel, where `devDebug` is the default, since a
   phone can reach dev and not the developer's machine. `localDebug` is for the emulator against
   `./gradlew :server:run`, `prodDebug` for production. They install side by side as *WYR Local*,
-  *WYR Dev* and *WYR*. From the command line: `./gradlew :app:androidApp:installDevDebug`.
+  *WYR Dev* and *WYR*. From the command line: `./gradlew :app:androidApp:installDevDebug`. To judge
+  speed, use `devRelease` (`installDevRelease`): a debug build's Compose runs several times slower.
 - **Desktop**: the `WYR_ENV` variable, which `./gradlew` passes on to the app:
 
   ```bash

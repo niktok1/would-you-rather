@@ -29,16 +29,21 @@ internal fun ImageComposeScene.nodes(): List<SemanticsNode> =
 internal fun ImageComposeScene.texts(): List<String> = nodes().flatMap { it.texts }
 
 /**
+ * Every node the scene holds, each on its own, a button's text apart from the button, from the top
+ * down: where each is laid out, not where it is clipped to.
+ */
+@OptIn(ExperimentalComposeUiApi::class)
+internal fun ImageComposeScene.everyNode(): List<SemanticsNode> =
+    semanticsOwners
+        .flatMap { owner -> owner.getAllSemanticsNodes(mergingEnabled = false) }
+        .sortedWith(compareBy({ it.positionInRoot.y }, { it.positionInRoot.x }))
+
+/**
  * Every text the scene lays out, each on its own, a field's label and the text under it included,
  * from the top down: where each is laid out, not where it is clipped to, so a screen that scrolls
  * shows all of its texts here.
  */
-@OptIn(ExperimentalComposeUiApi::class)
-internal fun ImageComposeScene.everyText(): List<String> =
-    semanticsOwners
-        .flatMap { owner -> owner.getAllSemanticsNodes(mergingEnabled = false) }
-        .sortedWith(compareBy({ it.positionInRoot.y }, { it.positionInRoot.x }))
-        .flatMap { it.texts }
+internal fun ImageComposeScene.everyText(): List<String> = everyNode().flatMap { it.texts }
 
 /** Every name the scene gives a screen reader for what has no text, an icon's, from the top down. */
 internal fun ImageComposeScene.descriptions(): List<String> = nodes().flatMap { it.descriptions }
@@ -66,6 +71,19 @@ internal fun ImageComposeScene.type(
     val setText = assertNotNull(fields.getOrNull(index), "no text field $index of ${fields.size}")
     setText(AnnotatedString(text))
     settle()
+}
+
+/**
+ * Draws the scene at [nanoTime] until what that frame changed shows, in its semantics and in what it
+ * draws. Drawn once, a frame can miss what the desktop's snapshot manager, on a thread of its own,
+ * does meanwhile: an animation then starts a frame late, or its value shows a frame late, and a test
+ * fails now and then. The same frame drawn again changes nothing else.
+ */
+internal fun ImageComposeScene.renderAt(nanoTime: Long) {
+    repeat(3) {
+        Snapshot.sendApplyNotifications()
+        render(nanoTime)
+    }
 }
 
 /** Draws the scene again once what the last action changed has reached it. */
