@@ -81,9 +81,10 @@ the list last read, in Serbian for now (`categoryName` in `io.ntole.wyr.play`, o
 translations branch to choose the language), one not read yet by its id. The **Play** screen's
 picker reads the list each time it opens; the **Submit** screen's chips are the list, read each time
 the tab is shown; `NOT_ENOUGH_POINTS` is a `DomainError` of its own, and the Submit screen says that a
-question costs 1 point, paid back if it is rejected (the 1 is the screen's copy of
-`Scoring.SUBMISSION_COST`). The **moderation app** reads the categories before every Load, for its
-chips, and has a third tab, **Categories**, which lists them and adds one (id typed or left to the
+question costs 1 point, paid back if it is rejected (the 1 is `SubmissionRules.SUBMISSION_COST`,
+pinned by `SubmissionLimitsTest` to `WyrApi.Limits.SUBMISSION_COST`, which `Scoring` charges). The
+**moderation app** reads the categories before every Load, for its chips, and has a third tab,
+**Categories**, which lists them and adds one (id typed or left to the
 server) and puts one's names right (`AddCategory`, `RenameCategory`, `CategoryRules`,
 `CATEGORY_EXISTS` and `CATEGORY_NOT_FOUND` as `DomainError`s). No client reads `pointsSpent` yet:
 the Account screen's lines of answers and likes no longer add up to its points once a question is

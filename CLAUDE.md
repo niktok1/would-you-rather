@@ -788,10 +788,11 @@ returns and never recomputes points, so the two cannot disagree.
   their own likes included, paid when the like is added and taken back when it is removed (§8d,
   *Likes*). A seed has no author and pays nobody.
 - Submitting a question **costs** its author `Scoring.SUBMISSION_COST`, **1 point** until the game is
-  released (*decided 2026-09-25*), taken in the submission's own transaction (§8d, *Submitting*). A
-  player needs at least that many points to submit, or it is 409 `NOT_ENOUGH_POINTS` and costs
-  nothing. A rejection pays the cost back, in the decision's transaction; an approval keeps it, and
-  so does a retirement. Each question keeps what it cost (`questions.submission_cost`, V7), and a
+  released (*decided 2026-09-25*), taken in the submission's own transaction (§8d, *Submitting*). The
+  number is the wire's, `WyrApi.Limits.SUBMISSION_COST`, so a client can say what it is; only the
+  server charges it. A player needs at least that many points to submit, or it is 409
+  `NOT_ENOUGH_POINTS` and costs nothing. A rejection pays the cost back, in the decision's
+  transaction; an approval keeps it, and so does a retirement. Each question keeps what it cost (`questions.submission_cost`, V7), and a
   rejection pays back that, not the constant, so a question submitted before submitting cost
   anything (V7 gave every question there 0) pays back nothing, and one submitted at 1 pays back 1
   whatever the cost is by then. A seed costs nothing and pays nobody.
@@ -1156,9 +1157,10 @@ lists the player's own (*Submitting*, below).
   (`SubmitState.submitFailure`, `listFailure`), so a list never read cannot be left spinning on a
   read nobody makes. One action at a time, and the form cannot change while it is sent. One line
   says submitting costs a point, paid back if it is rejected, and that each like of an approved one
-  earns 1: the number is the screen's copy of `Scoring.SUBMISSION_COST` (`SUBMISSION_COST` in
-  `SubmitScreen.kt`), which no client can see, so a change to the cost changes it too; the server
-  charges whatever it says. `SubmitViewModelTest` drives it over fakes, and
+  earns 1: the number, there and in the refusal for points, is `SubmissionRules.SUBMISSION_COST`,
+  the domain's copy of `WyrApi.Limits.SUBMISSION_COST`, which is what `Scoring.SUBMISSION_COST`
+  charges, so a change to the cost fails `SubmissionLimitsTest` until the copy changes too; an
+  installed build says the cost it was built with. `SubmitViewModelTest` drives it over fakes, and
   `SubmitScreenDrawTest` draws every state in both themes at 400x900 and 375x599; the screen scrolls.
 - **Moderation** *(built)*: a moderator approves or rejects each pending submission, **may change
   its categories** when approving (*Categories*: at least one stays, and a change replaces the

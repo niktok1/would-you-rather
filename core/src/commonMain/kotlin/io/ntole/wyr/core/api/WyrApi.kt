@@ -77,7 +77,7 @@ public object WyrApi {
          * POST: submits a question of the session player's own, with a
          * [io.ntole.wyr.core.question.SubmitQuestionRequest], answered 201 with its
          * [io.ntole.wyr.core.question.SubmissionDto]. Requires a session, earns nothing, and costs
-         * its author a point (CLAUDE.md §8c), which a rejection pays back. The
+         * its author [Limits.SUBMISSION_COST] (CLAUDE.md §8c), which a rejection pays back. The
          * question is stored pending and served to nobody until a moderator approves it, and then to
          * every player, its author included (CLAUDE.md §8d). A player may have at most
          * [Limits.MAX_PENDING_SUBMISSIONS] pending at once, and one more is refused with 409
@@ -337,6 +337,13 @@ public object WyrApi {
          * Approved and rejected ones do not count, so a decision frees a place.
          */
         public const val MAX_PENDING_SUBMISSIONS: Int = 20
+
+        /**
+         * What submitting a question costs its author, in points, and so the fewest a player needs to
+         * submit (CLAUDE.md §8c): 1 until the game is released. The server charges this number; it is
+         * here rather than on the server so a client can say what submitting costs.
+         */
+        public const val SUBMISSION_COST: Int = 1
 
         /**
          * Shortest username an account can have, once lower-cased

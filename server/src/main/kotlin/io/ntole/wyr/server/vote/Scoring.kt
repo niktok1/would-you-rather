@@ -1,5 +1,7 @@
 package io.ntole.wyr.server.vote
 
+import io.ntole.wyr.core.api.WyrApi
+
 /**
  * The scoring rule. **Server-side only, on purpose.**
  *
@@ -29,6 +31,7 @@ object Scoring {
      * What submitting a question costs its author (CLAUDE.md §8c), 1 until the game is released. A
      * player needs at least this much to submit. Each question keeps what it cost
      * (`Questions.submissionCost`), so a rejection pays back what was paid, whatever this is then.
+     * The wire's number ([WyrApi.Limits.SUBMISSION_COST]), so a client can say what it costs.
      */
-    const val SUBMISSION_COST: Int = 1
+    const val SUBMISSION_COST: Int = WyrApi.Limits.SUBMISSION_COST
 }
