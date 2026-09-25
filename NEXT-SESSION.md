@@ -807,11 +807,14 @@ broke a test. Counts: `:server` 311, 2 skipped (from the build cache: untouched)
 `assembleDebug` included, and the ios job's Kotlin compiles pass. **Not verified:** nothing has run
 on a device or against a server, and the renders were looked at on this Mac only.
 
-**To try it on a phone** (`devDebug`, against the dev server):
+**To try it on a phone** (`devDebug`, against the dev server, whose in-memory H2 forgets everything
+on a deploy or a spin-down). The numbers are a fresh guest's, with only the 24 seeds on the server
+and no category picked:
 
-1. `./gradlew :app:androidApp:installDevDebug`, answer 3 questions on **Play**, skip 1, and open
-   **Account**: *3 points*, *3 answers to 3 questions*, *Cycle 1: 20 questions left* (the 24 seeds
-   less the 4), *0 likes on questions you submitted*.
+1. `./gradlew :app:androidApp:installDevDebug`, then *New guest* on the **Console** tab (an install
+   over an old one keeps its session, and its numbers), or uninstall first. Answer 3 questions on
+   **Play**, skip 1, and open **Account**: *3 points*, *3 answers to 3 questions*, *Cycle 1: 20
+   questions left* (the 24 seeds less the 4), *0 likes on questions you submitted*.
 2. Answer or skip on Play until no question is left: once Play has asked for more, Account shows
    *Cycle 2: 24 questions left*, the answers and questions as they were (*Cycle 1: 0 questions left*
    before, if it has not asked yet).
