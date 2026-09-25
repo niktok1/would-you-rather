@@ -43,7 +43,10 @@ One client library is an exception of the same kind: Google Play services' Block
 recovery secret (§8a, *Recovery*). Nothing multiplatform does its job: it is the store Android keeps
 across a reinstall and hands on to the phone that replaces this one, by device-to-device transfer and,
 where the backup is end-to-end encrypted, from the cloud. It stays in Android source sets and never
-reaches common code. It is in the catalog, and a module takes it with the client half of recovery.
+reaches common code: `:core:network`'s Android source set alone depends on it, for
+`AndroidRecoverySecretStorage`, behind a seam (`BlockStore`) that keeps Play services out of its host
+tests. Its `Task`s are awaited by hand rather than through `kotlinx-coroutines-play-services`, which
+would be one more dependency for a few lines.
 
 ---
 
@@ -487,13 +490,19 @@ auth SDK, satisfying §2.
     in the token storage (`RecoverySecretStore`), so it never moves to another phone and a reinstall
     starts it again. `clear()`, the console's *New guest*, drops the secret with the session, which
     would otherwise recover the player being cleared away. `RecoverySecretFlowTest` pins every case.
-  - *Where it is kept* (*decided 2026-09-25*, not built yet): Android keeps the secret in Block Store
-    (§2), its cloud copy only where end-to-end encryption is available and a same-device reinstall
-    alone otherwise, and keeps the session store out of both cloud backup and device-to-device
-    transfer, so a new phone gets only the secret, and recovers with it. iOS keeps it in a Keychain
-    item synced through iCloud Keychain (`kSecAttrSynchronizable`), so one person's iPhones share one
-    account, each with a session of its own. Desktop and web keep none: they bind no
-    `RecoverySecretStorage` (`dataModule`), so they mint as before and never ask for a secret.
+  - *Where it is kept* (*decided 2026-09-25*), bound in each platform's `platformModule`:
+    - *Android* (built): Block Store (§2, `AndroidRecoverySecretStorage` in `:core:network`), which
+      keeps its entries across the app being uninstalled and installed again, and moves them to a new
+      phone set up from this one by device-to-device transfer. Its cloud copy is asked for only while
+      the backup is end-to-end encrypted (`isEndToEndEncryptionAvailable`; a phone that cannot say
+      counts as not), so a phone restored from any other cloud backup mints a guest. Without Play
+      services every call throws, and the phone plays as a guest. The session store is to stay out of
+      both cloud backup and device-to-device transfer, so a new phone gets only the secret, and
+      recovers with it (not built yet).
+    - *iOS* (not built yet): a Keychain item synced through iCloud Keychain (`kSecAttrSynchronizable`),
+      so one person's iPhones share one account, each with a session of its own.
+    - *Desktop and web* keep none: they bind no `RecoverySecretStorage` (`dataModule`), so they mint as
+      before and never ask for a secret.
 - Provider linking (Play Games Services on Android, Game Center on iOS) is phase 2 (§8b, *Provider
   linking*); recovery alone already carries a phone's guest across a reinstall.
 - On the client, `SessionStore` is the only copy of the credentials: Ktor's bearer cache is off

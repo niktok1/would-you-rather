@@ -8,4 +8,5 @@ import org.koin.dsl.module
 actual fun platformModule(): Module =
     module {
         single<TokenStorage> { JvmTokenStorage() }
+        // No RecoverySecretStorage: a desktop guest stays bound to this storage (CLAUDE.md §8a, *Recovery*).
     }
