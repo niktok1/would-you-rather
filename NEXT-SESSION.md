@@ -89,10 +89,12 @@ thing**: a category is named through `categoryName(category, language)` alone, t
 reading `LocalLanguage` as the other screens do (`Category.nameIn` and `CategoryNameTest` gone,
 their cases in `CategoryNamesTest`); its Try again, Play and failed read are the game's, *Покушај
 поново*, *Играј*, and *Игра није доступна.* offline or *Категорије нису учитане.* otherwise, as the
-dialog said them (`unreadText`; `CategoryStrings` lost `tryAgain`, `cannotLoad` and `play`); the one
-cancel is `Strings.cancel`, on the Auth page alone now. **The search folds accents** (*decided*, no
-longer provisional: the players' phones may lack a Serbian keyboard): č and ć are c, š s, ž z and đ
-dj, on both sides and in the English name too, so *nacin* finds *Начин живота* and *djak* finds
+dialog said them (`unreadText`; `CategoryStrings` lost `tryAgain`, `cannotLoad` and `play`); since
+the review (6b44dc4, 5a8adf7, 48e3e0e), *Све* and the spinner's name are one text each too
+(`Strings.allCategories`, `Strings.loading`), and *Изабрано: {0}* beside Играј is a template; the
+one cancel is `Strings.cancel`, on the Auth page alone now. **The search folds accents** (*decided*,
+no longer provisional: the players' phones may lack a Serbian keyboard): č and ć are c, š s, ž z and
+đ dj, on both sides and in the English name too, so *nacin* finds *Начин живота* and *djak* finds
 *Ђак*. The client alone changed. Verified here (*Verified working*): lint, the verify job's tests
 and client compiles, and the iOS Kotlin compiles; the `server-postgres`, `docker-smoke` and `ios`
 jobs run only in CI. Tests: `:app:shared` 309 (267 before the merge: the merge brought 60, the
@@ -280,6 +282,22 @@ from it.
 
 ### Verified working
 
+- **`merge/redesign` after the review of the `feat/category-picker` merge** (6b44dc4, 5a8adf7 and
+  48e3e0e), on this machine, at 48e3e0e, whose tree this note changes only in NEXT-SESSION.md: the
+  verify job's lists exactly, `ktlintCheck` with `--rerun-tasks`; `:server:test :core:domain:jvmTest
+  :core:data:jvmTest :core:network:jvmTest :core:network:testAndroidHostTest :app:shared:jvmTest
+  :app:adminApp:jvmTest`, each with `--rerun`; the client compiles, `:app:androidApp:assembleDebug`
+  and both web targets of `:app:shared` and `:app:adminApp` included; and the ios job's Kotlin
+  compiles (`:app:shared:compileKotlinIosSimulatorArm64` and the
+  `compileTestKotlinIosSimulatorArm64` of `:app:shared` and the three `:core` modules), each
+  Gradle's own exit code 0. Test counts from `build/test-results`, as before the review:
+  `:server:test` 346 (344 green, 2 skipped: the PostgreSQL-only boot races), `:core:domain:jvmTest`
+  72, `:core:data:jvmTest` 142, `:core:network:jvmTest` 72, `:core:network:testAndroidHostTest` 78,
+  `:app:shared:jvmTest` 309, `:app:adminApp:jvmTest` 106, no failure anywhere. 5a8adf7 passed
+  `:app:shared`'s lint and whole JVM suite alone, and 6b44dc4 its lint and the language and
+  categories tests. Changed, not added: `CategoriesScreenDrawTest`, `PlayScreenDrawTest`,
+  `PlayScreenTest` and `AppNavigationTest` read the one *Све* and the one *Учитавање* from
+  `Strings`, and the count through `fill`.
 - **`merge/redesign` with `feat/category-picker` merged in** (9c4ecd4 and its five follow-ups), on
   this machine, at 7353691, whose tree this note changes only in CLAUDE.md and NEXT-SESSION.md: the
   verify job's lists exactly, `ktlintCheck`; `:server:test :core:domain:jvmTest :core:data:jvmTest
