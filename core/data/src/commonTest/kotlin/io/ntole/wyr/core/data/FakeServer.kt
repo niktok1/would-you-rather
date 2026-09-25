@@ -24,7 +24,6 @@ import io.ntole.wyr.core.like.LikeRequest
 import io.ntole.wyr.core.like.LikeResultDto
 import io.ntole.wyr.core.network.WyrJson
 import io.ntole.wyr.core.player.PlayerStatsDto
-import io.ntole.wyr.core.question.QuestionCategory
 import io.ntole.wyr.core.question.QuestionDto
 import io.ntole.wyr.core.question.QuestionPageDto
 import io.ntole.wyr.core.question.QuestionStatus
@@ -349,7 +348,7 @@ internal class FakeServer {
                         id = "s2",
                         optionA = "s2-a",
                         optionB = "s2-b",
-                        categories = listOf(QuestionCategory.ETHICS),
+                        categories = listOf("ETHICS"),
                         status = QuestionStatus.REJECTED,
                         rejectionReason = "a duplicate",
                         submittedAt = SUBMITTED_AT + 1,
@@ -358,7 +357,7 @@ internal class FakeServer {
                         id = "s1",
                         optionA = "s1-a",
                         optionB = "s1-b",
-                        categories = listOf(QuestionCategory.FOOD, QuestionCategory.RANDOM),
+                        categories = listOf("FOOD", "ABSURD"),
                         status = QuestionStatus.PENDING,
                         submittedAt = SUBMITTED_AT,
                     ),
@@ -374,7 +373,7 @@ internal class FakeServer {
                             id = "q1",
                             optionA = "q1-a",
                             optionB = "q1-b",
-                            categories = listOf(QuestionCategory.FOOD),
+                            categories = listOf("FOOD"),
                         ),
                     ),
             )

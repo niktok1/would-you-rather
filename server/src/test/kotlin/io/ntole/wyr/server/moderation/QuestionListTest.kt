@@ -2,7 +2,6 @@ package io.ntole.wyr.server.moderation
 
 import io.ntole.wyr.core.question.AdminQuestionDto
 import io.ntole.wyr.core.question.AdminQuestionPageDto
-import io.ntole.wyr.core.question.QuestionCategory
 import io.ntole.wyr.core.question.QuestionStatus
 import io.ntole.wyr.core.question.SubmissionDto
 import io.ntole.wyr.core.question.SubmitQuestionRequest
@@ -61,10 +60,10 @@ class QuestionListTest {
     fun `every question is listed newest first, the seeds among them marked, each as it stands`() {
         val author = newPlayer()
         val pending = submit(author, at = seededAt + 1)
-        val approved = submit(author, at = seededAt + 2, categories = listOf(QuestionCategory.ETHICS))
+        val approved = submit(author, at = seededAt + 2, categories = listOf("ETHICS"))
         val rejected = submit(author, at = seededAt + 3)
         transaction(database) {
-            ModerationStore.approve(approved.id, listOf(QuestionCategory.FOOD, QuestionCategory.RANDOM), now = 7_000L)
+            ModerationStore.approve(approved.id, listOf("FOOD", "ABSURD"), now = 7_000L)
             ModerationStore.reject(rejected.id, "Not a dilemma", now = 8_000L)
         }
 
@@ -83,7 +82,7 @@ class QuestionListTest {
                     approved,
                     QuestionStatus.APPROVED,
                     reviewedAt = 7_000L,
-                    categories = listOf(QuestionCategory.FOOD, QuestionCategory.RANDOM),
+                    categories = listOf("FOOD", "ABSURD"),
                 ),
                 listed(pending, QuestionStatus.PENDING),
             ),
@@ -118,18 +117,18 @@ class QuestionListTest {
     fun `the list narrows to the questions filed under any of the categories asked for, each once`() {
         val author = newPlayer()
         val both =
-            submit(author, at = seededAt + 1, categories = listOf(QuestionCategory.ETHICS, QuestionCategory.FOOD))
-        val food = submit(author, at = seededAt + 2, categories = listOf(QuestionCategory.FOOD))
-        val filed = transaction(database) { filedUnder(QuestionCategory.ETHICS) + filedUnder(QuestionCategory.FOOD) }
+            submit(author, at = seededAt + 1, categories = listOf("ETHICS", "FOOD"))
+        val food = submit(author, at = seededAt + 2, categories = listOf("FOOD"))
+        val filed = transaction(database) { filedUnder("ETHICS") + filedUnder("FOOD") }
 
-        val listed = ids(categories = setOf(QuestionCategory.ETHICS, QuestionCategory.FOOD))
+        val listed = ids(categories = setOf("ETHICS", "FOOD"))
 
         assertEquals(listOf(food.id, both.id), listed.take(2))
         assertEquals(filed.toSet(), listed.toSet())
         assertEquals(listed.distinct(), listed, "a question filed under both is listed once")
         assertEquals(
             listOf(both.id),
-            ids(statuses = setOf(QuestionStatus.PENDING), categories = setOf(QuestionCategory.ETHICS)),
+            ids(statuses = setOf(QuestionStatus.PENDING), categories = setOf("ETHICS")),
             "and both filters at once",
         )
     }
@@ -243,7 +242,7 @@ class QuestionListTest {
     private fun submit(
         author: String,
         at: Long,
-        categories: List<QuestionCategory> = listOf(QuestionCategory.FOOD),
+        categories: List<String> = listOf("FOOD"),
     ): SubmissionDto {
         val tag = UUID.randomUUID().toString().take(8)
         val request = SubmitQuestionRequest("Option $tag", "Other $tag", categories)
@@ -269,7 +268,7 @@ class QuestionListTest {
         limit: Int,
         after: String? = null,
         statuses: Set<QuestionStatus> = emptySet(),
-        categories: Set<QuestionCategory> = emptySet(),
+        categories: Set<String> = emptySet(),
     ): AdminQuestionPageDto =
         transaction(database) {
             ModerationStore.questions(statuses, categories, after?.let(QuestionCursor::parse), limit)
@@ -284,7 +283,7 @@ class QuestionListTest {
 
     private fun ids(
         statuses: Set<QuestionStatus> = emptySet(),
-        categories: Set<QuestionCategory> = emptySet(),
+        categories: Set<String> = emptySet(),
     ): List<String> = page(limit = 100, statuses = statuses, categories = categories).questions.map { it.id }
 
     /** [submission] as the list shows it once a moderator left it at [status], with no votes or likes. */
@@ -293,7 +292,7 @@ class QuestionListTest {
         status: QuestionStatus,
         reviewedAt: Long? = null,
         reason: String? = null,
-        categories: List<QuestionCategory> = submission.categories,
+        categories: List<String> = submission.categories,
     ) = AdminQuestionDto(
         id = submission.id,
         optionA = submission.optionA,

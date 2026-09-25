@@ -1,11 +1,11 @@
 package io.ntole.wyr.server.question
 
 import io.ntole.wyr.core.api.WyrApi
-import io.ntole.wyr.core.question.QuestionCategory
 import io.ntole.wyr.core.question.QuestionDto
 import io.ntole.wyr.core.question.QuestionStatus
 import io.ntole.wyr.core.vote.OptionSide
 import io.ntole.wyr.core.vote.VoteResultDto
+import io.ntole.wyr.server.db.Categories
 import io.ntole.wyr.server.db.Players
 import io.ntole.wyr.server.db.QuestionCategories
 import io.ntole.wyr.server.db.Questions
@@ -50,16 +50,16 @@ class QuestionStoreTest {
 
     private val food: List<String> =
         transaction(database) {
-            filedUnder(QuestionCategory.FOOD)
+            filedUnder("FOOD")
         }
 
-    private val lifestyle: List<String> = transaction(database) { filedUnder(QuestionCategory.LIFESTYLE) }
+    private val lifestyle: List<String> = transaction(database) { filedUnder("LIFESTYLE") }
 
     /** Two categories some seeds are both filed under, and the questions in either. */
-    private val foodOrLifestyle = setOf(QuestionCategory.FOOD, QuestionCategory.LIFESTYLE)
+    private val foodOrLifestyle = setOf("FOOD", "LIFESTYLE")
     private val inFoodOrLifestyle: List<String> = (food + lifestyle).distinct()
 
-    private val stored: Map<String, List<QuestionCategory>> = transaction(database) { storedCategories() }
+    private val stored: Map<String, List<String>> = transaction(database) { storedCategories() }
 
     @Test
     fun `a batch holds only the questions still due, each once`() {
@@ -83,9 +83,9 @@ class QuestionStoreTest {
         assertEquals(pool.sorted(), batch.ids().sorted(), "each question once, however many categories it has")
         batch.forEach { question -> assertEquals(stored[question.id], question.categories, question.id) }
         assertEquals(
-            listOf(QuestionCategory.LIFESTYLE, QuestionCategory.ETHICS),
+            listOf("LIFESTYLE", "ETHICS"),
             batch.single { it.optionA == "Always tell the truth" }.categories,
-            "in declaration order, not by name nor as stored",
+            "in the order of categories, not by id nor as stored",
         )
     }
 
@@ -93,7 +93,7 @@ class QuestionStoreTest {
     fun `a category serves each question filed under it once whatever else it is filed under`() {
         assertTrue(food.any { id -> stored.getValue(id).size > 1 }, "no food seed is filed under another category too")
 
-        val batch = feed(newPlayer(), categories = setOf(QuestionCategory.FOOD))
+        val batch = feed(newPlayer(), categories = setOf("FOOD"))
 
         assertEquals(food.sorted(), batch.ids().sorted())
         batch.forEach { question -> assertEquals(stored[question.id], question.categories, question.id) }
@@ -139,7 +139,7 @@ class QuestionStoreTest {
         answer(player, inFoodOrLifestyle.first())
 
         assertEquals(inFoodOrLifestyle.size - 1L, dueCount(player, foodOrLifestyle))
-        assertEquals(food.size - 1L, dueCount(player, setOf(QuestionCategory.FOOD)))
+        assertEquals(food.size - 1L, dueCount(player, setOf("FOOD")))
         assertEquals(pool.size - 1L, dueCount(player, categories = emptySet()), "every category for none")
     }
 
@@ -160,17 +160,12 @@ class QuestionStoreTest {
     }
 
     @Test
-    fun `a stored name this build does not know reads as RANDOM and each category goes out once`() {
+    fun `a question's categories go out oldest first whatever their ids or the order they were stored in`() {
         val author = newPlayer()
-        // As a newer build could have filed them, read back by this one after a rollback. The key
-        // keeps a name to one row, so only two names that both read as RANDOM can repeat one.
-        val beside = storedUnder(author, QuestionCategory.FOOD.name, "FROM_THE_FUTURE")
-        val merged = storedUnder(author, QuestionCategory.RANDOM.name, "FROM_THE_FUTURE", "ANOTHER_ONE")
-        val expected =
-            mapOf(
-                beside to listOf(QuestionCategory.FOOD, QuestionCategory.RANDOM),
-                merged to listOf(QuestionCategory.RANDOM),
-            )
+        // Added after the first ones, and first by id: the order is when a category was added.
+        addCategory("ANIMALS", createdAt = System.currentTimeMillis())
+        val filed = storedUnder(author, "ANIMALS", "ABSURD", "FOOD")
+        val expected = mapOf(filed to listOf("FOOD", "ABSURD", "ANIMALS"))
 
         val served = feed(newPlayer()).filter { it.id in expected }.associate { it.id to it.categories }
         val listed = transaction(database) { SubmissionStore.byAuthor(author) }.associate { it.id to it.categories }
@@ -255,7 +250,7 @@ class QuestionStoreTest {
         val player = newPlayer()
         food.forEach { id -> answer(player, id) }
 
-        val batch = feed(player, categories = setOf(QuestionCategory.FOOD))
+        val batch = feed(player, categories = setOf("FOOD"))
 
         assertEquals(food.sorted(), batch.ids().sorted(), "all of that category again, rather than nothing")
         assertTrue(batch.all { it.answeredBefore })
@@ -268,7 +263,7 @@ class QuestionStoreTest {
         val player = newPlayer()
         pool.forEach { id -> answer(player, id) }
 
-        val batch = feed(player, categories = setOf(QuestionCategory.FOOD))
+        val batch = feed(player, categories = setOf("FOOD"))
 
         assertEquals(food.sorted(), batch.ids().sorted())
         assertEquals(2, cycleOf(player))
@@ -280,8 +275,8 @@ class QuestionStoreTest {
         val player = newPlayer()
         pool.forEach { id -> answer(player, id) }
 
-        // UNKNOWN is never stored, so it stands for a category with no questions in it.
-        assertTrue(feed(player, categories = setOf(QuestionCategory.UNKNOWN)).isEmpty())
+        addCategory("EMPTY", createdAt = System.currentTimeMillis())
+        assertTrue(feed(player, categories = setOf("EMPTY")).isEmpty(), "a category with no question in it")
 
         assertEquals(1, cycleOf(player), "a batch that served nothing must not start a cycle for the rest")
     }
@@ -302,6 +297,20 @@ class QuestionStoreTest {
     }
 
     private fun newPlayer(): String = transaction(database) { PlayerStore.createGuest().id }
+
+    private fun addCategory(
+        id: String,
+        createdAt: Long,
+    ) {
+        transaction(database) {
+            Categories.insert { row ->
+                row[Categories.id] = id
+                row[nameSr] = "Име $id"
+                row[nameEn] = "Name $id"
+                row[Categories.createdAt] = createdAt
+            }
+        }
+    }
 
     /** An approved question by [author], filed under the stored [names] as they are, known or not. */
     private fun storedUnder(
@@ -340,7 +349,7 @@ class QuestionStoreTest {
     private fun feed(
         player: String,
         limit: Int = WyrApi.Limits.MAX_PAGE_SIZE,
-        categories: Set<QuestionCategory> = emptySet(),
+        categories: Set<String> = emptySet(),
     ): List<QuestionDto> = transaction(database) { QuestionStore.feed(player, limit, categories).questions }
 
     private fun cycleOf(player: String): Int? = transaction(database) { PlayerStore.find(player)?.cycle }
@@ -348,7 +357,7 @@ class QuestionStoreTest {
     /** [QuestionStore.dueCount] read as `StatsStore` reads it, against the player's own cycle. */
     private fun dueCount(
         player: String,
-        categories: Set<QuestionCategory>,
+        categories: Set<String>,
     ): Long? =
         transaction(database) {
             val due = QuestionStore.dueCount(player, categories, cycle = Players.currentCycle)

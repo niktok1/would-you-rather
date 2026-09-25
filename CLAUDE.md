@@ -217,14 +217,17 @@ three, adding an enum value server-side makes already-installed clients fail des
 outright. Enums that are structurally closed (e.g. `OptionSide` — a question has exactly two
 sides) are exempt and must stay closed.
 
-A **list** of such an enum needs more, because `coerceInputValues` only coerces a property's own
-value, never an element of a list: one unknown element fails the whole payload. So every list
+A **list** of such an enum would need more, because `coerceInputValues` only coerces a property's
+own value, never an element of a list: one unknown element fails the whole payload. So a list
 property of a growable enum MUST be declared with a serializer that decodes an unknown element as
-`UNKNOWN` (`QuestionCategoryListSerializer` in `:core`, applied with `@Serializable(with = ...)`),
-and MUST default to an empty list, which the client reads as it reads `UNKNOWN`. An unknown element
-becomes `UNKNOWN` rather than being dropped: the server decodes with the same serializer, and a
-dropped element would let a request naming a category the server does not know through as if it
-had named only the rest. `WyrJsonTest` pins it.
+`UNKNOWN`, and MUST default to an empty list. None is on the wire today.
+
+**Categories are not an enum on the wire** (*decided 2026-09-25*): they are server data (§8d,
+*Categories*), and every categories field and parameter carries plain category ids, strings, each
+list defaulting to empty. A category added server-side is then only an id an installed client has
+no name for, never a payload it fails to decode, so the rule above does not apply to them.
+`QuestionCategory` and its list serializer are gone; the first ids are the enum's own names, so the
+JSON for them is byte for byte what it was (`WyrJsonTest`, `ServerJsonTest`).
 
 The client half lives in `WyrJson` (`:core:network`); the server half is `encodeDefaults = true`
 in `ServerJson` (`:server`), because the client can only coerce into a default that is actually
@@ -643,9 +646,12 @@ EncryptedSharedPreferences: enough for a game that stores nothing personal.
   previous one.
 - **WCAG AA contrast audit** — see §5b. Paused along with UI polish (§8d).
 
-`RANDOM` was an open item and is resolved: it is a content category (the absurd questions), not a
-"surprise me" filter, and it stays in `QuestionCategory` as-is. The unfiltered feed already mixes
-every category.
+`RANDOM` was an open item, resolved twice. First as a content category (the absurd questions), not a
+"surprise me" filter. Then, *decided 2026-09-25*: "RANDOM is actually all", so RANDOM is no category
+any more. Picking none, *All*, is the unfiltered feed, which mixes every category, and the absurd
+questions filed under RANDOM moved to a new category, **ABSURD** (sr *Апсурдно*, en *Absurd*; V6,
+§8d *Categories*). An installed build that still asks for RANDOM, as a filter or to submit under, is
+400 `VALIDATION_FAILED`.
 
 Isolation for hot counters was an open item and is resolved: transactions run at READ COMMITTED,
 under the rules in §4.
@@ -671,7 +677,7 @@ seed (`Migrations`, `DatabaseFactory.init`). Nothing builds a table any other wa
   refresh-token grace window, §8a), V3 (a question's `retired_at`, §8d *Moderation*) and V4
   (sessions and the recovery secret, since dropped) there; the next Manual Deploy runs V5 there
   (a player's username and password hash, *Accounts*, above), which every player already there takes
-  as a guest.
+  as a guest, and every later script (V6, the categories table, §8d *Categories*).
   `Migrations.migrate` takes the baseline itself (`baselineVersion` 1), and only for a database
   holding every table V1 builds (`TABLES_BEFORE_MIGRATIONS`) and no history table; Flyway's
   `baselineOnMigrate` is off. Any other database with tables and no history fails the boot, rather
@@ -715,7 +721,8 @@ seed (`Migrations`, `DatabaseFactory.init`). Nothing builds a table any other wa
   through the stores only where what they run there names V1's columns alone: a `selectAll` of a
   table a later script changed fails on V1 (V3 moved the seed's check to the id alone), and a mint
   now opens a session, in a table V1 lacks, so its player is inserted as a build before sessions
-  minted one (`playerAsMintedBefore`, V4).
+  minted one (`playerAsMintedBefore`, V4). The seeds go in as the builds before V6 wrote them, in
+  plain SQL (`seedAsBefore`), since the seed now needs the categories table.
 - *A script that has shipped never changes*: Flyway refuses to boot on a changed checksum. A script
   whose name Flyway cannot read fails the boot rather than being skipped (`validateMigrationNaming`),
   and clean is refused outright (`cleanDisabled`); the test harness alone turns it on, to wipe the
@@ -738,6 +745,12 @@ seed (`Migrations`, `DatabaseFactory.init`). Nothing builds a table any other wa
   drops them leaves a schema this build runs on (`ApiFlowTest`). V5 only adds two nullable columns and
   a unique constraint on one, which `d4a9dbf` never names: after a rollback a registered player plays
   on through their sessions as a guest would, and cannot log in anywhere new until the roll forward.
+  V6 adds `categories`, which no build before names, moves what was filed under RANDOM to ABSURD
+  and holds `question_categories` to `categories` with a foreign key. A build before it (`d4a9dbf`,
+  `40550e9`) boots and serves on that: it reads a stored name it has no enum member for as RANDOM,
+  so it shows an ABSURD question, or one under a category added later, as RANDOM, and its RANDOM
+  filter, which compares the stored names, finds none of them. A submission or an approval it files
+  under RANDOM fails the foreign key, a 500, until the roll forward.
 - *Several instances booting at once* (Render starts a deploy's new instance before it stops the old
   one): on PostgreSQL each script runs under Flyway's advisory lock, so one boot migrates while the
   rest wait, up to 50 tries a second apart, and then find nothing to do. Every boot that finds a
@@ -895,21 +908,39 @@ lists the player's own (*Submitting*, below).
     logout keeps the selection.
   - `answeredBefore` (`QuestionDto`) means the player has a vote on the question, from any cycle. No
     client reads it: the domain's `Question` has no such field since the dev console went.
-- **Categories** *(decided 2026-09-24; built)*: a
+- **Categories** *(decided 2026-09-24; server data since 2026-09-25; built on the server)*: a
   question is filed under **any number of categories, at least one**. A player may pick **several**
   categories to play, and a question matches when it is filed under **any** of them; none picked
   means every category. The author picks one or more when submitting, and the moderator may change
-  them (*Moderation*). Built in `question_categories`, one row per question and category, written
-  in the question's own transaction: `QuestionDto.categories` and `SubmissionDto.categories` carry
-  every one, each once, in `QuestionCategory` declaration order, and a list's unknown names decode
-  as `UNKNOWN` (§5). A batch reads its questions' categories in one more statement
-  (`QuestionStore.categoriesOf`), never one per question. The feed takes a filter of any number of
-  categories, `?category=` repeated, and none is every category; one that names no real category is
-  400. The filter, and the due count beside it (`QuestionStore.dueCount`), is an `EXISTS` on that
-  table, never a join, so a question in several of the categories asked for is served and counted
-  once. A submission names one or more (*Submitting*). On the client a question holds every one
-  (`Question.categories`, a set that is never empty, mapped in `QuestionMapper`): a name this build
-  cannot read is `Category.OTHER` beside the rest, and an empty list is `OTHER` alone. A player's
+  them (*Moderation*).
+  - *Server data* (*decided 2026-09-25*: there will be hundreds): each category is a row of
+    `categories` (V6), a **stable id** (1 to `WyrApi.Limits.MAX_CATEGORY_ID_LENGTH`, 32, of `A`-`Z`,
+    `0`-`9` and `_`), a name in **Serbian** (Cyrillic, `name_sr`) and one in **English**
+    (`name_en`), each at most `MAX_CATEGORY_NAME_LENGTH` (40), and when it was added. The **order of
+    categories** is when each was added, then its id (`CategoryStore.ids`): every list of them the
+    server sends, a question's own included, is in it. V6 wrote the first five, `Seed.CATEGORIES`:
+    `FOOD`, `LIFESTYLE`, `ETHICS` and `SUPERPOWERS` under the names the enum sent, so an installed
+    client reads every one as before, a millisecond apart in its declaration order, then `ABSURD`
+    (*Апсурдно*, *Absurd*), which took every question filed under RANDOM (§8b: RANDOM is no category
+    now, *All* is no filter). Nothing deletes a category. On the wire a category is its id, a plain
+    string (§5).
+  - Built in `question_categories`, one row per question and category, written in the question's
+    own transaction, each row held to a category by a foreign key (V6): `QuestionDto.categories`,
+    `SubmissionDto.categories` and `AdminQuestionDto.categories` carry every one, each once, in the
+    order of categories. A batch reads its questions' categories in one more statement
+    (`QuestionStore.categoriesOf`), never one per question. The feed takes a filter of any number of
+    categories, `?category=` repeated, and none is every category; an id no category has is 400,
+    RANDOM included. Every filter, submission and approval is checked against the categories in its
+    own transaction (`CategoryStore.checked`, which reads every category, so what a request names
+    never sizes the statement). The filter, and the due count beside it (`QuestionStore.dueCount`),
+    is an `EXISTS` on that table, never a join, so a question in several of the categories asked for
+    is served and counted once. A submission names one or more (*Submitting*).
+  - *The client, until it lists the categories itself*: the domain's `Category` still names the
+    first five, `ABSURD` standing in as `Category.RANDOM` both ways (`QuestionMapper`), so the picker's
+    Random plays the absurd questions, and every other id is `Category.OTHER`. The next client branch
+    replaces the enum with the server's list. A question holds every one
+    (`Question.categories`, a set that is never empty, mapped in `QuestionMapper`): an id this build
+    cannot name is `Category.OTHER` beside the rest, and an empty list is `OTHER` alone. A player's
   selection is a set too (`QuestionRepository.categories`, empty for every category, never `OTHER`),
   and every refill sends all of it; the Play screen's category picker ticks each category, and *All
   categories* empties it (*The Play screen*). Selecting all of `Category.selectable` is not selecting
@@ -1001,17 +1032,18 @@ lists the player's own (*Submitting*, below).
     without a vote, so the reveal's total, which is the vote's, shows it only from the next vote on.
 - **Submitting** *(built; details decided 2026-09-23)*: earns no points
   directly, because authors earn through likes. The author writes both options and **picks one or
-  more categories** (each a real one, not `UNKNOWN`; *Categories*). A player may have at most **20
+  more categories** (each a category's id; *Categories*). A player may have at most **20
   submissions pending** moderation at once. A submitted question is served only after a moderator
   approves it; once approved it is due for every player in their current cycle. Built as
   `POST /v1/questions`, in `SubmissionStore.submit` after `checkedSubmission`. Both options are
   trimmed, then each must be non-blank, at most `WyrApi.Limits.MAX_OPTION_LENGTH` (200, UTF-16
   units) and one line (no control character, nor U+2028 or U+2029, the line and paragraph
   separators), and the two must differ ignoring case: otherwise 422 `INVALID_SUBMISSION`, which the
-  player can put right. No category, or one that is not a real one, is 400 `VALIDATION_FAILED`,
-  since no correct client sends either: a picker must have one picked before it lets the player
-  submit. A category named twice is filed once, and the question's categories are stored in
-  declaration order, in the submission's own transaction. The 21st pending submission is 409
+  player can put right. No category, or an id no category has, is 400 `VALIDATION_FAILED`, and
+  comes before any of those, since no correct client sends either: a picker must have one picked
+  before it lets the player submit, and offers only categories the server has. A category named
+  twice is filed once, and the question's categories are stored in the submission's own
+  transaction. The 21st pending submission is 409
   `SUBMISSION_LIMIT`, counted under the author's row lock (§4). A submission is stored `PENDING`
   until a moderator decides it (*Moderation*). Questions carry an author and a
   `QuestionStatus`, and `QuestionStore.servable` serves only approved ones, due at once in whatever
@@ -1058,9 +1090,9 @@ lists the player's own (*Submitting*, below).
   - `GET /v1/admin/questions` is the list of every question, seeds included, newest first, in an
     `AdminQuestionPageDto` of `AdminQuestionDto`s: options, categories, status, whether it is a seed,
     when it was stored, reviewed and retired, a rejected one's reason, its tally and its like count,
-    and no author. `?status=` and `?category=` narrow it, each repeated for several and matching any of its
-    values, none for all; `UNKNOWN` or a name that is no status or category is 400, as for the feed's
-    category (`categoryFilter`). `?limit=` bounds a page as the feed's is. A page is asked for by
+    and no author. `?status=` and `?category=` narrow it, each repeated for several and matching any
+    of its values, none for all; `UNKNOWN` or a name that is no status, and an id no category has,
+    is 400, as for the feed's category (`categoryFilter`, `CategoryStore.checked`). `?limit=` bounds a page as the feed's is. A page is asked for by
     cursor, not offset (`QuestionCursor`, `?cursor=`): `nextCursor` is the last question's place,
     its `submitted_at` and then its id, and null on the last page, which is read as one row more than
     the limit. A question stored meanwhile is newer than every one listed and lands before the first
@@ -1071,8 +1103,8 @@ lists the player's own (*Submitting*, below).
     list is the moderator's alone and the table small; `(submitted_at, id)` is the index once it is
     not.
   - `POST /v1/admin/approvals` takes an `ApproveSubmissionRequest`: the id, and categories that, when
-    there are any, replace the author's (each real, each once, in declaration order); none keeps the
-    author's. `POST /v1/admin/rejections` takes a `RejectSubmissionRequest`: the id and a reason,
+    there are any, replace the author's (each a category's id, each once, in the order of
+    categories; any other is 400 before anything is decided); none keeps the author's. `POST /v1/admin/rejections` takes a `RejectSubmissionRequest`: the id and a reason,
     trimmed, then non-blank, at most `WyrApi.Limits.MAX_REJECTION_REASON_LENGTH` (200) and one line
     as an option is (provisional, §8b). A reason that breaks a rule is 400 `VALIDATION_FAILED`, not
     422: the moderator's client checks it against the same rules before it lets them send. Both

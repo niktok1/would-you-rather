@@ -2,7 +2,6 @@ package io.ntole.wyr.server.question
 
 import io.ntole.wyr.core.api.WyrApi
 import io.ntole.wyr.core.error.ErrorCode
-import io.ntole.wyr.core.question.QuestionCategory
 import io.ntole.wyr.core.question.QuestionStatus
 import io.ntole.wyr.core.question.SubmissionDto
 import io.ntole.wyr.core.question.SubmitQuestionRequest
@@ -49,7 +48,7 @@ class SubmissionStoreTest {
     fun `a submission is stored under its author waiting for a moderator`() {
         val author = newPlayer()
 
-        val categories = listOf(QuestionCategory.FOOD, QuestionCategory.SUPERPOWERS)
+        val categories = listOf("FOOD", "SUPERPOWERS")
 
         val submission = submit(author, SubmitQuestionRequest("Fly", "Swim", categories), at = 1_000L)
 
@@ -135,7 +134,7 @@ class SubmissionStoreTest {
                 transaction(database) {
                     val listed = SubmissionStore.byAuthor(author)
                     assertEquals(count, listed.size)
-                    assertEquals(List(count) { listOf(QuestionCategory.RANDOM) }, listed.map { it.categories })
+                    assertEquals(List(count) { listOf("ABSURD") }, listed.map { it.categories })
                     statementCount
                 }
             }
@@ -169,8 +168,7 @@ class SubmissionStoreTest {
         at: Long = System.currentTimeMillis(),
     ): SubmissionDto = transaction(database) { SubmissionStore.submit(author, request, now = at) }
 
-    private fun question(index: Int) =
-        SubmitQuestionRequest("Option $index", "Other $index", listOf(QuestionCategory.RANDOM))
+    private fun question(index: Int) = SubmitQuestionRequest("Option $index", "Other $index", listOf("ABSURD"))
 
     private fun assertLimitReached(author: String) {
         val refused = assertFailsWith<ApiFailure> { submit(author, question(REFUSED)) }

@@ -30,7 +30,6 @@ import io.ntole.wyr.core.network.api.ModerationApi
 import io.ntole.wyr.core.network.environment.WyrEnvironment
 import io.ntole.wyr.core.question.AdminQuestionDto
 import io.ntole.wyr.core.question.AdminQuestionPageDto
-import io.ntole.wyr.core.question.QuestionCategory
 import io.ntole.wyr.core.question.QuestionStatus
 import io.ntole.wyr.core.question.SubmissionDto
 import io.ntole.wyr.core.question.SubmissionListDto
@@ -265,7 +264,7 @@ class ModerationOverHttpTest {
                 id = "q1",
                 optionA = "Fly",
                 optionB = "Swim",
-                categories = listOf(QuestionCategory.SUPERPOWERS),
+                categories = listOf("SUPERPOWERS"),
                 status = QuestionStatus.PENDING,
                 submittedAt = 1_790_000_000_000L,
             )
@@ -278,7 +277,7 @@ class ModerationOverHttpTest {
                 id = "seed-1",
                 optionA = "Cats",
                 optionB = "Dogs",
-                categories = listOf(QuestionCategory.RANDOM),
+                categories = listOf("ABSURD"),
                 status = QuestionStatus.APPROVED,
                 seed = true,
                 submittedAt = 1_790_000_000_000L,

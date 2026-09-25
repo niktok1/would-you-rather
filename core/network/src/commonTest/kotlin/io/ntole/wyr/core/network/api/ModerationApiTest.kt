@@ -24,7 +24,6 @@ import io.ntole.wyr.core.network.storeHolding
 import io.ntole.wyr.core.question.AdminQuestionDto
 import io.ntole.wyr.core.question.AdminQuestionPageDto
 import io.ntole.wyr.core.question.ApproveSubmissionRequest
-import io.ntole.wyr.core.question.QuestionCategory
 import io.ntole.wyr.core.question.QuestionStatus
 import io.ntole.wyr.core.question.RejectSubmissionRequest
 import io.ntole.wyr.core.question.RestoreQuestionRequest
@@ -77,7 +76,7 @@ class ModerationApiTest {
     fun `an approval is posted with the admin token and the categories to file it under`() =
         runTest {
             val engine = MockEngine { respondOk(APPROVED) }
-            val request = ApproveSubmissionRequest("q1", listOf(QuestionCategory.FOOD, QuestionCategory.RANDOM))
+            val request = ApproveSubmissionRequest("q1", listOf("FOOD", "ABSURD"))
 
             val approved = moderationApi(engine, storeHolding(session("a"))).approve(ADMIN_TOKEN, request)
 
@@ -87,7 +86,7 @@ class ModerationApiTest {
             assertEquals(WyrApi.Paths.ADMIN_APPROVALS, sent.url.encodedPath)
             assertEquals(ADMIN_TOKEN, sent.headers[WyrApi.Headers.ADMIN_TOKEN])
             assertEquals(
-                """{"questionId":"q1","categories":["FOOD","RANDOM"]}""",
+                """{"questionId":"q1","categories":["FOOD","ABSURD"]}""",
                 sent.body.toByteArray().decodeToString(),
             )
         }
@@ -133,7 +132,7 @@ class ModerationApiTest {
                 moderationApi(engine, storeHolding(session("a"))).questions(
                     ADMIN_TOKEN,
                     statuses = listOf(QuestionStatus.PENDING, QuestionStatus.RETIRED),
-                    categories = listOf(QuestionCategory.FOOD, QuestionCategory.ETHICS),
+                    categories = listOf("FOOD", "ETHICS"),
                     cursor = "1790000000000:q1",
                     limit = 50,
                 )
@@ -284,7 +283,7 @@ class ModerationApiTest {
                 id = "q1",
                 optionA = "Fly",
                 optionB = "Swim",
-                categories = listOf(QuestionCategory.SUPERPOWERS),
+                categories = listOf("SUPERPOWERS"),
                 status = QuestionStatus.PENDING,
                 submittedAt = 1_790_000_000_000L,
             )
@@ -293,7 +292,7 @@ class ModerationApiTest {
 
         val APPROVED =
             PENDING.copy(
-                categories = listOf(QuestionCategory.FOOD, QuestionCategory.RANDOM),
+                categories = listOf("FOOD", "ABSURD"),
                 status = QuestionStatus.APPROVED,
             )
 
@@ -304,7 +303,7 @@ class ModerationApiTest {
                 id = "q1",
                 optionA = "Fly",
                 optionB = "Swim",
-                categories = listOf(QuestionCategory.SUPERPOWERS),
+                categories = listOf("SUPERPOWERS"),
                 status = QuestionStatus.APPROVED,
                 seed = false,
                 submittedAt = 1_790_000_000_000L,

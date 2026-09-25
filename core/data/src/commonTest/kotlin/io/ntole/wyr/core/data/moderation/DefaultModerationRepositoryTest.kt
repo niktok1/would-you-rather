@@ -36,7 +36,6 @@ import io.ntole.wyr.core.network.WyrJson
 import io.ntole.wyr.core.network.api.ModerationApi
 import io.ntole.wyr.core.question.AdminQuestionDto
 import io.ntole.wyr.core.question.ApproveSubmissionRequest
-import io.ntole.wyr.core.question.QuestionCategory
 import io.ntole.wyr.core.question.QuestionStatus
 import io.ntole.wyr.core.question.RejectSubmissionRequest
 import io.ntole.wyr.core.question.RestoreQuestionRequest
@@ -108,7 +107,7 @@ class DefaultModerationRepositoryTest {
             assertEquals(SubmissionStatus.APPROVED, approved.status)
             assertEquals(setOf(Category.FOOD, Category.RANDOM), approved.categories)
             assertEquals(
-                ApproveSubmissionRequest("q1", listOf(QuestionCategory.FOOD, QuestionCategory.RANDOM)),
+                ApproveSubmissionRequest("q1", listOf("FOOD", "ABSURD")),
                 decode<ApproveSubmissionRequest>(engine.requestHistory.single()),
             )
             assertEquals(listOf(token.value), adminTokensSent())
@@ -255,7 +254,7 @@ class DefaultModerationRepositoryTest {
         }
 
     @Test
-    fun `every question is read a page at a time with the filter by its wire names and the cursor as given`() =
+    fun `every question is read a page at a time with the filter by its ids and the cursor as given`() =
         runTest {
             val filter =
                 QuestionFilter(
@@ -268,7 +267,7 @@ class DefaultModerationRepositoryTest {
             val sent = engine.requestHistory.single()
             assertEquals(WyrApi.Paths.ADMIN_QUESTIONS, sent.url.encodedPath)
             assertEquals(listOf("PENDING", "RETIRED"), sent.url.parameters.getAll(WyrApi.Query.STATUS))
-            assertEquals(listOf("FOOD", "RANDOM"), sent.url.parameters.getAll(WyrApi.Query.CATEGORY))
+            assertEquals(listOf("FOOD", "ABSURD"), sent.url.parameters.getAll(WyrApi.Query.CATEGORY))
             assertEquals("c1", sent.url.parameters[WyrApi.Query.CURSOR])
             assertEquals("${ModerationRepository.PAGE_SIZE}", sent.url.parameters[WyrApi.Query.LIMIT])
             assertEquals(listOf(token.value), adminTokensSent())
@@ -441,7 +440,7 @@ class DefaultModerationRepositoryTest {
                 id = "q1",
                 optionA = "Fly",
                 optionB = "Swim",
-                categories = listOf(QuestionCategory.SUPERPOWERS),
+                categories = listOf("SUPERPOWERS"),
                 status = QuestionStatus.PENDING,
                 submittedAt = SUBMITTED_AT,
             )
@@ -451,7 +450,7 @@ class DefaultModerationRepositoryTest {
                 id = "q1",
                 optionA = "Fly",
                 optionB = "Swim",
-                categories = listOf(QuestionCategory.SUPERPOWERS),
+                categories = listOf("SUPERPOWERS"),
                 status = QuestionStatus.RETIRED,
                 seed = false,
                 submittedAt = SUBMITTED_AT,

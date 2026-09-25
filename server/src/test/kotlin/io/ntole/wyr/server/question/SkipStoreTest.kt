@@ -2,7 +2,6 @@ package io.ntole.wyr.server.question
 
 import io.ntole.wyr.core.api.WyrApi
 import io.ntole.wyr.core.player.PlayerStatsDto
-import io.ntole.wyr.core.question.QuestionCategory
 import io.ntole.wyr.core.question.QuestionDto
 import io.ntole.wyr.core.vote.OptionSide
 import io.ntole.wyr.core.vote.VoteResultDto
@@ -49,10 +48,10 @@ class SkipStoreTest {
 
     private val food: List<String> =
         transaction(database) {
-            filedUnder(QuestionCategory.FOOD)
+            filedUnder("FOOD")
         }
 
-    private val ethics: List<String> = transaction(database) { filedUnder(QuestionCategory.ETHICS) }
+    private val ethics: List<String> = transaction(database) { filedUnder("ETHICS") }
 
     @Test
     fun `a skipped question is not due for the rest of the cycle`() {
@@ -169,7 +168,7 @@ class SkipStoreTest {
         chosen.drop(1).forEach { id -> answer(player, id) }
         skip(player, skipped)
 
-        val batch = feed(player, categories = setOf(QuestionCategory.FOOD, QuestionCategory.ETHICS))
+        val batch = feed(player, categories = setOf("FOOD", "ETHICS"))
 
         assertEquals(chosen.sorted(), batch.ids().sorted(), "all of those categories again, as when all is answered")
         assertEquals(listOf(skipped), batch.filterNot { it.answeredBefore }.ids())
@@ -241,7 +240,7 @@ class SkipStoreTest {
 
     private fun feed(
         player: String,
-        categories: Set<QuestionCategory> = emptySet(),
+        categories: Set<String> = emptySet(),
     ): List<QuestionDto> =
         transaction(database) { QuestionStore.feed(player, WyrApi.Limits.MAX_PAGE_SIZE, categories).questions }
 

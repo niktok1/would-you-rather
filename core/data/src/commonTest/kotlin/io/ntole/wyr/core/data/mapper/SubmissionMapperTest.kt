@@ -4,7 +4,6 @@ import io.ntole.wyr.core.domain.question.Category
 import io.ntole.wyr.core.domain.submission.Submission
 import io.ntole.wyr.core.domain.submission.SubmissionStatus
 import io.ntole.wyr.core.network.WyrJson
-import io.ntole.wyr.core.question.QuestionCategory
 import io.ntole.wyr.core.question.QuestionStatus
 import io.ntole.wyr.core.question.SubmissionDto
 import io.ntole.wyr.core.question.SubmitQuestionRequest
@@ -22,7 +21,7 @@ class SubmissionMapperTest {
                 id = "q1",
                 optionA = "Fly",
                 optionB = "Swim",
-                categories = listOf(QuestionCategory.ETHICS),
+                categories = listOf("ETHICS"),
                 status = QuestionStatus.REJECTED,
                 rejectionReason = "a duplicate",
                 submittedAt = 1_790_000_000_123L,
@@ -72,11 +71,11 @@ class SubmissionMapperTest {
     fun `a submission's categories map as a question's do`() {
         val cases =
             listOf(
-                listOf(QuestionCategory.RANDOM, QuestionCategory.FOOD) to listOf(Category.FOOD, Category.RANDOM),
-                listOf(QuestionCategory.UNKNOWN, QuestionCategory.SUPERPOWERS, QuestionCategory.UNKNOWN) to
+                listOf("ABSURD", "FOOD") to listOf(Category.FOOD, Category.RANDOM),
+                listOf("FROM_THE_FUTURE", "SUPERPOWERS", "FROM_THE_FUTURE") to
                     listOf(Category.SUPERPOWERS, Category.OTHER),
                 // Never empty: a submission is filed under at least one.
-                emptyList<QuestionCategory>() to listOf(Category.OTHER),
+                emptyList<String>() to listOf(Category.OTHER),
             )
 
         cases.forEach { (categories, expected) ->
@@ -95,7 +94,7 @@ class SubmissionMapperTest {
             SubmitQuestionRequest(
                 optionA = " Fly ",
                 optionB = "Swim",
-                categories = listOf(QuestionCategory.FOOD, QuestionCategory.ETHICS, QuestionCategory.RANDOM),
+                categories = listOf("FOOD", "ETHICS", "ABSURD"),
             ),
             request,
         )
@@ -106,7 +105,7 @@ class SubmissionMapperTest {
         Category.selectable.forEach { category ->
             val request = submitQuestionRequest("Fly", "Swim", setOf(category))
 
-            assertEquals(listOf(QuestionCategory.valueOf(category.name)), request.categories, "$category")
+            assertEquals(listOf(category.toWireOrNull()), request.categories, "$category")
         }
     }
 
@@ -132,7 +131,7 @@ class SubmissionMapperTest {
                 id = "q1",
                 optionA = "Fly",
                 optionB = "Swim",
-                categories = listOf(QuestionCategory.FOOD),
+                categories = listOf("FOOD"),
                 status = QuestionStatus.PENDING,
                 submittedAt = 0,
             )

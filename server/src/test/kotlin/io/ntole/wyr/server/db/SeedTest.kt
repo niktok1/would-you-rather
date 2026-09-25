@@ -4,6 +4,7 @@ import io.ntole.wyr.server.TestDatabaseSettings
 import io.ntole.wyr.server.moderation.ModerationStore
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.Database
+import org.jetbrains.exposed.v1.jdbc.SchemaUtils
 import org.jetbrains.exposed.v1.jdbc.select
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
@@ -66,6 +67,39 @@ class SeedTest {
                 assertEquals(RETIRED_AT, retiredAt, "and still retired")
             }
     }
+
+    /**
+     * The store tests build their tables from the definitions, which hold no category, so the seed
+     * writes the first ones there, as V6 writes them into a migrated database, where it writes none.
+     */
+    @Test
+    fun `the seed writes the categories V6 writes into a database that has none`() {
+        val migrated =
+            TestDatabaseSettings(h2Url("wyr-seed-migrated-${UUID.randomUUID()}"), user = null, password = null)
+                .serverPool()
+                .use { pool ->
+                    DatabaseFactory.migrateAndSeed(pool).also { TransactionManager.closeAndUnregister(it) }
+                    pool.inTransaction { categories() }
+                }
+        val built =
+            TestDatabaseSettings(h2Url("wyr-seed-built-${UUID.randomUUID()}"), user = null, password = null)
+                .serverPool()
+                .use { pool ->
+                    pool.inTransaction {
+                        SchemaUtils.create(*appTables)
+                        Seed.questionsIfEmpty()
+                        categories()
+                    }
+                }
+
+        assertEquals(Seed.CATEGORIES.size, migrated.size)
+        assertEquals(migrated, built)
+    }
+
+    private fun categories(): List<List<Any>> =
+        Categories.selectAll().orderBy(Categories.id).map { row ->
+            listOf(row[Categories.id], row[Categories.nameSr], row[Categories.nameEn], row[Categories.createdAt])
+        }
 
     /** What one seed writes, on a database of its own. */
     private fun seededOnce(): Map<String, Long> =

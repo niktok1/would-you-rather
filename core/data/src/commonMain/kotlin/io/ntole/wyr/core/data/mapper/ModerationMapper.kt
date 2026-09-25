@@ -11,14 +11,13 @@ import io.ntole.wyr.core.domain.vote.Tally
 import io.ntole.wyr.core.question.AdminQuestionDto
 import io.ntole.wyr.core.question.AdminQuestionPageDto
 import io.ntole.wyr.core.question.ApproveSubmissionRequest
-import io.ntole.wyr.core.question.QuestionCategory
 import io.ntole.wyr.core.question.QuestionStatus
 import io.ntole.wyr.core.question.RejectSubmissionRequest
 import kotlin.time.Instant
 
 /**
  * Domain to wire, for a moderator's approval of [questionId] (CLAUDE.md §8d, *Moderation*): filed
- * under [categories] by their wire names in declaration order, so one selection is always one
+ * under [categories] by their ids ([toWireOrNull]) in declaration order, so one selection is always one
  * request, and none names none, which keeps the author's categories. The queue and every decision
  * are answered with `SubmissionDto`s, which map as the author's own list does (`SubmissionMapper`).
  *
@@ -85,11 +84,12 @@ internal fun QuestionFilter.wireStatuses(): List<QuestionStatus> =
     }
 
 /**
- * The categories [QuestionFilter.categories] asks for, by their wire names in declaration order.
+ * The categories [QuestionFilter.categories] asks for, by their ids ([toWireOrNull]) in declaration
+ * order.
  *
  * @throws IllegalArgumentException for [Category.OTHER], which has no wire category to ask by.
  */
-internal fun QuestionFilter.wireCategories(): List<QuestionCategory> =
+internal fun QuestionFilter.wireCategories(): List<String> =
     categories.sorted().map { category ->
         requireNotNull(category.toWireOrNull()) { "no question can be listed under $category" }
     }

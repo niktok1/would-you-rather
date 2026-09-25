@@ -82,7 +82,7 @@ public object WyrApi {
          * [Limits.MAX_PENDING_SUBMISSIONS] pending at once, and one more is refused with 409
          * [io.ntole.wyr.core.error.ErrorCode.SUBMISSION_LIMIT]. Options the rules refuse are 422
          * [io.ntole.wyr.core.error.ErrorCode.INVALID_SUBMISSION]; a malformed body, or one naming no
-         * category or one that is not real, is 400
+         * category or an id no category has, is 400
          * [io.ntole.wyr.core.error.ErrorCode.VALIDATION_FAILED].
          */
         public const val QUESTIONS: String = "/$VERSION/questions"
@@ -157,8 +157,8 @@ public object WyrApi {
          * A question that is not pending, whether decided already (by this moderator or another) or a
          * seed, is 409 [io.ntole.wyr.core.error.ErrorCode.ALREADY_DECIDED], and of two decisions racing
          * for one question exactly one is made. An id no question has is 404
-         * [io.ntole.wyr.core.error.ErrorCode.QUESTION_NOT_FOUND]. A malformed body, or one naming a
-         * category that is not real, is 400 [io.ntole.wyr.core.error.ErrorCode.VALIDATION_FAILED].
+         * [io.ntole.wyr.core.error.ErrorCode.QUESTION_NOT_FOUND]. A malformed body, or one naming an
+         * id no category has, is 400 [io.ntole.wyr.core.error.ErrorCode.VALIDATION_FAILED].
          */
         public const val ADMIN_APPROVALS: String = "/$VERSION/admin/approvals"
 
@@ -234,12 +234,11 @@ public object WyrApi {
         public const val LIMIT: String = "limit"
 
         /**
-         * Optional [io.ntole.wyr.core.question.QuestionCategory] name filter on the feed and on
-         * [Paths.ADMIN_QUESTIONS], repeated for several: `?category=FOOD&category=ETHICS` serves the
-         * questions filed under any of them, each once, and none is every category (CLAUDE.md §8d).
-         * Each value is one name, never a comma-separated list. A value that names no real category,
-         * `UNKNOWN` included, is 400 [io.ntole.wyr.core.error.ErrorCode.VALIDATION_FAILED], whatever
-         * the others name.
+         * Optional category filter on the feed and on [Paths.ADMIN_QUESTIONS], by category id,
+         * repeated for several: `?category=FOOD&category=ETHICS` serves the questions filed under any
+         * of them, each once, and none is every category (CLAUDE.md §8d). Each value is one id, never a
+         * comma-separated list. A value that is no category's id is 400
+         * [io.ntole.wyr.core.error.ErrorCode.VALIDATION_FAILED], whatever the others name.
          */
         public const val CATEGORY: String = "category"
 
@@ -285,6 +284,21 @@ public object WyrApi {
          * column is sized by.
          */
         public const val MAX_REJECTION_REASON_LENGTH: Int = 200
+
+        /**
+         * Longest id a category can have. An id is 1 to this many of `A`-`Z`, `0`-`9` and `_`
+         * (CLAUDE.md §8d, *Categories*), as the first ones are: `FOOD`, `LIFESTYLE`, `ETHICS`,
+         * `SUPERPOWERS` and `ABSURD`. Here rather than on the server so a client can check an id
+         * against the same number the server's columns are sized by.
+         */
+        public const val MAX_CATEGORY_ID_LENGTH: Int = 32
+
+        /**
+         * Longest name a category can have, in either language, counted as [MAX_OPTION_LENGTH]
+         * counts. Here rather than on the server so a client can check a name against the same
+         * number the server's columns are sized by.
+         */
+        public const val MAX_CATEGORY_NAME_LENGTH: Int = 40
 
         /**
          * Most submissions one player may have waiting for a moderator at once (CLAUDE.md §8d).

@@ -12,6 +12,7 @@ import io.ntole.wyr.core.question.RejectSubmissionRequest
 import io.ntole.wyr.core.question.RestoreQuestionRequest
 import io.ntole.wyr.core.question.RetireQuestionRequest
 import io.ntole.wyr.core.question.SubmissionListDto
+import io.ntole.wyr.server.category.CategoryStore
 import io.ntole.wyr.server.db.Db
 import io.ntole.wyr.server.plugins.ApiFailure
 import io.ntole.wyr.server.plugins.RouteLimit
@@ -56,7 +57,12 @@ fun Route.moderationRoutes(
                 // Checked before the transaction, as a submission is: a refusal needs no database.
                 val approval = checkedApproval(call.receiveOrReject<ApproveSubmissionRequest>("approval"))
 
-                call.respond(db.query { ModerationStore.approve(approval.questionId, approval.categories) })
+                call.respond(
+                    db.query {
+                        // Before the decision, so an id no category has is refused whatever the question.
+                        ModerationStore.approve(approval.questionId, CategoryStore.checked(approval.categories))
+                    },
+                )
             }
 
             post(WyrApi.Paths.ADMIN_REJECTIONS) {
@@ -76,7 +82,12 @@ fun Route.moderationRoutes(
                 val after = params.cursor()
                 val limit = params.pageLimit()
 
-                call.respond(db.query { ModerationStore.questions(statuses, categories, after, limit) })
+                call.respond(
+                    db.query {
+                        val filter = CategoryStore.checked(categories).toSet()
+                        ModerationStore.questions(statuses, filter, after, limit)
+                    },
+                )
             }
 
             post(WyrApi.Paths.ADMIN_RETIREMENTS) {

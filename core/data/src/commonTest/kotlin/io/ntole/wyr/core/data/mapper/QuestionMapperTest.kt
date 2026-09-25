@@ -2,7 +2,6 @@ package io.ntole.wyr.core.data.mapper
 
 import io.ntole.wyr.core.domain.question.Category
 import io.ntole.wyr.core.network.WyrJson
-import io.ntole.wyr.core.question.QuestionCategory
 import io.ntole.wyr.core.question.QuestionDto
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -18,7 +17,7 @@ class QuestionMapperTest {
                     id = "q1",
                     optionA = "q1-a",
                     optionB = "q1-b",
-                    categories = listOf(QuestionCategory.FOOD),
+                    categories = listOf("FOOD"),
                     likeCount = likeCount,
                     likedByMe = likedByMe,
                 )
@@ -33,15 +32,15 @@ class QuestionMapperTest {
     fun `a question keeps every category it is filed under each once in declaration order`() {
         val cases =
             listOf(
-                listOf(QuestionCategory.ETHICS, QuestionCategory.SUPERPOWERS) to
-                    listOf(Category.ETHICS, Category.SUPERPOWERS),
-                listOf(QuestionCategory.RANDOM, QuestionCategory.FOOD) to listOf(Category.FOOD, Category.RANDOM),
+                listOf("ETHICS", "SUPERPOWERS") to listOf(Category.ETHICS, Category.SUPERPOWERS),
+                listOf("ABSURD", "FOOD") to listOf(Category.FOOD, Category.RANDOM),
                 // What a server with two categories this build predates sends it: each is OTHER, once.
-                listOf(QuestionCategory.UNKNOWN, QuestionCategory.RANDOM, QuestionCategory.UNKNOWN) to
-                    listOf(Category.RANDOM, Category.OTHER),
-                listOf(QuestionCategory.UNKNOWN) to listOf(Category.OTHER),
+                listOf("ANIMALS", "ABSURD", "TRAVEL") to listOf(Category.RANDOM, Category.OTHER),
+                listOf("ANIMALS") to listOf(Category.OTHER),
+                // RANDOM went away with V6: it is an id like any other this build cannot name.
+                listOf("RANDOM") to listOf(Category.OTHER),
                 // No question is filed under nothing.
-                emptyList<QuestionCategory>() to listOf(Category.OTHER),
+                emptyList<String>() to listOf(Category.OTHER),
             )
 
         cases.forEach { (categories, expected) ->
@@ -60,33 +59,38 @@ class QuestionMapperTest {
     }
 
     @Test
-    fun `every wire category maps to its domain namesake and UNKNOWN to OTHER`() {
-        QuestionCategory.entries.forEach { wire ->
-            val expected = if (wire == QuestionCategory.UNKNOWN) Category.OTHER else Category.valueOf(wire.name)
+    fun `each of the server's first categories maps to its domain namesake and ABSURD to RANDOM`() {
+        val expected =
+            mapOf(
+                "FOOD" to Category.FOOD,
+                "LIFESTYLE" to Category.LIFESTYLE,
+                "ETHICS" to Category.ETHICS,
+                "SUPERPOWERS" to Category.SUPERPOWERS,
+                "ABSURD" to Category.RANDOM,
+            )
 
-            assertEquals(expected, wire.toDomain(), "$wire")
-        }
+        expected.forEach { (id, category) -> assertEquals(category, id.toDomainCategory(), id) }
     }
 
     @Test
     fun `every category the server knows goes back on the wire as itself`() {
         // What a category filter sends is what the feed serves the category as.
-        QuestionCategory.entries.filter { it != QuestionCategory.UNKNOWN }.forEach { wire ->
-            assertEquals(wire, wire.toDomain().toWireOrNull(), "$wire")
-        }
+        FIRST_CATEGORIES.forEach { id -> assertEquals(id, id.toDomainCategory().toWireOrNull(), id) }
     }
 
     @Test
-    fun `the categories a feed can be filtered to are every one the server knows`() {
-        assertEquals(
-            QuestionCategory.entries.filter { it != QuestionCategory.UNKNOWN },
-            Category.selectable.map { it.toWireOrNull() },
-        )
+    fun `the categories a feed can be filtered to are the server's first ones`() {
+        assertEquals(FIRST_CATEGORIES, Category.selectable.map { it.toWireOrNull() })
     }
 
     @Test
     fun `OTHER has no wire category to ask for`() {
-        // Never UNKNOWN: that is a sentinel for what the client cannot read, not a filter.
+        // It stands for what the client cannot name, not a filter.
         assertNull(Category.OTHER.toWireOrNull())
+    }
+
+    private companion object {
+        /** The ids V6 gave the server's first categories, oldest first. */
+        val FIRST_CATEGORIES = listOf("FOOD", "LIFESTYLE", "ETHICS", "SUPERPOWERS", "ABSURD")
     }
 }

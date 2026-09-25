@@ -146,7 +146,8 @@ public class DefaultQuestionRepository(
             lastHandedOut?.let { handedOutSinceFetch += it }
         }
 
-        val categories = selectedCategories.value.mapNotNull { it.toWireOrNull() }.toSet()
+        // In declaration order, so one selection is always one request, however it was put together.
+        val categories = selectedCategories.value.sorted().mapNotNull { it.toWireOrNull() }
         val batch =
             session
                 .withSessionRecovery { api.page(limit = WyrApi.Limits.DEFAULT_PAGE_SIZE, categories = categories) }

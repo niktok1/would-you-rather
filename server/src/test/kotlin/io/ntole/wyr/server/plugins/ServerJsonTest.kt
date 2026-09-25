@@ -1,7 +1,6 @@
 package io.ntole.wyr.server.plugins
 
 import io.ntole.wyr.core.question.ApproveSubmissionRequest
-import io.ntole.wyr.core.question.QuestionCategory
 import io.ntole.wyr.core.question.QuestionDto
 import io.ntole.wyr.core.question.QuestionStatus
 import io.ntole.wyr.core.question.SubmissionDto
@@ -13,18 +12,19 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 
 /**
- * The server half of the wire enum rule for a list of categories (CLAUDE.md §5), as `ServerJson`
- * writes and reads it. `WyrJsonTest` in `:core:network` pins the client half.
+ * Categories on the wire as `ServerJson` writes and reads them: plain ids, no enum (CLAUDE.md §5), so
+ * the first ones go out exactly as the enum they replace sent them, and a request's ids reach the
+ * store as sent, which refuses one no category has (`CategoryStore.checked`).
  */
 class ServerJsonTest {
     @Test
-    fun `a question goes out with its categories as a plain array of their names`() {
+    fun `a question goes out with its categories as a plain array of their ids`() {
         val question =
             QuestionDto(
                 id = "q1",
                 optionA = "Fly",
                 optionB = "Swim",
-                categories = listOf(QuestionCategory.FOOD, QuestionCategory.ETHICS),
+                categories = listOf("FOOD", "ETHICS"),
             )
 
         assertEquals("""["FOOD","ETHICS"]""", fieldOf(ServerJson.encodeToString(question), "categories").toString())
@@ -47,15 +47,14 @@ class ServerJsonTest {
     }
 
     @Test
-    fun `a submission naming a category this build does not know reads it as UNKNOWN`() {
-        // Kept rather than dropped, so checkedSubmission refuses the request instead of filing the
-        // question under FOOD alone.
+    fun `a submission's categories are read as the ids it names whatever they are`() {
+        // Kept as sent, so the store refuses the request instead of filing the question under FOOD alone.
         val request =
             ServerJson.decodeFromString<SubmitQuestionRequest>(
                 """{"optionA":"Fly","optionB":"Swim","categories":["FOOD","FROM_THE_FUTURE"]}""",
             )
 
-        assertEquals(listOf(QuestionCategory.FOOD, QuestionCategory.UNKNOWN), request.categories)
+        assertEquals(listOf("FOOD", "FROM_THE_FUTURE"), request.categories)
     }
 
     @Test
@@ -68,7 +67,7 @@ class ServerJsonTest {
             )
 
         assertEquals(ApproveSubmissionRequest("q1", categories = emptyList()), keeping)
-        assertEquals(listOf(QuestionCategory.ETHICS, QuestionCategory.UNKNOWN), replacing.categories)
+        assertEquals(listOf("ETHICS", "FROM_THE_FUTURE"), replacing.categories)
     }
 
     private fun fieldOf(

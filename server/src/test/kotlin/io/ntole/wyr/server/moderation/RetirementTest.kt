@@ -4,7 +4,6 @@ import io.ntole.wyr.core.api.WyrApi
 import io.ntole.wyr.core.error.ErrorCode
 import io.ntole.wyr.core.player.PlayerStatsDto
 import io.ntole.wyr.core.question.AdminQuestionDto
-import io.ntole.wyr.core.question.QuestionCategory
 import io.ntole.wyr.core.question.QuestionDto
 import io.ntole.wyr.core.question.QuestionStatus
 import io.ntole.wyr.core.question.SubmissionDto
@@ -73,7 +72,7 @@ class RetirementTest {
         listOf("its author" to author, "another player" to player).forEach { (who, id) ->
             assertEquals(seeds.sorted(), feed(id).ids().sorted(), "$who is served only the seeds")
             assertEquals(seeds.size, statsOf(id).dueThisCycle, "and the due count on the feed's predicate agrees")
-            assertFalse(question in feed(id, setOf(QuestionCategory.FOOD)).ids(), "$who is not served it by category")
+            assertFalse(question in feed(id, setOf("FOOD")).ids(), "$who is not served it by category")
         }
 
         val restored = transaction(database) { ModerationStore.restore(question) }
@@ -271,7 +270,7 @@ class RetirementTest {
     /** A food question by [author], waiting for a moderator. */
     private fun submit(author: String): String {
         val tag = UUID.randomUUID().toString().take(8)
-        val request = SubmitQuestionRequest("Option $tag", "Other $tag", listOf(QuestionCategory.FOOD))
+        val request = SubmitQuestionRequest("Option $tag", "Other $tag", listOf("FOOD"))
         return transaction(database) { SubmissionStore.submit(author, request).id }
     }
 
@@ -355,7 +354,7 @@ class RetirementTest {
 
     private fun feed(
         player: String,
-        categories: Set<QuestionCategory> = emptySet(),
+        categories: Set<String> = emptySet(),
     ): List<QuestionDto> =
         transaction(database) { QuestionStore.feed(player, WyrApi.Limits.MAX_PAGE_SIZE, categories).questions }
 

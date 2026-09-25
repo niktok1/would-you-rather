@@ -23,7 +23,6 @@ import io.ntole.wyr.core.network.WyrHttpClient
 import io.ntole.wyr.core.network.WyrJson
 import io.ntole.wyr.core.network.api.AuthApi
 import io.ntole.wyr.core.network.api.QuestionApi
-import io.ntole.wyr.core.question.QuestionCategory
 import io.ntole.wyr.core.question.QuestionDto
 import io.ntole.wyr.core.question.QuestionPageDto
 import kotlinx.coroutines.CompletableDeferred
@@ -299,7 +298,7 @@ class DefaultQuestionRepositoryTest {
             repeat(cache.count()) { repository.next() }
             repository.next()
 
-            assertEquals(List(3) { listOf("FOOD", "RANDOM") }, feed.asked)
+            assertEquals(List(3) { listOf("FOOD", "ABSURD") }, feed.asked)
         }
 
     @Test
@@ -542,7 +541,7 @@ class DefaultQuestionRepositoryTest {
                         val questions =
                             categories.flatMap { category ->
                                 val ids = (1..3).map { "${category.first().lowercase()}$it" }
-                                val batch = batchOf(*ids.toTypedArray(), category = QuestionCategory.valueOf(category))
+                                val batch = batchOf(*ids.toTypedArray(), category = category)
                                 batch.questions
                             }
                         QuestionPageDto(questions = questions)
@@ -562,7 +561,7 @@ class DefaultQuestionRepositoryTest {
     private fun batchOf(
         vararg ids: String,
         answeredBefore: Boolean = false,
-        category: QuestionCategory = QuestionCategory.FOOD,
+        category: String = "FOOD",
     ): QuestionPageDto =
         QuestionPageDto(
             questions =

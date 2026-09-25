@@ -1,6 +1,5 @@
 package io.ntole.wyr.server.db
 
-import io.ntole.wyr.core.question.QuestionCategory
 import io.ntole.wyr.core.question.QuestionStatus
 import org.jetbrains.exposed.v1.jdbc.batchInsert
 import org.jetbrains.exposed.v1.jdbc.select
@@ -26,11 +25,14 @@ object Seed {
      * collide.
      *
      * It never changes a question already there, so a seed a moderator retired stays retired through
-     * every boot, and is never written again. The check names only the id, which every schema since V1
-     * has: MigrationsTest seeds a database at V1 through this, and a column added since would fail it
-     * there.
+     * every boot, and is never written again. The check names only the id.
+     *
+     * The seeds are filed under [CATEGORIES], which V6 wrote into every migrated database, so a boot
+     * finds them there. A database the store tests build from the definitions (`SchemaUtils.create`)
+     * has no category at all, and gets them here first, as V6 would have written them.
      */
     fun questionsIfEmpty() {
+        categoriesIfNone()
         if (Questions.select(Questions.id).limit(1).any()) return
 
         val now = System.currentTimeMillis()
@@ -49,69 +51,113 @@ object Seed {
         val filings = seeds.flatMap { (id, starter) -> starter.categories.map { category -> id to category } }
         QuestionCategories.batchInsert(filings) { (id, category) ->
             this[QuestionCategories.questionId] = id
-            this[QuestionCategories.category] = category.name
+            this[QuestionCategories.category] = category
         }
     }
 
+    /** Writes [CATEGORIES] into a database with no category, as V6 writes them into every other. */
+    private fun categoriesIfNone() {
+        if (Categories.select(Categories.id).limit(1).any()) return
+
+        Categories.batchInsert(CATEGORIES) { category ->
+            this[Categories.id] = category.id
+            this[Categories.nameSr] = category.nameSr
+            this[Categories.nameEn] = category.nameEn
+            this[Categories.createdAt] = category.createdAt
+        }
+    }
+
+    /** A category as V6 wrote it. */
+    internal data class StartingCategory(
+        val id: String,
+        val nameSr: String,
+        val nameEn: String,
+        val createdAt: Long,
+    )
+
+    /** When V6 says the first categories were added: 2026-09-25, a millisecond apart. */
+    private const val FIRST_CATEGORY_AT = 1_790_294_400_000L
+
+    const val FOOD: String = "FOOD"
+    const val LIFESTYLE: String = "LIFESTYLE"
+    const val ETHICS: String = "ETHICS"
+    const val SUPERPOWERS: String = "SUPERPOWERS"
+    const val ABSURD: String = "ABSURD"
+
+    /**
+     * The categories V6 writes, exactly: the four the wire's enum named that stay, under the same ids,
+     * in its declaration order, then [ABSURD], which took RANDOM's questions (CLAUDE.md §8d,
+     * *Categories*). MigrationsTest holds V6 to this list.
+     */
+    internal val CATEGORIES: List<StartingCategory> =
+        listOf(
+            StartingCategory(FOOD, "Храна", "Food", FIRST_CATEGORY_AT),
+            StartingCategory(LIFESTYLE, "Начин живота", "Lifestyle", FIRST_CATEGORY_AT + 1),
+            StartingCategory(ETHICS, "Етика", "Ethics", FIRST_CATEGORY_AT + 2),
+            StartingCategory(SUPERPOWERS, "Супермоћи", "Superpowers", FIRST_CATEGORY_AT + 3),
+            StartingCategory(ABSURD, "Апсурдно", "Absurd", FIRST_CATEGORY_AT + 4),
+        )
+
     private data class Starter(
-        val category: QuestionCategory,
+        val category: String,
         val optionA: String,
         val optionB: String,
-        val alsoIn: QuestionCategory? = null,
+        val alsoIn: String? = null,
     ) {
-        val categories: List<QuestionCategory> get() = listOfNotNull(category, alsoIn)
+        /** In the order of [CATEGORIES], as every list of a question's categories is. */
+        val categories: List<String> get() = CATEGORIES.map { it.id }.filter { it == category || it == alsoIn }
     }
 
     private val STARTERS =
         listOf(
-            Starter(QuestionCategory.FOOD, "Only ever eat pizza again", "Only ever eat sushi again"),
+            Starter(FOOD, "Only ever eat pizza again", "Only ever eat sushi again"),
             Starter(
-                QuestionCategory.FOOD,
+                FOOD,
                 "Give up coffee forever",
                 "Give up chocolate forever",
-                alsoIn = QuestionCategory.LIFESTYLE,
+                alsoIn = LIFESTYLE,
             ),
-            Starter(QuestionCategory.FOOD, "Always slightly too salty food", "Always slightly bland food"),
-            Starter(QuestionCategory.LIFESTYLE, "Work four long days", "Work five short days"),
-            Starter(QuestionCategory.LIFESTYLE, "Live without music", "Live without films"),
-            Starter(QuestionCategory.LIFESTYLE, "Never be late again", "Never be tired again"),
-            Starter(QuestionCategory.LIFESTYLE, "Move to a new city every year", "Never leave your home town"),
+            Starter(FOOD, "Always slightly too salty food", "Always slightly bland food"),
+            Starter(LIFESTYLE, "Work four long days", "Work five short days"),
+            Starter(LIFESTYLE, "Live without music", "Live without films"),
+            Starter(LIFESTYLE, "Never be late again", "Never be tired again"),
+            Starter(LIFESTYLE, "Move to a new city every year", "Never leave your home town"),
             Starter(
-                QuestionCategory.ETHICS,
+                ETHICS,
                 "Always tell the truth",
                 "Always be told the truth",
-                alsoIn = QuestionCategory.LIFESTYLE,
+                alsoIn = LIFESTYLE,
             ),
             Starter(
-                QuestionCategory.ETHICS,
+                ETHICS,
                 "Know when anyone lies to you",
                 "Have everyone believe your lies",
-                alsoIn = QuestionCategory.SUPERPOWERS,
+                alsoIn = SUPERPOWERS,
             ),
-            Starter(QuestionCategory.ETHICS, "Save one friend", "Save five strangers"),
-            Starter(QuestionCategory.SUPERPOWERS, "Be able to fly", "Be able to turn invisible"),
-            Starter(QuestionCategory.SUPERPOWERS, "Read minds", "See one week into the future"),
-            Starter(QuestionCategory.SUPERPOWERS, "Teleport anywhere instantly", "Pause time for an hour a day"),
+            Starter(ETHICS, "Save one friend", "Save five strangers"),
+            Starter(SUPERPOWERS, "Be able to fly", "Be able to turn invisible"),
+            Starter(SUPERPOWERS, "Read minds", "See one week into the future"),
+            Starter(SUPERPOWERS, "Teleport anywhere instantly", "Pause time for an hour a day"),
             Starter(
-                QuestionCategory.SUPERPOWERS,
+                SUPERPOWERS,
                 "Never need sleep",
                 "Never need to eat",
-                alsoIn = QuestionCategory.FOOD,
+                alsoIn = FOOD,
             ),
-            Starter(QuestionCategory.RANDOM, "Fight one horse-sized duck", "Fight a hundred duck-sized horses"),
-            Starter(QuestionCategory.RANDOM, "Have fingers as long as legs", "Have legs as short as fingers"),
-            Starter(QuestionCategory.RANDOM, "Always speak in rhyme", "Only ever whisper"),
+            Starter(ABSURD, "Fight one horse-sized duck", "Fight a hundred duck-sized horses"),
+            Starter(ABSURD, "Have fingers as long as legs", "Have legs as short as fingers"),
+            Starter(ABSURD, "Always speak in rhyme", "Only ever whisper"),
             Starter(
-                QuestionCategory.RANDOM,
+                ABSURD,
                 "Live in permanent summer",
                 "Live in permanent winter",
-                alsoIn = QuestionCategory.LIFESTYLE,
+                alsoIn = LIFESTYLE,
             ),
-            Starter(QuestionCategory.LIFESTYLE, "Lose all your photos", "Lose all your messages"),
-            Starter(QuestionCategory.ETHICS, "Be forgotten after you die", "Be remembered wrongly"),
-            Starter(QuestionCategory.FOOD, "Eat only hot food", "Eat only cold food"),
-            Starter(QuestionCategory.SUPERPOWERS, "Talk to animals", "Speak every human language"),
-            Starter(QuestionCategory.RANDOM, "Have a permanent unexplained limp", "Have a permanent unexplained cough"),
-            Starter(QuestionCategory.LIFESTYLE, "Win the lottery tomorrow", "Live twenty years longer"),
+            Starter(LIFESTYLE, "Lose all your photos", "Lose all your messages"),
+            Starter(ETHICS, "Be forgotten after you die", "Be remembered wrongly"),
+            Starter(FOOD, "Eat only hot food", "Eat only cold food"),
+            Starter(SUPERPOWERS, "Talk to animals", "Speak every human language"),
+            Starter(ABSURD, "Have a permanent unexplained limp", "Have a permanent unexplained cough"),
+            Starter(LIFESTYLE, "Win the lottery tomorrow", "Live twenty years longer"),
         )
 }

@@ -42,8 +42,8 @@ internal fun QuestionStatus.toDomain(): SubmissionStatus =
 
 /**
  * Domain to wire, for a submission: the options as given, since every rule about them is the
- * server's, and [categories] by their wire names in declaration order, so one selection is always
- * one request.
+ * server's, and [categories] by their ids ([toWireOrNull]) in declaration order, so one selection is
+ * always one request.
  *
  * @throws IllegalArgumentException when [categories] is empty, which the server refuses as a
  *   malformed request, or holds [Category.OTHER], which has no wire category to file a question

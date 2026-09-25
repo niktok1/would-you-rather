@@ -6,7 +6,7 @@ import kotlinx.serialization.Serializable
  * Machine-readable cause of a failed request. The client branches on this, never on
  * [ErrorDto.message].
  *
- * Same forward-compatibility contract as [io.ntole.wyr.core.question.QuestionCategory]:
+ * Same forward-compatibility contract as [io.ntole.wyr.core.question.QuestionStatus] (CLAUDE.md §5):
  * [UNKNOWN] is the default so that a code added server-side later degrades instead of failing
  * to deserialize. Never sent by the server.
  */

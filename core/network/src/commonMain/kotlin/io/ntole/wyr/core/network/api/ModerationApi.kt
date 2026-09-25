@@ -12,7 +12,6 @@ import io.ntole.wyr.core.api.WyrApi
 import io.ntole.wyr.core.question.AdminQuestionDto
 import io.ntole.wyr.core.question.AdminQuestionPageDto
 import io.ntole.wyr.core.question.ApproveSubmissionRequest
-import io.ntole.wyr.core.question.QuestionCategory
 import io.ntole.wyr.core.question.QuestionStatus
 import io.ntole.wyr.core.question.RejectSubmissionRequest
 import io.ntole.wyr.core.question.RestoreQuestionRequest
@@ -74,14 +73,14 @@ public class ModerationApi(
 
     /**
      * One page of every question, seeds included, newest first: those at any of [statuses] and filed
-     * under any of [categories], either empty for all, one query parameter per value in the order
-     * given. [cursor] is the [AdminQuestionPageDto.nextCursor] of the page before, sent as it came,
+     * under any of [categories], by category id, either empty for all, one query parameter per value
+     * in the order given. [cursor] is the [AdminQuestionPageDto.nextCursor] of the page before, sent as it came,
      * or null for the first page. At most [limit] questions.
      */
     public suspend fun questions(
         adminToken: String,
         statuses: List<QuestionStatus> = emptyList(),
-        categories: List<QuestionCategory> = emptyList(),
+        categories: List<String> = emptyList(),
         cursor: String? = null,
         limit: Int = WyrApi.Limits.DEFAULT_PAGE_SIZE,
     ): AdminQuestionPageDto =
@@ -89,7 +88,7 @@ public class ModerationApi(
             .get(WyrApi.Paths.ADMIN_QUESTIONS) {
                 admin(adminToken)
                 statuses.forEach { status -> parameter(WyrApi.Query.STATUS, status.name) }
-                categories.forEach { category -> parameter(WyrApi.Query.CATEGORY, category.name) }
+                categories.forEach { category -> parameter(WyrApi.Query.CATEGORY, category) }
                 cursor?.let { parameter(WyrApi.Query.CURSOR, it) }
                 parameter(WyrApi.Query.LIMIT, limit)
             }.body()

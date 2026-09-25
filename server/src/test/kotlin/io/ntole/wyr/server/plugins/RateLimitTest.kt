@@ -26,7 +26,6 @@ import io.ntole.wyr.core.error.ErrorDto
 import io.ntole.wyr.core.like.LikeRequest
 import io.ntole.wyr.core.player.PlayerStatsDto
 import io.ntole.wyr.core.question.ApproveSubmissionRequest
-import io.ntole.wyr.core.question.QuestionCategory
 import io.ntole.wyr.core.question.QuestionPageDto
 import io.ntole.wyr.core.question.RejectSubmissionRequest
 import io.ntole.wyr.core.question.RestoreQuestionRequest
@@ -644,7 +643,7 @@ class RateLimitTest {
             text: String,
         ): HttpResponse =
             post(WyrApi.Paths.QUESTIONS) {
-                json(session, SubmitQuestionRequest(text, "Not $text", listOf(QuestionCategory.FOOD)))
+                json(session, SubmitQuestionRequest(text, "Not $text", listOf("FOOD")))
             }
 
         suspend fun HttpClient.stats(session: SessionDto): PlayerStatsDto =

@@ -1,9 +1,9 @@
 package io.ntole.wyr.server.question
 
-import io.ntole.wyr.core.question.QuestionCategory
 import io.ntole.wyr.core.question.QuestionDto
 import io.ntole.wyr.core.question.QuestionPageDto
 import io.ntole.wyr.core.question.QuestionStatus
+import io.ntole.wyr.server.db.Categories
 import io.ntole.wyr.server.db.QuestionCategories
 import io.ntole.wyr.server.db.Questions
 import io.ntole.wyr.server.db.Skips
@@ -77,7 +77,7 @@ object QuestionStore {
     fun feed(
         playerId: String,
         limit: Int,
-        categories: Set<QuestionCategory>,
+        categories: Set<String>,
     ): QuestionPageDto {
         val cycle = checkNotNull(PlayerStore.find(playerId)) { "player $playerId vanished mid-transaction" }.cycle
         val current = intParam(cycle)
@@ -103,7 +103,7 @@ object QuestionStore {
      */
     internal fun dueCount(
         playerId: String,
-        categories: Set<QuestionCategory>,
+        categories: Set<String>,
         cycle: Expression<Int>,
     ): Expression<Long?> =
         wrapAsExpression(candidates(playerId, categories, dueIn = cycle, columns = listOf(Questions.id.count())))
@@ -127,7 +127,7 @@ object QuestionStore {
      */
     private fun candidates(
         playerId: String,
-        categories: Set<QuestionCategory>,
+        categories: Set<String>,
         dueIn: Expression<Int>?,
         columns: List<Expression<*>> = BATCH_COLUMNS,
     ): Query =
@@ -163,18 +163,18 @@ object QuestionStore {
     }
 
     /**
-     * Filed under any of [categories], among others or not, or anything for none. An `EXISTS`, so a
-     * question filed under several of them still matches once, where a join would list it once for
-     * each. The feed's filter, and the moderator's list's (`ModerationStore.questions`).
+     * Filed under any of [categories], ids already checked (`CategoryStore.checked`), among others or
+     * not, or anything for none. An `EXISTS`, so a question filed under several of them still matches
+     * once, where a join would list it once for each. The feed's filter, and the moderator's list's
+     * (`ModerationStore.questions`).
      */
-    internal fun inCategories(categories: Set<QuestionCategory>): Op<Boolean> {
+    internal fun inCategories(categories: Set<String>): Op<Boolean> {
         if (categories.isEmpty()) return Op.TRUE
-        val names = categories.map { it.name }
         return exists(
             QuestionCategories
                 .select(QuestionCategories.questionId)
                 .where {
-                    (QuestionCategories.questionId eq Questions.id) and (QuestionCategories.category inList names)
+                    (QuestionCategories.questionId eq Questions.id) and (QuestionCategories.category inList categories)
                 },
         )
     }
@@ -217,7 +217,7 @@ object QuestionStore {
 
     private fun toDto(
         row: ResultRow,
-        categories: List<QuestionCategory>,
+        categories: List<String>,
         likes: LikeStore.QuestionLikes,
         answeredBefore: Boolean,
     ): QuestionDto =
@@ -232,33 +232,23 @@ object QuestionStore {
         )
 
     /**
-     * The categories of each question [questions] picks, by question id: each once, in
-     * [QuestionCategory] declaration order, which is the order the wire promises (`QuestionDto`).
+     * The categories of each question [questions] picks, by question id: each once, by id, in the
+     * order of categories (`CategoryStore.ids`), which is the order the wire promises (`QuestionDto`).
      * Must run inside a transaction.
      *
      * One statement for all of them, however many questions, rather than one per question. A batch
      * reads it after the statement that chose the batch, so a change to a question's categories
      * committed in between shows here: harmless, since they are then what the question is filed
-     * under. Its rows are written with the question, in one transaction, so none is ever missing.
+     * under. Its rows are written with the question, in one transaction, so none is ever missing, and
+     * the foreign key holds each to a category, so the join to it drops none.
      */
-    internal fun categoriesOf(questions: Op<Boolean>): Map<String, List<QuestionCategory>> =
+    internal fun categoriesOf(questions: Op<Boolean>): Map<String, List<String>> =
         QuestionCategories
             .join(Questions, JoinType.INNER, QuestionCategories.questionId, Questions.id)
+            .join(Categories, JoinType.INNER, QuestionCategories.category, Categories.id)
             .select(QuestionCategories.questionId, QuestionCategories.category)
             .where(questions)
-            .map { row -> row[QuestionCategories.questionId] to categoryOf(row[QuestionCategories.category]) }
+            .orderBy(Categories.createdAt to SortOrder.ASC, Categories.id to SortOrder.ASC)
+            .map { row -> row[QuestionCategories.questionId] to row[QuestionCategories.category] }
             .groupBy(keySelector = { it.first }, valueTransform = { it.second })
-            .mapValues { (_, categories) -> categories.distinct().sorted() }
-
-    /**
-     * The category a stored [name] stands for. One written by an older or newer build than this one
-     * still has to read back, and never as `UNKNOWN`, which the server does not send. So a name
-     * this build does not know reads as RANDOM, beside the question's other categories, and
-     * [categoriesOf] lists RANDOM once however many names read as it. That is not what the question
-     * is filed under, and a filter, which compares the stored names, does not find it under RANDOM.
-     * This build writes only names it knows, so only another build's rows get here.
-     */
-    private fun categoryOf(name: String): QuestionCategory =
-        runCatching { QuestionCategory.valueOf(name) }
-            .getOrDefault(QuestionCategory.RANDOM)
 }

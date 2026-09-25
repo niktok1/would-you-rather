@@ -2,7 +2,6 @@ package io.ntole.wyr.server.player
 
 import io.ntole.wyr.core.like.LikeResultDto
 import io.ntole.wyr.core.player.PlayerStatsDto
-import io.ntole.wyr.core.question.QuestionCategory
 import io.ntole.wyr.core.question.QuestionStatus
 import io.ntole.wyr.core.vote.OptionSide
 import io.ntole.wyr.core.vote.VoteResultDto
@@ -175,7 +174,7 @@ class StatsStoreTest {
             }
             QuestionCategories.insert { row ->
                 row[questionId] = id
-                row[category] = QuestionCategory.FOOD.name
+                row[category] = "FOOD"
             }
         }
         return id

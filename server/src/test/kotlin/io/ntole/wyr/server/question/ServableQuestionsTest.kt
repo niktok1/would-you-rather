@@ -3,7 +3,6 @@ package io.ntole.wyr.server.question
 import io.ntole.wyr.core.api.WyrApi
 import io.ntole.wyr.core.error.ErrorCode
 import io.ntole.wyr.core.player.PlayerStatsDto
-import io.ntole.wyr.core.question.QuestionCategory
 import io.ntole.wyr.core.question.QuestionDto
 import io.ntole.wyr.core.question.QuestionStatus
 import io.ntole.wyr.core.vote.OptionSide
@@ -54,7 +53,7 @@ class ServableQuestionsTest {
 
     private val foodSeeds: List<String> =
         transaction(database) {
-            filedUnder(QuestionCategory.FOOD)
+            filedUnder("FOOD")
         }
 
     @Test
@@ -70,7 +69,7 @@ class ServableQuestionsTest {
         }
         // Both are food, and with every food seed answered the feed serves that category again.
         foodSeeds.forEach { id -> answer(player, id) }
-        assertEquals(foodSeeds.sorted(), feed(player, setOf(QuestionCategory.FOOD)).ids().sorted(), "even served again")
+        assertEquals(foodSeeds.sorted(), feed(player, setOf("FOOD")).ids().sorted(), "even served again")
     }
 
     @Test
@@ -161,7 +160,7 @@ class ServableQuestionsTest {
             }
             QuestionCategories.insert { row ->
                 row[questionId] = id
-                row[category] = QuestionCategory.FOOD.name
+                row[category] = "FOOD"
             }
         }
         return id
@@ -187,7 +186,7 @@ class ServableQuestionsTest {
 
     private fun feed(
         player: String,
-        categories: Set<QuestionCategory> = emptySet(),
+        categories: Set<String> = emptySet(),
     ): List<QuestionDto> =
         transaction(database) { QuestionStore.feed(player, WyrApi.Limits.MAX_PAGE_SIZE, categories).questions }
 

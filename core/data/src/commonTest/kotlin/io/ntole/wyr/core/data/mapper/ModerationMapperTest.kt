@@ -12,7 +12,6 @@ import io.ntole.wyr.core.domain.vote.Tally
 import io.ntole.wyr.core.question.AdminQuestionDto
 import io.ntole.wyr.core.question.AdminQuestionPageDto
 import io.ntole.wyr.core.question.ApproveSubmissionRequest
-import io.ntole.wyr.core.question.QuestionCategory
 import io.ntole.wyr.core.question.QuestionStatus
 import io.ntole.wyr.core.question.RejectSubmissionRequest
 import io.ntole.wyr.core.vote.VoteTallyDto
@@ -24,9 +23,9 @@ import kotlin.time.Instant
 
 class ModerationMapperTest {
     @Test
-    fun `an approval names its categories by their wire names in declaration order`() {
+    fun `an approval names its categories by their ids in declaration order`() {
         assertEquals(
-            ApproveSubmissionRequest("q1", listOf(QuestionCategory.FOOD, QuestionCategory.RANDOM)),
+            ApproveSubmissionRequest("q1", listOf("FOOD", "ABSURD")),
             approveSubmissionRequest("q1", setOf(Category.RANDOM, Category.FOOD)),
         )
     }
@@ -57,7 +56,7 @@ class ModerationMapperTest {
                 id = "q1",
                 optionA = "Fly",
                 optionB = "Swim",
-                categories = listOf(QuestionCategory.ETHICS, QuestionCategory.UNKNOWN),
+                categories = listOf("ETHICS", "FROM_THE_FUTURE"),
                 status = QuestionStatus.RETIRED,
                 seed = true,
                 submittedAt = 1_000L,
@@ -124,7 +123,7 @@ class ModerationMapperTest {
             )
 
         assertEquals(listOf(QuestionStatus.PENDING, QuestionStatus.RETIRED), filter.wireStatuses())
-        assertEquals(listOf(QuestionCategory.FOOD, QuestionCategory.RANDOM), filter.wireCategories())
+        assertEquals(listOf("FOOD", "ABSURD"), filter.wireCategories())
         assertEquals(
             SubmissionStatus.entries.filter { it != SubmissionStatus.OTHER }.map { it.name },
             QuestionFilter(statuses = SubmissionStatus.entries.toSet() - SubmissionStatus.OTHER)

@@ -2,7 +2,6 @@ package io.ntole.wyr.server.moderation
 
 import io.ntole.wyr.core.question.AdminQuestionDto
 import io.ntole.wyr.core.question.AdminQuestionPageDto
-import io.ntole.wyr.core.question.QuestionCategory
 import io.ntole.wyr.core.question.QuestionStatus
 import io.ntole.wyr.core.question.SubmissionDto
 import io.ntole.wyr.core.vote.OptionSide
@@ -77,15 +76,16 @@ object ModerationStore {
      * ([QuestionStore.servable]), so it is due at once for every player, its author included, in
      * whatever cycle each is on.
      *
-     * [categories], when there are any, replace the author's pick, and must be checked already
-     * (`checkedApproval`): each once, in declaration order, none of them `UNKNOWN`. None keeps the
-     * author's. They are replaced only once [decide] has made the decision, in its transaction, so
-     * they commit with the status or not at all: a refused decision leaves them as they were, and of
-     * two approvals racing for one question only the winner's are written.
+     * [categories], when there are any, replace the author's pick, and must be checked already, by
+     * `CategoryStore.checked` in this same transaction: each once, in the order of categories, and each
+     * a category's. None keeps the author's. They are replaced only once [decide] has made the
+     * decision, in its transaction, so they commit with the status or not at all: a refused decision
+     * leaves them as they were, and of two approvals racing for one question only the winner's are
+     * written.
      */
     fun approve(
         questionId: String,
-        categories: List<QuestionCategory>,
+        categories: List<String>,
         now: Long = System.currentTimeMillis(),
     ): SubmissionDto {
         decide(questionId, QuestionStatus.APPROVED, reason = null, now)
@@ -94,7 +94,7 @@ object ModerationStore {
             QuestionCategories.deleteWhere { QuestionCategories.questionId eq questionId }
             QuestionCategories.batchInsert(categories) { category ->
                 this[QuestionCategories.questionId] = questionId
-                this[QuestionCategories.category] = category.name
+                this[QuestionCategories.category] = category
             }
         }
 
@@ -241,8 +241,8 @@ object ModerationStore {
      * inside a transaction.
      *
      * A question is listed when it stands at any of [statuses] and is filed under any of [categories],
-     * either set empty for every one, the categories matched as the feed matches them
-     * ([QuestionStore.inCategories]). Two stored in the same millisecond, as every seed is, come in id
+     * ids already checked (`CategoryStore.checked`), either set empty for every one, the categories
+     * matched as the feed matches them ([QuestionStore.inCategories]). Two stored in the same millisecond, as every seed is, come in id
      * order, as in the author's list. [AdminQuestionPageDto.nextCursor] is the last one's place when
      * more follow it, read as one more row than [limit] asks for, and null when none does, so the last
      * page says it is the last.
@@ -251,7 +251,7 @@ object ModerationStore {
      */
     fun questions(
         statuses: Set<QuestionStatus>,
-        categories: Set<QuestionCategory>,
+        categories: Set<String>,
         after: QuestionCursor?,
         limit: Int,
     ): AdminQuestionPageDto {

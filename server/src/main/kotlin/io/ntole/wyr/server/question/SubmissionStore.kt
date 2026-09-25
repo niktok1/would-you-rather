@@ -1,7 +1,6 @@
 package io.ntole.wyr.server.question
 
 import io.ntole.wyr.core.api.WyrApi
-import io.ntole.wyr.core.question.QuestionCategory
 import io.ntole.wyr.core.question.QuestionStatus
 import io.ntole.wyr.core.question.SubmissionDto
 import io.ntole.wyr.core.question.SubmitQuestionRequest
@@ -23,9 +22,10 @@ object SubmissionStore {
     /**
      * Stores [submission] as a question by [authorId], waiting for a moderator, and returns it as
      * its author sees it (CLAUDE.md §8d). Must run inside a transaction, with [submission] already
-     * checked (`checkedSubmission`), so its categories are each once and in order. The question and
-     * its categories are written in this one transaction. It pays nothing: authors earn through
-     * likes.
+     * checked (`checkedSubmission`) and its categories by `CategoryStore.checked`, in this same
+     * transaction, so they are each once, in the order of categories, and each a category's. The
+     * question and its categories are written in this one transaction. It pays nothing: authors earn
+     * through likes.
      *
      * An author may have at most [WyrApi.Limits.MAX_PENDING_SUBMISSIONS] pending at once, and a
      * count then an insert is a read-then-write (CLAUDE.md §4). At READ COMMITTED two submissions
@@ -62,7 +62,7 @@ object SubmissionStore {
         }
         QuestionCategories.batchInsert(submission.categories) { category ->
             this[QuestionCategories.questionId] = id
-            this[QuestionCategories.category] = category.name
+            this[QuestionCategories.category] = category
         }
 
         return SubmissionDto(
@@ -108,7 +108,7 @@ object SubmissionStore {
      */
     internal fun toSubmission(
         row: ResultRow,
-        categories: List<QuestionCategory>,
+        categories: List<String>,
     ): SubmissionDto {
         val status = statusOf(row)
         return SubmissionDto(

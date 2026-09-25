@@ -19,7 +19,6 @@ import io.ntole.wyr.core.network.SessionStore
 import io.ntole.wyr.core.network.WyrHttpClient
 import io.ntole.wyr.core.network.api.AuthApi
 import io.ntole.wyr.core.network.api.SubmissionApi
-import io.ntole.wyr.core.question.QuestionCategory
 import io.ntole.wyr.core.question.SubmitQuestionRequest
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
@@ -192,7 +191,7 @@ class DefaultSubmissionRepositoryTest {
             SubmitQuestionRequest(
                 optionA = "Fly",
                 optionB = "Swim",
-                categories = listOf(QuestionCategory.FOOD, QuestionCategory.SUPERPOWERS),
+                categories = listOf("FOOD", "SUPERPOWERS"),
             )
     }
 }

@@ -7,7 +7,6 @@ import io.ktor.client.request.parameter
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
 import io.ntole.wyr.core.api.WyrApi
-import io.ntole.wyr.core.question.QuestionCategory
 import io.ntole.wyr.core.question.QuestionPageDto
 import io.ntole.wyr.core.question.SkipRequest
 
@@ -18,21 +17,18 @@ public class QuestionApi(
      * The next batch of the session player's feed. Requires a session: the Auth plugin attaches
      * the bearer token, and the server answers who the batch is for from that alone.
      *
-     * [categories] filters it to the questions filed under any of them, and none is every category
-     * (CLAUDE.md §8d). Each goes as a [WyrApi.Query.CATEGORY] of its own, in declaration order, so
-     * one selection is always one request, however it was put together.
+     * [categories] filters it to the questions filed under any of them, by category id, and none is
+     * every category (CLAUDE.md §8d). Each goes as a [WyrApi.Query.CATEGORY] of its own, in the order
+     * given.
      */
     public suspend fun page(
         limit: Int = WyrApi.Limits.DEFAULT_PAGE_SIZE,
-        categories: Set<QuestionCategory> = emptySet(),
+        categories: List<String> = emptyList(),
     ): QuestionPageDto =
         client
             .get(WyrApi.Paths.QUESTIONS) {
                 parameter(WyrApi.Query.LIMIT, limit)
-                // UNKNOWN is a client-side sentinel, never a real filter the server knows.
-                categories.filter { it != QuestionCategory.UNKNOWN }.sorted().forEach {
-                    parameter(WyrApi.Query.CATEGORY, it.name)
-                }
+                categories.forEach { parameter(WyrApi.Query.CATEGORY, it) }
             }.body()
 
     /**

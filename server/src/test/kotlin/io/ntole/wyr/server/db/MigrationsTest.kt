@@ -87,8 +87,8 @@ internal class MigrationsTest(
     /**
      * The path the production database takes when every build with a script is deployed in turn
      * (CLAUDE.md §8b): recorded at V1, then each later script run by a boot of its own, the last by
-     * this build's, on the rows written before it. Production is at V4 (`d4a9dbf`), so this build's
-     * own is V5.
+     * this build's, on the rows written before it. Production is at V4 (`d4a9dbf`), and its next
+     * deploy runs every later script in one boot, which the tests above take.
      */
     @Test
     fun `a database each build migrated in turn takes this build's scripts, its data kept`() {
@@ -110,7 +110,7 @@ internal class MigrationsTest(
             val result = Migrations.migrate(pool)
 
             assertEquals(BASELINED_HISTORY, history(pool))
-            assertEquals(1, result.migrationsExecuted, "only this build's own")
+            assertEquals(1, result.migrationsExecuted, "only the last script")
             assertEquals(afterLaterScripts(before), pool.inTransaction { contents() })
         }
     }
@@ -395,7 +395,8 @@ internal class MigrationsTest(
      * are written through the stores where what those write names only V1's columns, as an older build's
      * did; one that named a later column would fail here, on a table without it. The player is inserted
      * as an older build minted one, with its refresh token in its own row, since a mint now opens a
-     * session, in a table V1 does not have.
+     * session, in a table V1 does not have, and the seeds as the builds before V6 wrote them
+     * ([seedAsBefore]), since the seed now files them under categories V1 has no table for.
      */
     private fun buildAsBeforeMigrations(pool: DataSource) {
         val v1 =
@@ -408,7 +409,7 @@ internal class MigrationsTest(
         pool.inTransaction {
             // Flyway quotes its own table's name, in lower case, on H2 as on PostgreSQL.
             exec("DROP TABLE \"${v1.configuration.table}\"")
-            Seed.questionsIfEmpty()
+            seedAsBefore()
             val author = playerAsMintedBefore(refreshTokenHash = "a".repeat(64), refreshExpiresAt = 1L)
             PlayerStore.addPoints(author, points = 3)
             Likes.insert { row ->
@@ -480,8 +481,9 @@ internal class MigrationsTest(
      * no previous refresh token and V3 retires no question. V4 gives nobody a recovery secret, and every
      * player who holds a refresh token a session holding it, under the player's own id and creation
      * time, and marks their row, the mirror, with that session's token. V5 leaves every player a guest,
-     * with no username and no password. None changes anything else. A later script that changes the
-     * rows already there adds what it does to them here.
+     * with no username and no password. V6 adds the first categories ([Seed.CATEGORIES]) and files what
+     * was under RANDOM under ABSURD instead. None changes anything else. A later script that changes
+     * the rows already there adds what it does to them here.
      */
     private fun afterLaterScripts(before: Contents): Contents {
         val widened =
@@ -510,8 +512,28 @@ internal class MigrationsTest(
                 val session = sessions.singleOrNull { it["player_id"] == player["id"] }
                 player + ("mirrored_refresh_token_hash" to session?.get("refresh_token_hash"))
             }
-        return (widened + mapOf(Players.tableName to marked, Sessions.tableName to sessions))
-            .mapValues { (_, rows) -> rows.canonical() }
+        val categories =
+            Seed.CATEGORIES.map { category ->
+                mapOf(
+                    "id" to category.id,
+                    "name_sr" to category.nameSr,
+                    "name_en" to category.nameEn,
+                    "created_at" to category.createdAt.toString(),
+                )
+            }
+        val filings =
+            widened.getValue(QuestionCategories.tableName).map { row ->
+                if (row["category"] == "RANDOM") row + ("category" to Seed.ABSURD) else row
+            }
+        return (
+            widened +
+                mapOf(
+                    Players.tableName to marked,
+                    Sessions.tableName to sessions,
+                    Categories.tableName to categories,
+                    QuestionCategories.tableName to filings,
+                )
+        ).mapValues { (_, rows) -> rows.canonical() }
     }
 
     /** Each row with its columns in name order, and the rows in the order that gives them. */
@@ -526,7 +548,7 @@ internal class MigrationsTest(
          * The history of a database built before migrations once a boot has migrated it: V1 recorded
          * without running it, then every later script run.
          */
-        private val BASELINED_HISTORY = listOf("1 BASELINE", "2 SQL", "3 SQL", "4 SQL", "5 SQL")
+        private val BASELINED_HISTORY = listOf("1 BASELINE", "2 SQL", "3 SQL", "4 SQL", "5 SQL", "6 SQL")
 
         /**
          * The columns the scripts after V1 add, by table, empty in every row already there but for

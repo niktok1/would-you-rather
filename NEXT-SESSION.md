@@ -52,6 +52,16 @@ which only it showed; and `PlayerStats.playerId` and `VoteOutcome.questionId`, w
 (the wire's `QuestionDto`, `PlayerStatsDto` and `VoteResultDto` still carry all three). The client
 alone changed; the server only in a comment and a test's name.
 
+**On `feat/server-categories`** (from 40550e9; not merged, nothing pushed; the server and the
+contract, the clients only as far as they must compile): categories are **server data** (CLAUDE.md
+§8d, *Categories*, decided 2026-09-25). V6 adds `categories` (id, Serbian and English names, when
+added), writes the first five, `FOOD`, `LIFESTYLE`, `ETHICS`, `SUPERPOWERS` and `ABSURD`, moves
+everything filed under RANDOM to ABSURD and holds `question_categories` to it with a foreign key.
+RANDOM is no category any more (§8b: *All* is no filter). Every categories field on the wire is
+plain ids, `QuestionCategory` and its list serializer are gone (§5), and the JSON for the first ids
+is what it was. The client maps ABSURD to its `Category.RANDOM` until the next branch lists the
+categories from the server.
+
 ### Verified working
 
 - `:server` on H2: 311 tests, 309 green and 2 skipped (the PostgreSQL-only boot races), including
@@ -79,16 +89,17 @@ alone changed; the server only in a comment and a test's name.
   one or two categories serving each matching question once (an `EXISTS`, and a join mutation fails
   it), the two as one pool, served again only once nothing in it is due, the due count over a set,
   that a batch reads its categories in the same number of statements whatever its size, and that a
-  stored name this build does not know reads as `RANDOM`, sent once however many read as it, in
-  the feed and in the author's list.
-  `ApiFlowTest` covers the repeated `?category=`, the 400s for `UNKNOWN`, an unknown name, a
+  question's categories go out oldest first whatever their ids (`feat/server-categories`, which
+  also added `CategoryStoreTest`: the order of categories, and an id no category has refused).
+  `ApiFlowTest` covers the repeated `?category=`, the 400s for RANDOM, `UNKNOWN`, an unknown id, a
   comma-separated list and an empty value, and submitting under several (deduplicated and ordered,
-  and listed back the same) with the 400s for none and for `UNKNOWN`. `SubmissionStoreTest` pins
+  and listed back the same) with the 400s for none, RANDOM and `UNKNOWN`. `SubmissionStoreTest` pins
   the rows, and the author's list in the same number of statements whatever its length.
-  `WyrJsonTest` and `ServerJsonTest` pin an unknown name in a list decoding as `UNKNOWN` on both
-  sides. On the client, `QuestionMapperTest` pins a question's categories as a set, each once in
-  declaration order, with an unknown name as `OTHER` beside the rest and an empty or missing list as
-  `OTHER` alone; `QuestionApiTest`, one `?category=` per category, in declaration order;
+  `WyrJsonTest` and `ServerJsonTest` pin categories as plain ids on both sides, the first ones'
+  JSON as the enum sent it. On the client, `QuestionMapperTest` pins a question's categories as a
+  set, each once in declaration order, with an id this build cannot name as `OTHER` beside the rest,
+  ABSURD as `RANDOM`, and an empty or missing list as `OTHER` alone; `QuestionApiTest`, one
+  `?category=` per category, in the order given;
   `DefaultQuestionRepositoryTest`, a selection of several sent whole with every refill, any change to
   it dropping the queue (a refill in flight included), the same set keeping it, and `OTHER` refused;
   and `PlayViewModelTest`, the Play screen's category picker: ticking, *All categories*, every
