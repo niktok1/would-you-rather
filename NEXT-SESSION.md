@@ -159,7 +159,10 @@ contract did not. How to try it on a phone is under *Skip and Like on Play*.
   first; `DefaultLikeRepositoryTest` the first launch's like going out once, recovery after a 401
   sending the same body, a like lost to `NETWORK` asked for again and held once, and a 404 leaving the
   session alone, all through `MockEngine`; and `DevConsoleViewModelTest` the Like button and the
-  likes-moved comparison, a like sent before any read after the vote worked included.
+  likes-moved comparison, a like sent before any read after the vote worked included. On
+  `feat/play-skip-like` the Like left the console with its tests and those of a like sent before any
+  read: the console's keep only the likes-moved comparison, and `PlayViewModelTest` and
+  `PlayScreenTest` cover the Play tab's Like.
 - Live curl run against `./gradlew :server:run` confirmed guest auth, paging, voting,
   refresh-token rotation, replay rejection, and the `ErrorDto` envelope on 400/401/404/409. That
   run predates flat scoring, `fix/read-committed` and the endless feed, so the scoring it checked
@@ -624,13 +627,15 @@ contract did not. How to try it on a phone is under *Skip and Like on Play*.
   (`PlayerStoreTest`, `VoteStoreTest`, `SkipStoreTest`, `LikeStoreTest`, `ModerationStoreTest`,
   `SubmissionStoreTest`) poll H2's `SESSIONS` and still run on H2 only, which is what the
   "on Postgres" bullets above still mean.
-- **The UI has never been looked at.** It compiles and its ViewModel is tested, but no
-  screenshot of the play screen or the reveal state has been taken on any platform. Treat the
-  layout and the §5b palette in practice as unreviewed. The dev console has not been opened
-  either: its actions are tested through its ViewModel, and the use cases behind them ran live,
-  all but `SkipQuestion`, which has run only against `FakeServer`. `POST /v1/skips` itself has run
-  only in the server's own tests. The *Submit a question* section has not been opened either: its
-  ViewModel and line helpers are tested, and its use cases ran live, but it has never been drawn.
+- **The UI has not been looked at on a device.** It compiles and its ViewModels are tested, but no
+  screenshot has been taken on a phone, a simulator or in a browser; the Play screen's off-screen
+  renders on the desktop were looked at as images in review (*Skip and Like on the Play tab on a
+  device*, above). Treat the layout and the §5b palette in practice as unreviewed. The dev console
+  has not been opened either: its actions are tested through its ViewModel, and the use cases behind
+  them ran live. `SkipQuestion`, now behind the Play tab's Skip, has run only against `FakeServer`,
+  and `POST /v1/skips` itself only in the server's own tests. The *Submit a question* section has
+  not been opened either: its ViewModel and line helpers are tested, and its use cases ran live, but
+  it has never been drawn.
 - **The moderation app has not been opened.** No window has been shown and no page served: its
   screens were drawn off screen by `ScreensDrawTest` and looked at as images once, and its
   ViewModel has run against a local fat jar from the JVM only (*Verified*, above), never against
