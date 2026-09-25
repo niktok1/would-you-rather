@@ -873,9 +873,11 @@ game's, or a place on one, theme tokens only (§5b), and its words in `Strings` 
   nothing: their on-screen buttons are the way back.
 - *ViewModels* belong to the platform's owner, the activity's or the window's, as under the tabs,
   never to the back stack: each screen's lives as long as the app, so Play keeps its question
-  through Account and back, or Home and back, and Account and Submit read the server again each time
-  they are shown; the Auth page is on the Account screen's. `AppNavigationTest` drives the whole
-  `App` over fakes by tapping its buttons, and counts the questions asked.
+  through Account and back, or Home and back, and Account, Submit and Categories read the server
+  again each time they are shown; the Auth page is on the Account screen's, and the Categories
+  screen starts each visit afresh from what is played (`CategoriesViewModel.open`, which Play's tap
+  calls before it opens the screen). `AppNavigationTest` drives the whole `App` over fakes by
+  tapping its buttons, and counts the questions asked.
 - *Heights*: each top bar is `WyrDimens.topBarHeight` high, 48, the tab row's height before it, so
   the Play, Account, Auth, Submit and Categories screens keep the 599 of an iPhone SE's 667 their
   draw tests hold them to. `TopBarsDrawTest` holds every bar to 48 at 375 wide with nothing cut

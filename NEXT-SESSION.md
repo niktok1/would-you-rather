@@ -41,17 +41,17 @@ changed, with `SubmissionRules` in `:core:domain` so the form checks the options
 the server and the contract did not. How to try it on a phone is under *Submit from My questions*,
 rewritten since for the form under Account.
 
-**On `chore/remove-console`** (from 61bfcad; not merged, nothing pushed): the dev console is gone
-(the user, 2026-09-25: "console is not needed"). Every build, LOCAL, DEV and PROD alike, shows Play,
-Submit and Account and opens on Play (CLAUDE.md §8d, *Current focus*); a LOCAL or DEV build names
-its server on the Account tab's last line (§8e). Changes are tried through the game and the
+**On `chore/remove-console`** (from 61bfcad; on `main` and `origin/main` since): the dev console is
+gone (the user, 2026-09-25: "console is not needed"). Every build, LOCAL, DEV and PROD alike, shows
+Play, Submit and Account and opens on Play (CLAUDE.md §8d, *Current focus*); a LOCAL or DEV build
+names its server on the Account tab's last line (§8e). Changes are tried through the game and the
 moderation app (*Trying a change*, below). What only the console read went with it: the HTTP trace
-(`HttpTrace`, `HttpTracing`); `SessionDiagnostics`, the session and token expiry its header
-showed; the session port's `currentPlayerId` and `clear`, which only it called through the port (a
-logout clears the session through `DefaultSessionRepository` itself); `Question.answeredBefore`,
-which only it showed; and `PlayerStats.playerId` and `VoteOutcome.questionId`, which only it read
-(the wire's `QuestionDto`, `PlayerStatsDto` and `VoteResultDto` still carry all three). The client
-alone changed; the server only in a comment and a test's name.
+(`HttpTrace`, `HttpTracing`); `SessionDiagnostics`, the session and token expiry its header showed;
+the session port's `currentPlayerId` and `clear`, which only it called through the port (a logout
+clears the session through `DefaultSessionRepository` itself); `Question.answeredBefore`, which only
+it showed; and `PlayerStats.playerId` and `VoteOutcome.questionId`, which only it read (the wire's
+`QuestionDto`, `PlayerStatsDto` and `VoteResultDto` still carry all three). The client alone
+changed; the server only in a comment and a test's name.
 
 **On `feat/app-foundation`** (from 40550e9; merged into main as 4821c05): the foundation of the
 user's redesign (2026-09-25), which the Play, Account and category screens' redesigns build on. **No
@@ -68,6 +68,42 @@ own copy stays English for the branches that redesign them. The client alone cha
 `AppNavigationTest`, `HomeScreenDrawTest`, `TopBarsDrawTest`, `WyrIconsDrawTest`, the language
 tests; `RootScreensTest` went with the tabs). Not seen on a device: Android's back, and any screen of
 it on a phone; nor whether the web build's default font draws Cyrillic.
+
+**On `merge/redesign`, `feat/category-picker` merged in** (9c4ecd4, one `--no-ff` merge, then
+0b50d1f, cfdf8af, 008d0cc, 0daeb7a, 7353691 and this note; nothing pushed): **everything is merged
+here** — `feat/play-redesign`, `feat/account-redesign`, `main` at 60b0d7f (with
+`chore/remove-console` and `feat/server-categories` and its clients) and now `feat/category-picker`
+— and the branch is **ready for `main`**, which is its ancestor, so it goes there as a fast-forward
+or a `--no-ff` merge. The Play row's categories open the **Categories screen** (`Screen.Categories`,
+under the one `BackTopBar`, CLAUDE.md §8d *Navigation*, *The Categories screen*), and the picker
+dialog is gone with `CategoryPicking`, `PlayViewModel`'s picker methods and `GetCategories`,
+`PlayScreen`'s picker parameters, `PlayStrings`' three picker texts and their tests; the one case
+only the picker covered, every category ticked played as all of them and not as none, is
+`CategoriesViewModelTest`'s now. A selection played there drops what Play shows, a question asked,
+one revealed (in its first half second too), or a failure, out of questions or a vote lost to
+`NETWORK`, and **loads** a question from it (`load`: `next` goes on only from the reveal here);
+while a load, a vote, a skip or a like is in flight it changes nothing more, and the question after
+it is the new selection's (`canChangeCategories`; `PlayViewModelTest` plays one from each state, and
+each case fails with `next` in the observer or with its guard taken out). **One way to say each
+thing**: a category is named through `categoryName(category, language)` alone, the Categories screen
+reading `LocalLanguage` as the other screens do (`Category.nameIn` and `CategoryNameTest` gone,
+their cases in `CategoryNamesTest`); its Try again, Play and failed read are the game's, *Покушај
+поново*, *Играј*, and *Игра није доступна.* offline or *Категорије нису учитане.* otherwise, as the
+dialog said them (`unreadText`; `CategoryStrings` lost `tryAgain`, `cannotLoad` and `play`); the one
+cancel is `Strings.cancel`, on the Auth page alone now. **The search folds accents** (*decided*, no
+longer provisional: the players' phones may lack a Serbian keyboard): č and ć are c, š s, ž z and đ
+dj, on both sides and in the English name too, so *nacin* finds *Начин живота* and *djak* finds
+*Ђак*. The client alone changed. Verified here (*Verified working*): lint, the verify job's tests
+and client compiles, and the iOS Kotlin compiles; the `server-postgres`, `docker-smoke` and `ios`
+jobs run only in CI. Tests: `:app:shared` 309 (267 before the merge: the merge brought 60, the
+dialog's removal took 24, the observer's states 5 more, the naming 3 fewer, the accents 4 more). To
+ask the user: how many are ticked beside Play, rather than their names; a query finds a category by
+either name whatever the language shown (*food* finds *Храна* in Cyrillic); *Све* in bold; and the
+Categories screen saying offline as Play does, *Игра није доступна.*, where the Submit form says
+*Нема интернет везе.*. The provisional items below still stand (CLAUDE.md §8b: the Play row's
+arrangement, one Try again, what submitting cost; §8d: the reveal's half second). Not seen on a
+device: any of it on a phone, the keyboard over the list, and Android's back from the Categories
+screen.
 
 **On `merge/redesign`, `main` merged in** (60b0d7f, `feat/server-categories` with its clients; one
 `--no-ff` merge, nothing pushed): the redesign's screens on main's server categories and cost.
@@ -124,7 +160,8 @@ compiles; `:server:test` came from the cache, the server untouched. Tests: `:app
 `CentredRow`'s `MiddleRow`, which takes the categories played as text, so its
 `categoriesPlayed(PlayedCategories)` keeps the `all` it is given; `sendText` takes the whole
 `Strings`, and the rest of the Account paragraph's merge notes hold. For `feat/category-picker`: its
-`CategoryStrings.tryAgain` goes, for `Strings.tryAgain`. Not seen on a device.
+`CategoryStrings.tryAgain` goes, for `Strings.tryAgain` (done at its merge, above). Not seen on a
+device.
 
 **On `feat/play-redesign`** (from 4821c05; merged into `merge/redesign`, nothing pushed): the user's
 **Play screen** redesign (CLAUDE.md §8d, *The Play screen*). Two cards and one row between them: the
@@ -171,25 +208,25 @@ Tests: `:app:shared` 225 (`AuthScreenDrawTest` 9, `TemplatesTest` 4 new; `Accoun
 14). Android's back is covered only by `NavigatorTest`: on the JVM `SystemBack` binds nothing. Not
 seen on a device: any of it on a phone, autofill on the Auth page and Android's back included.
 
-**On `feat/server-categories`** (from 40550e9, merged into main after ; the server and the
-contract first, then the clients): categories are **server data** (CLAUDE.md
-§8d, *Categories*, decided 2026-09-25). V6 adds `categories` (id, Serbian and English names, when
-added), writes the first five, `FOOD`, `LIFESTYLE`, `ETHICS`, `SUPERPOWERS` and `ABSURD`, moves
-everything filed under RANDOM to ABSURD and holds `question_categories` to it with a foreign key.
-RANDOM is no category any more (§8b: *All* is no filter). Every categories field on the wire is
-plain ids, `QuestionCategory` and its list serializer are gone (§5), and the JSON for the first ids
-is what it was. `GET /v1/categories` lists every category, with its id and both names,
-oldest first, to anybody (no bearer), limited per address. The moderator adds a category
-(`POST /v1/admin/categories`, the id given or derived from the English name, 409 `CATEGORY_EXISTS`)
-and renames one (`POST /v1/admin/category-renames`, 404 `CATEGORY_NOT_FOUND`); no delete.
-Submitting costs `Scoring.SUBMISSION_COST`, 1 point until release (CLAUDE.md §8c): too few is 409
+**On `feat/server-categories`** (from 40550e9, on `main` and `origin/main` at 60b0d7f; the server
+and the contract first, then the clients): categories are **server data** (CLAUDE.md §8d,
+*Categories*, decided 2026-09-25). V6 adds `categories` (id, Serbian and English names, when added),
+writes the first five, `FOOD`, `LIFESTYLE`, `ETHICS`, `SUPERPOWERS` and `ABSURD`, moves everything
+filed under RANDOM to ABSURD and holds `question_categories` to it with a foreign key. RANDOM is no
+category any more (§8b: *All* is no filter). Every categories field on the wire is plain ids,
+`QuestionCategory` and its list serializer are gone (§5), and the JSON for the first ids is what it
+was. `GET /v1/categories` lists every category, with its id and both names, oldest first, to anybody
+(no bearer), limited per address. The moderator adds a category (`POST /v1/admin/categories`, the id
+given or derived from the English name, 409 `CATEGORY_EXISTS`) and renames one (`POST
+/v1/admin/category-renames`, 404 `CATEGORY_NOT_FOUND`); no delete. Submitting costs
+`Scoring.SUBMISSION_COST`, 1 point until release (CLAUDE.md §8c): too few is 409
 `NOT_ENOUGH_POINTS`, a rejection pays back what the question cost (V7 keeps it on the question,
-`submission_cost`), and `GET /v1/me` reports `pointsSpent`, so the total is what the answers and likes
-earned less that. For the user to decide: an author's own like pays them, so liking their approved
-question gives its cost back (CLAUDE.md §8c, *provisional*); keep it, or let an own like pay
-nothing. Every seed comes with made-up votes (V8, `questions.base_votes_a`/`_b`, CLAUDE.md §8d *Seeds*), which every
-tally the server reports adds to the players' own, and the seeds are in Serbian Cyrillic (V9 rewrote
-production's English ones by id; a new database is seeded in Serbian).
+`submission_cost`), and `GET /v1/me` reports `pointsSpent`, so the total is what the answers and
+likes earned less that. For the user to decide: an author's own like pays them, so liking their
+approved question gives its cost back (CLAUDE.md §8c, *provisional*); keep it, or let an own like
+pay nothing. Every seed comes with made-up votes (V8, `questions.base_votes_a`/`_b`, CLAUDE.md §8d
+*Seeds*), which every tally the server reports adds to the players' own, and the seeds are in
+Serbian Cyrillic (V9 rewrote production's English ones by id; a new database is seeded in Serbian).
 
 The clients on the same branch (four commits after the server's): categories are **server data on
 the client too** (CLAUDE.md §8d, *Categories*, *The client*). `GET /v1/categories` is read through
@@ -211,49 +248,60 @@ the Account screen's lines of answers and likes no longer add up to its points o
 pending or approved, which the Account redesign can show. `App.kt` is untouched: the Play screen's
 two category values changed type under the same names (`PlayedCategories`, `CategoryPicking`).
 
-**On `feat/category-picker`** (from 60b0d7f; not merged, nothing pushed): the category picker is a
-**screen of its own** (the user, 2026-09-25: hundreds of categories, several picked, *All* being
-every one, and a search; CLAUDE.md §8d, *Categories*, *The Categories screen*; §8f), in
-`io.ntole.wyr.categories`. `Screen.Categories` opens from the Play screen's categories under a back
-arrow (`BackTopBar`): a search field that finds a category by any part of either name, in either
-script and any case (`searchKey`, both sides through `SerbianScript.toLatin`, lower-cased); *Све* and
-every category in a `LazyColumn`, as many ticked as wanted, *Све* being none ticked; and at the bottom
-*Изабрано: N* and **Играј**, which sets them in one `setCategories`, waits for it, and goes back.
-Back plays nothing, and each visit starts from what is played (`CategoriesViewModel.open`, called by
-Play's tap, so a rotation keeps the ticks). The list is read as the screen is shown; a failed read
-says so with *Пробај опет*. The Play screen plays the selection whoever sets it (`PlayViewModel`'s
-`init`), and `Category.nameIn(language)` names a category in the language shown. The client alone
-changed. Commits: baf042d (`nameIn`), d1605eb (Play follows the selection), 7df4d5f (the screen).
+**On `feat/category-picker`** (from 60b0d7f; merged into `merge/redesign`, above, nothing pushed):
+the category picker is a **screen of its own** (the user, 2026-09-25: hundreds of categories,
+several picked, *All* being every one, and a search; CLAUDE.md §8d, *Categories*, *The Categories
+screen*; §8f), in `io.ntole.wyr.categories`. `Screen.Categories` opens from the Play screen's
+categories under a back arrow (`BackTopBar`): a search field that finds a category by any part of
+either name, in either script and any case (`searchKey`, both sides through `SerbianScript.toLatin`,
+lower-cased); *Све* and every category in a `LazyColumn`, as many ticked as wanted, *Све* being none
+ticked; and at the bottom *Изабрано: N* and **Играј**, which sets them in one `setCategories`, waits
+for it, and goes back. Back plays nothing, and each visit starts from what is played
+(`CategoriesViewModel.open`, called by Play's tap, so a rotation keeps the ticks). The list is read
+as the screen is shown; a failed read says so with *Пробај опет*. The Play screen plays the
+selection whoever sets it (`PlayViewModel`'s `init`), and `Category.nameIn(language)` names a
+category in the language shown. The client alone changed. Commits: baf042d (`nameIn`), d1605eb (Play
+follows the selection), 7df4d5f (the screen).
 
-For the merge with `merge/redesign`:
-- The dialog is still in `io.ntole.wyr.play`, opened by nothing: delete `CategoryPicker`,
-  `CategoryOption`, `pickerNote`, `CategoryPicking`, `PlayViewModel`'s `picking`, `openCategories`,
-  `toggleCategory`, `selectAllCategories`, `applyCategories`, `closeCategories` and its
-  `getCategories`, `PlayScreen`'s picker parameters and their tests (`PlayViewModelTest`'s picker
-  tests, `PlayScreenDrawTest`'s picker draws, `PlayScreenTest`'s `pickerNote`), and bring CLAUDE.md
-  §8d *The Play screen* and *Navigation* up to date: both still describe the dialog, since this
-  branch was to edit §8d *Categories* and §8f only.
-- There the Play row's `onOpenCategories` opens the dialog: wire it as `App.kt` does here,
-  `picker.open()` then `navigator.open(Screen.Categories)`.
-- There `next()` goes on only from the reveal and `load()` loads: the observer in `PlayViewModel`'s
-  `init` must call `load()`, or a selection played from a question not answered yet, or from a
-  failure, would change nothing on screen (its `PlayViewModelTest` cases catch it).
-- `BackTopBar` has `merge/redesign`'s name and signature: keep one. `Strings.categoriesScreen`
-  (`CategoryStrings`) stands beside `PlayStrings`, and *Све* is in both.
-- The Play row and the Submit chips still name categories in Serbian (`categoryName`): move them to
-  `nameIn`.
+Each of its notes for the merge with `merge/redesign` is done there (above): the dialog deleted and
+CLAUDE.md's *The Play screen* and *Navigation* brought up to date, the Play row wired to the screen,
+the observer calling `load()`, one `BackTopBar`, and `nameIn` folded into `categoryName` rather than
+the other way round, since `categoryName` already named a category not read yet by its id.
 
-To ask the user: the search counts accents (*nacin* does not find *Начин живота*; provisional,
-CLAUDE.md §8d *The Categories screen*), or fold č, ć, š, ž and đ; how many are ticked beside Play,
-rather than their names; a query finds a category by either name whatever the language shown (*food*
-finds *Храна* in Cyrillic); and *Све* in bold. Tests: `:app:shared` 240 (180 before; new
+To ask the user, at the branch: the search counts accents (*nacin* does not find *Начин живота*;
+folded since, at the merge), or fold č, ć, š, ž and đ; how many are ticked beside Play, rather than
+their names; a query finds a category by either name whatever the language shown (*food* finds
+*Храна* in Cyrillic); and *Све* in bold. Tests: `:app:shared` 240 (180 before; new
 `CategoriesViewModelTest` 37 and `CategoriesScreenDrawTest` 12 in `io.ntole.wyr.categories`, not the
 moderation app's of the same name, `CategoryNameTest` 4; `PlayViewModelTest` 4, `AppNavigationTest`
-2 and `NavigatorTest` 1 more; `AppModuleTest` and `TopBarsDrawTest` check the new ViewModel and bar).
-Not seen on a device: any of it on a phone, the keyboard over the list, and Android's back from it.
+2 and `NavigatorTest` 1 more; `AppModuleTest` and `TopBarsDrawTest` check the new ViewModel and
+bar). Not seen on a device: any of it on a phone, the keyboard over the list, and Android's back
+from it.
 
 ### Verified working
 
+- **`merge/redesign` with `feat/category-picker` merged in** (9c4ecd4 and its five follow-ups), on
+  this machine, at 7353691, whose tree this note changes only in CLAUDE.md and NEXT-SESSION.md: the
+  verify job's lists exactly, `ktlintCheck`; `:server:test :core:domain:jvmTest :core:data:jvmTest
+  :core:network:jvmTest :core:network:testAndroidHostTest :app:shared:jvmTest
+  :app:adminApp:jvmTest`, each with `--rerun`, so none came from the build cache; the client
+  compiles, `:app:androidApp:assembleDebug` and both web targets of `:app:shared` and
+  `:app:adminApp` included; and the ios job's Kotlin compiles
+  (`:app:shared:compileKotlinIosSimulatorArm64` and the `compileTestKotlinIosSimulatorArm64` of
+  `:app:shared` and the three `:core` modules), each Gradle's own exit code 0. Test counts from
+  `build/test-results`: `:server:test` 346 (344 green, 2 skipped: the PostgreSQL-only boot races),
+  `:core:domain:jvmTest` 72, `:core:data:jvmTest` 142, `:core:network:jvmTest` 72,
+  `:core:network:testAndroidHostTest` 78, `:app:shared:jvmTest` 309, `:app:adminApp:jvmTest` 106, no
+  failure anywhere. The merge commit (327 in `:app:shared`), 0b50d1f, 008d0cc and 0daeb7a each
+  passed `:app:shared`'s lint and whole JVM suite alone, and cfdf8af and 7353691 its lint and their
+  own package's tests. New or changed: `PlayViewModelTest` 43 (a selection played from each state,
+  the picker's 18 gone); `CategoriesViewModelTest` 42 (every category ticked played as all of them,
+  the accents folded, the search key); `CategoriesScreenDrawTest` 12 (the game's Try again and Play,
+  a failed read offline and otherwise in every language); `CategoryNamesTest` 3 (`nameIn`'s cases);
+  `PlayScreenDrawTest` 20 and `PlayScreenTest` 8 (the picker's gone); `AppNavigationTest` 18 (Play,
+  Categories and back, played or not, through the row's *Све*); `NavigatorTest` 13,
+  `TopBarsDrawTest` 4 (one back bar for Account, Auth, Submit and Categories). `:server`, `:core`
+  and `:app:adminApp` are untouched since the merge with `main`.
 - **`merge/redesign` with `main` merged in** (60b0d7f merged `--no-ff`), on this machine, the
   merge commit's tree: the verify job's lists exactly, `ktlintCheck`; `:server:test
   :core:domain:jvmTest :core:data:jvmTest :core:network:jvmTest :core:network:testAndroidHostTest
@@ -853,11 +901,11 @@ Not seen on a device: any of it on a phone, the keyboard over the list, and Andr
   `3 SQL`, `4 SQL`, and that `sessions` has a row for every `players` row with a
   `refresh_token_hash`. The next script after V4 runs there at the next Manual Deploy.
 - **The clients' categories on a device** (`feat/server-categories`). No build with them has been
-  installed or run: the Play picker, the Submit chips and the moderation app's Categories tab are
-  drawn off screen (`PlayScreenDrawTest`, `SubmitScreenDrawTest`, `ScreensDrawTest`) and driven over
-  fakes, and no app has read `GET /v1/categories` from a real server. Serbian names on a phone's
-  fonts, the names in Latinica and English, a picker of many more than five categories, and the
-  Account card once a question has cost a point (its answers and likes then count more than its
+  installed or run: the Categories screen, the Submit chips and the moderation app's Categories tab
+  are drawn off screen (`CategoriesScreenDrawTest`, `SubmitScreenDrawTest`, `ScreensDrawTest`) and
+  driven over fakes, and no app has read `GET /v1/categories` from a real server. Serbian names on a
+  phone's fonts, the names in Latinica and English, a list of many more than five categories, and
+  the Account card once a question has cost a point (its answers and likes then count more than its
   points; `pointsSpent` is shown nowhere, CLAUDE.md §8b), are unseen. Installed builds from before
   this branch against a server from it: a filter or a submission under RANDOM is 400, ABSURD and
   every new category show as `OTHER`, and a refusal for points reads as `UNKNOWN`, as the server's
@@ -888,13 +936,14 @@ Not seen on a device: any of it on a phone, the keyboard over the list, and Andr
   ViewModel is driven over fakes. Its renders on this Mac's Skia were looked at as images in review,
   in the light theme only, never on a phone. Nobody has sent a skip or a like from the app to a
   server. Android's 360x640 class (about 520 high) cuts the reveal's percentages as `main` did.
-- **The category picker on a device.** The same holds for it (`feat/play-categories`): drawn off
-  screen, and its renders on this Mac looked at as images in review, both themes, never on a phone.
-  `PlayScreenDrawTest` checks by pixels that the screen draws its dialog, and draws what is ticked
-  in it, not what the dialog shows. Nobody has tapped it, nor seen a platform's dialog open and
-  close it. On Android's 360x640 class a question not answered yet no longer fits either, since the
-  categories row is drawn in every state: its option cards are squeezed below their least height
-  (CLAUDE.md §8b, *The categories row on the Play screen*, provisional).
+- **The Categories screen on a device** (`feat/category-picker`, merged into `merge/redesign`). The
+  same holds for it: drawn off screen (`CategoriesScreenDrawTest`), both themes and every language,
+  and driven over fakes, never on a phone. Nobody has typed a search on a phone's keyboard, seen the
+  keyboard over the list, scrolled the lazy list under a finger, or gone back from it with
+  Android's back. The dialog it replaced, and its pixel checks, are gone. On Android's 360x640 class
+  a question not answered yet does not fit, since the categories share the row between the cards in
+  every state: its option cards are squeezed below their least height (CLAUDE.md §8b, *The
+  categories row on the Play screen*).
 - **The `:core` modules' tests on iOS.** The ios CI job runs `:app:shared`'s tests on the simulator
   and only compiles the `:core` modules' tests, which Kotlin/Native refused while their
   names held commas (`SharedSessionStoreTest`'s among them, from before `feat/recovery-secret`, and
@@ -1243,14 +1292,15 @@ in Latinica, and the English name in English (§8f).
    Try it from a question asked, from a revealed one and from a failure: each time a question from
    the new selection shows.
 3. Open it again: *Храна* and *Етика* are ticked. Type *eti*, then *ети*, then *ETH*: *Етика* each
-   time. Type *xyz*: *Нема резултата* under *Све*. Tick *Све*: the others untick. The back arrow, or
-   Android's back: nothing changes, and opening it again shows *Храна* and *Етика* ticked. **Играј**
-   with what is already played: the question stays.
+   time. Type *nacin*, with no accent, then *način*: *Начин живота* both times. Type *xyz*: *Нема
+   резултата* under *Све*. Tick *Све*: the others untick. The back arrow, or Android's back: nothing
+   changes, and opening it again shows *Храна* and *Етика* ticked. **Играј** with what is already
+   played: the question stays.
 4. On Account pick *Latinica*, then *English*: the list reads *Hrana*, *Način života*..., then
    *Food*, *Lifestyle*..., and the row *Hrana, Etika*, then *Food, Ethics*.
-5. Offline, opening it says *Категорије се нису учитале.* with *Пробај опет* over the categories read
-   before. A category the moderation app adds shows the next time it opens. With the keyboard up,
-   **Играј** should stay above it.
+5. Offline, opening it says *Игра није доступна.* with **Покушај поново** over the categories read
+   before, as Play says it offline. A category the moderation app adds shows the next time it opens.
+   With the keyboard up, **Играј** should stay above it.
 6. Tick every category: the row's names are cut short on their one line, and the points move right
    of the middle only as far as the names need; the points, the like count and Skip stay whole. That
    is the arrangement to judge (CLAUDE.md §8b, *The Play row's arrangement*): keep it, or the points
@@ -1483,9 +1533,14 @@ item is one short-lived branch, in order:
     (*Categories on Play*). Then `feat/account-stats` (at 52f36bb) and `feat/submit-screen` (at
     61bfcad), both on `main` and `origin/main` too, moved the stats and submitting, the last of the
     console's features.
-17. **Now:** `chore/remove-console` — the console goes, with nothing in its place; every build shows
-    Play, Submit and Account, and a LOCAL or DEV build names its server on Account. Next: review,
-    merge, push, CI, then try it on a phone (*Trying a change*).
+17. `chore/remove-console` *(on `main` at 60b0d7f, with `feat/server-categories`)* — the console
+    goes, with nothing in its place; every build shows the game's screens, and a LOCAL or DEV build
+    names its server on Account.
+18. **Now:** `merge/redesign` — the user's redesign, the app's foundation, Play, Account and the
+    Categories screen, on `main`'s server categories: every branch merged (*Where we are*), ready
+    for `main`. Next: review, merge into `main`, push, read CI (the `server-postgres`,
+    `docker-smoke` and `ios` jobs run only there), then try it on a phone (*Categories on Play*,
+    *Trying a change*).
 
 **For the moderation app.** Everything it needs is in `io.ntole.wyr.core.domain.moderation`, and
 none of it needs or makes a player session:
