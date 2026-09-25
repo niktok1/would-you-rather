@@ -17,8 +17,10 @@ applied; **dev** `wyr-server-dev` on in-memory H2, deployed automatically from e
 **On `feat/simple-accounts`** (not merged): stage 1 took the recovery secret, Block Store, the
 Keychain, the rollback mirror and the question's row lock out (CLAUDE.md §8a, §8b). Stage 2 built
 simple accounts on the server (§8a, *Accounts*): V5, register, log in, log out, and the username in
-`GET /v1/me` (*Accounts*, under *Running it locally*). Stage 3, the client, is next; until then no
-client registers or logs in. A `d4a9dbf` build of the app on a phone that keeps a recovery secret
+`GET /v1/me` (*Accounts*, under *Running it locally*). Stage 3 built the client: an account
+repository behind `RegisterAccount`, `LogIn` and `LogOut`, and the game's **Account** tab, in every
+build (§8d, *Current focus*; how to try it on a phone is under *Accounts*). The branch is ready for
+review and CI; nothing of it is pushed. A `d4a9dbf` build of the app on a phone that keeps a recovery secret
 fails every call against this server once its session dies, since the recovery it tries first is 404
 here: install a build from this branch on it.
 
@@ -415,6 +417,36 @@ here: install a build from this branch on it.
   tokens were 401 and the second's refreshed again with the point kept. No password, token or hash
   was in the log. The first registration took 43 ms (a cold hash), a login 12 ms. The
   `server-postgres`, `docker-smoke` and `ios` jobs have not run on the branch.
+- Accounts on the client (`feat/simple-accounts`, stage 3). `AuthApiTest` sends a login past the
+  Auth plugin: its 401 `INVALID_LOGIN` comes back once, with no refresh and no bearer (taking the
+  `AuthCircuitBreaker` out fails it), and a registration and a logout go with the bearer.
+  `DefaultAccountRepositoryTest`, over the real client and `FakeServer`: a registration keeps the
+  player and its session, a first launch's goes once as the guest it mints, one on a dead session
+  registers the fresh guest, a taken name leaves the session; a login from a second device stores
+  the account's session in place of its guest's and leaves the first device's alone; a wrong
+  password and an unknown name are `INVALID_LOGIN` with nothing refreshed, minted or replaced; a
+  logout tells the server and the next call mints a guest, one the server refuses still logs the
+  device out, and one with no session sends nothing. `AccountUseCasesTest`: a registration ensures
+  the session first and one the rules refuse sends nothing; a login and a logout drop the question
+  queue, a refused login does not. `AccountRulesTest` holds the rules to the server's, and
+  `AccountLimitsTest` their numbers to `WyrApi.Limits`. `AccountViewModelTest` (14): the states, the
+  rules' hints with nothing sent, a taken name and a wrong login under their forms with what was
+  typed kept, the guest-progress warning once and the login after it, none for a guest without
+  points, cancelling it, a logout to a fresh guest, a failed read and its retry, one action at a
+  time, and the copy for a rate limit and offline. `AccountScreenDrawTest` draws every state in both
+  themes. `RootScreensTest`: Account in every build, a PROD build opening on Play. Counts:
+  `:server` 310, 2 skipped; `:core:domain` 47; `:core:data` 146; `:core:network` 82 (88 as Android
+  host tests); `:app:shared` 123; `:app:adminApp` 87. Lint (forced), the verify job's tests (each
+  test task forced to rerun) and client compiles, and the ios job's Kotlin compiles pass. The fat
+  jar on JDK 21, `PORT=18096`, no `DATABASE_URL`: `/health` 200, then by curl a guest voted,
+  registered as `Smoke_3` (`smoke_3`, 1 point in `/v1/me`), a wrong login was 401 `INVALID_LOGIN`,
+  a login from a second device answered the same player, both refreshed, the first logged out
+  (204) and both its tokens were 401 after, and the second refreshed with the point kept. Then the
+  real client on the JVM's engine against the same server, from a throwaway test not committed: a
+  registration kept the player; a wrong login on a second device was one 401, no refresh in its
+  trace, its session untouched; the right one played as the account; a logout answered 204 and the
+  next read minted a fresh guest; the first device stayed logged in. No password, hash or token was
+  in the server's log. The server was stopped.
 - `:app:androidApp:assembleDebug` produces a real APK.
 - `ktlintCheck` clean across every module.
 
@@ -453,6 +485,14 @@ here: install a build from this branch on it.
   the second writer waiting on the first's uncommitted name and failing with 23505 once it commits is
   documented behaviour. Production takes V5 at its next Manual Deploy. The hash's cost on Render's
   tenth of a CPU is an estimate (0.1 to 0.2 s): read a login's time in its log line once deployed.
+- **The Account tab on a device.** No build with it has been installed or run: the screen is drawn
+  off screen on the desktop (`AccountScreenDrawTest`) and its ViewModel driven over fakes. Nothing
+  has seen Android's password manager offer to fill or save the fields; that rests on the autofill
+  content types and on Compose committing autofill once no autofillable field is left on screen
+  (read in `AndroidAutofillManager`'s source, Compose 1.11), and iOS and the browsers may do nothing
+  with them. The real client has run against a real server only on the JVM, against the local fat
+  jar; not from a phone, not against dev, and not through the refresh that turns a `d4a9dbf` access
+  token (no `sessionId`) into one a logout takes.
 - **The `:core` modules' tests on iOS.** The ios CI job runs `:app:shared`'s tests on the simulator
   and only compiles the `:core` modules' tests, which Kotlin/Native refused while their
   names held commas (`SharedSessionStoreTest`'s among them, from before `feat/recovery-secret`, and
@@ -943,10 +983,13 @@ rules live in CLAUDE.md §8d. Each item is one short-lived branch, in order:
     Keychain and the rollback mirror too much for a simple game (2026-09-25), so
     `feat/simple-accounts` takes them out again, keeping per-device sessions and the grace.
 14. **Now:** `feat/simple-accounts` goes on to simple accounts (CLAUDE.md §8b, *Accounts*): play as a
-    guest at once, register optionally and keep the points, log in on another device. The server's
-    half is built (stage 2: V5, register, log in, log out, the username in the stats); the client's,
-    stage 3, is next. No-click sign-in (Play Games Services, Game Center) comes later, once there is
-    an Apple developer account.
+    guest at once, register optionally and keep the points, log in on another device. Built on the
+    server (stage 2: V5, register, log in, log out, the username in the stats) and in the game
+    (stage 3: the account repository and the **Account** tab, the first feature moved out of the
+    console, CLAUDE.md §8d). Next: review, push, CI (`server-postgres`, `docker-smoke` and `ios`
+    have not run on the branch), the dev deploy, then try it on a phone (*Accounts*), and move the
+    next feature from the console into the game. No-click sign-in (Play Games Services, Game
+    Center) comes later, once there is an Apple developer account.
 
 **For the moderation app.** Everything it needs is in `io.ntole.wyr.core.domain.moderation`, and
 none of it needs or makes a player session:
@@ -1160,9 +1203,10 @@ Play tab is frozen).
   only to `Passwords`, hashed on `Dispatchers.Default` and outside any transaction, and neither it nor
   its hash may reach a log, an answer or a `toString` (`RegisterRequest` and `LoginRequest` hide it).
   Exposed writes a failed statement's values into its message only when the transaction's `debug` is
-  on: keep it off. A login's 401 `INVALID_LOGIN` is no expired token: the client must send the login
-  with Ktor's `AuthCircuitBreaker` attribute, or the bearer plugin refreshes the session it holds and
-  sends the login again. Every access token names its session (`sessionId`), which only a logout
+  on: keep it off. A login's 401 `INVALID_LOGIN` is no expired token: `AuthApi.logIn` sends the login
+  with Ktor's `AuthCircuitBreaker` attribute, without which the bearer plugin refreshes the session it
+  holds and sends the login again, and never through `withSessionRecovery` (`AuthApiTest`,
+  `DefaultAccountRepositoryTest`). Every access token names its session (`sessionId`), which only a logout
   reads; a token without one, from `d4a9dbf`, is 401 there, and a refresh replaces it.
 - **A session write returns once it is durable, and suspends for it** (`TokenStorage.write`,
   CLAUDE.md §8a). `AndroidTokenStorage` used `apply()`, which returns before the file is written,
