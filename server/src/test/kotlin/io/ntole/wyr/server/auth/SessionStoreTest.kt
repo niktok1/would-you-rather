@@ -457,67 +457,6 @@ class SessionStoreTest {
     }
 
     /**
-     * Recovery (CLAUDE.md §8a, *Recovery*): the secret opens a session of its own for its player each
-     * time, spending nothing, and each such session rotates apart from the rest and is the mirror in its
-     * turn, so a rollback keeps a restored phone.
-     */
-    @Test
-    fun `a recovery secret opens a session of its own for its player each time, and is not spent`() {
-        val database = connectH2(h2Url("wyr-session-store-recover"), Connection.TRANSACTION_READ_COMMITTED)
-        val player = transaction(database) { createPlayer(refreshTokenHash = "phone", recoverySecretHash = "secret") }
-
-        val restored = transaction(database) { SessionStore.recover("secret", "restored", Long.MAX_VALUE, ROTATED_AT) }
-        val again = transaction(database) { SessionStore.recover("secret", "again", Long.MAX_VALUE, ROTATED_AT + 1) }
-
-        assertEquals(player.id, restored)
-        assertEquals(player.id, again, "the secret recovers again")
-        assertEquals(
-            setOf(
-                StoredTokens("phone", null, null),
-                StoredTokens("restored", null, null),
-                StoredTokens("again", null, null),
-            ),
-            sessionsOf(database, player.id),
-        )
-        assertEquals(
-            Mirror("again", null, null, marked = "again"),
-            mirrorOf(database, player.id),
-            "the one opened last",
-        )
-        assertEquals(player.id, transaction(database) { rotate("restored", newHash = "restored-1") })
-        assertEquals(player.id, transaction(database) { rotate("phone", newHash = "phone-1") }, "untouched by either")
-    }
-
-    /**
-     * A secret recovers only while it is its player's: one never issued, and one its player replaced,
-     * open nothing. The sessions a replaced one opened live on.
-     */
-    @Test
-    fun `a secret no player holds recovers nobody, and replacing one closes none of its sessions`() {
-        val database = connectH2(h2Url("wyr-session-store-recover-refused"), Connection.TRANSACTION_READ_COMMITTED)
-        val player = transaction(database) { createPlayer(refreshTokenHash = "phone", recoverySecretHash = "old") }
-        transaction(database) { SessionStore.recover("old", "restored", Long.MAX_VALUE, ROTATED_AT) }
-
-        val replaced = transaction(database) { PlayerStore.replaceRecoverySecret(player.id, "new") }
-        val withOld = transaction(database) { SessionStore.recover("old", "stolen", Long.MAX_VALUE, ROTATED_AT) }
-        val withNone =
-            transaction(database) { SessionStore.recover("never-issued", "guess", Long.MAX_VALUE, ROTATED_AT) }
-        val withNew =
-            transaction(database) { SessionStore.recover("new", "restored-again", Long.MAX_VALUE, ROTATED_AT) }
-
-        assertTrue(replaced)
-        assertNull(withOld, "replaced")
-        assertNull(withNone, "never issued")
-        assertEquals(player.id, withNew)
-        assertEquals(
-            setOf("phone", "restored", "restored-again"),
-            sessionsOf(database, player.id).map { it.current }.toSet(),
-        )
-        assertEquals(player.id, transaction(database) { rotate("restored", newHash = "on") }, "the old one's session")
-        assertEquals(false, transaction(database) { PlayerStore.replaceRecoverySecret("no-such-player", "any") })
-    }
-
-    /**
      * [SessionStore.rotate], with a lifetime no test reaches, and with no time bound unless a test sets
      * one.
      */
@@ -590,10 +529,9 @@ class SessionStoreTest {
     private fun createPlayer(
         refreshTokenHash: String = "unused",
         refreshExpiresAt: Long = Long.MAX_VALUE,
-        recoverySecretHash: String? = null,
     ): PlayerStore.Player {
         SchemaUtils.create(Players, Sessions)
-        return PlayerStore.createGuest(refreshTokenHash, refreshExpiresAt, recoverySecretHash)
+        return PlayerStore.createGuest(refreshTokenHash, refreshExpiresAt)
     }
 
     /** The hashes a session holds, and when the previous one was displaced. */

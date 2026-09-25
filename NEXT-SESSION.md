@@ -705,26 +705,6 @@ Raise any budget for a session with its variable, and a refused request says whi
 RATE_LIMIT_GUESTS_PER_HOUR=1000 ./gradlew :server:run
 ```
 
-### Recovering a guest
-
-A mint's answer carries the player's recovery secret (CLAUDE.md §8a, *Recovery*), and a recovery
-with it opens a second session for the same player, each refreshing on its own. By hand, against
-`./gradlew :server:run`:
-
-```bash
-GUEST=$(curl -s -X POST localhost:8080/v1/auth/guest)
-SECRET=$(echo "$GUEST" | python3 -c 'import sys,json; print(json.load(sys.stdin)["recoverySecret"])')
-ACCESS=$(echo "$GUEST" | python3 -c 'import sys,json; print(json.load(sys.stdin)["accessToken"])')
-curl -s -X POST localhost:8080/v1/auth/recover -H 'Content-Type: application/json' \
-  -d "{\"recoverySecret\":\"$SECRET\"}"
-curl -s -X POST localhost:8080/v1/me/recovery-secret -H "Authorization: Bearer $ACCESS"
-```
-
-The recovery answers a session of the same `playerId` with a refresh token of its own, and no
-secret; the last call answers a new secret and kills `$SECRET`, which then recovers nobody (401
-`INVALID_RECOVERY_SECRET`). Recoveries are 10 an hour per address (`RATE_LIMIT_RECOVERIES_PER_HOUR`).
-No client calls either route any more (CLAUDE.md §8a).
-
 ### Moderating
 
 Moderation is off unless the server has an admin token (CLAUDE.md §8d): the admin routes are then
@@ -1206,13 +1186,6 @@ Play tab is frozen).
   session (`SessionStore.foldMirror`). Every write here locks a session it did not insert itself
   before its player; keep that order, or two can each wait on the other. The server's
   `SessionStore` is not the client's, which keeps the stored session in `:core:network`.
-- **The recovery secret travels once, and never rotates** (CLAUDE.md §8a, *Recovery*). Only the
-  mint's `GuestSessionDto` and `POST /v1/me/recovery-secret`'s `RecoverySecretDto` carry it; a
-  refresh and a recovery answer a plain `SessionDto`, so a response type that could carry it is a
-  contract change. A recovery spends nothing, by the user's decision: whoever holds the secret owns
-  the account until it is replaced, and replacing it closes no session. Never log it or its hash,
-  in a route or anywhere else (`RateLimitTest` scans a flow's log for both), and never put it in an
-  `ApiFailure`'s message. No client keeps it any more: the server half is what is left of it.
 - **A session write returns once it is durable, and suspends for it** (`TokenStorage.write`,
   CLAUDE.md §8a). `AndroidTokenStorage` used `apply()`, which returns before the file is written,
   so a kill just after a refresh could come back with the rotated-out token and orphan the guest.

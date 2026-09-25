@@ -1,13 +1,9 @@
 package io.ntole.wyr.server.auth
 
-import io.ktor.server.auth.authenticate
 import io.ktor.server.response.respond
 import io.ktor.server.routing.Route
 import io.ktor.server.routing.post
 import io.ntole.wyr.core.api.WyrApi
-import io.ntole.wyr.core.auth.GuestSessionDto
-import io.ntole.wyr.core.auth.RecoverRequest
-import io.ntole.wyr.core.auth.RecoverySecretDto
 import io.ntole.wyr.core.auth.RefreshRequest
 import io.ntole.wyr.core.auth.SessionDto
 import io.ntole.wyr.server.config.ServerConfig
@@ -19,14 +15,8 @@ import io.ntole.wyr.server.plugins.rateLimit
 import io.ntole.wyr.server.plugins.receiveOrReject
 
 /**
- * Session endpoints. The first three are public: [WyrApi.Paths.AUTH_GUEST] has no credential to
- * present yet, and the refresh token is itself the credential for [WyrApi.Paths.AUTH_REFRESH], as the
- * recovery secret is for [WyrApi.Paths.AUTH_RECOVER]. [WyrApi.Paths.MY_RECOVERY_SECRET] needs the
- * session whose player's secret it replaces.
- *
- * The recovery secret goes out in the mint's answer and in [WyrApi.Paths.MY_RECOVERY_SECRET]'s, and
- * nowhere else: never in a refresh's or a recovery's, and never in a log line (CLAUDE.md §8a,
- * *Recovery*).
+ * Session endpoints. Both are public: [WyrApi.Paths.AUTH_GUEST] has no credential to present
+ * yet, and the refresh token is itself the credential for [WyrApi.Paths.AUTH_REFRESH].
  */
 fun Route.authRoutes(
     db: Db,
@@ -39,27 +29,19 @@ fun Route.authRoutes(
     rateLimit(RouteLimit.GUESTS) {
         post(WyrApi.Paths.AUTH_GUEST) {
             val refresh = tokens.issueRefreshToken()
-            val secret = tokens.issueRecoverySecret()
             val expiresAt = System.currentTimeMillis() + config.refreshTokenTtlSeconds * 1_000L
 
             val player =
                 db.query {
-                    PlayerStore.createGuest(
-                        refreshTokenHash = refresh.hash,
-                        refreshExpiresAt = expiresAt,
-                        recoverySecretHash = secret.hash,
-                    )
+                    PlayerStore.createGuest(refreshTokenHash = refresh.hash, refreshExpiresAt = expiresAt)
                 }
 
-            // A session's fields and the secret beside them, which a client from before recovery
-            // ignores, reading the session it always did.
             call.respond(
-                GuestSessionDto(
+                SessionDto(
                     playerId = player.id,
                     accessToken = tokens.issueAccessToken(player.id),
                     refreshToken = refresh.value,
                     accessTokenExpiresInSeconds = config.accessTokenTtlSeconds,
-                    recoverySecret = secret.value,
                 ),
             )
         }
@@ -100,56 +82,6 @@ fun Route.authRoutes(
                     accessTokenExpiresInSeconds = config.accessTokenTtlSeconds,
                 ),
             )
-        }
-    }
-
-    // A phone that replaced the one its player played on, holding the recovery secret it was handed
-    // on, opens a session of its own for them. Per address, right secret or wrong, as the secret is
-    // the caller's only credential. The secret is not spent, so a refusal costs nothing either.
-    rateLimit(RouteLimit.RECOVERIES) {
-        post(WyrApi.Paths.AUTH_RECOVER) {
-            val body = call.receiveOrReject<RecoverRequest>("recovery request")
-
-            if (body.recoverySecret.isBlank()) throw ApiFailure.validation("recoverySecret is blank")
-
-            val session = tokens.issueRefreshToken()
-            val expiresAt = System.currentTimeMillis() + config.refreshTokenTtlSeconds * 1_000L
-
-            val playerId =
-                db.query {
-                    SessionStore.recover(
-                        secretHash = tokens.hash(body.recoverySecret),
-                        refreshTokenHash = session.hash,
-                        expiresAt = expiresAt,
-                    ) ?: throw ApiFailure.invalidRecoverySecret()
-                }
-
-            // The new session alone, and never the secret, which the caller has already.
-            call.respond(
-                SessionDto(
-                    playerId = playerId,
-                    accessToken = tokens.issueAccessToken(playerId),
-                    refreshToken = session.value,
-                    accessTokenExpiresInSeconds = config.accessTokenTtlSeconds,
-                ),
-            )
-        }
-    }
-
-    // A new secret for the session player, killing the one before: for a guest minted before recovery,
-    // who has none, and a client that could not keep the one it was given.
-    authenticate(JWT_AUTH) {
-        rateLimit(RouteLimit.RECOVERY_SECRETS) {
-            post(WyrApi.Paths.MY_RECOVERY_SECRET) {
-                val playerId = call.authenticatedPlayerId()
-                val secret = tokens.issueRecoverySecret()
-
-                // As for the feed and a vote: a validly signed token can outlive its player.
-                val replaced = db.query { PlayerStore.replaceRecoverySecret(playerId, secret.hash) }
-                if (!replaced) throw ApiFailure.unauthorized("unknown player")
-
-                call.respond(RecoverySecretDto(recoverySecret = secret.value))
-            }
         }
     }
 }

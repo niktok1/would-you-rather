@@ -1,6 +1,5 @@
 package io.ntole.wyr.server.plugins
 
-import io.ntole.wyr.core.auth.GuestSessionDto
 import io.ntole.wyr.core.question.ApproveSubmissionRequest
 import io.ntole.wyr.core.question.QuestionCategory
 import io.ntole.wyr.core.question.QuestionDto
@@ -9,15 +8,13 @@ import io.ntole.wyr.core.question.SubmissionDto
 import io.ntole.wyr.core.question.SubmitQuestionRequest
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
-import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonObject
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
 /**
  * The server half of the wire enum rule for a list of categories (CLAUDE.md §5), as `ServerJson`
- * writes and reads it, and of the guest session a client from before recovery reads as a session.
- * `WyrJsonTest` in `:core:network` pins the client half.
+ * writes and reads it. `WyrJsonTest` in `:core:network` pins the client half.
  */
 class ServerJsonTest {
     @Test
@@ -72,14 +69,6 @@ class ServerJsonTest {
 
         assertEquals(ApproveSubmissionRequest("q1", categories = emptyList()), keeping)
         assertEquals(listOf(QuestionCategory.ETHICS, QuestionCategory.UNKNOWN), replacing.categories)
-    }
-
-    @Test
-    fun `a guest session goes out with its recovery secret, and a session has none to send`() {
-        val guest = GuestSessionDto("p1", "access", "refresh", 900, recoverySecret = "secret")
-
-        assertEquals(JsonPrimitive("secret"), fieldOf(ServerJson.encodeToString(guest), "recoverySecret"))
-        assertEquals(null, fieldOf(ServerJson.encodeToString(guest.session()), "recoverySecret"))
     }
 
     private fun fieldOf(

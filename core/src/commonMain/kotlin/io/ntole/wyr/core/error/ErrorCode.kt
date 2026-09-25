@@ -73,10 +73,10 @@ public enum class ErrorCode {
     INVALID_REFRESH_TOKEN,
 
     /**
-     * The recovery secret presented ([io.ntole.wyr.core.api.WyrApi.Paths.AUTH_RECOVER]) is none that
-     * any player holds now: it was never issued, or its player has replaced it since. Sent with 401,
-     * alike for every such secret. It will recover nobody, ever: a client drops it. A server whose
-     * database is in memory, as the dev server's is, forgets every secret when it restarts.
+     * A recovery secret no player held.
+     *
+     * No longer sent: the recovery secret and its routes are gone (CLAUDE.md §8a). It stays in the
+     * contract because it is on the wire, and dropping a member is a breaking change of its own.
      */
     INVALID_RECOVERY_SECRET,
 

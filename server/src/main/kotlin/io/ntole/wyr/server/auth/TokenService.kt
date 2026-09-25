@@ -12,12 +12,10 @@ import java.util.Date
 /**
  * Issues and validates player credentials.
  *
- * Three credentials with different jobs:
+ * Two credentials with different jobs:
  *  - a short-lived signed **access token**, stateless, checked on every request;
  *  - a long-lived opaque **refresh token**, of which only a SHA-256 hash is stored, so a
- *    database leak does not hand out working sessions;
- *  - a long-lived opaque **recovery secret**, stored the same way, which opens a new session for its
- *    player and never rotates (CLAUDE.md §8a, *Recovery*).
+ *    database leak does not hand out working sessions.
  *
  * Refresh tokens are rotated on every use: a refreshed session retires the token that produced it,
  * which works once more, until the next rotation displaces it (the grace, CLAUDE.md §8a, which
@@ -67,13 +65,6 @@ class TokenService(
 
     /** A fresh opaque refresh token, plus the hash to store in its session's row. */
     fun issueRefreshToken(): Opaque = opaque()
-
-    /**
-     * A fresh recovery secret (CLAUDE.md §8a, *Recovery*), plus the hash to store in its player's row.
-     * Made as a refresh token is, 256 random bits, and kept as one is, by its hash alone, so a database
-     * leak hands out no recovery either. It differs only in never rotating.
-     */
-    fun issueRecoverySecret(): Opaque = opaque()
 
     fun hash(token: String): String =
         MessageDigest

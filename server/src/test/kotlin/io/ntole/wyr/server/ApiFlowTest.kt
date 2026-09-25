@@ -106,6 +106,28 @@ class ApiFlowTest {
         }
 
     @Test
+    fun `a guest's mint answers its session and nothing else, and no recovery route is left`() =
+        runServer("mint-only") { client ->
+            val minted = client.post(WyrApi.Paths.AUTH_GUEST)
+            val session = Json.decodeFromString<SessionDto>(minted.bodyAsText())
+
+            assertEquals(
+                setOf("playerId", "accessToken", "refreshToken", "accessTokenExpiresInSeconds"),
+                Json.parseToJsonElement(minted.bodyAsText()).jsonObject.keys,
+            )
+            // The recovery secret's two routes, gone with it (CLAUDE.md §8a).
+            listOf("/v1/auth/recover", "/v1/me/recovery-secret").forEach { path ->
+                val answer =
+                    client.post(path) {
+                        bearerAuth(session.accessToken)
+                        contentType(ContentType.Application.Json)
+                        setBody("""{"recoverySecret":"any"}""")
+                    }
+                assertEquals(HttpStatusCode.NotFound, answer.status, path)
+            }
+        }
+
+    @Test
     fun `every answer pays one point whichever side it picks, and the total accumulates`() =
         runServer("flat-scoring") { client ->
             val player = client.guest()

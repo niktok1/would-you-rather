@@ -363,8 +363,7 @@ This project must never be attributed to any employer identity.
 auth SDK, satisfying §2.
 
 - `POST /v1/auth/guest` mints the player server-side and returns a signed access JWT plus an
-  opaque refresh token, and the player's recovery secret (*Recovery*, below). Nothing is asked of the
-  player.
+  opaque refresh token. Nothing is asked of the player.
 - Identity is **server-issued**, which is the whole point: a client-supplied device id would be
   forgeable and would let one device stuff the ballot.
 - The access token travels in `Authorization: Bearer`, never in a request body, so `VoteRequest`
@@ -421,7 +420,7 @@ auth SDK, satisfying §2.
 - **Sessions** (*decided 2026-09-25*): a player's refresh tokens live in `sessions`, **one
   refresh-token family per device**, each rotating on its own row by the rules above, so a refresh on
   one device never touches another's tokens, and nothing caps how many a player has. A mint opens a
-  player's first session and each recovery another (`SessionStore.open`, *Recovery*, below). V4
+  player's first session (`SessionStore.open`). V4
   opened one for every player who held a refresh token, under the player's own id and with their
   previous token and its grace, so every client kept refreshing across the deploy. No row is deleted:
   an expired session is dead where it lies.
@@ -457,36 +456,6 @@ auth SDK, satisfying §2.
     moved in the mirror, if another of their sessions refreshes first once rolled forward, since a
     session's rotation always rewrites the mirror: that device is refused, and mints a guest. A rollback past V2 still needs the mirror's previous
     token cleared before rolling forward (*The rotation*, above).
-- **Recovery** (*decided 2026-09-25*, and dropped again the same day, §8b *Accounts*): the server
-  half, which no client uses any more (below). The mint answers a
-  `GuestSessionDto`, the session's fields with the player's **recovery secret** beside them: 256
-  random bits in base64url, kept as a refresh token is, by its SHA-256 alone
-  (`players.recovery_secret_hash`, unique), and carried by no other answer, since a refresh and a
-  recovery answer a plain `SessionDto`. A client from before recovery reads the mint as the session
-  it always did.
-  - `POST /v1/auth/recover` with a `RecoverRequest` opens a new session for the secret's player
-    (`SessionStore.recover`), answered with that `SessionDto` alone; every other session of the player
-    lives on. A recovery does **not rotate the secret**, since the copy a restored phone holds may lag:
-    it recovers again as often as it is presented, and **whoever holds it owns the account until it is
-    replaced** (the user's decision). A secret no player holds, never issued or replaced since, is 401
-    `INVALID_RECOVERY_SECRET`, alike for every one and never 404; a malformed body or a blank secret is
-    400 `VALIDATION_FAILED`. It is looked up by its hash through the unique index, as a refresh token is.
-  - `POST /v1/me/recovery-secret` (bearer) issues the session player a new one, as a
-    `RecoverySecretDto`, and kills the one before (`PlayerStore.replaceRecoverySecret`); the sessions
-    that one opened live on. For a guest from before V4, who has none, and for a client that could not
-    keep the one it was given. 401 `UNAUTHORIZED` without a session or for a player the server no
-    longer has.
-  - Both are rate-limited (§8b), and neither the secret nor its hash is ever logged: the refusal's
-    line names the limit and a client address, and `RateLimitTest` scans a whole flow's log for both.
-    Nor does a `toString` show it: the three DTOs that carry it say only whether it is there
-    (`WyrJsonTest`). Each environment's server keeps secrets of its own (§8e): a DEV secret recovers
-    nobody on PROD, and DEV's in-memory database forgets every secret at each restart, where a client
-    meets `INVALID_RECOVERY_SECRET`. `RecoveryFlowTest` pins the routes and `SessionStoreTest` the
-    store.
-  - *No client keeps it* (*decided 2026-09-25*, `feat/simple-accounts`): Block Store on Android, the
-    iCloud Keychain on iOS, recovering before minting, the upkeep of a secret and the console's
-    *Reinstall (keep secret)* are gone. A device with no session, or a dead one, mints a guest, as
-    before recovery. The server still issues and honours secrets until its half goes too.
 - Every device keeps its session to itself. On Android the backup rules
   (`data_extraction_rules.xml`, Android 12 and later, and `backup_rules.xml`, Android 11 and
   earlier, in `:app:androidApp`) keep `AndroidTokenStorage`'s `wyr.auth.xml` out of the cloud backup
@@ -545,8 +514,8 @@ EncryptedSharedPreferences: enough for a game that stores nothing personal.
   device, and the app saves the credentials by itself. Passwords are hashed on the server and never
   logged. No email is collected, so there is **no password reset**: a forgotten password means a new
   account. No-click sign-in (Play Games Services on Android, Game Center on iOS) comes later, once
-  there is an Apple developer account. The recovery secret this replaces is gone from every client
-  (§8a).
+  there is an Apple developer account. This replaces the recovery secret (V4), which is gone from
+  the server and every client; its column stays, unused, until a later migration drops it.
 - **SQLDelight cache** — see §4. Needs a per-platform split because of web. Lower priority now
   that the endless feed (§8d) makes the server the source of truth for what a player has answered:
   the client keeps no record of what it served, so a persisted queue would only save one fetch
@@ -605,9 +574,7 @@ EncryptedSharedPreferences: enough for a game that stores nothing personal.
   request and refills whole when its period ends, so up to twice a budget can pass in moments where
   one window ends and the next begins, while over any longer span the average holds:
   - *Per client address* (on Render, Cloudflare's `CF-Connecting-IP`: `CLIENT_IP_HEADER`, §8), for
-    a caller with no session to name: guest minting 10 an hour, refreshes 30 a minute, recoveries 10
-    an hour, right secret or wrong (a restored phone recovers once; no guess at 256 bits comes near,
-    so the budget is what bounds the sessions one secret's holder can open), the admin
+    a caller with no session to name: guest minting 10 an hour, refreshes 30 a minute, the admin
     routes 60 a minute together, and on top of that, admin requests with a wrong or missing token 10
     a minute. A request with the right token spends none of that
     last budget, but once an address has spent it, every admin request from the address is refused
@@ -618,8 +585,7 @@ EncryptedSharedPreferences: enough for a game that stores nothing personal.
   - *Per player*, so players behind one address do not share a budget: the feed, votes and skips
     120 a minute each (the console's *Answer N* sends at most 50 votes in a row), likes 60 a minute,
     submissions 30 an hour (the 20-pending cap still applies), `GET /v1/me` and
-    `GET /v1/me/questions` 120 a minute each, and a new recovery secret 10 an hour (a client asks only
-    when it holds none it trusts). The key is the player id in the bearer token, which the
+    `GET /v1/me/questions` 120 a minute each. The key is the player id in the bearer token, which the
     limiter verifies itself (`verifiedPlayerId`): it runs before authentication, so no principal is
     there yet. A request without a token this server signed spends its address's budget of the group
     instead, and then gets its 401, so a forged token naming a player cannot spend that player's
