@@ -3,25 +3,31 @@ package io.ntole.wyr.account
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.ImageComposeScene
-import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getAllSemanticsNodes
 import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.unit.Density
 import io.ntole.wyr.core.domain.error.DomainError
 import io.ntole.wyr.core.domain.player.PlayerStats
+import io.ntole.wyr.core.domain.question.Category
+import io.ntole.wyr.core.domain.submission.Submission
+import io.ntole.wyr.core.domain.submission.SubmissionRules
+import io.ntole.wyr.core.domain.submission.SubmissionStatus
 import io.ntole.wyr.core.network.environment.WyrEnvironment
 import io.ntole.wyr.everyText
 import io.ntole.wyr.language.Language
 import io.ntole.wyr.language.WyrStrings
 import io.ntole.wyr.language.stringsOf
+import io.ntole.wyr.nodes
 import io.ntole.wyr.tap
+import io.ntole.wyr.texts
 import io.ntole.wyr.theme.WyrTheme
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.seconds
+import kotlin.time.Instant
 
 /**
  * The Account screen drawn off screen at two phones' sizes, in each theme and each language, from
@@ -70,20 +76,93 @@ class AccountScreenDrawTest {
     }
 
     /**
-     * No state has a form, a guest's forms being on the Auth page, so none must need scrolling: the
-     * language switch, the stats, the guest's one button or Log out, and the server line all show at
-     * an iPhone SE's height.
+     * The list under it scrolls, but the language switch, the stats, the guest's one button or Log
+     * out, and My questions' heading with New question all show at an iPhone SE's height, before any
+     * scrolling, in every language.
      *
      * Measured at the width drawn above, not 375, since CI's Linux fonts wrap wider than a phone's
-     * (as `PlayScreenDrawTest` explains), and for DEV, whose server line is the longest. On this Mac
-     * the tallest, a registered player whose read again failed, needs 572 of the 599 (524 without
-     * the server line).
+     * (as `PlayScreenDrawTest` explains).
      */
     @Test
-    fun `every state fits a short phone whole`() {
-        (GUEST_STATES + NOT_A_GUEST).forEach { state ->
-            val needed = heightNeeded(state, WIDTH)
-            assertTrue(needed <= SHORT_PHONE_HEIGHT, "$state needs $needed of $SHORT_PHONE_HEIGHT")
+    fun `New question shows before any scrolling`() {
+        Language.entries.forEach { language ->
+            val newQuestion = stringsOf(language).accountScreens.newQuestion
+            (GUEST_STATES + NOT_A_GUEST).filter { it.stats != null }.forEach { state ->
+                val scene = scene(state, language)
+                try {
+                    val button = scene.nodes().single { newQuestion in it.texts }
+                    val bottom = button.boundsInRoot.bottom
+                    assertTrue(bottom <= SHORT_PHONE_HEIGHT, "$language: $state ends New question at $bottom")
+                } finally {
+                    scene.close()
+                }
+            }
+        }
+    }
+
+    /** My questions: each question the player submitted, newest first, its two options and its status. */
+    @Test
+    fun `My questions lists each question with its options and status`() {
+        Language.entries.forEach { language ->
+            val strings = stringsOf(language).accountScreens
+            val scene = scene(AccountState(stats = REGISTERED, submissions = EVERY_STATUS), language)
+            try {
+                val shown = scene.everyText()
+                val expected =
+                    EVERY_STATUS.flatMap { listOf(statusText(it, strings), it.optionA, strings.or, it.optionB) }
+                assertEquals(expected, shown.filter { it in expected.toSet() }, "$language")
+            } finally {
+                scene.close()
+            }
+        }
+    }
+
+    @Test
+    fun `My questions says when there are none and New question opens the form`() {
+        Language.entries.forEach { language ->
+            val strings = stringsOf(language).accountScreens
+            var opened = 0
+            val none = AccountState(stats = GUEST, submissions = emptyList())
+            val scene = scene(none, language, onNewQuestion = { opened++ })
+            try {
+                assertTrue(strings.noQuestions in scene.everyText(), "$language")
+                scene.tap(strings.newQuestion)
+            } finally {
+                scene.close()
+            }
+            assertEquals(1, opened, "$language")
+        }
+    }
+
+    @Test
+    fun `a list that cannot be read offers to try again`() {
+        Language.entries.forEach { language ->
+            val strings = stringsOf(language).accountScreens
+            val actions = Refreshes()
+            val failure = AccountFailure(AccountAction.LOAD, DomainError.NETWORK)
+            val state = AccountState(stats = GUEST, listFailure = failure)
+            val scene = scene(state, language, actions = actions)
+            try {
+                assertTrue(strings.offline in scene.everyText(), "$language")
+                scene.tap(strings.tryAgain)
+            } finally {
+                scene.close()
+            }
+            assertEquals(1, actions.count, "$language")
+        }
+    }
+
+    /** With no player read there is nobody's list to show. */
+    @Test
+    fun `no player read shows no My questions`() {
+        val myQuestions = stringsOf(Language.DEFAULT).accountScreens.myQuestions
+        NOT_A_GUEST.filter { it.stats == null }.forEach { state ->
+            val scene = scene(state, Language.DEFAULT)
+            try {
+                assertFalse(myQuestions in scene.everyText(), "$state")
+            } finally {
+                scene.close()
+            }
         }
     }
 
@@ -132,32 +211,6 @@ class AccountScreenDrawTest {
         }
     }
 
-    /** The least height [state]'s screen needs at [width] to show all of it without scrolling. */
-    private fun heightNeeded(
-        state: AccountState,
-        width: Int,
-    ): Int {
-        var needed = -1
-        val scene =
-            ImageComposeScene(width = width, height = SHORT_PHONE_HEIGHT, density = Density(1f)) {
-                WyrTheme {
-                    Layout(content = { Screen(state) }) { measurables, constraints ->
-                        val screen = measurables.single()
-                        needed = screen.minIntrinsicHeight(constraints.maxWidth)
-                        val placeable = screen.measure(constraints)
-                        layout(placeable.width, placeable.height) { placeable.place(0, 0) }
-                    }
-                }
-            }
-        try {
-            scene.render()
-        } finally {
-            scene.close()
-        }
-        assertTrue(needed > 0, "$state was never measured")
-        return needed
-    }
-
     /** Every text [state]'s screen draws, as its semantics hold it, from the top of the screen down. */
     @OptIn(ExperimentalComposeUiApi::class)
     private fun textsShown(
@@ -185,9 +238,21 @@ class AccountScreenDrawTest {
         state: AccountState,
         language: Language,
         onOpenAuth: () -> Unit = {},
+        onNewQuestion: () -> Unit = {},
+        actions: AccountActions = Refreshes(),
     ): ImageComposeScene =
         ImageComposeScene(width = WIDTH, height = HEIGHT, density = Density(1f)) {
-            WyrTheme { WyrStrings(language) { Screen(state, language = language, onOpenAuth = onOpenAuth) } }
+            WyrTheme {
+                WyrStrings(language) {
+                    Screen(
+                        state,
+                        language = language,
+                        onOpenAuth = onOpenAuth,
+                        onNewQuestion = onNewQuestion,
+                        actions = actions,
+                    )
+                }
+            }
         }.also { it.render() }
 
     @Composable
@@ -196,19 +261,27 @@ class AccountScreenDrawTest {
         environment: WyrEnvironment = WyrEnvironment.DEV,
         language: Language = Language.DEFAULT,
         onOpenAuth: () -> Unit = {},
+        onNewQuestion: () -> Unit = {},
+        actions: AccountActions = Refreshes(),
     ) {
         AccountScreen(
             state = state,
-            actions = NoActions,
+            actions = actions,
             environment = environment,
             language = language,
             onSelectLanguage = {},
             onOpenAuth = onOpenAuth,
+            onNewQuestion = onNewQuestion,
         )
     }
 
-    private object NoActions : AccountActions {
-        override fun refresh() = Unit
+    /** Counts the reads asked for, and does nothing else. */
+    private class Refreshes : AccountActions {
+        var count = 0
+
+        override fun refresh() {
+            count++
+        }
 
         override fun authShown() = Unit
 
@@ -249,10 +322,43 @@ class AccountScreenDrawTest {
         val REGISTERED =
             PlayerStats(123_456, 123_456, 12_345, 1_234, 12_345, 123_456, username = "abcdefghijklmnopqrst")
 
+        val LONGEST = "Be able to fly ".repeat(20).take(SubmissionRules.MAX_OPTION_LENGTH)
+
+        val QUESTION =
+            Submission(
+                id = "q1",
+                optionA = "Fly",
+                optionB = "Swim",
+                categories = setOf(Category.SUPERPOWERS),
+                status = SubmissionStatus.PENDING,
+                rejectionReason = null,
+                submittedAt = Instant.parse("2026-09-25T12:00:00Z"),
+            )
+
+        /** One of every status, newest first, the longest options and reason among them. */
+        val EVERY_STATUS =
+            listOf(
+                QUESTION,
+                QUESTION.copy(id = "q2", optionA = "Tea", optionB = "Coffee", status = SubmissionStatus.APPROVED),
+                QUESTION.copy(
+                    id = "q3",
+                    optionA = LONGEST,
+                    optionB = LONGEST.reversed(),
+                    status = SubmissionStatus.REJECTED,
+                    rejectionReason = "x".repeat(200),
+                ),
+                QUESTION.copy(id = "q4", optionA = "Lie", optionB = "Steal", status = SubmissionStatus.REJECTED),
+                QUESTION.copy(id = "q5", optionA = "Run", optionB = "Walk", status = SubmissionStatus.RETIRED),
+                QUESTION.copy(id = "q6", optionA = "Sing", optionB = "Dance", status = SubmissionStatus.OTHER),
+            )
+
         /** A guest's screen, its one button to the Auth page under the stats, whatever is typed there. */
         val GUEST_STATES =
             listOf(
                 AccountState(stats = GUEST),
+                AccountState(stats = GUEST, submissions = emptyList()),
+                AccountState(stats = GUEST, submissions = listOf(QUESTION)),
+                AccountState(stats = GUEST, listFailure = AccountFailure(AccountAction.LOAD, DomainError.NETWORK)),
                 AccountState(stats = GUEST.copy(totalPoints = 1, answersGiven = 1, questionsAnswered = 1)),
                 AccountState(
                     stats = GUEST,
@@ -274,6 +380,7 @@ class AccountScreenDrawTest {
                 AccountState(running = AccountAction.LOAD),
                 AccountState(failure = AccountFailure(AccountAction.LOAD, DomainError.NETWORK)),
                 AccountState(stats = REGISTERED),
+                AccountState(stats = REGISTERED, submissions = EVERY_STATUS),
                 AccountState(stats = REGISTERED, running = AccountAction.LOAD),
                 AccountState(stats = REGISTERED, running = AccountAction.LOG_OUT),
                 AccountState(stats = REGISTERED, failure = AccountFailure(AccountAction.LOG_OUT, DomainError.NETWORK)),

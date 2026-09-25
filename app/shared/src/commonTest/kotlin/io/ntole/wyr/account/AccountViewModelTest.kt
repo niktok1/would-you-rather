@@ -14,6 +14,10 @@ import io.ntole.wyr.core.domain.question.Category
 import io.ntole.wyr.core.domain.question.Question
 import io.ntole.wyr.core.domain.question.QuestionRepository
 import io.ntole.wyr.core.domain.session.SessionRepository
+import io.ntole.wyr.core.domain.submission.GetMySubmissions
+import io.ntole.wyr.core.domain.submission.Submission
+import io.ntole.wyr.core.domain.submission.SubmissionRepository
+import io.ntole.wyr.core.domain.submission.SubmissionStatus
 import io.ntole.wyr.language.EnglishStrings
 import io.ntole.wyr.language.SerbianCyrillicStrings
 import io.ntole.wyr.language.SerbianLatinStrings
@@ -36,6 +40,7 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.seconds
+import kotlin.time.Instant
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class AccountViewModelTest {
@@ -60,6 +65,74 @@ class AccountViewModelTest {
             testScheduler.advanceUntilIdle()
 
             assertEquals(emptyList(), game.calls)
+        }
+
+    @Test
+    fun `showing the screen reads the player and then their questions`() =
+        runTest(dispatcher) {
+            game.questionsOf["guest1"] = listOf(QUESTION)
+
+            val state = open().state.value
+
+            assertEquals(listOf("stats", "mine"), game.calls)
+            assertEquals(listOf(QUESTION), state.submissions)
+            assertNull(state.listFailure)
+        }
+
+    /** My questions are the player's: another player's after a login, and a fresh guest's none. */
+    @Test
+    fun `a login shows the account's questions and a logout none`() =
+        runTest(dispatcher) {
+            val theirs = QUESTION.copy(id = "q2", optionA = "Tea", optionB = "Coffee")
+            game.questionsOf["guest1"] = listOf(QUESTION)
+            game.questionsOf["bob-player"] = listOf(theirs)
+            game.accounts["bob_1"] = "correct horse" to "bob-player"
+            val viewModel = open()
+
+            viewModel.setLoginUsername("bob_1")
+            viewModel.setLoginPassword("correct horse")
+            viewModel.logIn()
+            testScheduler.advanceUntilIdle()
+            assertEquals(listOf(theirs), viewModel.state.value.submissions)
+
+            viewModel.logOut()
+            testScheduler.advanceUntilIdle()
+            assertEquals(emptyList(), viewModel.state.value.submissions)
+        }
+
+    @Test
+    fun `every action reads the list again`() =
+        runTest(dispatcher) {
+            val viewModel = open()
+            game.calls.clear()
+            viewModel.setRegisterUsername("bob_1")
+            viewModel.setRegisterPassword("correct horse")
+
+            viewModel.register()
+            testScheduler.advanceUntilIdle()
+
+            assertEquals(listOf("register bob_1", "stats", "mine"), game.calls)
+        }
+
+    @Test
+    fun `a list that cannot be read says so under it and keeps the stats`() =
+        runTest(dispatcher) {
+            game.points = 3
+            game.mineFailsWith = DomainError.NETWORK
+            val viewModel = open()
+
+            val state = viewModel.state.value
+            assertEquals(3, state.stats?.totalPoints)
+            assertNull(state.submissions)
+            assertEquals(AccountFailure(AccountAction.LOAD, DomainError.NETWORK), state.listFailure)
+            assertNull(state.failure, "the stats were read")
+
+            game.mineFailsWith = null
+            viewModel.refresh()
+            testScheduler.advanceUntilIdle()
+
+            assertEquals(emptyList(), viewModel.state.value.submissions)
+            assertNull(viewModel.state.value.listFailure)
         }
 
     @Test
@@ -154,7 +227,7 @@ class AccountViewModelTest {
             assertEquals(12, state.stats?.totalPoints)
             assertEquals("guest1", game.player, "the same player")
             // A registered player sees no form, so nothing typed is kept; only the Auth page's cue to go back.
-            assertEquals(AccountState(stats = state.stats, signedIn = true), state)
+            assertEquals(AccountState(stats = state.stats, submissions = emptyList(), signedIn = true), state)
             assertTrue("register Bob_1" in game.calls)
         }
 
@@ -518,12 +591,12 @@ class AccountViewModelTest {
 
             viewModel.authShown()
             testScheduler.advanceUntilIdle()
-            assertEquals(listOf("stats"), game.calls)
+            assertEquals(listOf("stats", "mine"), game.calls)
             assertEquals("Playing as guest", playingAs(viewModel.state.value.shown()))
 
             viewModel.authShown()
             testScheduler.advanceUntilIdle()
-            assertEquals(listOf("stats"), game.calls)
+            assertEquals(listOf("stats", "mine"), game.calls)
         }
 
     /** The player the screen shows, which a test expects there to be. */
@@ -539,6 +612,7 @@ class AccountViewModelTest {
     private fun viewModel(): AccountViewModel =
         AccountViewModel(
             getPlayerStats = GetPlayerStats(game, game),
+            getMySubmissions = GetMySubmissions(game, game),
             registerAccount = RegisterAccount(game, game),
             logInToAccount = LogIn(game, game),
             logOutOfAccount = LogOut(game, game),
@@ -552,6 +626,7 @@ class AccountViewModelTest {
         PlayerRepository,
         SessionRepository,
         AccountRepository,
+        SubmissionRepository,
         QuestionRepository {
         val calls = mutableListOf<String>()
 
@@ -569,6 +644,10 @@ class AccountViewModelTest {
 
         /** When set, a registration waits for it before it answers. */
         var registerWaitsFor: CompletableDeferred<Unit>? = null
+
+        /** The questions each player submitted, by player; none for a player not named. */
+        val questionsOf = mutableMapOf<String, List<Submission>>()
+        var mineFailsWith: DomainError? = null
 
         /** Who is playing on this device, as the stored session names them, or none. */
         var player: String? = null
@@ -619,6 +698,18 @@ class AccountViewModelTest {
             player = null
         }
 
+        override suspend fun mine(): List<Submission> {
+            calls += "mine"
+            mineFailsWith?.let { throw WyrException(it) }
+            return questionsOf[ensure()].orEmpty()
+        }
+
+        override suspend fun submit(
+            optionA: String,
+            optionB: String,
+            categories: Set<Category>,
+        ): Submission = error("the Account screen submits nothing: the Submit screen does")
+
         override val categories: StateFlow<Set<Category>> = MutableStateFlow(emptySet())
 
         override suspend fun next(): Question = error("the Account screen serves no question")
@@ -637,5 +728,16 @@ class AccountViewModelTest {
     private companion object {
         val ENGLISH = EnglishStrings.accountScreens
         val CYRILLIC = SerbianCyrillicStrings.accountScreens
+
+        val QUESTION =
+            Submission(
+                id = "q1",
+                optionA = "Fly",
+                optionB = "Swim",
+                categories = setOf(Category.SUPERPOWERS),
+                status = SubmissionStatus.PENDING,
+                rejectionReason = null,
+                submittedAt = Instant.fromEpochMilliseconds(1_790_000_000_000L),
+            )
     }
 }

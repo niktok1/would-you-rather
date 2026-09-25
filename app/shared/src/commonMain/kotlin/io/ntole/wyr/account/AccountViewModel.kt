@@ -7,6 +7,7 @@ import io.ntole.wyr.core.domain.account.LogOut
 import io.ntole.wyr.core.domain.account.RegisterAccount
 import io.ntole.wyr.core.domain.error.WyrException
 import io.ntole.wyr.core.domain.player.GetPlayerStats
+import io.ntole.wyr.core.domain.submission.GetMySubmissions
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -50,14 +51,15 @@ interface AccountActions {
 /**
  * Drives the Account screen and the Auth page opened from it (CLAUDE.md §8d, *The Account screen*):
  * register the guest playing, log in to an account, log out, each through its use case, and the
- * player read after every one. A register or a login that worked raises [AccountState.signedIn], for
- * the Auth page to go back on.
+ * player read after every one, their stats and then the questions they submitted (My questions). A
+ * register or a login that worked raises [AccountState.signedIn], for the Auth page to go back on.
  *
  * One action at a time, and after each the player is read again, whatever became of it: a
  * registration whose answer was lost may have landed, and the read then names the account.
  */
 class AccountViewModel(
     private val getPlayerStats: GetPlayerStats,
+    private val getMySubmissions: GetMySubmissions,
     private val registerAccount: RegisterAccount,
     private val logInToAccount: LogIn,
     private val logOutOfAccount: LogOut,
@@ -132,7 +134,7 @@ class AccountViewModel(
         perform(AccountAction.LOG_IN) {
             logInToAccount(draft.loginUsername, draft.loginPassword)
             // Another player from here on: what was read was the guest's.
-            _state.update { it.copy(stats = null, guestPointsWarning = null, signedIn = true) }
+            _state.update { it.copy(stats = null, submissions = null, guestPointsWarning = null, signedIn = true) }
         }
     }
 
@@ -142,7 +144,7 @@ class AccountViewModel(
     override fun logOut() =
         perform(AccountAction.LOG_OUT) {
             logOutOfAccount()
-            _state.update { it.copy(stats = null) }
+            _state.update { it.copy(stats = null, submissions = null) }
         }
 
     /**
@@ -154,7 +156,7 @@ class AccountViewModel(
         block: suspend () -> Unit,
     ) {
         if (_state.value.isBusy) return
-        _state.update { it.copy(running = action, failure = null, signedIn = false) }
+        _state.update { it.copy(running = action, failure = null, listFailure = null, signedIn = false) }
 
         viewModelScope.launch {
             try {
@@ -171,20 +173,41 @@ class AccountViewModel(
     }
 
     /**
-     * Reads who is playing, minting a guest where there is none. A registered player sees no form, so
-     * what was typed goes then: not before, since the platform's password manager reads the fields
-     * as they leave the screen, and the Auth page leaves on [AccountState.signedIn], which stays up
-     * for it. A failed read keeps what was shown, and says so unless the action before it already
-     * failed, which says more.
+     * Reads who is playing, minting a guest where there is none, then the questions they submitted,
+     * each whatever became of the other. A registered player sees no form, so what was typed goes
+     * then: not before, since the platform's password manager reads the fields as they leave the
+     * screen, and the Auth page leaves on [AccountState.signedIn], which stays up for it. A failed
+     * read keeps what was shown, and says so: the stats' unless the action before it already failed,
+     * which says more, and the list's under the list.
      */
     private suspend fun load() {
+        loadStats()
+        try {
+            val submissions = getMySubmissions()
+            _state.update { it.copy(submissions = submissions) }
+        } catch (failure: WyrException) {
+            _state.update {
+                it.copy(
+                    listFailure = AccountFailure(AccountAction.LOAD, failure.error, failure.retryAfter),
+                )
+            }
+        }
+    }
+
+    private suspend fun loadStats() {
         try {
             val stats = getPlayerStats()
             _state.update {
                 if (stats.username == null) {
                     it.copy(stats = stats)
                 } else {
-                    AccountState(stats = stats, failure = it.failure, running = it.running, signedIn = it.signedIn)
+                    AccountState(
+                        stats = stats,
+                        submissions = it.submissions,
+                        failure = it.failure,
+                        running = it.running,
+                        signedIn = it.signedIn,
+                    )
                 }
             }
         } catch (failure: WyrException) {

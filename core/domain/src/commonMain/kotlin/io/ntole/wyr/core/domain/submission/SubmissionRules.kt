@@ -19,6 +19,14 @@ public object SubmissionRules {
     /** Most submissions one player may have waiting for a moderator at once. */
     public const val MAX_PENDING_SUBMISSIONS: Int = 20
 
+    /**
+     * The points submitting a question costs its author, 1 until the game is released (CLAUDE.md §8c,
+     * §8d *Submitting*): the client's one copy, which the Submit screen shows on its button and holds
+     * the button off by while the player has fewer. The server takes the cost and refuses a question
+     * its author cannot pay for itself, so this copy decides nothing on its own.
+     */
+    public const val COST: Int = 1
+
     /** What is wrong with [option] by the server's rules, or null when a question can have it. */
     public fun optionProblem(option: String): OptionProblem? {
         val trimmed = option.trim()

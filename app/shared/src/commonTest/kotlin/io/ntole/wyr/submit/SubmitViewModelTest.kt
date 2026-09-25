@@ -2,15 +2,19 @@ package io.ntole.wyr.submit
 
 import io.ntole.wyr.core.domain.error.DomainError
 import io.ntole.wyr.core.domain.error.WyrException
+import io.ntole.wyr.core.domain.player.GetPlayerStats
+import io.ntole.wyr.core.domain.player.PlayerRepository
+import io.ntole.wyr.core.domain.player.PlayerStats
 import io.ntole.wyr.core.domain.question.Category
 import io.ntole.wyr.core.domain.session.SessionRepository
-import io.ntole.wyr.core.domain.submission.GetMySubmissions
 import io.ntole.wyr.core.domain.submission.OptionProblem
 import io.ntole.wyr.core.domain.submission.Submission
 import io.ntole.wyr.core.domain.submission.SubmissionRepository
 import io.ntole.wyr.core.domain.submission.SubmissionRules
 import io.ntole.wyr.core.domain.submission.SubmissionStatus
 import io.ntole.wyr.core.domain.submission.SubmitQuestion
+import io.ntole.wyr.language.EnglishStrings
+import io.ntole.wyr.language.SerbianCyrillicStrings
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -56,16 +60,75 @@ class SubmitViewModelTest {
         }
 
     @Test
-    fun `showing the screen lists the player's submissions newest first`() =
+    fun `showing the form reads the player's points`() =
         runTest(dispatcher) {
+            server.points = 7
+
             val state = open().state.value
 
-            assertEquals(MINE, state.submissions)
+            assertEquals(7, state.points)
             // The session first, as every use case makes sure of it.
-            assertEquals(listOf("ensure", "mine"), server.calls)
+            assertEquals(listOf("ensure", "stats"), server.calls)
             assertNull(state.submitFailure)
-            assertNull(state.listFailure)
+            assertNull(state.pointsFailure)
             assertFalse(state.isBusy)
+        }
+
+    @Test
+    fun `a question costs the points the client keeps and no more`() {
+        assertEquals(1, SubmissionRules.COST)
+    }
+
+    @Test
+    fun `a player with the cost can send and one with fewer points cannot`() =
+        runTest(dispatcher) {
+            server.points = SubmissionRules.COST
+            val viewModel = open()
+            viewModel.write("Fly", "Swim", Category.FOOD)
+            assertTrue(viewModel.state.value.canSubmit)
+            assertFalse(viewModel.state.value.tooFewPoints)
+
+            server.points = SubmissionRules.COST - 1
+            viewModel.refresh()
+            testScheduler.advanceUntilIdle()
+            server.calls.clear()
+
+            assertTrue(viewModel.state.value.tooFewPoints)
+            assertFalse(viewModel.state.value.canSubmit)
+            viewModel.submit()
+            testScheduler.advanceUntilIdle()
+            assertEquals(emptyList(), server.calls)
+        }
+
+    @Test
+    fun `nothing is sent before the points are read`() =
+        runTest(dispatcher) {
+            val viewModel = viewModel()
+            viewModel.write("Fly", "Swim", Category.FOOD)
+
+            assertNull(viewModel.state.value.points)
+            assertFalse(viewModel.state.value.tooFewPoints, "nothing to say before the points are known")
+            assertFalse(viewModel.state.value.canSubmit)
+        }
+
+    @Test
+    fun `points that cannot be read offer to try again and a second read works`() =
+        runTest(dispatcher) {
+            server.statsFailWith = DomainError.NETWORK
+            val viewModel = open()
+            viewModel.write("Fly", "Swim", Category.FOOD)
+
+            assertNull(viewModel.state.value.points)
+            assertEquals(SubmitFailure(DomainError.NETWORK), viewModel.state.value.pointsFailure)
+            assertFalse(viewModel.state.value.canSubmit)
+
+            server.statsFailWith = null
+            viewModel.refresh()
+            testScheduler.advanceUntilIdle()
+
+            assertEquals(5, viewModel.state.value.points)
+            assertNull(viewModel.state.value.pointsFailure)
+            assertTrue(viewModel.state.value.canSubmit)
         }
 
     @Test
@@ -162,7 +225,7 @@ class SubmitViewModelTest {
         }
 
     @Test
-    fun `a stored question clears the form and the list is read again`() =
+    fun `a stored question clears the form and the points are read again`() =
         runTest(dispatcher) {
             val viewModel = open()
             server.calls.clear()
@@ -174,7 +237,7 @@ class SubmitViewModelTest {
 
             // As typed: trimming is the server's.
             assertEquals(
-                listOf("ensure", """submit " Fly "|"Swim"|[FOOD, SUPERPOWERS]""", "ensure", "mine"),
+                listOf("ensure", """submit " Fly "|"Swim"|[FOOD, SUPERPOWERS]""", "ensure", "stats"),
                 server.calls,
             )
             val state = viewModel.state.value
@@ -183,16 +246,29 @@ class SubmitViewModelTest {
             assertEquals(emptySet(), state.categories)
             assertTrue(state.sent)
             assertNull(state.submitFailure)
-            assertNull(state.listFailure)
+            assertNull(state.pointsFailure)
             assertFalse(state.isBusy)
-            val listed = assertNotNull(state.submissions)
-            assertEquals("Fly", listed.first().optionA)
-            assertEquals(SubmissionStatus.PENDING, listed.first().status)
-            assertEquals(MINE, listed.drop(1))
+            assertEquals(4, state.points, "the server took the cost")
+            assertEquals("Fly", server.stored.single().optionA)
         }
 
     @Test
-    fun `the next action takes the sent note down`() =
+    fun `a stored question is sent until the form goes back for it`() =
+        runTest(dispatcher) {
+            val viewModel = open()
+            viewModel.write("Fly", "Swim", Category.FOOD)
+            viewModel.submit()
+            testScheduler.advanceUntilIdle()
+            assertTrue(viewModel.state.value.sent)
+
+            viewModel.leftForm()
+
+            assertFalse(viewModel.state.value.sent)
+        }
+
+    /** A question whose answer came after the player went back is not sent back later. */
+    @Test
+    fun `the next action takes sent down`() =
         runTest(dispatcher) {
             val viewModel = open()
             viewModel.write("Fly", "Swim", Category.FOOD)
@@ -217,16 +293,14 @@ class SubmitViewModelTest {
 
             val state = viewModel.state.value
             assertEquals(SubmitFailure(DomainError.INVALID_SUBMISSION), state.submitFailure)
-            assertEquals(
-                "The game can't take that question as written. Check both options.",
-                failureMessage(assertNotNull(state.submitFailure)),
-            )
+            val failure = assertNotNull(state.submitFailure)
+            assertEquals("Not accepted. Check both options.", failureMessage(failure, ENGLISH))
             assertEquals("Fly", state.optionA)
             assertEquals("Swim", state.optionB)
             assertEquals(setOf(Category.FOOD), state.categories)
             assertFalse(state.sent)
-            // After a failure too: a submission whose answer was lost may have been stored.
-            assertEquals("mine", server.calls.last())
+            // After a failure too: a submission whose answer was lost may have been stored, and paid for.
+            assertEquals("stats", server.calls.last())
         }
 
     @Test
@@ -241,10 +315,8 @@ class SubmitViewModelTest {
 
             val failure = assertNotNull(viewModel.state.value.submitFailure)
             assertEquals(SubmitFailure(DomainError.SUBMISSION_LIMIT), failure)
-            assertEquals(
-                "You have 20 questions waiting for review already. Send more once one is reviewed.",
-                failureMessage(failure),
-            )
+            assertEquals("You have 20 waiting already.", failureMessage(failure, ENGLISH))
+            assertEquals("Већ имаш 20 питања на чекању.", failureMessage(failure, CYRILLIC))
             assertEquals("Fly", viewModel.state.value.optionA)
         }
 
@@ -260,10 +332,8 @@ class SubmitViewModelTest {
 
             val state = viewModel.state.value
             assertEquals(SubmitFailure(DomainError.NETWORK), state.submitFailure)
-            assertEquals(
-                "Can't reach the game. Check your connection.",
-                failureMessage(assertNotNull(state.submitFailure)),
-            )
+            val failure = assertNotNull(state.submitFailure)
+            assertEquals("No connection. Check your internet.", failureMessage(failure, ENGLISH))
             assertEquals("Fly", state.optionA)
             assertTrue(state.canSubmit, "to send again")
         }
@@ -280,31 +350,14 @@ class SubmitViewModelTest {
 
             val failure = assertNotNull(viewModel.state.value.submitFailure)
             assertEquals(SubmitFailure(DomainError.RATE_LIMITED, 42.seconds), failure)
-            assertEquals("Too many tries. Wait 42 s, then try again.", failureMessage(failure))
+            assertEquals("Too many tries. Wait 42 s.", failureMessage(failure, ENGLISH))
         }
 
     @Test
-    fun `a list that cannot be read offers to try again and a second read works`() =
-        runTest(dispatcher) {
-            server.mineFailsWith = DomainError.NETWORK
-            val viewModel = open()
-
-            assertNull(viewModel.state.value.submissions)
-            assertEquals(SubmitFailure(DomainError.NETWORK), viewModel.state.value.listFailure)
-
-            server.mineFailsWith = null
-            viewModel.refresh()
-            testScheduler.advanceUntilIdle()
-
-            assertEquals(MINE, viewModel.state.value.submissions)
-            assertNull(viewModel.state.value.listFailure)
-        }
-
-    @Test
-    fun `a stored question whose list read fails says so under the list and keeps what was shown`() =
+    fun `a stored question whose points read fails says so and stays sent`() =
         runTest(dispatcher) {
             val viewModel = open()
-            server.mineFailsWith = DomainError.SERVER
+            server.statsFailWith = DomainError.SERVER
 
             viewModel.write("Fly", "Swim", Category.FOOD)
             viewModel.submit()
@@ -313,16 +366,16 @@ class SubmitViewModelTest {
             val state = viewModel.state.value
             assertTrue(state.sent)
             assertNull(state.submitFailure)
-            assertEquals(SubmitFailure(DomainError.SERVER), state.listFailure)
-            assertEquals(MINE, state.submissions)
+            assertEquals(SubmitFailure(DomainError.SERVER), state.pointsFailure)
+            assertEquals(5, state.points, "what was read before")
         }
 
     @Test
-    fun `a refused question whose list read fails too says each under its own part`() =
+    fun `a refused question whose points read fails too says each`() =
         runTest(dispatcher) {
             server.submitFailsWith = WyrException(DomainError.SUBMISSION_LIMIT)
             val viewModel = open()
-            server.mineFailsWith = DomainError.NETWORK
+            server.statsFailWith = DomainError.NETWORK
 
             viewModel.write("Fly", "Swim", Category.FOOD)
             viewModel.submit()
@@ -330,39 +383,8 @@ class SubmitViewModelTest {
 
             val state = viewModel.state.value
             assertEquals(SubmitFailure(DomainError.SUBMISSION_LIMIT), state.submitFailure)
-            // The list is as read before, so it says it could not be read again.
-            assertEquals(SubmitFailure(DomainError.NETWORK), state.listFailure)
-            assertEquals(MINE, state.submissions)
-        }
-
-    @Test
-    fun `a list never read whose read fails again after a refused question still offers to try again`() =
-        runTest(dispatcher) {
-            // Offline from the moment the tab is shown.
-            server.mineFailsWith = DomainError.NETWORK
-            server.submitFailsWith = WyrException(DomainError.NETWORK, "connect timed out")
-            val viewModel = open()
-            assertEquals(SubmitFailure(DomainError.NETWORK), viewModel.state.value.listFailure)
-
-            viewModel.write("Fly", "Swim", Category.FOOD)
-            viewModel.submit()
-            testScheduler.advanceUntilIdle()
-
-            // Nothing in flight, no list and a failure under it: the screen offers Try again there,
-            // where it would otherwise wait on a read nobody makes.
-            val state = viewModel.state.value
+            assertEquals(SubmitFailure(DomainError.NETWORK), state.pointsFailure)
             assertFalse(state.isBusy)
-            assertNull(state.submissions)
-            assertEquals(SubmitFailure(DomainError.NETWORK), state.submitFailure)
-            assertEquals(SubmitFailure(DomainError.NETWORK), state.listFailure)
-
-            server.mineFailsWith = null
-            viewModel.refresh()
-            testScheduler.advanceUntilIdle()
-
-            assertEquals(MINE, viewModel.state.value.submissions)
-            assertNull(viewModel.state.value.listFailure)
-            assertNull(viewModel.state.value.submitFailure)
         }
 
     @Test
@@ -378,21 +400,22 @@ class SubmitViewModelTest {
             testScheduler.advanceUntilIdle()
 
             assertEquals(1, server.calls.count { it.startsWith("submit") })
-            assertEquals(1, server.calls.count { it == "mine" }, "only the read after the submit")
+            assertEquals(1, server.calls.count { it == "stats" }, "only the read after the submit")
         }
 
     @Test
-    fun `nothing is sent while the list is being read`() =
+    fun `nothing is sent while the points are being read`() =
         runTest(dispatcher) {
-            val viewModel = viewModel()
+            val viewModel = open()
             viewModel.write("Fly", "Swim", Category.FOOD)
+            server.calls.clear()
 
             viewModel.refresh()
             assertFalse(viewModel.state.value.canSubmit)
             viewModel.submit()
             testScheduler.advanceUntilIdle()
 
-            assertEquals(listOf("ensure", "mine"), server.calls)
+            assertEquals(listOf("ensure", "stats"), server.calls)
             assertTrue(viewModel.state.value.canSubmit, "once the read is done")
         }
 
@@ -423,7 +446,7 @@ class SubmitViewModelTest {
         }
 
     @Test
-    fun `the form can change while the list is being read`() =
+    fun `the form can change while the points are being read`() =
         runTest(dispatcher) {
             val viewModel = viewModel()
 
@@ -435,7 +458,7 @@ class SubmitViewModelTest {
             assertEquals(setOf(Category.FOOD), viewModel.state.value.categories)
         }
 
-    /** A view model whose screen has been shown, and read the list. */
+    /** A view model whose form has been shown, and read the points. */
     private fun TestScope.open(): SubmitViewModel =
         viewModel().also {
             it.refresh()
@@ -445,7 +468,7 @@ class SubmitViewModelTest {
     private fun viewModel(): SubmitViewModel =
         SubmitViewModel(
             submitQuestion = SubmitQuestion(server, server),
-            getMySubmissions = GetMySubmissions(server, server),
+            getPlayerStats = GetPlayerStats(server, server),
         )
 
     /** Types both options and picks exactly [categories]. */
@@ -462,14 +485,17 @@ class SubmitViewModelTest {
 
     /**
      * The server and this device's session in one. Every call that reaches it is in [calls], a
-     * submission with its options quoted as sent and its categories in declaration order.
+     * submission with its options quoted as sent and its categories in declaration order. A question
+     * stored costs [SubmissionRules.COST], as the server takes it.
      */
     private class FakeServer :
         SubmissionRepository,
+        PlayerRepository,
         SessionRepository {
         val calls = mutableListOf<String>()
-        var mine: List<Submission> = MINE
-        var mineFailsWith: DomainError? = null
+        val stored = mutableListOf<Submission>()
+        var points = 5
+        var statsFailWith: DomainError? = null
         var submitFailsWith: WyrException? = null
 
         /** When set, a submission waits for it before it answers. */
@@ -488,9 +514,9 @@ class SubmitViewModelTest {
             calls += "submit \"$optionA\"|\"$optionB\"|${categories.sorted()}"
             submitWaitsFor?.await()
             submitFailsWith?.let { throw it }
-            val stored =
+            val submission =
                 Submission(
-                    id = "q${mine.size + 1}",
+                    id = "q${stored.size + 1}",
                     optionA = optionA.trim(),
                     optionB = optionB.trim(),
                     categories = categories,
@@ -498,38 +524,22 @@ class SubmitViewModelTest {
                     rejectionReason = null,
                     submittedAt = Instant.fromEpochMilliseconds(1_790_000_000_010L),
                 )
-            mine = listOf(stored) + mine
-            return stored
+            points -= SubmissionRules.COST
+            stored += submission
+            return submission
         }
 
-        override suspend fun mine(): List<Submission> {
-            calls += "mine"
-            mineFailsWith?.let { throw WyrException(it) }
-            return mine
+        override suspend fun mine(): List<Submission> = error("the form lists nothing: My questions does")
+
+        override suspend fun stats(): PlayerStats {
+            calls += "stats"
+            statsFailWith?.let { throw WyrException(it) }
+            return PlayerStats(points, 0, 0, 1, 0, 0)
         }
     }
 
     private companion object {
-        val MINE =
-            listOf(
-                Submission(
-                    id = "q2",
-                    optionA = "Tea",
-                    optionB = "Coffee",
-                    categories = setOf(Category.FOOD),
-                    status = SubmissionStatus.REJECTED,
-                    rejectionReason = "a duplicate",
-                    submittedAt = Instant.fromEpochMilliseconds(1_790_000_000_001L),
-                ),
-                Submission(
-                    id = "q1",
-                    optionA = "Lie",
-                    optionB = "Steal",
-                    categories = setOf(Category.ETHICS),
-                    status = SubmissionStatus.PENDING,
-                    rejectionReason = null,
-                    submittedAt = Instant.fromEpochMilliseconds(1_790_000_000_000L),
-                ),
-            )
+        val ENGLISH = EnglishStrings.accountScreens
+        val CYRILLIC = SerbianCyrillicStrings.accountScreens
     }
 }

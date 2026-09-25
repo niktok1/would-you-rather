@@ -20,7 +20,6 @@ import io.ntole.wyr.home.HomeScreen
 import io.ntole.wyr.language.Language
 import io.ntole.wyr.language.LanguageViewModel
 import io.ntole.wyr.language.WyrStrings
-import io.ntole.wyr.navigation.AccountTopBar
 import io.ntole.wyr.navigation.BackTopBar
 import io.ntole.wyr.navigation.Navigator
 import io.ntole.wyr.navigation.PlayTopBar
@@ -89,8 +88,15 @@ private fun Screens(
                 }
 
                 Screen.Account -> {
-                    AccountTopBar(onBack = { navigator.back() }, onSubmit = { navigator.open(Screen.Submit) })
-                    Below { Account(language, onSelectLanguage, onOpenAuth = { navigator.open(Screen.Auth) }) }
+                    BackTopBar(onBack = { navigator.back() })
+                    Below {
+                        Account(
+                            language = language,
+                            onSelectLanguage = onSelectLanguage,
+                            onOpenAuth = { navigator.open(Screen.Auth) },
+                            onNewQuestion = { navigator.open(Screen.Submit) },
+                        )
+                    }
                 }
 
                 Screen.Auth -> {
@@ -100,7 +106,7 @@ private fun Screens(
 
                 Screen.Submit -> {
                     BackTopBar(onBack = { navigator.back() })
-                    Below { Submit() }
+                    Below { Submit(onSent = { navigator.back() }) }
                 }
             }
         }
@@ -118,12 +124,13 @@ private fun Account(
     language: Language,
     onSelectLanguage: (Language) -> Unit,
     onOpenAuth: () -> Unit,
+    onNewQuestion: () -> Unit,
 ) {
     val viewModel = koinViewModel<AccountViewModel>()
     val state by viewModel.state.collectAsStateWithLifecycle()
 
-    // Every time the screen is shown: the points move on the Play screen meanwhile, and a guest's are
-    // what a login would leave behind.
+    // Every time the screen is shown: the points move on the Play screen meanwhile, a guest's are what
+    // a login would leave behind, and a moderator decides the player's questions.
     LaunchedEffect(viewModel) { viewModel.refresh() }
 
     AccountScreen(
@@ -133,6 +140,7 @@ private fun Account(
         language = language,
         onSelectLanguage = onSelectLanguage,
         onOpenAuth = onOpenAuth,
+        onNewQuestion = onNewQuestion,
     )
 }
 
@@ -157,13 +165,24 @@ private fun Auth(onSignedIn: () -> Unit) {
     AuthScreen(state = state, actions = viewModel)
 }
 
+/**
+ * The Submit screen's form, opened from My questions. A question stored goes back to My questions,
+ * [onSent], which reads the list again as the Account screen is shown.
+ */
 @Composable
-private fun Submit() {
+private fun Submit(onSent: () -> Unit) {
     val viewModel = koinViewModel<SubmitViewModel>()
     val state by viewModel.state.collectAsStateWithLifecycle()
 
-    // Every time the screen is shown: a moderator decides the player's submissions meanwhile.
+    // Every time the form is shown: the points move meanwhile. Declared first, so it takes down a
+    // `sent` left from a showing before, of a question whose answer came after the player went back.
     LaunchedEffect(viewModel) { viewModel.refresh() }
+    LaunchedEffect(state.sent) {
+        if (state.sent) {
+            viewModel.leftForm()
+            onSent()
+        }
+    }
 
     SubmitScreen(state = state, actions = viewModel)
 }

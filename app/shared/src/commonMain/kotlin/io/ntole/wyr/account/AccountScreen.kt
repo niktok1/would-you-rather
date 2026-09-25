@@ -29,7 +29,8 @@ import io.ntole.wyr.theme.WyrTypeScale
  * The Account screen (CLAUDE.md §8d, *The Account screen*): the language switch first, [language]
  * the one the game is shown in, which [onSelectLanguage] changes (§8f); then who is playing on this
  * device and their stats, the points first; for a guest, one button to the Auth page, which
- * [onOpenAuth] opens, to register or log in; for a registered player, Log out. A build for any server
+ * [onOpenAuth] opens, to register or log in; for a registered player, Log out; then My questions,
+ * whose New question [onNewQuestion] answers with the Submit screen's form. A build for any server
  * but production's names that server last ([serverLine]), [environment] being the one the build
  * talks to.
  *
@@ -43,6 +44,7 @@ fun AccountScreen(
     language: Language,
     onSelectLanguage: (Language) -> Unit,
     onOpenAuth: () -> Unit,
+    onNewQuestion: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val colors = WyrThemeAccessors.colors
@@ -75,6 +77,9 @@ fun AccountScreen(
                     LogOutSection(state, actions)
                 }
             }
+
+            // The player's own questions, once there is a player to read them for.
+            if (stats != null) MyQuestions(state, actions, onNewQuestion)
 
             serverLine(environment)?.let { line ->
                 Text(text = line, color = colors.muted, fontSize = WyrTypeScale.statLabel)

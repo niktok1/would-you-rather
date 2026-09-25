@@ -5,12 +5,13 @@ import io.ntole.wyr.core.domain.account.PasswordProblem
 import io.ntole.wyr.core.domain.account.UsernameProblem
 import io.ntole.wyr.core.domain.error.DomainError
 import io.ntole.wyr.core.domain.player.PlayerStats
+import io.ntole.wyr.core.domain.submission.Submission
 import kotlin.time.Duration
 
 /**
  * What the Account screen and the Auth page opened from it show (CLAUDE.md §8d, *The Account
- * screen*): who is playing on this device and their stats, for a guest the Register or the Log in
- * form, whichever [authMode] names, and for a registered player Log out.
+ * screen*): who is playing on this device and their stats, the questions they submitted, for a guest
+ * the Register or the Log in form, whichever [authMode] names, and for a registered player Log out.
  *
  * What is typed lives here, in memory, and never in saved state: a password must not be written to
  * disk. It stays in the fields until they leave the screen, which is when the platform's password
@@ -19,6 +20,11 @@ import kotlin.time.Duration
 data class AccountState(
     /** The player as last read: their username, null for a guest, and their stats. Null until read. */
     val stats: PlayerStats? = null,
+    /**
+     * The questions the player submitted, newest first, as last read: My questions. Null until a read
+     * works, and again once another player plays here, whose list is theirs.
+     */
+    val submissions: List<Submission>? = null,
     val registerUsername: String = "",
     val registerPassword: String = "",
     val showRegisterPassword: Boolean = false,
@@ -33,6 +39,11 @@ data class AccountState(
     val guestPointsWarning: Int? = null,
     /** What the last action ended in, when it failed, and which it was, so its section can say so. */
     val failure: AccountFailure? = null,
+    /**
+     * Why the last read of My questions failed, until the next action starts. It shows under the list,
+     * with Try again, whatever became of the rest of the read.
+     */
+    val listFailure: AccountFailure? = null,
     /** The action in flight, or null when idle. Only one runs at a time. */
     val running: AccountAction? = null,
     /**

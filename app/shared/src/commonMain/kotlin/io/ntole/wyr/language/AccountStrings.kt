@@ -1,9 +1,10 @@
 package io.ntole.wyr.language
 
 /**
- * The words of the Account screen and of the page opened from it to register or log in (CLAUDE.md
- * §8d, *The Account screen*; §8f), as [Strings.accountScreens]: made in each language as the rest of
- * [Strings] is, and checked by the same tests.
+ * The words of the Account screen and of the pages opened from it, the Auth page to register or log
+ * in and the Submit screen's form (CLAUDE.md §8d, *The Account screen*, *Submitting*; §8f), as
+ * [Strings.accountScreens]: made in each language as the rest of [Strings] is, and checked by the
+ * same tests.
  *
  * Short on purpose, the user asking for less text. A text holding `{0}` is a template, which [fill]
  * fills in.
@@ -43,6 +44,43 @@ data class AccountStrings(
     val tooManyTriesNoWait: String,
     val offline: String,
     val somethingWrong: String,
+    /** The heading of the player's own submissions on the Account screen. */
+    val myQuestions: String,
+    /** My questions' way to the Submit screen's form. */
+    val newQuestion: String,
+    /** My questions with none sent yet. */
+    val noQuestions: String,
+    /** Between a question's two options. */
+    val or: String,
+    val pending: String,
+    val approved: String,
+    /** A rejection with no reason given. */
+    val rejected: String,
+    /** A rejection and the moderator's reason, `{0}`, as they wrote it. */
+    val rejectedBecause: String,
+    val retired: String,
+    /** A status this build cannot name. */
+    val unknownStatus: String,
+    /** The Submit form's heading, the question the two options answer. */
+    val wouldYouRather: String,
+    val optionA: String,
+    val optionB: String,
+    /** The option rule: one line, up to `{0}` characters. */
+    val optionRule: String,
+    val optionBlank: String,
+    /** An option longer than `{0}` characters. */
+    val optionTooLong: String,
+    val optionNotOneLine: String,
+    val optionsSame: String,
+    val categories: String,
+    val pickCategories: String,
+    /** The Submit form's button, and what submitting costs, `{0}`: *Пошаљи · 1 P*. */
+    val send: String,
+    /** Under Send, while the player has fewer points than submitting costs. */
+    val notEnoughPoints: String,
+    val invalidSubmission: String,
+    /** The pending limit, `{0}` questions waiting for review. */
+    val submissionLimit: String,
 ) {
     /** These strings with [transform] applied to every one of them, as [Strings.map] asks. */
     internal fun map(transform: (String) -> String): AccountStrings =
@@ -71,6 +109,30 @@ data class AccountStrings(
             tooManyTriesNoWait = transform(tooManyTriesNoWait),
             offline = transform(offline),
             somethingWrong = transform(somethingWrong),
+            myQuestions = transform(myQuestions),
+            newQuestion = transform(newQuestion),
+            noQuestions = transform(noQuestions),
+            or = transform(or),
+            pending = transform(pending),
+            approved = transform(approved),
+            rejected = transform(rejected),
+            rejectedBecause = transform(rejectedBecause),
+            retired = transform(retired),
+            unknownStatus = transform(unknownStatus),
+            wouldYouRather = transform(wouldYouRather),
+            optionA = transform(optionA),
+            optionB = transform(optionB),
+            optionRule = transform(optionRule),
+            optionBlank = transform(optionBlank),
+            optionTooLong = transform(optionTooLong),
+            optionNotOneLine = transform(optionNotOneLine),
+            optionsSame = transform(optionsSame),
+            categories = transform(categories),
+            pickCategories = transform(pickCategories),
+            send = transform(send),
+            notEnoughPoints = transform(notEnoughPoints),
+            invalidSubmission = transform(invalidSubmission),
+            submissionLimit = transform(submissionLimit),
         )
 }
 
@@ -101,6 +163,30 @@ internal val SerbianCyrillicAccountStrings: AccountStrings =
         tooManyTriesNoWait = "Превише покушаја. Сачекај мало.",
         offline = "Нема везе. Провери интернет.",
         somethingWrong = "Нешто није у реду. Покушај поново.",
+        myQuestions = "Моја питања",
+        newQuestion = "Ново питање",
+        noQuestions = "Још ниједно.",
+        or = "или",
+        pending = "На чекању",
+        approved = "Одобрено",
+        rejected = "Одбијено",
+        rejectedBecause = "Одбијено: {0}",
+        retired = "Повучено",
+        unknownStatus = "Непознато",
+        wouldYouRather = "Шта би радије…",
+        optionA = "Опција А",
+        optionB = "Опција Б",
+        optionRule = "Један ред, до {0} знакова.",
+        optionBlank = "Напиши нешто.",
+        optionTooLong = "Највише {0} знакова.",
+        optionNotOneLine = "Један ред, без прелома.",
+        optionsSame = "Опције морају да се разликују.",
+        categories = "Категорије",
+        pickCategories = "Изабери једну или више.",
+        send = "Пошаљи · {0}",
+        notEnoughPoints = "Немаш довољно поена.",
+        invalidSubmission = "Питање није прихваћено. Провери опције.",
+        submissionLimit = "Већ имаш {0} питања на чекању.",
     )
 
 internal val EnglishAccountStrings: AccountStrings =
@@ -129,4 +215,28 @@ internal val EnglishAccountStrings: AccountStrings =
         tooManyTriesNoWait = "Too many tries. Wait a moment.",
         offline = "No connection. Check your internet.",
         somethingWrong = "Something went wrong. Try again.",
+        myQuestions = "My questions",
+        newQuestion = "New question",
+        noQuestions = "None yet.",
+        or = "or",
+        pending = "Pending",
+        approved = "Approved",
+        rejected = "Rejected",
+        rejectedBecause = "Rejected: {0}",
+        retired = "Retired",
+        unknownStatus = "Unknown",
+        wouldYouRather = "Would you rather…",
+        optionA = "Option A",
+        optionB = "Option B",
+        optionRule = "One line, up to {0} characters.",
+        optionBlank = "Write something.",
+        optionTooLong = "At most {0} characters.",
+        optionNotOneLine = "One line, no line breaks.",
+        optionsSame = "The two options must differ.",
+        categories = "Categories",
+        pickCategories = "Pick one or more.",
+        send = "Send · {0}",
+        notEnoughPoints = "Not enough points.",
+        invalidSubmission = "Not accepted. Check both options.",
+        submissionLimit = "You have {0} waiting already.",
     )

@@ -31,6 +31,7 @@ import io.ntole.wyr.core.domain.session.SessionRepository
 import io.ntole.wyr.core.domain.submission.GetMySubmissions
 import io.ntole.wyr.core.domain.submission.Submission
 import io.ntole.wyr.core.domain.submission.SubmissionRepository
+import io.ntole.wyr.core.domain.submission.SubmissionStatus
 import io.ntole.wyr.core.domain.submission.SubmitQuestion
 import io.ntole.wyr.core.domain.vote.AttemptId
 import io.ntole.wyr.core.domain.vote.CastVote
@@ -45,6 +46,8 @@ import io.ntole.wyr.language.EnglishStrings
 import io.ntole.wyr.language.Language
 import io.ntole.wyr.language.LanguageViewModel
 import io.ntole.wyr.language.SerbianCyrillicStrings
+import io.ntole.wyr.play.categoryName
+import io.ntole.wyr.submit.sendText
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -62,6 +65,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
+import kotlin.time.Instant
 
 /**
  * The whole app, [App] as every platform shows it, drawn off screen over fakes of the game and driven
@@ -111,7 +115,7 @@ class AppNavigationTest {
         withApp { scene ->
             scene.tap(CYRILLIC.play)
             scene.tap(CYRILLIC.account)
-            assertTrue(CYRILLIC.submitQuestion in scene.texts(), "the Account screen is not shown")
+            assertTrue(CYRILLIC.accountScreens.newQuestion in scene.texts(), "the Account screen is not shown")
 
             scene.tap(CYRILLIC.back)
 
@@ -142,17 +146,43 @@ class AppNavigationTest {
             assertEquals(listOf(CYRILLIC.gameName, CYRILLIC.play), scene.texts())
         }
 
+    /** The Account screen reads the player and My questions each time it is shown; the form reads the points. */
     @Test
-    fun `Submit opens from Account and its back arrow returns to Account`() =
+    fun `the Submit form opens from My questions and its back arrow returns to Account`() =
         withApp { scene ->
             scene.tap(CYRILLIC.account)
-            scene.tap(CYRILLIC.submitQuestion)
+            assertEquals(1, game.statsRead)
             assertEquals(1, game.submissionsRead)
+
+            scene.tap(CYRILLIC.accountScreens.newQuestion)
+            assertTrue(sendText(CYRILLIC.accountScreens) in scene.texts(), "the form is not shown")
             assertEquals(listOf(CYRILLIC.back), scene.descriptions().take(1))
+            assertEquals(2, game.statsRead)
 
             scene.tap(CYRILLIC.back)
 
-            assertTrue(CYRILLIC.submitQuestion in scene.texts(), "the Account screen is not shown")
+            assertTrue(CYRILLIC.accountScreens.newQuestion in scene.texts(), "the Account screen is not shown")
+            assertEquals(2, game.submissionsRead)
+        }
+
+    /** After a question sent, My questions again, which reads the list and lists it. */
+    @Test
+    fun `a question sent goes back to My questions which lists it`() =
+        withApp { scene ->
+            scene.tap(CYRILLIC.account)
+            scene.tap(CYRILLIC.accountScreens.newQuestion)
+            scene.type(0, "Fly")
+            scene.type(1, "Swim")
+            scene.tap(categoryName(Category.FOOD))
+
+            scene.tap(sendText(CYRILLIC.accountScreens))
+            scene.settle()
+
+            assertEquals(listOf("Fly"), game.sent.map { it.optionA })
+            val shown = scene.everyText()
+            assertTrue(CYRILLIC.accountScreens.newQuestion in shown, "the Account screen is not shown: $shown")
+            assertTrue("Fly" in shown && CYRILLIC.accountScreens.pending in shown, "the question is not listed: $shown")
+            assertEquals(2, game.submissionsRead)
         }
 
     @Test
@@ -206,7 +236,7 @@ class AppNavigationTest {
 
             scene.tap(Language.ENGLISH.ownName)
 
-            assertTrue(ENGLISH.submitQuestion in scene.texts(), "${scene.texts()}")
+            assertTrue(ENGLISH.accountScreens.newQuestion in scene.texts(), "${scene.texts()}")
             assertEquals(listOf(ENGLISH.back), scene.descriptions().take(1))
             scene.tap(ENGLISH.back)
             assertEquals(listOf(ENGLISH.gameName, ENGLISH.play), scene.texts())
@@ -273,7 +303,7 @@ class AppNavigationTest {
     /**
      * The game, counting what the screens ask of it. Out of questions, so the Play screen shows a
      * failure and no question needs making; nothing here votes, likes or skips, and a registration
-     * always works.
+     * and a submission always work.
      */
     private class FakeGame :
         QuestionRepository,
@@ -289,6 +319,9 @@ class AppNavigationTest {
 
         /** The account the guest registered as, or null while none. */
         var username: String? = null
+
+        /** The questions submitted, newest first. */
+        val sent = mutableListOf<Submission>()
 
         override val categories: StateFlow<Set<Category>> = MutableStateFlow(emptySet())
 
@@ -320,7 +353,7 @@ class AppNavigationTest {
 
         override suspend fun stats(): PlayerStats {
             statsRead++
-            return PlayerStats(0, 0, 0, 1, 10, 0, username = username)
+            return PlayerStats(5, 5, 5, 1, 10, 0, username = username)
         }
 
         override suspend fun register(
@@ -339,11 +372,20 @@ class AppNavigationTest {
             optionA: String,
             optionB: String,
             categories: Set<Category>,
-        ): Submission = error("nothing submits here")
+        ): Submission =
+            Submission(
+                id = "q${sent.size + 1}",
+                optionA = optionA,
+                optionB = optionB,
+                categories = categories,
+                status = SubmissionStatus.PENDING,
+                rejectionReason = null,
+                submittedAt = Instant.fromEpochMilliseconds(1_790_000_000_000L),
+            ).also { sent.add(0, it) }
 
         override suspend fun mine(): List<Submission> {
             submissionsRead++
-            return emptyList()
+            return sent.toList()
         }
     }
 

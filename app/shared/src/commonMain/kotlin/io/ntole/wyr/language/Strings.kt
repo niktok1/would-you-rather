@@ -24,8 +24,6 @@ data class Strings(
     val account: String,
     /** The back arrow's name, for a screen reader: to the screen before. */
     val back: String,
-    /** The Account screen's way to the Submit screen. */
-    val submitQuestion: String,
     /** The label of the language switch on the Account screen, for a screen reader. */
     val language: String,
     /** The Account screen's own words and those of the pages opened from it. */
@@ -43,7 +41,6 @@ data class Strings(
             home = transform(home),
             account = transform(account),
             back = transform(back),
-            submitQuestion = transform(submitQuestion),
             language = transform(language),
             accountScreens = accountScreens.map(transform),
         )
@@ -57,7 +54,6 @@ val SerbianCyrillicStrings: Strings =
         home = "Почетна",
         account = "Налог",
         back = "Назад",
-        submitQuestion = "Пошаљи питање",
         language = "Језик",
         accountScreens = SerbianCyrillicAccountStrings,
     )
@@ -72,7 +68,6 @@ val EnglishStrings: Strings =
         home = "Home",
         account = "Account",
         back = "Back",
-        submitQuestion = "Submit a question",
         language = "Language",
         accountScreens = EnglishAccountStrings,
     )

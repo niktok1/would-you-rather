@@ -14,7 +14,7 @@ sealed class Screen(
 
     data object Account : Screen("account")
 
-    /** Reached from the Account screen for now (§8d, *The Submit screen*). */
+    /** The form a question is written in, reached from My questions on the Account screen (§8d, *Submitting*). */
     data object Submit : Screen("submit")
 
     /** The page a guest registers or logs in on, reached from the Account screen (§8d, *The Account screen*). */
