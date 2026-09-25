@@ -868,7 +868,9 @@ and reveals its tally, and holds Skip, Like and the category picker (*Skipping*,
 - Tapping a card answers. In the reveal both cards count their percentage up from 0 to its value
   over 2.5 seconds, both at once (`COUNT_UP_MILLIS`), and tapping either card again is the next
   question (`PlayViewModel.next`, from the reveal only). Nothing else shows: no verdict, no points of
-  the vote, no vote counts (the domain still has `VoteOutcome.agreedWithMajority`).
+  the vote, no vote counts (the domain still has `VoteOutcome.agreedWithMajority`). A screen reader
+  hears what a tap does where no text says it: *Следеће питање* on a revealed card, *Промени
+  категорије* on the categories played.
 - **Skip** is an icon in the middle of the top bar (`PlayTopBar`), there only while a question is
   asked and not answered: the bar has the room, and the row keeps its three things legible at 375
   wide.
@@ -885,10 +887,10 @@ and reveals its tally, and holds Skip, Like and the category picker (*Skipping*,
 - `PlayViewModelTest` drives it over fakes. `PlayScreenDrawTest` draws every state in both themes and
   every language at 400x900 and 375x599 (an iPhone SE less its status bar and the top bar), holds
   each to 599 high (376 on this Mac, 400 for a long Cyrillic reveal), reads each state's texts and
-  nothing else, taps the cards before and after the reveal, steps the scene's clock through the count
-  up, holds the row to 335 wide with only the categories cut, and to one height with a like's
-  failure or without at font scales 1, 1.3 and 2; `TopBarsDrawTest` finds Skip in the bar's middle,
-  and `AppNavigationTest` skips through it.
+  nothing else and what a screen reader hears a tap does, taps the cards before and after the
+  reveal, steps the scene's clock through the count up, holds the row to 335 wide with only the
+  categories cut, and to one height with a like's failure or without at font scales 1, 1.3 and 2;
+  `TopBarsDrawTest` finds Skip in the bar's middle, and `AppNavigationTest` skips through it.
 
 **The Submit screen** (`io.ntole.wyr.submit`), opened from the Account screen's top bar for now
 (*Navigation*), writes a question and lists the player's own (*Submitting*, below).

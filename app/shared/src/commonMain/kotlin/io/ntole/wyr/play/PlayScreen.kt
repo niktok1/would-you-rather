@@ -41,6 +41,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -151,6 +152,8 @@ private fun QuestionBody(
 ) {
     val colors = WyrThemeAccessors.colors
     val outcome = (state as? PlayUiState.Revealed)?.outcome
+    // Before the answer a card's text says what a tap on it does; after, a screen reader is told.
+    val clickLabel = if (outcome == null) null else LocalStrings.current.playScreen.nextQuestion
 
     Column(modifier = Modifier.fillMaxSize()) {
         OptionCard(
@@ -160,6 +163,7 @@ private fun QuestionBody(
             percent = outcome?.tally?.percentA,
             isYourPick = outcome?.yourSide == Side.A,
             enabled = !state.isBusy,
+            clickLabel = clickLabel,
             onClick = { if (outcome == null) onChoose(Side.A) else onNext() },
             modifier = Modifier.weight(1f),
         )
@@ -182,6 +186,7 @@ private fun QuestionBody(
             percent = outcome?.tally?.percentB,
             isYourPick = outcome?.yourSide == Side.B,
             enabled = !state.isBusy,
+            clickLabel = clickLabel,
             onClick = { if (outcome == null) onChoose(Side.B) else onNext() },
             modifier = Modifier.weight(1f),
         )
@@ -299,8 +304,12 @@ private fun CategoriesPlayed(
         verticalAlignment = Alignment.CenterVertically,
         modifier =
             Modifier
-                .clickable(enabled = enabled, onClickLabel = strings.categories, role = Role.Button, onClick = onClick)
-                .minimumInteractiveComponentSize(),
+                .clickable(
+                    enabled = enabled,
+                    onClickLabel = strings.changeCategories,
+                    role = Role.Button,
+                    onClick = onClick,
+                ).minimumInteractiveComponentSize(),
     ) {
         Text(
             text = categoriesPlayed(categories, all = strings.allCategories),
@@ -424,6 +433,7 @@ private fun CategoryOption(
 /**
  * One answer card, in its side's brand colour (CLAUDE.md §5b), outlined once it is the player's pick.
  * Once the answer is revealed it shows its side's share, [percent], counted up from 0 ([countedUp]).
+ * [clickLabel], if any, is what a screen reader says a tap on it does.
  */
 @Composable
 private fun OptionCard(
@@ -433,6 +443,7 @@ private fun OptionCard(
     percent: Int?,
     isYourPick: Boolean,
     enabled: Boolean,
+    clickLabel: String?,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -449,6 +460,8 @@ private fun OptionCard(
             modifier
                 .fillMaxWidth()
                 .heightIn(min = dimens.optionMinHeight)
+                // Only the label: without an action of its own, the tap stays the Surface's.
+                .semantics { if (clickLabel != null) onClick(label = clickLabel, action = null) }
                 .then(
                     if (isYourPick) {
                         Modifier.border(width = dimens.pickBorder, color = contentColor, shape = shape)

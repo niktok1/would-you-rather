@@ -6,6 +6,7 @@ import androidx.compose.ui.ImageComposeScene
 import androidx.compose.ui.graphics.toComposeImageBitmap
 import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.layout.Layout
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsNode
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
@@ -33,6 +34,7 @@ import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
@@ -269,6 +271,29 @@ class PlayScreenDrawTest {
         }
     }
 
+    /**
+     * A screen reader hears what a tap does where the text does not say it: a card on the reveal goes
+     * on to the next question, which its option alone would make sound like answering again, and the
+     * categories played open the picker. Before the reveal a card's option says it all.
+     */
+    @Test
+    fun `a screen reader hears what a tap on a revealed card and on the categories does`() {
+        val cards = listOf(QUESTION.optionA, QUESTION.optionB)
+        Language.entries.forEach { language ->
+            val strings = stringsOf(language).playScreen
+            withScreen(PlayUiState.Asking(QUESTION), language = language) { scene, _ ->
+                cards.forEach { assertNull(scene.clickLabel(it), "$it before the reveal in $language") }
+                assertEquals(strings.changeCategories, scene.clickLabel(strings.allCategories), "in $language")
+            }
+            withScreen(PlayUiState.Revealed(QUESTION, OUTCOME), language = language) { scene, _ ->
+                cards.forEach { assertEquals(strings.nextQuestion, scene.clickLabel(it), "$it in $language") }
+            }
+            withScreen(PlayUiState.Failed(DomainError.OUT_OF_QUESTIONS), language = language) { scene, _ ->
+                assertEquals(strings.changeCategories, scene.clickLabel(strings.allCategories), "failed in $language")
+            }
+        }
+    }
+
     /** The categories, the points and the heart sit in one row between the two cards, the points in the middle. */
     @Test
     fun `the row sits between the cards with the points in the middle`() {
@@ -383,6 +408,10 @@ class PlayScreenDrawTest {
             }
         return assertNotNull(node, "nothing shows \"$text\"")
     }
+
+    /** What a screen reader says a tap on the one node showing [text] does, if anything. */
+    private fun ImageComposeScene.clickLabel(text: String): String? =
+        node(text).config.getOrNull(SemanticsActions.OnClick)?.label
 
     private val SemanticsNode.isOff: Boolean
         get() = config.getOrNull(SemanticsProperties.Disabled) != null

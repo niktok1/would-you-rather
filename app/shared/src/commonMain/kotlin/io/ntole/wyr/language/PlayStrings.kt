@@ -3,13 +3,15 @@ package io.ntole.wyr.language
 /**
  * The Play screen's words (CLAUDE.md §8d, *The Play screen*; §8f), a part of [Strings] of their own
  * so the screen's texts stand together. Short, the user asking for less text: a failure is one
- * sentence, and the rest are names a screen reader says for an icon.
+ * sentence, and the rest are names a screen reader says for an icon or for what a tap does.
  */
 data class PlayStrings(
     /** The categories played when none is picked, which is every category. */
     val allCategories: String,
     /** What a tap on the categories played does, for a screen reader: opens the category picker. */
-    val categories: String,
+    val changeCategories: String,
+    /** What a tap on either card does once the answer is revealed, for a screen reader. */
+    val nextQuestion: String,
     /** After the player's points, their unit: *123 П*. */
     val pointsUnit: String,
     /** The heart's name, for a screen reader: whether the player likes the question. */
@@ -41,7 +43,8 @@ data class PlayStrings(
     internal fun map(transform: (String) -> String): PlayStrings =
         PlayStrings(
             allCategories = transform(allCategories),
-            categories = transform(categories),
+            changeCategories = transform(changeCategories),
+            nextQuestion = transform(nextQuestion),
             pointsUnit = transform(pointsUnit),
             like = transform(like),
             skip = transform(skip),
@@ -59,7 +62,8 @@ data class PlayStrings(
 internal val SerbianCyrillicPlayStrings: PlayStrings =
     PlayStrings(
         allCategories = "Све",
-        categories = "Категорије",
+        changeCategories = "Промени категорије",
+        nextQuestion = "Следеће питање",
         pointsUnit = "П",
         like = "Свиђа ми се",
         skip = "Прескочи",
@@ -75,7 +79,8 @@ internal val SerbianCyrillicPlayStrings: PlayStrings =
 internal val EnglishPlayStrings: PlayStrings =
     PlayStrings(
         allCategories = "All",
-        categories = "Categories",
+        changeCategories = "Change categories",
+        nextQuestion = "Next question",
         pointsUnit = "P",
         like = "Like",
         skip = "Skip",
