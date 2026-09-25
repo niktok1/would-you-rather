@@ -888,11 +888,12 @@ and reveals its tally, and holds Skip, Like and the category picker (*Skipping*,
   safety*). The selection lives in the repository, in memory for the app's life.
 - `PlayViewModelTest` drives it over fakes. `PlayScreenDrawTest` draws every state in both themes and
   every language at 400x900 and 375x599 (an iPhone SE less its status bar and the top bar), holds
-  each to 599 high (376 on this Mac, 400 for a long Cyrillic reveal), reads each state's texts and
-  nothing else and what a screen reader hears a tap does, taps the cards before and after the
-  reveal, steps the scene's clock through the count up, holds the row to 335 wide with only the
-  categories cut, and to one height with a like's failure or without at font scales 1, 1.3 and 2;
-  `TopBarsDrawTest` finds Skip in the bar's middle, and `AppNavigationTest` skips through it.
+  each to 599 high (376 on this Mac), measured 400 wide rather than 375 since CI's Linux fonts wrap
+  wider than a phone's, reads each state's texts and nothing else and what a screen reader hears a
+  tap does, taps the cards before and after the reveal, steps the scene's clock through the count
+  up, holds the row to 335 wide with only the categories cut, and to one height with a like's
+  failure or without at font scales 1, 1.3 and 2; `TopBarsDrawTest` finds Skip in the bar's middle,
+  and `AppNavigationTest` skips through it.
 
 **The Submit screen** (`io.ntole.wyr.submit`), opened from the Account screen's top bar for now
 (*Navigation*), writes a question and lists the player's own (*Submitting*, below).
@@ -1033,7 +1034,8 @@ and reveals its tally, and holds Skip, Like and the category picker (*Skipping*,
     answer, so a like that failed, a like lost to `NETWORK` included, leaves the question as it was,
     and says why in the points' place (*The Play screen*), and pressing again asks for the same
     like again. It works out no points itself: a like of the player's own question moves their total
-    without a vote, so the reveal's total, which is the vote's, shows it only from the next vote on.
+    without a vote, so the points between the cards show it from the next vote on, or from the next
+    time the Play screen is shown, which reads them again.
 - **Submitting** *(built; details decided 2026-09-23)*: earns no points
   directly, because authors earn through likes. The author writes both options and **picks one or
   more categories** (each a real one, not `UNKNOWN`; *Categories*). A player may have at most **20
