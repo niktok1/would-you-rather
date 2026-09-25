@@ -246,7 +246,7 @@ class DevConsoleViewModelTest {
         }
 
     @Test
-    fun `the header says whether a recovery secret is kept, and follows it`() =
+    fun `the header says whether a recovery secret is kept and follows it`() =
         runTest(dispatcher) {
             val viewModel = openConsole()
             assertEquals(RecoverySecretStatus.KEPT, viewModel.state.value.recoverySecret)

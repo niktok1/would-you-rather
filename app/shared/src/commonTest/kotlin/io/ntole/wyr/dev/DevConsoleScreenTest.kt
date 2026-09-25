@@ -36,7 +36,7 @@ class DevConsoleScreenTest {
     }
 
     @Test
-    fun `the header says whether a recovery secret is kept, and on desktop and web that none is kept there`() {
+    fun `the header says whether a recovery secret is kept and on desktop and web that none is kept there`() {
         assertEquals(
             listOf("kept", "none", "unreadable", "not kept on this platform", "unknown"),
             (RecoverySecretStatus.entries + null).map(::recoverySecretOf),
