@@ -478,17 +478,21 @@ auth SDK, satisfying §2.
     nothing and fails the call, and the next call tries again: offline, a 5xx, a 429, or the 404 of a
     build from before recovery, since a mint would keep its own secret in place of the one that
     recovers the account. A store that cannot be read counts as empty there, so a phone without Play
-    services plays on as a guest.
-  - *A session with no secret kept* (a guest from before recovery, or a secret the store could not
-    keep) asks `POST /v1/me/recovery-secret` for one, once a launch, and only while the store holds
-    none and can be read: a new secret kills the one before, wherever it is kept. So a secret held for
-    another player is left alone, since on iOS it is the account this person's other iPhones share;
-    this device's guest then stays bound to it, and recovers as that account should its session die. A
-    request the server refused, or whose secret the store could not keep, counts, and after three
-    (`MAX_FAILED_SECRET_REQUESTS`) the install asks no more for that player: a server without recovery
-    refuses every one. One lost on the network does not count. The count is kept beside the session,
-    in the token storage (`RecoverySecretStore`), so it goes where the session goes and never with the
-    secret, and a reinstall starts it again.
+    services plays on as a guest; but that guest's secret is not kept, since the store may hold one
+    it failed to read only for a moment, as a restored phone's may while Play services starts, and
+    the guest's would replace it for good. A later launch asks for the guest's secret only if the
+    store then reads as empty (below).
+  - *A session with no secret kept* (a guest from before recovery, a secret the store could not
+    keep, or a guest minted while it could not be read) asks `POST /v1/me/recovery-secret` for one,
+    once a launch, and only while the store holds none and can be read: a new secret kills the one
+    before, wherever it is kept. So a secret held for another player is left alone, since on iOS it
+    is the account this person's other iPhones share; this device's guest then stays bound to it,
+    and recovers as that account should its session die. A request the server refused, or whose
+    secret the store could not keep, counts, and after three (`MAX_FAILED_SECRET_REQUESTS`) the
+    install asks no more for that player: a server without recovery refuses every one. One lost on
+    the network does not count. The count is kept beside the session, in the token storage
+    (`RecoverySecretStore`), so it goes where the session goes and never with the secret, and a
+    reinstall starts it again.
   - `clear()`, the console's *New guest*, drops the secret with the session, since it would otherwise
     recover the player being cleared away, and fails as NETWORK when it cannot, unless the store
     cannot read the secret back either, as without Play services, where nothing could recover with
@@ -562,14 +566,15 @@ auth SDK, satisfying §2.
   layer writes the session through `runApi`, so no bare storage exception reaches a ViewModel.
 
 **Known limitation, by design for now:** a guest account lives only while some store holds a live
-session of it or its recovery secret. An Android or iOS guest survives a reinstall and a move to a new
-phone through the secret (*Recovery*), none of which has yet run on a phone (NEXT-SESSION.md); one
-whose every copy of the secret is lost is gone all the same, as is one on a phone whose secret store
-failed when the app first started there, which mints a guest in its place. A desktop or web guest
-stays bound to its one storage: lose it and the account — and its points — are gone. A copy of the
-secret in the wrong hands owns the account until it is replaced. Session storage is ordinary
-preference storage (SharedPreferences / NSUserDefaults / JVM Preferences / localStorage), not Keychain
-or EncryptedSharedPreferences. All of it must be revisited before real accounts exist.
+session of it or its recovery secret. An Android or iOS guest survives a reinstall and a move to a
+new phone through the secret (*Recovery*), none of which has yet run on a phone (NEXT-SESSION.md);
+one whose every copy of the secret is lost is gone all the same. A phone whose secret store could
+not be read when the app first started there plays as a new guest, and recovers the player only once
+that guest's session dies or the app is installed again, which leaves the guest behind. A desktop or
+web guest stays bound to its one storage: lose it and the account — and its points — are gone. A
+copy of the secret in the wrong hands owns the account until it is replaced. Session storage is
+ordinary preference storage (SharedPreferences / NSUserDefaults / JVM Preferences / localStorage),
+not Keychain or EncryptedSharedPreferences. All of it must be revisited before real accounts exist.
 
 ## 8b. Open decisions (resolve before relevant work)
 

@@ -140,14 +140,27 @@ public class DefaultSessionRepository(
      * failure goes to the caller, and the next call tries the secret again.
      *
      * A store that cannot be read counts as holding none, so a phone without Play services plays as
-     * a guest rather than not at all. The price: a phone whose store only failed for a moment, as the
-     * app first starts on a restored phone, mints a guest and keeps its secret in place of the one it
-     * could not read.
+     * a guest rather than not at all. But the guest's secret is not kept then: the store may hold a
+     * secret it only failed to read for a moment, as the app first starts on a restored phone, and
+     * the guest's would take its place for good. A later launch that reads none asks for the guest's
+     * ([keepRecoverySecret]); one that reads a secret leaves it, to recover its player should the
+     * guest's session die or the app be installed again.
      */
     private suspend fun openSession(): String {
-        val secret = recovery?.let { store -> bestEffort { store.read() } }
-        val playerId = secret?.let { recoverWith(it) } ?: mintGuest()
-        // Seen to, one way or another: kept as it was, kept from the mint, or none to keep this launch.
+        var unreadable = false
+        val secret =
+            recovery?.let { store ->
+                try {
+                    store.read()
+                } catch (cancellation: CancellationException) {
+                    throw cancellation
+                } catch (failed: Exception) {
+                    unreadable = true
+                    null
+                }
+            }
+        val playerId = secret?.let { recoverWith(it) } ?: mintGuest(keepSecret = !unreadable)
+        // Seen to for this launch: kept as it was, kept from the mint, none to keep, or left to the next.
         secretSeenToFor = playerId
         return playerId
     }
@@ -169,16 +182,16 @@ public class DefaultSessionRepository(
     }
 
     /**
-     * A fresh guest, stored, and its recovery secret kept where this device keeps one. The secret goes
-     * first: should the session's write then fail, or the app be killed before it, the next start
-     * recovers this same player rather than mint another. A secret that cannot be kept costs only the
-     * recovery until a later launch asks for another ([keepRecoverySecret]). A server from before
-     * recovery sends none.
+     * A fresh guest, stored, and its recovery secret kept where this device keeps one, unless
+     * [keepSecret] is false. The secret goes first: should the session's write then fail, or the app
+     * be killed before it, the next start recovers this same player rather than mint another. A secret
+     * that cannot be kept costs only the recovery until a later launch asks for another
+     * ([keepRecoverySecret]). A server from before recovery sends none.
      */
-    private suspend fun mintGuest(): String {
+    private suspend fun mintGuest(keepSecret: Boolean): String {
         val guest = runApi { authApi.guest() }
         val secret = guest.recoverySecret
-        if (secret != null) recovery?.let { store -> bestEffort { store.write(secret) } }
+        if (secret != null && keepSecret) recovery?.let { store -> bestEffort { store.write(secret) } }
         persist { sessionStore.write(guest.session()) }
         return guest.playerId
     }
@@ -186,7 +199,8 @@ public class DefaultSessionRepository(
     /**
      * Makes sure this device keeps a recovery secret for [playerId], the session's player, once a
      * launch. A guest minted before recovery has none, and neither has one whose secret could not be
-     * kept: either would be lost with this device's storage.
+     * kept, nor one minted while the store could not be read ([openSession]): each would be lost with
+     * this device's storage.
      *
      * Asks the server for one only when the store holds none. Asking kills the player's secret
      * wherever else it is kept, so a store that cannot be read asks nothing, and one that holds a

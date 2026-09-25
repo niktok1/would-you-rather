@@ -158,6 +158,41 @@ class RecoverySecretFlowTest {
             assertEquals(emptyList(), server.recoveriesSent)
         }
 
+    /**
+     * A store that fails a read for a moment, as Play services may while a restored phone starts: the
+     * guest's secret would take the place of the only way back to the player's account.
+     */
+    @Test
+    fun `a guest minted while the secret store cannot be read leaves the secret it holds`() =
+        runTest {
+            server.knowPlayer("a", secret = "secret-a")
+            recovery.write("secret-a")
+            secrets.readFails = true
+
+            assertEquals("guest1", sessions().ensure())
+
+            secrets.readFails = false
+            assertEquals("secret-a", recovery.read())
+            // The next launch leaves it as it is, and the next session opened recovers its player.
+            sessions().ensure()
+            assertEquals(0, server.secretRequestsSent)
+            store.clear()
+            assertEquals("a", sessions().ensure())
+        }
+
+    @Test
+    fun `a guest minted while the secret store cannot be read asks for its secret at the next launch`() =
+        runTest {
+            secrets.readFails = true
+            assertEquals("guest1", sessions().ensure())
+            secrets.readFails = false
+
+            sessions().ensure()
+
+            assertEquals(1, server.secretRequestsSent)
+            assertEquals("secret-guest1-2", recovery.read())
+        }
+
     @Test
     fun `a guest whose secret cannot be kept is still stored`() =
         runTest {
