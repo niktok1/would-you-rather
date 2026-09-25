@@ -569,22 +569,9 @@ EncryptedSharedPreferences: enough for a game that stores nothing personal.
   batch, which the client reads as out of questions. The Play screen's category picker sends the
   categories selected (§8d, *The Play screen*), so a player reaches this in every build, PROD's
   included. `SkipStoreTest` pins what is built.
-- **The categories row on the Play screen** — *provisional — user decision.* The category picker
-  was not to take height from the question's cards or from the reveal on a short phone (§8d, *The
-  Play screen*). The reveal keeps to that: the categories share the row its points already took, and
-  it needs 569 of the 599 as before. A question not answered yet does not: the row is drawn in
-  every state, where before only the reveal drew one, so on this Mac it needs 537 at 360, 375 and
-  400 wide (481 before), and each of its option cards is about 28 shorter. On an iPhone SE (599)
-  its cards stay taller than `optionMinHeight`; on Android's 360x640 class (about 520) it no longer
-  fits, and its cards are squeezed below their least height, as only the reveal's were before.
-  Built this way so the header is one height in every state (the reveal no longer moves the cards
-  down) and a selection with nothing to serve can be changed from the failure it leads to. The
-  options: keep it; draw the categories only where a row is drawn anyway, in the reveal beside the
-  points, and in the failures, so a question not answered yet gets its height back and a player
-  changes the categories only once they have answered; or put them on the title's line, which at
-  375 wide leaves room for little more than *All*. The row under the question has no room for them
-  beside Like and Next question at 375 wide. `PlayScreenDrawTest` holds every state to 599 high,
-  not to its height before.
+- **The categories row on the Play screen** — *resolved 2026-09-25*: the user picked the redesign's
+  one row between the cards (§8d, *The Play screen*), where the categories share the row with the
+  points and the like in every question state, at one height, and the cards keep what is left.
 - **Retrying a submission** — *decided 2026-09-24: keep it simple.* A submission carries no
   attempt id, so one sent again after its response was lost is stored twice, both pending; the
   moderator rejects the copy, and the 20-pending cap bounds how many there can be. Nothing resends
@@ -781,9 +768,9 @@ returns and never recomputes points, so the two cannot disagree.
 - `PlayerStore.addPoints` adds in SQL (`total_points = total_points + n`), never as a read then a
   write, so two votes by one player landing together cannot lose a point, nor a burst of likes for
   one author.
-- The reveal's "with the crowd" verdict is `VoteOutcome.agreedWithMajority` on the client (an
-  exact tie counts as agreeing). It is display only: no points depend on it, so the server keeps
-  no copy of the rule.
+- The "with the crowd" verdict is `VoteOutcome.agreedWithMajority` on the client (an exact tie
+  counts as agreeing). No points depend on it, so the server keeps no copy of the rule, and since
+  the Play screen's redesign nothing shows it (§8d, *The Play screen*).
 
 Deliberately lives in `:server` and not `:core:domain`, so `:server` needs no dependency on the
 client's domain module and the §3 graph stays intact.
@@ -808,10 +795,11 @@ game's, or a place on one, theme tokens only (§5b), and its words in `Strings` 
 **Navigation** (*decided 2026-09-25*: no tabs; `App.kt`, `io.ntole.wyr.navigation`, `io.ntole.wyr.home`):
 - The app opens on **Home**: the game's name, a big **Play** button and the account icon top right,
   and nothing else, the user asking for less text. Play opens the **Play** screen under a top bar of
-  the home icon, left, back to Home, and the account icon, right. The account icon, from Home or
-  Play, opens the **Account** screen under a top bar of a back arrow and, on the right for now, the
-  way to the **Submit** screen, whose own bar has a back arrow. The icons are the theme's (§5b), each
-  named for a screen reader in the language shown (§8f).
+  the home icon, left, back to Home, and the account icon, right, with Skip between them while a
+  question is asked (*The Play screen*). The account icon, from Home or Play, opens the **Account**
+  screen under a top bar of a back arrow and, on the right for now, the way to the **Submit**
+  screen, whose own bar has a back arrow. The icons are the theme's (§5b), each named for a screen
+  reader in the language shown (§8f).
 - *The back stack* is made by hand, no navigation library: a sealed `Screen` and a `Navigator` of
   the screens opened, Home at the bottom. `open` shows a screen over the one shown, or goes back to
   it when it is on the stack already, so no screen is on it twice and the home icon is
@@ -867,50 +855,46 @@ game's, or a place on one, theme tokens only (§5b), and its words in `Strings` 
   `AccountScreenDrawTest` finds it under everything else in every state, and holds a registered
   player's screen with it to 599 high.
 
-**The Play screen** (`io.ntole.wyr.play`) asks a question and reveals its tally, and holds Skip and
-Like (*Skipping* and *Likes*, below) and the category picker (*Categories*, below):
-- One row under the question, asked or revealed: its like count, **Like** (**Unlike** while the
-  player likes it), and the way on, **Skip** while it is asked and **Next question** once it is
-  answered. One row, where Next question alone stood before, so the reveal is no taller than it was:
-  height the screen needs and does not get comes out of the option cards, and on a short phone the
-  tally inside them is what is cut off.
-- One action at a time (`PlayUiState.OnQuestion.isBusy`): while a vote, a skip or a like is in
-  flight, every other control is off. A like that failed says why in one line under the cards, in the
-  reveal's verdict's place, not beside it; a skip that failed moves on all the same (*Skipping*).
-- Under the title, in every state, the categories played: *All*, or their names in declaration
-  order, cut short on one line. A value over its label, as the reveal's points are, and in the same
-  row beside them, so the reveal is no taller for it (on this Mac it still needs 569 of the 599; a
-  question not answered yet needs 56 more than before, from the height its cards had to spare:
-  *provisional*, §8b, *The categories row on the Play screen*). The label is *change categories*:
-  the value's accent colour is the title's too, and nothing else marks it as something to tap.
-- Tapping it opens a small dialog (`CategoryPicker`): *All categories* and every category but
-  `OTHER`, ticked or not, then *Cancel* and *Play*. Nothing changes until Play, so ticking several is
-  one change and one reload. A new selection drops the question on screen, answered or not, and
-  shows the next from it (`PlayViewModel.applyCategories`); the selection already played keeps the
-  question on screen.
-- One action at a time (`canChangeCategories`): not while a question loads, nor while a vote, a skip
-  or a like is in flight. Play is off then, and a change refused keeps the picker open. From a
-  failure it goes: a selection the feed has nothing in shows the out-of-questions state, and changing
-  the categories is the way out of it. From a vote lost to `NETWORK` it goes too, and the lost
-  attempt is never sent again (*Retry safety*).
-- The selection lives in the repository, in memory for the app's life: a launch plays every category
-  again, and a login or a logout keeps it.
-- `PlayViewModelTest` drives it over fakes. `PlayScreenDrawTest` draws every state in both themes at
-  400x900 and 375x599 (an iPhone SE less its status bar and the top bar), with none, one and every
-  category played, and with the picker open; holds every state to 599 high with each, a reveal with a
-  failed like to the height of one without, every selection to the height of none, and the picker's
-  card to 599 too. It measures 400 wide with one short line an option, because CI's Linux wraps text
-  wider than a phone does. With no Compose UI test library in the tree, it checks the dialog by
-  pixels: every state draws differently with the picker open, and differently again with a category
-  ticked in it. Theme tokens only, and the option cards and brand colors as they were (§5b).
+**The Play screen** (`io.ntole.wyr.play`; the user's layout, *decided 2026-09-25*) asks a question
+and reveals its tally, and holds Skip, Like and the category picker (*Skipping*, *Likes* and
+*Categories*, below):
+- Two answer cards in the brand colours (§5b) and, between them, **one row**: on the left the
+  categories played, *Све* or their names, cut to one line, with a small chevron, which opens the
+  picker; in the middle the player's points, *123 П*; on the right the heart, filled while the player
+  likes the question, beside its like count, before answering and after. No title, no *OR*.
+- The points are the server's (`PlayViewModel.points`, §8c): read through `GetPlayerStats` each time
+  the screen is shown, and moved to a vote's total when its answer arrives, which drops a read still
+  in flight; none until the first.
+- Tapping a card answers. In the reveal both cards count their percentage up from 0 to its value
+  over 2.5 seconds, both at once (`COUNT_UP_MILLIS`), and tapping either card again is the next
+  question (`PlayViewModel.next`, from the reveal only). Nothing else shows: no verdict, no points of
+  the vote, no vote counts (the domain still has `VoteOutcome.agreedWithMajority`).
+- **Skip** is an icon in the middle of the top bar (`PlayTopBar`), there only while a question is
+  asked and not answered: the bar has the room, and the row keeps its three things legible at 375
+  wide.
+- One action at a time (`isBusy`, `canChangeCategories`): while a vote, a skip or a like is in
+  flight, the cards, the heart, Skip and the categories are off. A like that failed says why in the
+  points' place, in two short lines at most, so it moves nothing; a skip that failed moves on all
+  the same.
+- Loading is a spinner; a failure is one short sentence, *Пробај опет* and the categories played,
+  the way out of a selection with nothing to serve. The words are `PlayStrings` (§8f).
+- The picker (`CategoryPicker`) is the dialog it was: nothing changes until Play, a new selection
+  drops the question on screen and shows the next from it (`PlayViewModel.applyCategories`), a change
+  refused keeps it open, and a change from a vote lost to `NETWORK` never sends it again (*Retry
+  safety*). The selection lives in the repository, in memory for the app's life.
+- `PlayViewModelTest` drives it over fakes. `PlayScreenDrawTest` draws every state in both themes and
+  every language at 400x900 and 375x599 (an iPhone SE less its status bar and the top bar), holds
+  each to 599 high (376 on this Mac, 400 for a long Cyrillic reveal), reads each state's texts and
+  nothing else, taps the cards before and after the reveal, steps the scene's clock through the count
+  up, and holds the row to 335 wide with only the categories cut; `TopBarsDrawTest` finds Skip in the
+  bar's middle, and `AppNavigationTest` skips through it.
 
 **The Submit screen** (`io.ntole.wyr.submit`), opened from the Account screen's top bar for now
 (*Navigation*), writes a question and lists the player's own (*Submitting*, below).
 
 - **Scoring** *(built; see §8c)*: every answer earns exactly **1 point**, whichever side
   it picks. There is no majority bonus and no streak: the streak is removed from the server, the
-  contract, and the domain. The reveal still shows the split and whether the player sided with
-  the majority, as information only.
+  contract, and the domain. The reveal shows the split, as information only.
 - **Endless feed** *(built; cycles decided 2026-09-23)*: the game never ends, and it runs in
   **cycles**. Every question comes back **exactly once per cycle**, and every cycle is a **new
   random order**; this replaced looping least-recently-answered first. A question is *due* while
@@ -996,11 +980,12 @@ Like (*Skipping* and *Likes*, below) and the category picker (*Categories*, belo
   with nothing due in it (*Categories* above; provisional, §8b). A player is therefore never
   stuck at the end of a cycle on a question they keep skipping. Built as `POST /v1/skips` in
   `SkipStore.skip`, on `skips.skipped_in_cycle`, which the feed's due predicate compares with the
-  cycle as it does the vote's. The Play screen's Skip, under a question not answered yet, sends it
-  through `SkipQuestion` and then shows the next question (`PlayViewModel.skip`), even when the skip
-  failed, and says nothing of it: the player asked not to answer that question, and an unrecorded
-  skip only leaves it due, so the feed may serve it again this cycle, where Skip works on it again.
-  Nothing else goes while a skip is in flight, and an answered question offers Next question instead.
+  cycle as it does the vote's. The Play screen's Skip, on its top bar while a question is not
+  answered yet, sends it through `SkipQuestion` and then shows the next question
+  (`PlayViewModel.skip`), even when the skip failed, and says nothing of it: the player asked not to
+  answer that question, and an unrecorded skip only leaves it due, so the feed may serve it again
+  this cycle, where Skip works on it again. Nothing else goes while a skip is in flight, and an
+  answered question goes on with a tap on a card instead.
 - **Own questions** *(built; decided 2026-09-24)*: an author is served their own questions
   **like any other player** and may answer, skip and like them; the user chose the simpler logic.
   `QuestionStore.servable` is the one predicate the feed, the due count and votes, skips and likes
@@ -1036,12 +1021,12 @@ Like (*Skipping* and *Likes*, below) and the category picker (*Categories*, belo
     undo the like; nothing resends after any other failure. The answer is a `QuestionLikes`. A
     `Question` carries `likeCount` and `likedByMe` as the feed served them (`QuestionMapper`), and a
     queued one keeps them as fetched; `PlayerStats` carries `likesReceived`.
-  - *The Play screen* shows the like count under the question, asked or revealed, beside a Like
-    button (Unlike while the player likes it; `PlayViewModel.toggleLike`). It asks for the opposite
+  - *The Play screen* shows the like count between the cards, asked or revealed, beside the heart,
+    filled while the player likes the question (`PlayViewModel.toggleLike`). It asks for the opposite
     of what the question on screen shows, then puts the server's answer on that question: only on
     the one the answer names, and only while it is still on screen. Nothing changes before the
-    answer, so a like that failed, a like lost to `NETWORK` included, leaves the question as it was
-    with one line saying why under the cards (*The Play screen*), and pressing again asks for the same
+    answer, so a like that failed, a like lost to `NETWORK` included, leaves the question as it was,
+    and says why in the points' place (*The Play screen*), and pressing again asks for the same
     like again. It works out no points itself: a like of the player's own question moves their total
     without a vote, so the reveal's total, which is the vote's, shows it only from the next vote on.
 - **Submitting** *(built; details decided 2026-09-23)*: earns no points
@@ -1302,7 +1287,8 @@ hand, so the two cannot say different things; and **English** stands beside them
   Latin is the Cyrillic transliterated, every Serbian text is in Cyrillic, and no Latin or English
   one has a Cyrillic letter. Translated so far: the Home screen, the game's name (*Шта би радије?*,
   *Would You Rather?*) and *Играј*; the top bars, the icons' names (*Почетна*, *Налог*, *Назад*) and
-  the Account bar's *Пошаљи питање*; and the switch's name, *Језик*.
+  the Account bar's *Пошаљи питање*; the switch's name, *Језик*; and the Play screen's words
+  (`PlayStrings`, `Strings.playScreen`), all but the category picker's and the category names.
 - **The default** *(built)*: Serbian Cyrillic on a first launch, whatever the device's language:
   nothing reads the device's locale (`Language.DEFAULT`; `LanguageSwitchTest` sets an English, a
   German and a Serbian Latin locale on the JVM and still opens in Cyrillic).
@@ -1321,8 +1307,10 @@ hand, so the two cannot say different things; and **English** stands beside them
   pin it, the sessions beside it in one storage untouched.
 - **Not translated yet**: question texts stay as their authors wrote them (server data; a later
   change may put Serbian ones through `SerbianScript.toLatin`); the moderation app (`:app:adminApp`)
-  stays English; and the Play, Account and Submit screens' own copy, everything under their top bars
-  but the switch, stays English until the branches that redesign them translate it.
+  stays English; the Account and Submit screens' own copy, everything under their top bars but the
+  switch, stays English until the branches that redesign them translate it; and so do the Play
+  screen's category picker and the category names, until categories are server data (§8d,
+  *Categories*).
 ---
 
 ## 9. How to work in this repo

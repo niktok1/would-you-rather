@@ -18,6 +18,8 @@ data class Strings(
     val gameName: String,
     /** The Home screen's one button, into the game. */
     val play: String,
+    /** The Play screen's words. */
+    val playScreen: PlayStrings,
     /** The home icon's name, for a screen reader: back to the Home screen. */
     val home: String,
     /** The account icon's name, for a screen reader: to the Account screen. */
@@ -38,6 +40,7 @@ data class Strings(
         Strings(
             gameName = transform(gameName),
             play = transform(play),
+            playScreen = playScreen.map(transform),
             home = transform(home),
             account = transform(account),
             back = transform(back),
@@ -51,6 +54,7 @@ val SerbianCyrillicStrings: Strings =
     Strings(
         gameName = "Шта би радије?",
         play = "Играј",
+        playScreen = SerbianCyrillicPlayStrings,
         home = "Почетна",
         account = "Налог",
         back = "Назад",
@@ -65,6 +69,7 @@ val EnglishStrings: Strings =
     Strings(
         gameName = "Would You Rather?",
         play = "Play",
+        playScreen = EnglishPlayStrings,
         home = "Home",
         account = "Account",
         back = "Back",

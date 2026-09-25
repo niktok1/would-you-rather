@@ -104,6 +104,24 @@ class AppNavigationTest {
             assertEquals(1, game.questionsAsked)
         }
 
+    /** Skip is on Play's top bar while a question is asked, and goes past it to the next. */
+    @Test
+    fun `Skip on the Play screen's top bar skips the question asked`() {
+        game.serving = QUESTION
+        withApp { scene ->
+            scene.tap(CYRILLIC.play)
+            assertEquals(
+                listOf(CYRILLIC.home, CYRILLIC.playScreen.skip, CYRILLIC.account),
+                scene.descriptions().take(3),
+            )
+
+            scene.tap(CYRILLIC.playScreen.skip)
+
+            assertEquals(listOf(QUESTION.id), game.skipped)
+            assertEquals(2, game.questionsAsked)
+        }
+    }
+
     /** The Play screen's ViewModel is the app's, not the back stack's: its question is still there. */
     @Test
     fun `Play keeps its question through Account and back`() =
@@ -241,8 +259,8 @@ class AppNavigationTest {
     }
 
     /**
-     * The game, counting what the screens ask of it. Out of questions, so the Play screen shows a
-     * failure and no question needs making; nothing here votes, likes, skips or registers.
+     * The game, counting what the screens ask of it. Out of questions unless it is [serving] one, so
+     * the Play screen shows a failure; nothing here votes, likes or registers.
      */
     private class FakeGame :
         QuestionRepository,
@@ -256,18 +274,25 @@ class AppNavigationTest {
         var statsRead = 0
         var submissionsRead = 0
 
+        /** The question every fetch serves, or none: out of questions, which needs none made. */
+        var serving: Question? = null
+
+        val skipped = mutableListOf<String>()
+
         override val categories: StateFlow<Set<Category>> = MutableStateFlow(emptySet())
 
         override suspend fun next(): Question {
             questionsAsked++
-            throw WyrException(DomainError.OUT_OF_QUESTIONS)
+            return serving ?: throw WyrException(DomainError.OUT_OF_QUESTIONS)
         }
 
         override suspend fun prefetch() = Unit
 
         override suspend fun setCategories(categories: Set<Category>) = Unit
 
-        override suspend fun skip(questionId: String) = Unit
+        override suspend fun skip(questionId: String) {
+            skipped += questionId
+        }
 
         override suspend fun reset() = Unit
 
@@ -316,5 +341,7 @@ class AppNavigationTest {
     private companion object {
         val CYRILLIC = SerbianCyrillicStrings
         val ENGLISH = EnglishStrings
+
+        val QUESTION = Question(id = "q1", optionA = "Fly", optionB = "Swim", categories = setOf(Category.FOOD))
     }
 }

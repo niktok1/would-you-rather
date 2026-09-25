@@ -1,6 +1,7 @@
 package io.ntole.wyr.play
 
-import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -15,6 +16,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeContentPadding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -22,48 +24,57 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconToggleButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import io.ntole.wyr.core.domain.error.DomainError
 import io.ntole.wyr.core.domain.question.Category
 import io.ntole.wyr.core.domain.question.Question
 import io.ntole.wyr.core.domain.vote.Side
-import io.ntole.wyr.core.domain.vote.VoteOutcome
+import io.ntole.wyr.language.LocalStrings
+import io.ntole.wyr.language.PlayStrings
+import io.ntole.wyr.theme.WyrIcons
 import io.ntole.wyr.theme.WyrThemeAccessors
 import io.ntole.wyr.theme.WyrTypeScale
+import kotlin.math.roundToInt
 
 /**
- * The game: a question, its two options, and the reveal once it is answered.
+ * The game (CLAUDE.md §8d, *The Play screen*): two answer cards and, between them, one row of the
+ * categories played, the player's points and the like. Tapping a card answers ([onChoose]); once the
+ * answer is revealed, tapping either card goes on to the next question ([onNext]). Skip is on the
+ * top bar (`PlayTopBar`), not here.
  *
- * [categories] are the categories played, none for every category, shown in the header, where
- * tapping them opens the category picker (CLAUDE.md §8d, *Categories*). [picking] is what the open
- * picker has ticked, or `null` while it is closed.
+ * [categories] are the categories played, none for every category, and tapping them opens the
+ * category picker ([onOpenCategories]), a dialog over the screen while [picking], what it has
+ * ticked, is not `null`. [points] are the player's as the server last reported them, `null` until
+ * it has.
  */
 @Composable
 fun PlayScreen(
     state: PlayUiState,
     categories: Set<Category>,
+    points: Int?,
     picking: Set<Category>?,
     onChoose: (Side) -> Unit,
-    onSkip: () -> Unit,
-    onToggleLike: () -> Unit,
     onNext: () -> Unit,
+    onToggleLike: () -> Unit,
     onRetry: () -> Unit,
     onOpenCategories: () -> Unit,
     onToggleCategory: (Category) -> Unit,
@@ -84,46 +95,26 @@ fun PlayScreen(
                     .padding(dimens.screenPadding),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Header(state, categories = categories, onOpenCategories = onOpenCategories)
-
-            Spacer(Modifier.size(dimens.spaceMd))
-
             when (state) {
                 PlayUiState.Loading -> {
                     LoadingBody()
                 }
 
                 is PlayUiState.Failed -> {
-                    FailureBody(state.error, onRetry)
+                    FailureBody(state.error, categories, onRetry = onRetry, onOpenCategories = onOpenCategories)
                 }
 
-                // Weighted, not filling: the row of controls below needs the height that is left.
-                is PlayUiState.Asking -> {
+                is PlayUiState.OnQuestion -> {
                     QuestionBody(
-                        question = state.question,
-                        outcome = null,
-                        likeError = state.likeError,
-                        enabled = !state.isBusy,
+                        state = state,
+                        categories = categories,
+                        points = points,
                         onChoose = onChoose,
-                        modifier = Modifier.weight(1f),
+                        onNext = onNext,
+                        onToggleLike = onToggleLike,
+                        onOpenCategories = onOpenCategories,
                     )
                 }
-
-                is PlayUiState.Revealed -> {
-                    QuestionBody(
-                        question = state.question,
-                        outcome = state.outcome,
-                        likeError = state.likeError,
-                        enabled = false,
-                        onChoose = onChoose,
-                        modifier = Modifier.weight(1f),
-                    )
-                }
-            }
-
-            if (state is PlayUiState.OnQuestion) {
-                Spacer(Modifier.size(dimens.spaceMd))
-                Controls(state, onToggleLike = onToggleLike, onSkip = onSkip, onNext = onNext)
             }
         }
 
@@ -143,70 +134,183 @@ fun PlayScreen(
 }
 
 /**
- * The title, and one row under it: the categories played, in every state, so a selection with
- * nothing to serve can be changed from the failure it leads to, and beside them, once a vote is
- * scored, the points.
- *
- * The categories are a [Stat] like the points, a value over its label, one line of each, so the row
- * is no taller for them than the reveal's points alone made it, and the reveal's option cards keep
- * the height their tally needs on a short phone (CLAUDE.md §8d, *The Play screen*). Tapping them
- * opens the picker, so their value is in the accent colour and their label says what a tap does:
- * the colour alone is the title's too, and the picker is the only way to choose categories. It looks
- * the same while the categories cannot change, as it does for every question that loads: the tap
- * then does nothing.
+ * The two cards and the row between them. Before the answer a card answers for its side; once it is
+ * revealed, either card is the way on. Off while anything is in flight, one action at a time.
  */
 @Composable
-private fun Header(
-    state: PlayUiState,
+private fun QuestionBody(
+    state: PlayUiState.OnQuestion,
     categories: Set<Category>,
+    points: Int?,
+    onChoose: (Side) -> Unit,
+    onNext: () -> Unit,
+    onToggleLike: () -> Unit,
     onOpenCategories: () -> Unit,
 ) {
     val colors = WyrThemeAccessors.colors
-    val dimens = WyrThemeAccessors.dimens
+    val outcome = (state as? PlayUiState.Revealed)?.outcome
 
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(
-            text = "Would you rather...",
-            color = colors.headingAccent,
-            fontSize = WyrTypeScale.heading,
-            fontWeight = FontWeight.ExtraBold,
-            textAlign = TextAlign.Center,
+    Column(modifier = Modifier.fillMaxSize()) {
+        OptionCard(
+            text = state.question.optionA,
+            background = colors.optionA,
+            contentColor = colors.onOptionA,
+            percent = outcome?.tally?.percentA,
+            isYourPick = outcome?.yourSide == Side.A,
+            enabled = !state.isBusy,
+            onClick = { if (outcome == null) onChoose(Side.A) else onNext() },
+            modifier = Modifier.weight(1f),
         )
 
-        Spacer(Modifier.size(dimens.spaceSm))
-        Row(horizontalArrangement = Arrangement.spacedBy(dimens.spaceMd)) {
-            // Weighted, so a long selection is cut short on its one line rather than pushing the
-            // points off the row.
-            Stat(
-                label = "change categories",
-                value = categoriesPlayed(categories),
-                valueColor = colors.headingAccent,
-                modifier =
-                    Modifier
-                        .weight(1f, fill = false)
-                        .clickable(
-                            enabled = state.canChangeCategories,
-                            onClickLabel = "Change categories",
-                            role = Role.Button,
-                            onClick = onOpenCategories,
-                        ),
-            )
+        MiddleRow(
+            question = state.question,
+            categories = categories,
+            points = points,
+            likeError = state.likeError,
+            canChangeCategories = state.canChangeCategories,
+            canLike = !state.isBusy,
+            onOpenCategories = onOpenCategories,
+            onToggleLike = onToggleLike,
+        )
 
-            // Points only mean something once the server has scored a vote, so they stay hidden
-            // until there is a real number to show rather than a placeholder zero.
-            val outcome = (state as? PlayUiState.Revealed)?.outcome
-            if (outcome != null) {
-                Stat(label = "points", value = outcome.totalPoints.toString())
-                pointsThisVote(outcome)?.let { points -> Stat(label = "this vote", value = points) }
+        OptionCard(
+            text = state.question.optionB,
+            background = colors.optionB,
+            contentColor = colors.onOptionB,
+            percent = outcome?.tally?.percentB,
+            isYourPick = outcome?.yourSide == Side.B,
+            enabled = !state.isBusy,
+            onClick = { if (outcome == null) onChoose(Side.B) else onNext() },
+            modifier = Modifier.weight(1f),
+        )
+    }
+}
+
+/**
+ * The one row between the cards: on the left the categories played, which open the picker; in the
+ * middle the player's points, or how the last like failed; on the right the heart, the player's own
+ * like, filled while they like the question, and how many like it, as the server counted them
+ * (CLAUDE.md §8d, *Likes*), before answering and after.
+ *
+ * It is the heart's height whatever it shows, so a failed like moves nothing. The two sides share
+ * what the middle leaves, so the points stand in the middle of the screen, and a long selection is
+ * cut short on its one line, never the like count: the middle is no wider than
+ * `WyrDimens.playRowMiddleMaxWidth`. Internal, not private, so a test can measure it.
+ */
+@Composable
+internal fun MiddleRow(
+    question: Question,
+    categories: Set<Category>,
+    points: Int?,
+    likeError: DomainError?,
+    canChangeCategories: Boolean,
+    canLike: Boolean,
+    onOpenCategories: () -> Unit,
+    onToggleLike: () -> Unit,
+) {
+    val colors = WyrThemeAccessors.colors
+    val dimens = WyrThemeAccessors.dimens
+    val strings = LocalStrings.current.playScreen
+
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(dimens.spaceSm),
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(vertical = dimens.spaceXs),
+    ) {
+        Box(contentAlignment = Alignment.CenterStart, modifier = Modifier.weight(1f)) {
+            CategoriesPlayed(categories, enabled = canChangeCategories, onClick = onOpenCategories)
+        }
+
+        // No wider than its cap, so the like count always has its width. How a like failed shows in
+        // the points' place, until the next like or the next question, in two short lines at most,
+        // which the heart's height holds.
+        val middle = Modifier.widthIn(max = dimens.playRowMiddleMaxWidth)
+        if (likeError != null) {
+            Text(
+                text = failureText(likeError, strings),
+                color = MaterialTheme.colorScheme.error,
+                fontSize = WyrTypeScale.statLabel,
+                textAlign = TextAlign.Center,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                modifier = middle,
+            )
+        } else if (points != null) {
+            Text(
+                text = strings.points(points),
+                color = colors.primaryText,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = middle,
+            )
+        }
+
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.End,
+            modifier = Modifier.weight(1f),
+        ) {
+            IconToggleButton(checked = question.likedByMe, onCheckedChange = { onToggleLike() }, enabled = canLike) {
+                Icon(
+                    imageVector = if (question.likedByMe) WyrIcons.HeartFilled else WyrIcons.Heart,
+                    contentDescription = strings.like,
+                    tint = colors.headingAccent,
+                )
             }
+            Text(
+                text = question.likeCount.toString(),
+                color = colors.primaryText,
+                fontWeight = FontWeight.Medium,
+                maxLines = 1,
+            )
         }
     }
 }
 
-/** The categories played, as the header names them: all of them while none is selected. */
-internal fun categoriesPlayed(categories: Set<Category>): String =
+/**
+ * The categories played, *All* while none is picked, with a small chevron: a tap opens the category
+ * picker, the only way to choose them. It looks the same while the categories cannot change, as it
+ * does for every question that loads: the tap then does nothing.
+ */
+@Composable
+private fun CategoriesPlayed(
+    categories: Set<Category>,
+    enabled: Boolean,
+    onClick: () -> Unit,
+) {
+    val colors = WyrThemeAccessors.colors
+    val strings = LocalStrings.current.playScreen
+
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier =
+            Modifier
+                .clickable(enabled = enabled, onClickLabel = strings.categories, role = Role.Button, onClick = onClick)
+                .minimumInteractiveComponentSize(),
+    ) {
+        Text(
+            text = categoriesPlayed(categories, all = strings.allCategories),
+            color = colors.headingAccent,
+            fontWeight = FontWeight.Bold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f, fill = false),
+        )
+        Icon(imageVector = WyrIcons.ChevronDown, contentDescription = null, tint = colors.headingAccent)
+    }
+}
+
+/** The categories played, as the Play screen names them: [all] while none is selected. */
+internal fun categoriesPlayed(
+    categories: Set<Category>,
+    all: String,
+): String =
     if (categories.isEmpty()) {
-        "All"
+        all
     } else {
         // In declaration order, as the picker lists them, whatever order the set holds them in.
         Category.entries.filter { it in categories }.joinToString(", ", transform = ::categoryName)
@@ -308,104 +412,15 @@ private fun CategoryOption(
 }
 
 /**
- * What the vote earned, as the header shows it, or null for a replay (CLAUDE.md §8d, retry safety).
- * A replay pays 0 because the attempt it repeats was paid when it landed, so "+0" would tell the
- * player their answer earned nothing. The client never recomputes points (§8c), so it shows none.
+ * One answer card, in its side's brand colour (CLAUDE.md §5b), outlined once it is the player's pick.
+ * Once the answer is revealed it shows its side's share, [percent], counted up from 0 ([countedUp]).
  */
-internal fun pointsThisVote(outcome: VoteOutcome): String? = if (outcome.replayed) null else "+${outcome.pointsAwarded}"
-
-/** A value over its label, one line each, the value cut short rather than wrapped. */
-@Composable
-private fun Stat(
-    label: String,
-    value: String,
-    modifier: Modifier = Modifier,
-    valueColor: Color = WyrThemeAccessors.colors.primaryText,
-) {
-    val colors = WyrThemeAccessors.colors
-
-    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = modifier) {
-        Text(
-            text = value,
-            color = valueColor,
-            fontWeight = FontWeight.Bold,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
-        Text(text = label, color = colors.muted, fontSize = WyrTypeScale.statLabel, maxLines = 1)
-    }
-}
-
-@Composable
-private fun QuestionBody(
-    question: Question,
-    outcome: VoteOutcome?,
-    likeError: DomainError?,
-    enabled: Boolean,
-    onChoose: (Side) -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val colors = WyrThemeAccessors.colors
-    val dimens = WyrThemeAccessors.dimens
-
-    Column(modifier = modifier.fillMaxWidth()) {
-        OptionCard(
-            text = question.optionA,
-            background = colors.optionA,
-            contentColor = colors.onOptionA,
-            percent = outcome?.tally?.percentA,
-            votes = outcome?.tally?.votesA,
-            isYourPick = outcome?.yourSide == Side.A,
-            enabled = enabled,
-            onClick = { onChoose(Side.A) },
-            modifier = Modifier.weight(1f),
-        )
-
-        OrPill()
-
-        OptionCard(
-            text = question.optionB,
-            background = colors.optionB,
-            contentColor = colors.onOptionB,
-            percent = outcome?.tally?.percentB,
-            votes = outcome?.tally?.votesB,
-            isYourPick = outcome?.yourSide == Side.B,
-            enabled = enabled,
-            onClick = { onChoose(Side.B) },
-            modifier = Modifier.weight(1f),
-        )
-
-        // One line under the cards at most: how the last like failed, or else the reveal's verdict.
-        // The failure takes the verdict's place, not a line of its own, so a short phone's reveal
-        // keeps the height its cards need for the tally.
-        val note = likeError?.let(::likeFailureMessage) ?: outcome?.let(::verdictLine)
-        if (note != null) {
-            Spacer(Modifier.size(dimens.spaceSm))
-            Text(
-                text = note,
-                color = if (likeError != null) MaterialTheme.colorScheme.error else colors.muted,
-                fontSize = WyrTypeScale.statLabel,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.fillMaxWidth(),
-            )
-        }
-    }
-}
-
-private fun verdictLine(outcome: VoteOutcome): String {
-    val total = outcome.tally.total
-    val people = if (total == 1L) "1 person has" else "$total people have"
-    val verdict = if (outcome.agreedWithMajority) "You're with the crowd" else "You're the outlier"
-    return "$verdict · $people answered this"
-}
-
 @Composable
 private fun OptionCard(
     text: String,
     background: Color,
     contentColor: Color,
     percent: Int?,
-    votes: Long?,
     isYourPick: Boolean,
     enabled: Boolean,
     onClick: () -> Unit,
@@ -413,12 +428,6 @@ private fun OptionCard(
 ) {
     val dimens = WyrThemeAccessors.dimens
     val shape = RoundedCornerShape(dimens.radiusCard)
-
-    // Animating from 0 makes the reveal read as the tally arriving, not as a layout jump.
-    val revealed by animateFloatAsState(
-        targetValue = if (percent == null) 0f else 1f,
-        animationSpec = tween(durationMillis = 350),
-    )
 
     Surface(
         onClick = onClick,
@@ -432,7 +441,7 @@ private fun OptionCard(
                 .heightIn(min = dimens.optionMinHeight)
                 .then(
                     if (isYourPick) {
-                        Modifier.border(width = 4.dp, color = contentColor, shape = shape)
+                        Modifier.border(width = dimens.pickBorder, color = contentColor, shape = shape)
                     } else {
                         Modifier
                     },
@@ -453,15 +462,9 @@ private fun OptionCard(
                 if (percent != null) {
                     Spacer(Modifier.size(dimens.spaceSm))
                     Text(
-                        text = "$percent%",
+                        text = LocalStrings.current.playScreen.percent(countedUp(percent)),
                         fontSize = WyrTypeScale.percentage,
                         fontWeight = FontWeight.ExtraBold,
-                        modifier = Modifier.alpha(revealed),
-                    )
-                    Text(
-                        text = if (votes == 1L) "1 vote" else "${votes ?: 0} votes",
-                        fontSize = WyrTypeScale.statLabel,
-                        modifier = Modifier.alpha(revealed),
                     )
                 }
             }
@@ -470,153 +473,86 @@ private fun OptionCard(
 }
 
 /**
- * One row under the question, asked or revealed: its like count, the player's Like (Unlike while
- * they like it), and the way on, Skip before answering and Next question after. The count is visible
- * before answering and is the server's (CLAUDE.md §8d, *Likes*), never worked out here.
- *
- * One row, where Next question alone stood before likes came, so the reveal is no taller than it
- * was and a short phone's option cards keep the height their tally needs. How a like failed shows
- * in the verdict's place (QuestionBody), not here.
+ * How long the reveal's percentages take to count up from 0, both cards at once (CLAUDE.md §8d,
+ * *The Play screen*). Internal, so a test can step the clock to it.
  */
-@Composable
-private fun Controls(
-    state: PlayUiState.OnQuestion,
-    onToggleLike: () -> Unit,
-    onSkip: () -> Unit,
-    onNext: () -> Unit,
-) {
-    val colors = WyrThemeAccessors.colors
-    val dimens = WyrThemeAccessors.dimens
-
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(dimens.spaceSm),
-        modifier = Modifier.fillMaxWidth(),
-    ) {
-        Text(
-            text = likeCountOf(state.question),
-            color = colors.primaryText,
-            fontWeight = FontWeight.Medium,
-            modifier = Modifier.weight(1f),
-        )
-        OutlinedButton(onClick = onToggleLike, enabled = !state.isBusy) {
-            Text(likeActionOf(state.question))
-        }
-        when (state) {
-            is PlayUiState.Asking -> {
-                OutlinedButton(onClick = onSkip, enabled = !state.isBusy) { Text("Skip") }
-            }
-
-            is PlayUiState.Revealed -> {
-                Button(onClick = onNext, enabled = !state.isBusy) { Text("Next question") }
-            }
-        }
-    }
-}
-
-/** How many players like [question], this one included, as the server counted them. */
-internal fun likeCountOf(question: Question): String =
-    if (question.likeCount == 1) "1 like" else "${question.likeCount} likes"
-
-/** What the Like button does to [question]: unlike it when the player likes it, like it otherwise. */
-internal fun likeActionOf(question: Question): String = if (question.likedByMe) "Unlike" else "Like"
+internal const val COUNT_UP_MILLIS = 2_500
 
 /**
- * Player-facing copy for a like or unlike that failed, by its [DomainError], never the server's
- * message. The question stays as it was on screen, so pressing again is always the way to retry.
+ * [target] as the reveal shows it: counted up from 0 over [COUNT_UP_MILLIS], fast at first and
+ * slowing into the value, once per reveal. The text alone counts; nothing moves.
  */
-internal fun likeFailureMessage(error: DomainError): String =
-    when (error) {
-        DomainError.NETWORK -> "Can't reach the game right now. Try again."
-        DomainError.RATE_LIMITED -> "Slow down a moment, then try again."
-        DomainError.QUESTION_NOT_FOUND -> "That question is no longer in the game."
-        else -> "Something went wrong. Try again."
-    }
-
 @Composable
-private fun OrPill() {
-    val colors = WyrThemeAccessors.colors
-    val dimens = WyrThemeAccessors.dimens
-
-    Box(
-        contentAlignment = Alignment.Center,
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .padding(vertical = dimens.spaceSm),
-    ) {
-        Surface(
-            shape = RoundedCornerShape(dimens.radiusPill),
-            color = colors.orPillBackground,
-            contentColor = colors.orPillText,
-        ) {
-            Text(
-                text = "OR",
-                fontSize = WyrTypeScale.orPill,
-                fontWeight = FontWeight.Black,
-                modifier =
-                    Modifier.padding(
-                        horizontal = dimens.spaceMd,
-                        vertical = dimens.spaceXs,
-                    ),
-            )
-        }
+private fun countedUp(target: Int): Int {
+    val counted = remember { Animatable(0f) }
+    LaunchedEffect(target) {
+        counted.animateTo(
+            targetValue = target.toFloat(),
+            animationSpec = tween(durationMillis = COUNT_UP_MILLIS, easing = LinearOutSlowInEasing),
+        )
     }
+    return counted.value.roundToInt()
 }
 
+/** A spinner, named for a screen reader: no text to read while a question loads. */
 @Composable
 private fun LoadingBody() {
+    val loading = LocalStrings.current.playScreen.loading
+
     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        CircularProgressIndicator(color = WyrThemeAccessors.colors.headingAccent)
+        CircularProgressIndicator(
+            color = WyrThemeAccessors.colors.headingAccent,
+            modifier = Modifier.semantics { contentDescription = loading },
+        )
     }
 }
 
+/**
+ * What failed, in one short sentence, Try again, and the categories played: a selection with
+ * nothing to serve ends here, and changing it is the way out (CLAUDE.md §8d, *Categories*).
+ */
 @Composable
 private fun FailureBody(
     error: DomainError,
+    categories: Set<Category>,
     onRetry: () -> Unit,
+    onOpenCategories: () -> Unit,
 ) {
     val colors = WyrThemeAccessors.colors
     val dimens = WyrThemeAccessors.dimens
+    val strings = LocalStrings.current.playScreen
 
     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(dimens.spaceMd),
+        ) {
             Text(
-                text = message(error),
+                text = failureText(error, strings),
                 color = colors.primaryText,
                 textAlign = TextAlign.Center,
                 fontWeight = FontWeight.Medium,
             )
-            Spacer(Modifier.size(dimens.spaceMd))
-            Button(onClick = onRetry) { Text("Try again") }
+            Button(onClick = onRetry) { Text(strings.tryAgain) }
+            CategoriesPlayed(categories, enabled = true, onClick = onOpenCategories)
         }
     }
 }
 
 /**
- * Player-facing copy per [DomainError].
- *
- * Branching on the domain error, never on a server message: `ErrorDto.message` is diagnostic and
- * unlocalised, so it must never reach a screen. The Play tab never submits or moderates a
- * question, nor registers or logs in; those errors have copy only because every [DomainError] does.
+ * What failed, in the player's words, by its [DomainError], never the server's message, which is
+ * diagnostic and never translated: a question that failed to load or to be answered, and a like
+ * that failed. The Play screen never submits, moderates or logs in, so every other error is the
+ * same short sentence.
  */
-private fun message(error: DomainError): String =
+internal fun failureText(
+    error: DomainError,
+    strings: PlayStrings,
+): String =
     when (error) {
-        DomainError.NETWORK -> "Can't reach the game right now.\nCheck your connection."
-        DomainError.OUT_OF_QUESTIONS -> "You've answered everything we have.\nCome back soon."
-        DomainError.RATE_LIMITED -> "Slow down a moment, then try again."
-        DomainError.UNAUTHORIZED -> "We couldn't verify your session.\nTrying again should fix it."
-        DomainError.QUESTION_NOT_FOUND -> "That question disappeared.\nLet's find another."
-        DomainError.ALREADY_VOTED -> "You've already answered that one."
-        DomainError.INVALID_SUBMISSION -> "That question can't be sent as written."
-        DomainError.SUBMISSION_LIMIT -> "You have too many questions waiting for review."
-        DomainError.ALREADY_DECIDED -> "That question has already been reviewed."
-        DomainError.WRONG_STATUS -> "That question can't be changed that way right now."
-        DomainError.FORBIDDEN -> "That needs a moderator."
-        DomainError.INVALID_USERNAME -> "That username can't be used."
-        DomainError.INVALID_PASSWORD -> "That password can't be used."
-        DomainError.USERNAME_TAKEN -> "That username is taken."
-        DomainError.ALREADY_REGISTERED -> "You're registered already."
-        DomainError.INVALID_LOGIN -> "Wrong username or password."
-        DomainError.SERVER, DomainError.UNKNOWN -> "Something went wrong on our end."
+        DomainError.NETWORK -> strings.noInternet
+        DomainError.OUT_OF_QUESTIONS -> strings.outOfQuestions
+        DomainError.RATE_LIMITED -> strings.slowDown
+        DomainError.QUESTION_NOT_FOUND -> strings.questionGone
+        else -> strings.somethingWrong
     }

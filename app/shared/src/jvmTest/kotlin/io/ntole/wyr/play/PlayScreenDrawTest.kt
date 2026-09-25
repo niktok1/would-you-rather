@@ -5,6 +5,10 @@ import androidx.compose.ui.ImageComposeScene
 import androidx.compose.ui.graphics.toComposeImageBitmap
 import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.layout.Layout
+import androidx.compose.ui.semantics.SemanticsNode
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.semantics.getOrNull
+import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.unit.Density
 import io.ntole.wyr.core.domain.error.DomainError
 import io.ntole.wyr.core.domain.question.Category
@@ -12,28 +16,52 @@ import io.ntole.wyr.core.domain.question.Question
 import io.ntole.wyr.core.domain.vote.Side
 import io.ntole.wyr.core.domain.vote.Tally
 import io.ntole.wyr.core.domain.vote.VoteOutcome
+import io.ntole.wyr.descriptions
+import io.ntole.wyr.language.Language
+import io.ntole.wyr.language.PlayStrings
+import io.ntole.wyr.language.WyrStrings
+import io.ntole.wyr.language.stringsOf
+import io.ntole.wyr.nodes
+import io.ntole.wyr.sizeNeeded
+import io.ntole.wyr.tap
+import io.ntole.wyr.texts
 import io.ntole.wyr.theme.WyrTheme
+import kotlin.math.abs
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
 /**
- * The Play screen drawn off screen at two phones' sizes, in each theme, from every state it can be
- * in, with every category played or a few, and with the category picker open. Compose measures and
- * draws it all, so a layout that cannot be measured fails here rather than when the tab opens.
- * Whether what it draws fits is asked separately, since a squeezed card draws, and so is whether the
- * picker is drawn at all, since the screen draws without it too.
+ * The Play screen (CLAUDE.md §8d, *The Play screen*) drawn off screen at two phones' sizes, in each
+ * theme and each language, from every state it can be in, with every category played or a few, and
+ * with the category picker open; read through its semantics, as a screen reader reads it, and
+ * tapped through them. Compose measures and draws it all, so a layout that cannot be measured fails
+ * here rather than when the screen opens. Whether what it draws fits is asked separately, since a
+ * squeezed card draws, and so is whether the picker is drawn at all, since the screen draws without
+ * it too.
  */
 class PlayScreenDrawTest {
     @Test
-    fun `the screen draws in every state it can be in`() {
+    fun `the screen draws in every state in both themes and every language`() {
         statesOf(QUESTION).forEach { state ->
             listOf(false, true).forEach { dark ->
-                SELECTIONS.forEach { categories ->
-                    draw(state, dark, WIDTH, HEIGHT, categories)
-                    draw(state, dark, SHORT_PHONE_WIDTH, SHORT_PHONE_HEIGHT, categories)
+                Language.entries.forEach { language ->
+                    draw(state, dark, WIDTH, HEIGHT, language = language)
+                    draw(state, dark, SHORT_PHONE_WIDTH, SHORT_PHONE_HEIGHT, language = language)
+                }
+            }
+        }
+    }
+
+    @Test
+    fun `the screen draws with every selection played`() {
+        statesOf(QUESTION).forEach { state ->
+            SELECTIONS.forEach { categories ->
+                listOf(false, true).forEach { dark ->
+                    draw(state, dark, SHORT_PHONE_WIDTH, SHORT_PHONE_HEIGHT, categories = categories)
                 }
             }
         }
@@ -74,30 +102,29 @@ class PlayScreenDrawTest {
 
     /**
      * Height the screen needs and does not get comes out of the weighted option cards, which then
-     * cut off what they hold: the reveal's vote counts first, then its percentages. Drawing cannot
-     * see that, so this asks the screen how much height it needs at an iPhone SE's height.
+     * cut off what they hold, the reveal's percentages first. Drawing cannot see that, so this asks
+     * the screen how much height it needs at an iPhone SE's height, in every language, on a question
+     * of two lines an option and on one of one line.
      *
-     * The height a line takes differs little from one font to another, but where text wraps differs
-     * a lot, and CI's Linux has wider fonts than a phone (Noto Sans or DejaVu Sans). So it is measured
-     * at the width drawn above, which leaves the screen's own copy, the verdict above all, 25 more
-     * than 375 does to stay on one line, and the options are one short line each, so the cards need
-     * only their least height (`optionMinHeight`) and what is measured is everything around them.
-     * On this Mac the reveal of [QUESTION] at 375 wide needs 593, and of [ONE_LINE_QUESTION] 569.
+     * Where text wraps differs a lot from one font to another, and CI's Linux has wider fonts than a
+     * phone (Noto Sans or DejaVu Sans), so it is measured at the width drawn above, 25 more than 375.
      */
     @Test
     fun `every state fits a short phone without squeezing the option cards`() {
-        statesOf(ONE_LINE_QUESTION).forEach { state ->
-            SELECTIONS.forEach { categories ->
-                val needed = heightNeeded(state, WIDTH, categories)
-                assertTrue(needed <= SHORT_PHONE_HEIGHT, "$state on $categories needs $needed of $SHORT_PHONE_HEIGHT")
+        (statesOf(QUESTION) + statesOf(ONE_LINE_QUESTION)).forEach { state ->
+            Language.entries.forEach { language ->
+                SELECTIONS.forEach { categories ->
+                    val needed = heightNeeded(state, WIDTH, categories, language)
+                    assertTrue(
+                        needed <= SHORT_PHONE_HEIGHT,
+                        "$state in $language on $categories needs $needed of $SHORT_PHONE_HEIGHT",
+                    )
+                }
             }
         }
     }
 
-    /**
-     * The categories played share the header's one row with the reveal's points, so however many are
-     * selected they take one line of it, cut short at the narrow phone's width rather than wrapped.
-     */
+    /** However many categories are played, they take the row's one line, cut short rather than wrapped. */
     @Test
     fun `every category played takes no more height than none`() {
         statesOf(QUESTION).forEach { state ->
@@ -130,16 +157,235 @@ class PlayScreenDrawTest {
         }
     }
 
-    /** A failed like says so in the verdict's place, so the reveal is no taller for it. */
+    /** A failed like says so in the points' place, so no line of its own moves the cards. */
     @Test
-    fun `a failed like takes no height from the reveal`() {
+    fun `a failed like takes no height`() {
+        val asked = PlayUiState.Asking(QUESTION)
         val revealed = PlayUiState.Revealed(QUESTION, OUTCOME)
-        listOf(DomainError.NETWORK, DomainError.QUESTION_NOT_FOUND).forEach { error ->
-            assertEquals(
-                heightNeeded(revealed, WIDTH),
-                heightNeeded(revealed.copy(likeError = error), WIDTH),
-                "with $error",
-            )
+        Language.entries.forEach { language ->
+            LIKE_FAILURES.forEach { error ->
+                assertEquals(
+                    heightNeeded(asked, WIDTH, language = language),
+                    heightNeeded(asked.copy(likeError = error), WIDTH, language = language),
+                    "asked with $error in $language",
+                )
+                assertEquals(
+                    heightNeeded(revealed, WIDTH, language = language),
+                    heightNeeded(revealed.copy(likeError = error), WIDTH, language = language),
+                    "revealed with $error in $language",
+                )
+            }
+        }
+    }
+
+    /**
+     * What each state shows, and nothing else: no title, no *OR*, no *+1*, no verdict, no vote
+     * counts, and neither Next question nor Skip on the screen itself (Skip is the top bar's). Read
+     * once the reveal has counted up.
+     */
+    @Test
+    fun `every state shows its texts and nothing else in every language`() {
+        Language.entries.forEach { language ->
+            val strings = stringsOf(language).playScreen
+            expectedOf(strings).forEach { (state, expected) ->
+                val (texts, names) = expected
+                withScreen(state, language = language) { scene, _ ->
+                    scene.render(COUNTED_UP)
+                    assertEquals(texts.sorted(), scene.texts().sorted(), "$state in $language")
+                    assertEquals(names, scene.descriptions(), "$state in $language")
+                }
+            }
+            // The points are the server's, and there are none until it has said.
+            withScreen(PlayUiState.Asking(QUESTION), points = null, language = language) { scene, _ ->
+                assertEquals(
+                    listOf(QUESTION.optionA, strings.allCategories, "0", QUESTION.optionB).sorted(),
+                    scene.texts().sorted(),
+                    "in $language",
+                )
+            }
+        }
+    }
+
+    @Test
+    fun `a card answers before the reveal and goes on to the next question after it`() {
+        withScreen(PlayUiState.Asking(QUESTION)) { scene, actions ->
+            scene.tap(QUESTION.optionA)
+            scene.tap(QUESTION.optionB)
+            assertEquals(listOf("choose A", "choose B"), actions.tapped, "before the reveal")
+        }
+        withScreen(PlayUiState.Revealed(QUESTION, OUTCOME)) { scene, actions ->
+            scene.tap(QUESTION.optionA)
+            scene.tap(QUESTION.optionB)
+            assertEquals(listOf("next", "next"), actions.tapped, "after the reveal")
+        }
+    }
+
+    /** One action at a time: while a vote or a like is in flight, the cards and the heart are off. */
+    @Test
+    fun `the cards and the heart are off while anything is in flight`() {
+        val like = stringsOf(Language.DEFAULT).playScreen.like
+        val parts = listOf(QUESTION.optionA, QUESTION.optionB, like)
+        listOf(
+            PlayUiState.Asking(QUESTION, isSubmitting = true),
+            PlayUiState.Asking(QUESTION, isLiking = true),
+            PlayUiState.Revealed(QUESTION, OUTCOME, isLiking = true),
+        ).forEach { state ->
+            withScreen(state) { scene, _ -> parts.forEach { assertTrue(scene.node(it).isOff, "$it in $state") } }
+        }
+        listOf(PlayUiState.Asking(QUESTION), PlayUiState.Revealed(QUESTION, OUTCOME)).forEach { state ->
+            withScreen(state) { scene, _ -> parts.forEach { assertFalse(scene.node(it).isOff, "$it in $state") } }
+        }
+    }
+
+    @Test
+    fun `the row between the cards opens the categories and likes the question`() {
+        Language.entries.forEach { language ->
+            val strings = stringsOf(language).playScreen
+            statesOf(QUESTION).filterIsInstance<PlayUiState.OnQuestion>().forEach { state ->
+                withScreen(state, language = language) { scene, actions ->
+                    val liked = if (state.question.likedByMe) ToggleableState.On else ToggleableState.Off
+                    val heart = scene.node(strings.like)
+                    assertEquals(liked, heart.config.getOrNull(SemanticsProperties.ToggleableState), "$state")
+                    assertTrue(state.question.likeCount.toString() in scene.texts(), "$state")
+
+                    scene.tap(strings.allCategories)
+                    scene.tap(strings.like)
+
+                    assertEquals(listOf("categories", "like"), actions.tapped, "$state in $language")
+                }
+            }
+        }
+    }
+
+    /** The categories, the points and the heart sit in one row between the two cards, the points in the middle. */
+    @Test
+    fun `the row sits between the cards with the points in the middle`() {
+        val strings = stringsOf(Language.DEFAULT).playScreen
+        withScreen(PlayUiState.Asking(QUESTION)) { scene, _ ->
+            val cardA = scene.node(QUESTION.optionA).boundsInRoot
+            val cardB = scene.node(QUESTION.optionB).boundsInRoot
+            val row =
+                listOf(
+                    strings.allCategories,
+                    strings.points(POINTS),
+                    strings.like,
+                ).map { scene.node(it).boundsInRoot }
+            row.forEach { part -> assertTrue(part.center.y > cardA.bottom && part.center.y < cardB.top, "$part") }
+
+            val (categories, points, heart) = row
+            assertTrue(abs(points.center.x - SHORT_PHONE_WIDTH / 2f) <= 1f, "the points are at ${points.center.x}")
+            assertTrue(categories.right < points.left && heart.left > points.right, "$row")
+        }
+    }
+
+    /** A selection with nothing to serve ends in a failure, and the categories are the way out of it. */
+    @Test
+    fun `a failure offers Try again and the categories`() {
+        Language.entries.forEach { language ->
+            val strings = stringsOf(language).playScreen
+            withScreen(PlayUiState.Failed(DomainError.OUT_OF_QUESTIONS), language = language) { scene, actions ->
+                scene.tap(strings.tryAgain)
+                scene.tap(strings.allCategories)
+                assertEquals(listOf("retry", "categories"), actions.tapped, "in $language")
+            }
+        }
+    }
+
+    /** Both percentages count up from 0 at once and reach their values at 2.5 seconds, on the scene's clock. */
+    @Test
+    fun `the reveal's percentages count up from 0 over two and a half seconds`() {
+        withScreen(PlayUiState.Revealed(QUESTION, OUTCOME)) { scene, _ ->
+            scene.render(0)
+            assertEquals(listOf("0%", "0%"), percentages(scene), "at the start")
+
+            scene.render(COUNTED_UP / 2)
+            val halfway = percentages(scene).map { it.removeSuffix("%").toInt() }
+            assertTrue(halfway[0] in 1 until 70 && halfway[1] in 1 until 30, "halfway: $halfway")
+
+            scene.render(COUNTED_UP)
+            assertEquals(listOf("70%", "30%"), percentages(scene), "at two and a half seconds")
+            scene.render(COUNTED_UP * 2)
+            assertEquals(listOf("70%", "30%"), percentages(scene), "after")
+        }
+    }
+
+    /**
+     * At a short phone's width, less the screen's padding, the row needs no more width than it has,
+     * so nothing in it is cut short but a long selection: not the points, not the like count, not
+     * how a like failed, in any language; and it is the same height whatever it shows.
+     */
+    @Test
+    fun `nothing in the row is cut short at a short phone's width`() {
+        val question = QUESTION.copy(likeCount = 1234, likedByMe = true)
+        Language.entries.forEach { language ->
+            (LIKE_FAILURES + null).forEach { error ->
+                val (width, height) =
+                    sizeNeeded(ROW_WIDTH, SHORT_PHONE_HEIGHT) {
+                        WyrTheme {
+                            WyrStrings(language) {
+                                MiddleRow(
+                                    question = question,
+                                    categories = emptySet(),
+                                    points = 12345,
+                                    likeError = error,
+                                    canChangeCategories = true,
+                                    canLike = true,
+                                    onOpenCategories = {},
+                                    onToggleLike = {},
+                                )
+                            }
+                        }
+                    }
+                assertTrue(width <= ROW_WIDTH, "the row with $error in $language needs $width of $ROW_WIDTH")
+                assertEquals(ROW_HEIGHT, height, "the row with $error in $language")
+            }
+        }
+    }
+
+    /** The percentages the scene shows, card A's first. */
+    private fun percentages(scene: ImageComposeScene): List<String> = scene.texts().filter { it.endsWith("%") }
+
+    /** The one node showing [text] or named [text]. */
+    private fun ImageComposeScene.node(text: String): SemanticsNode {
+        val node =
+            nodes().singleOrNull { node ->
+                val shown =
+                    node.config
+                        .getOrNull(SemanticsProperties.Text)
+                        .orEmpty()
+                        .map { it.text }
+                text in shown || text in node.config.getOrNull(SemanticsProperties.ContentDescription).orEmpty()
+            }
+        return assertNotNull(node, "nothing shows \"$text\"")
+    }
+
+    private val SemanticsNode.isOff: Boolean
+        get() = config.getOrNull(SemanticsProperties.Disabled) != null
+
+    /** What the screen's callbacks were called for, in order. */
+    private class Actions {
+        val tapped = mutableListOf<String>()
+    }
+
+    /** [test] on [state]'s screen at the short phone's size, in the light theme, drawn once at time 0. */
+    private fun withScreen(
+        state: PlayUiState,
+        points: Int? = POINTS,
+        language: Language = Language.DEFAULT,
+        test: (ImageComposeScene, Actions) -> Unit,
+    ) {
+        val actions = Actions()
+        val scene =
+            ImageComposeScene(width = SHORT_PHONE_WIDTH, height = SHORT_PHONE_HEIGHT, density = Density(1f)) {
+                WyrTheme(darkTheme = false) {
+                    WyrStrings(language) { Screen(state, emptySet(), points, picking = null, actions) }
+                }
+            }
+        try {
+            scene.render(0)
+            test(scene, actions)
+        } finally {
+            scene.close()
         }
     }
 
@@ -150,10 +396,11 @@ class PlayScreenDrawTest {
         height: Int,
         categories: Set<Category> = emptySet(),
         picking: Set<Category>? = null,
+        language: Language = Language.DEFAULT,
     ) {
         val scene =
             ImageComposeScene(width = width, height = height, density = Density(1f)) {
-                WyrTheme(darkTheme = dark) { Screen(state, categories, picking) }
+                WyrTheme(darkTheme = dark) { WyrStrings(language) { Screen(state, categories, POINTS, picking) } }
             }
         try {
             assertEquals(width, scene.render().width)
@@ -169,7 +416,7 @@ class PlayScreenDrawTest {
     ): IntArray {
         val scene =
             ImageComposeScene(width = SHORT_PHONE_WIDTH, height = SHORT_PHONE_HEIGHT, density = Density(1f)) {
-                WyrTheme(darkTheme = false) { Screen(state, categories = emptySet(), picking = picking) }
+                WyrTheme(darkTheme = false) { Screen(state, categories = emptySet(), POINTS, picking = picking) }
             }
         return try {
             scene
@@ -187,7 +434,9 @@ class PlayScreenDrawTest {
         state: PlayUiState,
         width: Int,
         categories: Set<Category> = emptySet(),
-    ): Int = heightNeeded(width, "$state") { Screen(state, categories, picking = null) }
+        language: Language = Language.DEFAULT,
+    ): Int =
+        heightNeeded(width, "$state") { WyrStrings(language) { Screen(state, categories, POINTS, picking = null) } }
 
     /** The least height [content] needs at [width] for nothing in it to be squeezed. */
     private fun heightNeeded(
@@ -220,18 +469,20 @@ class PlayScreenDrawTest {
     private fun Screen(
         state: PlayUiState,
         categories: Set<Category>,
+        points: Int?,
         picking: Set<Category>?,
+        actions: Actions = Actions(),
     ) {
         PlayScreen(
             state = state,
             categories = categories,
+            points = points,
             picking = picking,
-            onChoose = {},
-            onSkip = {},
-            onToggleLike = {},
-            onNext = {},
-            onRetry = {},
-            onOpenCategories = {},
+            onChoose = { side -> actions.tapped += "choose $side" },
+            onNext = { actions.tapped += "next" },
+            onToggleLike = { actions.tapped += "like" },
+            onRetry = { actions.tapped += "retry" },
+            onOpenCategories = { actions.tapped += "categories" },
             onToggleCategory = {},
             onSelectAllCategories = {},
             onApplyCategories = {},
@@ -243,15 +494,20 @@ class PlayScreenDrawTest {
         const val WIDTH = 400
         const val HEIGHT = 900
 
-        /**
-         * An iPhone SE (667 high) less its status bar (20) and the top bar above the Play screen (48).
-         * Android's 360x640 class leaves about 520, which cuts the reveal's percentages off: a limit
-         * of the cards' layout, not of the controls under them. Since the categories row is drawn in
-         * every state, a question not answered yet (537 here) no longer fits there either, and its
-         * cards are squeezed below their least height (CLAUDE.md §8b, provisional).
-         */
+        /** An iPhone SE (667 high) less its status bar (20) and the top bar above the Play screen (48). */
         const val SHORT_PHONE_WIDTH = 375
         const val SHORT_PHONE_HEIGHT = 599
+
+        /** The short phone's width less the screen's padding on each side (`WyrDimens.screenPadding`). */
+        const val ROW_WIDTH = 335
+
+        /** The heart button's touch target and the row's padding above and below it. */
+        const val ROW_HEIGHT = 56
+
+        /** The scene's clock, in nanoseconds, once the reveal has counted up. */
+        const val COUNTED_UP = COUNT_UP_MILLIS * 1_000_000L
+
+        const val POINTS = 42
 
         /** Two lines an option on a phone, as most seeds are. */
         val QUESTION =
@@ -263,15 +519,20 @@ class PlayScreenDrawTest {
             )
         val ONE_LINE_QUESTION = QUESTION.copy(optionA = "Fly", optionB = "Swim")
 
-        /** None, which is every category; one; and every one, the longest line the header can hold. */
+        /** None, which is every category; one; and every one, the longest line the row can hold. */
         val SELECTIONS: List<Set<Category>> =
             listOf(emptySet(), setOf(Category.ETHICS), Category.selectable.toSet())
+
+        /** Every way a like's failure is worded, the longest among them. */
+        val LIKE_FAILURES: List<DomainError?> =
+            listOf(DomainError.NETWORK, DomainError.RATE_LIMITED, DomainError.QUESTION_NOT_FOUND, DomainError.SERVER)
+
         val OUTCOME =
             VoteOutcome(
                 yourSide = Side.B,
                 tally = Tally(votesA = 7, votesB = 3),
                 pointsAwarded = 1,
-                totalPoints = 42,
+                totalPoints = POINTS,
             )
 
         /** Every state the screen can be in, on [question] where there is one. */
@@ -280,6 +541,9 @@ class PlayScreenDrawTest {
                 PlayUiState.Loading,
                 PlayUiState.Failed(DomainError.NETWORK),
                 PlayUiState.Failed(DomainError.OUT_OF_QUESTIONS),
+                PlayUiState.Failed(DomainError.RATE_LIMITED),
+                PlayUiState.Failed(DomainError.QUESTION_NOT_FOUND),
+                PlayUiState.Failed(DomainError.SERVER),
                 PlayUiState.Asking(question),
                 PlayUiState.Asking(question, isSubmitting = true),
                 PlayUiState.Asking(question.copy(likeCount = 1, likedByMe = true), isLiking = true),
@@ -291,5 +555,41 @@ class PlayScreenDrawTest {
                 PlayUiState.Revealed(question, OUTCOME, likeError = DomainError.NETWORK),
                 PlayUiState.Revealed(question, OUTCOME, likeError = DomainError.QUESTION_NOT_FOUND),
             )
+
+        /**
+         * What some states show in [strings], each its texts in any order, and then the names it gives
+         * a screen reader for what has no text, from the top down.
+         */
+        fun expectedOf(strings: PlayStrings): List<Pair<PlayUiState, Pair<List<String>, List<String>>>> {
+            val all = strings.allCategories
+            val points = strings.points(POINTS)
+            val a = QUESTION.optionA
+            val b = QUESTION.optionB
+            val revealedA = strings.percent(70)
+            val revealedB = strings.percent(30)
+            val like = listOf(strings.like)
+            return listOf(
+                PlayUiState.Loading to (emptyList<String>() to listOf(strings.loading)),
+                PlayUiState.Failed(DomainError.NETWORK) to
+                    (listOf(strings.noInternet, strings.tryAgain, all) to emptyList()),
+                PlayUiState.Failed(DomainError.OUT_OF_QUESTIONS) to
+                    (listOf(strings.outOfQuestions, strings.tryAgain, all) to emptyList()),
+                PlayUiState.Failed(DomainError.SERVER) to
+                    (listOf(strings.somethingWrong, strings.tryAgain, all) to emptyList()),
+                PlayUiState.Asking(QUESTION) to (listOf(a, all, points, "0", b) to like),
+                PlayUiState.Asking(QUESTION.copy(likeCount = 12), likeError = DomainError.NETWORK) to
+                    (listOf(a, all, strings.noInternet, "12", b) to like),
+                PlayUiState.Revealed(QUESTION, OUTCOME) to
+                    (listOf(a, revealedA, all, points, "0", b, revealedB) to like),
+                PlayUiState.Revealed(QUESTION, OUTCOME.copy(pointsAwarded = 0, replayed = true)) to
+                    (listOf(a, revealedA, all, points, "0", b, revealedB) to like),
+                PlayUiState.Revealed(
+                    QUESTION.copy(likeCount = 3),
+                    OUTCOME,
+                    likeError = DomainError.QUESTION_NOT_FOUND,
+                ) to
+                    (listOf(a, revealedA, all, strings.questionGone, "3", b, revealedB) to like),
+            )
+        }
     }
 }

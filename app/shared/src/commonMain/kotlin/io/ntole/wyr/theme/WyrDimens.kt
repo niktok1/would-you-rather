@@ -16,6 +16,13 @@ data class WyrDimens(
     val radiusCard: Dp = 24.dp,
     val radiusPill: Dp = 999.dp,
     val optionMinHeight: Dp = 140.dp,
+    /** The outline of the answer card the player picked, once the answer is revealed. */
+    val pickBorder: Dp = 4.dp,
+    /**
+     * The widest the middle of the Play screen's row between the cards may be, the points or how a
+     * like failed, so the like count on its right is never cut short at 375 wide.
+     */
+    val playRowMiddleMaxWidth: Dp = 120.dp,
     val screenPadding: Dp = 20.dp,
     /**
      * The top bar's height, the tab row's before it, so a screen under it keeps the 599 of an iPhone
