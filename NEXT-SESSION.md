@@ -68,6 +68,25 @@ own copy stays English for the branches that redesign them. The client alone cha
 tests; `RootScreensTest` went with the tabs). Not seen on a device: Android's back, and any screen of
 it on a phone; nor whether the web build's default font draws Cyrillic.
 
+**On `feat/account-redesign`** (from 4821c05; not merged, nothing pushed): the user's Account
+redesign (2026-09-25; CLAUDE.md §8d, *The Account screen*, *Submitting*; §8f). The Account screen,
+top down: a card of the player (the username or *Гост*, the points as *123 P*, four stats as numbers),
+**My questions** (the player's submissions, each option and its status in a word, and *Ново питање*),
+the language switch, Log out, and the server line, all in the three languages. A guest's one button
+opens the **Auth** page: Register only, with a link that switches it to Log in and back; the rules,
+the short failures and the guest-points warning kept, and back to Account once one works. The Submit
+screen is only the form now, opened from My questions and back there once a question is stored;
+Send shows the cost, *Пошаљи · 1 P* (`SubmissionRules.COST`, 1 until release), and is off with
+*Немаш довољно поена.* while the points are fewer. The client alone changed. *Accounts* and *Submit on
+its own tab* below still walk the flows as they were before it. For the merge: `feat/server-categories`
+adds `NOT_ENOUGH_POINTS`, which this branch leaves alone, so until it is mapped the form shows it as
+*Нешто није у реду*; the chips still call `categoryName`; `Strings.kt` and CLAUDE.md §8f will
+conflict with `feat/play-redesign`, both adding texts. To ask the user: the Auth page has no heading
+(read literally, it "shows only Register"), and the form's line that submitting earns no points is
+gone. Tests: `:app:shared` 220 (`AuthScreenDrawTest` 8, `TemplatesTest` 4 new; `AccountScreenDrawTest`
+14, `AccountViewModelTest` 31, `SubmitViewModelTest` 25, `SubmitScreenDrawTest` 6, `AppNavigationTest`
+12). Not seen on a device: any of it on a phone, autofill on the Auth page included.
+
 ### Verified working
 
 - `:server` on H2: 311 tests, 309 green and 2 skipped (the PostgreSQL-only boot races), including
