@@ -514,16 +514,16 @@ automatically from every green commit on `main` (its URL is on its Render page).
   live, in the client run above.
 - **V2, V3 and V4 on PostgreSQL, and on production.** `SchemaDriftTest` and `MigrationsTest` run
   the scripts on PostgreSQL only in the `server-postgres` CI job. It has passed V2 and V3 on `main`
-  (9a7902f, the moderation app's merge); V4 (`feat/recovery-secret`, H2's draft rewritten by hand,
-  plus the backfill) has run on H2 alone, since the branch never ran CI before this merge, which is
-  its first. V2 is the same statements V1 used for its unique constraint, and V3 one nullable
-  `BIGINT` with no default. Production (`wyr-postgres`, provably V1; nothing here records a migrating
-  build booting on it yet) runs what it lacks at its next Manual Deploy, baselining it in the same
-  boot if no earlier one did: nullable columns, a new table filled from a few rows and unique
-  constraints on tables of a few rows, so no rewrite and a moment's lock. Check, read-only, that its
-  history reads `1 BASELINE`, `2 SQL`, `3 SQL`, `4 SQL` afterwards (without the last while the build
-  promoted predates V4), and once V4 has run, that `sessions` has a row for every `players` row with
-  a `refresh_token_hash`.
+  (9a7902f, `feat/moderation-app` fast-forwarded onto `main`); V4 (`feat/recovery-secret`, H2's
+  draft rewritten by hand, plus the backfill) has run on H2 alone, since the branch never ran CI
+  before this merge, which is its first. V2 is the same statements V1 used for its unique
+  constraint, and V3 one nullable `BIGINT` with no default. Production (`wyr-postgres`, provably V1;
+  nothing here records a migrating build booting on it yet) runs what it lacks at its next Manual
+  Deploy, baselining it in the same boot if no earlier one did: nullable columns, a new table filled
+  from a few rows and unique constraints on tables of a few rows, so no rewrite and a moment's lock.
+  Check, read-only, that its history reads `1 BASELINE`, `2 SQL`, `3 SQL`, `4 SQL` afterwards
+  (without the last while the build promoted predates V4), and once V4 has run, that `sessions` has
+  a row for every `players` row with a `refresh_token_hash`.
 - **The fold beside a real older build.** The fold (a mirror a build without sessions moved,
   CLAUDE.md §8a) has run only in `SessionStoreTest`, against that build's statement as copied into
   the test, never against the V3 build itself (`main` at 9a7902f) serving beside this one while a
@@ -577,14 +577,15 @@ automatically from every green commit on `main` (its URL is on its Render page).
   id)` index. The client has sent moderation requests only from the JVM (the live run above), and no
   browser has sent `X-Admin-Token`: only `CorsTest` has seen its preflight. Nobody has opened the
   moderation app on any platform (below). The question list (`GET /v1/admin/questions`,
-  `feat/moderation-app`) has run on H2 only: its counts are correlated subqueries and its pages a
-  keyset on `(submitted_at, id)` compared in the database's collation, which `ApiFlowTest` runs on
-  PostgreSQL only in the `server-postgres` job, which has not seen the branch. So has retirement:
-  `RetirementTest`'s races poll H2's `SESSIONS`, and on PostgreSQL a `SELECT ... FOR UPDATE` that
-  waited on a retirement re-checks its `WHERE` against the committed row, and finds nothing, only as
-  documented behaviour (EvalPlanQual), as for the refresh rotation. H2 does the same, which the
-  races show; that a locking read there re-checks rather than returning the row it first matched was
-  first seen in a standalone check against H2 2.4.240.
+  `feat/moderation-app`), whose counts are correlated subqueries and whose pages are a keyset on
+  `(submitted_at, id)` compared in the database's collation, and retirement and restoration have
+  passed on PostgreSQL in `ApiFlowTest`'s flows, in `main`'s `server-postgres` job at 9a7902f (run
+  36074122336). Only the races are still H2's alone: `RetirementTest`'s poll H2's `SESSIONS`, as
+  `ModerationStoreTest`'s do, and on PostgreSQL a `SELECT ... FOR UPDATE` that waited on a retirement
+  re-checks its `WHERE` against the committed row, and finds nothing, only as documented behaviour
+  (EvalPlanQual), as for the refresh rotation. H2 does the same, which the races show; that a locking
+  read there re-checks rather than returning the row it first matched was first seen in a standalone
+  check against H2 2.4.240.
 - **Likes on Postgres, and in any client but the JVM.** Two first likes racing, and two unlikes,
   now each queued on the question's row lock (`feat/moderation-app`), the grouped count
   with its `COUNT(CASE ...)` and the stats' subquery have run only on H2 (`LikeStoreTest` polls H2's
