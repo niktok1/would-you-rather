@@ -925,6 +925,30 @@ game's, or a place on one, theme tokens only (§5b), and its words in `Strings` 
   short, in both themes and every language; `HomeScreenDrawTest` holds Home to 599 at 375 wide (276
   on this Mac) and to its two texts and one icon.
 
+**Wide screens** (*decided 2026-09-26*: of two options, the user picked the cards side by side over
+the row with the top bar as it is, the other being the row moved into the top bar): what a screen
+does with more width than height, a phone on its side, a tablet on its side or a desktop window,
+decided by the room it gets, never by the device's orientation, in common code alone:
+- *The Play screen* stands its two cards side by side, card A first, `WyrDimens.spaceMd` apart and
+  sharing the width, with the row under them across the whole width, when the room inside its padding
+  is wider than tall and at least `WyrDimens.wideLayoutMinWidth`, 600, across: a phone on its side
+  (an iPhone SE's gives 627), a tablet on its side, and a desktop window, which Compose opens at 800
+  by 600. On anything else, a phone held upright above all, a tablet held upright or a narrow window,
+  they stay stacked around the row. Stacked on a phone on its side, a card got about 90 high, too
+  little for a revealed option of two lines, whose percentage was cut off. The top bar stays as it is.
+- One layout does both, `QuestionLayout`, a custom `Layout`: `BoxWithConstraints` would decide the
+  same, but a subcomposition cannot answer the intrinsic heights the draw tests measure the screen by.
+  The cards are then the same composables whichever way they stand, so a window resized across the
+  rule, or an iPhone turned, keeps a reveal's count up where it is; an Android activity, made anew on
+  a rotation, counts it up again.
+- `QuestionLayoutDrawTest` holds the rule to boxes of known sizes, which no font changes: side by side
+  from 600 across while wider than tall, stacked at 599, when square and on a tablet held upright, and
+  the height it needs by the same rule. `PlayScreenDrawTest` draws every state on two phones on their
+  side and in a desktop window, holds each state to the room a 360-by-780 phone on its side (720 by
+  256) and an iPhone SE on its side (667 by 327) give, measured wider for CI's fonts as the portrait
+  test is, finds the row under the cards with the points in the middle of the screen, and nothing in
+  it moved by the reveal.
+
 **The Account screen** (`io.ntole.wyr.account`; §8a *Accounts*, *Stats* below):
 - *Its order* (*decided 2026-09-25*, the user's redesign, with less text overall): the player on a
   card, with a guest's one button to the Auth page; **My questions**; the **language switch** (§8f,
@@ -992,7 +1016,8 @@ game's, or a place on one, theme tokens only (§5b), and its words in `Strings` 
 **The Play screen** (`io.ntole.wyr.play`; the user's layout, *decided 2026-09-25*) asks a question
 and reveals its tally, holds Skip and Like, and opens the Categories screen (*Skipping*, *Likes*
 and *Categories*, below):
-- Two answer cards in the brand colours (§5b) and, between them, **one row**: on the left the
+- Two answer cards in the brand colours (§5b) and, between them, **one row** (on a wide screen the
+  cards side by side over it, *Wide screens*): on the left the
   categories played, *Све* or their names, cut to one line, with a small chevron, which opens the
   Categories screen; in the middle the player's points, *123 П*; on the right the heart, filled
   while the player likes the question, beside its like count, before answering and after, and

@@ -62,8 +62,8 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
- * The Play screen (CLAUDE.md §8d, *The Play screen*) drawn off screen at two phones' sizes, in each
- * theme and each language, from every state it can be in, with every category played or a few; read
+ * The Play screen (CLAUDE.md §8d, *The Play screen*) drawn off screen at two phones' sizes, and at two
+ * phones on their side and a desktop window's (§8d, *Wide screens*), in each theme and each language, from every state it can be in, with every category played or a few; read
  * through its semantics, as a screen reader reads it, and tapped through them. Compose measures and
  * draws it all, so a layout that cannot be measured fails here rather than when the screen opens.
  * Whether what it draws fits is asked separately, since a squeezed card draws.
@@ -76,6 +76,7 @@ class PlayScreenDrawTest {
                 Language.entries.forEach { language ->
                     draw(state, dark, WIDTH, HEIGHT, language = language)
                     draw(state, dark, SHORT_PHONE_WIDTH, SHORT_PHONE_HEIGHT, language = language)
+                    WIDE_SIZES.forEach { (width, height) -> draw(state, dark, width, height, language = language) }
                 }
             }
         }
@@ -113,6 +114,55 @@ class PlayScreenDrawTest {
                     )
                 }
             }
+        }
+    }
+
+    /**
+     * On its side a phone has the cards side by side over the row (CLAUDE.md §8d, *Wide screens*), and
+     * each still holds a question of two lines an option with its percentage once revealed, in every
+     * language, on the least height a phone on its side gives the screen. Measured wider than drawn, by
+     * the share the portrait test above adds to 375, for CI's wider fonts.
+     */
+    @Test
+    fun `every state fits a phone on its side without squeezing the option cards`() {
+        (statesOf(QUESTION) + statesOf(ONE_LINE_QUESTION)).forEach { state ->
+            Language.entries.forEach { language ->
+                listOf(
+                    PHONE_ON_ITS_SIDE_WIDTH to PHONE_ON_ITS_SIDE_HEIGHT,
+                    SE_ON_ITS_SIDE_WIDTH to SE_ON_ITS_SIDE_HEIGHT,
+                ).forEach { (width, height) ->
+                    val needed = heightNeeded(state, width * WIDTH / SHORT_PHONE_WIDTH, language = language)
+                    assertTrue(needed <= height, "$state in $language needs $needed of $height at $width wide")
+                }
+            }
+        }
+    }
+
+    /**
+     * On a phone on its side the cards stand side by side, card A first, sharing the width, and the
+     * row runs under them across it, the categories under card A, the heart and Skip under card B, and
+     * the points in the middle of the screen.
+     */
+    @Test
+    fun `on a phone on its side the cards stand side by side over the row`() {
+        val shown = stringsOf(Language.DEFAULT)
+        val strings = shown.playScreen
+        val asked = PlayUiState.Asking(QUESTION)
+        withScreen(asked, width = PHONE_ON_ITS_SIDE_WIDTH, height = PHONE_ON_ITS_SIDE_HEIGHT) { scene, _ ->
+            val cardA = scene.node(QUESTION.optionA).boundsInRoot
+            val cardB = scene.node(QUESTION.optionB).boundsInRoot
+            assertTrue(cardA.top == cardB.top && cardA.bottom == cardB.bottom, "$cardA beside $cardB")
+            assertTrue(cardA.right < cardB.left && abs(cardA.width - cardB.width) <= 1f, "$cardA beside $cardB")
+
+            val row =
+                listOf(shown.allCategories, POINTS_SHOWN, strings.like, strings.skip).map {
+                    scene.node(it).boundsInRoot
+                }
+            row.forEach { part -> assertTrue(part.top >= cardA.bottom, "$part is not under the cards") }
+            val (categories, points, heart, skip) = row
+            assertTrue(categories.left >= cardA.left && categories.right < cardA.right, "categories at $categories")
+            assertTrue(heart.left > cardB.left && skip.right <= cardB.right, "the heart and Skip at $heart, $skip")
+            assertTrue(abs(points.center.x - PHONE_ON_ITS_SIDE_WIDTH / 2f) <= 1f, "the points are at $points")
         }
     }
 
@@ -283,10 +333,17 @@ class PlayScreenDrawTest {
     fun `the row does not move when the answer is revealed`() {
         val shown = stringsOf(Language.DEFAULT)
         val parts = listOf(shown.allCategories, POINTS_SHOWN, shown.playScreen.like, "0")
-        val asked = mutableListOf<Rect>()
-        withScreen(PlayUiState.Asking(QUESTION)) { scene, _ -> parts.mapTo(asked) { scene.node(it).boundsInRoot } }
-        withScreen(PlayUiState.Revealed(QUESTION, OUTCOME)) { scene, _ ->
-            assertEquals(asked, parts.map { scene.node(it).boundsInRoot })
+        listOf(
+            SHORT_PHONE_WIDTH to SHORT_PHONE_HEIGHT,
+            PHONE_ON_ITS_SIDE_WIDTH to PHONE_ON_ITS_SIDE_HEIGHT,
+        ).forEach { (width, height) ->
+            val asked = mutableListOf<Rect>()
+            withScreen(PlayUiState.Asking(QUESTION), width = width, height = height) { scene, _ ->
+                parts.mapTo(asked) { scene.node(it).boundsInRoot }
+            }
+            withScreen(PlayUiState.Revealed(QUESTION, OUTCOME), width = width, height = height) { scene, _ ->
+                assertEquals(asked, parts.map { scene.node(it).boundsInRoot }, "at $width by $height")
+            }
         }
     }
 
@@ -738,8 +795,9 @@ class PlayScreenDrawTest {
     }
 
     /**
-     * [test] on [state]'s screen at the short phone's size, [categories] played, in the light theme
-     * unless [dark], drawn at time 0, its composition counted by [recompositions].
+     * [test] on [state]'s screen at [width] by [height], the short phone's size unless told, [categories]
+     * played, in the light theme unless [dark], drawn at time 0, its composition counted by
+     * [recompositions].
      */
     private fun withScreen(
         state: PlayUiState,
@@ -748,11 +806,13 @@ class PlayScreenDrawTest {
         language: Language = Language.DEFAULT,
         dark: Boolean = false,
         recompositions: Recompositions = Recompositions(),
+        width: Int = SHORT_PHONE_WIDTH,
+        height: Int = SHORT_PHONE_HEIGHT,
         test: (ImageComposeScene, Actions) -> Unit,
     ) {
         val actions = Actions()
         val scene =
-            ImageComposeScene(width = SHORT_PHONE_WIDTH, height = SHORT_PHONE_HEIGHT, density = Density(1f)) {
+            ImageComposeScene(width = width, height = height, density = Density(1f)) {
                 CountedBy(recompositions) {
                     WyrTheme(darkTheme = dark) {
                         WyrStrings(language) { Screen(state, categories, points, actions) }
@@ -857,6 +917,26 @@ class PlayScreenDrawTest {
         /** An iPhone SE (667 high) less its status bar (20) and the top bar above the Play screen (48). */
         const val SHORT_PHONE_WIDTH = 375
         const val SHORT_PHONE_HEIGHT = 599
+
+        /**
+         * A phone of 360 by 780 on its side, a Galaxy S23's size, less its status bar, the gesture areas
+         * at its ends and foot, and the top bar above the Play screen: about the least room a phone held
+         * that way gives the screen.
+         */
+        const val PHONE_ON_ITS_SIDE_WIDTH = 720
+        const val PHONE_ON_ITS_SIDE_HEIGHT = 256
+
+        /** An iPhone SE on its side (667 by 375, which shows no status bar so), less the top bar. */
+        const val SE_ON_ITS_SIDE_WIDTH = 667
+        const val SE_ON_ITS_SIDE_HEIGHT = 327
+
+        /** Two phones on their side, and a desktop window as Compose first opens one (800 by 600) less the top bar. */
+        val WIDE_SIZES: List<Pair<Int, Int>> =
+            listOf(
+                PHONE_ON_ITS_SIDE_WIDTH to PHONE_ON_ITS_SIDE_HEIGHT,
+                SE_ON_ITS_SIDE_WIDTH to SE_ON_ITS_SIDE_HEIGHT,
+                800 to 552,
+            )
 
         /** The screen's padding on each side (`WyrDimens.screenPadding`). */
         const val PADDING = 20

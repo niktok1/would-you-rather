@@ -55,7 +55,8 @@ import io.ntole.wyr.theme.WyrTypeScale
 
 /**
  * The game (CLAUDE.md §8d, *The Play screen*): two answer cards and, between them, one row of the
- * categories played, the player's points, the like and Skip. Tapping a card answers ([onChoose]);
+ * categories played, the player's points, the like and Skip; on a wide screen the cards stand side by
+ * side over the row (§8d, *Wide screens*). Tapping a card answers ([onChoose]);
  * Skip ([onSkip]) goes past a question not answered yet; once the answer is revealed, tapping either
  * card goes on to the next question ([onNext]).
  *
@@ -116,9 +117,10 @@ fun PlayScreen(
 }
 
 /**
- * The two cards and the row between them. Before the answer a card answers for its side, and Skip
- * goes past it; once it is revealed, either card is the way on, and Skip is gone. Off while anything
- * is in flight, one action at a time.
+ * The two cards and the row between them, or under them side by side on a wide screen
+ * ([QuestionLayout]). Before the answer a card answers for its side, and Skip goes past it; once it
+ * is revealed, either card is the way on, and Skip is gone. Off while anything is in flight, one
+ * action at a time.
  */
 @Composable
 private fun QuestionBody(
@@ -136,7 +138,11 @@ private fun QuestionBody(
     // Before the answer a card's text says what a tap on it does; after, a screen reader is told.
     val clickLabel = if (outcome == null) null else LocalStrings.current.playScreen.nextQuestion
 
-    Column(modifier = Modifier.fillMaxSize()) {
+    QuestionLayout(
+        wideMinWidth = WyrThemeAccessors.dimens.wideLayoutMinWidth,
+        gap = WyrThemeAccessors.dimens.spaceMd,
+        modifier = Modifier.fillMaxSize(),
+    ) {
         OptionCard(
             text = state.question.optionA,
             background = colors.optionA,
@@ -146,7 +152,6 @@ private fun QuestionBody(
             enabled = !state.isBusy,
             clickLabel = clickLabel,
             onClick = { if (outcome == null) onChoose(Side.A) else onNext() },
-            modifier = Modifier.weight(1f),
         )
 
         MiddleRow(
@@ -176,7 +181,6 @@ private fun QuestionBody(
             enabled = !state.isBusy,
             clickLabel = clickLabel,
             onClick = { if (outcome == null) onChoose(Side.B) else onNext() },
-            modifier = Modifier.weight(1f),
         )
     }
 }
