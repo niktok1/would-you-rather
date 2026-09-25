@@ -525,10 +525,6 @@ automatically from every green commit on `main` (its URL is on its Render page).
   Check, read-only, that its history reads `1 BASELINE`, `2 SQL`, `3 SQL`, `4 SQL` afterwards
   (without the last while the build promoted predates V4), and once V4 has run, that `sessions` has
   a row for every `players` row with a `refresh_token_hash`.
-- **The fold beside a real older build.** The fold (a mirror a build without sessions moved,
-  CLAUDE.md §8a) has run only in `SessionStoreTest`, against that build's statement as copied into
-  the test, never against the V3 build itself (`main` at 9a7902f) serving beside this one while a
-  deploy's new instance starts, which is when it matters first.
 - **The `:core` modules' tests on iOS.** The ios CI job runs `:app:shared`'s tests on the simulator
   and only compiles the `:core` modules' tests, which Kotlin/Native refused while their
   names held commas (`SharedSessionStoreTest`'s among them, from before `feat/recovery-secret`, and
@@ -586,10 +582,8 @@ automatically from every green commit on `main` (its URL is on its Render page).
   rules under a race because an `UPDATE` that waited on a row lock re-checks its whole `WHERE`, both
   halves of its `OR` included, against the committed row, and evaluates its `SET` against that row.
   That is documented Postgres behaviour (EvalPlanQual), not something a test here has seen, and the
-  same goes for the concurrent-seed recovery described on `Seed.questionsIfEmpty`, and for the fold's
-  `SELECT ... FOR UPDATE` of the session the mirror copied, which a racing fold's commit makes match
-  nothing there (on H2 the tests pass whether it does or not: the compare-and-set on the mark after it
-  decides). Porting the races means polling `pg_stat_activity` instead.
+  same goes for the concurrent-seed recovery described on `Seed.questionsIfEmpty`. Porting the races
+  means polling `pg_stat_activity` instead.
 - **Timeouts on a real engine, against a real cold start.** Every timeout test runs on
   `MockEngine`, which enforces only the request timeout (Ktor's own timer). What each engine takes
   was read in the Ktor 3.5.1 sources: OkHttp maps the connect timeout to its own and the socket
@@ -1165,10 +1159,7 @@ Play tab is frozen).
   `UPDATE` whose `WHERE` holds the whole check and whose `SET` copies the current columns into the
   previous ones in SQL: a read first, or an update by id, lets two racers with the previous token both
   through (`SessionStoreTest` races it). Keep stamping the rotation with no bound too: a bound set
-  later reads it, and so does a rollback to a build from before the unbounded grace. A rollback to
-  a build from before V2, such as prod's `4cdc819`, rotates without the previous-token columns and
-  leaves them stale: clear them before rolling forward (the `UPDATE` is in CLAUDE.md §8a, *The
-  rotation*). A bound, if set, must stay longer than the client's `REFRESH_TIMEOUT` (5 minutes), and
+  later reads it. A bound, if set, must stay longer than the client's `REFRESH_TIMEOUT` (5 minutes), and
   nothing but the KDocs on each side ties them, since `:server` cannot see `:core:network`. On the
   client, a refresh that finds the store moved on to the same player's other session refreshes once
   more as it (`refreshAs`), since both tabs' refreshes go through and a previous token survives one
@@ -1177,15 +1168,13 @@ Play tab is frozen).
   original while the two take turns refreshing. What remains, in CLAUDE.md §8b (*Refresh answers
   lost past the grace*): a refresh that spends the previous token and whose answer is lost too, as a
   settling refresh's lost answer usually does, leaves a spent token.
-- **A refresh token lives in its session, and the players row keeps a copy** (CLAUDE.md §8a,
-  *Sessions*). Every session opened or rotated rewrites its player's refresh columns and the mark
-  beside them (`SessionStore.mirror`), which is all a rollback to a build from before sessions can
-  refresh from: a new write to a session's tokens that forgets the mirror breaks the rollback
-  silently, and only `SessionStoreTest`'s mirror checks would notice. A refresh no session takes is
-  tried in the mirror only where its current token is not its mark, and is then folded back into a
-  session (`SessionStore.foldMirror`). Every write here locks a session it did not insert itself
-  before its player; keep that order, or two can each wait on the other. The server's
-  `SessionStore` is not the client's, which keeps the stored session in `:core:network`.
+- **A refresh token lives in its session, and nowhere else** (CLAUDE.md §8a, *Sessions*). A refresh
+  reads and writes its session's row alone. The players row's old refresh columns, the mirror's mark
+  and the recovery secret's hash are unused since `feat/simple-accounts`: no statement may name
+  them (not even a `selectAll()` of `Players`), so a later migration can drop them and a rollback to
+  this build still runs, which `ApiFlowTest` pins by dropping them. A rollback to a build from before
+  sessions is not supported (CLAUDE.md §8b, *Rollbacks*). The server's `SessionStore` is not the
+  client's, which keeps the stored session in `:core:network`.
 - **A session write returns once it is durable, and suspends for it** (`TokenStorage.write`,
   CLAUDE.md §8a). `AndroidTokenStorage` used `apply()`, which returns before the file is written,
   so a kill just after a refresh could come back with the rotated-out token and orphan the guest.

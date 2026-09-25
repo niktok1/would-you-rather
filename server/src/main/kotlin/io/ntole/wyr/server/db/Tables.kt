@@ -26,42 +26,29 @@ object Players : Table("players") {
      */
     val answersGiven = integer("answers_given").default(0)
 
-    /**
-     * The mirror (CLAUDE.md §8a, *Sessions*): a copy of the refresh-token columns of the player's
-     * session written last, opened or rotated ([Sessions]), for the builds from before sessions, which
-     * look a refresh token up here and nowhere else. After a rollback to one, the device each player
-     * used last still refreshes. This build refreshes from [Sessions], and spends a token here only
-     * where a build without sessions has moved it ([mirroredRefreshTokenHash]).
-     *
-     * The SHA-256 of the current refresh token, as [Sessions.refreshTokenHash] holds it: the token
-     * itself is never stored. Null only for a player minted in the same transaction, before their
-     * first session is mirrored.
-     */
+    // The next seven are unused since `feat/simple-accounts`, which dropped the rollback mirror and the
+    // recovery secret: no statement names them, so a later migration can drop them (CLAUDE.md §8b,
+    // *Rollbacks*). Declared until then, so SchemaDriftTest holds this file to V4.
+
+    /** Unused since `feat/simple-accounts` (the mirror of a session's token); drop in a later migration. */
     val refreshTokenHash = varchar("refresh_token_hash", 64).nullable()
+
+    /** Unused since `feat/simple-accounts` (the mirror); drop in a later migration. */
     val refreshTokenExpiresAt = long("refresh_token_expires_at").nullable()
 
-    /**
-     * The mirror's copy of the refresh token its session's last rotation displaced, as
-     * [Sessions.previousRefreshTokenHash] and the two beside it hold it (CLAUDE.md §8a), so a build
-     * from before sessions gives the displaced token the grace this one does. All three are null while
-     * the mirrored session has never refreshed.
-     */
+    /** Unused since `feat/simple-accounts` (the mirror); drop in a later migration. */
     val previousRefreshTokenHash = varchar("previous_refresh_token_hash", 64).nullable()
+
+    /** Unused since `feat/simple-accounts` (the mirror); drop in a later migration. */
     val previousRefreshTokenExpiresAt = long("previous_refresh_token_expires_at").nullable()
+
+    /** Unused since `feat/simple-accounts` (the mirror); drop in a later migration. */
     val previousRefreshTokenRotatedAt = long("previous_refresh_token_rotated_at").nullable()
 
-    /**
-     * The [refreshTokenHash] this build last wrote into the mirror, which is the current hash of the
-     * session it copied. Only a build with sessions writes it. While the two are equal the mirror is
-     * that session's copy. Anything else, null beside a hash included, means a build without sessions
-     * has rotated the mirror since, or minted the player there: a rollback, or the build before still
-     * serving while a deploy's new instance starts. The next refresh with the token the mirror then
-     * holds folds it back into the session it came from, or into a new one for a player minted there
-     * (`SessionStore.rotate`).
-     */
+    /** Unused since `feat/simple-accounts` (the mirror's mark); drop in a later migration. */
     val mirroredRefreshTokenHash = varchar("mirrored_refresh_token_hash", 64).nullable()
 
-    /** Unused since `feat/simple-accounts`, which dropped the recovery secret; drop in a later migration. */
+    /** Unused since `feat/simple-accounts` (the recovery secret); drop in a later migration. */
     val recoverySecretHash = varchar("recovery_secret_hash", 64).nullable()
 
     /**
@@ -75,12 +62,9 @@ object Players : Table("players") {
     override val primaryKey = PrimaryKey(id)
 
     init {
-        // A refresh that no session takes looks its token up in the mirror by either hash, and so does
-        // every refresh a build without sessions serves. Unique: a hash names one token, and a mirror
-        // copies one session.
+        // Unused with their columns (above), and dropped with them.
         index(isUnique = true, refreshTokenHash)
         index(isUnique = true, previousRefreshTokenHash)
-        // Unused with its column (above); dropped with it.
         index(isUnique = true, recoverySecretHash)
     }
 
@@ -90,10 +74,9 @@ object Players : Table("players") {
 /**
  * Every session a player has (CLAUDE.md §8a, *Sessions*): one refresh-token family per device, each
  * rotating on its own, so a refresh on one device never touches another's tokens. A guest's mint
- * opens the first (`SessionStore.open`), and V4 opened one for every player
- * who held a refresh token then. Each session opened or rotated is copied into its player's row, the
- * mirror ([Players.refreshTokenHash]). No row is ever deleted: a session whose tokens have expired is
- * dead where it lies, and nothing caps how many a player has.
+ * opens the first (`SessionStore.open`), and V4 opened one for every player who held a refresh token
+ * then. No row is ever deleted: a session whose tokens have expired is dead where it lies, and nothing
+ * caps how many a player has.
  */
 object Sessions : Table("sessions") {
     val id = varchar("id", 36)

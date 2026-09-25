@@ -6,18 +6,12 @@ import io.ntole.wyr.server.db.connectH2
 import io.ntole.wyr.server.db.h2Url
 import io.ntole.wyr.server.db.raceBehindFirst
 import io.ntole.wyr.server.player.PlayerStore
-import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
-import org.jetbrains.exposed.v1.core.greater
-import org.jetbrains.exposed.v1.core.or
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.SchemaUtils
-import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
-import org.jetbrains.exposed.v1.jdbc.update
 import java.sql.Connection
-import java.util.UUID
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
@@ -26,10 +20,10 @@ import kotlin.time.Duration.Companion.days
 import kotlin.time.Duration.Companion.minutes
 
 /**
- * A player's sessions (CLAUDE.md §8a, *Sessions*): the refresh rules, per session, and the mirror a
- * build from before sessions refreshes from. Every race runs at READ COMMITTED by hand, not taken from
- * the server, so it keeps telling a compare-and-set from a read-then-write whatever the server's level
- * becomes: only there does a rotation by id alone let two racers through.
+ * A player's sessions (CLAUDE.md §8a, *Sessions*): the refresh rules, per session. Every race runs at
+ * READ COMMITTED by hand, not taken from the server, so it keeps telling a compare-and-set from a
+ * read-then-write whatever the server's level becomes: only there does a rotation by id alone let two
+ * racers through.
  */
 class SessionStoreTest {
     @Test
@@ -267,193 +261,17 @@ class SessionStoreTest {
     }
 
     /**
-     * Two devices of one player refreshing at once each rotate their own session, and then wait for each
-     * other only on the player's row, to mirror their session there: both go through, and the mirror
-     * copies whichever wrote it last.
+     * The players row's old refresh-token columns are unused (CLAUDE.md §8a, *Sessions*): neither a mint
+     * nor an opened session nor a rotation writes them, and a rotation touches no players row at all.
      */
     @Test
-    fun `two devices of one player refreshing at once both go through, and the mirror copies the later`() {
-        val url = h2Url("wyr-session-store-devices-race")
-        val database = connectH2(url, Connection.TRANSACTION_READ_COMMITTED)
+    fun `neither a mint nor a session nor a rotation writes the players row's old refresh-token columns`() {
+        val database = connectH2(h2Url("wyr-session-store-unused-columns"), Connection.TRANSACTION_READ_COMMITTED)
         val player = transaction(database) { createPlayer(refreshTokenHash = "phone") }
         transaction(database) { SessionStore.open(player.id, "tablet", Long.MAX_VALUE, now = ROTATED_AT) }
-
-        val (phone, tablet) =
-            raceBehindFirst(
-                url,
-                database,
-                { rotate("phone", newHash = "phone-1", now = ROTATED_AT + 1) },
-                { rotate("tablet", newHash = "tablet-1", now = ROTATED_AT + 2) },
-            )
-
-        assertEquals(player.id, phone)
-        assertEquals(player.id, tablet)
-        assertEquals(
-            setOf(StoredTokens("phone-1", "phone", ROTATED_AT + 1), StoredTokens("tablet-1", "tablet", ROTATED_AT + 2)),
-            sessionsOf(database, player.id),
-        )
-        assertEquals(Mirror("tablet-1", "tablet", ROTATED_AT + 2, marked = "tablet-1"), mirrorOf(database, player.id))
-    }
-
-    /**
-     * The mirror is what a rollback to a build from before sessions refreshes from (CLAUDE.md §8a,
-     * *Sessions*): a copy of the session opened or rotated last, its previous token and stamp included,
-     * so that build still refreshes the device used last, with the grace this one gives it, and refuses
-     * the rest.
-     */
-    @Test
-    fun `the mirror copies the session written last, so a build without sessions refreshes that device alone`() {
-        val database = connectH2(h2Url("wyr-session-store-mirror"), Connection.TRANSACTION_READ_COMMITTED)
-        val player = transaction(database) { createPlayer(refreshTokenHash = "phone") }
-        assertEquals(Mirror("phone", null, null, marked = "phone"), mirrorOf(database, player.id), "the mint's")
-        transaction(database) { SessionStore.open(player.id, "tablet", Long.MAX_VALUE, now = ROTATED_AT) }
-        assertEquals(Mirror("tablet", null, null, marked = "tablet"), mirrorOf(database, player.id), "an opened one's")
         transaction(database) { rotate("phone", newHash = "phone-1", now = ROTATED_AT + 1) }
-        assertEquals(Mirror("phone-1", "phone", ROTATED_AT + 1, marked = "phone-1"), mirrorOf(database, player.id))
 
-        val tablet = transaction(database) { rotateAsBuildWithoutSessions("tablet", newHash = "old-1") }
-        val phone = transaction(database) { rotateAsBuildWithoutSessions("phone", newHash = "old-2") }
-
-        assertEquals(false, tablet, "the tablet refreshed before the phone's last refresh")
-        assertEquals(true, phone, "the phone's previous token, with the grace this build gave it")
-    }
-
-    /**
-     * After a rollback, or while the build before still serves as a deploy's new instance starts, a
-     * build without sessions rotates the mirror, and the device goes on with the token it answered.
-     * This build takes that token from the mirror by the same rules, and folds the result back into the
-     * session the mirror copied: one family for the device still, with no token of the session's own
-     * left live beside the mirror's.
-     */
-    @Test
-    fun `a token a build without sessions rotated in the mirror still refreshes, folded back into its session`() {
-        val database = connectH2(h2Url("wyr-session-store-fold"), Connection.TRANSACTION_READ_COMMITTED)
-        val player = transaction(database) { createPlayer(refreshTokenHash = "phone") }
-        val opened = sessionIdsOf(database, player.id)
-        transaction(database) { rotateAsBuildWithoutSessions("phone", newHash = "rolled-back") }
-
-        val folded = transaction(database) { rotate("rolled-back", newHash = "forward", now = ROTATED_AT) }
-
-        assertEquals(player.id, folded)
-        assertEquals(opened, sessionIdsOf(database, player.id), "the same session, and no other")
-        assertEquals(setOf(StoredTokens("forward", "rolled-back", ROTATED_AT)), sessionsOf(database, player.id))
-        assertEquals(Mirror("forward", "rolled-back", ROTATED_AT, marked = "forward"), mirrorOf(database, player.id))
-        assertNull(transaction(database) { rotate("phone", newHash = "stale") }, "the session's own token is dead")
-        assertEquals(player.id, transaction(database) { rotate("forward", newHash = "on") }, "and it goes on")
-    }
-
-    /** As above, for a guest a build without sessions minted, who has no session until then. */
-    @Test
-    fun `a guest a build without sessions minted gets a session at their first refresh`() {
-        val database = connectH2(h2Url("wyr-session-store-fold-mint"), Connection.TRANSACTION_READ_COMMITTED)
-        val playerId = transaction(database) { mintAsBuildWithoutSessions(refreshTokenHash = "minted") }
-
-        val folded = transaction(database) { rotate("minted", newHash = "forward", now = ROTATED_AT) }
-
-        assertEquals(playerId, folded)
-        assertEquals(setOf(StoredTokens("forward", "minted", ROTATED_AT)), sessionsOf(database, playerId))
-        assertEquals(Mirror("forward", "minted", ROTATED_AT, marked = "forward"), mirrorOf(database, playerId))
-        assertEquals(playerId, transaction(database) { rotate("forward", newHash = "on") }, "from the session now")
-    }
-
-    /**
-     * Two refreshes presenting a token the mirror alone holds, as the device's refresh whose answer was
-     * lost and its retry can. The first folds it; the second, having found it in the mirror, finds the
-     * mirror moved on once the first commits, and then finds the token the previous one of the session
-     * the first folded it into, and spends it there, so both go through, as two racing with one
-     * session's token do. With the grace off, exactly one. The same for a token folded into the session
-     * the mirror copied, whose lock the second waits on, and for one folded into a new session, where
-     * it waits on the player's.
-     */
-    @Test
-    fun `two refreshes racing with a token only the mirror holds go through as two with a session's token do`() {
-        listOf(true, false).forEach { hadSession ->
-            listOf(null, 0L).forEach { graceMillis ->
-                val case = "had a session $hadSession, grace $graceMillis"
-                val url = h2Url("wyr-session-store-fold-race-$hadSession-${graceMillis ?: "unbounded"}")
-                val database = connectH2(url, Connection.TRANSACTION_READ_COMMITTED)
-                val playerId =
-                    transaction(database) {
-                        if (hadSession) {
-                            createPlayer(refreshTokenHash = "phone").id.also {
-                                rotateAsBuildWithoutSessions("phone", newHash = "shared")
-                            }
-                        } else {
-                            mintAsBuildWithoutSessions(refreshTokenHash = "shared")
-                        }
-                    }
-
-                val (first, second) =
-                    raceBehindFirst(
-                        url,
-                        database,
-                        { rotate("shared", newHash = "first", now = ROTATED_AT, graceMillis = graceMillis) },
-                        { rotate("shared", newHash = "second", now = ROTATED_AT + 1, graceMillis = graceMillis) },
-                    )
-
-                assertEquals(playerId, first, case)
-                if (graceMillis == null) {
-                    assertEquals(playerId, second, case)
-                    assertEquals(
-                        setOf(StoredTokens("second", "first", ROTATED_AT + 1)),
-                        sessionsOf(database, playerId),
-                        case,
-                    )
-                } else {
-                    assertNull(second, case)
-                    assertEquals(
-                        setOf(StoredTokens("first", "shared", ROTATED_AT)),
-                        sessionsOf(database, playerId),
-                        case,
-                    )
-                }
-            }
-        }
-    }
-
-    /**
-     * A device whose last refresh by a build without sessions never got its answer still holds its
-     * session's token, which that build left as the mirror's previous one. It is spent there, as that
-     * build would have spent it, and folded back into the session, whose previous token is then the
-     * one the lost answer carried, as after any refresh whose answer was lost.
-     */
-    @Test
-    fun `a device whose refresh by a build without sessions was lost goes on through the mirror`() {
-        val database = connectH2(h2Url("wyr-session-store-fold-lost"), Connection.TRANSACTION_READ_COMMITTED)
-        val player = transaction(database) { createPlayer(refreshTokenHash = "phone") }
-        val opened = sessionIdsOf(database, player.id)
-        transaction(database) { rotateAsBuildWithoutSessions("phone", newHash = "never-received") }
-
-        val rotated = transaction(database) { rotate("phone", newHash = "forward", now = ROTATED_AT) }
-
-        assertEquals(player.id, rotated)
-        assertEquals(opened, sessionIdsOf(database, player.id), "the same session, and no other")
-        assertEquals(setOf(StoredTokens("forward", "never-received", ROTATED_AT)), sessionsOf(database, player.id))
-        assertEquals(Mirror("forward", "never-received", ROTATED_AT, marked = "forward"), mirrorOf(database, player.id))
-    }
-
-    /**
-     * After a rollback whose build without sessions rotated the mirror twice, the session the mirror
-     * copied still holds tokens that build displaced, both dead by its rules. A stale copy of either
-     * stays dead: spent in the session, it would work a third time, and the mirror written from it
-     * would refuse the token the device went on with.
-     */
-    @Test
-    fun `a session's own tokens stay dead once a build without sessions has moved the mirror on from it`() {
-        val database = connectH2(h2Url("wyr-session-store-moved-on"), Connection.TRANSACTION_READ_COMMITTED)
-        val player = transaction(database) { createPlayer(refreshTokenHash = "phone") }
-        transaction(database) { rotate("phone", newHash = "phone-1", now = ROTATED_AT) }
-        transaction(database) { rotateAsBuildWithoutSessions("phone-1", newHash = "old-1") }
-        transaction(database) { rotateAsBuildWithoutSessions("old-1", newHash = "old-2") }
-
-        val current = transaction(database) { rotate("phone-1", newHash = "stale-current") }
-        val previous = transaction(database) { rotate("phone", newHash = "stale-previous") }
-
-        assertNull(current, "the session's current token")
-        assertNull(previous, "the session's previous one")
-        val device = transaction(database) { rotate("old-2", newHash = "forward", now = ROTATED_AT + 1) }
-        assertEquals(player.id, device, "the device's own token still refreshes")
-        assertEquals(setOf(StoredTokens("forward", "old-2", ROTATED_AT + 1)), sessionsOf(database, player.id))
+        assertEquals(UnusedColumns(null, null, null, null), unusedColumnsOf(database, player.id))
     }
 
     /**
@@ -481,50 +299,6 @@ class SessionStoreTest {
         now: Long,
     ): String? = rotate(presentedHash, newHash, now, graceMillis = BOUND_MILLIS)
 
-    /**
-     * A refresh as the build before sessions ran it, on the mirror alone: `PlayerStore.rotateRefreshToken`
-     * as it stood then, with no time bound. It names neither sessions nor the mirror's mark. True when
-     * it rotated. Must run inside a transaction.
-     */
-    private fun rotateAsBuildWithoutSessions(
-        presentedHash: String,
-        newHash: String,
-        now: Long = System.currentTimeMillis(),
-    ): Boolean {
-        val spendable =
-            ((Players.refreshTokenHash eq presentedHash) and (Players.refreshTokenExpiresAt greater now)) or
-                (
-                    (Players.previousRefreshTokenHash eq presentedHash) and
-                        (Players.previousRefreshTokenExpiresAt greater now)
-                )
-        return Players.update({ spendable }) { row ->
-            row[previousRefreshTokenHash] = refreshTokenHash
-            row[previousRefreshTokenExpiresAt] = refreshTokenExpiresAt
-            row[previousRefreshTokenRotatedAt] = now
-            row[refreshTokenHash] = newHash
-            row[refreshTokenExpiresAt] = Long.MAX_VALUE
-        } == 1
-    }
-
-    /**
-     * A guest as the build before sessions minted one, in the players row alone, into tables this build
-     * made. Returns the player's id. Must run inside a transaction.
-     */
-    private fun mintAsBuildWithoutSessions(refreshTokenHash: String): String {
-        SchemaUtils.create(Players, Sessions)
-        val id = UUID.randomUUID().toString()
-        Players.insert { row ->
-            row[Players.id] = id
-            row[createdAt] = System.currentTimeMillis()
-            row[totalPoints] = 0
-            row[answersGiven] = 0
-            row[Players.refreshTokenHash] = refreshTokenHash
-            row[refreshTokenExpiresAt] = Long.MAX_VALUE
-            row[currentCycle] = Players.FIRST_CYCLE
-        }
-        return id
-    }
-
     /** Creates the players and sessions tables and one player in them. Must run inside a transaction. */
     private fun createPlayer(
         refreshTokenHash: String = "unused",
@@ -541,8 +315,8 @@ class SessionStoreTest {
         val previousRotatedAt: Long?,
     )
 
-    /** The hashes a player's row holds, the mirror, and the mark this build put beside them. */
-    private data class Mirror(
+    /** What a player's row holds in the refresh-token columns nothing uses any more. */
+    private data class UnusedColumns(
         val current: String?,
         val previous: String?,
         val previousRotatedAt: Long?,
@@ -573,29 +347,17 @@ class SessionStoreTest {
                 .also { sessions -> assertTrue(sessions.isNotEmpty(), "player $playerId has no session") }
         }
 
-    private fun sessionIdsOf(
+    private fun unusedColumnsOf(
         database: Database,
         playerId: String,
-    ): Set<String> =
-        transaction(database) {
-            Sessions
-                .selectAll()
-                .where { Sessions.playerId eq playerId }
-                .map { row -> row[Sessions.id] }
-                .toSet()
-        }
-
-    private fun mirrorOf(
-        database: Database,
-        playerId: String,
-    ): Mirror =
+    ): UnusedColumns =
         transaction(database) {
             Players
                 .selectAll()
                 .where { Players.id eq playerId }
                 .single()
                 .let { row ->
-                    Mirror(
+                    UnusedColumns(
                         current = row[Players.refreshTokenHash],
                         previous = row[Players.previousRefreshTokenHash],
                         previousRotatedAt = row[Players.previousRefreshTokenRotatedAt],

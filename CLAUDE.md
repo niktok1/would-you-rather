@@ -405,57 +405,16 @@ auth SDK, satisfying §2.
     with the current token, the second waits on the first's row lock, finds the token the previous one
     by then and goes through too, the first's new token becoming the previous one; of two racing with
     the previous token, exactly one goes through. `SessionStoreTest` races both and pins every rule.
-    It stamps every rotation, bound or not: a bound set later reads the stamp, and so does a rollback
-    to a build from before this rule, whose unset `REFRESH_GRACE_SECONDS` means 10 minutes. A build
-    from before V2 (any before `08397e4`) rotates the players row, the mirror (*Sessions*), without
-    touching the previous token's columns, so after a rollback to one they can name a token displaced
-    several rotations back, which with no bound works again once this rule is back, until that
-    player's next refresh or its own expiry. A database V2 has only just given those columns holds
-    nothing in them, so the first deploy of V2 needs nothing more. But before rolling forward again
-    after such a rollback, while the old build still runs, clear them: `UPDATE players SET
-    previous_refresh_token_hash = NULL, previous_refresh_token_expires_at = NULL,
-    previous_refresh_token_rotated_at = NULL`. That costs only a lost answer from before the rollback
-    whose player has not been back since. A bound set for the roll-forward is no substitute: a stale
-    token not yet displaced works again once it is unset.
+    It stamps every rotation, bound or not: a bound set later reads the stamp.
 - **Sessions** (*decided 2026-09-25*): a player's refresh tokens live in `sessions`, **one
   refresh-token family per device**, each rotating on its own row by the rules above, so a refresh on
   one device never touches another's tokens, and nothing caps how many a player has. A mint opens a
-  player's first session (`SessionStore.open`). V4
-  opened one for every player who held a refresh token, under the player's own id and with their
-  previous token and its grace, so every client kept refreshing across the deploy. No row is deleted:
-  an expired session is dead where it lies.
-  - *The mirror.* A build from before sessions (the V2 and V3 builds among them) looks a refresh token
-    up in the players row alone, so the players row keeps its refresh-token columns as a copy of the
-    session opened or rotated last, previous token and stamp included, marked as this build's copy
-    (`players.mirrored_refresh_token_hash`). Every open and rotation writes it, under the player's row
-    lock, which a rotation takes after its session's: every write here that locks a session it did not
-    insert itself locks it before its player. It costs a read and an `UPDATE` per refresh. The columns
-    stay until no rollback target predates sessions; dropping them then is a migration of its own
-    (§8b, *Rollbacks*).
-  - *A rollback* to such a build refreshes, for each player, the device that opened or refreshed a
-    session last, with the grace this build gave its token, and refuses every other device, whose
-    client throws the session away and mints a fresh guest in its place. The guests that build mints
-    have no session, no mark and no secret.
-  - *Rolling forward* needs nothing by hand. A mirror whose current token is not its mark was moved
-    by a build without sessions: during a rollback, or while the build before still serves as a
-    deploy's new instance starts, which the first deploy of V4 goes through too. A refresh no
-    session takes is tried there by the same rules and, spent, folded back into the session the mark
-    names, the device the build without sessions went on refreshing, or into a new session for a
-    guest minted there (`SessionStore.foldMirror`). The mark is read first so that session is locked
-    before the player, and the player's update is a compare-and-set on it (§4). Two refreshes racing
-    with such a token behave as two with a session's token. Until the fold, the session the mark
-    names spends none of its own tokens (`notMovedOnWithoutSessions`, in the rotation's `UPDATE`):
-    the device went on with the mirror's, and by that build's rules the session's were displaced, so
-    a stale copy of one stays dead rather than work a third time and rewrite the mirror over the
-    device's token. A device whose answer from that build was lost still holds the session's current
-    token, which is the mirror's previous one, and the fold spends it there, under the grace this
-    build gives it. `SessionStoreTest` pins the mirror, a build without sessions refreshing from it,
-    both folds and their races.
-  - *What a rollback still costs:* every device but the one used last, as above, loses its player
-    to a fresh guest. And, for a player with more than one session, the chain a build without sessions
-    moved in the mirror, if another of their sessions refreshes first once rolled forward, since a
-    session's rotation always rewrites the mirror: that device is refused, and mints a guest. A rollback past V2 still needs the mirror's previous
-    token cleared before rolling forward (*The rotation*, above).
+  player's first session (`SessionStore.open`). V4 opened one for every player who held a refresh
+  token, under the player's own id and with their previous token and its grace, so every client kept
+  refreshing across the deploy. No row is deleted: an expired session is dead where it lies. A refresh
+  reads and writes its session alone, never the player's row. The players row's own refresh-token
+  columns, which V4 kept as a mirror for a rollback to a build from before sessions, are unused since
+  `feat/simple-accounts` (*decided 2026-09-25*: that rollback is not supported, §8b *Rollbacks*).
 - Every device keeps its session to itself. On Android the backup rules
   (`data_extraction_rules.xml`, Android 12 and later, and `backup_rules.xml`, Android 11 and
   earlier, in `:app:androidApp`) keep `AndroidTokenStorage`'s `wyr.auth.xml` out of the cloud backup
@@ -720,10 +679,14 @@ seed (`Migrations`, `DatabaseFactory.init`). Nothing builds a table any other wa
   the build a rollback would return to can read it. That is why V3 keeps a retired question
   `APPROVED` beside `questions.retired_at` rather than giving it a status of its own: a build before
   it reads every row and only serves retired questions again (§8d, *Retiring*). Moving what a table
-  holds is one as well: V4 moved refresh tokens into `sessions` and keeps the `players` columns every
-  build before it refreshes from, V3's included, as a mirror of the session written last (§8a,
-  *Sessions*), so a rollback keeps each player's latest device, and rolling forward folds back
-  whatever the older build wrote there.
+  holds is one as well: V4 moved refresh tokens into `sessions` and kept the `players` columns every
+  build before it refreshes from as a mirror of the session written last. The mirror is gone since
+  `feat/simple-accounts` (*decided 2026-09-25*): **a rollback to a build from before sessions (any
+  before V4) is not supported**, since nothing keeps the refresh columns such a build refreshes from,
+  so it would refuse every device and each would mint a fresh guest. A rollback to `d4a9dbf`,
+  production's build before this one, still works: it reads the sessions this build writes. The
+  unused columns stay declared (`Players`) and no statement names them, so the later migration that
+  drops them leaves a schema this build runs on (`ApiFlowTest`).
 - *Several instances booting at once* (Render starts a deploy's new instance before it stops the old
   one): on PostgreSQL each script runs under Flyway's advisory lock, so one boot migrates while the
   rest wait, up to 50 tries a second apart, and then find nothing to do. Every boot that finds a

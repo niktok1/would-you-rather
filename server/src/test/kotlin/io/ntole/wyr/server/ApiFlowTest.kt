@@ -127,6 +127,33 @@ class ApiFlowTest {
             }
         }
 
+    /**
+     * The players row's old refresh-token columns and its recovery secret's are unused (CLAUDE.md §8b,
+     * *Rollbacks*): with all of them dropped, this build still mints, refreshes, serves, scores and
+     * reports, so the later migration that drops them leaves a schema a rollback to it can run on.
+     */
+    @Test
+    fun `a guest plays on with the players row's unused columns dropped`() {
+        val database = testDatabaseFor("unused-columns-dropped")
+        runServer("unused-columns-dropped", database = database) { client ->
+            assertEquals(HttpStatusCode.OK, client.get(WyrApi.Paths.HEALTH).status, "booted, and migrated")
+            database.dropUnusedPlayersColumns()
+
+            val guest = client.guest()
+            val refreshed = client.refresh(guest.refreshToken)
+            assertEquals(HttpStatusCode.OK, refreshed.status)
+            val session = refreshed.body<SessionDto>()
+            val vote =
+                client.post(WyrApi.Paths.VOTES) {
+                    bearerAuth(session.accessToken)
+                    contentType(ContentType.Application.Json)
+                    setBody(VoteRequest(client.batch(session).first().id, OptionSide.A, attemptId = "a1"))
+                }
+            assertEquals(HttpStatusCode.OK, vote.status)
+            assertEquals(Scoring.POINTS_PER_ANSWER, client.stats(session).totalPoints)
+        }
+    }
+
     @Test
     fun `every answer pays one point whichever side it picks, and the total accumulates`() =
         runServer("flat-scoring") { client ->
@@ -1868,6 +1895,30 @@ class ApiFlowTest {
             check(restamped == 1) { "no one session for player $playerId" }
         }
     }
+
+    /**
+     * Drops the players row's seven unused columns, and the unique constraints three of them hold, as
+     * the later migration will (CLAUDE.md §8b, *Rollbacks*).
+     */
+    private fun TestDatabaseSettings.dropUnusedPlayersColumns() =
+        serverPool().use { pool ->
+            pool.inTransaction {
+                listOf(
+                    "players_refresh_token_hash_unique",
+                    "players_previous_refresh_token_hash_unique",
+                    "players_recovery_secret_hash_unique",
+                ).forEach { constraint -> exec("ALTER TABLE players DROP CONSTRAINT $constraint") }
+                listOf(
+                    "refresh_token_hash",
+                    "refresh_token_expires_at",
+                    "previous_refresh_token_hash",
+                    "previous_refresh_token_expires_at",
+                    "previous_refresh_token_rotated_at",
+                    "mirrored_refresh_token_hash",
+                    "recovery_secret_hash",
+                ).forEach { column -> exec("ALTER TABLE players DROP COLUMN $column") }
+            }
+        }
 
     private suspend fun HttpClient.guest(): SessionDto = post(WyrApi.Paths.AUTH_GUEST).body()
 
