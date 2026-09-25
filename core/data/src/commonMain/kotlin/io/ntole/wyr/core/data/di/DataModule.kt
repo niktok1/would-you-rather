@@ -91,7 +91,9 @@ public fun dataModule(environment: WyrEnvironment): Module =
             DefaultSessionRepository(authApi = get(), sessionStore = get(), recovery = recoverySecretStore(environment))
         }
         single<SessionRepository> { get<DefaultSessionRepository>() }
-        single<SessionDiagnostics> { DefaultSessionDiagnostics(sessionStore = get()) }
+        single<SessionDiagnostics> {
+            DefaultSessionDiagnostics(sessionStore = get(), recovery = recoverySecretStore(environment))
+        }
 
         single<QuestionRepository> { DefaultQuestionRepository(api = get(), session = get(), cache = get()) }
         single<VoteRepository> { DefaultVoteRepository(api = get(), session = get()) }

@@ -490,6 +490,12 @@ auth SDK, satisfying §2.
     in the token storage (`RecoverySecretStore`), so it never moves to another phone and a reinstall
     starts it again. `clear()`, the console's *New guest*, drops the secret with the session, which
     would otherwise recover the player being cleared away. `RecoverySecretFlowTest` pins every case.
+  - *The console* shows whether a secret is kept (`SessionDiagnostics.recoverySecret`: kept, none,
+    unreadable, or not kept on this platform), never the secret, and *Reinstall (keep secret)* does
+    what deleting the app and installing it again does: `clearKeepingSecret()` drops the session and
+    the count of failed requests, keeps the secret, and the next session opened recovers the player.
+    Its log line ends `recovered` when the player came back, and `was=` the one before when not, as on
+    desktop and web, where it is *New guest*.
   - *Where it is kept* (*decided 2026-09-25*), bound in each platform's `platformModule`:
     - *Android* (built): Block Store (§2, `AndroidRecoverySecretStorage` in `:core:network`), which
       keeps its entries across the app being uninstalled and installed again, and moves them to a new

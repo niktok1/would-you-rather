@@ -9,6 +9,9 @@ package io.ntole.wyr.core.domain.session
 public interface SessionDiagnostics {
     /** The stored session, or `null` when there is none. */
     public suspend fun info(): SessionInfo?
+
+    /** Whether a recovery secret is kept for this server. */
+    public suspend fun recoverySecret(): RecoverySecretStatus
 }
 
 /**

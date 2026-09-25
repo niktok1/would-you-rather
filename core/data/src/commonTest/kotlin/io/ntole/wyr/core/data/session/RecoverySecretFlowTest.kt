@@ -3,6 +3,7 @@ package io.ntole.wyr.core.data.session
 import io.ktor.http.HttpStatusCode
 import io.ntole.wyr.core.data.BASE_URL
 import io.ntole.wyr.core.data.FakeServer
+import io.ntole.wyr.core.data.FlakySecretStorage
 import io.ntole.wyr.core.data.session
 import io.ntole.wyr.core.data.session.DefaultSessionRepository.Companion.MAX_FAILED_SECRET_REQUESTS
 import io.ntole.wyr.core.domain.error.DomainError
@@ -10,7 +11,6 @@ import io.ntole.wyr.core.domain.error.WyrException
 import io.ntole.wyr.core.error.ErrorCode
 import io.ntole.wyr.core.network.ApiException
 import io.ntole.wyr.core.network.InMemoryTokenStorage
-import io.ntole.wyr.core.network.RecoverySecretStorage
 import io.ntole.wyr.core.network.RecoverySecretStore
 import io.ntole.wyr.core.network.SessionStore
 import io.ntole.wyr.core.network.WyrHttpClient
@@ -20,7 +20,6 @@ import io.ntole.wyr.core.network.trace.HttpTrace
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.test.runTest
-import kotlinx.io.IOException
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -383,6 +382,36 @@ class RecoverySecretFlowTest {
         }
 
     @Test
+    fun `a reinstall keeps the secret, so the next session recovers the player, and forgets the count`() =
+        runTest {
+            server.knowPlayer("a", secret = "secret-a")
+            store.write(session("a"))
+            recovery.write("secret-a")
+            recovery.countFailedRequest("a")
+            val sessions = sessions()
+
+            sessions.clearKeepingSecret()
+
+            assertNull(store.read())
+            assertEquals(0, recovery.failedRequests("a"))
+            assertEquals("a", sessions.ensure())
+            assertEquals(listOf("secret-a"), server.recoveriesSent)
+            assertEquals(0, server.guestsMinted)
+        }
+
+    @Test
+    fun `a reinstall on a platform that keeps no secret mints a guest`() =
+        runTest {
+            server.knowPlayer("a")
+            store.write(session("a"))
+            val guestOnly = DefaultSessionRepository(AuthApi(client), store)
+
+            guestOnly.clearKeepingSecret()
+
+            assertEquals("guest1", guestOnly.ensure())
+        }
+
+    @Test
     fun `a secret that cannot be dropped fails the clear and leaves the session`() =
         runTest {
             store.write(session("a"))
@@ -431,30 +460,4 @@ class RecoverySecretFlowTest {
         }
 
     private fun sessions() = DefaultSessionRepository(AuthApi(client), store, recovery)
-}
-
-/** A secret store that keeps values in memory, and fails whichever kind of call it is told to. */
-private class FlakySecretStorage : RecoverySecretStorage {
-    private val values = mutableMapOf<String, String>()
-    var readFails = false
-    var writeFails = false
-    var clearFails = false
-
-    override suspend fun read(key: String): String? {
-        if (readFails) throw IOException("the secret store is not available")
-        return values[key]
-    }
-
-    override suspend fun write(
-        key: String,
-        value: String,
-    ) {
-        if (writeFails) throw IOException("the secret store is not available")
-        values[key] = value
-    }
-
-    override suspend fun clear(key: String) {
-        if (clearFails) throw IOException("the secret store is not available")
-        values.remove(key)
-    }
 }

@@ -14,6 +14,7 @@ import io.ntole.wyr.core.domain.question.Question
 import io.ntole.wyr.core.domain.question.QuestionCache
 import io.ntole.wyr.core.domain.question.QuestionRepository
 import io.ntole.wyr.core.domain.question.SkipQuestion
+import io.ntole.wyr.core.domain.session.RecoverySecretStatus
 import io.ntole.wyr.core.domain.session.SessionDiagnostics
 import io.ntole.wyr.core.domain.session.SessionInfo
 import io.ntole.wyr.core.domain.session.SessionRepository
@@ -188,6 +189,73 @@ class DevConsoleViewModelTest {
             assertEquals(listOf("clear", "reset", "ensure", "ensure", "next", "ensure", "stats"), calls)
             assertEquals(QUESTION, viewModel.state.value.question)
             assertEquals(LogResult.Ok("playerId=p1 question=q1"), viewModel.onlyResult())
+        }
+
+    @Test
+    fun `Reinstall drops the session alone then resets the queue then opens a session then loads a question`() =
+        runTest(dispatcher) {
+            val viewModel = openConsole()
+            viewModel.ensureSession()
+            testScheduler.advanceUntilIdle()
+            calls.clear()
+
+            viewModel.simulateReinstall()
+            testScheduler.advanceUntilIdle()
+
+            // Never clear, which would drop the recovery secret too.
+            assertEquals(listOf("clearKeepingSecret", "reset", "ensure", "ensure", "next", "ensure", "stats"), calls)
+            assertEquals(QUESTION, viewModel.state.value.question)
+            assertEquals(LogResult.Ok("playerId=p1 recovered question=q1"), viewModel.log.first().result)
+        }
+
+    @Test
+    fun `Reinstall that comes back as another player says which it was`() =
+        runTest(dispatcher) {
+            val viewModel = openConsole()
+            viewModel.ensureSession()
+            testScheduler.advanceUntilIdle()
+            // What a platform that keeps no secret does: a fresh guest.
+            sessions.playerId = "p2"
+
+            viewModel.simulateReinstall()
+            testScheduler.advanceUntilIdle()
+
+            assertEquals(LogResult.Ok("playerId=p2 was=p1 question=q1"), viewModel.log.first().result)
+            assertEquals(sessionOf("p2"), viewModel.state.value.session)
+        }
+
+    @Test
+    fun `Reinstall forgets the last vote and the stats before it`() =
+        runTest(dispatcher) {
+            val viewModel = openConsole()
+            viewModel.nextQuestion()
+            testScheduler.advanceUntilIdle()
+            viewModel.vote(Side.A)
+            testScheduler.advanceUntilIdle()
+            questions.next = { throw WyrException(DomainError.NETWORK, "offline") }
+            players.stats = { throw WyrException(DomainError.NETWORK, "offline") }
+
+            viewModel.simulateReinstall()
+            testScheduler.advanceUntilIdle()
+
+            val state = viewModel.state.value
+            assertEquals(null, state.lastVote)
+            assertEquals(null, state.lastOutcome)
+            assertEquals(null, state.stats)
+            assertEquals(null, state.question)
+        }
+
+    @Test
+    fun `the header says whether a recovery secret is kept, and follows it`() =
+        runTest(dispatcher) {
+            val viewModel = openConsole()
+            assertEquals(RecoverySecretStatus.KEPT, viewModel.state.value.recoverySecret)
+            diagnostics.recoverySecret = RecoverySecretStatus.NONE
+
+            viewModel.newGuest()
+            testScheduler.advanceUntilIdle()
+
+            assertEquals(RecoverySecretStatus.NONE, viewModel.state.value.recoverySecret)
         }
 
     @Test
@@ -1245,6 +1313,11 @@ class DevConsoleViewModelTest {
             stored = null
         }
 
+        override suspend fun clearKeepingSecret() {
+            calls += "clearKeepingSecret"
+            stored = null
+        }
+
         /**
          * What session recovery does to a session the server has stopped accepting: a fresh guest
          * in its place, stored as if [ensure] had minted it.
@@ -1356,8 +1429,11 @@ class DevConsoleViewModelTest {
         private val sessions: FakeSessions,
     ) : SessionDiagnostics {
         var info: suspend () -> SessionInfo? = { sessions.stored?.let(::sessionOf) }
+        var recoverySecret = RecoverySecretStatus.KEPT
 
         override suspend fun info(): SessionInfo? = info.invoke()
+
+        override suspend fun recoverySecret(): RecoverySecretStatus = recoverySecret
     }
 
     private class FakeQueue : QuestionCache {

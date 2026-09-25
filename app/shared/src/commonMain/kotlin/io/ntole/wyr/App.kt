@@ -99,6 +99,7 @@ private fun DevConsole() {
         httpExchanges = httpExchanges,
         onEnsureSession = viewModel::ensureSession,
         onNewGuest = viewModel::newGuest,
+        onSimulateReinstall = viewModel::simulateReinstall,
         onNextQuestion = viewModel::nextQuestion,
         onResetQueue = viewModel::resetQueue,
         onVote = viewModel::vote,

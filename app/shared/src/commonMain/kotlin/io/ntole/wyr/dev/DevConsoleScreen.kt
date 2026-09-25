@@ -29,6 +29,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
 import io.ntole.wyr.core.domain.question.Category
 import io.ntole.wyr.core.domain.question.Question
+import io.ntole.wyr.core.domain.session.RecoverySecretStatus
 import io.ntole.wyr.core.domain.session.SessionInfo
 import io.ntole.wyr.core.domain.vote.Side
 import io.ntole.wyr.core.domain.vote.VoteOutcome
@@ -54,6 +55,7 @@ fun DevConsoleScreen(
     httpExchanges: List<HttpExchange>,
     onEnsureSession: () -> Unit,
     onNewGuest: () -> Unit,
+    onSimulateReinstall: () -> Unit,
     onNextQuestion: () -> Unit,
     onResetQueue: () -> Unit,
     onVote: (Side) -> Unit,
@@ -146,6 +148,7 @@ fun DevConsoleScreen(
                 Buttons {
                     Button(onClick = onEnsureSession, enabled = idle) { Text("Ensure session") }
                     OutlinedButton(onClick = onNewGuest, enabled = idle) { Text("New guest") }
+                    OutlinedButton(onClick = onSimulateReinstall, enabled = idle) { Text("Reinstall (keep secret)") }
                 }
             }
 
@@ -219,6 +222,7 @@ private fun Header(state: DevConsoleState) {
         Value("api", state.environment.apiBaseUrl)
         Value("player", state.session?.playerId ?: "no session")
         Value("token expires", tokenExpiry(state.session))
+        Value("recovery secret", recoverySecretOf(state.recoverySecret))
         Value("total points", state.lastOutcome?.totalPoints?.toString() ?: "no vote yet")
         val running = state.running
         if (running != null) {
@@ -336,6 +340,16 @@ private fun Buttons(content: @Composable () -> Unit) {
         content()
     }
 }
+
+/** Whether a recovery secret is kept, as the header says it: never the secret, which the console never has. */
+internal fun recoverySecretOf(status: RecoverySecretStatus?): String =
+    when (status) {
+        RecoverySecretStatus.KEPT -> "kept"
+        RecoverySecretStatus.NONE -> "none"
+        RecoverySecretStatus.UNREADABLE -> "unreadable"
+        RecoverySecretStatus.NOT_KEPT_HERE -> "not kept on this platform"
+        null -> "unknown"
+    }
 
 /** What the Like button does to [question]: unlike it when the player likes it, like it otherwise. */
 internal fun likeActionOf(question: Question?): String = if (question?.likedByMe == true) "Unlike" else "Like"

@@ -50,6 +50,18 @@ public class DefaultSessionRepository(
             persist { sessionStore.clear() }
         }
 
+    /**
+     * What deleting the app and installing it again leaves: the secret, and nothing that was kept
+     * beside the session, so the count of failed requests for a secret goes with it. The next [ensure]
+     * then recovers the player as a new phone would, in a session of its own.
+     */
+    override suspend fun clearKeepingSecret(): Unit =
+        mutex.withLock {
+            persist { sessionStore.clear() }
+            recovery?.let { store -> persist { store.clearFailedRequests() } }
+            secretSeenToFor = null
+        }
+
     /** The session as stored right now, for [withSessionRecovery] to capture before a call. */
     internal fun storedSession(): SessionDto? = sessionStore.read()
 
