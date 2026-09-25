@@ -792,6 +792,8 @@ not moved yet still adds its section to the console. Navigation is the root tab 
 - One action at a time, and the player read again after every one, a failed one too: a registration
   whose answer was lost shows as the account it made. `AccountViewModelTest` drives it over fakes and
   `AccountScreenDrawTest` draws every state in both themes; theme tokens only (§5b).
+- The console has no account forms. Its Session section names the account by its last stats read,
+  the username or `guest` (`accountOf`).
 
 - **Scoring** *(built; see §8c)*: every answer earns exactly **1 point**, whichever side
   it picks. There is no majority bonus and no streak: the streak is removed from the server, the

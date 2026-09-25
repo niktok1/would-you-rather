@@ -27,6 +27,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
+import io.ntole.wyr.core.domain.player.PlayerStats
 import io.ntole.wyr.core.domain.question.Category
 import io.ntole.wyr.core.domain.question.Question
 import io.ntole.wyr.core.domain.session.SessionInfo
@@ -141,6 +142,7 @@ fun DevConsoleScreen(
             }
 
             Section("Session") {
+                Value("account", accountOf(state.stats))
                 Buttons {
                     Button(onClick = onEnsureSession, enabled = idle) { Text("Ensure session") }
                     OutlinedButton(onClick = onNewGuest, enabled = idle) { Text("New guest") }
@@ -332,6 +334,12 @@ private fun Buttons(content: @Composable () -> Unit) {
         content()
     }
 }
+
+/**
+ * Whose account the session is, by the last stats read: its username, or a guest's, who has none.
+ * Registering and logging in are the game's Account tab (CLAUDE.md §8d, *Current focus*), not this.
+ */
+internal fun accountOf(stats: PlayerStats?): String = if (stats == null) "stats not read" else stats.username ?: "guest"
 
 /** What the Like button does to [question]: unlike it when the player likes it, like it otherwise. */
 internal fun likeActionOf(question: Question?): String = if (question?.likedByMe == true) "Unlike" else "Like"

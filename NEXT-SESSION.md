@@ -796,7 +796,10 @@ The app opens on the **Console** tab (`io.ntole.wyr.dev`). **Play** is the froze
 - **Session.** *Ensure session* mints a guest, or reuses the stored one. The header then shows the
   player id and when its access token expires. Opening the console reads the stats, which ensures a
   session too, so the first open mints a guest. *New guest* drops the session and the question
-  queue, then mints a fresh player and loads a question for it.
+  queue, then mints a fresh player and loads a question for it. The section names the account,
+  `account: <username>` once the stats read names one, `guest` otherwise, `stats not read` before a
+  read works. Registering and logging in are the game's **Account** tab; the console reads the stats
+  only on its own actions, so after a change there, press *Read stats* to see it here.
 - **Play.** *Skip* records the skip of the question on screen (`POST /v1/skips`), then loads the
   next question and reads the stats. The skipped one is not due for the rest of the cycle and
   comes back in the next, `answeredBefore` only if it was ever answered. A skip that fails is
