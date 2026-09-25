@@ -31,7 +31,7 @@ import io.ntole.wyr.core.domain.vote.Tally
 import io.ntole.wyr.core.domain.vote.VoteOutcome
 import io.ntole.wyr.descriptions
 import io.ntole.wyr.language.Language
-import io.ntole.wyr.language.PlayStrings
+import io.ntole.wyr.language.Strings
 import io.ntole.wyr.language.WyrStrings
 import io.ntole.wyr.language.stringsOf
 import io.ntole.wyr.nodes
@@ -159,8 +159,7 @@ class PlayScreenDrawTest {
     fun `every state shows its texts and nothing else in every language`() {
         Language.entries.forEach { language ->
             val shown = stringsOf(language)
-            val strings = shown.playScreen
-            expectedOf(strings, shown.points(POINTS), shown.tryAgain).forEach { (state, expected) ->
+            expectedOf(shown, shown.points(POINTS)).forEach { (state, expected) ->
                 val (texts, names) = expected
                 withScreen(state, language = language) { scene, _ ->
                     scene.renderAt(COUNTED_UP)
@@ -171,7 +170,7 @@ class PlayScreenDrawTest {
             // The points are the server's, and there are none until it has said.
             withScreen(PlayUiState.Asking(QUESTION), points = null, language = language) { scene, _ ->
                 assertEquals(
-                    listOf(QUESTION.optionA, strings.allCategories, "0", QUESTION.optionB).sorted(),
+                    listOf(QUESTION.optionA, shown.allCategories, "0", QUESTION.optionB).sorted(),
                     scene.texts().sorted(),
                     "in $language",
                 )
@@ -270,8 +269,8 @@ class PlayScreenDrawTest {
      */
     @Test
     fun `the row does not move when the answer is revealed`() {
-        val strings = stringsOf(Language.DEFAULT).playScreen
-        val parts = listOf(strings.allCategories, POINTS_SHOWN, strings.like, "0")
+        val shown = stringsOf(Language.DEFAULT)
+        val parts = listOf(shown.allCategories, POINTS_SHOWN, shown.playScreen.like, "0")
         val asked = mutableListOf<Rect>()
         withScreen(PlayUiState.Asking(QUESTION)) { scene, _ -> parts.mapTo(asked) { scene.node(it).boundsInRoot } }
         withScreen(PlayUiState.Revealed(QUESTION, OUTCOME)) { scene, _ ->
@@ -290,7 +289,7 @@ class PlayScreenDrawTest {
                     assertEquals(liked, heart.config.getOrNull(SemanticsProperties.ToggleableState), "$state")
                     assertTrue(state.question.likeCount.toString() in scene.texts(), "$state")
 
-                    scene.tap(strings.allCategories)
+                    scene.tap(stringsOf(language).allCategories)
                     scene.tap(strings.like)
 
                     assertEquals(listOf("categories", "like"), actions.tapped, "$state in $language")
@@ -309,15 +308,16 @@ class PlayScreenDrawTest {
         val cards = listOf(QUESTION.optionA, QUESTION.optionB)
         Language.entries.forEach { language ->
             val strings = stringsOf(language).playScreen
+            val all = stringsOf(language).allCategories
             withScreen(PlayUiState.Asking(QUESTION), language = language) { scene, _ ->
                 cards.forEach { assertNull(scene.clickLabel(it), "$it before the reveal in $language") }
-                assertEquals(strings.changeCategories, scene.clickLabel(strings.allCategories), "in $language")
+                assertEquals(strings.changeCategories, scene.clickLabel(all), "in $language")
             }
             withScreen(PlayUiState.Revealed(QUESTION, OUTCOME), language = language) { scene, _ ->
                 cards.forEach { assertEquals(strings.nextQuestion, scene.clickLabel(it), "$it in $language") }
             }
             withScreen(PlayUiState.Failed(DomainError.OUT_OF_QUESTIONS), language = language) { scene, _ ->
-                assertEquals(strings.changeCategories, scene.clickLabel(strings.allCategories), "failed in $language")
+                assertEquals(strings.changeCategories, scene.clickLabel(all), "failed in $language")
             }
         }
     }
@@ -328,13 +328,14 @@ class PlayScreenDrawTest {
      */
     @Test
     fun `the row sits between the cards with the points in the middle`() {
-        val strings = stringsOf(Language.DEFAULT).playScreen
+        val shown = stringsOf(Language.DEFAULT)
+        val strings = shown.playScreen
         withScreen(PlayUiState.Asking(QUESTION)) { scene, _ ->
             val cardA = scene.node(QUESTION.optionA).boundsInRoot
             val cardB = scene.node(QUESTION.optionB).boundsInRoot
             val row =
                 listOf(
-                    strings.allCategories,
+                    shown.allCategories,
                     POINTS_SHOWN,
                     strings.like,
                     strings.skip,
@@ -422,10 +423,9 @@ class PlayScreenDrawTest {
     @Test
     fun `a failure offers Try again and the categories`() {
         Language.entries.forEach { language ->
-            val strings = stringsOf(language).playScreen
             withScreen(PlayUiState.Failed(DomainError.OUT_OF_QUESTIONS), language = language) { scene, actions ->
                 scene.tap(stringsOf(language).tryAgain)
-                scene.tap(strings.allCategories)
+                scene.tap(stringsOf(language).allCategories)
                 assertEquals(listOf("retry", "categories"), actions.tapped, "in $language")
             }
         }
@@ -480,7 +480,7 @@ class PlayScreenDrawTest {
     fun `nothing in the row is cut short at a short phone's width`() {
         val question = QUESTION.copy(likeCount = 1234, likedByMe = true)
         Language.entries.forEach { language ->
-            val all = stringsOf(language).playScreen.allCategories
+            val all = stringsOf(language).allCategories
             (LIKE_FAILURES + null).forEach { error ->
                 // Asked, with Skip, and answered, with its place kept.
                 listOf<(() -> Unit)?>({}, null).forEach { onSkip ->
@@ -828,16 +828,16 @@ class PlayScreenDrawTest {
             )
 
         /**
-         * What some states show in [strings], with [points] as the points and [tryAgain] under a
-         * failure, each its texts in any order, and then the names it gives a screen reader for what
-         * has no text, from the top down.
+         * What some states show in [shown]'s words, with [points] as the points, each its texts in any
+         * order, and then the names it gives a screen reader for what has no text, from the top down.
          */
         fun expectedOf(
-            strings: PlayStrings,
+            shown: Strings,
             points: String,
-            tryAgain: String,
         ): List<Pair<PlayUiState, Pair<List<String>, List<String>>>> {
-            val all = strings.allCategories
+            val strings = shown.playScreen
+            val all = shown.allCategories
+            val tryAgain = shown.tryAgain
             val a = QUESTION.optionA
             val b = QUESTION.optionB
             val revealedA = strings.percent(70)
@@ -845,7 +845,7 @@ class PlayScreenDrawTest {
             val like = listOf(strings.like)
             val likeAndSkip = listOf(strings.like, strings.skip)
             return listOf(
-                PlayUiState.Loading to (emptyList<String>() to listOf(strings.loading)),
+                PlayUiState.Loading to (emptyList<String>() to listOf(shown.loading)),
                 PlayUiState.Failed(DomainError.NETWORK) to
                     (listOf(strings.cannotReach, tryAgain, all) to emptyList()),
                 PlayUiState.Failed(DomainError.OUT_OF_QUESTIONS) to

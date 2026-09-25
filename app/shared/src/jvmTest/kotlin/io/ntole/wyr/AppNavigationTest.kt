@@ -349,7 +349,7 @@ class AppNavigationTest {
             assertEquals(1, game.questionsAsked)
             scene.tap(ALL_PLAYED)
             assertEquals(ToggleableState.Off, scene.toggleOf("Храна"), "a visit starts afresh")
-            assertEquals(ToggleableState.On, scene.toggleOf(CYRILLIC.categoriesScreen.all))
+            assertEquals(ToggleableState.On, scene.toggleOf(CYRILLIC.allCategories))
         }
 
     /** The switch changes the screen it is on at once, and every screen after it, and is kept. */
@@ -571,6 +571,6 @@ class AppNavigationTest {
         val QUESTION = Question(id = "q1", optionA = "Fly", optionB = "Swim", categories = setOf(FOOD.id))
 
         /** The Play screen's categories, All while none is played: a tap on them opens the Categories screen. */
-        val ALL_PLAYED = CYRILLIC.playScreen.allCategories
+        val ALL_PLAYED = CYRILLIC.allCategories
     }
 }

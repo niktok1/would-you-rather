@@ -112,12 +112,12 @@ class CategoriesScreenDrawTest {
     @Test
     fun `the screen shows the search then All then every category then Play`() {
         Language.entries.forEach { language ->
-            val strings = stringsOf(language).categoriesScreen
+            val shared = stringsOf(language)
             val scene =
                 scene(CategoriesState(categories = KNOWN, found = KNOWN), language, width = WIDTH, height = HEIGHT)
             try {
                 val names = KNOWN.map { categoryName(it, language) }
-                val expected = listOf(strings.search, strings.all) + names + stringsOf(language).play
+                val expected = listOf(shared.categoriesScreen.search, shared.allCategories) + names + shared.play
                 assertEquals(expected, scene.allTexts(), "$language")
                 assertEquals(emptyList(), scene.descriptions(), "$language")
             } finally {
@@ -193,11 +193,12 @@ class CategoriesScreenDrawTest {
     @Test
     fun `a search that finds nothing says so under All`() {
         Language.entries.forEach { language ->
-            val strings = stringsOf(language).categoriesScreen
+            val shared = stringsOf(language)
             val scene = scene(CategoriesState(query = "xyz", categories = KNOWN, found = emptyList()), language)
             try {
                 // The search field shows what is typed, not its hint, and says it as no text of its own.
-                assertEquals(listOf(strings.all, strings.noMatch, stringsOf(language).play), scene.texts(), "$language")
+                val expected = listOf(shared.allCategories, shared.categoriesScreen.noMatch, shared.play)
+                assertEquals(expected, scene.texts(), "$language")
             } finally {
                 scene.close()
             }
@@ -207,11 +208,11 @@ class CategoriesScreenDrawTest {
     @Test
     fun `the categories being read with none read before show a named spinner`() {
         Language.entries.forEach { language ->
-            val strings = stringsOf(language).categoriesScreen
+            val shared = stringsOf(language)
             val scene = scene(CategoriesState(isLoading = true), language)
             try {
-                assertEquals(listOf(strings.loading), scene.descriptions(), "$language")
-                assertFalse(strings.noMatch in scene.texts(), "$language")
+                assertEquals(listOf(shared.loading), scene.descriptions(), "$language")
+                assertFalse(shared.categoriesScreen.noMatch in scene.texts(), "$language")
             } finally {
                 scene.close()
             }
@@ -236,7 +237,7 @@ class CategoriesScreenDrawTest {
                         // One line, the button's text drawn a little higher than the failure's: either first.
                         val texts = scene.texts().filter { it != shared.categoriesScreen.search }
                         assertEquals(setOf(said, shared.tryAgain), texts.take(2).toSet(), "$failure in $language")
-                        assertEquals(shared.categoriesScreen.all, texts[2], "$language")
+                        assertEquals(shared.allCategories, texts[2], "$language")
                         val names = known.map { categoryName(it, language) }
                         assertEquals(names, texts.filter { it in names }, "$language")
                     } finally {
@@ -259,7 +260,7 @@ class CategoriesScreenDrawTest {
             val scene = scene(state, language, actions = actions)
             try {
                 scene.tap(categoryName(KNOWN[2], language))
-                scene.tap(shared.categoriesScreen.all)
+                scene.tap(shared.allCategories)
                 scene.tap(shared.tryAgain)
                 scene.type("хр")
                 scene.tap(shared.play)
@@ -282,7 +283,7 @@ class CategoriesScreenDrawTest {
         val state = CategoriesState(ticked = setOf("FOOD"), categories = KNOWN, found = KNOWN, isPlaying = true)
         val scene = scene(state, language)
         try {
-            val offs = listOf(strings.categoriesScreen.all, "Храна", "Етика", strings.play)
+            val offs = listOf(strings.allCategories, "Храна", "Етика", strings.play)
             offs.forEach { text ->
                 val node = scene.nodes().single { text in it.texts }
                 assertTrue(node.config.contains(SemanticsProperties.Disabled), "$text is on")

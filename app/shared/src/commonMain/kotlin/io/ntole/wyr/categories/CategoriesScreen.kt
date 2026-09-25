@@ -86,7 +86,7 @@ fun CategoriesScreen(
             LazyColumn(modifier = Modifier.weight(1f).fillMaxWidth()) {
                 item(key = ALL_KEY) {
                     Option(
-                        label = strings.all,
+                        label = shared.allCategories,
                         ticked = state.ticked.isEmpty(),
                         enabled = !state.isPlaying,
                         bold = true,
@@ -157,7 +157,7 @@ private fun Note(content: @Composable () -> Unit) {
 /** The spinner while the categories are read, named for a screen reader. */
 @Composable
 private fun Spinner() {
-    val name = LocalStrings.current.categoriesScreen.loading
+    val name = LocalStrings.current.loading
     CircularProgressIndicator(
         color = WyrThemeAccessors.colors.headingAccent,
         modifier = Modifier.semantics { contentDescription = name },

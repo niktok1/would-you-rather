@@ -991,7 +991,8 @@ and *Categories*, below):
   moves nothing; a skip that failed moves on all the same.
 - Loading is a spinner; a failure is one short sentence, *Покушај поново* (`Strings.tryAgain`, §8f)
   and the categories played, the way out of a selection with nothing to serve. The words are
-  `PlayStrings` (§8f).
+  `PlayStrings` (§8f), but for those the Categories screen says too, *Све* and the spinner's name
+  (`Strings.allCategories`, `Strings.loading`).
 - The categories are picked on the Categories screen (*Categories*, *The Categories screen*), which
   a tap on them opens; the dialog the Play screen had for them is gone. A selection played there
   drops what is on screen, a question asked or answered or a failure, and loads a question from it
@@ -1578,16 +1579,18 @@ hand, so the two cannot say different things; and **English** stands beside them
   (*Шта би радије?*, *Would You Rather?*) and *Играј*; the top bars and the icons' names (*Почетна*,
   *Налог*, *Назад*); the switch's name, *Језик*; the Play screen's words (`PlayStrings`,
   `Strings.playScreen`); the Categories screen (`CategoryStrings`, `Strings.categoriesScreen`:
-  *Претражи категорије*, *Све*, *Изабрано: 3*, *Нема резултата* and *Учитавање* for a screen
-  reader); the Account screen, whole, with My questions and the server line; the Auth page, whole;
-  and the Submit screen's form, whole (`Strings.accountScreens`, an `AccountStrings` of the Account
-  screen's words and those of the pages opened from it). **Try again** is one text of `Strings`,
-  `tryAgain`, *Покушај поново* (*provisional*, §8b), under a failure on Play, the Categories screen,
-  the Account screen, My questions, the Auth page and the Submit form, so the game says it one way;
-  the Account screens' *Нешто није у реду. Покушај поново.* asks in its words, and `StringsTest`
-  holds the two together. So are *Откажи* (`cancel`), on the Auth page's warning, and *Категорије
-  нису учитане.* (`categoriesUnread`), on the Categories screen and under the Submit form's
-  categories alike, and the Categories screen's Play is the Home screen's *Играј* (`Strings.play`).
+  *Претражи категорије*, *Изабрано: 3* and *Нема резултата*); the Account screen, whole, with My
+  questions and the server line; the Auth page, whole; and the Submit screen's form, whole
+  (`Strings.accountScreens`, an `AccountStrings` of the Account screen's words and those of the
+  pages opened from it). **Try again** is one text of `Strings`, `tryAgain`, *Покушај поново*
+  (*provisional*, §8b), under a failure on Play, the Categories screen, the Account screen, My
+  questions, the Auth page and the Submit form, so the game says it one way; the Account screens'
+  *Нешто није у реду. Покушај поново.* asks in its words, and `StringsTest` holds the two together.
+  So are *Откажи* (`cancel`), on the Auth page's warning, and *Категорије нису учитане.*
+  (`categoriesUnread`), on the Categories screen and under the Submit form's categories alike, and
+  the Categories screen's Play is the Home screen's *Играј* (`Strings.play`). So too are *Све*
+  (`allCategories`), on the Play screen's row and first in the Categories screen's list, and
+  *Учитавање* (`loading`), the name both screens give their spinner for a screen reader.
 - **The categories' names** *(built)*: the server's, not `Strings`, since a moderator adds and
   renames categories without a build (§8d, *Categories*): `nameSr` in Serbian Cyrillic,
   `SerbianScript.toLatin(nameSr)` in Serbian Latin, as every Latin text is made, and `nameEn` in

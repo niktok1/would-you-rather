@@ -54,8 +54,8 @@ class PlayScreenTest {
     @Test
     fun `no category selected is all of them in the language shown`() {
         val none = PlayedCategories(known = KNOWN)
-        assertEquals("Све", categoriesPlayed(none, SerbianCyrillicStrings.playScreen.allCategories, CYRILLIC))
-        assertEquals("All", categoriesPlayed(none, EnglishStrings.playScreen.allCategories, Language.ENGLISH))
+        assertEquals("Све", categoriesPlayed(none, SerbianCyrillicStrings.allCategories, CYRILLIC))
+        assertEquals("All", categoriesPlayed(none, EnglishStrings.allCategories, Language.ENGLISH))
     }
 
     @Test

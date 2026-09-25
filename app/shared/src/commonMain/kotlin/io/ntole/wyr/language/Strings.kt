@@ -42,6 +42,17 @@ data class Strings(
      * Categories screen and under the Submit form's categories alike.
      */
     val categoriesUnread: String,
+    /**
+     * Every category, played while none is picked: on the Play screen's row, and first in the
+     * Categories screen's list, ticked while no category is. One text, so the game says it one way.
+     */
+    val allCategories: String,
+    /**
+     * A spinner's name, for a screen reader: on the Play screen while a question loads, and on the
+     * Categories screen while the categories are read with none read before. One text, so the game
+     * says it one way.
+     */
+    val loading: String,
     /** The Play screen's words. */
     val playScreen: PlayStrings,
     /** The home icon's name, for a screen reader: back to the Home screen. */
@@ -70,6 +81,8 @@ data class Strings(
             tryAgain = transform(tryAgain),
             cancel = transform(cancel),
             categoriesUnread = transform(categoriesUnread),
+            allCategories = transform(allCategories),
+            loading = transform(loading),
             playScreen = playScreen.map(transform),
             home = transform(home),
             account = transform(account),
@@ -95,6 +108,8 @@ val SerbianCyrillicStrings: Strings =
         tryAgain = "Покушај поново",
         cancel = "Откажи",
         categoriesUnread = "Категорије нису учитане.",
+        allCategories = "Све",
+        loading = "Учитавање",
         playScreen = SerbianCyrillicPlayStrings,
         home = "Почетна",
         account = "Налог",
@@ -115,6 +130,8 @@ val EnglishStrings: Strings =
         tryAgain = "Try again",
         cancel = "Cancel",
         categoriesUnread = "Couldn't load the categories.",
+        allCategories = "All",
+        loading = "Loading",
         playScreen = EnglishPlayStrings,
         home = "Home",
         account = "Account",

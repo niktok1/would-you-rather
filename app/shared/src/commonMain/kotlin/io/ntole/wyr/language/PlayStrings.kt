@@ -5,11 +5,10 @@ package io.ntole.wyr.language
  * so the screen's texts stand together. Short, the user asking for less text: a failure is one
  * sentence, and the rest are names a screen reader says for an icon or for what a tap does. The
  * categories' own names are the server's ([categoryName]), and the Categories screen's words are
- * [CategoryStrings].
+ * [CategoryStrings]. Every category and the spinner's name are the game's, which the Categories
+ * screen says too: [Strings.allCategories] and [Strings.loading].
  */
 data class PlayStrings(
-    /** The categories played when none is picked, which is every category. */
-    val allCategories: String,
     /** What a tap on the categories played does, for a screen reader: opens the Categories screen. */
     val changeCategories: String,
     /** What a tap on either card does once the answer is revealed, for a screen reader. */
@@ -18,8 +17,6 @@ data class PlayStrings(
     val like: String,
     /** The skip icon's name, for a screen reader: past the question without answering it. */
     val skip: String,
-    /** The spinner's name, for a screen reader, while a question loads. */
-    val loading: String,
     /**
      * No answer from the server, worded for both of the reasons it can have: the phone is offline,
      * or the server is down or too slow to answer. The Categories screen, opened from this one, says
@@ -41,12 +38,10 @@ data class PlayStrings(
     /** These strings with [transform] applied to every one of them, as [Strings.map] does. */
     internal fun map(transform: (String) -> String): PlayStrings =
         PlayStrings(
-            allCategories = transform(allCategories),
             changeCategories = transform(changeCategories),
             nextQuestion = transform(nextQuestion),
             like = transform(like),
             skip = transform(skip),
-            loading = transform(loading),
             cannotReach = transform(cannotReach),
             outOfQuestions = transform(outOfQuestions),
             slowDown = transform(slowDown),
@@ -58,12 +53,10 @@ data class PlayStrings(
 /** The source text, written by hand; Serbian Latin is made from it with the rest of [Strings]. */
 internal val SerbianCyrillicPlayStrings: PlayStrings =
     PlayStrings(
-        allCategories = "Све",
         changeCategories = "Промени категорије",
         nextQuestion = "Следеће питање",
         like = "Свиђа ми се",
         skip = "Прескочи",
-        loading = "Учитавање",
         cannotReach = "Игра није доступна.",
         outOfQuestions = "Нема више питања.",
         slowDown = "Сачекај мало.",
@@ -73,12 +66,10 @@ internal val SerbianCyrillicPlayStrings: PlayStrings =
 
 internal val EnglishPlayStrings: PlayStrings =
     PlayStrings(
-        allCategories = "All",
         changeCategories = "Change categories",
         nextQuestion = "Next question",
         like = "Like",
         skip = "Skip",
-        loading = "Loading",
         cannotReach = "Can't reach the game.",
         outOfQuestions = "No more questions.",
         slowDown = "Wait a moment.",

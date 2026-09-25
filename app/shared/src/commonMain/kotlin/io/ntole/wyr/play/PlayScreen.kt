@@ -156,7 +156,7 @@ private fun QuestionBody(
             categoriesPlayed =
                 categoriesPlayed(
                     categories,
-                    all = LocalStrings.current.playScreen.allCategories,
+                    all = LocalStrings.current.allCategories,
                     language = LocalLanguage.current,
                 ),
             points = points,
@@ -428,7 +428,7 @@ private fun countedUp(target: Int): Int {
 /** A spinner, named for a screen reader: no text to read while a question loads. */
 @Composable
 private fun LoadingBody() {
-    val loading = LocalStrings.current.playScreen.loading
+    val loading = LocalStrings.current.loading
 
     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         CircularProgressIndicator(
@@ -451,7 +451,8 @@ private fun FailureBody(
 ) {
     val colors = WyrThemeAccessors.colors
     val dimens = WyrThemeAccessors.dimens
-    val strings = LocalStrings.current.playScreen
+    val shared = LocalStrings.current
+    val strings = shared.playScreen
 
     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         Column(
@@ -464,9 +465,9 @@ private fun FailureBody(
                 textAlign = TextAlign.Center,
                 fontWeight = FontWeight.Medium,
             )
-            Button(onClick = onRetry) { Text(LocalStrings.current.tryAgain) }
+            Button(onClick = onRetry) { Text(shared.tryAgain) }
             CategoriesPlayed(
-                text = categoriesPlayed(categories, all = strings.allCategories, language = LocalLanguage.current),
+                text = categoriesPlayed(categories, all = shared.allCategories, language = LocalLanguage.current),
                 enabled = true,
                 onClick = onOpenCategories,
             )
