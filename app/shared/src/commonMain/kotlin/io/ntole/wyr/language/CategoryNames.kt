@@ -7,8 +7,9 @@ import io.ntole.wyr.core.domain.language.SerbianScript
  * [category] in the player's words, in [language] (CLAUDE.md §8f): its Serbian name as the server
  * keeps it, in Cyrillic; that name made Latin by [SerbianScript.toLatin], as every Serbian Latin text
  * is; or its English name. The one place the game names a category, the Play screen, the
- * Categories screen and the Submit form alike, so the language is chosen here alone. The server's names, not [Strings]: a moderator
- * adds and renames categories without a build (CLAUDE.md §8d, *Categories*).
+ * Categories screen and the Submit form alike, so the language is chosen here alone. The server's
+ * names, not [Strings]: a moderator adds and renames categories without a build (CLAUDE.md §8d,
+ * *Categories*).
  */
 fun categoryName(
     category: Category,
