@@ -74,18 +74,26 @@ top down: a card of the player (the username or *Гост*, the points as *123 P
 **My questions** (the player's submissions, each option and its status in a word, and *Ново питање*),
 the language switch, Log out, and the server line, all in the three languages. A guest's one button
 opens the **Auth** page: Register only, with a link that switches it to Log in and back; the rules,
-the short failures and the guest-points warning kept, and back to Account once one works. The Submit
-screen is only the form now, opened from My questions and back there once a question is stored;
-Send shows the cost, *Пошаљи · 1 P* (`SubmissionRules.COST`, 1 until release), and is off with
-*Немаш довољно поена.* while the points are fewer. The client alone changed. *Accounts* and *Submit on
-its own tab* below still walk the flows as they were before it. For the merge: `feat/server-categories`
-adds `NOT_ENOUGH_POINTS`, which this branch leaves alone, so until it is mapped the form shows it as
-*Нешто није у реду*; the chips still call `categoryName`; `Strings.kt` and CLAUDE.md §8f will
-conflict with `feat/play-redesign`, both adding texts. To ask the user: the Auth page has no heading
-(read literally, it "shows only Register"), and the form's line that submitting earns no points is
-gone. Tests: `:app:shared` 220 (`AuthScreenDrawTest` 8, `TemplatesTest` 4 new; `AccountScreenDrawTest`
-14, `AccountViewModelTest` 31, `SubmitViewModelTest` 25, `SubmitScreenDrawTest` 6, `AppNavigationTest`
-12). Not seen on a device: any of it on a phone, autofill on the Auth page included.
+the short failures and the guest-points warning kept, and back to Account once one works, or once
+the read after one whose answer was lost names the account. Shown before any player is read, a read
+that failed says so on top with Try again, and Log in waits for one. The Submit screen is only the
+form now, opened from My questions and back there once a question is stored (one stored after the
+player went back is read again if Account is shown then); Send shows the cost, *Пошаљи · 1 P*
+(`SubmissionRules.COST`, 1 until release), and is off with *Немаш довољно поена.* while the points
+are fewer. The client alone changed: the server here charges nothing. *Accounts* and *Submit on its
+own tab* below still walk the flows as they were before it. For the merge: `SubmitScreen.kt` and
+`SubmitScreenTest.kt` conflict with `feat/server-categories`' 4ceb426, which adds
+`SUBMISSION_COST = 1`, a cost `POINTS_NOTE` and an English `NOT_ENOUGH_POINTS` line; keep
+`SubmissionRules.COST` as the only copy, drop `SUBMISSION_COST` and `POINTS_NOTE` (this branch has
+no note), map `NOT_ENOUGH_POINTS` to an `AccountStrings` text in all three languages (until then the
+form shows it as *Нешто није у реду*), and drop §8d *Submitting*'s "the server on this branch
+charges nothing". The chips still call `categoryName`; `Strings.kt` and CLAUDE.md §8f will conflict
+with `feat/play-redesign`, both adding texts. To ask the user: the Auth page has no heading (read
+literally, it "shows only Register"), and the form's line that submitting earns no points is gone.
+Tests: `:app:shared` 225 (`AuthScreenDrawTest` 9, `TemplatesTest` 4 new; `AccountScreenDrawTest` 14,
+`AccountViewModelTest` 33, `SubmitViewModelTest` 25, `SubmitScreenDrawTest` 6, `AppNavigationTest`
+14). Android's back is covered only by `NavigatorTest`: on the JVM `SystemBack` binds nothing. Not
+seen on a device: any of it on a phone, autofill on the Auth page and Android's back included.
 
 ### Verified working
 
