@@ -477,13 +477,21 @@ contract did not. How to try it on a phone is under *Skip and Like on Play*.
   next question. Each guard, the id check, the moved-on check, the failure and the like's direction
   were broken one at a time, and each broke its test. `PlayScreenDrawTest` draws the Play screen in
   every state, the like states among them, in both themes, and `PlayScreenTest` the count, the
-  button and the failure copy. The console lost its Skip and Like and their tests (`:app:shared`'s
-  `DevConsoleViewModelTest` 49, 62 before), and the bookkeeping only its likes needed
-  (`likeSentBeforeMeasure`, `likesUnmeasuredAtOutcome`). Counts: `:server` 311, 2 skipped (from the
-  build cache: untouched); `:core:domain` 47; `:core:data` 146; `:core:network` 82 (88 as Android
-  host tests); `:app:shared` 127; `:app:adminApp` 87. Lint (forced), the verify job's tests (each
-  client test task forced to rerun) and client compiles, `assembleDebug` included, and the ios job's
-  Kotlin compiles pass. Nothing was run on a device or against a server.
+  button and the failure copy. Review found that a like row of its own under the cards took 56 from
+  them, so an iPhone SE's reveal (375x599 under the tab row) lost its vote counts. The count, Like
+  and Skip or Next question now share one row, a like's failure takes the verdict's line, and
+  `PlayScreenDrawTest` draws every state at 375x599 as well and asks each how much height it needs,
+  measured 400 wide with one short line an option so that CI's wider Linux fonts wrap nothing: the
+  reveal needs 569 of 599 (625 with the row of its own, which failed the test), and a failed like
+  adds nothing to it (a failure on a line of its own failed that test). With two lines an option the
+  reveal needs 593 at 375 wide on this Mac, as `main`'s layout does. The console lost its Skip and
+  Like and their tests (`:app:shared`'s `DevConsoleViewModelTest` 49, 62 before), and the
+  bookkeeping only its likes needed (`likeSentBeforeMeasure`, `likesUnmeasuredAtOutcome`). Counts:
+  `:server` 311, 2 skipped (from the build cache: untouched); `:core:domain` 47; `:core:data` 146;
+  `:core:network` 82 (88 as Android host tests); `:app:shared` 129; `:app:adminApp` 87. Lint
+  (forced), the verify job's tests (each client test task forced to rerun) and client compiles,
+  `assembleDebug` included, and the ios job's Kotlin compiles pass. Nothing was run on a device or
+  against a server.
 - `:app:androidApp:assembleDebug` produces a real APK.
 - `ktlintCheck` clean across every module.
 
@@ -531,10 +539,11 @@ contract did not. How to try it on a phone is under *Skip and Like on Play*.
   jar; not from a phone, not against dev, and not through the refresh that turns a `d4a9dbf` access
   token (no `sessionId`) into one a logout takes.
 - **Skip and Like on the Play tab on a device.** No build with them has been installed or run: the
-  screen is drawn off screen on the desktop (`PlayScreenDrawTest`), which proves it measures and draws
-  but not what it shows (there is no Compose UI test library in the tree), and its ViewModel is driven
-  over fakes. Nobody has seen the like row, the Skip button or a like's failure line on a phone, nor
-  sent a skip or a like from the app to a server.
+  screen is drawn off screen on the desktop (`PlayScreenDrawTest`), which proves it measures, draws
+  and fits 599 high but not what it shows (there is no Compose UI test library in the tree), and its
+  ViewModel is driven over fakes. Its renders on this Mac's Skia were looked at as images in review,
+  in the light theme only, never on a phone. Nobody has sent a skip or a like from the app to a
+  server. Android's 360x640 class (about 520 high) cuts the reveal's percentages as `main` did.
 - **The `:core` modules' tests on iOS.** The ios CI job runs `:app:shared`'s tests on the simulator
   and only compiles the `:core` modules' tests, which Kotlin/Native refused while their
   names held commas (`SharedSessionStoreTest`'s among them, from before `feat/recovery-secret`, and
@@ -766,8 +775,8 @@ a deploy or a spin-down; the server needs nothing new):
 
 1. `./gradlew :app:androidApp:installDevDebug`, open *WYR Dev*, and go to the **Play** tab (a PROD
    build opens on it).
-2. Under the two options: the like count (`0 likes` on a question nobody likes) and **Like**, then
-   **Skip**.
+2. One row under the two options: the like count (`0 likes` on a question nobody likes), **Like**
+   and **Skip**.
    Press **Like**: the count goes up by one and the button reads **Unlike**; press it again and both
    go back. The count is the server's, so another player's like shows only when the question is
    served again.
@@ -775,9 +784,11 @@ a deploy or a spin-down; the server needs nothing new):
    cycle: with only the 24 seeds and no category picked, it comes back once the other 23 are answered
    or skipped, in the next cycle.
 4. Answer a question: the reveal keeps the like count and **Like**, and **Next question** stands where
-   Skip was. A like there works the same.
-5. Airplane mode, then **Like**: the question stays as it was and one line under it says *Can't reach
-   the game right now. Try again.* Network back on, **Like** again: it goes through. **Skip** offline
+   Skip was. A like there works the same. The reveal is as tall as it was before Skip and Like, so
+   what fitted a phone then fits it now: on an iPhone SE, each side's vote count.
+5. Airplane mode, then **Like**: the question stays as it was and the line under the cards says
+   *Can't reach the game right now. Try again.*, where the reveal's verdict stands once the question
+   is answered. Network back on, **Like** again: it goes through. **Skip** offline
    moves on all the same while questions are queued, and shows *Can't reach the game* with *Try again*
    once they run out.
 6. A like of your own question pays you a point: submit one on the console (*Submit a question*),

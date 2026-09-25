@@ -72,11 +72,12 @@ fun PlayScreen(
                     FailureBody(state.error, onRetry)
                 }
 
-                // Weighted, not filling: the likes and the buttons below need the height that is left.
+                // Weighted, not filling: the row of controls below needs the height that is left.
                 is PlayUiState.Asking -> {
                     QuestionBody(
                         question = state.question,
                         outcome = null,
+                        likeError = state.likeError,
                         enabled = !state.isBusy,
                         onChoose = onChoose,
                         modifier = Modifier.weight(1f),
@@ -87,6 +88,7 @@ fun PlayScreen(
                     QuestionBody(
                         question = state.question,
                         outcome = state.outcome,
+                        likeError = state.likeError,
                         enabled = false,
                         onChoose = onChoose,
                         modifier = Modifier.weight(1f),
@@ -94,25 +96,9 @@ fun PlayScreen(
                 }
             }
 
-            // Before answering and after it alike: a like count is visible before answering (§8d).
             if (state is PlayUiState.OnQuestion) {
-                Spacer(Modifier.size(dimens.spaceSm))
-                Likes(state, onToggleLike)
-            }
-
-            // Before answering the way on is to skip the question, and after it the next question.
-            if (state is PlayUiState.Asking) {
                 Spacer(Modifier.size(dimens.spaceMd))
-                OutlinedButton(onClick = onSkip, enabled = !state.isBusy, modifier = Modifier.fillMaxWidth()) {
-                    Text("Skip")
-                }
-            }
-
-            if (state is PlayUiState.Revealed) {
-                Spacer(Modifier.size(dimens.spaceMd))
-                Button(onClick = onNext, enabled = !state.isBusy, modifier = Modifier.fillMaxWidth()) {
-                    Text("Next question")
-                }
+                Controls(state, onToggleLike = onToggleLike, onSkip = onSkip, onNext = onNext)
             }
         }
     }
@@ -169,6 +155,7 @@ private fun Stat(
 private fun QuestionBody(
     question: Question,
     outcome: VoteOutcome?,
+    likeError: DomainError?,
     enabled: Boolean,
     onChoose: (Side) -> Unit,
     modifier: Modifier = Modifier,
@@ -203,11 +190,15 @@ private fun QuestionBody(
             modifier = Modifier.weight(1f),
         )
 
-        if (outcome != null) {
+        // One line under the cards at most: how the last like failed, or else the reveal's verdict.
+        // The failure takes the verdict's place, not a line of its own, so a short phone's reveal
+        // keeps the height its cards need for the tally.
+        val note = likeError?.let(::likeFailureMessage) ?: outcome?.let(::verdictLine)
+        if (note != null) {
             Spacer(Modifier.size(dimens.spaceSm))
             Text(
-                text = verdictLine(outcome),
-                color = colors.muted,
+                text = note,
+                color = if (likeError != null) MaterialTheme.colorScheme.error else colors.muted,
                 fontSize = WyrTypeScale.statLabel,
                 textAlign = TextAlign.Center,
                 modifier = Modifier.fillMaxWidth(),
@@ -294,40 +285,46 @@ private fun OptionCard(
 }
 
 /**
- * The question's like count and the player's Like, or Unlike while they like it, with how the last
- * one failed under them. The count is the server's (CLAUDE.md §8d, *Likes*), never worked out here.
+ * One row under the question, asked or revealed: its like count, the player's Like (Unlike while
+ * they like it), and the way on, Skip before answering and Next question after. The count is visible
+ * before answering and is the server's (CLAUDE.md §8d, *Likes*), never worked out here.
+ *
+ * One row, where Next question alone stood before likes came, so the reveal is no taller than it
+ * was and a short phone's option cards keep the height their tally needs. How a like failed shows
+ * in the verdict's place (QuestionBody), not here.
  */
 @Composable
-private fun Likes(
+private fun Controls(
     state: PlayUiState.OnQuestion,
     onToggleLike: () -> Unit,
+    onSkip: () -> Unit,
+    onNext: () -> Unit,
 ) {
     val colors = WyrThemeAccessors.colors
     val dimens = WyrThemeAccessors.dimens
 
-    Column(modifier = Modifier.fillMaxWidth()) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(dimens.spaceSm),
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            Text(
-                text = likeCountOf(state.question),
-                color = colors.primaryText,
-                fontWeight = FontWeight.Medium,
-                modifier = Modifier.weight(1f),
-            )
-            OutlinedButton(onClick = onToggleLike, enabled = !state.isBusy) {
-                Text(likeActionOf(state.question))
-            }
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(dimens.spaceSm),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Text(
+            text = likeCountOf(state.question),
+            color = colors.primaryText,
+            fontWeight = FontWeight.Medium,
+            modifier = Modifier.weight(1f),
+        )
+        OutlinedButton(onClick = onToggleLike, enabled = !state.isBusy) {
+            Text(likeActionOf(state.question))
         }
+        when (state) {
+            is PlayUiState.Asking -> {
+                OutlinedButton(onClick = onSkip, enabled = !state.isBusy) { Text("Skip") }
+            }
 
-        state.likeError?.let { error ->
-            Text(
-                text = likeFailureMessage(error),
-                color = MaterialTheme.colorScheme.error,
-                fontSize = WyrTypeScale.statLabel,
-            )
+            is PlayUiState.Revealed -> {
+                Button(onClick = onNext, enabled = !state.isBusy) { Text("Next question") }
+            }
         }
     }
 }

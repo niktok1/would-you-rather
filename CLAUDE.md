@@ -801,13 +801,19 @@ not moved yet still adds its section to the console. Navigation is the root tab 
 
 The second to move is **Skip and Like**, onto the Play screen (`io.ntole.wyr.play`; *Skipping* and
 *Likes*, below):
-- Under the question, asked or revealed, its like count and **Like** (**Unlike** while the player
-  likes it); under those, **Skip** while it is asked, and **Next question** once it is answered.
+- One row under the question, asked or revealed: its like count, **Like** (**Unlike** while the
+  player likes it), and the way on, **Skip** while it is asked and **Next question** once it is
+  answered. One row, where Next question alone stood before, so the reveal is no taller than it was:
+  height the screen needs and does not get comes out of the option cards, and on a short phone the
+  tally inside them is what is cut off.
 - One action at a time (`PlayUiState.OnQuestion.isBusy`): while a vote, a skip or a like is in
-  flight, every other control is off. A like that failed says why in one line under it; a skip that
-  failed moves on all the same (*Skipping*).
-- `PlayViewModelTest` drives it over fakes and `PlayScreenDrawTest` draws every state in both themes;
-  theme tokens only, and the option cards and brand colors as they were (§5b).
+  flight, every other control is off. A like that failed says why in one line under the cards, in the
+  reveal's verdict's place, not beside it; a skip that failed moves on all the same (*Skipping*).
+- `PlayViewModelTest` drives it over fakes. `PlayScreenDrawTest` draws every state in both themes at
+  400x900 and 375x599 (an iPhone SE less its status bar and the tab row), holds every state to 599
+  high, and a reveal with a failed like to the height of one without. It measures 400 wide with one
+  short line an option, because CI's Linux wraps text wider than a phone does. Theme tokens only, and
+  the option cards and brand colors as they were (§5b).
 - The console has neither any more; its Play section keeps A/B, Answer N and Retry last vote for now.
 
 - **Scoring** *(built; see §8c)*: every answer earns exactly **1 point**, whichever side
@@ -939,9 +945,9 @@ The second to move is **Skip and Like**, onto the Play screen (`io.ntole.wyr.pla
     of what the question on screen shows, then puts the server's answer on that question: only on
     the one the answer names, and only while it is still on screen. Nothing changes before the
     answer, so a like that failed, a like lost to `NETWORK` included, leaves the question as it was
-    with one line saying why under it, and pressing again asks for the same like again. It works
-    out no points itself: a like of the player's own question moves their total without a vote, so
-    the reveal's total, which is the vote's, shows it only from the next vote on.
+    with one line saying why under the cards (*Current focus*), and pressing again asks for the same
+    like again. It works out no points itself: a like of the player's own question moves their total
+    without a vote, so the reveal's total, which is the vote's, shows it only from the next vote on.
   - *The console* no longer likes. It shows a question's `likeCount` and `likedByMe` as the feed
     served them, and `likesReceived` in its stats. Since a like moves its author's total without a
     vote, it compares its stats with the last vote's total only while they count as many likes
