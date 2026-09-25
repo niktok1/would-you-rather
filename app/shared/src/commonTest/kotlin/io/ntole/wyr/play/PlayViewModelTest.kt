@@ -975,6 +975,86 @@ class PlayViewModelTest {
             assertEquals(PlayUiState.Asking(QUESTION), viewModel.state.value)
         }
 
+    @Test
+    fun `categories played from the Categories screen drop the question on screen and show one from them`() =
+        runTest(dispatcher) {
+            val questions = FakeQuestionRepository(servedFor = mapOf(setOf("FOOD") to FOOD_QUESTION))
+            val viewModel = viewModel(questions)
+            testScheduler.advanceUntilIdle()
+
+            // As the Categories screen's Play sets them, with nothing of this ViewModel's asked.
+            questions.setCategories(setOf("FOOD"))
+            testScheduler.advanceUntilIdle()
+
+            assertEquals(listOf("next", "setCategories [FOOD]", "next"), questions.calls)
+            assertEquals(PlayUiState.Asking(FOOD_QUESTION), viewModel.state.value)
+            assertEquals(setOf("FOOD"), viewModel.categories.value.selected)
+        }
+
+    @Test
+    fun `categories played from the Categories screen drop the answered question too`() =
+        runTest(dispatcher) {
+            val questions = FakeQuestionRepository(servedFor = mapOf(setOf("FOOD") to FOOD_QUESTION))
+            val viewModel = viewModel(questions)
+            testScheduler.advanceUntilIdle()
+            viewModel.choose(Side.A)
+            testScheduler.advanceUntilIdle()
+            assertIs<PlayUiState.Revealed>(viewModel.state.value)
+
+            questions.setCategories(setOf("FOOD"))
+            testScheduler.advanceUntilIdle()
+
+            assertEquals(PlayUiState.Asking(FOOD_QUESTION), viewModel.state.value)
+        }
+
+    @Test
+    fun `categories played from the Categories screen after a vote lost to the network move on without it`() =
+        runTest(dispatcher) {
+            // As the picker's change does: the vote counts only if it landed the first time (§8d).
+            val votes = RecordingVoteRepository(DomainError.NETWORK)
+            val questions = FakeQuestionRepository(servedFor = mapOf(setOf("FOOD") to FOOD_QUESTION))
+            val viewModel = viewModel(questions, votes = votes)
+            testScheduler.advanceUntilIdle()
+            viewModel.choose(Side.A)
+            testScheduler.advanceUntilIdle()
+            assertIs<PlayUiState.Failed>(viewModel.state.value)
+
+            questions.setCategories(setOf("FOOD"))
+            testScheduler.advanceUntilIdle()
+
+            assertEquals(1, votes.callCount, "the lost vote is not sent again")
+            assertEquals(PlayUiState.Asking(FOOD_QUESTION), viewModel.state.value)
+        }
+
+    @Test
+    fun `categories played elsewhere while a like is in flight leave the question to it`() =
+        runTest(dispatcher) {
+            // One action at a time: the like lands on the question it was for, and the next question
+            // is the new categories' since the change dropped the queue.
+            val gate = CompletableDeferred<Unit>()
+            val likes = FakeLikeRepository()
+            likes.answer = { questionId, liked ->
+                gate.await()
+                QuestionLikes(questionId, likeCount = 1, likedByMe = liked)
+            }
+            val questions = FakeQuestionRepository(servedFor = mapOf(setOf("FOOD") to FOOD_QUESTION))
+            val viewModel = viewModel(questions, likes = likes)
+            testScheduler.advanceUntilIdle()
+            viewModel.toggleLike()
+            testScheduler.advanceUntilIdle()
+
+            questions.setCategories(setOf("FOOD"))
+            testScheduler.advanceUntilIdle()
+            gate.complete(Unit)
+            testScheduler.advanceUntilIdle()
+
+            assertEquals(listOf("next", "setCategories [FOOD]"), questions.calls)
+            assertEquals(PlayUiState.Asking(QUESTION.copy(likeCount = 1, likedByMe = true)), viewModel.state.value)
+            viewModel.skip()
+            testScheduler.advanceUntilIdle()
+            assertEquals(PlayUiState.Asking(FOOD_QUESTION), viewModel.state.value)
+        }
+
     private fun viewModel(
         questions: QuestionRepository = FakeQuestionRepository(),
         votes: VoteRepository = FakeVoteRepository(),

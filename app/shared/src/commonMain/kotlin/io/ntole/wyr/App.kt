@@ -16,6 +16,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.ntole.wyr.account.AccountScreen
 import io.ntole.wyr.account.AccountViewModel
 import io.ntole.wyr.account.AuthScreen
+import io.ntole.wyr.categories.CategoriesScreen
+import io.ntole.wyr.categories.CategoriesViewModel
 import io.ntole.wyr.home.HomeScreen
 import io.ntole.wyr.language.Language
 import io.ntole.wyr.language.LanguageViewModel
@@ -80,11 +82,20 @@ private fun Screens(
                 }
 
                 Screen.Play -> {
+                    val picker = koinViewModel<CategoriesViewModel>()
                     PlayTopBar(
                         onHome = { navigator.open(Screen.Home) },
                         onAccount = { navigator.open(Screen.Account) },
                     )
-                    Below { Play() }
+                    Below {
+                        Play(
+                            onOpenCategories = {
+                                // A visit of its own: what is played now ticked, and nothing searched.
+                                picker.open()
+                                navigator.open(Screen.Categories)
+                            },
+                        )
+                    }
                 }
 
                 Screen.Account -> {
@@ -107,6 +118,11 @@ private fun Screens(
                 Screen.Submit -> {
                     BackTopBar(onBack = { navigator.back() })
                     Below { Submit(onSent = { navigator.back() }) }
+                }
+
+                Screen.Categories -> {
+                    BackTopBar(onBack = { navigator.back() })
+                    Below { Categories(language, onPlayed = { navigator.back() }) }
                 }
             }
         }
@@ -198,8 +214,29 @@ private fun Submit(onSent: () -> Unit) {
     SubmitScreen(state = state, actions = viewModel)
 }
 
+/**
+ * The Categories screen, opened from Play, which starts the visit ([CategoriesViewModel.open]). Once
+ * what is ticked is played, [onPlayed] goes back to Play, which shows a question from it; the back
+ * arrow, or Android's back, leaves it with nothing played (CLAUDE.md §8d, *Categories*).
+ */
 @Composable
-private fun Play() {
+private fun Categories(
+    language: Language,
+    onPlayed: () -> Unit,
+) {
+    val viewModel = koinViewModel<CategoriesViewModel>()
+    val state by viewModel.state.collectAsStateWithLifecycle()
+
+    // Every time the screen is shown: a moderator adds categories meanwhile.
+    LaunchedEffect(viewModel) { viewModel.refresh() }
+    LaunchedEffect(state.played) { if (state.played) onPlayed() }
+
+    CategoriesScreen(state = state, language = language, actions = viewModel)
+}
+
+/** The Play screen; its categories, tapped, open the Categories screen ([onOpenCategories]). */
+@Composable
+private fun Play(onOpenCategories: () -> Unit) {
     val viewModel = koinViewModel<PlayViewModel>()
     val state by viewModel.state.collectAsStateWithLifecycle()
     val categories by viewModel.categories.collectAsStateWithLifecycle()
@@ -219,7 +256,7 @@ private fun Play() {
         onToggleLike = viewModel::toggleLike,
         onNext = viewModel::next,
         onRetry = viewModel::retry,
-        onOpenCategories = viewModel::openCategories,
+        onOpenCategories = onOpenCategories,
         onToggleCategory = viewModel::toggleCategory,
         onSelectAllCategories = viewModel::selectAllCategories,
         onApplyCategories = viewModel::applyCategories,

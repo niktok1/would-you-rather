@@ -36,8 +36,9 @@ fun PlayTopBar(
 }
 
 /**
- * Account's, the Auth page's and Submit's: the back arrow, to the screen each was opened from. The
- * way to the Submit screen is on the Account screen itself, in My questions (§8d, *The Account screen*).
+ * Account's, the Auth page's, Submit's and the Categories screen's: the back arrow, to the screen each
+ * was opened from. The way to the Submit screen is on the Account screen itself, in My questions (§8d,
+ * *The Account screen*).
  */
 @Composable
 fun BackTopBar(onBack: () -> Unit) {

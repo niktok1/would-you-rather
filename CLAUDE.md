@@ -1122,20 +1122,56 @@ listed on the Account screen.
     one it has not read by its id. The server files every question under at least one; a payload
     without them, which no server sends, reads as none rather than failing. A player's selection is a
     set of ids too (`QuestionRepository.categories`, empty for every category), and every refill sends
-    all of it, in id order, so one selection is always one request; the Play screen's category picker
-    ticks each category the server lists, and *Све категорије* empties it (*The Play screen*).
-    Ticking every category is not selecting none: a category a moderator adds later is in none and
-    not in those ticked. Nothing checks an id against the list before sending it: an id no category
-    has is the server's 400, which only a stale client could send, since ids never change and no
-    category is deleted. A client submits under a set of one or more (*Submitting*). The game names
-    a category in the language shown (§8f), through one function, `categoryName` in
-    `io.ntole.wyr.language`, the one place the language is chosen: the Serbian name as the server
-    keeps it in Serbian Cyrillic, that name through `SerbianScript.toLatin` in Serbian Latin, and the
-    English name in English. The moderation app names it in Serbian (`nameOf`).
-  - *A known limit:* every picker shows every category, a chip or a row each. The Play picker
-    scrolls inside its dialog, but the Submit form, the moderation app's category filter and each
-    pending card lay out every chip in place, to be scrolled past, which suits tens of categories,
-    not the hundreds planned; a searchable or collapsible picker comes with UI polish.
+    all of it, in id order, so one selection is always one request. The Play screen plays the
+    selection whoever sets it (`PlayViewModel`'s `init`): a new one drops what is on screen, a
+    question asked or answered or a failure, a vote lost to `NETWORK` included, which is never sent
+    again (*Retry safety*), and loads a question from it (`load`, not `next`, which goes on only from
+    the reveal); a load, a vote, a skip or a like in flight there goes on, and the question after it
+    is the new selection's, since the change dropped the queue (`PlayViewModelTest`). The Categories
+    screen ticks any of the categories the server lists, and *Све* empties it (*The Categories
+    screen*, below). Ticking every category is not selecting none: a category a moderator adds later
+    is in none and not in those ticked. Nothing checks an id against the list before sending it: an
+    id no category has is the server's 400, which only a stale client could send, since ids never
+    change and no category is deleted. A client submits under a set of one or more (*Submitting*).
+    The game names a category in the language shown (§8f): the Play screen's row and the Submit
+    form's chips through `categoryName` in `io.ntole.wyr.language`, the Categories screen through
+    `Category.nameIn` in `io.ntole.wyr.categories`, the same choice made twice until one of them
+    goes: the Serbian name as the server keeps it in Serbian Cyrillic, that name through
+    `SerbianScript.toLatin` in Serbian Latin, and the English name in English. The moderation app
+    names it in Serbian (`nameOf`).
+  - *The Categories screen* (*built 2026-09-25*; the user: "Category needs its own screen for
+    picker, as there will be hundreds of categories, and players should be able to pick multiple,
+    random is actually all. There should be also category search."): `io.ntole.wyr.categories`, a
+    `Screen` of the navigator's own (`Screen.Categories`), opened by a tap on the categories played
+    on the Play screen, in place of the dialog *The Play screen* describes, which nothing opens now,
+    under a top bar of a back arrow (`BackTopBar`). Top down: a search field, then one lazy list (a
+    `LazyColumn`, so hundreds draw only the lines on screen) of **Све**, ticked while no category
+    is, and every category the search finds, each ticked or not, in the server's order; and at the
+    bottom how many are ticked (*Изабрано: 3*, nothing while Све is) and **Играј**. Ticking Све
+    unticks every category, ticking one unticks Све, and unticking the last is Све again: Све is none
+    ticked, as the repository holds it. The search filters as it is typed, by any part of either
+    name, whatever the script and the case of either: a query and each name are compared in Serbian
+    Latin, lower-cased (`searchKey`, through `SerbianScript.toLatin`), so *hra*, *Хра* and *HRA*
+    find *Храна*, *lj* finds *Љ* and *рок* a name typed in Latin. Accents count, so *nacin* does not
+    find *Начин живота* (*provisional — user decision*: Serbian Latin is often typed without them;
+    keep it, or fold č and ć into c, š into s, ž into z and đ into dj or d). A category the search
+    hides stays ticked, and a search that finds none says so under Све. Each visit starts from the
+    categories played, nothing searched (`CategoriesViewModel.open`, called by the Play screen's
+    tap, so a rotation keeps what is ticked), and reads the list (`GetCategories`) as it is shown: a
+    read that fails says so above the list, with *Пробај опет*, the categories read before staying
+    to tick, and with none read before a spinner shows while it reads. **Играј** sets what is ticked
+    in one `QuestionRepository.setCategories`, waits for it to land, the list and Играј off
+    meanwhile, then goes back to the Play screen, which shows a question from it (*The client*,
+    above); what is played already is not sent again, so the question stays. Back, the arrow or
+    Android's, plays nothing. `CategoriesViewModelTest`, `CategoriesScreenDrawTest` (every state in
+    both themes and every language at 400x900 and 375x599; with 301 categories at 375x599 the search
+    field and Play on screen, nothing cut short, only the lines that fit composed, and the list
+    scrolled to its last), `AppNavigationTest` (Play, Categories and back, played or not),
+    `NavigatorTest`, `TopBarsDrawTest`.
+  - *A known limit:* the game's picker is a screen of its own, searched and lazy (*The Categories
+    screen*), but the Submit form, the moderation app's category filter and each pending card lay out
+    every chip in place, to be scrolled past, which suits tens of categories, not the hundreds
+    planned; a searchable or collapsible picker for them comes with UI polish.
 - **Re-answering** *(built)*: a question can be answered again, whether or not the feed has
   served it again. It earns the point again **every time**, inside its cycle or not (farming is
   bounded by rate limiting, 120 votes a minute per player on average, §8b), and the player may
@@ -1539,23 +1575,29 @@ hand, so the two cannot say different things; and **English** stands beside them
   one has a Cyrillic letter. Translated so far: the Home screen, the game's name (*Шта би радије?*,
   *Would You Rather?*) and *Играј*; the top bars and the icons' names (*Почетна*, *Налог*, *Назад*);
   the switch's name, *Језик*; the Play screen's words, the category picker's included (`PlayStrings`,
-  `Strings.playScreen`); the Account screen, whole, with My questions and the server line; the Auth
-  page, whole; and the Submit screen's form, whole (`Strings.accountScreens`, an `AccountStrings` of
-  the Account screen's words and those of the pages opened from it). **Try again** is one text of
-  `Strings`, `tryAgain`, *Покушај поново* (*provisional*, §8b), under a failure on Play, the Account
-  screen, My questions, the Auth page and the Submit form, so the game says it one way; the Account
-  screens' *Нешто није у реду. Покушај поново.* asks in its words, and `StringsTest` holds the two
-  together. So are *Откажи* (`cancel`), on the Auth page's warning and the Play picker, and
-  *Категорије нису учитане.* (`categoriesUnread`), under the Play picker and the Submit form's
-  categories alike, and the picker's Play is the Home screen's *Играј*.
+  `Strings.playScreen`); the Categories screen (`CategoryStrings`, `Strings.categoriesScreen`:
+  *Претражи категорије*, *Све*, *Изабрано: 3*, *Нема резултата*, *Категорије се нису учитале.*,
+  *Пробај опет*, *Учитавање* for a screen reader, and *Играј*); the Account screen, whole, with My
+  questions and the server line; the Auth page, whole; and the Submit screen's form, whole
+  (`Strings.accountScreens`, an `AccountStrings` of the Account screen's words and those of the pages
+  opened from it). **Try again** is one text of `Strings`, `tryAgain`, *Покушај поново*
+  (*provisional*, §8b), under a failure on Play, the Account screen, My questions, the Auth page and
+  the Submit form, so the game says it one way, but for the Categories screen's own *Пробај опет*;
+  the Account screens' *Нешто није у реду. Покушај поново.* asks in its words, and `StringsTest`
+  holds the two together. So are *Откажи* (`cancel`), on the Auth page's warning and the Play
+  picker, and *Категорије нису учитане.* (`categoriesUnread`), under the Play picker and the Submit
+  form's categories alike, and the picker's Play is the Home screen's *Играј*.
 - **The categories' names** *(built)*: the server's, not `Strings`, since a moderator adds and
-  renames categories without a build (§8d, *Categories*), and named through one function,
-  `categoryName(category, language)` (`io.ntole.wyr.language`): `nameSr` in Serbian Cyrillic,
+  renames categories without a build (§8d, *Categories*): `nameSr` in Serbian Cyrillic,
   `SerbianScript.toLatin(nameSr)` in Serbian Latin, as every Latin text is made, and `nameEn` in
-  English; a category not read yet shows by its id in every language. A screen finds the language
-  shown in `LocalLanguage`, which `WyrStrings` provides beside `LocalStrings`. The Play screen's row
-  and picker and the Submit form's chips call it; `CategoryNamesTest`, `PlayScreenTest`,
-  `PlayScreenDrawTest` and `SubmitScreenDrawTest` hold each language to it.
+  English. A Serbian name a moderator typed in Latin reads as typed in both scripts, since `toLatin`
+  leaves Latin letters alone. `categoryName(category, language)` (`io.ntole.wyr.language`) makes
+  that choice for the Play screen's row and picker and the Submit form's chips, a category not read
+  yet showing by its id in every language, and `Category.nameIn(language)`
+  (`io.ntole.wyr.categories`) makes it again for the Categories screen, until one of the two goes. A
+  screen finds the language shown in `LocalLanguage`, which `WyrStrings` provides beside
+  `LocalStrings`. `CategoryNamesTest`, `CategoryNameTest`, `PlayScreenTest`, `PlayScreenDrawTest`,
+  `SubmitScreenDrawTest` and `CategoriesScreenDrawTest` hold each language to it.
 - **Numbers and symbols** *(built)*: a text holding a number or a name is a template, `{0}` and on,
   filled in by `fill` (`Templates.kt`), so each language puts it where its grammar wants it, and
   `StringsTest` holds every language's copy of a template to the same placeholders. **Points** have

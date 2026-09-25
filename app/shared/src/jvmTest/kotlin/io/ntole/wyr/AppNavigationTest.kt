@@ -2,6 +2,9 @@ package io.ntole.wyr
 
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.ImageComposeScene
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.semantics.getOrNull
+import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.unit.Density
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleOwner
@@ -54,7 +57,6 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
@@ -78,6 +80,7 @@ import kotlin.time.Instant
 @OptIn(ExperimentalCoroutinesApi::class)
 class AppNavigationTest {
     private val game = FakeGame()
+    private val categories = FakeCategories()
     private val storage = InMemoryTokenStorage()
     private val owner = TestOwner()
 
@@ -314,6 +317,41 @@ class AppNavigationTest {
             assertEquals(listOf(CYRILLIC.gameName, CYRILLIC.play), scene.texts())
         }
 
+    @Test
+    fun `the categories open from Play and Play plays what is picked there`() =
+        withApp { scene ->
+            scene.tap(CYRILLIC.play)
+            scene.tap(ALL_PLAYED)
+            assertEquals(listOf(CYRILLIC.back), scene.descriptions().take(1))
+            assertEquals(1, categories.reads, "read as the screen opens")
+
+            scene.tap("Храна")
+            scene.tap("Етика")
+            scene.tap(CYRILLIC.categoriesScreen.play)
+
+            assertEquals(listOf(CYRILLIC.home, CYRILLIC.account), scene.descriptions().take(2))
+            assertEquals(listOf(setOf("FOOD", "ETHICS")), game.categoryChanges)
+            assertEquals(2, game.questionsAsked, "a question from them")
+            assertTrue("Храна, Етика" in scene.texts(), "${scene.texts()}")
+        }
+
+    @Test
+    fun `back from the categories plays nothing picked there`() =
+        withApp { scene ->
+            scene.tap(CYRILLIC.play)
+            scene.tap(ALL_PLAYED)
+            scene.tap("Храна")
+
+            scene.tap(CYRILLIC.back)
+
+            assertEquals(listOf(CYRILLIC.home, CYRILLIC.account), scene.descriptions().take(2))
+            assertEquals(emptyList(), game.categoryChanges)
+            assertEquals(1, game.questionsAsked)
+            scene.tap(ALL_PLAYED)
+            assertEquals(ToggleableState.Off, scene.toggleOf("Храна"), "a visit starts afresh")
+            assertEquals(ToggleableState.On, scene.toggleOf(CYRILLIC.categoriesScreen.all))
+        }
+
     /** The switch changes the screen it is on at once, and every screen after it, and is kept. */
     @Test
     fun `the language switch changes every screen at once and is kept`() =
@@ -364,7 +402,7 @@ class AppNavigationTest {
             single<PlayerRepository> { game }
             single<AccountRepository> { game }
             single<SubmissionRepository> { game }
-            single<CategoryRepository> { ServerCategories }
+            single<CategoryRepository> { categories }
             factory { GetNextQuestion(questions = get(), session = get()) }
             factory { SkipQuestion(questions = get(), session = get()) }
             factory { CastVote(votes = get(), session = get()) }
@@ -378,11 +416,24 @@ class AppNavigationTest {
             factory { GetCategories(categories = get()) }
         }
 
-    /** The server's one category, [FOOD], listed once read: the Submit form's one chip. */
-    private object ServerCategories : CategoryRepository {
+    /** Whether the line showing [text] is ticked. */
+    private fun ImageComposeScene.toggleOf(text: String): ToggleableState? =
+        nodes().single { text in it.texts }.config.getOrNull(SemanticsProperties.ToggleableState)
+
+    /**
+     * The server's categories, [LISTED], none read until a screen reads them: the Categories screen's
+     * lines and the Submit form's chips. Each read counted.
+     */
+    private class FakeCategories : CategoryRepository {
+        var reads = 0
+
         override val categories = MutableStateFlow<List<Category>>(emptyList())
 
-        override suspend fun refresh(): List<Category> = listOf(FOOD).also { categories.value = it }
+        override suspend fun refresh(): List<Category> {
+            reads++
+            categories.value = LISTED
+            return LISTED
+        }
     }
 
     /** A resumed lifecycle and a ViewModel store, as an activity or a window gives the app. */
@@ -429,7 +480,10 @@ class AppNavigationTest {
         /** When set, a submission waits for it before it is stored. */
         var submitWaitsFor: CompletableDeferred<Unit>? = null
 
-        override val categories: StateFlow<Set<String>> = MutableStateFlow(emptySet())
+        /** Every change of the categories played, in order. */
+        val categoryChanges = mutableListOf<Set<String>>()
+
+        override val categories = MutableStateFlow<Set<String>>(emptySet())
 
         override suspend fun next(): Question {
             questionsAsked++
@@ -438,7 +492,10 @@ class AppNavigationTest {
 
         override suspend fun prefetch() = Unit
 
-        override suspend fun setCategories(categories: Set<String>) = Unit
+        override suspend fun setCategories(categories: Set<String>) {
+            categoryChanges += categories
+            this.categories.value = categories
+        }
 
         override suspend fun skip(questionId: String) {
             skipped += questionId
@@ -509,6 +566,11 @@ class AppNavigationTest {
 
         val FOOD = Category(id = "FOOD", nameSr = "Храна", nameEn = "Food")
 
+        val LISTED = listOf(FOOD, Category(id = "ETHICS", nameSr = "Етика", nameEn = "Ethics"))
+
         val QUESTION = Question(id = "q1", optionA = "Fly", optionB = "Swim", categories = setOf(FOOD.id))
+
+        /** The Play screen's categories, All while none is played: a tap on them opens the Categories screen. */
+        val ALL_PLAYED = CYRILLIC.playScreen.allCategories
     }
 }

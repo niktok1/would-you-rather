@@ -211,6 +211,47 @@ the Account screen's lines of answers and likes no longer add up to its points o
 pending or approved, which the Account redesign can show. `App.kt` is untouched: the Play screen's
 two category values changed type under the same names (`PlayedCategories`, `CategoryPicking`).
 
+**On `feat/category-picker`** (from 60b0d7f; not merged, nothing pushed): the category picker is a
+**screen of its own** (the user, 2026-09-25: hundreds of categories, several picked, *All* being
+every one, and a search; CLAUDE.md §8d, *Categories*, *The Categories screen*; §8f), in
+`io.ntole.wyr.categories`. `Screen.Categories` opens from the Play screen's categories under a back
+arrow (`BackTopBar`): a search field that finds a category by any part of either name, in either
+script and any case (`searchKey`, both sides through `SerbianScript.toLatin`, lower-cased); *Све* and
+every category in a `LazyColumn`, as many ticked as wanted, *Све* being none ticked; and at the bottom
+*Изабрано: N* and **Играј**, which sets them in one `setCategories`, waits for it, and goes back.
+Back plays nothing, and each visit starts from what is played (`CategoriesViewModel.open`, called by
+Play's tap, so a rotation keeps the ticks). The list is read as the screen is shown; a failed read
+says so with *Пробај опет*. The Play screen plays the selection whoever sets it (`PlayViewModel`'s
+`init`), and `Category.nameIn(language)` names a category in the language shown. The client alone
+changed. Commits: baf042d (`nameIn`), d1605eb (Play follows the selection), 7df4d5f (the screen).
+
+For the merge with `merge/redesign`:
+- The dialog is still in `io.ntole.wyr.play`, opened by nothing: delete `CategoryPicker`,
+  `CategoryOption`, `pickerNote`, `CategoryPicking`, `PlayViewModel`'s `picking`, `openCategories`,
+  `toggleCategory`, `selectAllCategories`, `applyCategories`, `closeCategories` and its
+  `getCategories`, `PlayScreen`'s picker parameters and their tests (`PlayViewModelTest`'s picker
+  tests, `PlayScreenDrawTest`'s picker draws, `PlayScreenTest`'s `pickerNote`), and bring CLAUDE.md
+  §8d *The Play screen* and *Navigation* up to date: both still describe the dialog, since this
+  branch was to edit §8d *Categories* and §8f only.
+- There the Play row's `onOpenCategories` opens the dialog: wire it as `App.kt` does here,
+  `picker.open()` then `navigator.open(Screen.Categories)`.
+- There `next()` goes on only from the reveal and `load()` loads: the observer in `PlayViewModel`'s
+  `init` must call `load()`, or a selection played from a question not answered yet, or from a
+  failure, would change nothing on screen (its `PlayViewModelTest` cases catch it).
+- `BackTopBar` has `merge/redesign`'s name and signature: keep one. `Strings.categoriesScreen`
+  (`CategoryStrings`) stands beside `PlayStrings`, and *Све* is in both.
+- The Play row and the Submit chips still name categories in Serbian (`categoryName`): move them to
+  `nameIn`.
+
+To ask the user: the search counts accents (*nacin* does not find *Начин живота*; provisional,
+CLAUDE.md §8d *The Categories screen*), or fold č, ć, š, ž and đ; how many are ticked beside Play,
+rather than their names; a query finds a category by either name whatever the language shown (*food*
+finds *Храна* in Cyrillic); and *Све* in bold. Tests: `:app:shared` 240 (180 before; new
+`CategoriesViewModelTest` 37 and `CategoriesScreenDrawTest` 12 in `io.ntole.wyr.categories`, not the
+moderation app's of the same name, `CategoryNameTest` 4; `PlayViewModelTest` 4, `AppNavigationTest`
+2 and `NavigatorTest` 1 more; `AppModuleTest` and `TopBarsDrawTest` check the new ViewModel and bar).
+Not seen on a device: any of it on a phone, the keyboard over the list, and Android's back from it.
+
 ### Verified working
 
 - **`merge/redesign` with `main` merged in** (60b0d7f merged `--no-ff`), on this machine, the
@@ -234,6 +275,20 @@ two category values changed type under the same names (`PlayedCategories`, `Cate
   refusal for points reading the points again); `AppNavigationTest` submits under a category the
   fake server lists. `:server`, `:core` and `:app:adminApp` are main's byte for byte, but for
   `SubmissionRules`' KDoc.
+- **`feat/category-picker`** (baf042d, d1605eb, 7df4d5f), on this machine, at 7df4d5f: the verify
+  job's lists exactly, `ktlintCheck`; `:server:test :core:domain:jvmTest :core:data:jvmTest
+  :core:network:jvmTest :core:network:testAndroidHostTest :app:shared:jvmTest
+  :app:adminApp:jvmTest`; the client compiles, `:app:androidApp:assembleDebug` and both web targets
+  of `:app:shared` and `:app:adminApp` included; and the ios job's Kotlin compiles
+  (`:app:shared:compileKotlinIosSimulatorArm64` and the `compileTestKotlinIosSimulatorArm64` of
+  `:app:shared` and the three `:core` modules), each Gradle's own exit code 0. The untouched
+  modules' suites came from the build cache, and `:app:shared:jvmTest` was run again with `--rerun`.
+  Test counts from `build/test-results`: `:server:test` 346 (344 green, 2 skipped),
+  `:core:domain:jvmTest` 72, `:core:data:jvmTest` 142, `:core:network:jvmTest` 72,
+  `:core:network:testAndroidHostTest` 78, `:app:shared:jvmTest` 240, `:app:adminApp:jvmTest` 106, no
+  failure anywhere. d1605eb and baf042d each passed `:app:shared`'s lint and JVM tests alone. The
+  new Play tests fail with the observer taken out, and with its guard taken out; the fit test fails
+  with a search hint too long for its line.
 - **`feat/server-categories`, the clients** (4ceb426, 4a009e4, a4c05fb, c48aa95), on this machine. At
   the last, the verify job's lists exactly: `ktlintCheck`; `:server:test :core:domain:jvmTest
   :core:data:jvmTest :core:network:jvmTest :core:network:testAndroidHostTest :app:shared:jvmTest
@@ -1168,34 +1223,42 @@ a deploy or a spin-down; the server needs nothing new):
 
 ### Categories on Play
 
-The game's **Play** screen picks the categories played (CLAUDE.md §8d, *The Play screen* and
-*Categories*), in every build, PROD's included. The selection lives in memory for the app's life, so
-a launch plays every category again. The categories are the server's, read each time the picker
-opens, and named in the language shown: Serbian in Cyrillic, the same made Latin in Latinica, and
-the English name in English (§8f).
+The game's **Play** screen plays the categories picked on the **Categories** screen, opened from
+the categories in the row between the cards (CLAUDE.md §8d, *The Play screen*, *Categories*, *The
+Categories screen*), in every build, PROD's included. The selection lives in memory for the app's
+life, so a launch plays every category again. The categories are the server's, read each time the
+Categories screen opens, and named in the language shown: Serbian in Cyrillic, the same made Latin
+in Latinica, and the English name in English (§8f).
 
 **To try it on a phone** (`devDebug`, as for *Skip and Like on Play*; a server from
 `feat/server-categories` or later, which `main` is):
 
-1. `./gradlew :app:androidApp:installDevDebug`, open *WYR Dev*, and tap **Играј**. On the left of the
-   row between the cards: **Све** and a small chevron, which should read as something to tap.
-2. Tap it: a dialog, *Изабери категорије*, of *Све категорије* (ticked) and the server's categories,
-   *Храна* to *Апсурдно* on a fresh server, then *Откажи* and *Играј*. Tick *Храна* and *Етика*:
-   nothing changes behind the dialog yet. **Играј**: the question on screen goes, and the next is
-   filed under either; the row reads *Храна, Етика*. Switch to Latinica on the Account screen: the
-   row reads *Hrana, Etika*, and in English *Food, Ethics*. A category the moderation app adds shows
-   the next time the picker opens. Opened offline, it says *Игра није доступна.* under the ones read
-   before.
-3. Open it again and **Откажи**, or tap outside it: nothing changes. **Играј** with what is already
-   played: the question stays.
-4. Tick every category: the names are cut short on their one line, and the points move right of the
-   middle only as far as the names need; the points, the like count and Skip stay whole. That is the
-   arrangement to judge (CLAUDE.md §8b, *The Play row's arrangement*): keep it, or the points always
-   in the middle and the names cut shorter.
-5. While a vote or a like is in flight the categories do nothing when tapped. *Све категорије*, then
-   **Играј**, goes back to the whole feed. Categories the server has no questions in would show *Нема
-   више питања.* with **Покушај поново** and the categories as the way out; every category has seeds,
-   so only a server without them shows it.
+1. `./gradlew :app:androidApp:installDevDebug`, open *WYR Dev*, and tap **Играј** on Home. On the
+   left of the row between the cards: **Све** and a small chevron, which should read as something
+   to tap.
+2. Tap it: the **Categories** screen, a back arrow over *Претражи категорије*, then *Све* (ticked) and
+   the server's categories, *Храна* to *Апсурдно* on a fresh server, and **Играј** at the bottom. Tick
+   *Храна* and *Етика*: *Све* unticks, and *Изабрано: 2* shows beside **Играј**. Tap it: back on Play,
+   the question on screen goes, and the next is filed under either; the row reads *Храна, Етика*.
+   Try it from a question asked, from a revealed one and from a failure: each time a question from
+   the new selection shows.
+3. Open it again: *Храна* and *Етика* are ticked. Type *eti*, then *ети*, then *ETH*: *Етика* each
+   time. Type *xyz*: *Нема резултата* under *Све*. Tick *Све*: the others untick. The back arrow, or
+   Android's back: nothing changes, and opening it again shows *Храна* and *Етика* ticked. **Играј**
+   with what is already played: the question stays.
+4. On Account pick *Latinica*, then *English*: the list reads *Hrana*, *Način života*..., then
+   *Food*, *Lifestyle*..., and the row *Hrana, Etika*, then *Food, Ethics*.
+5. Offline, opening it says *Категорије се нису учитале.* with *Пробај опет* over the categories read
+   before. A category the moderation app adds shows the next time it opens. With the keyboard up,
+   **Играј** should stay above it.
+6. Tick every category: the row's names are cut short on their one line, and the points move right
+   of the middle only as far as the names need; the points, the like count and Skip stay whole. That
+   is the arrangement to judge (CLAUDE.md §8b, *The Play row's arrangement*): keep it, or the points
+   always in the middle and the names cut shorter.
+7. While a vote or a like is in flight the categories do nothing when tapped. *Све*, then **Играј**,
+   goes back to the whole feed. Categories the server has no questions in would show *Нема више
+   питања.* with **Покушај поново** and the categories as the way out; every category has seeds, so
+   only a server without them shows it.
 
 ### Moderating
 

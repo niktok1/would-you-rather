@@ -3,6 +3,7 @@ package io.ntole.wyr.navigation
 import androidx.compose.runtime.saveable.SaverScope
 import io.ntole.wyr.navigation.Screen.Account
 import io.ntole.wyr.navigation.Screen.Auth
+import io.ntole.wyr.navigation.Screen.Categories
 import io.ntole.wyr.navigation.Screen.Home
 import io.ntole.wyr.navigation.Screen.Play
 import io.ntole.wyr.navigation.Screen.Submit
@@ -101,6 +102,17 @@ class NavigatorTest {
         assertEquals(Account, navigator.current)
     }
 
+    @Test
+    fun `the categories open over Play and back returns to Play`() {
+        val navigator = navigatorAt(Play)
+
+        navigator.open(Categories)
+        assertEquals(listOf(Home, Play, Categories), navigator.screens)
+
+        assertTrue(navigator.back())
+        assertEquals(listOf(Home, Play), navigator.screens)
+    }
+
     /** No screen is on the stack twice, so no back ever shows the one it leaves. */
     @Test
     fun `a screen opened while it is on the stack is gone back to`() {
@@ -129,6 +141,7 @@ class NavigatorTest {
             listOf(Home, Account, Submit),
             listOf(Home, Play, Account, Submit),
             listOf(Home, Play, Account, Auth),
+            listOf(Home, Play, Categories),
         ).forEach { screens ->
             val saved = save(Navigator(screens))
 
