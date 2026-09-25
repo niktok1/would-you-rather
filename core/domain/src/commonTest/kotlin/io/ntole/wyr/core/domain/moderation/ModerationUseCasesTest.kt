@@ -55,7 +55,7 @@ class ModerationUseCasesTest {
         }
 
     @Test
-    fun `every question is listed a page at a time with the token, the filter and the cursor`() =
+    fun `every question is listed a page at a time with the token and the filter and the cursor`() =
         runTest {
             val filter = QuestionFilter(setOf(SubmissionStatus.RETIRED), setOf(Category.FOOD))
 

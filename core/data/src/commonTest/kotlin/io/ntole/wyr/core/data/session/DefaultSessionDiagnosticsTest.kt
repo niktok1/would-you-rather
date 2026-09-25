@@ -1,8 +1,13 @@
 package io.ntole.wyr.core.data.session
 
+import io.ntole.wyr.core.data.FlakySecretStorage
 import io.ntole.wyr.core.data.session
 import io.ntole.wyr.core.data.storeHolding
+import io.ntole.wyr.core.domain.session.RecoverySecretStatus
 import io.ntole.wyr.core.domain.session.SessionInfo
+import io.ntole.wyr.core.network.InMemoryTokenStorage
+import io.ntole.wyr.core.network.RecoverySecretStore
+import io.ntole.wyr.core.network.environment.WyrEnvironment
 import kotlinx.coroutines.test.runTest
 import kotlin.io.encoding.Base64
 import kotlin.test.Test
@@ -66,6 +71,28 @@ class DefaultSessionDiagnosticsTest {
     fun `info is null with no session stored`() =
         runTest {
             assertNull(DefaultSessionDiagnostics(storeHolding(null)).info())
+        }
+
+    @Test
+    fun `the recovery secret is reported as kept or none or unreadable and never as itself`() =
+        runTest {
+            val secrets = FlakySecretStorage()
+            val recovery = RecoverySecretStore(secrets, InMemoryTokenStorage(), WyrEnvironment.DEV)
+            val diagnostics = DefaultSessionDiagnostics(storeHolding(null), recovery)
+
+            assertEquals(RecoverySecretStatus.NONE, diagnostics.recoverySecret())
+            recovery.write("secret")
+            assertEquals(RecoverySecretStatus.KEPT, diagnostics.recoverySecret())
+            secrets.readFails = true
+            assertEquals(RecoverySecretStatus.UNREADABLE, diagnostics.recoverySecret())
+        }
+
+    @Test
+    fun `a platform that keeps no recovery secret says so`() =
+        runTest {
+            val guestOnly = DefaultSessionDiagnostics(storeHolding(null))
+
+            assertEquals(RecoverySecretStatus.NOT_KEPT_HERE, guestOnly.recoverySecret())
         }
 
     private companion object {

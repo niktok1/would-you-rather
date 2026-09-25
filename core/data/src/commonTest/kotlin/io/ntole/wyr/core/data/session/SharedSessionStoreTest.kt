@@ -118,7 +118,7 @@ class SharedSessionStoreTest {
      * with which two refreshes at once both go through.
      */
     @Test
-    fun `when the server lets both tabs' refreshes through, the store ends on the player's current token`() =
+    fun `the store ends on the player's current token when the server lets both tabs' refreshes through`() =
         runTest {
             val server = GraceServer()
             val serverLock = Mutex()

@@ -12,10 +12,12 @@ import java.util.Date
 /**
  * Issues and validates player credentials.
  *
- * Two credentials with different jobs:
+ * Three credentials with different jobs:
  *  - a short-lived signed **access token**, stateless, checked on every request;
  *  - a long-lived opaque **refresh token**, of which only a SHA-256 hash is stored, so a
- *    database leak does not hand out working sessions.
+ *    database leak does not hand out working sessions;
+ *  - a long-lived opaque **recovery secret**, stored the same way, which opens a new session for its
+ *    player and never rotates (CLAUDE.md §8a, *Recovery*).
  *
  * Refresh tokens are rotated on every use: a refreshed session retires the token that produced it,
  * which works once more, until the next rotation displaces it (the grace, CLAUDE.md §8a, which
@@ -63,12 +65,15 @@ class TokenService(
             .withExpiresAt(Date(now + config.accessTokenTtlSeconds * 1_000L))
             .sign(algorithm)
 
-    /** A fresh opaque refresh token, plus the hash to store alongside the player row. */
-    fun issueRefreshToken(): RefreshToken {
-        val bytes = ByteArray(REFRESH_TOKEN_BYTES).also(secureRandom::nextBytes)
-        val token = Base64.getUrlEncoder().withoutPadding().encodeToString(bytes)
-        return RefreshToken(value = token, hash = hash(token))
-    }
+    /** A fresh opaque refresh token, plus the hash to store in its session's row. */
+    fun issueRefreshToken(): Opaque = opaque()
+
+    /**
+     * A fresh recovery secret (CLAUDE.md §8a, *Recovery*), plus the hash to store in its player's row.
+     * Made as a refresh token is, 256 random bits, and kept as one is, by its hash alone, so a database
+     * leak hands out no recovery either. It differs only in never rotating.
+     */
+    fun issueRecoverySecret(): Opaque = opaque()
 
     fun hash(token: String): String =
         MessageDigest
@@ -76,14 +81,21 @@ class TokenService(
             .digest(token.toByteArray())
             .joinToString("") { byte -> "%02x".format(byte) }
 
-    data class RefreshToken(
+    private fun opaque(): Opaque {
+        val bytes = ByteArray(OPAQUE_BYTES).also(secureRandom::nextBytes)
+        val value = Base64.getUrlEncoder().withoutPadding().encodeToString(bytes)
+        return Opaque(value = value, hash = hash(value))
+    }
+
+    /** An opaque credential as issued, and the SHA-256 of it, the only part the server keeps. */
+    data class Opaque(
         val value: String,
         val hash: String,
     )
 
     companion object {
         const val CLAIM_PLAYER_ID: String = "playerId"
-        private const val REFRESH_TOKEN_BYTES = 32
+        private const val OPAQUE_BYTES = 32
         private val secureRandom = SecureRandom()
     }
 }

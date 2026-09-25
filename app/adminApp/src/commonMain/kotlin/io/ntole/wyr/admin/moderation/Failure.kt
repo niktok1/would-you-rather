@@ -80,6 +80,7 @@ private fun describe(
 
         // None of these is an answer an admin route gives.
         DomainError.UNAUTHORIZED,
+        DomainError.INVALID_RECOVERY_SECRET,
         DomainError.ALREADY_VOTED,
         DomainError.INVALID_SUBMISSION,
         DomainError.SUBMISSION_LIMIT,

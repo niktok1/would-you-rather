@@ -255,7 +255,7 @@ class DefaultModerationRepositoryTest {
         }
 
     @Test
-    fun `every question is read a page at a time, the filter by its wire names and the cursor as given`() =
+    fun `every question is read a page at a time with the filter by its wire names and the cursor as given`() =
         runTest {
             val filter =
                 QuestionFilter(

@@ -128,7 +128,7 @@ class ModerationApiTest {
         }
 
     @Test
-    fun `the question list is asked for with every filter value, the cursor, the limit and the admin token`() =
+    fun `the question list is asked for with every filter value and the cursor and the limit and the admin token`() =
         runTest {
             val engine = MockEngine { respondOk(PAGE) }
 

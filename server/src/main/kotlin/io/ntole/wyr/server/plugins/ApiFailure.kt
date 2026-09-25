@@ -57,5 +57,13 @@ class ApiFailure(
                 ErrorCode.INVALID_REFRESH_TOKEN,
                 "refresh token unknown, expired, or already rotated",
             )
+
+        /** Alike for every secret no player holds, never issued or replaced since: nothing tells them apart. */
+        fun invalidRecoverySecret() =
+            ApiFailure(
+                HttpStatusCode.Unauthorized,
+                ErrorCode.INVALID_RECOVERY_SECRET,
+                "recovery secret unknown or replaced",
+            )
     }
 }

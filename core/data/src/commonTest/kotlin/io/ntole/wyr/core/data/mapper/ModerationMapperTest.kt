@@ -88,7 +88,7 @@ class ModerationMapperTest {
     }
 
     @Test
-    fun `a question with a status this build cannot name lists as OTHER, and one never reviewed has no times`() {
+    fun `a question with a status this build cannot name lists as OTHER and one never reviewed has no times`() {
         val listed =
             AdminQuestionDto(
                 id = "seed-1",
@@ -105,7 +105,7 @@ class ModerationMapperTest {
     }
 
     @Test
-    fun `a page's cursor goes back as it came, and the last page has none`() {
+    fun `a page's cursor goes back as it came and the last page has none`() {
         val question = AdminQuestionDto("q1", "Fly", "Swim", submittedAt = 1L, tally = VoteTallyDto(0, 0))
 
         assertEquals(

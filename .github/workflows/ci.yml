@@ -185,11 +185,15 @@ jobs:
           restore-keys: |
             konan-${{ runner.os }}-
 
+      # The :core modules' common tests run on the JVM and the Android host; compiling them here too
+      # catches what only Kotlin/Native refuses, such as a comma in a test's name.
       - name: Link framework and run simulator tests
         run: |
           ./gradlew --no-daemon \
             :app:shared:linkDebugFrameworkIosSimulatorArm64 \
-            :app:shared:iosSimulatorArm64Test
+            :app:shared:iosSimulatorArm64Test \
+            :core:network:compileTestKotlinIosSimulatorArm64 \
+            :core:data:compileTestKotlinIosSimulatorArm64
 
       # The Swift app on top of the framework, built through the project's own "Compile Kotlin
       # Framework" phase (embedAndSignAppleFrameworkForXcode). -target rather than -scheme because

@@ -13,8 +13,37 @@ public object WyrApi {
     public object Paths {
         public const val HEALTH: String = "/health"
 
+        /**
+         * POST, with no body: mints a guest player with a first session, answered with a
+         * [io.ntole.wyr.core.auth.GuestSessionDto], which a client that knows no recovery reads as a
+         * [io.ntole.wyr.core.auth.SessionDto]. The one answer that carries the player's recovery secret
+         * (CLAUDE.md §8a, *Recovery*). Limited per client address.
+         */
         public const val AUTH_GUEST: String = "/$VERSION/auth/guest"
         public const val AUTH_REFRESH: String = "/$VERSION/auth/refresh"
+
+        /**
+         * POST: opens a new session for the player whose recovery secret a
+         * [io.ntole.wyr.core.auth.RecoverRequest] carries (CLAUDE.md §8a, *Recovery*), answered with
+         * that session alone, as a [io.ntole.wyr.core.auth.SessionDto]: every other session of the
+         * player lives on untouched. Unauthenticated, as [AUTH_REFRESH] is. The secret does not rotate,
+         * so it recovers again, as often as it is presented, until the player replaces it
+         * ([MY_RECOVERY_SECRET]). A secret no player holds is 401
+         * [io.ntole.wyr.core.error.ErrorCode.INVALID_RECOVERY_SECRET], whatever else is true of it, and
+         * a malformed body or a blank secret is 400
+         * [io.ntole.wyr.core.error.ErrorCode.VALIDATION_FAILED]. Limited per client address.
+         */
+        public const val AUTH_RECOVER: String = "/$VERSION/auth/recover"
+
+        /**
+         * POST, with no body: issues the player the bearer token names a new recovery secret, as a
+         * [io.ntole.wyr.core.auth.RecoverySecretDto], and kills the one before it (CLAUDE.md §8a,
+         * *Recovery*). For a guest minted before recovery, who has none, and for a client that could
+         * not keep the one it was given. Requires a session: 401
+         * [io.ntole.wyr.core.error.ErrorCode.UNAUTHORIZED] without one, or for a player the server no
+         * longer has. Limited per player.
+         */
+        public const val MY_RECOVERY_SECRET: String = "/$VERSION/me/recovery-secret"
 
         /**
          * GET: the next batch of questions for the player the bearer token names. Requires a

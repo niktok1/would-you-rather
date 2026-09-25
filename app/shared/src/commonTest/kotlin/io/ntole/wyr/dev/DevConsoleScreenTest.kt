@@ -2,6 +2,7 @@ package io.ntole.wyr.dev
 
 import io.ntole.wyr.core.domain.question.Category
 import io.ntole.wyr.core.domain.question.Question
+import io.ntole.wyr.core.domain.session.RecoverySecretStatus
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
@@ -32,5 +33,13 @@ class DevConsoleScreenTest {
     @Test
     fun `a feed filtered to several categories names each of them`() {
         assertEquals("FOOD, RANDOM", feedFilterOf(setOf(Category.FOOD, Category.RANDOM)))
+    }
+
+    @Test
+    fun `the header says whether a recovery secret is kept and on desktop and web that none is kept there`() {
+        assertEquals(
+            listOf("kept", "none", "unreadable", "not kept on this platform", "unknown"),
+            (RecoverySecretStatus.entries + null).map(::recoverySecretOf),
+        )
     }
 }

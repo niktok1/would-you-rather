@@ -41,6 +41,16 @@ equivalent exists: HikariCP (connection pooling), the PostgreSQL JDBC driver, `j
 2026-09-24), with the `flyway-database-postgresql` module Flyway needs to run on PostgreSQL. H2 is
 a fifth, used only as the local development database.
 
+One client library is an exception of the same kind: Google Play services' Block Store
+(`play-services-auth-blockstore`, *approved 2026-09-25*), Android only, where a phone keeps the
+recovery secret (§8a, *Recovery*). Nothing multiplatform does its job: it is the store Android keeps
+across a reinstall and hands on to the phone that replaces this one, by device-to-device transfer and,
+where the backup is end-to-end encrypted, from the cloud. It stays in Android source sets and never
+reaches common code: `:core:network`'s Android source set alone depends on it, for
+`AndroidRecoverySecretStorage`, behind a seam (`BlockStore`) that keeps Play services out of its host
+tests. Its `Task`s are awaited by hand rather than through `kotlinx-coroutines-play-services`, which
+would be one more dependency for a few lines.
+
 ---
 
 ## 3. Module structure
@@ -121,6 +131,7 @@ mechanism; this table is the rationale.
 | Serialization      | kotlinx.serialization  | Backbone of :core                                |
 | Async              | Coroutines + Flow      | Official                                         |
 | Local cache        | SQLDelight             | **Declared, not yet wired — see below**          |
+| Recovery secret    | Block Store            | Android only (play-services-auth-blockstore), §2 |
 | Server persistence | Exposed                | JetBrains Kotlin SQL framework, pairs with Ktor  |
 | Schema migrations  | Flyway                 | Server-only Java exception (§2); runs at boot    |
 | Schema diffing     | exposed-migration-jdbc | JetBrains; test scope only (drift test, drafts)  |
@@ -154,8 +165,8 @@ failing:
 - Any other read-then-write is a compare-and-set: the `UPDATE`'s `WHERE` repeats what the read
   relied on, and 0 rows updated means another transaction won (`PlayerStore.startNextCycle`,
   `ModerationStore.decide`, and a retirement or restoration, `ModerationStore.move`). Where the
-  `WHERE` can hold the whole check, nothing need be read first (`PlayerStore.rotateRefreshToken`,
-  whose second racer re-checks it against the first's commit).
+  `WHERE` can hold the whole check, nothing need be read first (`SessionStore.rotate`, whose second
+  racer re-checks it against the first's commit).
   Or the read takes the row lock (`SELECT ... FOR UPDATE`), so a concurrent writer waits and then
   reads the row as committed (`VoteStore.cast`, which branches on more than one outcome, and
   `SkipStore.skip`). A write that rests on a row it does not write locks that row the same way:
@@ -369,22 +380,23 @@ This project must never be attributed to any employer identity.
 auth SDK, satisfying §2.
 
 - `POST /v1/auth/guest` mints the player server-side and returns a signed access JWT plus an
-  opaque refresh token. Nothing is asked of the player.
+  opaque refresh token, and the player's recovery secret (*Recovery*, below). Nothing is asked of the
+  player.
 - Identity is **server-issued**, which is the whole point: a client-supplied device id would be
   forgeable and would let one device stuff the ballot.
 - The access token travels in `Authorization: Bearer`, never in a request body, so `VoteRequest`
   does not change when auth evolves.
 - Only a SHA-256 hash of the refresh token is stored. Refresh tokens **rotate on every use**, with a
   **grace window** (*decided 2026-09-24*) that has **no time bound** (*decided 2026-09-24*, replacing
-  the 10 minutes built first). The token a rotation displaces is kept as the player's previous one,
-  with the expiry it had and when it was displaced (V2), and a refresh presenting it still succeeds
-  until the next rotation displaces it, never past the token's own expiry. `REFRESH_GRACE_SECONDS`
-  can bound it in time: unset, the default, sets no bound; 0 turns the grace off; any other number of
-  seconds accepts the previous token only that long after the rotation that displaced it. It rotates
-  by the same rule, so the token it presented is dead afterwards and the one it displaced becomes the
-  previous one; a refresh with the current token displaces the previous one for good the same way. A
-  token therefore works twice at most, once while current and once more as the previous one; anything
-  else is 401 `INVALID_REFRESH_TOKEN`.
+  the 10 minutes built first). The token a rotation displaces is kept as its session's previous one
+  (*Sessions*, below), with the expiry it had and when it was displaced, and a refresh presenting it
+  still succeeds until the next rotation displaces it, never past the token's own expiry.
+  `REFRESH_GRACE_SECONDS` can bound it in time: unset, the default, sets no bound; 0 turns the grace
+  off; any other number of seconds accepts the previous token only that long after the rotation that
+  displaced it. It rotates by the same rule, so the token it presented is dead afterwards and the one
+  it displaced becomes the previous one; a refresh with the current token displaces the previous one
+  for good the same way. A token therefore works twice at most, once while current and once more as
+  the previous one; anything else is 401 `INVALID_REFRESH_TOKEN`.
   - *Why:* a refresh the server ran whose answer never arrived (a dropped connection, a Render cold
     start, the client's 5-minute refresh timeout, the app killed mid-refresh) leaves the client with
     only the token the server rotated out. Without the grace its next refresh is refused and session
@@ -405,28 +417,171 @@ auth SDK, satisfying §2.
     and a bound under half the access token's 15 minutes always would. Accepted for guest accounts,
     whose only credential this is (the user's decision, 2026-09-24); account linking changes the
     picture. `ServerConfig.refreshGraceSeconds` says so.
-  - *The rotation* is one `UPDATE` whose `WHERE` is the whole check, nothing read before it
-    (`PlayerStore.rotateRefreshToken`, §4): the presented hash as the current one and unexpired,
+  - *The rotation* is one `UPDATE` of the session whose `WHERE` is the whole check, nothing read
+    before it (`SessionStore.rotate`, §4): the presented hash as the current one and unexpired,
     or as the previous one, unexpired and, under a bound, displaced within it. Of two refreshes racing
     with the current token, the second waits on the first's row lock, finds the token the previous one
     by then and goes through too, the first's new token becoming the previous one; of two racing with
-    the previous token, exactly one goes through. `PlayerStoreTest` races both and pins every rule.
+    the previous token, exactly one goes through. `SessionStoreTest` races both and pins every rule.
     It stamps every rotation, bound or not: a bound set later reads the stamp, and so does a rollback
     to a build from before this rule, whose unset `REFRESH_GRACE_SECONDS` means 10 minutes. A build
-    from before V2 (any before `08397e4`) rotates without touching the previous token's columns, so
-    after a rollback to one they can name a token displaced several rotations back, which with no
-    bound works again once this rule is back, until that player's next refresh or its own expiry. A
-    database V2 has only just given those columns holds nothing in them, so the first deploy of V2
-    needs nothing more. But before rolling forward again after such a rollback, while the old build
-    still runs, clear them: `UPDATE players SET previous_refresh_token_hash = NULL,
-    previous_refresh_token_expires_at = NULL, previous_refresh_token_rotated_at = NULL`. That costs
-    only a lost answer from before the rollback whose player has not been back since. A bound set for
-    the roll-forward is no substitute: a stale token not yet displaced works again once it is unset.
-- `POST /v1/auth/link` does not exist yet. It is the intended next step and is what will make an
-  account survive reinstall and sync across devices.
+    from before V2 (any before `08397e4`) rotates the players row, the mirror (*Sessions*), without
+    touching the previous token's columns, so after a rollback to one they can name a token displaced
+    several rotations back, which with no bound works again once this rule is back, until that
+    player's next refresh or its own expiry. A database V2 has only just given those columns holds
+    nothing in them, so the first deploy of V2 needs nothing more. But before rolling forward again
+    after such a rollback, while the old build still runs, clear them: `UPDATE players SET
+    previous_refresh_token_hash = NULL, previous_refresh_token_expires_at = NULL,
+    previous_refresh_token_rotated_at = NULL`. That costs only a lost answer from before the rollback
+    whose player has not been back since. A bound set for the roll-forward is no substitute: a stale
+    token not yet displaced works again once it is unset.
+- **Sessions** (*decided 2026-09-25*): a player's refresh tokens live in `sessions`, **one
+  refresh-token family per device**, each rotating on its own row by the rules above, so a refresh on
+  one device never touches another's tokens, and nothing caps how many a player has. A mint opens a
+  player's first session and each recovery another (`SessionStore.open`, *Recovery*, below). V4
+  opened one for every player who held a refresh token, under the player's own id and with their
+  previous token and its grace, so every client kept refreshing across the deploy. No row is deleted:
+  an expired session is dead where it lies.
+  - *The mirror.* A build from before sessions (the V2 and V3 builds among them) looks a refresh token
+    up in the players row alone, so the players row keeps its refresh-token columns as a copy of the
+    session opened or rotated last, previous token and stamp included, marked as this build's copy
+    (`players.mirrored_refresh_token_hash`). Every open and rotation writes it, under the player's row
+    lock, which a rotation takes after its session's: every write here that locks a session it did not
+    insert itself locks it before its player. It costs a read and an `UPDATE` per refresh. The columns
+    stay until no rollback target predates sessions; dropping them then is a migration of its own
+    (§8b, *Rollbacks*).
+  - *A rollback* to such a build refreshes, for each player, the device that opened or refreshed a
+    session last, with the grace this build gave its token, and refuses every other device, whose
+    client throws the session away and opens another. A phone that keeps a recovery secret recovers
+    before it mints, and the build before answers the recovery with a bare 404, which mints nothing
+    (*Recovery*): so that phone fails every call until the roll-forward, and so does a phone first
+    installed meanwhile with a restored secret. Desktop, web and a phone with no secret replace their
+    player with a fresh guest. The build before never reads or writes the recovery secret, so once
+    rolled forward a phone that kept its secret recovers its player. The guests it mints have no
+    session, no mark and no secret.
+  - *Rolling forward* needs nothing by hand. A mirror whose current token is not its mark was moved
+    by a build without sessions: during a rollback, or while the build before still serves as a
+    deploy's new instance starts, which the first deploy of V4 goes through too. A refresh no
+    session takes is tried there by the same rules and, spent, folded back into the session the mark
+    names, the device the build without sessions went on refreshing, or into a new session for a
+    guest minted there (`SessionStore.foldMirror`). The mark is read first so that session is locked
+    before the player, and the player's update is a compare-and-set on it (§4). Two refreshes racing
+    with such a token behave as two with a session's token. Until the fold, the session the mark
+    names spends none of its own tokens (`notMovedOnWithoutSessions`, in the rotation's `UPDATE`):
+    the device went on with the mirror's, and by that build's rules the session's were displaced, so
+    a stale copy of one stays dead rather than work a third time and rewrite the mirror over the
+    device's token. A device whose answer from that build was lost still holds the session's current
+    token, which is the mirror's previous one, and the fold spends it there, under the grace this
+    build gives it. `SessionStoreTest` pins the mirror, a build without sessions refreshing from it,
+    both folds and their races.
+  - *What a rollback still costs:* every device but the one used last, as above: a phone keeping a
+    secret cannot play until the roll-forward, and any other device loses its player to a fresh
+    guest. And, for a player with more than one session, the chain a build without sessions moved in
+    the mirror, if another of their sessions refreshes first once rolled forward, since a session's
+    rotation always rewrites the mirror: that device is refused, and a phone recovers with its
+    secret, any other device minting a guest. A rollback past V2 still needs the mirror's previous
+    token cleared before rolling forward (*The rotation*, above).
+- **Recovery** (*decided 2026-09-25*, phase 1 of making a guest durable, §8b *Provider linking*): a
+  guest's account survives a reinstall and a phone restore with no click. The mint answers a
+  `GuestSessionDto`, the session's fields with the player's **recovery secret** beside them: 256
+  random bits in base64url, kept as a refresh token is, by its SHA-256 alone
+  (`players.recovery_secret_hash`, unique), and carried by no other answer, since a refresh and a
+  recovery answer a plain `SessionDto`. A client from before recovery reads the mint as the session
+  it always did.
+  - `POST /v1/auth/recover` with a `RecoverRequest` opens a new session for the secret's player
+    (`SessionStore.recover`), answered with that `SessionDto` alone; every other session of the player
+    lives on. A recovery does **not rotate the secret**, since the copy a restored phone holds may lag:
+    it recovers again as often as it is presented, and **whoever holds it owns the account until it is
+    replaced** (the user's decision). A secret no player holds, never issued or replaced since, is 401
+    `INVALID_RECOVERY_SECRET`, alike for every one and never 404; a malformed body or a blank secret is
+    400 `VALIDATION_FAILED`. It is looked up by its hash through the unique index, as a refresh token is.
+  - `POST /v1/me/recovery-secret` (bearer) issues the session player a new one, as a
+    `RecoverySecretDto`, and kills the one before (`PlayerStore.replaceRecoverySecret`); the sessions
+    that one opened live on. For a guest from before V4, who has none, and for a client that could not
+    keep the one it was given. 401 `UNAUTHORIZED` without a session or for a player the server no
+    longer has.
+  - Both are rate-limited (§8b), and neither the secret nor its hash is ever logged: the refusal's
+    line names the limit and a client address, and `RateLimitTest` scans a whole flow's log for both.
+    Nor does a `toString` show it: the three DTOs that carry it say only whether it is there
+    (`WyrJsonTest`). Each environment's server keeps secrets of its own (§8e): a DEV secret recovers
+    nobody on PROD, and DEV's in-memory database forgets every secret at each restart, where a client
+    meets `INVALID_RECOVERY_SECRET`. `RecoveryFlowTest` pins the routes and `SessionStoreTest` the
+    store.
+  - *The client* (`DefaultSessionRepository`, built): a device with no session recovers with the
+    secret it keeps before it mints a guest, and so does a dead session before `withSessionRecovery`
+    opens another in its place, which makes a dead session cost nothing where a secret is kept. A
+    secret the server does not know (`INVALID_RECOVERY_SECRET`: DEV after a restart, say) is dropped,
+    and a guest minted, whose secret is kept before its session. Any other failure of a recovery mints
+    nothing and fails the call, and the next call tries again: offline, a 5xx, a 429, or the 404 of a
+    build from before recovery, since a mint would keep its own secret in place of the one that
+    recovers the account. A store that cannot be read counts as empty there, so a phone without Play
+    services plays on as a guest; but that guest's secret is not kept, since the store may hold one
+    it failed to read only for a moment, as a restored phone's may while Play services starts, and
+    the guest's would replace it for good. A later launch asks for the guest's secret only if the
+    store then reads as empty (below).
+  - *A session with no secret kept* (a guest from before recovery, a secret the store could not
+    keep, or a guest minted while it could not be read) asks `POST /v1/me/recovery-secret` for one,
+    once a launch, and only while the store holds none and can be read: a new secret kills the one
+    before, wherever it is kept. So a secret held for another player is left alone, since on iOS it
+    is the account this person's other iPhones share; this device's guest then stays bound to it,
+    and recovers as that account should its session die. A request that fails is made again at the
+    next launch, whatever failed it: offline, a 5xx, a 429, or the bare 404 of a server without
+    recovery, as production answers until it is promoted, so a guest from before V4 gets its secret
+    once the server can give one. A secret the store could not keep counts, and after three
+    (`MAX_FAILED_SECRET_REQUESTS`) the install asks no more for that player. The count is kept
+    beside the session, in the token storage (`RecoverySecretStore`), so it goes where the session
+    goes and never with the secret, and a reinstall starts it again.
+  - `clear()`, the console's *New guest*, drops the secret with the session, since it would otherwise
+    recover the player being cleared away, and fails as NETWORK when it cannot, unless the store
+    cannot read the secret back either, as without Play services, where nothing could recover with
+    it. `RecoverySecretFlowTest` pins every case.
+  - *The console* shows whether a secret is kept (`SessionDiagnostics.recoverySecret`: kept, none,
+    unreadable, or not kept on this platform), never the secret, and *Reinstall (keep secret)* does
+    what deleting the app and installing it again does: `clearKeepingSecret()` drops the session and
+    the count of failed requests, keeps the secret, and the next session opened recovers the player.
+    Its log line ends `recovered` when the player came back, and `was=` the one before when not, as on
+    desktop and web, where it is *New guest*.
+  - *Where it is kept* (*decided 2026-09-25*), bound in each platform's `platformModule`:
+    - *Android* (built): Block Store (§2, `AndroidRecoverySecretStorage` in `:core:network`), which
+      keeps its entries across the app being uninstalled and installed again only while Google's
+      Backup services are on (Settings > Google > Backup, per Google's Block Store guide), and moves
+      them to a new phone set up from this one by device-to-device transfer. Its cloud copy is asked
+      for only while the backup is end-to-end encrypted (`isEndToEndEncryptionAvailable`; a phone
+      that cannot say counts as not), so a phone restored from any other cloud backup mints a guest.
+      Block Store decides that at each store, so a secret stored while the backup was not encrypted
+      (before a screen lock was set, say) is stored again into it by the first launch that finds it
+      encrypted (`backUp`), and never stored again out of it, which would delete the cloud's copy at
+      the next sync. Without Play services every call throws, and the phone plays as a guest. The
+      session store stays out of both the cloud backup and a device-to-device transfer, so a new
+      phone gets only the secret, and recovers with it into a session of its own:
+      `data_extraction_rules.xml` (Android 12 and later) and `backup_rules.xml`
+      (`fullBackupContent`, Android 11 and earlier, for both) in `:app:androidApp` exclude
+      `AndroidTokenStorage`'s `wyr.auth.xml`, which holds the session and the count of failed
+      requests for a secret. `allowBackup` stays on, with nothing else in it yet.
+    - *iOS* (built, compiled only: §9): a generic-password Keychain item per environment
+      (`IosRecoverySecretStorage` in `:core:network`; service `io.ntole.wyr.recovery`, the key as its
+      account), synced through iCloud Keychain (`kSecAttrSynchronizable`), so one person's iPhones
+      share one account, each with a session of its own. It is readable once the phone has been
+      unlocked after starting (`kSecAttrAccessibleAfterFirstUnlock`, never a `ThisDeviceOnly` class,
+      which would not sync), and the Keychain keeps it when the app is deleted. No test runs it: the
+      simulator's test binary is no signed app, so the app on a phone is the first to call it. The
+      one item holds one secret, whoever's: an iPhone that opens the app before the item has synced
+      to it (a new iPhone opened before iCloud Keychain catches up, or iCloud Keychain off and turned
+      on later) reads none, mints a guest and writes the guest's secret into the same item, and once
+      the two meet iCloud Keychain keeps one of them on every iPhone. Should it keep the guest's, the
+      other iPhone's player has no secret left anywhere: that iPhone plays on as its player, holding
+      the guest's secret, which it never replaces since the store holds one, and a reinstall or a
+      dead session there turns it into the guest. An item per player would avoid it, a change of
+      design not yet made.
+    - *Desktop and web* keep none: they bind no `RecoverySecretStorage` (`dataModule`), so they mint as
+      before and never ask for a secret.
+- Provider linking (Play Games Services on Android, Game Center on iOS) is phase 2 (§8b, *Provider
+  linking*); recovery alone already carries a phone's guest across a reinstall.
 - On the client, `SessionStore` is the only copy of the credentials: Ktor's bearer cache is off
   (`cacheTokens = false`), so a session change applies to the very next request. A dead session
-  is replaced through `withSessionRecovery` in `:core:data`, which mints at most one guest for it.
+  is replaced through `withSessionRecovery` in `:core:data`, which opens at most one session for it:
+  its own player's, through the recovery secret, where the device keeps one (*Recovery*), and else a
+  fresh guest's.
 - *Clients sharing one store* (browser tabs, desktop instances) can both refresh one token, and the
   server lets both through, so the store may end up holding the displaced token of the two. The
   server takes that one once more, but a previous token survives only one refresh: the clients share
@@ -461,17 +616,35 @@ auth SDK, satisfying §2.
   cancelled meanwhile. A write that cannot be made durable fails the call as `NETWORK`: the data
   layer writes the session through `runApi`, so no bare storage exception reaches a ViewModel.
 
-**Known limitation, by design for now:** a guest account is bound to one device's storage. Lose
-the device or clear storage and the account — and its points — are gone. Token storage is also
-ordinary preference storage (SharedPreferences / NSUserDefaults / JVM Preferences /
-localStorage), not Keychain or EncryptedSharedPreferences. Both must be addressed before real
-accounts exist.
+**Known limitation, by design for now:** a guest account lives only while some store holds a live
+session of it or its recovery secret. An Android or iOS guest survives a reinstall and a move to a
+new phone through the secret (*Recovery*), none of which has yet run on a phone (NEXT-SESSION.md);
+one whose every copy of the secret is lost is gone all the same, as is an Android guest reinstalled
+with Google's Backup services off, where Block Store keeps nothing across it. A phone whose secret
+store could not be read when the app first started there plays as a new guest, and recovers the
+player only once that guest's session dies or the app is installed again, which leaves the guest
+behind. An iPhone that mints before the Keychain item has synced to it can take another iPhone's
+secret from it for good (*Where it is kept*, iOS). A desktop or web guest stays bound to its one
+storage: lose it and the account — and its points — are gone. A copy of the secret in the wrong
+hands owns the account until it is replaced. Session storage is ordinary preference storage
+(SharedPreferences / NSUserDefaults / JVM Preferences / localStorage), not Keychain or
+EncryptedSharedPreferences. All of it must be revisited before real accounts exist.
 
 ## 8b. Open decisions (resolve before relevant work)
 
-- **Provider linking** (Google / Apple / passkeys) — needed to make accounts durable. Requires
-  OAuth client credentials, and Apple additionally requires a paid developer account. Passkeys
-  have no desktop-JVM story, so desktop would need a browser handoff.
+- **Provider linking** — *decided 2026-09-25: two phases.* Phase 1, free and zero-click, is the
+  recovery secret (§8a, *Recovery*): built, on the server and in the Android and iOS clients, and
+  yet to run on a phone. Phase 2, next, is a silent Play Games Services v2 link on Android, and Game
+  Center on iOS later; either needs OAuth client credentials, and Apple a paid developer account
+  too. Passkeys have no desktop-JVM story, so desktop would need a browser handoff. The decisions of
+  2026-09-25, every one the research's default: phase 1 now and the store providers' links later; a
+  long-lived recovery secret, whose holder owns the account until it is replaced; a sessions table
+  first, one refresh-token family per device, with no cap per player (§8a, *Sessions*); the session
+  store out of Android's cloud backup and its device-to-device transfer, so only the secret moves
+  between phones; Block Store's cloud copy only where end-to-end encryption is available, else a
+  same-device reinstall only, and that only with Google's Backup services on (§8a); the iOS Keychain
+  item synced through iCloud Keychain; desktop and web guest-only; and Block Store approved as a
+  library exception (§2).
 - **SQLDelight cache** — see §4. Needs a per-platform split because of web. Lower priority now
   that the endless feed (§8d) makes the server the source of truth for what a player has answered:
   the client keeps no record of what it served, so a persisted queue would only save one fetch
@@ -538,7 +711,9 @@ accounts exist.
   request and refills whole when its period ends, so up to twice a budget can pass in moments where
   one window ends and the next begins, while over any longer span the average holds:
   - *Per client address* (on Render, Cloudflare's `CF-Connecting-IP`: `CLIENT_IP_HEADER`, §8), for
-    a caller with no session to name: guest minting 10 an hour, refreshes 30 a minute, the admin
+    a caller with no session to name: guest minting 10 an hour, refreshes 30 a minute, recoveries 10
+    an hour, right secret or wrong (a restored phone recovers once; no guess at 256 bits comes near,
+    so the budget is what bounds the sessions one secret's holder can open), the admin
     routes 60 a minute together, and on top of that, admin requests with a wrong or missing token 10
     a minute. A request with the right token spends none of that
     last budget, but once an address has spent it, every admin request from the address is refused
@@ -548,8 +723,9 @@ accounts exist.
     first, so guesses refused by it spend none of the moderator's 60.
   - *Per player*, so players behind one address do not share a budget: the feed, votes and skips
     120 a minute each (the console's *Answer N* sends at most 50 votes in a row), likes 60 a minute,
-    submissions 30 an hour (the 20-pending cap still applies), and `GET /v1/me` and
-    `GET /v1/me/questions` 120 a minute each. The key is the player id in the bearer token, which the
+    submissions 30 an hour (the 20-pending cap still applies), `GET /v1/me` and
+    `GET /v1/me/questions` 120 a minute each, and a new recovery secret 10 an hour (a client asks only
+    when it holds none it trusts). The key is the player id in the bearer token, which the
     limiter verifies itself (`verifiedPlayerId`): it runs before authentication, so no principal is
     there yet. A request without a token this server signed spends its address's budget of the group
     instead, and then gets its 401, so a forged token naming a player cannot spend that player's
@@ -624,9 +800,10 @@ seed (`Migrations`, `DatabaseFactory.init`). Nothing builds a table any other wa
   is the first kind: `4cdc819` built it on 2026-09-24, the first deploy, and `Tables.kt` changed no
   column, key or index between then and V1, so it holds exactly V1, and the first migrating build to
   boot on it records `1 BASELINE`. §8 records no such deploy yet, so its next Manual Deploy may
-  baseline it and run V2 (the refresh-token grace window, §8a) and V3 (a question's `retired_at`,
-  §8d *Moderation*) in one boot, or run what it lacks on an earlier baseline or V2; either way its
-  history then reads `1 BASELINE`, `2 SQL`, `3 SQL`.
+  baseline it and run V2 (the refresh-token grace window, §8a), V3 (a question's `retired_at`, §8d
+  *Moderation*) and V4 (sessions and the recovery secret, §8a) in one boot, or run what it lacks on an
+  earlier baseline, V2 or V3; either way its history then reads `1 BASELINE`, `2 SQL`, `3 SQL`,
+  `4 SQL`.
   `Migrations.migrate` takes the baseline itself (`baselineVersion` 1), and only for a database
   holding every table V1 builds (`TABLES_BEFORE_MIGRATIONS`) and no history table; Flyway's
   `baselineOnMigrate` is off. Any other database with tables and no history fails the boot, rather
@@ -665,10 +842,12 @@ seed (`Migrations`, `DatabaseFactory.init`). Nothing builds a table any other wa
   `MigrationsTest`, add the script's row to `BASELINED_HISTORY` and what it does to rows already
   there to `afterLaterScripts` (a column added empty goes in `ADDED_COLUMNS`). Its database built
   before migrations is V1 run alone with the history dropped (V2 moved it there), since the
-  definitions describe the latest script, and it reads rows with `SELECT *`, since the definitions
-  name columns V1 lacks. It writes that database's rows through the stores, so what they run there
-  must name only V1's columns: a `selectAll` of a table a later script changed fails on V1 (V3 moved
-  the seed's check to the id alone).
+  definitions describe the latest script, and it reads rows with `SELECT *`, from the tables there
+  are, since the definitions name columns and a table V1 lacks. It writes that database's rows
+  through the stores only where what they run there names V1's columns alone: a `selectAll` of a
+  table a later script changed fails on V1 (V3 moved the seed's check to the id alone), and a mint
+  now opens a session, in a table V1 lacks, so its player is inserted as a build before sessions
+  minted one (`playerAsMintedBefore`, V4).
 - *A script that has shipped never changes*: Flyway refuses to boot on a changed checksum. A script
   whose name Flyway cannot read fails the boot rather than being skipped (`validateMigrationNaming`),
   and clean is refused outright (`cleanDisabled`); the test harness alone turns it on, to wipe the
@@ -678,7 +857,13 @@ seed (`Migrations`, `DatabaseFactory.init`). Nothing builds a table any other wa
   before it can still run on: add before use, drop only once no build a rollback could return to
   reads it. A new `QuestionStatus` is a migration too, although no column changes:
   `questions.status` is read strictly, unlike a category, so no build may write a new status until
-  the build a rollback would return to can read it.
+  the build a rollback would return to can read it. That is why V3 keeps a retired question
+  `APPROVED` beside `questions.retired_at` rather than giving it a status of its own: a build before
+  it reads every row and only serves retired questions again (§8d, *Retiring*). Moving what a table
+  holds is one as well: V4 moved refresh tokens into `sessions` and keeps the `players` columns every
+  build before it refreshes from, V3's included, as a mirror of the session written last (§8a,
+  *Sessions*), so a rollback keeps each player's latest device, and rolling forward folds back
+  whatever the older build wrote there.
 - *Several instances booting at once* (Render starts a deploy's new instance before it stops the old
   one): on PostgreSQL each script runs under Flyway's advisory lock, so one boot migrates while the
   rest wait, up to 50 tries a second apart, and then find nothing to do. Every boot that finds a
@@ -1067,6 +1252,9 @@ base URL, a display name, and whether a build for it shows the developer tools. 
 - *iOS*: the `WYR_ENV` build setting in `app/iosApp/Configuration/Config.xcconfig` (`local` by
   default). `Info.plist` carries it as its `WYR_ENV` key (`$(WYR_ENV)`), and `MainViewController`
   reads that from the main bundle; a missing key is LOCAL.
+- *Guest-only on desktop and web* (*decided 2026-09-25*): neither keeps a recovery secret (§8a,
+  *Recovery*), so a player there is bound to that one storage, and the console's *Reinstall (keep
+  secret)* mints a fresh guest there, as *New guest* does.
 - *In the app.* Koin binds the environment (`appModules`), and `dataModule` sends every request to
   that same environment's URL, so the dev console's header, which shows its name and URL, always says
   where requests go. The console tab is shown only where the environment shows developer
@@ -1081,6 +1269,11 @@ base URL, a display name, and whether a build for it shows the developer tools. 
   Preferences node, one bundle id's `NSUserDefaults`, one origin's `localStorage`. With one key, a
   build for one server sent the other's tokens to it and, once they were refused, replaced that
   guest, and its points, with a new one (§8a). Android's flavors have storage of their own anyway.
+  The recovery secret (§8a, *Recovery*) is one environment's too, since each server's database holds
+  its own, so it is kept under a key per environment the same way (`RecoverySecretStore.secretKeyFor`:
+  `wyr.recovery.local`, `wyr.recovery.dev`, `wyr.recovery.prod`, with no legacy key to keep), one
+  iCloud Keychain item per environment included, or a DEV secret would be sent to PROD and dropped as
+  unknown. Renaming a key strands every secret kept under it.
 ---
 
 ## 9. How to work in this repo
@@ -1092,8 +1285,9 @@ base URL, a display name, and whether a build for it shows the developer tools. 
 - Verify with `./gradlew ktlintCheck` plus the test and compile tasks listed in
   `.github/workflows/ci.yml`. That workflow is the definition of "green". Besides `verify` it runs
   `server-postgres` (the server suite against a Postgres service container), `docker-smoke` (builds
-  the image and polls `/health`), and `ios` (framework link, simulator tests, and an `xcodebuild`
-  simulator build on macOS). All four passed on their first run, 2026-09-24. None of those three
+  the image and polls `/health`), and `ios` (framework link, simulator tests, the `:core` modules'
+  test compiles, and an `xcodebuild` simulator build on macOS). All four passed on their first run,
+  2026-09-24. None of those three
   can run on this machine: read their results with `gh run list -R niktok1/would-you-rather`,
   through a login to the personal account only (§7). `:server:test` uses H2 unless `WYR_TEST_JDBC_URL` (plus
   `WYR_TEST_DB_USER` / `WYR_TEST_DB_PASSWORD`) names another database; the suite then wipes it,
@@ -1102,5 +1296,7 @@ base URL, a display name, and whether a build for it shows the developer tools. 
 - **iOS cannot be linked, tested, or run on a machine without Xcode** (Command Line Tools alone
   are not enough). The Kotlin compile does not need Xcode, so before pushing iOS-touching code
   run `./gradlew :app:shared:compileKotlinIosSimulatorArm64 :app:shared:compileTestKotlinIosSimulatorArm64`
-  locally. Framework linking, the simulator tests and the Xcode app stay unverified until the
+  locally, and before pushing a common test in `:core:network` or `:core:data`, that module's
+  `compileTestKotlinIosSimulatorArm64`: Kotlin/Native refuses a comma in a test's name, which the JVM
+  takes. Framework linking, the simulator tests and the Xcode app stay unverified until the
   `ios` CI job or a machine with full Xcode runs them.

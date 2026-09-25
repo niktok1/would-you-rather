@@ -12,6 +12,12 @@ public enum class DomainError {
     QUESTION_NOT_FOUND,
     ALREADY_VOTED,
     UNAUTHORIZED,
+
+    /**
+     * A recovery secret no player holds now: never issued, or replaced since. It will recover nobody,
+     * ever. Nothing to do with the session the device holds, if any, which stays as it is.
+     */
+    INVALID_RECOVERY_SECRET,
     RATE_LIMITED,
 
     /** A submitted question broke a rule the player can put right by editing it. */

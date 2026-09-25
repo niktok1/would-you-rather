@@ -73,6 +73,14 @@ public enum class ErrorCode {
     INVALID_REFRESH_TOKEN,
 
     /**
+     * The recovery secret presented ([io.ntole.wyr.core.api.WyrApi.Paths.AUTH_RECOVER]) is none that
+     * any player holds now: it was never issued, or its player has replaced it since. Sent with 401,
+     * alike for every such secret. It will recover nobody, ever: a client drops it. A server whose
+     * database is in memory, as the dev server's is, forgets every secret when it restarts.
+     */
+    INVALID_RECOVERY_SECRET,
+
+    /**
      * Too many requests from this player, or from this address for a caller with no session: back off
      * and retry. Sent with 429 and a `Retry-After` header, the whole seconds to wait. The refused
      * request did nothing.

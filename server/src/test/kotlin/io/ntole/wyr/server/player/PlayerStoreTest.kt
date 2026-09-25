@@ -4,6 +4,7 @@ import com.zaxxer.hikari.HikariDataSource
 import io.ntole.wyr.server.config.ServerConfig
 import io.ntole.wyr.server.db.DatabaseFactory
 import io.ntole.wyr.server.db.Players
+import io.ntole.wyr.server.db.Sessions
 import io.ntole.wyr.server.db.connectH2
 import io.ntole.wyr.server.db.h2Url
 import io.ntole.wyr.server.db.raceBehindFirst
@@ -11,15 +12,12 @@ import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.SchemaUtils
 import org.jetbrains.exposed.v1.jdbc.select
-import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import java.sql.Connection
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertNull
-import kotlin.time.Duration.Companion.days
-import kotlin.time.Duration.Companion.minutes
 
+/** A player's counters. Their refresh tokens are their sessions', which `SessionStoreTest` pins. */
 class PlayerStoreTest {
     /**
      * Holds the first award's transaction open while the second one starts, so the second cannot
@@ -83,273 +81,11 @@ class PlayerStoreTest {
         }
     }
 
-    @Test
-    fun `with the grace off, two refreshes racing with the same token let exactly one through`() {
-        // READ COMMITTED by hand for the same reason as the awards: only here does a rotation by
-        // id alone let both through. Under REPEATABLE_READ the second is refused, and its retry no
-        // longer finds the token.
-        val url = h2Url("wyr-player-store-refresh")
-        val database = connectH2(url, Connection.TRANSACTION_READ_COMMITTED)
-        val player = transaction(database) { createPlayer(refreshTokenHash = "spent") }
-
-        val (first, second) =
-            raceBehindFirst(
-                url,
-                database,
-                { rotate("spent", newHash = "first", graceMillis = 0) },
-                { rotate("spent", newHash = "second", graceMillis = 0) },
-            )
-
-        assertEquals(player.id, first?.id)
-        assertNull(second, "the token was already spent by the first refresh")
-        assertEquals("first", storedTokens(database, player.id).current, "the first refresh's session must stay live")
+    /** Creates the players and sessions tables and one player in them. Must run inside a transaction. */
+    private fun createPlayer(): PlayerStore.Player {
+        SchemaUtils.create(Players, Sessions)
+        return PlayerStore.createGuest(refreshTokenHash = "unused", refreshExpiresAt = Long.MAX_VALUE)
     }
-
-    /**
-     * The grace window's point (CLAUDE.md §8a). Two refreshes present the current token at once, as a
-     * refresh whose answer was lost and its retry can, or two clients sharing one store. The second
-     * waits on the first's row lock, then finds the token it presented displaced, and spends it as the
-     * previous one: both go through, and the first's new token, which the second displaced, is the
-     * previous one in its turn, still good until the next rotation. The same with no time bound and
-     * under one, which adds the stamp to the `WHERE` the second re-checks.
-     */
-    @Test
-    fun `two refreshes racing with the current token both go through, the first's token becoming the previous one`() {
-        listOf(null, BOUND_MILLIS).forEach { graceMillis ->
-            val url = h2Url("wyr-player-store-refresh-grace-${graceMillis ?: "unbounded"}")
-            val database = connectH2(url, Connection.TRANSACTION_READ_COMMITTED)
-            val player = transaction(database) { createPlayer(refreshTokenHash = "shared") }
-
-            val (first, second) =
-                raceBehindFirst(
-                    url,
-                    database,
-                    { rotate("shared", newHash = "first", now = ROTATED_AT, graceMillis = graceMillis) },
-                    { rotate("shared", newHash = "second", now = ROTATED_AT + 1, graceMillis = graceMillis) },
-                )
-
-            assertEquals(player.id, first?.id, "bound $graceMillis")
-            assertEquals(player.id, second?.id, "the second spends the token as the previous one: bound $graceMillis")
-            assertEquals(StoredTokens("second", "first", ROTATED_AT + 1), storedTokens(database, player.id))
-            val third =
-                transaction(database) {
-                    rotate("first", newHash = "third", now = ROTATED_AT + 2, graceMillis = graceMillis)
-                }
-            assertEquals(player.id, third?.id, "bound $graceMillis")
-        }
-    }
-
-    /**
-     * The displaced token works once, however long it waits as the previous one: of two refreshes
-     * presenting it at once, the second waits on the first's row lock and then finds it displaced for
-     * good. By id, or by the hash alone, both would go through from one state, and it could be spent
-     * again and again. The same with no time bound and under one.
-     */
-    @Test
-    fun `two refreshes racing with the previous token let exactly one through`() {
-        listOf(null, BOUND_MILLIS).forEach { graceMillis ->
-            val url = h2Url("wyr-player-store-refresh-previous-${graceMillis ?: "unbounded"}")
-            val database = connectH2(url, Connection.TRANSACTION_READ_COMMITTED)
-            val player = transaction(database) { createPlayer(refreshTokenHash = "displaced") }
-            transaction(database) {
-                rotate("displaced", newHash = "current", now = ROTATED_AT, graceMillis = graceMillis)
-            }
-
-            val (first, second) =
-                raceBehindFirst(
-                    url,
-                    database,
-                    { rotate("displaced", newHash = "first", now = ROTATED_AT + 1, graceMillis = graceMillis) },
-                    { rotate("displaced", newHash = "second", now = ROTATED_AT + 1, graceMillis = graceMillis) },
-                )
-
-            assertEquals(player.id, first?.id, "bound $graceMillis")
-            assertNull(second, "the previous token was spent by the first refresh: bound $graceMillis")
-            assertEquals(StoredTokens("first", "current", ROTATED_AT + 1), storedTokens(database, player.id))
-        }
-    }
-
-    /**
-     * The lost answer the grace is for (CLAUDE.md §8a), sent again days later, as a player back after
-     * that long sends it: with no time bound, the token the rotation displaced still keeps them. Spent,
-     * it is displaced for good, however long after.
-     */
-    @Test
-    fun `with no time bound, a token a rotation displaced still rotates days later, and then never again`() {
-        val database = connectH2(h2Url("wyr-player-store-unbounded"), Connection.TRANSACTION_READ_COMMITTED)
-        val player = transaction(database) { createPlayer(refreshTokenHash = "lost") }
-        transaction(database) { rotate("lost", newHash = "never-received", now = ROTATED_AT) }
-        val daysLater = ROTATED_AT + 3.days.inWholeMilliseconds
-
-        val retried = transaction(database) { rotate("lost", newHash = "retry", now = daysLater) }
-        val replayed = transaction(database) { rotate("lost", newHash = "replayed", now = daysLater + 1) }
-
-        assertEquals(player.id, retried?.id, "a retry days later keeps the player")
-        assertNull(replayed, "a token works twice at most: once current, once more as the previous one")
-        assertEquals(StoredTokens("retry", "never-received", daysLater), storedTokens(database, player.id))
-    }
-
-    /**
-     * What ends a displaced token with no time bound: the next rotation, here the first use of the token
-     * that displaced it, which makes that one the previous token in its place.
-     */
-    @Test
-    fun `a token a rotation displaced dies at the first use of the token that displaced it`() {
-        val database = connectH2(h2Url("wyr-player-store-displaced-twice"), Connection.TRANSACTION_READ_COMMITTED)
-        val player = transaction(database) { createPlayer(refreshTokenHash = "original") }
-        transaction(database) { rotate("original", newHash = "first", now = ROTATED_AT) }
-        transaction(database) { rotate("first", newHash = "second", now = ROTATED_AT + 1) }
-
-        val rotated = transaction(database) { rotate("original", newHash = "late", now = ROTATED_AT + 2) }
-
-        assertNull(rotated, "displaced for good by the rotation after the one that displaced it")
-        assertEquals(StoredTokens("second", "first", ROTATED_AT + 1), storedTokens(database, player.id))
-    }
-
-    @Test
-    fun `under a time bound, a token a rotation displaced still rotates within it, and not a moment after`() {
-        val database = connectH2(h2Url("wyr-player-store-grace-ends"), Connection.TRANSACTION_READ_COMMITTED)
-        val player = transaction(database) { createPlayer(refreshTokenHash = "lost") }
-        transaction(database) { rotateUnderBound("lost", newHash = "never-received", now = ROTATED_AT) }
-
-        val late = transaction(database) { rotateUnderBound("lost", newHash = "late", now = ROTATED_AT + BOUND_MILLIS) }
-        val inTime =
-            transaction(database) { rotateUnderBound("lost", newHash = "retry", now = ROTATED_AT + BOUND_MILLIS - 1) }
-
-        assertNull(late, "the bound has passed")
-        assertEquals(player.id, inTime?.id, "a retry within the bound keeps the player")
-        assertEquals(
-            StoredTokens("retry", "never-received", ROTATED_AT + BOUND_MILLIS - 1),
-            storedTokens(database, player.id),
-        )
-    }
-
-    @Test
-    fun `under a time bound, a token spent as the previous one is dead, and the one it displaced gets its own`() {
-        val database = connectH2(h2Url("wyr-player-store-spent-twice"), Connection.TRANSACTION_READ_COMMITTED)
-        val player = transaction(database) { createPlayer(refreshTokenHash = "original") }
-        val secondRotation = ROTATED_AT + BOUND_MILLIS - 1
-        val lastMomentOfItsBound = secondRotation + BOUND_MILLIS - 1
-        transaction(database) { rotateUnderBound("original", newHash = "first", now = ROTATED_AT) }
-        val spentAsPrevious =
-            transaction(database) { rotateUnderBound("original", newHash = "second", now = secondRotation) }
-        assertEquals(player.id, spentAsPrevious?.id, "spent once more, within the bound")
-
-        val replayed =
-            transaction(database) { rotateUnderBound("original", newHash = "replayed", now = secondRotation) }
-        val displaced =
-            transaction(database) { rotateUnderBound("first", newHash = "third", now = lastMomentOfItsBound) }
-
-        assertNull(replayed, "a token works twice at most: once current, once more as the previous one")
-        assertEquals(player.id, displaced?.id, "its bound runs from the rotation that displaced it, not the first")
-    }
-
-    @Test
-    fun `with the grace off, a token a rotation displaced is dead at once`() {
-        val database = connectH2(h2Url("wyr-player-store-no-grace"), Connection.TRANSACTION_READ_COMMITTED)
-        val player = transaction(database) { createPlayer(refreshTokenHash = "old") }
-        transaction(database) { rotate("old", newHash = "new", now = ROTATED_AT, graceMillis = 0) }
-
-        val rotated = transaction(database) { rotate("old", newHash = "again", now = ROTATED_AT, graceMillis = 0) }
-
-        assertNull(rotated)
-        assertEquals(StoredTokens("new", "old", ROTATED_AT), storedTokens(database, player.id))
-    }
-
-    @Test
-    fun `an expired refresh token does not rotate`() {
-        val database = connectH2(h2Url("wyr-player-store-expired"), Connection.TRANSACTION_READ_COMMITTED)
-        val player = transaction(database) { createPlayer(refreshTokenHash = "stale", refreshExpiresAt = 1_000L) }
-
-        val rotated = transaction(database) { rotate("stale", newHash = "fresh", now = 1_000L) }
-
-        assertNull(rotated)
-        assertEquals("stale", storedTokens(database, player.id).current)
-    }
-
-    /**
-     * A displaced token keeps the expiry it had while current: the grace lets it outlive its rotation,
-     * never its own lifetime, which is all that bounds it when nothing else does.
-     */
-    @Test
-    fun `the grace never outlasts a displaced token's own expiry, bounded in time or not`() {
-        listOf(null, BOUND_MILLIS).forEach { graceMillis ->
-            val url = h2Url("wyr-player-store-grace-expiry-${graceMillis ?: "unbounded"}")
-            val database = connectH2(url, Connection.TRANSACTION_READ_COMMITTED)
-            val expiry = ROTATED_AT + BOUND_MILLIS / 2
-            val player = transaction(database) { createPlayer(refreshTokenHash = "ending", refreshExpiresAt = expiry) }
-            transaction(database) { rotate("ending", newHash = "current", now = ROTATED_AT, graceMillis = graceMillis) }
-
-            val expired =
-                transaction(database) { rotate("ending", newHash = "late", now = expiry, graceMillis = graceMillis) }
-            val unexpired =
-                transaction(database) {
-                    rotate("ending", newHash = "retry", now = expiry - 1, graceMillis = graceMillis)
-                }
-
-            assertNull(expired, "within any bound, but past its own expiry: bound $graceMillis")
-            assertEquals(player.id, unexpired?.id, "bound $graceMillis")
-        }
-    }
-
-    /**
-     * [PlayerStore.rotateRefreshToken], with a lifetime no test reaches, and with no time bound unless a
-     * test sets one.
-     */
-    private fun rotate(
-        presentedHash: String,
-        newHash: String,
-        now: Long = System.currentTimeMillis(),
-        graceMillis: Long? = null,
-    ): PlayerStore.Player? =
-        PlayerStore.rotateRefreshToken(
-            presentedHash = presentedHash,
-            newHash = newHash,
-            expiresAt = Long.MAX_VALUE,
-            graceMillis = graceMillis,
-            now = now,
-        )
-
-    /** [rotate] under the time bound [BOUND_MILLIS]. */
-    private fun rotateUnderBound(
-        presentedHash: String,
-        newHash: String,
-        now: Long,
-    ): PlayerStore.Player? = rotate(presentedHash, newHash, now, graceMillis = BOUND_MILLIS)
-
-    /** Creates the players table and one player in it. Must run inside a transaction. */
-    private fun createPlayer(
-        refreshTokenHash: String = "unused",
-        refreshExpiresAt: Long = Long.MAX_VALUE,
-    ): PlayerStore.Player {
-        SchemaUtils.create(Players)
-        return PlayerStore.createGuest(refreshTokenHash, refreshExpiresAt)
-    }
-
-    /** The hashes a player's row holds, and when the previous one was displaced. */
-    private data class StoredTokens(
-        val current: String?,
-        val previous: String?,
-        val previousRotatedAt: Long?,
-    )
-
-    private fun storedTokens(
-        database: Database,
-        playerId: String,
-    ): StoredTokens =
-        transaction(database) {
-            Players
-                .selectAll()
-                .where { Players.id eq playerId }
-                .single()
-                .let { row ->
-                    StoredTokens(
-                        current = row[Players.refreshTokenHash],
-                        previous = row[Players.previousRefreshTokenHash],
-                        previousRotatedAt = row[Players.previousRefreshTokenRotatedAt],
-                    )
-                }
-        }
 
     private fun storedAnswersGiven(
         database: Database,
@@ -364,11 +100,5 @@ class PlayerStoreTest {
 
     private companion object {
         const val BURST = 8
-
-        /** The time bound the tests of one set: 10 minutes, as the grace had by default at first. */
-        val BOUND_MILLIS = 10.minutes.inWholeMilliseconds
-
-        /** When the refresh tests' first rotation happens, far from 0 so a bound before it is no concern. */
-        const val ROTATED_AT = 1_000_000_000L
     }
 }

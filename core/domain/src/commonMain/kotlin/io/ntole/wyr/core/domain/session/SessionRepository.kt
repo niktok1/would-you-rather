@@ -15,6 +15,16 @@ public interface SessionRepository {
     /** The player id if a session already exists locally, without touching the network. */
     public suspend fun currentPlayerId(): String?
 
-    /** Drop the local session. The next [ensure] mints a fresh guest. */
+    /**
+     * Drop the local session, and the recovery secret with it where the platform keeps one. The next
+     * [ensure] mints a fresh guest.
+     */
     public suspend fun clear()
+
+    /**
+     * Drop the local session alone, as deleting the app and installing it again does: the recovery
+     * secret stays where the platform keeps one, so the next [ensure] recovers its player in a new
+     * session. Where the platform keeps none, this is [clear].
+     */
+    public suspend fun clearKeepingSecret()
 }

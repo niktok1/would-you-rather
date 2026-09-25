@@ -292,5 +292,7 @@ class PlayViewModelTest {
         override suspend fun currentPlayerId(): String = "player-1"
 
         override suspend fun clear() = Unit
+
+        override suspend fun clearKeepingSecret() = Unit
     }
 }

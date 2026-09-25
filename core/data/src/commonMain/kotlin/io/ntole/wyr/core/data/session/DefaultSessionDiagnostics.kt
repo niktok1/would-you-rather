@@ -1,8 +1,11 @@
 package io.ntole.wyr.core.data.session
 
+import io.ntole.wyr.core.domain.session.RecoverySecretStatus
 import io.ntole.wyr.core.domain.session.SessionDiagnostics
 import io.ntole.wyr.core.domain.session.SessionInfo
+import io.ntole.wyr.core.network.RecoverySecretStore
 import io.ntole.wyr.core.network.SessionStore
+import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -10,14 +13,17 @@ import kotlinx.serialization.json.longOrNull
 import kotlin.io.encoding.Base64
 
 /**
- * Reports the stored session without touching the network.
+ * Reports the stored session, and whether a recovery secret is kept, without touching the network.
  *
  * The expiry is read from the access token's own `exp` claim. The session's
  * `accessTokenExpiresInSeconds` cannot answer it: it counts from when the token was issued, and
  * that moment is not stored.
+ *
+ * [recovery] is null where the platform keeps no recovery secret, as for `DefaultSessionRepository`.
  */
 public class DefaultSessionDiagnostics(
     private val sessionStore: SessionStore,
+    private val recovery: RecoverySecretStore? = null,
 ) : SessionDiagnostics {
     override suspend fun info(): SessionInfo? =
         sessionStore.read()?.let { session ->
@@ -26,6 +32,17 @@ public class DefaultSessionDiagnostics(
                 accessTokenExpiresAtEpochMillis = jwtExpiryEpochMillis(session.accessToken),
             )
         }
+
+    override suspend fun recoverySecret(): RecoverySecretStatus {
+        val store = recovery ?: return RecoverySecretStatus.NOT_KEPT_HERE
+        return try {
+            if (store.read() == null) RecoverySecretStatus.NONE else RecoverySecretStatus.KEPT
+        } catch (cancellation: CancellationException) {
+            throw cancellation
+        } catch (unreadable: Exception) {
+            RecoverySecretStatus.UNREADABLE
+        }
+    }
 }
 
 /**

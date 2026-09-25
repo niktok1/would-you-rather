@@ -46,7 +46,7 @@ import io.ntole.wyr.core.vote.VoteResultDto
 import io.ntole.wyr.core.vote.VoteTallyDto
 import io.ntole.wyr.server.auth.TokenService
 import io.ntole.wyr.server.config.ServerConfig
-import io.ntole.wyr.server.db.Players
+import io.ntole.wyr.server.db.Sessions
 import io.ntole.wyr.server.db.inTransaction
 import io.ntole.wyr.server.db.serverPool
 import io.ntole.wyr.server.vote.Scoring
@@ -1830,9 +1830,9 @@ class ApiFlowTest {
     }
 
     /**
-     * Restamps [playerId]'s last refresh-token rotation as [ago] before now, as though it had happened
-     * then: a test cannot wait that long. Of the token that rotation displaced, only a bound on the grace
-     * reads the stamp; its expiry is left where it was.
+     * Restamps the last refresh-token rotation of [playerId]'s one session as [ago] before now, as
+     * though it had happened then: a test cannot wait that long. Of the token that rotation displaced,
+     * only a bound on the grace reads the stamp; its expiry is left where it was.
      */
     private fun TestDatabaseSettings.stampLastRotation(
         playerId: String,
@@ -1840,10 +1840,10 @@ class ApiFlowTest {
     ) = serverPool().use { pool ->
         pool.inTransaction {
             val restamped =
-                Players.update({ Players.id eq playerId }) { row ->
+                Sessions.update({ Sessions.playerId eq playerId }) { row ->
                     row[previousRefreshTokenRotatedAt] = System.currentTimeMillis() - ago.inWholeMilliseconds
                 }
-            check(restamped == 1) { "no player $playerId" }
+            check(restamped == 1) { "no one session for player $playerId" }
         }
     }
 

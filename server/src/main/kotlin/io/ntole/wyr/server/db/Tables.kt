@@ -26,20 +26,49 @@ object Players : Table("players") {
      */
     val answersGiven = integer("answers_given").default(0)
 
-    /** SHA-256 of the current refresh token. The token itself is never stored. */
+    /**
+     * The mirror (CLAUDE.md §8a, *Sessions*): a copy of the refresh-token columns of the player's
+     * session written last, opened or rotated ([Sessions]), for the builds from before sessions, which
+     * look a refresh token up here and nowhere else. After a rollback to one, the device each player
+     * used last still refreshes. This build refreshes from [Sessions], and spends a token here only
+     * where a build without sessions has moved it ([mirroredRefreshTokenHash]).
+     *
+     * The SHA-256 of the current refresh token, as [Sessions.refreshTokenHash] holds it: the token
+     * itself is never stored. Null only for a player minted in the same transaction, before their
+     * first session is mirrored.
+     */
     val refreshTokenHash = varchar("refresh_token_hash", 64).nullable()
     val refreshTokenExpiresAt = long("refresh_token_expires_at").nullable()
 
     /**
-     * The refresh token the last rotation displaced (CLAUDE.md §8a): its SHA-256, the expiry it had
-     * while current, and when it was displaced. A refresh presenting it still succeeds, once, until the
-     * next rotation displaces it, and only within a time bound after that rotation where
-     * `REFRESH_GRACE_SECONDS` sets one (`PlayerStore.rotateRefreshToken`). All three are null for a
-     * player who has never refreshed, and for every player from before V2.
+     * The mirror's copy of the refresh token its session's last rotation displaced, as
+     * [Sessions.previousRefreshTokenHash] and the two beside it hold it (CLAUDE.md §8a), so a build
+     * from before sessions gives the displaced token the grace this one does. All three are null while
+     * the mirrored session has never refreshed.
      */
     val previousRefreshTokenHash = varchar("previous_refresh_token_hash", 64).nullable()
     val previousRefreshTokenExpiresAt = long("previous_refresh_token_expires_at").nullable()
     val previousRefreshTokenRotatedAt = long("previous_refresh_token_rotated_at").nullable()
+
+    /**
+     * The [refreshTokenHash] this build last wrote into the mirror, which is the current hash of the
+     * session it copied. Only a build with sessions writes it. While the two are equal the mirror is
+     * that session's copy. Anything else, null beside a hash included, means a build without sessions
+     * has rotated the mirror since, or minted the player there: a rollback, or the build before still
+     * serving while a deploy's new instance starts. The next refresh with the token the mirror then
+     * holds folds it back into the session it came from, or into a new one for a player minted there
+     * (`SessionStore.rotate`).
+     */
+    val mirroredRefreshTokenHash = varchar("mirrored_refresh_token_hash", 64).nullable()
+
+    /**
+     * SHA-256 of the player's recovery secret (CLAUDE.md §8a, *Recovery*): whoever presents the secret
+     * opens a session of their own for the player (`SessionStore.recover`). The secret itself is never
+     * stored. Written at the mint and replaced only by `PlayerStore.replaceRecoverySecret`. Null for a
+     * player from before V4 until they ask for one, and for every player a build without recovery
+     * minted.
+     */
+    val recoverySecretHash = varchar("recovery_secret_hash", 64).nullable()
 
     /**
      * The feed's current pass over the questions (CLAUDE.md §8d), counted from [FIRST_CYCLE]. A
@@ -52,14 +81,57 @@ object Players : Table("players") {
     override val primaryKey = PrimaryKey(id)
 
     init {
+        // A refresh that no session takes looks its token up in the mirror by either hash, and so does
+        // every refresh a build without sessions serves. Unique: a hash names one token, and a mirror
+        // copies one session.
         index(isUnique = true, refreshTokenHash)
-        // A refresh looks its token up here as well as in the current hash, so without an index every
-        // refresh presenting a token that is not current, a stranger's guess included, reads the whole
-        // table. Unique as the current hash is: a hash names one token, and that token one player.
         index(isUnique = true, previousRefreshTokenHash)
+        // A recovery looks its player up by it. Unique as a refresh token's hash is.
+        index(isUnique = true, recoverySecretHash)
     }
 
     const val FIRST_CYCLE: Int = 1
+}
+
+/**
+ * Every session a player has (CLAUDE.md §8a, *Sessions*): one refresh-token family per device, each
+ * rotating on its own, so a refresh on one device never touches another's tokens. A guest's mint
+ * opens the first and each recovery another (`SessionStore.open`), and V4 opened one for every player
+ * who held a refresh token then. Each session opened or rotated is copied into its player's row, the
+ * mirror ([Players.refreshTokenHash]). No row is ever deleted: a session whose tokens have expired is
+ * dead where it lies, and nothing caps how many a player has.
+ */
+object Sessions : Table("sessions") {
+    val id = varchar("id", 36)
+    val playerId = varchar("player_id", 36).references(Players.id)
+
+    /** SHA-256 of the session's current refresh token. The token itself is never stored. */
+    val refreshTokenHash = varchar("refresh_token_hash", 64)
+    val refreshTokenExpiresAt = long("refresh_token_expires_at")
+
+    /**
+     * The refresh token the session's last rotation displaced (CLAUDE.md §8a): its SHA-256, the expiry
+     * it had while current, and when it was displaced. A refresh presenting it still succeeds, once,
+     * until the next rotation displaces it, and only within a time bound after that rotation where
+     * `REFRESH_GRACE_SECONDS` sets one (`SessionStore.rotate`). All three are null for a session that
+     * has never refreshed.
+     */
+    val previousRefreshTokenHash = varchar("previous_refresh_token_hash", 64).nullable()
+    val previousRefreshTokenExpiresAt = long("previous_refresh_token_expires_at").nullable()
+    val previousRefreshTokenRotatedAt = long("previous_refresh_token_rotated_at").nullable()
+
+    /** When the session was opened. V4 gave the sessions it opened their player's own creation time. */
+    val createdAt = long("created_at")
+
+    override val primaryKey = PrimaryKey(id)
+
+    init {
+        // A refresh looks its token up by either hash, so without an index every refresh, a stranger's
+        // guess included, would read the whole table. Unique: a hash names one token, and that token
+        // one session. Nothing looks a player's sessions up, so player_id has no index of its own.
+        index(isUnique = true, refreshTokenHash)
+        index(isUnique = true, previousRefreshTokenHash)
+    }
 }
 
 object Questions : Table("questions") {
@@ -256,4 +328,4 @@ object Likes : Table("likes") {
  * tests build their tables straight from it with `SchemaUtils.create`, which that same test shows
  * builds what the migrations do.
  */
-val appTables: Array<Table> = arrayOf(Players, Questions, QuestionCategories, Votes, Skips, Likes)
+val appTables: Array<Table> = arrayOf(Players, Sessions, Questions, QuestionCategories, Votes, Skips, Likes)
