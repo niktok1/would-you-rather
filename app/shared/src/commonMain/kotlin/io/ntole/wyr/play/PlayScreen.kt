@@ -149,11 +149,11 @@ fun PlayScreen(
  *
  * The categories are a [Stat] like the points, a value over its label, one line of each, so the row
  * is no taller for them than the reveal's points alone made it, and the reveal's option cards keep
- * the height their tally needs on a short phone (CLAUDE.md §8d, *The Play screen*). Tapping them opens
- * the picker, so their value is in the accent colour and their label says what a tap does: the
- * colour alone is the title's too, and the picker is the only way to choose categories in a PROD
- * build. It looks the same while the categories cannot change, as it does for every question that
- * loads: the tap then does nothing.
+ * the height their tally needs on a short phone (CLAUDE.md §8d, *The Play screen*). Tapping them
+ * opens the picker, so their value is in the accent colour and their label says what a tap does:
+ * the colour alone is the title's too, and the picker is the only way to choose categories. It looks
+ * the same while the categories cannot change, as it does for every question that loads: the tap
+ * then does nothing.
  */
 @Composable
 private fun Header(

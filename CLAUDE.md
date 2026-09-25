@@ -559,9 +559,9 @@ EncryptedSharedPreferences: enough for a game that stores nothing personal.
   categories selected (§8d, *The Play screen*), so a player reaches this in every build, PROD's
   included. `SkipStoreTest` pins what is built.
 - **The categories row on the Play screen** — *provisional — user decision.* The category picker
-  was not to take height from the question's cards or from the reveal on a short phone (§8d,
-  *The Play screen*). The reveal keeps to that: the categories share the row its points already took,
-  and it needs 569 of the 599 as before. A question not answered yet does not: the row is drawn in
+  was not to take height from the question's cards or from the reveal on a short phone (§8d, *The
+  Play screen*). The reveal keeps to that: the categories share the row its points already took, and
+  it needs 569 of the 599 as before. A question not answered yet does not: the row is drawn in
   every state, where before only the reveal drew one, so on this Mac it needs 537 at 360, 375 and
   400 wide (481 before), and each of its option cards is about 28 shorter. On an iPhone SE (599)
   its cards stay taller than `optionMinHeight`; on Android's 360x640 class (about 520) it no longer
@@ -599,9 +599,9 @@ EncryptedSharedPreferences: enough for a game that stores nothing personal.
   - *Per player*, so players behind one address do not share a budget: registrations 20 an hour
     (every one the rules take costs a password hash), logouts 30 a minute, the feed, votes and skips
     120 a minute each, likes 60 a minute, submissions 30 an hour (the 20-pending cap still applies),
-    `GET /v1/me` and `GET /v1/me/questions` 120 a minute each. The key is the player id in the bearer token, which the
-    limiter verifies itself (`verifiedPlayerId`): it runs before authentication, so no principal is
-    there yet. A request without a token this server signed spends its address's budget of the group
+    `GET /v1/me` and `GET /v1/me/questions` 120 a minute each. The key is the player id in the bearer
+    token, which the limiter verifies itself (`verifiedPlayerId`): it runs before authentication, so
+    no principal is there yet. A request without a token this server signed spends its address's budget of the group
     instead, and then gets its 401, so a forged token naming a player cannot spend that player's
     budget. A token that has only expired, as every player's does in its turn, still names its
     player for a refresh token's lifetime (`TokenService.expiredTokenVerifier`), so the request that
@@ -941,7 +941,7 @@ lists the player's own (*Submitting*, below).
   `StatsStore.of`, as one statement, so the total always agrees with the answers given and
   the likes received (§8c). It only reads, and the cycle starts lazily on the next feed request, so
   between the answer that finishes a cycle and that request it reports the finished cycle with
-  nothing due. The Account screen shows every number but the player id (*The Account screen*).
+  nothing due. The Account screen shows every number but the player id (above).
 - **Skipping** *(built; decided 2026-09-23)*: allowed, earns nothing, and never touches the
   tally. The server **records the skip for the player's current cycle only**, so the question is
   no longer due in that cycle and comes back in the **next** one, except through a category filter
@@ -1173,9 +1173,8 @@ lists the player's own (*Submitting*, below).
 Every client build targets one of three server environments, chosen **when it is built**, so a phone
 can play against the deployed servers and a production build can never talk to a development one by
 accident. `WyrEnvironment` (`io.ntole.wyr.core.network.environment`) names them, each with its API
-base URL and a display name. It lives in
-`:core:network`, not `:app:shared`, so a client without the game UI (the moderation app,
-`:app:adminApp`, §3) can name one too.
+base URL and a display name. It lives in `:core:network`, not `:app:shared`, so a client without the
+game UI (the moderation app, `:app:adminApp`, §3) can name one too.
 
 | Environment | Server                                                           |
 |-------------|------------------------------------------------------------------|
