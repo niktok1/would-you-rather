@@ -32,9 +32,9 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import io.ntole.wyr.CountedBy
 import io.ntole.wyr.Recompositions
-import io.ntole.wyr.core.domain.category.Category
 import io.ntole.wyr.core.domain.error.DomainError
 import io.ntole.wyr.core.domain.question.Question
+import io.ntole.wyr.core.domain.reaction.Reaction
 import io.ntole.wyr.core.domain.vote.Side
 import io.ntole.wyr.core.domain.vote.Tally
 import io.ntole.wyr.core.domain.vote.VoteOutcome
@@ -43,6 +43,7 @@ import io.ntole.wyr.everyNode
 import io.ntole.wyr.language.Language
 import io.ntole.wyr.language.Strings
 import io.ntole.wyr.language.WyrStrings
+import io.ntole.wyr.language.fill
 import io.ntole.wyr.language.stringsOf
 import io.ntole.wyr.nodes
 import io.ntole.wyr.renderAt
@@ -63,8 +64,9 @@ import kotlin.test.assertTrue
 
 /**
  * The Play screen (CLAUDE.md §8d, *The Play screen*) drawn off screen at two phones' sizes, in each
- * theme and each language, from every state it can be in, with every category played or a few; read
- * through its semantics, as a screen reader reads it, and tapped through them. Compose measures and
+ * theme and each language, from every state it can be in; read through its semantics, as a screen
+ * reader reads it, and tapped through them. The categories played are on the top bar above it
+ * (`TopBarsDrawTest`). Compose measures and
  * draws it all, so a layout that cannot be measured fails here rather than when the screen opens.
  * Whether what it draws fits is asked separately, since a squeezed card draws.
  */
@@ -76,17 +78,6 @@ class PlayScreenDrawTest {
                 Language.entries.forEach { language ->
                     draw(state, dark, WIDTH, HEIGHT, language = language)
                     draw(state, dark, SHORT_PHONE_WIDTH, SHORT_PHONE_HEIGHT, language = language)
-                }
-            }
-        }
-    }
-
-    @Test
-    fun `the screen draws with every selection played`() {
-        statesOf(QUESTION).forEach { state ->
-            SELECTIONS.forEach { categories ->
-                listOf(false, true).forEach { dark ->
-                    draw(state, dark, SHORT_PHONE_WIDTH, SHORT_PHONE_HEIGHT, categories = categories)
                 }
             }
         }
@@ -105,52 +96,38 @@ class PlayScreenDrawTest {
     fun `every state fits a short phone without squeezing the option cards`() {
         (statesOf(QUESTION) + statesOf(ONE_LINE_QUESTION)).forEach { state ->
             Language.entries.forEach { language ->
-                SELECTIONS.forEach { categories ->
-                    val needed = heightNeeded(state, WIDTH, categories, language)
-                    assertTrue(
-                        needed <= SHORT_PHONE_HEIGHT,
-                        "$state in $language on $categories needs $needed of $SHORT_PHONE_HEIGHT",
-                    )
-                }
-            }
-        }
-    }
-
-    /** However many categories are played, they take the row's one line, cut short rather than wrapped. */
-    @Test
-    fun `every category played takes no more height than none`() {
-        statesOf(QUESTION).forEach { state ->
-            listOf(WIDTH, SHORT_PHONE_WIDTH).forEach { width ->
-                assertEquals(
-                    heightNeeded(state, width, categories = emptySet()),
-                    heightNeeded(state, width, categories = EVERY),
-                    "$state at $width wide",
-                )
+                val needed = heightNeeded(state, WIDTH, language)
+                assertTrue(needed <= SHORT_PHONE_HEIGHT, "$state in $language needs $needed of $SHORT_PHONE_HEIGHT")
             }
         }
     }
 
     /**
-     * A failed like says so in the points' place, so no line of its own moves the cards; and at any
-     * font size, since text grows with the phone's font size and the heart's touch target does not.
+     * A failed reaction says so in the points' place, so no line of its own moves the cards; and at
+     * any font size, since text grows with the phone's font size and a thumb's touch target does not.
      */
     @Test
-    fun `a failed like takes no height`() {
+    fun `a failed reaction takes no height`() {
         val asked = PlayUiState.Asking(QUESTION)
         val revealed = PlayUiState.Revealed(QUESTION, OUTCOME)
         FONT_SCALES.forEach { fontScale ->
             Language.entries.forEach { language ->
-                LIKE_FAILURES.forEach { error ->
+                REACTION_FAILURES.forEach { error ->
                     val at = "in $language at font scale $fontScale"
                     assertEquals(
                         heightNeeded(asked, WIDTH, language = language, fontScale = fontScale),
-                        heightNeeded(asked.copy(likeError = error), WIDTH, language = language, fontScale = fontScale),
+                        heightNeeded(
+                            asked.copy(reactionError = error),
+                            WIDTH,
+                            language = language,
+                            fontScale = fontScale,
+                        ),
                         "asked with $error $at",
                     )
                     assertEquals(
                         heightNeeded(revealed, WIDTH, language = language, fontScale = fontScale),
                         heightNeeded(
-                            revealed.copy(likeError = error),
+                            revealed.copy(reactionError = error),
                             WIDTH,
                             language = language,
                             fontScale = fontScale,
@@ -164,14 +141,15 @@ class PlayScreenDrawTest {
 
     /**
      * What each state shows, and nothing else: no title, no *OR*, no *+1*, no verdict, no vote
-     * counts and no Next question; Skip, named for a screen reader, only while a question is asked.
-     * Read once the reveal has counted up.
+     * counts and no Next question; the points a coin and the number, which a screen reader hears in
+     * words; Skip, named for a screen reader, only while a question is asked. Read once the reveal
+     * has counted up.
      */
     @Test
     fun `every state shows its texts and nothing else in every language`() {
         Language.entries.forEach { language ->
             val shown = stringsOf(language)
-            expectedOf(shown, shown.points(POINTS)).forEach { (state, expected) ->
+            expectedOf(shown, shown.points.fill(POINTS)).forEach { (state, expected) ->
                 val (texts, names) = expected
                 withScreen(state, language = language) { scene, _ ->
                     scene.renderAt(COUNTED_UP)
@@ -181,11 +159,9 @@ class PlayScreenDrawTest {
             }
             // The points are the server's, and there are none until it has said.
             withScreen(PlayUiState.Asking(QUESTION), points = null, language = language) { scene, _ ->
-                assertEquals(
-                    listOf(QUESTION.optionA, shown.allCategories, "0", QUESTION.optionB).sorted(),
-                    scene.texts().sorted(),
-                    "in $language",
-                )
+                assertEquals(listOf(QUESTION.optionA, "0", "0", QUESTION.optionB).sorted(), scene.texts().sorted())
+                val strings = shown.playScreen
+                assertEquals(listOf(strings.like, strings.dislike, strings.skip), scene.descriptions(), "in $language")
             }
         }
     }
@@ -204,15 +180,15 @@ class PlayScreenDrawTest {
         }
     }
 
-    /** One action at a time: while a vote or a like is in flight, the cards, the heart and Skip are off. */
+    /** One action at a time: while a vote or a reaction is in flight, the cards, the thumbs and Skip are off. */
     @Test
-    fun `the cards and the heart and Skip are off while anything is in flight`() {
+    fun `the cards and the thumbs and Skip are off while anything is in flight`() {
         val strings = stringsOf(Language.DEFAULT).playScreen
-        val parts = listOf(QUESTION.optionA, QUESTION.optionB, strings.like)
+        val parts = listOf(QUESTION.optionA, QUESTION.optionB, strings.like, strings.dislike)
         listOf(
             PlayUiState.Asking(QUESTION, isSubmitting = true),
-            PlayUiState.Asking(QUESTION, isLiking = true),
-            PlayUiState.Revealed(QUESTION, OUTCOME, isLiking = true),
+            PlayUiState.Asking(QUESTION, isReacting = true),
+            PlayUiState.Revealed(QUESTION, OUTCOME, isReacting = true),
         ).forEach { state ->
             val off = if (state is PlayUiState.Asking) parts + strings.skip else parts
             withScreen(state) { scene, _ -> off.forEach { assertTrue(scene.node(it).isOff, "$it in $state") } }
@@ -227,7 +203,7 @@ class PlayScreenDrawTest {
      * Skip also looks off while it is off, muted as the top bar drew it, so a tap that would do
      * nothing does not look like one that skips; in both themes and every language. Told by the
      * colours of its own pixels: the heading's accent and never the muted grey while it skips, and
-     * the grey and never the accent while a vote or a like is in flight.
+     * the grey and never the accent while a vote or a reaction is in flight.
      */
     @Test
     fun `Skip is drawn muted while anything is in flight`() {
@@ -240,7 +216,7 @@ class PlayScreenDrawTest {
                 assertTrue(accent in on && muted !in on, "Skip on $at")
                 listOf(
                     PlayUiState.Asking(QUESTION, isSubmitting = true),
-                    PlayUiState.Asking(QUESTION, isLiking = true),
+                    PlayUiState.Asking(QUESTION, isReacting = true),
                 ).forEach { state ->
                     val off = skipColours(state, colors.isDark, language)
                     assertTrue(muted in off && accent !in off, "Skip on $state $at")
@@ -250,7 +226,7 @@ class PlayScreenDrawTest {
     }
 
     /**
-     * Skip is in the row between the cards (CLAUDE.md §8d, *Skipping*), after the heart, while a
+     * Skip is in the row between the cards (CLAUDE.md §8d, *Skipping*), after the thumbs, while a
      * question is asked, in every language, and a tap on it skips; once the answer is revealed it is
      * gone, since a card is then the way on.
      */
@@ -263,7 +239,7 @@ class PlayScreenDrawTest {
                 val cardB = scene.node(QUESTION.optionB).boundsInRoot
                 val skip = scene.node(strings.skip).boundsInRoot
                 assertTrue(skip.center.y > cardA.bottom && skip.center.y < cardB.top, "Skip is at $skip in $language")
-                assertTrue(skip.left > scene.node(strings.like).boundsInRoot.right, "Skip is not after the heart")
+                assertTrue(skip.left > scene.node(strings.dislike).boundsInRoot.right, "Skip is not after the thumbs")
 
                 scene.tap(strings.skip)
 
@@ -276,35 +252,48 @@ class PlayScreenDrawTest {
     }
 
     /**
-     * Skip's place is kept once it is gone, so the reveal moves nothing in the row: not the
-     * categories, not the points, not the heart the player may tap next.
+     * Skip's place is kept once it is gone, so the reveal moves nothing in the row: not the points, not
+     * the thumbs the player may tap next, nor their counts.
      */
     @Test
     fun `the row does not move when the answer is revealed`() {
-        val shown = stringsOf(Language.DEFAULT)
-        val parts = listOf(shown.allCategories, POINTS_SHOWN, shown.playScreen.like, "0")
+        val strings = stringsOf(Language.DEFAULT).playScreen
+        val question = REACTED_TO
+        val parts = listOf(POINTS_SHOWN, strings.like, "$LIKES", strings.dislike, "$DISLIKES")
         val asked = mutableListOf<Rect>()
-        withScreen(PlayUiState.Asking(QUESTION)) { scene, _ -> parts.mapTo(asked) { scene.node(it).boundsInRoot } }
-        withScreen(PlayUiState.Revealed(QUESTION, OUTCOME)) { scene, _ ->
+        withScreen(PlayUiState.Asking(question)) { scene, _ -> parts.mapTo(asked) { scene.node(it).boundsInRoot } }
+        withScreen(PlayUiState.Revealed(question, OUTCOME)) { scene, _ ->
             assertEquals(asked, parts.map { scene.node(it).boundsInRoot })
         }
     }
 
+    /**
+     * Each thumb shows whether the player holds its reaction and how many hold it, and a tap asks for
+     * it, or for none when the player holds it already, so a second tap takes it back.
+     */
     @Test
-    fun `the row between the cards opens the categories and likes the question`() {
+    fun `the thumbs show the reactions and ask for them`() {
         Language.entries.forEach { language ->
             val strings = stringsOf(language).playScreen
-            statesOf(QUESTION).filterIsInstance<PlayUiState.OnQuestion>().forEach { state ->
+            statesOf(QUESTION).filterIsInstance<PlayUiState.OnQuestion>().filterNot { it.isBusy }.forEach { state ->
                 withScreen(state, language = language) { scene, actions ->
-                    val liked = if (state.question.likedByMe) ToggleableState.On else ToggleableState.Off
-                    val heart = scene.node(strings.like)
-                    assertEquals(liked, heart.config.getOrNull(SemanticsProperties.ToggleableState), "$state")
-                    assertTrue(state.question.likeCount.toString() in scene.texts(), "$state")
+                    val question = state.question
+                    val like = scene.node(strings.like).config.getOrNull(SemanticsProperties.ToggleableState)
+                    val dislike = scene.node(strings.dislike).config.getOrNull(SemanticsProperties.ToggleableState)
+                    assertEquals(toggle(question.myReaction == Reaction.LIKE), like, "$state")
+                    assertEquals(toggle(question.myReaction == Reaction.DISLIKE), dislike, "$state")
+                    assertTrue(question.likeCount.toString() in scene.texts(), "$state")
+                    assertTrue(question.dislikeCount.toString() in scene.texts(), "$state")
 
-                    scene.tap(stringsOf(language).allCategories)
                     scene.tap(strings.like)
+                    scene.tap(strings.dislike)
 
-                    assertEquals(listOf("categories", "like"), actions.tapped, "$state in $language")
+                    val asked =
+                        listOf(
+                            "react ${reactionAfterTap(Reaction.LIKE, question.myReaction)}",
+                            "react ${reactionAfterTap(Reaction.DISLIKE, question.myReaction)}",
+                        )
+                    assertEquals(asked, actions.tapped, "$state in $language")
                 }
             }
         }
@@ -313,7 +302,8 @@ class PlayScreenDrawTest {
     /**
      * A screen reader hears what a tap does where the text does not say it: a card on the reveal goes
      * on to the next question, which its option alone would make sound like answering again, and the
-     * categories played open the Categories screen. Before the reveal a card's option says it all.
+     * categories played, on the top bar, open the Categories screen. Before the reveal a card's option
+     * says it all.
      */
     @Test
     fun `a screen reader hears what a tap on a revealed card and on the categories does`() {
@@ -323,68 +313,65 @@ class PlayScreenDrawTest {
             val all = stringsOf(language).allCategories
             withScreen(PlayUiState.Asking(QUESTION), language = language) { scene, _ ->
                 cards.forEach { assertNull(scene.clickLabel(it), "$it before the reveal in $language") }
-                assertEquals(strings.changeCategories, scene.clickLabel(all), "in $language")
             }
             withScreen(PlayUiState.Revealed(QUESTION, OUTCOME), language = language) { scene, _ ->
                 cards.forEach { assertEquals(strings.nextQuestion, scene.clickLabel(it), "$it in $language") }
             }
-            withScreen(PlayUiState.Failed(DomainError.OUT_OF_QUESTIONS), language = language) { scene, _ ->
-                assertEquals(strings.changeCategories, scene.clickLabel(all), "failed in $language")
+            val scene =
+                ImageComposeScene(width = SHORT_PHONE_WIDTH, height = ROW_HEIGHT, density = Density(1f)) {
+                    WyrTheme { WyrStrings(language) { CategoriesPlayed(text = all, enabled = true, onClick = {}) } }
+                }
+            try {
+                scene.render()
+                assertEquals(strings.changeCategories, scene.clickLabel(all), "the categories in $language")
+            } finally {
+                scene.close()
             }
         }
     }
 
     /**
-     * The categories, the points, the heart and Skip sit in one row between the two cards, in that
-     * order, the points in the middle of the screen while the categories played leave them room.
+     * The points, the thumbs and Skip sit in one row between the two cards, in that order, the thumbs
+     * in the middle of the screen.
      */
     @Test
-    fun `the row sits between the cards with the points in the middle`() {
-        val shown = stringsOf(Language.DEFAULT)
-        val strings = shown.playScreen
-        withScreen(PlayUiState.Asking(QUESTION)) { scene, _ ->
-            val cardA = scene.node(QUESTION.optionA).boundsInRoot
-            val cardB = scene.node(QUESTION.optionB).boundsInRoot
+    fun `the row sits between the cards with the thumbs in the middle`() {
+        val strings = stringsOf(Language.DEFAULT).playScreen
+        withScreen(PlayUiState.Asking(REACTED_TO)) { scene, _ ->
+            val cardA = scene.node(REACTED_TO.optionA).boundsInRoot
+            val cardB = scene.node(REACTED_TO.optionB).boundsInRoot
             val row =
-                listOf(
-                    shown.allCategories,
-                    POINTS_SHOWN,
-                    strings.like,
-                    strings.skip,
-                ).map { scene.node(it).boundsInRoot }
+                listOf(POINTS_SHOWN, strings.like, strings.dislike, "$DISLIKES", strings.skip).map {
+                    scene.node(it).boundsInRoot
+                }
             row.forEach { part -> assertTrue(part.center.y > cardA.bottom && part.center.y < cardB.top, "$part") }
 
-            val (categories, points, heart, skip) = row
-            assertTrue(abs(points.center.x - SHORT_PHONE_WIDTH / 2f) <= 1f, "the points are at ${points.center.x}")
-            assertTrue(categories.right < points.left && heart.left > points.right && skip.left > heart.right, "$row")
-            assertTrue(categories.left >= cardA.left && skip.right <= cardA.right, "the row is wider than a card: $row")
+            val (points, like, dislike, dislikes, skip) = row
+            // A thumb's bounds are its icon button's, inside its touch target, which the row sets from.
+            val thumbsMiddle = (like.left - TOUCH_INSET + dislikes.right) / 2
+            assertTrue(abs(thumbsMiddle - SHORT_PHONE_WIDTH / 2f) <= 1f, "the thumbs are about $thumbsMiddle")
+            assertTrue(points.right < like.left && like.right < dislike.left && skip.left > dislikes.right, "$row")
+            assertTrue(points.left >= cardA.left && skip.right <= cardA.right, "the row is wider than a card: $row")
         }
     }
 
     /**
-     * The categories played take what the like, Skip and the points leave them, so a long Cyrillic
-     * name shows whole beside them, the server's names being Serbian (CLAUDE.md §8d, *The Play
-     * screen*); the points move aside only as far as it needs, never over it or the heart. A
-     * selection longer than the row is what is cut short, never the points, the like count or Skip.
-     *
-     * Measured 400 wide, as the fit test above is, since CI's Linux fonts run wider than a phone's.
-     * On this Mac the row at 375 leaves *Начин живота* its 125 with room to spare.
+     * A reaction's failure shows in the points' place, cut short on its two lines there when it runs
+     * long, never the counts or Skip; measured 400 wide, as the fit test above is.
      */
     @Test
-    fun `a long Cyrillic selection shows whole beside the points and the like`() {
-        val strings = stringsOf(Language.DEFAULT).playScreen
-        LONG_SELECTIONS.forEach { selection ->
-            withRow(selection, WIDTH - 2 * PADDING) { scene ->
-                assertFalse(scene.isCutShort(selection), "\"$selection\" is cut short")
-                val (categories, points, heart) =
-                    listOf(selection, POINTS_SHOWN, strings.like).map { scene.node(it).boundsInRoot }
-                assertTrue(categories.right < points.left && points.right < heart.left, "\"$selection\"")
+    fun `a reaction's failure takes the points' place and leaves the rest whole`() {
+        Language.entries.forEach { language ->
+            val strings = stringsOf(language).playScreen
+            REACTION_FAILURES.forEach { error ->
+                withRow(WIDTH - 2 * PADDING, language = language, reactionError = error) { scene ->
+                    val failure = failureText(assertNotNull(error), strings)
+                    assertTrue(failure in scene.texts(), "$error in $language")
+                    assertFalse(POINTS_SHOWN in scene.descriptions(), "the points make way in $language")
+                    listOf("$LIKES", "$DISLIKES").forEach { assertFalse(scene.isCutShort(it), "$it in $language") }
+                    assertTrue(strings.skip in scene.descriptions())
+                }
             }
-        }
-        withRow(EVERY_CATEGORY_IN_CYRILLIC, WIDTH - 2 * PADDING) { scene ->
-            assertTrue(scene.isCutShort(EVERY_CATEGORY_IN_CYRILLIC), "every category is not cut short")
-            listOf(POINTS_SHOWN, LIKES.toString()).forEach { assertFalse(scene.isCutShort(it), it) }
-            assertTrue(strings.skip in scene.descriptions())
         }
     }
 
@@ -431,36 +418,17 @@ class PlayScreenDrawTest {
         }
     }
 
-    /** A selection with nothing to serve ends in a failure, and the categories are the way out of it. */
+    /**
+     * A failure offers Try again; a selection with nothing to serve ends here too, and the categories
+     * played on the top bar are the way out of it (`TopBarsDrawTest`).
+     */
     @Test
-    fun `a failure offers Try again and the categories`() {
+    fun `a failure offers Try again`() {
         Language.entries.forEach { language ->
             withScreen(PlayUiState.Failed(DomainError.OUT_OF_QUESTIONS), language = language) { scene, actions ->
                 scene.tap(stringsOf(language).tryAgain)
-                scene.tap(stringsOf(language).allCategories)
-                assertEquals(listOf("retry", "categories"), actions.tapped, "in $language")
-            }
-        }
-    }
-
-    /**
-     * The categories played are named in the language shown, the server's Serbian made Latin in
-     * Serbian Latin, and a tap on them opens the Categories screen in each.
-     */
-    @Test
-    fun `the categories played are named in the language shown`() {
-        val named =
-            mapOf(
-                Language.SERBIAN_CYRILLIC to "Начин живота",
-                Language.SERBIAN_LATIN to "Način života",
-                Language.ENGLISH to "Lifestyle",
-            )
-        named.forEach { (language, name) ->
-            val asked = PlayUiState.Asking(QUESTION)
-            withScreen(asked, categories = setOf("LIFESTYLE"), language = language) { scene, actions ->
-                assertTrue(name in scene.texts(), "in $language: ${scene.texts()}")
-                scene.tap(name)
-                assertEquals(listOf("categories"), actions.tapped, "in $language")
+                assertEquals(listOf("retry"), actions.tapped, "in $language")
+                assertFalse(stringsOf(language).allCategories in scene.texts(), "the categories are on the top bar")
             }
         }
     }
@@ -501,6 +469,59 @@ class PlayScreenDrawTest {
                 }
                 val after = scene.pixelsAt(COUNTED_UP * 2, areas, from = COUNTED_UP)
                 assertEquals(end, after, "after, in the $theme theme")
+            }
+        }
+    }
+
+    /**
+     * Each card's bar, along its edge by the row, fills from its start with the count, over the same
+     * two and a half seconds, and stops where the card's share does: empty at the start, part way
+     * halfway, and at 2.5 seconds filled to its share of the card's width, then still. Told by the
+     * pixels along the middle of each bar: the card's text colour where it is filled.
+     */
+    @Test
+    fun `each card's bar fills with its share over two and a half seconds`() {
+        listOf(WyrLightColors, WyrDarkColors).forEach { colors ->
+            val theme = if (colors.isDark) "dark" else "light"
+            withScreen(PlayUiState.Revealed(QUESTION, OUTCOME), dark = colors.isDark) { scene, _ ->
+                val cardA = scene.node(QUESTION.optionA).boundsInRoot
+                val cardB = scene.node(QUESTION.optionB).boundsInRoot
+                // Along the middle of each bar, in from its card's edge past the pick's outline: card B is
+                // the pick here, outlined in the colour its bar fills with.
+                val bars =
+                    listOf(
+                        Triple(cardA, cardA.bottom - BAR_INSET - BAR_HEIGHT / 2, colors.onOptionA),
+                        Triple(cardB, cardB.top + BAR_INSET + BAR_HEIGHT / 2, colors.onOptionB),
+                    )
+
+                // How far each bar is filled, as a share of its card's width: from past the card's round
+                // corner and the outline beside it, as far right as the fill runs unbroken; null for none.
+                fun filledTo(nanoTime: Long): List<Float?> {
+                    scene.renderAt(nanoTime)
+                    val pixels = scene.render(nanoTime).toComposeImageBitmap().toPixelMap()
+                    return bars.map { (card, y, fill) ->
+                        val from = card.left.toInt() + CORNER
+                        val to =
+                            (from until card.right.toInt())
+                                .takeWhile { x -> pixels[x, y.toInt()].toArgb() == fill.toArgb() }
+                                .lastOrNull()
+                        to?.let { (it + 1 - card.left) / card.width }
+                    }
+                }
+
+                val start = filledTo(0)
+                val halfway = filledTo(COUNTED_UP / 2)
+                val end = filledTo(COUNTED_UP)
+                val after = filledTo(COUNTED_UP * 2)
+                assertEquals(listOf<Float?>(null, null), start, "nothing filled at the start in the $theme theme")
+                listOf(0.7f, 0.3f).forEachIndexed { card, share ->
+                    val at = "card ${card + 1} in the $theme theme"
+                    val half = assertNotNull(halfway[card], "$at halfway")
+                    assertTrue(half > 0f && half < share, "$at is filled to $half halfway")
+                    val filled = assertNotNull(end[card], "$at at 2.5 seconds")
+                    assertTrue(abs(filled - share) <= BAR_TOLERANCE, "$at is filled to $filled of $share")
+                }
+                assertEquals(end, after, "still after, in the $theme theme")
             }
         }
     }
@@ -552,15 +573,14 @@ class PlayScreenDrawTest {
 
     /**
      * At a short phone's width, less the screen's padding, the row needs no more width than it has,
-     * so nothing in it is cut short but a long selection: not the points, not the like count, not
-     * how a like failed, in any language; and it is the same height whatever it shows.
+     * so nothing in it is cut short: not the points, not the counts, not how a reaction failed, in any
+     * language; and it is the same height whatever it shows.
      */
     @Test
     fun `nothing in the row is cut short at a short phone's width`() {
-        val question = QUESTION.copy(likeCount = 1234, likedByMe = true)
+        val question = QUESTION.copy(likeCount = 1234, dislikeCount = 567, myReaction = Reaction.LIKE)
         Language.entries.forEach { language ->
-            val all = stringsOf(language).allCategories
-            (LIKE_FAILURES + null).forEach { error ->
+            (REACTION_FAILURES + null).forEach { error ->
                 // Asked, with Skip, and answered, with its place kept.
                 listOf<(() -> Unit)?>({}, null).forEach { onSkip ->
                     val at = "with $error in $language ${if (onSkip == null) "answered" else "asked"}"
@@ -570,13 +590,10 @@ class PlayScreenDrawTest {
                                 WyrStrings(language) {
                                     MiddleRow(
                                         question = question,
-                                        categoriesPlayed = all,
                                         points = 12345,
-                                        likeError = error,
-                                        canChangeCategories = true,
+                                        reactionError = error,
                                         idle = true,
-                                        onOpenCategories = {},
-                                        onToggleLike = {},
+                                        onReact = {},
                                         onSkip = onSkip,
                                     )
                                 }
@@ -693,28 +710,28 @@ class PlayScreenDrawTest {
     }
 
     /**
-     * [test] on the row alone, [width] wide, asked with Skip, the categories played named
-     * [categoriesPlayed], [POINTS] and [LIKES] likes.
+     * [test] on the row alone, [width] wide, in [language], asked with Skip: [POINTS], or how a
+     * reaction failed, [reactionError], and [LIKES] likes and [DISLIKES] dislikes.
      */
     private fun withRow(
-        categoriesPlayed: String,
         width: Int,
+        language: Language = Language.DEFAULT,
+        reactionError: DomainError? = null,
         test: (ImageComposeScene) -> Unit,
     ) {
         val scene =
             ImageComposeScene(width = width, height = ROW_HEIGHT, density = Density(1f)) {
                 WyrTheme {
-                    MiddleRow(
-                        question = QUESTION.copy(likeCount = LIKES),
-                        categoriesPlayed = categoriesPlayed,
-                        points = POINTS,
-                        likeError = null,
-                        canChangeCategories = true,
-                        idle = true,
-                        onOpenCategories = {},
-                        onToggleLike = {},
-                        onSkip = {},
-                    )
+                    WyrStrings(language) {
+                        MiddleRow(
+                            question = REACTED_TO,
+                            points = POINTS,
+                            reactionError = reactionError,
+                            idle = true,
+                            onReact = {},
+                            onSkip = {},
+                        )
+                    }
                 }
             }
         try {
@@ -732,19 +749,21 @@ class PlayScreenDrawTest {
     private val SemanticsNode.isOff: Boolean
         get() = config.getOrNull(SemanticsProperties.Disabled) != null
 
+    /** A thumb's toggle as a screen reader hears it: on while the player holds its reaction. */
+    private fun toggle(on: Boolean): ToggleableState = if (on) ToggleableState.On else ToggleableState.Off
+
     /** What the screen's callbacks were called for, in order. */
     private class Actions {
         val tapped = mutableListOf<String>()
     }
 
     /**
-     * [test] on [state]'s screen at the short phone's size, [categories] played, in the light theme
-     * unless [dark], drawn at time 0, its composition counted by [recompositions].
+     * [test] on [state]'s screen at the short phone's size, in the light theme unless [dark], drawn at
+     * time 0, its composition counted by [recompositions].
      */
     private fun withScreen(
         state: PlayUiState,
         points: Int? = POINTS,
-        categories: Set<String> = emptySet(),
         language: Language = Language.DEFAULT,
         dark: Boolean = false,
         recompositions: Recompositions = Recompositions(),
@@ -755,7 +774,7 @@ class PlayScreenDrawTest {
             ImageComposeScene(width = SHORT_PHONE_WIDTH, height = SHORT_PHONE_HEIGHT, density = Density(1f)) {
                 CountedBy(recompositions) {
                     WyrTheme(darkTheme = dark) {
-                        WyrStrings(language) { Screen(state, categories, points, actions) }
+                        WyrStrings(language) { Screen(state, points, actions) }
                     }
                 }
             }
@@ -772,12 +791,11 @@ class PlayScreenDrawTest {
         dark: Boolean,
         width: Int,
         height: Int,
-        categories: Set<String> = emptySet(),
         language: Language = Language.DEFAULT,
     ) {
         val scene =
             ImageComposeScene(width = width, height = height, density = Density(1f)) {
-                WyrTheme(darkTheme = dark) { WyrStrings(language) { Screen(state, categories, POINTS) } }
+                WyrTheme(darkTheme = dark) { WyrStrings(language) { Screen(state, POINTS) } }
             }
         try {
             assertEquals(width, scene.render().width)
@@ -793,12 +811,11 @@ class PlayScreenDrawTest {
     private fun heightNeeded(
         state: PlayUiState,
         width: Int,
-        categories: Set<String> = emptySet(),
         language: Language = Language.DEFAULT,
         fontScale: Float = 1f,
     ): Int =
         heightNeeded(width, "$state", fontScale) {
-            WyrStrings(language) { Screen(state, categories, POINTS) }
+            WyrStrings(language) { Screen(state, POINTS) }
         }
 
     /** The least height [content] needs at [width] for nothing in it to be squeezed. */
@@ -829,24 +846,20 @@ class PlayScreenDrawTest {
         return needed
     }
 
-    /** The screen with [categories] played, [KNOWN] read. */
     @Composable
     private fun Screen(
         state: PlayUiState,
-        categories: Set<String>,
         points: Int?,
         actions: Actions = Actions(),
     ) {
         PlayScreen(
             state = state,
-            categories = PlayedCategories(selected = categories, known = KNOWN),
             points = points,
             onChoose = { side -> actions.tapped += "choose $side" },
             onSkip = { actions.tapped += "skip" },
             onNext = { actions.tapped += "next" },
-            onToggleLike = { actions.tapped += "like" },
+            onReact = { reaction -> actions.tapped += "react $reaction" },
             onRetry = { actions.tapped += "retry" },
-            onOpenCategories = { actions.tapped += "categories" },
         )
     }
 
@@ -864,8 +877,23 @@ class PlayScreenDrawTest {
         /** The short phone's width less the screen's padding on each side. */
         const val ROW_WIDTH = SHORT_PHONE_WIDTH - 2 * PADDING
 
-        /** The heart button's touch target and the row's padding above and below it. */
+        /** A thumb's touch target and the row's padding above and below it. */
         const val ROW_HEIGHT = 56
+
+        /** How far an icon button's bounds are inside its touch target, 40 of 48, on each side. */
+        const val TOUCH_INSET = 4f
+
+        /** The reveal's bar's height (`WyrDimens.revealBarHeight`). */
+        const val BAR_HEIGHT = 6f
+
+        /** How far in from its card's edge each bar stands (`WyrDimens.revealBarInset`). */
+        const val BAR_INSET = 8f
+
+        /** Past a card's round corner, and the pick's outline along it, where a bar's fill shows first. */
+        const val CORNER = 14
+
+        /** How far a bar's fill may end from its share of the card's width: a pixel and its rounding. */
+        const val BAR_TOLERANCE = 0.01f
 
         /** The scene's clock, in nanoseconds, once the reveal has counted up. */
         const val COUNTED_UP = COUNT_UP_MILLIS * 1_000_000L
@@ -875,20 +903,15 @@ class PlayScreenDrawTest {
 
         const val POINTS = 42
 
-        /** [POINTS] as the default language shows them, which the scenes are drawn in unless told. */
-        val POINTS_SHOWN = stringsOf(Language.DEFAULT).points(POINTS)
-
-        /** A like count of a question many like. */
-        const val LIKES = 12
-
         /**
-         * The longest of the server's category names (`feat/server-categories`' V6), the two words
-         * of *Lifestyle*; another single one; and two short ones together.
+         * [POINTS] as a screen reader hears them in the default language, which the scenes are drawn
+         * in unless told: on screen they are a coin and the number.
          */
-        val LONG_SELECTIONS = listOf("Начин живота", "Супермоћи", "Храна, Етика")
+        val POINTS_SHOWN = stringsOf(Language.DEFAULT).points.fill(POINTS)
 
-        /** Every one of the server's categories played, longer than the row. */
-        const val EVERY_CATEGORY_IN_CYRILLIC = "Храна, Начин живота, Етика, Супермоћи, Апсурдно"
+        /** A like count of a question many like, and its dislike count, neither the other's. */
+        const val LIKES = 12
+        const val DISLIKES = 5
 
         /** Two lines an option on a phone, as most seeds are. */
         val QUESTION =
@@ -900,25 +923,14 @@ class PlayScreenDrawTest {
             )
         val ONE_LINE_QUESTION = QUESTION.copy(optionA = "Fly", optionB = "Swim")
 
-        /** The server's first five categories, as V6 wrote them, in the order of categories. */
-        val KNOWN =
-            listOf(
-                Category(id = "FOOD", nameSr = "Храна", nameEn = "Food"),
-                Category(id = "LIFESTYLE", nameSr = "Начин живота", nameEn = "Lifestyle"),
-                Category(id = "ETHICS", nameSr = "Етика", nameEn = "Ethics"),
-                Category(id = "SUPERPOWERS", nameSr = "Супермоћи", nameEn = "Superpowers"),
-                Category(id = "ABSURD", nameSr = "Апсурдно", nameEn = "Absurd"),
-            )
-        val EVERY: Set<String> = KNOWN.map { it.id }.toSet()
-
-        /** None, which is every category; one; and every one, the longest line the row can hold. */
-        val SELECTIONS: List<Set<String>> = listOf(emptySet(), setOf("ETHICS"), EVERY)
+        /** [QUESTION] with [LIKES] likes and [DISLIKES] dislikes, neither the player's. */
+        val REACTED_TO = QUESTION.copy(likeCount = LIKES, dislikeCount = DISLIKES)
 
         /** The phone's font size as it is, Android's largest before Android 14, and twice it, the largest since. */
         val FONT_SCALES: List<Float> = listOf(1f, 1.3f, 2f)
 
-        /** Every way a like's failure is worded, the longest among them. */
-        val LIKE_FAILURES: List<DomainError?> =
+        /** Every way a reaction's failure is worded, the longest among them. */
+        val REACTION_FAILURES: List<DomainError?> =
             listOf(DomainError.NETWORK, DomainError.RATE_LIMITED, DomainError.QUESTION_NOT_FOUND, DomainError.SERVER)
 
         val OUTCOME =
@@ -940,54 +952,57 @@ class PlayScreenDrawTest {
                 PlayUiState.Failed(DomainError.SERVER),
                 PlayUiState.Asking(question),
                 PlayUiState.Asking(question, isSubmitting = true),
-                PlayUiState.Asking(question.copy(likeCount = 1, likedByMe = true), isLiking = true),
-                PlayUiState.Asking(question.copy(likeCount = 12), likeError = DomainError.NETWORK),
+                PlayUiState.Asking(question.copy(likeCount = 1, myReaction = Reaction.LIKE), isReacting = true),
+                PlayUiState.Asking(question.copy(likeCount = 12), reactionError = DomainError.NETWORK),
+                PlayUiState.Asking(question.copy(likeCount = 4, dislikeCount = 2, myReaction = Reaction.DISLIKE)),
                 PlayUiState.Revealed(question, OUTCOME),
                 PlayUiState.Revealed(question, OUTCOME.copy(pointsAwarded = 0, replayed = true)),
-                PlayUiState.Revealed(question.copy(likeCount = 3), OUTCOME, isLiking = true),
-                PlayUiState.Revealed(question.copy(likeCount = 1234, likedByMe = true), OUTCOME),
-                PlayUiState.Revealed(question, OUTCOME, likeError = DomainError.NETWORK),
-                PlayUiState.Revealed(question, OUTCOME, likeError = DomainError.QUESTION_NOT_FOUND),
+                PlayUiState.Revealed(question.copy(likeCount = 3), OUTCOME, isReacting = true),
+                PlayUiState.Revealed(
+                    question.copy(likeCount = 1234, dislikeCount = 99, myReaction = Reaction.LIKE),
+                    OUTCOME,
+                ),
+                PlayUiState.Revealed(question, OUTCOME, reactionError = DomainError.NETWORK),
+                PlayUiState.Revealed(question, OUTCOME, reactionError = DomainError.QUESTION_NOT_FOUND),
             )
 
         /**
-         * What some states show in [shown]'s words, with [points] as the points, each its texts in any
-         * order, and then the names it gives a screen reader for what has no text, from the top down.
+         * What some states show in [shown]'s words, each its texts in any order, and then the names it
+         * gives a screen reader for what has no text, from the top down: the thumbs and, while a
+         * question is asked, Skip, and then [points], as it hears the points, which sit a little lower,
+         * in the middle of the row's height, as the thumbs' touch targets fill it.
          */
         fun expectedOf(
             shown: Strings,
             points: String,
         ): List<Pair<PlayUiState, Pair<List<String>, List<String>>>> {
             val strings = shown.playScreen
-            val all = shown.allCategories
             val tryAgain = shown.tryAgain
             val a = QUESTION.optionA
             val b = QUESTION.optionB
             val revealedA = strings.percent(70)
             val revealedB = strings.percent(30)
-            val like = listOf(strings.like)
-            val likeAndSkip = listOf(strings.like, strings.skip)
+            val thumbs = listOf(strings.like, strings.dislike)
+            val thumbsAndSkip = thumbs + strings.skip
             return listOf(
                 PlayUiState.Loading to (emptyList<String>() to listOf(shown.loading)),
-                PlayUiState.Failed(DomainError.NETWORK) to
-                    (listOf(strings.cannotReach, tryAgain, all) to emptyList()),
+                PlayUiState.Failed(DomainError.NETWORK) to (listOf(strings.cannotReach, tryAgain) to emptyList()),
                 PlayUiState.Failed(DomainError.OUT_OF_QUESTIONS) to
-                    (listOf(strings.outOfQuestions, tryAgain, all) to emptyList()),
-                PlayUiState.Failed(DomainError.SERVER) to
-                    (listOf(strings.somethingWrong, tryAgain, all) to emptyList()),
-                PlayUiState.Asking(QUESTION) to (listOf(a, all, points, "0", b) to likeAndSkip),
-                PlayUiState.Asking(QUESTION.copy(likeCount = 12), likeError = DomainError.NETWORK) to
-                    (listOf(a, all, strings.cannotReach, "12", b) to likeAndSkip),
+                    (listOf(strings.outOfQuestions, tryAgain) to emptyList()),
+                PlayUiState.Failed(DomainError.SERVER) to (listOf(strings.somethingWrong, tryAgain) to emptyList()),
+                PlayUiState.Asking(QUESTION) to (listOf(a, "0", "0", b) to thumbsAndSkip + points),
+                PlayUiState.Asking(QUESTION.copy(likeCount = 12), reactionError = DomainError.NETWORK) to
+                    (listOf(a, strings.cannotReach, "12", "0", b) to thumbsAndSkip),
                 PlayUiState.Revealed(QUESTION, OUTCOME) to
-                    (listOf(a, revealedA, all, points, "0", b, revealedB) to like),
+                    (listOf(a, revealedA, "0", "0", b, revealedB) to thumbs + points),
                 PlayUiState.Revealed(QUESTION, OUTCOME.copy(pointsAwarded = 0, replayed = true)) to
-                    (listOf(a, revealedA, all, points, "0", b, revealedB) to like),
+                    (listOf(a, revealedA, "0", "0", b, revealedB) to thumbs + points),
                 PlayUiState.Revealed(
-                    QUESTION.copy(likeCount = 3),
+                    QUESTION.copy(likeCount = 3, dislikeCount = 1),
                     OUTCOME,
-                    likeError = DomainError.QUESTION_NOT_FOUND,
+                    reactionError = DomainError.QUESTION_NOT_FOUND,
                 ) to
-                    (listOf(a, revealedA, all, strings.questionGone, "3", b, revealedB) to like),
+                    (listOf(a, revealedA, strings.questionGone, "3", "1", b, revealedB) to thumbs),
             )
         }
     }

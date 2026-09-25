@@ -22,9 +22,6 @@ import io.ntole.wyr.core.domain.category.CategoryRepository
 import io.ntole.wyr.core.domain.category.GetCategories
 import io.ntole.wyr.core.domain.error.DomainError
 import io.ntole.wyr.core.domain.error.WyrException
-import io.ntole.wyr.core.domain.like.LikeRepository
-import io.ntole.wyr.core.domain.like.QuestionLikes
-import io.ntole.wyr.core.domain.like.SetLike
 import io.ntole.wyr.core.domain.player.GetPlayerStats
 import io.ntole.wyr.core.domain.player.PlayerRepository
 import io.ntole.wyr.core.domain.player.PlayerStats
@@ -32,6 +29,10 @@ import io.ntole.wyr.core.domain.question.GetNextQuestion
 import io.ntole.wyr.core.domain.question.Question
 import io.ntole.wyr.core.domain.question.QuestionRepository
 import io.ntole.wyr.core.domain.question.SkipQuestion
+import io.ntole.wyr.core.domain.reaction.QuestionReactions
+import io.ntole.wyr.core.domain.reaction.Reaction
+import io.ntole.wyr.core.domain.reaction.ReactionRepository
+import io.ntole.wyr.core.domain.reaction.SetReaction
 import io.ntole.wyr.core.domain.session.SessionRepository
 import io.ntole.wyr.core.domain.submission.GetMySubmissions
 import io.ntole.wyr.core.domain.submission.Submission
@@ -52,6 +53,7 @@ import io.ntole.wyr.language.Language
 import io.ntole.wyr.language.LanguageViewModel
 import io.ntole.wyr.language.SerbianCyrillicStrings
 import io.ntole.wyr.language.categoryName
+import io.ntole.wyr.language.fill
 import io.ntole.wyr.submit.sendText
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
@@ -116,8 +118,10 @@ class AppNavigationTest {
         }
 
     /**
-     * Skip is in the row between the cards while a question is asked, after the heart, and not on the
-     * top bar, which holds home and the account icon alone; it goes past the question to the next.
+     * Skip is in the row between the cards while a question is asked, after the thumbs, and not on the
+     * top bar, which holds home, the categories played and the account icon; it goes past the question
+     * to the next. The points, a coin and the number, a screen reader hears in words, last, a little
+     * lower in the row than the thumbs' touch targets.
      */
     @Test
     fun `Skip between the cards skips the question asked`() {
@@ -125,9 +129,12 @@ class AppNavigationTest {
         withApp { scene ->
             scene.tap(CYRILLIC.play)
             assertEquals(
-                listOf(CYRILLIC.home, CYRILLIC.account, CYRILLIC.playScreen.like, CYRILLIC.playScreen.skip),
+                listOf(CYRILLIC.home, CYRILLIC.account) +
+                    listOf(CYRILLIC.playScreen.like, CYRILLIC.playScreen.dislike, CYRILLIC.playScreen.skip) +
+                    CYRILLIC.points.fill(5),
                 scene.descriptions(),
             )
+            assertTrue(CYRILLIC.allCategories in scene.texts(), "the categories played are on the top bar")
 
             scene.tap(CYRILLIC.playScreen.skip)
 
@@ -191,12 +198,15 @@ class AppNavigationTest {
     @Test
     fun `the Submit form opens from My questions and its back arrow returns to Account`() =
         withApp { scene ->
+            // Only a registered player submits.
+            game.username = "bob"
             scene.tap(CYRILLIC.account)
             assertEquals(1, game.statsRead)
             assertEquals(1, game.submissionsRead)
 
             scene.tap(CYRILLIC.accountScreens.newQuestion)
-            assertTrue(sendText(CYRILLIC) in scene.texts(), "the form is not shown")
+            // Its cost is a coin and the number, which a screen reader hears in words.
+            assertTrue(sendText(CYRILLIC) in scene.descriptions(), "the form is not shown")
             assertEquals(listOf(CYRILLIC.back), scene.descriptions().take(1))
             assertEquals(2, game.statsRead)
 
@@ -210,6 +220,7 @@ class AppNavigationTest {
     @Test
     fun `a question sent goes back to My questions which lists it`() =
         withApp { scene ->
+            game.username = "bob"
             scene.tap(CYRILLIC.account)
             scene.tap(CYRILLIC.accountScreens.newQuestion)
             scene.type(0, "Fly")
@@ -222,7 +233,11 @@ class AppNavigationTest {
             assertEquals(listOf("Fly"), game.sent.map { it.optionA })
             val shown = scene.everyText()
             assertTrue(CYRILLIC.accountScreens.newQuestion in shown, "the Account screen is not shown: $shown")
-            assertTrue("Fly" in shown && CYRILLIC.accountScreens.pending in shown, "the question is not listed: $shown")
+            val listed = "Fly ${CYRILLIC.accountScreens.or} Swim"
+            assertTrue(
+                listed in shown && CYRILLIC.accountScreens.pending in shown,
+                "the question is not listed: $shown",
+            )
             assertEquals(2, game.submissionsRead)
         }
 
@@ -232,6 +247,7 @@ class AppNavigationTest {
         withApp { scene ->
             val answer = CompletableDeferred<Unit>()
             game.submitWaitsFor = answer
+            game.username = "bob"
             scene.tap(CYRILLIC.account)
             scene.tap(CYRILLIC.accountScreens.newQuestion)
             scene.type(0, "Fly")
@@ -246,7 +262,11 @@ class AppNavigationTest {
 
             val shown = scene.everyText()
             assertTrue(CYRILLIC.accountScreens.newQuestion in shown, "the Account screen is not shown: $shown")
-            assertTrue("Fly" in shown && CYRILLIC.accountScreens.pending in shown, "the question is not listed: $shown")
+            val listed = "Fly ${CYRILLIC.accountScreens.or} Swim"
+            assertTrue(
+                listed in shown && CYRILLIC.accountScreens.pending in shown,
+                "the question is not listed: $shown",
+            )
             assertEquals(3, game.submissionsRead)
         }
 
@@ -352,12 +372,13 @@ class AppNavigationTest {
             assertEquals(ToggleableState.On, scene.toggleOf(CYRILLIC.allCategories))
         }
 
-    /** The switch changes the screen it is on at once, and every screen after it, and is kept. */
+    /** The menu changes the screen it is on at once, and every screen after it, and is kept. */
     @Test
-    fun `the language switch changes every screen at once and is kept`() =
+    fun `the language menu changes every screen at once and is kept`() =
         withApp { scene ->
             scene.tap(CYRILLIC.account)
 
+            scene.tap("${CYRILLIC.language}: ${Language.SERBIAN_CYRILLIC.ownName}")
             scene.tap(Language.ENGLISH.ownName)
 
             assertTrue(ENGLISH.accountScreens.newQuestion in scene.texts(), "${scene.texts()}")
@@ -398,7 +419,7 @@ class AppNavigationTest {
             single<QuestionRepository> { game }
             single<SessionRepository> { game }
             single<VoteRepository> { game }
-            single<LikeRepository> { game }
+            single<ReactionRepository> { game }
             single<PlayerRepository> { game }
             single<AccountRepository> { game }
             single<SubmissionRepository> { game }
@@ -406,7 +427,7 @@ class AppNavigationTest {
             factory { GetNextQuestion(questions = get(), session = get()) }
             factory { SkipQuestion(questions = get(), session = get()) }
             factory { CastVote(votes = get(), session = get()) }
-            factory { SetLike(likes = get(), session = get()) }
+            factory { SetReaction(reactions = get(), session = get()) }
             factory { GetPlayerStats(players = get(), session = get()) }
             factory { RegisterAccount(accounts = get(), session = get()) }
             factory { LogIn(accounts = get(), questions = get()) }
@@ -448,14 +469,14 @@ class AppNavigationTest {
 
     /**
      * The game, counting what the screens ask of it. Out of questions unless it is [serving] one, so
-     * the Play screen shows a failure; nothing here votes or likes, and a registration and a
+     * the Play screen shows a failure; nothing here votes or reacts, and a registration and a
      * submission always work.
      */
     private class FakeGame :
         QuestionRepository,
         SessionRepository,
         VoteRepository,
-        LikeRepository,
+        ReactionRepository,
         PlayerRepository,
         AccountRepository,
         SubmissionRepository {
@@ -511,14 +532,14 @@ class AppNavigationTest {
             attempt: AttemptId,
         ): VoteOutcome = error("nothing votes here")
 
-        override suspend fun setLiked(
+        override suspend fun setReaction(
             questionId: String,
-            liked: Boolean,
-        ): QuestionLikes = error("nothing likes here")
+            reaction: Reaction,
+        ): QuestionReactions = error("nothing reacts here")
 
         override suspend fun stats(): PlayerStats {
             statsRead++
-            return PlayerStats(5, 5, 5, 1, 10, 0, username = username)
+            return PlayerStats(totalPoints = 5, questionsAnswered = 5, username = username)
         }
 
         override suspend fun register(

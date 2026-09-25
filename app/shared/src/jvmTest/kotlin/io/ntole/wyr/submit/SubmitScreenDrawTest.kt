@@ -7,6 +7,7 @@ import androidx.compose.ui.unit.Density
 import io.ntole.wyr.core.domain.category.Category
 import io.ntole.wyr.core.domain.error.DomainError
 import io.ntole.wyr.core.domain.submission.SubmissionRules
+import io.ntole.wyr.descriptions
 import io.ntole.wyr.everyText
 import io.ntole.wyr.language.Language
 import io.ntole.wyr.language.WyrStrings
@@ -100,6 +101,31 @@ class SubmitScreenDrawTest {
         }
     }
 
+    /** Only a registered player submits: for a guest Send is off, and one short line says to register. */
+    @Test
+    fun `Send is off for a guest who is told to register first`() {
+        Language.entries.forEach { language ->
+            val strings = stringsOf(language).accountScreens
+            // The server's refusal for a guest says what the line does: one line of it, not two.
+            val guests =
+                listOf(WRITTEN.copy(registered = false), WRITTEN.copy(registered = false, submitFailure = GUEST))
+            guests.forEach { state ->
+                val scene = scene(state, language)
+                try {
+                    assertTrue(sendButton(scene, sendText(stringsOf(language))).isOff, "$language")
+                    assertEquals(
+                        1,
+                        scene.texts().count { it == strings.registerToSubmit },
+                        "$language: ${scene.texts()}",
+                    )
+                    assertFalse(strings.notEnoughPoints in scene.texts(), "$language")
+                } finally {
+                    scene.close()
+                }
+            }
+        }
+    }
+
     /** Points not read yet say nothing, and Send waits for them. */
     @Test
     fun `Send waits for the points without a note`() {
@@ -185,11 +211,11 @@ class SubmitScreenDrawTest {
         }
     }
 
-    /** The one Send and what it shows, as a screen reader finds it. */
+    /** The one Send, found by what a screen reader hears it named: its cost is a coin and the number on screen. */
     private fun sendButton(
         scene: ImageComposeScene,
         text: String,
-    ) = assertNotNull(scene.nodes().singleOrNull { text in it.texts }, "no \"$text\" in ${scene.texts()}")
+    ) = assertNotNull(scene.nodes().singleOrNull { text in it.descriptions }, "no \"$text\" in ${scene.descriptions()}")
 
     private val SemanticsNode.isOff: Boolean
         get() = SemanticsProperties.Disabled in config
@@ -249,6 +275,9 @@ class SubmitScreenDrawTest {
                 Category(id = "ABSURD", nameSr = "Апсурдно", nameEn = "Absurd"),
             )
 
+        /** The server's refusal of a guest's question. */
+        val GUEST = SubmitFailure(DomainError.ACCOUNT_REQUIRED)
+
         val WRITTEN =
             SubmitState(
                 optionA = "Fly",
@@ -256,6 +285,7 @@ class SubmitScreenDrawTest {
                 categories = setOf("SUPERPOWERS", "ABSURD"),
                 categoryOptions = KNOWN,
                 points = 12,
+                registered = true,
             )
 
         val STATES =
@@ -292,6 +322,8 @@ class SubmitScreenDrawTest {
                     pointsFailure = SubmitFailure(DomainError.NETWORK),
                     points = 0,
                 ),
+                WRITTEN.copy(registered = false),
+                WRITTEN.copy(registered = false, submitFailure = GUEST),
             )
     }
 }

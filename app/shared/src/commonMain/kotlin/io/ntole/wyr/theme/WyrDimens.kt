@@ -17,11 +17,24 @@ data class WyrDimens(
     val optionMinHeight: Dp = 140.dp,
     /** The outline of the answer card the player picked, once the answer is revealed. */
     val pickBorder: Dp = 4.dp,
+    /** The reveal's bar along each card's edge by the row between them (CLAUDE.md §8d, *The Play screen*). */
+    val revealBarHeight: Dp = 6.dp,
     /**
-     * The widest the middle of the Play screen's row between the cards may be, the points or how a
-     * like failed, so the like count and Skip on its right are never cut short at 375 wide.
+     * How far in from its card's edge the reveal's bar stands: past the pick's outline ([pickBorder]),
+     * with a strip of the card's colour between, so the outline, in the bar's colour, never merges with it.
      */
-    val playRowMiddleMaxWidth: Dp = 104.dp,
+    val revealBarInset: Dp = 8.dp,
+    /**
+     * The widest the start of the Play screen's row may be, the points or how a reaction failed, so the
+     * thumbs stay in the middle and their counts and Skip are never cut short at 375 wide.
+     */
+    val playRowStartMaxWidth: Dp = 88.dp,
+    /** The Account card's circle of the player's initial. */
+    val avatarSize: Dp = 44.dp,
+    /** Each number column of My questions' table: its likes, its dislikes and its answers. */
+    val tableNumberWidth: Dp = 44.dp,
+    /** The icons heading My questions' number columns, a little smaller than a button's. */
+    val tableIconSize: Dp = 20.dp,
     val screenPadding: Dp = 20.dp,
     /**
      * The top bar's height, the tab row's before it, so a screen under it keeps the 599 of an iPhone

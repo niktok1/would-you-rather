@@ -137,7 +137,13 @@ class CountedUpTextDrawTest {
                 CountedBy(recompositions) {
                     WyrTheme(darkTheme = false) {
                         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                            CountedUpText(target = target, text = text, style = STYLE, modifier = modifier)
+                            CountedUpText(
+                                counted = rememberCountUp(target),
+                                target = target,
+                                text = text,
+                                style = STYLE,
+                                modifier = modifier,
+                            )
                         }
                     }
                 }

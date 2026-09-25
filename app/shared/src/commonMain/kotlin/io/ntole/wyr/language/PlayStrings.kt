@@ -13,8 +13,10 @@ data class PlayStrings(
     val changeCategories: String,
     /** What a tap on either card does once the answer is revealed, for a screen reader. */
     val nextQuestion: String,
-    /** The heart's name, for a screen reader: whether the player likes the question. */
+    /** The thumb up's name, for a screen reader: whether the player likes the question. */
     val like: String,
+    /** The thumb down's name, for a screen reader: whether the player dislikes the question. */
+    val dislike: String,
     /** The skip icon's name, for a screen reader: past the question without answering it. */
     val skip: String,
     /**
@@ -41,6 +43,7 @@ data class PlayStrings(
             changeCategories = transform(changeCategories),
             nextQuestion = transform(nextQuestion),
             like = transform(like),
+            dislike = transform(dislike),
             skip = transform(skip),
             cannotReach = transform(cannotReach),
             outOfQuestions = transform(outOfQuestions),
@@ -56,6 +59,7 @@ internal val SerbianCyrillicPlayStrings: PlayStrings =
         changeCategories = "Промени категорије",
         nextQuestion = "Следеће питање",
         like = "Свиђа ми се",
+        dislike = "Не свиђа ми се",
         skip = "Прескочи",
         cannotReach = "Игра није доступна.",
         outOfQuestions = "Нема више питања.",
@@ -69,6 +73,7 @@ internal val EnglishPlayStrings: PlayStrings =
         changeCategories = "Change categories",
         nextQuestion = "Next question",
         like = "Like",
+        dislike = "Dislike",
         skip = "Skip",
         cannotReach = "Can't reach the game.",
         outOfQuestions = "No more questions.",

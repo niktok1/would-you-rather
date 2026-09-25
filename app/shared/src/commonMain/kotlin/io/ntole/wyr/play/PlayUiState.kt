@@ -16,16 +16,16 @@ sealed interface PlayUiState {
     data object Loading : PlayUiState
 
     /**
-     * A question on screen, asked or revealed, with its likes as the server last counted them
-     * (CLAUDE.md §8d, *Likes*): the feed's, until the answer to a like of the player's own.
+     * A question on screen, asked or revealed, with its reactions as the server last counted them
+     * (CLAUDE.md §8d, *Reactions*): the feed's, until the answer to a reaction of the player's own.
      *
-     * [isLiking] while the player's like or unlike of it is in flight. [likeError] is how the last
-     * one failed, shown until the next is asked for or the question is answered.
+     * [isReacting] while the player's reaction to it is in flight. [reactionError] is how the last one
+     * failed, shown until the next is asked for or the question is answered.
      */
     sealed interface OnQuestion : PlayUiState {
         val question: Question
-        val isLiking: Boolean
-        val likeError: DomainError?
+        val isReacting: Boolean
+        val reactionError: DomainError?
 
         /** While anything is in flight, when nothing else goes: one action at a time. */
         val isBusy: Boolean
@@ -35,19 +35,19 @@ sealed interface PlayUiState {
     data class Asking(
         override val question: Question,
         val isSubmitting: Boolean = false,
-        override val isLiking: Boolean = false,
-        override val likeError: DomainError? = null,
+        override val isReacting: Boolean = false,
+        override val reactionError: DomainError? = null,
     ) : OnQuestion {
-        override val isBusy: Boolean get() = isSubmitting || isLiking
+        override val isBusy: Boolean get() = isSubmitting || isReacting
     }
 
     data class Revealed(
         override val question: Question,
         val outcome: VoteOutcome,
-        override val isLiking: Boolean = false,
-        override val likeError: DomainError? = null,
+        override val isReacting: Boolean = false,
+        override val reactionError: DomainError? = null,
     ) : OnQuestion {
-        override val isBusy: Boolean get() = isLiking
+        override val isBusy: Boolean get() = isReacting
     }
 
     /**
@@ -66,7 +66,7 @@ sealed interface PlayUiState {
  * the rest of the screen goes, and on a failure, where a selection with nothing to serve leaves the
  * player. Only then do the categories played open the Categories screen, and a selection played
  * there drop what is on screen and load a question from it. Not while a question loads, nor while a
- * vote, a skip or a like is in flight: that goes on, and the question after it is the new
+ * vote, a skip or a reaction is in flight: that goes on, and the question after it is the new
  * selection's.
  */
 val PlayUiState.canChangeCategories: Boolean

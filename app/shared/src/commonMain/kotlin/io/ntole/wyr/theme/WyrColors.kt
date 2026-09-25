@@ -20,6 +20,15 @@ data class WyrColors(
     val onOptionA: Color,
     val optionB: Color,
     val onOptionB: Color,
+    /**
+     * The track of the reveal's bar on each card (CLAUDE.md §8d, *The Play screen*): the card's own
+     * text colour, faint, which the bar fills in that colour whole.
+     */
+    val revealTrackOnA: Color,
+    val revealTrackOnB: Color,
+    /** The coin the points are shown with (CLAUDE.md §5b): its face, and its rim and ring on it. */
+    val coin: Color,
+    val onCoin: Color,
     val isDark: Boolean,
 )
 
@@ -32,6 +41,14 @@ private val OnOptionA = Color(0xFFFFFFFF)
 private val OptionB = Color(0xFFEF9F27)
 private val OnOptionB = Color(0xFF412402)
 private val Muted = Color(0xFF888780)
+
+/** The cards' text colours, faint: the reveal's bar's empty track on each. Constant, as the cards are. */
+private val RevealTrackOnA = Color(0x4DFFFFFF)
+private val RevealTrackOnB = Color(0x33412402)
+
+/** A gold coin, in the brand's amber with its dark brown: the same in light and dark, as the cards. */
+private val Coin = OptionB
+private val OnCoin = OnOptionB
 
 val WyrLightColors: WyrColors =
     WyrColors(
@@ -46,6 +63,10 @@ val WyrLightColors: WyrColors =
         onOptionA = OnOptionA,
         optionB = OptionB,
         onOptionB = OnOptionB,
+        revealTrackOnA = RevealTrackOnA,
+        revealTrackOnB = RevealTrackOnB,
+        coin = Coin,
+        onCoin = OnCoin,
         isDark = false,
     )
 
@@ -62,5 +83,9 @@ val WyrDarkColors: WyrColors =
         onOptionA = OnOptionA,
         optionB = OptionB,
         onOptionB = OnOptionB,
+        revealTrackOnA = RevealTrackOnA,
+        revealTrackOnB = RevealTrackOnB,
+        coin = Coin,
+        onCoin = OnCoin,
         isDark = true,
     )

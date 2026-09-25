@@ -143,7 +143,7 @@ class AccountViewModelTest {
 
             assertEquals("Guest", nameOf(state.shown(), ENGLISH))
             assertEquals("Гост", nameOf(state.shown(), CYRILLIC))
-            assertEquals("12\u00A0П", SerbianCyrillicStrings.points(state.shown().totalPoints))
+            assertEquals(12, state.shown().totalPoints)
             assertNull(state.failure)
         }
 
@@ -151,34 +151,14 @@ class AccountViewModelTest {
     fun `a guest's stats read as the server counted them`() =
         runTest(dispatcher) {
             game.points = 12
-            game.answersGiven = 15
             game.questionsAnswered = 10
-            game.cycle = 2
-            game.dueThisCycle = 4
-            game.likesReceived = 3
 
             val state = open().state.value
 
             assertEquals("Guest", nameOf(state.shown(), ENGLISH))
             assertEquals(12, state.shown().totalPoints)
-            assertEquals(
-                listOf(
-                    StatCell("15", "Answers"),
-                    StatCell("10", "Questions"),
-                    StatCell("2", "Cycle", "4 left"),
-                    StatCell("3", "Likes"),
-                ),
-                statCells(state.shown(), ENGLISH),
-            )
-            assertEquals(
-                listOf(
-                    StatCell("15", "Одговори"),
-                    StatCell("10", "Питања"),
-                    StatCell("2", "Циклус", "још 4"),
-                    StatCell("3", "Лајкови"),
-                ),
-                statCells(state.shown(), CYRILLIC),
-            )
+            assertEquals(listOf(StatCell("10", "Questions answered")), statCells(state.shown(), ENGLISH))
+            assertEquals(listOf(StatCell("10", "Одговорена питања")), statCells(state.shown(), CYRILLIC))
         }
 
     @Test
@@ -186,40 +166,33 @@ class AccountViewModelTest {
         runTest(dispatcher) {
             game.accounts["bob_1"] = "correct horse" to "guest1"
             game.points = 1
-            game.answersGiven = 1
             game.questionsAnswered = 1
-            game.cycle = 1
-            game.dueThisCycle = 1
-            game.likesReceived = 1
 
             val state = open().state.value
 
             assertEquals("bob_1", nameOf(state.shown(), ENGLISH))
-            assertEquals("1\u00A0P", EnglishStrings.points(state.shown().totalPoints))
-            assertEquals(
-                listOf(
-                    StatCell("1", "Answers"),
-                    StatCell("1", "Questions"),
-                    StatCell("1", "Cycle", "1 left"),
-                    StatCell("1", "Likes"),
-                ),
-                statCells(state.shown(), ENGLISH),
-            )
+            assertEquals(1, state.shown().totalPoints)
+            assertEquals(listOf(StatCell("1", "Questions answered")), statCells(state.shown(), ENGLISH))
         }
 
     @Test
     fun `each showing reads the stats again`() =
         runTest(dispatcher) {
             val viewModel = open()
-            assertEquals(StatCell("1", "Cycle", "0 left"), statCells(viewModel.state.value.shown(), ENGLISH)[2])
+            assertEquals(
+                StatCell("0", "Questions answered"),
+                statCells(viewModel.state.value.shown(), ENGLISH).single(),
+            )
 
-            // Played on the Play screen meanwhile: the last question of cycle 1 answered, then more asked for.
-            game.cycle = 2
-            game.dueThisCycle = 24
+            // Played on the Play screen meanwhile: more questions answered.
+            game.questionsAnswered = 24
             viewModel.refresh()
             testScheduler.advanceUntilIdle()
 
-            assertEquals(StatCell("2", "Cycle", "24 left"), statCells(viewModel.state.value.shown(), ENGLISH)[2])
+            assertEquals(
+                StatCell("24", "Questions answered"),
+                statCells(viewModel.state.value.shown(), ENGLISH).single(),
+            )
         }
 
     @Test
@@ -706,11 +679,7 @@ class AccountViewModelTest {
 
         /** The stats of whoever is playing, as the server counts them. */
         var points = 0
-        var answersGiven = 0
         var questionsAnswered = 0
-        var cycle = 1
-        var dueThisCycle = 0
-        var likesReceived = 0
         var statsFailWith: DomainError? = null
 
         /** When set, a registration waits for it before it answers. */
@@ -736,11 +705,7 @@ class AccountViewModelTest {
             val playing = ensure()
             return PlayerStats(
                 totalPoints = points,
-                answersGiven = answersGiven,
                 questionsAnswered = questionsAnswered,
-                cycle = cycle,
-                dueThisCycle = dueThisCycle,
-                likesReceived = likesReceived,
                 username = accounts.entries.firstOrNull { it.value.second == playing }?.key,
             )
         }

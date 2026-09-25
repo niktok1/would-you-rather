@@ -11,8 +11,8 @@ import androidx.compose.ui.unit.dp
 
 /**
  * Every icon in the app, drawn here by hand, so no icon library is needed (CLAUDE.md §5b): a few
- * lines each on a 24 by 24 grid, outlined in one stroke width with round ends, and the heart filled
- * besides for a question the player likes.
+ * lines each on a 24 by 24 grid, outlined in one stroke width with round ends, the thumbs filled
+ * besides for a question the player likes or dislikes, and the coin's face filled.
  *
  * They are drawn in black and carry no colour of their own: `Icon` tints the whole of one, so a
  * screen gives it a colour from [WyrColors] and each icon follows the light and dark themes as text
@@ -97,28 +97,120 @@ object WyrIcons {
         }
     }
 
-    /** A heart's outline, for a question the player does not like. */
-    val Heart: ImageVector by lazy { icon("Heart") { outline { heart() } } }
+    /** A thumb up's outline, for a question the player does not like (CLAUDE.md §8d, *Reactions*). */
+    val ThumbUp: ImageVector by lazy { icon("ThumbUp") { outline { thumb(down = false) } } }
 
-    /** A filled heart, the outline's size exactly, for a question the player likes. */
-    val HeartFilled: ImageVector by lazy {
-        icon("HeartFilled") {
-            path(fill = SolidColor(Color.Black)) { heart() }
-            outline { heart() }
+    /** A thumb up filled, the outline's size exactly, for a question the player likes. */
+    val ThumbUpFilled: ImageVector by lazy { filled("ThumbUpFilled") { thumb(down = false) } }
+
+    /** A thumb down's outline, the thumb up turned over, for a question the player does not dislike. */
+    val ThumbDown: ImageVector by lazy { icon("ThumbDown") { outline { thumb(down = true) } } }
+
+    /** A thumb down filled, the outline's size exactly, for a question the player dislikes. */
+    val ThumbDownFilled: ImageVector by lazy { filled("ThumbDownFilled") { thumb(down = true) } }
+
+    /**
+     * A coin's face, a full disc, the points' sign wherever the game shows them (CLAUDE.md §5b). Drawn
+     * under [CoinMark] in a colour of its own, so the coin is two colours while each icon is tinted
+     * whole, as every other is.
+     */
+    val CoinFace: ImageVector by lazy {
+        icon("CoinFace") { path(fill = SolidColor(Color.Black)) { circle(COIN_RADIUS) } }
+    }
+
+    /** A coin's rim and the ring stamped in its face, drawn over [CoinFace]. */
+    val CoinMark: ImageVector by lazy {
+        icon("CoinMark") {
+            outline {
+                circle(COIN_RADIUS)
+                circle(COIN_RING_RADIUS)
+            }
         }
     }
 
-    /** A heart: two round lobes meeting in a dip at the top, and a point at the bottom. */
-    private fun PathBuilder.heart() {
-        moveTo(12f, 20f)
-        curveTo(12f, 20f, 3f, 14.5f, 3f, 8.5f)
-        curveTo(3f, 5.5f, 5.5f, 3.5f, 8f, 3.5f)
-        curveTo(9.8f, 3.5f, 11.2f, 4.5f, 12f, 6f)
-        curveTo(12.8f, 4.5f, 14.2f, 3.5f, 16f, 3.5f)
-        curveTo(18.5f, 3.5f, 21f, 5.5f, 21f, 8.5f)
-        curveTo(21f, 14.5f, 12f, 20f, 12f, 20f)
+    /** A globe, for the language menu, found by its look whatever language the screen is in. */
+    val Globe: ImageVector by lazy {
+        icon("Globe") {
+            outline {
+                circle(COIN_RADIUS)
+                // A meridian, an ellipse in two half turns, and the equator.
+                moveTo(12f, 3f)
+                arcTo(4f, 9f, 0f, isMoreThanHalf = true, isPositiveArc = true, x1 = 12f, y1 = 21f)
+                arcTo(4f, 9f, 0f, isMoreThanHalf = true, isPositiveArc = true, x1 = 12f, y1 = 3f)
+                moveTo(3f, 12f)
+                horizontalLineTo(21f)
+            }
+        }
+    }
+
+    /** Two players, one behind the other, for how many players answered (My questions' table). */
+    val Players: ImageVector by lazy {
+        icon("Players") {
+            outline {
+                // The one in front, as Account's player, smaller and to the left.
+                moveTo(5.8f, 8.5f)
+                arcTo(3.2f, 3.2f, 0f, isMoreThanHalf = true, isPositiveArc = true, x1 = 12.2f, y1 = 8.5f)
+                arcTo(3.2f, 3.2f, 0f, isMoreThanHalf = true, isPositiveArc = true, x1 = 5.8f, y1 = 8.5f)
+                close()
+                moveTo(3f, 19.5f)
+                curveTo(3f, 16f, 5.7f, 13.8f, 9f, 13.8f)
+                curveTo(12.3f, 13.8f, 15f, 16f, 15f, 19.5f)
+                // The one behind, to the right: a head, and a shoulder showing past the one in front.
+                moveTo(13.9f, 7.5f)
+                arcTo(2.6f, 2.6f, 0f, isMoreThanHalf = true, isPositiveArc = true, x1 = 19.1f, y1 = 7.5f)
+                arcTo(2.6f, 2.6f, 0f, isMoreThanHalf = true, isPositiveArc = true, x1 = 13.9f, y1 = 7.5f)
+                close()
+                moveTo(17f, 13.2f)
+                curveTo(19.4f, 13.6f, 21f, 15.6f, 21f, 18.5f)
+            }
+        }
+    }
+
+    /**
+     * A thumb up, or turned over top to bottom for a thumb down: the cuff on the left, and the hand
+     * beside it, its thumb pointing up out of it, or down.
+     */
+    private fun PathBuilder.thumb(down: Boolean) {
+        fun y(value: Float) = if (down) SIZE - value else value
+
+        // The cuff.
+        moveTo(3f, y(10.5f))
+        lineTo(7f, y(10.5f))
+        lineTo(7f, y(20f))
+        lineTo(3f, y(20f))
+        close()
+        // The hand: up the thumb, round its tip and down, across the fingers and back along the palm.
+        moveTo(7f, y(10.5f))
+        lineTo(10.2f, y(4.2f))
+        curveTo(10.6f, y(3.4f), 11.5f, y(2.9f), 12.4f, y(3.1f))
+        curveTo(13.5f, y(3.4f), 14.1f, y(4.5f), 13.8f, y(5.6f))
+        lineTo(12.9f, y(9f))
+        lineTo(18.8f, y(9f))
+        curveTo(20.1f, y(9f), 21.1f, y(10.2f), 20.9f, y(11.5f))
+        lineTo(19.9f, y(18.4f))
+        curveTo(19.7f, y(19.4f), 18.9f, y(20f), 17.9f, y(20f))
+        lineTo(7f, y(20f))
         close()
     }
+
+    /** A circle of [radius] about the grid's middle, in two half turns. */
+    private fun PathBuilder.circle(radius: Float) {
+        val middle = SIZE / 2
+        moveTo(middle - radius, middle)
+        arcTo(radius, radius, 0f, isMoreThanHalf = true, isPositiveArc = true, x1 = middle + radius, y1 = middle)
+        arcTo(radius, radius, 0f, isMoreThanHalf = true, isPositiveArc = true, x1 = middle - radius, y1 = middle)
+        close()
+    }
+
+    /** [draw]'s figure filled and outlined, the outline's size exactly. */
+    private fun filled(
+        name: String,
+        draw: PathBuilder.() -> Unit,
+    ): ImageVector =
+        icon(name) {
+            path(fill = SolidColor(Color.Black), pathBuilder = draw)
+            outline(draw)
+        }
 
     private fun icon(
         name: String,
@@ -149,4 +241,10 @@ object WyrIcons {
     private const val SIZE = 24f
 
     private const val STROKE = 2f
+
+    /** A coin's rim, and the globe's outline, about the grid's middle. */
+    private const val COIN_RADIUS = 9f
+
+    /** The ring stamped in a coin's face. */
+    private const val COIN_RING_RADIUS = 5f
 }

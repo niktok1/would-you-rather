@@ -32,6 +32,7 @@ import io.ntole.wyr.language.AccountStrings
 import io.ntole.wyr.language.LocalStrings
 import io.ntole.wyr.language.USERNAME_CHARACTERS
 import io.ntole.wyr.language.fill
+import io.ntole.wyr.points.PointsText
 import io.ntole.wyr.theme.WyrThemeAccessors
 
 /**
@@ -162,7 +163,12 @@ private fun LogInForm(
             Text(strings.logIn)
         }
     } else {
-        Text(text = strings.guestPointsWarning.fill(LocalStrings.current.points(warning)), color = colors.primaryText)
+        PointsText(
+            template = strings.guestPointsWarning,
+            points = warning,
+            spoken = strings.guestPointsWarning.fill(warning),
+            color = colors.primaryText,
+        )
         Row(horizontalArrangement = Arrangement.spacedBy(dimens.spaceSm)) {
             Button(onClick = actions::logIn, enabled = state.canLogIn) { Text(strings.logInAnyway) }
             OutlinedButton(onClick = actions::cancelLogIn, enabled = !state.isBusy) {

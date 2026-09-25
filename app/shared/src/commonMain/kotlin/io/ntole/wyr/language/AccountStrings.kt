@@ -12,16 +12,8 @@ package io.ntole.wyr.language
 data class AccountStrings(
     /** Who is playing, when they have no username. */
     val guest: String,
-    /** The stat of the answers given, re-answers included. */
-    val answers: String,
-    /** The stat of the questions those answers went to. */
-    val questions: String,
-    /** The stat of the player's current cycle. */
-    val cycle: String,
-    /** Under the cycle: the `{0}` questions still due in it. */
-    val cycleLeft: String,
-    /** The stat of the likes the player's questions hold. */
-    val likes: String,
+    /** The Account card's stat of the distinct questions the player has answered. */
+    val questionsAnswered: String,
     val logOut: String,
     /** A LOCAL or DEV build's server: its name, `{0}`, and its URL, `{1}`. */
     val serverLine: String,
@@ -62,8 +54,20 @@ data class AccountStrings(
     val myQuestions: String,
     /** My questions' way to the Submit screen's form. */
     val newQuestion: String,
-    /** My questions with none sent yet. */
-    val noQuestions: String,
+    /** My questions' table's way to the form, with none sent yet. */
+    val firstQuestion: String,
+    /** Under My questions' heading and on the Submit form, for a guest: only a registered player submits. */
+    val registerToSubmit: String,
+    /** The heading of My questions' table's question column. */
+    val question: String,
+    /** The likes a question holds, for a screen reader: the column's heading is a thumb up. */
+    val likes: String,
+    /** The dislikes a question holds, for a screen reader: the column's heading is a thumb down. */
+    val dislikes: String,
+    /** How many players answered a question, for a screen reader: the column's heading is two players. */
+    val answers: String,
+    /** The last row of My questions' table: what every question holds, added up. */
+    val total: String,
     /** Between a question's two options. */
     val or: String,
     val pending: String,
@@ -100,11 +104,7 @@ data class AccountStrings(
     internal fun map(transform: (String) -> String): AccountStrings =
         AccountStrings(
             guest = transform(guest),
-            answers = transform(answers),
-            questions = transform(questions),
-            cycle = transform(cycle),
-            cycleLeft = transform(cycleLeft),
-            likes = transform(likes),
+            questionsAnswered = transform(questionsAnswered),
             logOut = transform(logOut),
             serverLine = transform(serverLine),
             openAuth = transform(openAuth),
@@ -131,7 +131,13 @@ data class AccountStrings(
             somethingWrong = transform(somethingWrong),
             myQuestions = transform(myQuestions),
             newQuestion = transform(newQuestion),
-            noQuestions = transform(noQuestions),
+            firstQuestion = transform(firstQuestion),
+            registerToSubmit = transform(registerToSubmit),
+            question = transform(question),
+            likes = transform(likes),
+            dislikes = transform(dislikes),
+            answers = transform(answers),
+            total = transform(total),
             or = transform(or),
             pending = transform(pending),
             approved = transform(approved),
@@ -160,11 +166,7 @@ data class AccountStrings(
 internal val SerbianCyrillicAccountStrings: AccountStrings =
     AccountStrings(
         guest = "Гост",
-        answers = "Одговори",
-        questions = "Питања",
-        cycle = "Циклус",
-        cycleLeft = "још {0}",
-        likes = "Лајкови",
+        questionsAnswered = "Одговорена питања",
         logOut = "Одјави се",
         serverLine = "Сервер: {0} ({1})",
         openAuth = "Региструј се или се пријави",
@@ -191,7 +193,13 @@ internal val SerbianCyrillicAccountStrings: AccountStrings =
         somethingWrong = "Нешто није у реду. Покушај поново.",
         myQuestions = "Моја питања",
         newQuestion = "Ново питање",
-        noQuestions = "Још ниједно.",
+        firstQuestion = "Постави прво питање",
+        registerToSubmit = "Региструј се да додаш питање.",
+        question = "Питање",
+        likes = "Лајкови",
+        dislikes = "Дислајкови",
+        answers = "Одговори",
+        total = "Укупно",
         or = "или",
         pending = "На чекању",
         approved = "Одобрено",
@@ -218,11 +226,7 @@ internal val SerbianCyrillicAccountStrings: AccountStrings =
 internal val EnglishAccountStrings: AccountStrings =
     AccountStrings(
         guest = "Guest",
-        answers = "Answers",
-        questions = "Questions",
-        cycle = "Cycle",
-        cycleLeft = "{0} left",
-        likes = "Likes",
+        questionsAnswered = "Questions answered",
         logOut = "Log out",
         serverLine = "Server: {0} ({1})",
         openAuth = "Register or log in",
@@ -249,7 +253,13 @@ internal val EnglishAccountStrings: AccountStrings =
         somethingWrong = "Something went wrong. Try again.",
         myQuestions = "My questions",
         newQuestion = "New question",
-        noQuestions = "None yet.",
+        firstQuestion = "Ask your first question",
+        registerToSubmit = "Register to add a question.",
+        question = "Question",
+        likes = "Likes",
+        dislikes = "Dislikes",
+        answers = "Answers",
+        total = "Total",
         or = "or",
         pending = "Pending",
         approved = "Approved",

@@ -4,9 +4,6 @@ import io.ntole.wyr.core.domain.category.Category
 import io.ntole.wyr.core.domain.category.CategoryRepository
 import io.ntole.wyr.core.domain.error.DomainError
 import io.ntole.wyr.core.domain.error.WyrException
-import io.ntole.wyr.core.domain.like.LikeRepository
-import io.ntole.wyr.core.domain.like.QuestionLikes
-import io.ntole.wyr.core.domain.like.SetLike
 import io.ntole.wyr.core.domain.player.GetPlayerStats
 import io.ntole.wyr.core.domain.player.PlayerRepository
 import io.ntole.wyr.core.domain.player.PlayerStats
@@ -14,6 +11,10 @@ import io.ntole.wyr.core.domain.question.GetNextQuestion
 import io.ntole.wyr.core.domain.question.Question
 import io.ntole.wyr.core.domain.question.QuestionRepository
 import io.ntole.wyr.core.domain.question.SkipQuestion
+import io.ntole.wyr.core.domain.reaction.QuestionReactions
+import io.ntole.wyr.core.domain.reaction.Reaction
+import io.ntole.wyr.core.domain.reaction.ReactionRepository
+import io.ntole.wyr.core.domain.reaction.SetReaction
 import io.ntole.wyr.core.domain.session.SessionRepository
 import io.ntole.wyr.core.domain.vote.AttemptId
 import io.ntole.wyr.core.domain.vote.CastVote
@@ -278,176 +279,193 @@ class PlayViewModelTest {
         }
 
     @Test
-    fun `the like count shows before answering`() =
+    fun `the reaction counts show before answering`() =
         runTest(dispatcher) {
-            val served = QUESTION.copy(likeCount = 3, likedByMe = true)
+            val served = QUESTION.copy(likeCount = 3, dislikeCount = 2, myReaction = Reaction.LIKE)
             val viewModel = viewModel(questions = FakeQuestionRepository(served))
 
             testScheduler.advanceUntilIdle()
 
             // As the feed counted them, with nothing answered yet.
             val state = assertIs<PlayUiState.Asking>(viewModel.state.value)
-            assertEquals(3, state.question.likeCount)
-            assertTrue(state.question.likedByMe)
+            assertEquals(Triple(3, 2, Reaction.LIKE), state.question.reactions())
         }
 
     @Test
-    fun `Like likes the question being asked then shows the server's count`() =
+    fun `a like of the question being asked shows the server's counts`() =
         runTest(dispatcher) {
-            val likes = FakeLikeRepository()
-            // Others like it too, so the count shown is the server's and not one more than before.
-            likes.answer = { questionId, liked -> QuestionLikes(questionId, likeCount = 7, likedByMe = liked) }
+            val reactions = FakeReactionRepository()
+            // Others react too, so the counts shown are the server's and not one more than before.
+            reactions.answer = { questionId, reaction -> QuestionReactions(questionId, 7, 2, reaction) }
             val votes = RecordingVoteRepository()
-            val viewModel = viewModel(FakeQuestionRepository(QUESTION.copy(likeCount = 3)), votes, likes)
+            val viewModel = viewModel(FakeQuestionRepository(QUESTION.copy(likeCount = 3)), votes, reactions)
             testScheduler.advanceUntilIdle()
 
-            viewModel.toggleLike()
+            viewModel.react(Reaction.LIKE)
             testScheduler.advanceUntilIdle()
 
-            assertEquals(listOf(QUESTION.id to true), likes.sent)
-            assertEquals(PlayUiState.Asking(QUESTION.copy(likeCount = 7, likedByMe = true)), viewModel.state.value)
-            assertEquals(0, votes.callCount, "a like is no answer")
+            assertEquals(listOf(QUESTION.id to Reaction.LIKE), reactions.sent)
+            assertEquals(
+                PlayUiState.Asking(QUESTION.held(Reaction.LIKE, likes = 7, dislikes = 2)),
+                viewModel.state.value,
+            )
+            assertEquals(0, votes.callCount, "a reaction is no answer")
         }
 
     @Test
-    fun `a like then an unlike each put the server's answer on the question`() =
+    fun `a like then taking it back each put the server's answer on the question`() =
         runTest(dispatcher) {
-            val likes = FakeLikeRepository()
-            val viewModel = viewModel(likes = likes)
+            val reactions = FakeReactionRepository()
+            val viewModel = viewModel(reactions = reactions)
             testScheduler.advanceUntilIdle()
 
-            viewModel.toggleLike()
+            viewModel.react(Reaction.LIKE)
             testScheduler.advanceUntilIdle()
-            assertEquals(PlayUiState.Asking(QUESTION.copy(likeCount = 1, likedByMe = true)), viewModel.state.value)
+            assertEquals(PlayUiState.Asking(QUESTION.held(Reaction.LIKE)), viewModel.state.value)
 
-            viewModel.toggleLike()
+            viewModel.react(Reaction.NONE)
             testScheduler.advanceUntilIdle()
 
-            // The opposite of what the question on screen showed, each time.
-            assertEquals(listOf(QUESTION.id to true, QUESTION.id to false), likes.sent)
+            assertEquals(listOf(QUESTION.id to Reaction.LIKE, QUESTION.id to Reaction.NONE), reactions.sent)
             assertEquals(PlayUiState.Asking(QUESTION), viewModel.state.value)
         }
 
     @Test
-    fun `a failed like leaves the question as it was and shows the error`() =
+    fun `a dislike replaces a like on the question as the server answers`() =
         runTest(dispatcher) {
-            val likes = FakeLikeRepository()
+            val reactions = FakeReactionRepository()
+            val viewModel = viewModel(reactions = reactions)
+            testScheduler.advanceUntilIdle()
+
+            viewModel.react(Reaction.LIKE)
+            testScheduler.advanceUntilIdle()
+            viewModel.react(Reaction.DISLIKE)
+            testScheduler.advanceUntilIdle()
+
+            assertEquals(listOf(QUESTION.id to Reaction.LIKE, QUESTION.id to Reaction.DISLIKE), reactions.sent)
+            assertEquals(PlayUiState.Asking(QUESTION.held(Reaction.DISLIKE)), viewModel.state.value)
+        }
+
+    @Test
+    fun `a failed reaction leaves the question as it was and shows the error`() =
+        runTest(dispatcher) {
+            val reactions = FakeReactionRepository()
             var lost = false
-            likes.answer = { questionId, liked ->
+            reactions.answer = { questionId, reaction ->
                 if (!lost) {
                     lost = true
                     throw WyrException(DomainError.NETWORK)
                 }
-                QuestionLikes(questionId, likeCount = 1, likedByMe = liked)
+                heldOn(questionId, reaction)
             }
-            val viewModel = viewModel(likes = likes)
+            val viewModel = viewModel(reactions = reactions)
             testScheduler.advanceUntilIdle()
 
-            viewModel.toggleLike()
+            viewModel.react(Reaction.DISLIKE)
             testScheduler.advanceUntilIdle()
-            assertEquals(PlayUiState.Asking(QUESTION, likeError = DomainError.NETWORK), viewModel.state.value)
+            assertEquals(PlayUiState.Asking(QUESTION, reactionError = DomainError.NETWORK), viewModel.state.value)
 
-            viewModel.toggleLike()
+            viewModel.react(Reaction.DISLIKE)
             testScheduler.advanceUntilIdle()
 
-            // A like both times: the first may have landed, and the server holds it once.
-            assertEquals(listOf(QUESTION.id to true, QUESTION.id to true), likes.sent)
-            assertEquals(PlayUiState.Asking(QUESTION.copy(likeCount = 1, likedByMe = true)), viewModel.state.value)
+            // A dislike both times: the first may have landed, and the server holds it once.
+            assertEquals(listOf(QUESTION.id to Reaction.DISLIKE, QUESTION.id to Reaction.DISLIKE), reactions.sent)
+            assertEquals(PlayUiState.Asking(QUESTION.held(Reaction.DISLIKE)), viewModel.state.value)
         }
 
     @Test
-    fun `likes answered for another question are not put on the one on screen`() =
+    fun `reactions answered for another question are not put on the one on screen`() =
         runTest(dispatcher) {
-            val likes = FakeLikeRepository()
-            likes.answer = { _, liked -> QuestionLikes("q9", likeCount = 5, likedByMe = liked) }
-            val viewModel = viewModel(likes = likes)
+            val reactions = FakeReactionRepository()
+            reactions.answer = { _, reaction -> QuestionReactions("q9", 5, 1, reaction) }
+            val viewModel = viewModel(reactions = reactions)
             testScheduler.advanceUntilIdle()
 
-            viewModel.toggleLike()
+            viewModel.react(Reaction.LIKE)
             testScheduler.advanceUntilIdle()
 
             assertEquals(PlayUiState.Asking(QUESTION), viewModel.state.value)
         }
 
     @Test
-    fun `Like works after answering and keeps the reveal`() =
+    fun `a reaction works after answering and keeps the reveal`() =
         runTest(dispatcher) {
-            val likes = FakeLikeRepository()
-            val viewModel = viewModel(likes = likes)
+            val reactions = FakeReactionRepository()
+            val viewModel = viewModel(reactions = reactions)
             testScheduler.advanceUntilIdle()
             viewModel.choose(Side.B)
             testScheduler.advanceUntilIdle()
 
-            viewModel.toggleLike()
+            viewModel.react(Reaction.LIKE)
             testScheduler.advanceUntilIdle()
 
-            assertEquals(listOf(QUESTION.id to true), likes.sent)
+            assertEquals(listOf(QUESTION.id to Reaction.LIKE), reactions.sent)
             assertEquals(
-                PlayUiState.Revealed(QUESTION.copy(likeCount = 1, likedByMe = true), OUTCOME.copy(yourSide = Side.B)),
+                PlayUiState.Revealed(QUESTION.held(Reaction.LIKE), OUTCOME.copy(yourSide = Side.B)),
                 viewModel.state.value,
             )
         }
 
     @Test
-    fun `nothing else goes while a like is in flight`() =
+    fun `nothing else goes while a reaction is in flight`() =
         runTest(dispatcher) {
             val gate = CompletableDeferred<Unit>()
-            val likes = FakeLikeRepository()
-            likes.answer = { questionId, liked ->
+            val reactions = FakeReactionRepository()
+            reactions.answer = { questionId, reaction ->
                 gate.await()
-                QuestionLikes(questionId, likeCount = 1, likedByMe = liked)
+                heldOn(questionId, reaction)
             }
             val questions = FakeQuestionRepository(QUESTION, NEXT_QUESTION)
             val votes = RecordingVoteRepository()
-            val viewModel = viewModel(questions, votes, likes)
+            val viewModel = viewModel(questions, votes, reactions)
             testScheduler.advanceUntilIdle()
 
-            viewModel.toggleLike()
+            viewModel.react(Reaction.LIKE)
             testScheduler.advanceUntilIdle()
             viewModel.choose(Side.A)
             viewModel.skip()
-            viewModel.toggleLike()
+            viewModel.react(Reaction.DISLIKE)
             testScheduler.advanceUntilIdle()
 
             assertEquals(0, votes.callCount)
             assertEquals(emptyList(), questions.skipped)
-            assertEquals(1, likes.sent.size)
+            assertEquals(1, reactions.sent.size)
             gate.complete(Unit)
             testScheduler.advanceUntilIdle()
-            assertEquals(PlayUiState.Asking(QUESTION.copy(likeCount = 1, likedByMe = true)), viewModel.state.value)
+            assertEquals(PlayUiState.Asking(QUESTION.held(Reaction.LIKE)), viewModel.state.value)
         }
 
     @Test
-    fun `Like while the vote is in flight does nothing`() =
+    fun `a reaction while the vote is in flight does nothing`() =
         runTest(dispatcher) {
-            val likes = FakeLikeRepository()
-            val viewModel = viewModel(likes = likes)
+            val reactions = FakeReactionRepository()
+            val viewModel = viewModel(reactions = reactions)
             testScheduler.advanceUntilIdle()
 
             viewModel.choose(Side.A)
-            viewModel.toggleLike()
+            viewModel.react(Reaction.LIKE)
             testScheduler.advanceUntilIdle()
 
-            assertEquals(emptyList(), likes.sent)
+            assertEquals(emptyList(), reactions.sent)
             assertEquals(PlayUiState.Revealed(QUESTION, OUTCOME), viewModel.state.value)
         }
 
-    /** One action at a time: the reveal waits for its like, which then lands on it. */
+    /** One action at a time: the reveal waits for its reaction, which then lands on it. */
     @Test
-    fun `Next while a like is in flight does nothing`() =
+    fun `Next while a reaction is in flight does nothing`() =
         runTest(dispatcher) {
             val gate = CompletableDeferred<Unit>()
-            val likes = FakeLikeRepository()
-            likes.answer = { questionId, liked ->
+            val reactions = FakeReactionRepository()
+            reactions.answer = { questionId, reaction ->
                 gate.await()
-                QuestionLikes(questionId, likeCount = 1, likedByMe = liked)
+                heldOn(questionId, reaction)
             }
             val questions = FakeQuestionRepository(QUESTION, NEXT_QUESTION)
-            val viewModel = viewModel(questions, likes = likes)
+            val viewModel = viewModel(questions, reactions = reactions)
             testScheduler.advanceUntilIdle()
             viewModel.choose(Side.A)
             testScheduler.advanceUntilIdle()
-            viewModel.toggleLike()
+            viewModel.react(Reaction.LIKE)
             testScheduler.advanceUntilIdle()
 
             viewModel.next()
@@ -455,10 +473,7 @@ class PlayViewModelTest {
             gate.complete(Unit)
             testScheduler.advanceUntilIdle()
 
-            assertEquals(
-                PlayUiState.Revealed(QUESTION.copy(likeCount = 1, likedByMe = true), OUTCOME),
-                viewModel.state.value,
-            )
+            assertEquals(PlayUiState.Revealed(QUESTION.held(Reaction.LIKE), OUTCOME), viewModel.state.value)
             assertEquals(listOf("next"), questions.calls)
         }
 
@@ -701,20 +716,20 @@ class PlayViewModelTest {
         }
 
     @Test
-    fun `categories played elsewhere while a like is in flight leave the question to it`() =
+    fun `categories played elsewhere while a reaction is in flight leave the question to it`() =
         runTest(dispatcher) {
-            // One action at a time: the like lands on the question it was for, and the next question
+            // One action at a time: the reaction lands on the question it was for, and the next question
             // is the new categories' since the change dropped the queue.
             val gate = CompletableDeferred<Unit>()
-            val likes = FakeLikeRepository()
-            likes.answer = { questionId, liked ->
+            val reactions = FakeReactionRepository()
+            reactions.answer = { questionId, reaction ->
                 gate.await()
-                QuestionLikes(questionId, likeCount = 1, likedByMe = liked)
+                heldOn(questionId, reaction)
             }
             val questions = FakeQuestionRepository(servedFor = mapOf(setOf("FOOD") to FOOD_QUESTION))
-            val viewModel = viewModel(questions, likes = likes)
+            val viewModel = viewModel(questions, reactions = reactions)
             testScheduler.advanceUntilIdle()
-            viewModel.toggleLike()
+            viewModel.react(Reaction.LIKE)
             testScheduler.advanceUntilIdle()
 
             questions.setCategories(setOf("FOOD"))
@@ -723,7 +738,7 @@ class PlayViewModelTest {
             testScheduler.advanceUntilIdle()
 
             assertEquals(listOf("next", "setCategories [FOOD]"), questions.calls)
-            assertEquals(PlayUiState.Asking(QUESTION.copy(likeCount = 1, likedByMe = true)), viewModel.state.value)
+            assertEquals(PlayUiState.Asking(QUESTION.held(Reaction.LIKE)), viewModel.state.value)
             viewModel.skip()
             testScheduler.advanceUntilIdle()
             assertEquals(PlayUiState.Asking(FOOD_QUESTION), viewModel.state.value)
@@ -838,14 +853,14 @@ class PlayViewModelTest {
     private fun viewModel(
         questions: QuestionRepository = FakeQuestionRepository(),
         votes: VoteRepository = FakeVoteRepository(),
-        likes: LikeRepository = FakeLikeRepository(),
+        reactions: ReactionRepository = FakeReactionRepository(),
         players: PlayerRepository = FakePlayerRepository(),
         categories: CategoryRepository = FakeCategoryRepository(),
     ) = PlayViewModel(
         getNextQuestion = GetNextQuestion(questions, NoOpSessionRepository),
         castVote = CastVote(votes, NoOpSessionRepository),
         skipQuestion = SkipQuestion(questions, NoOpSessionRepository),
-        setLike = SetLike(likes, NoOpSessionRepository),
+        setReaction = SetReaction(reactions, NoOpSessionRepository),
         getPlayerStats = GetPlayerStats(players, NoOpSessionRepository),
         questions = questions,
         categoryList = categories,
@@ -884,15 +899,28 @@ class PlayViewModelTest {
                 totalPoints = 42,
             )
 
-        fun statsWith(totalPoints: Int): PlayerStats =
-            PlayerStats(
-                totalPoints = totalPoints,
-                answersGiven = 0,
-                questionsAnswered = 0,
-                cycle = 1,
-                dueThisCycle = 10,
-                likesReceived = 0,
-            )
+        fun statsWith(totalPoints: Int): PlayerStats = PlayerStats(totalPoints = totalPoints, questionsAnswered = 0)
+
+        /** Where [questionId]'s reactions stand when only this player holds [reaction]. */
+        fun heldOn(
+            questionId: String,
+            reaction: Reaction,
+        ) = QuestionReactions(
+            questionId,
+            likeCount = if (reaction == Reaction.LIKE) 1 else 0,
+            dislikeCount = if (reaction == Reaction.DISLIKE) 1 else 0,
+            myReaction = reaction,
+        )
+
+        /** This question with the player holding [reaction], and these counts, only theirs by default. */
+        fun Question.held(
+            reaction: Reaction,
+            likes: Int = if (reaction == Reaction.LIKE) 1 else 0,
+            dislikes: Int = if (reaction == Reaction.DISLIKE) 1 else 0,
+        ) = copy(likeCount = likes, dislikeCount = dislikes, myReaction = reaction)
+
+        /** A question's like count, dislike count and what the player thinks of it. */
+        fun Question.reactions(): Triple<Int, Int, Reaction> = Triple(likeCount, dislikeCount, myReaction)
     }
 
     /**
@@ -1023,21 +1051,25 @@ class PlayViewModelTest {
         ): VoteOutcome = throw WyrException(error)
     }
 
-    /** Answers every like as the server would set it on a question nobody else likes, and records it. */
-    private class FakeLikeRepository : LikeRepository {
-        var answer: suspend (String, Boolean) -> QuestionLikes = { questionId, liked ->
-            QuestionLikes(questionId, likeCount = if (liked) 1 else 0, likedByMe = liked)
-        }
+    /**
+     * Answers every reaction as the server would set it on a question nobody else reacts to, and
+     * records it.
+     */
+    private class FakeReactionRepository : ReactionRepository {
+        var answer: suspend (
+            String,
+            Reaction,
+        ) -> QuestionReactions = { questionId, reaction -> heldOn(questionId, reaction) }
 
-        /** The question and `liked` of every like sent, in order. */
-        val sent = mutableListOf<Pair<String, Boolean>>()
+        /** The question and the reaction of every reaction sent, in order. */
+        val sent = mutableListOf<Pair<String, Reaction>>()
 
-        override suspend fun setLiked(
+        override suspend fun setReaction(
             questionId: String,
-            liked: Boolean,
-        ): QuestionLikes {
-            sent += questionId to liked
-            return answer(questionId, liked)
+            reaction: Reaction,
+        ): QuestionReactions {
+            sent += questionId to reaction
+            return answer(questionId, reaction)
         }
     }
 

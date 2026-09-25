@@ -4,6 +4,8 @@ import androidx.compose.ui.ImageComposeScene
 import androidx.compose.ui.unit.Density
 import io.ntole.wyr.core.domain.error.DomainError
 import io.ntole.wyr.core.domain.player.PlayerStats
+import io.ntole.wyr.descriptions
+import io.ntole.wyr.everyNode
 import io.ntole.wyr.everyText
 import io.ntole.wyr.language.Language
 import io.ntole.wyr.language.WyrStrings
@@ -149,7 +151,9 @@ class AuthScreenDrawTest {
                 )
 
             val shown = textsOf(warned, language)
-            assertTrue(strings.guestPointsWarning.fill(stringsOf(language).points(12)) in shown, "$language: $shown")
+            // The points are a coin and the number, which a screen reader hears in words instead.
+            val said = descriptionsOf(warned, language)
+            assertTrue(strings.guestPointsWarning.fill(12) in said, "$language: $said")
             assertFalse(strings.logIn in shown, "$language: $shown")
             tapping(warned, language, actions) {
                 it.tap(strings.logInAnyway)
@@ -218,6 +222,19 @@ class AuthScreenDrawTest {
         val scene = scene(state, language)
         try {
             return scene.everyText()
+        } finally {
+            scene.close()
+        }
+    }
+
+    /** What a screen reader hears for what shows no text of its own: an icon, or the points' coin. */
+    private fun descriptionsOf(
+        state: AccountState,
+        language: Language,
+    ): List<String> {
+        val scene = scene(state, language)
+        try {
+            return scene.everyNode().flatMap { it.descriptions }
         } finally {
             scene.close()
         }
@@ -292,7 +309,7 @@ class AuthScreenDrawTest {
         const val SHORT_PHONE_WIDTH = 375
         const val SHORT_PHONE_HEIGHT = 599
 
-        val GUEST = PlayerStats(12, 12, 10, 1, 4, 0)
+        val GUEST = PlayerStats(totalPoints = 12, questionsAnswered = 10)
 
         val READ_FAILED = AccountFailure(AccountAction.LOAD, DomainError.NETWORK)
 

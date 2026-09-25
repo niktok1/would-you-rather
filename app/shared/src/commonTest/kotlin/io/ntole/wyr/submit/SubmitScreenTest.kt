@@ -18,9 +18,10 @@ class SubmitScreenTest {
      */
     @Test
     fun `Send names what a question costs in every language`() {
-        assertEquals("Пошаљи · 1 П", sendText(SerbianCyrillicStrings))
-        assertEquals("Pošalji · 1 P", sendText(SerbianLatinStrings))
-        assertEquals("Send · 1 P", sendText(EnglishStrings))
+        // A coin and the number on screen, which a screen reader hears as the points are heard everywhere.
+        assertEquals("Пошаљи · Поени: 1", sendText(SerbianCyrillicStrings))
+        assertEquals("Pošalji · Poeni: 1", sendText(SerbianLatinStrings))
+        assertEquals("Send · Points: 1", sendText(EnglishStrings))
     }
 
     @Test

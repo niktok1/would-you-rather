@@ -30,6 +30,11 @@ data class SubmitState(
     /** The player's points as last read, or null until a read works. */
     val points: Int? = null,
     /**
+     * Whether the player is registered, as last read with the points, or null until a read works. Only
+     * a registered player submits (CLAUDE.md §8d, *Submitting*): a guest is told to register first.
+     */
+    val registered: Boolean? = null,
+    /**
      * Whether the last Submit stored its question, until the form goes back to My questions for it
      * ([SubmitActions.leftForm]) or the next action starts.
      */
@@ -64,13 +69,17 @@ data class SubmitState(
     /** Whether the points last read are fewer than a question costs, which the form says: not while none are read. */
     val tooFewPoints: Boolean get() = points != null && points < SubmissionRules.SUBMISSION_COST
 
+    /** Whether the player last read is a guest, who may not submit, which the form says: not while none is read. */
+    val isGuest: Boolean get() = registered == false
+
     /**
-     * Whether Submit can go: both options pass the rules, a category is picked, the points last read
-     * pay for it, and nothing is in flight.
+     * Whether Submit can go: both options pass the rules, a category is picked, the player last read
+     * is registered and has the points it costs, and nothing is in flight.
      */
     val canSubmit: Boolean
         get() =
             !isBusy && categories.isNotEmpty() && !sameOptions && points != null && !tooFewPoints &&
+                registered == true &&
                 SubmissionRules.optionProblem(optionA) == null && SubmissionRules.optionProblem(optionB) == null
 
     private fun problemOf(option: String): OptionProblem? =

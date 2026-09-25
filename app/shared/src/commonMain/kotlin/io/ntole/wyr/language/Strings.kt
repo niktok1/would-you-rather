@@ -22,10 +22,11 @@ data class Strings(
      */
     val play: String,
     /**
-     * After a number of points, their unit, the one the whole game writes: *123 П*. Serbian's is
-     * Cyrillic, so Serbian Latin's is made from it as every other text is.
+     * An amount of points, `{0}`, as a screen reader hears it: *Поени: 43*. On screen the points are a
+     * coin and the number (`PointsAmount`), which says nothing to it, and a label and the number need
+     * no plural form, which a number and a noun would.
      */
-    val pointsUnit: String,
+    val points: String,
     /**
      * The button under a failure, on every screen that has one: the Play screen, the Categories
      * screen, the Account screen, My questions, the Auth page and the Submit form. One text, so the
@@ -77,7 +78,7 @@ data class Strings(
         Strings(
             gameName = transform(gameName),
             play = transform(play),
-            pointsUnit = transform(pointsUnit),
+            points = transform(points),
             tryAgain = transform(tryAgain),
             cancel = transform(cancel),
             categoriesUnread = transform(categoriesUnread),
@@ -91,12 +92,6 @@ data class Strings(
             language = transform(language),
             accountScreens = accountScreens.map(transform),
         )
-
-    /**
-     * [count] points as the whole game shows them, on the Play screen, the Account screen and the
-     * Submit form's cost alike: *123 П*, never broken between the two.
-     */
-    fun points(count: Int): String = "$count\u00A0$pointsUnit"
 }
 
 /** The source text, written by hand. */
@@ -104,7 +99,7 @@ val SerbianCyrillicStrings: Strings =
     Strings(
         gameName = "Шта би радије?",
         play = "Играј",
-        pointsUnit = "П",
+        points = "Поени: {0}",
         tryAgain = "Покушај поново",
         cancel = "Откажи",
         categoriesUnread = "Категорије нису учитане.",
@@ -126,7 +121,7 @@ val EnglishStrings: Strings =
     Strings(
         gameName = "Would You Rather?",
         play = "Play",
-        pointsUnit = "P",
+        points = "Points: {0}",
         tryAgain = "Try again",
         cancel = "Cancel",
         categoriesUnread = "Couldn't load the categories.",

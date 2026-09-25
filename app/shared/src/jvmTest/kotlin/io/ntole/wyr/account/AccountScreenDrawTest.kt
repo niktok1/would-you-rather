@@ -2,6 +2,7 @@ package io.ntole.wyr.account
 
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.ImageComposeScene
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.unit.Density
 import io.ntole.wyr.core.domain.error.DomainError
 import io.ntole.wyr.core.domain.player.PlayerStats
@@ -9,9 +10,12 @@ import io.ntole.wyr.core.domain.submission.Submission
 import io.ntole.wyr.core.domain.submission.SubmissionRules
 import io.ntole.wyr.core.domain.submission.SubmissionStatus
 import io.ntole.wyr.core.network.environment.WyrEnvironment
+import io.ntole.wyr.descriptions
+import io.ntole.wyr.everyNode
 import io.ntole.wyr.everyText
 import io.ntole.wyr.language.Language
 import io.ntole.wyr.language.WyrStrings
+import io.ntole.wyr.language.fill
 import io.ntole.wyr.language.stringsOf
 import io.ntole.wyr.nodes
 import io.ntole.wyr.sizeNeeded
@@ -52,47 +56,69 @@ class AccountScreenDrawTest {
         }
     }
 
-    /** The name, or Гост, the points as *123 П*, and each stat as a number over a word or two. */
+    /**
+     * The name, or Гост, the points as a coin and the number, which a screen reader hears in words, and
+     * each stat as a number over a word or two.
+     */
     @Test
     fun `the screen shows who is playing and their points and every stat`() {
         Language.entries.forEach { language ->
             val strings = stringsOf(language).accountScreens
             listOf(GUEST, REGISTERED).forEach { stats ->
-                val shown = textsOf(AccountState(stats = stats, submissions = emptyList()), language)
+                val state = AccountState(stats = stats, submissions = emptyList())
+                val shown = textsOf(state, language)
                 val expected =
-                    listOf(nameOf(stats, strings), stringsOf(language).points(stats.totalPoints)) +
-                        statCells(stats, strings).flatMap { listOfNotNull(it.value, it.label, it.note) }
+                    listOf(nameOf(stats, strings)) + statCells(stats, strings).flatMap { listOf(it.value, it.label) }
                 expected.forEach { text -> assertTrue(text in shown, "$language: \"$text\" is not in $shown") }
+                val said = descriptionsOf(state, language)
+                val points = stringsOf(language).points.fill(stats.totalPoints)
+                assertTrue(points in said, "$language: \"$points\" is not in $said")
             }
         }
     }
 
+    /** The card shows the questions answered, and no longer the answers given, the cycle or the likes. */
+    @Test
+    fun `the card's one stat is the questions answered`() {
+        assertEquals(
+            listOf(StatCell("10", "Questions answered")),
+            statCells(GUEST, stringsOf(Language.ENGLISH).accountScreens),
+        )
+        assertEquals(
+            listOf(StatCell("12345", "Одговорена питања")),
+            statCells(REGISTERED, stringsOf(Language.SERBIAN_CYRILLIC).accountScreens),
+        )
+    }
+
     /**
      * The user's order: who is playing and the stats, a guest's button to the Auth page, My
-     * questions, the language switch, Log out, and the server line last.
+     * questions, a guest told to register first, the table, the language menu, Log out, and the
+     * server line last.
      */
     @Test
     fun `the screen is in the user's order`() {
         Language.entries.forEach { language ->
             val strings = stringsOf(language).accountScreens
-            val switch = Language.entries.first().ownName
+            val menu = language.ownName
+            val question = optionsOf(QUESTION, language)
 
             val guest = textsOf(AccountState(stats = GUEST, submissions = listOf(QUESTION)), language)
             assertInOrder(
                 guest,
-                listOf(strings.guest, stringsOf(language).points(GUEST.totalPoints)) +
-                    listOf(strings.answers, strings.openAuth) +
-                    listOf(strings.myQuestions, QUESTION.optionA, switch, serverLine(DEV, strings)),
+                listOf(strings.guest, strings.questionsAnswered, strings.openAuth, strings.myQuestions) +
+                    listOf(strings.registerToSubmit, strings.question, question, strings.total, menu) +
+                    listOf(serverLine(DEV, strings)),
                 "$language, a guest",
             )
 
             val registered = textsOf(AccountState(stats = REGISTERED, submissions = listOf(QUESTION)), language)
             assertInOrder(
                 registered,
-                listOf(nameOf(REGISTERED, strings), strings.answers, strings.myQuestions, QUESTION.optionA) +
-                    listOf(switch, strings.logOut, serverLine(DEV, strings)),
+                listOf(nameOf(REGISTERED, strings), strings.questionsAnswered, strings.myQuestions, question) +
+                    listOf(menu, strings.logOut, serverLine(DEV, strings)),
                 "$language, a registered player",
             )
+            assertFalse(strings.registerToSubmit in registered, "$language: a registered player submits")
         }
     }
 
@@ -120,8 +146,8 @@ class AccountScreenDrawTest {
 
     /**
      * With no question listed yet, every state needs no scrolling: the card of the player's stats with
-     * a guest's button, My questions' heading, the language switch, Log out and the server line all
-     * show at an iPhone SE's height, in every language. A list scrolls, under New question
+     * a guest's button, My questions' heading and its table, the language menu, Log out and the server
+     * line all show at an iPhone SE's height, in every language. A list scrolls, under New question
      * (below).
      *
      * Measured at the width drawn above, not 375, since CI's Linux fonts wrap wider than a phone's
@@ -217,31 +243,88 @@ class AccountScreenDrawTest {
         }
     }
 
-    /** My questions: each question the player submitted, newest first, its two options and its status. */
+    /** My questions: a row for each question the player submitted, newest first, its options and its status. */
     @Test
     fun `My questions lists each question with its options and status`() {
         Language.entries.forEach { language ->
             val strings = stringsOf(language).accountScreens
             val shown = textsOf(AccountState(stats = REGISTERED, submissions = EVERY_STATUS), language)
-            val expected = EVERY_STATUS.flatMap { listOf(statusText(it, strings), it.optionA, strings.or, it.optionB) }
+            val expected = EVERY_STATUS.flatMap { listOf(optionsOf(it, language), statusText(it, strings)) }
             assertEquals(expected, shown.filter { it in expected.toSet() }, "$language")
         }
     }
 
+    /**
+     * Each question's likes, dislikes and players who answered it, a served one's as the server counted
+     * them and a question never served, pending or rejected, a dash; then a last row adding them up.
+     */
     @Test
-    fun `My questions says when there are none and New question opens the form`() {
+    fun `the table counts each question and adds them up`() {
+        Language.entries.forEach { language ->
+            val strings = stringsOf(language).accountScreens
+            val shown = textsOf(AccountState(stats = REGISTERED, submissions = COUNTED), language)
+
+            // Approved 5, 1, 34; retired 2, 0, 9; pending, never served: dashes. Added up: 7, 1, 43.
+            val numbers = shown.filter { it.all(Char::isDigit) || it == NOT_SERVED }
+            val counted = listOf("5", "1", "34", "2", "0", "9", NOT_SERVED, NOT_SERVED, NOT_SERVED, "7", "1", "43")
+            assertEquals(counted, numbers.takeLast(counted.size), "$language: $shown")
+            assertInOrder(shown, listOf(strings.question, strings.total), "$language")
+        }
+    }
+
+    /** A screen reader hears each number with its column's name, and a question never served has none. */
+    @Test
+    fun `a screen reader hears each number with its column`() {
+        Language.entries.forEach { language ->
+            val strings = stringsOf(language).accountScreens
+            val said = descriptionsOf(AccountState(stats = REGISTERED, submissions = COUNTED), language)
+
+            listOf(strings.likes, strings.dislikes, strings.answers).forEach { column ->
+                assertTrue(column in said, "$language: the heading of $column")
+            }
+            listOf("${strings.likes}: 5", "${strings.dislikes}: 1", "${strings.answers}: 34", "${strings.answers}: 43")
+                .forEach { value -> assertTrue(value in said, "$language: \"$value\" is not in $said") }
+        }
+    }
+
+    @Test
+    fun `an empty table invites the first question and New question opens the form`() {
+        Language.entries.forEach { language ->
+            val strings = stringsOf(language).accountScreens
+            listOf(strings.newQuestion, strings.firstQuestion).forEach { button ->
+                var opened = 0
+                val none = AccountState(stats = REGISTERED, submissions = emptyList())
+                val scene = scene(none, language, onNewQuestion = { opened++ })
+                try {
+                    assertTrue(strings.question in scene.everyText(), "$language: the table stays, empty")
+                    scene.tap(button)
+                } finally {
+                    scene.close()
+                }
+                assertEquals(1, opened, "$language: $button")
+            }
+        }
+    }
+
+    /** Only a registered player submits: a guest is told to register first, and New question is off. */
+    @Test
+    fun `a guest cannot open the form and is told to register first`() {
         Language.entries.forEach { language ->
             val strings = stringsOf(language).accountScreens
             var opened = 0
             val none = AccountState(stats = GUEST, submissions = emptyList())
             val scene = scene(none, language, onNewQuestion = { opened++ })
             try {
-                assertTrue(strings.noQuestions in scene.everyText(), "$language")
-                scene.tap(strings.newQuestion)
+                val shown = scene.everyText()
+                assertEquals(1, shown.count { it == strings.registerToSubmit }, "$language: in the empty table: $shown")
+                assertTrue(strings.question in shown, "$language: the table stays, empty")
+                assertFalse(strings.firstQuestion in shown, "$language: no way to the form in the table")
+                val newQuestion = scene.nodes().single { strings.newQuestion in it.texts }
+                assertTrue(newQuestion.config.contains(SemanticsProperties.Disabled), "$language: New question is off")
             } finally {
                 scene.close()
             }
-            assertEquals(1, opened, "$language")
+            assertEquals(0, opened, "$language")
         }
     }
 
@@ -291,6 +374,25 @@ class AccountScreenDrawTest {
     ) {
         val places = expected.map { text -> shown.indexOf(text) }
         assertTrue(places.none { it < 0 } && places == places.sorted(), "$message: $expected in $shown")
+    }
+
+    /** A question's options as its row shows them: one, *или* in the language shown, and the other. */
+    private fun optionsOf(
+        submission: Submission,
+        language: Language,
+    ): String = "${submission.optionA} ${stringsOf(language).accountScreens.or} ${submission.optionB}"
+
+    /** What a screen reader hears for what shows no text of its own: an icon, a coin, a table's number. */
+    private fun descriptionsOf(
+        state: AccountState,
+        language: Language,
+    ): List<String> {
+        val scene = scene(state, language)
+        try {
+            return scene.everyNode().flatMap { it.descriptions }
+        } finally {
+            scene.close()
+        }
     }
 
     /** Every text [state]'s screen lays out, from the top down, a list running past the window's included. */
@@ -391,11 +493,11 @@ class AccountScreenDrawTest {
 
         val DEV = WyrEnvironment.DEV
 
-        val GUEST = PlayerStats(12, 15, 10, 2, 4, 3)
+        val GUEST = PlayerStats(totalPoints = 12, questionsAnswered = 10)
 
         /** The longest name there can be, and numbers long enough to widen every stat. */
         val REGISTERED =
-            PlayerStats(123_456, 123_456, 12_345, 1_234, 12_345, 123_456, username = "abcdefghijklmnopqrst")
+            PlayerStats(totalPoints = 123_456, questionsAnswered = 12_345, username = "abcdefghijklmnopqrst")
 
         val LONGEST = "Be able to fly ".repeat(20).take(SubmissionRules.MAX_OPTION_LENGTH)
 
@@ -427,6 +529,26 @@ class AccountScreenDrawTest {
                 QUESTION.copy(id = "q6", optionA = "Sing", optionB = "Dance", status = SubmissionStatus.OTHER),
             )
 
+        /** Questions whose counts differ, an approved one, a retired one and one never served: pending. */
+        val COUNTED =
+            listOf(
+                QUESTION.copy(
+                    id = "c1",
+                    status = SubmissionStatus.APPROVED,
+                    likeCount = 5,
+                    dislikeCount = 1,
+                    answerCount = 34,
+                ),
+                QUESTION.copy(
+                    id = "c2",
+                    status = SubmissionStatus.RETIRED,
+                    likeCount = 2,
+                    dislikeCount = 0,
+                    answerCount = 9,
+                ),
+                QUESTION.copy(id = "c3", status = SubmissionStatus.PENDING),
+            )
+
         /** A guest's screen, its one button to the Auth page on the card, whatever is typed there. */
         val GUEST_STATES =
             listOf(
@@ -436,7 +558,7 @@ class AccountScreenDrawTest {
                 AccountState(stats = GUEST, submissions = EVERY_STATUS),
                 AccountState(stats = GUEST, listFailure = AccountFailure(AccountAction.LOAD, DomainError.NETWORK)),
                 AccountState(
-                    stats = GUEST.copy(totalPoints = 1, answersGiven = 1, questionsAnswered = 1),
+                    stats = GUEST.copy(totalPoints = 1, questionsAnswered = 1),
                     submissions = emptyList(),
                 ),
                 AccountState(

@@ -363,6 +363,54 @@ class SubmitViewModelTest {
             assertEquals("Fly", viewModel.state.value.optionA)
         }
 
+    @Test
+    fun `a guest cannot send and is told to register first`() =
+        runTest(dispatcher) {
+            server.username = null
+            val viewModel = open()
+            viewModel.write("Fly", "Swim", "FOOD")
+            server.calls.clear()
+
+            val state = viewModel.state.value
+            assertEquals(false, state.registered)
+            assertTrue(state.isGuest)
+            assertFalse(state.canSubmit, "only a registered player submits")
+            viewModel.submit()
+            testScheduler.advanceUntilIdle()
+            assertEquals(emptyList(), server.calls, "nothing sent")
+        }
+
+    @Test
+    fun `nothing says register before the player is read`() =
+        runTest(dispatcher) {
+            val viewModel = viewModel()
+
+            assertNull(viewModel.state.value.registered)
+            assertFalse(viewModel.state.value.isGuest)
+        }
+
+    /** A guest whose read was out of date: the server's refusal, and the player read again. */
+    @Test
+    fun `a refusal for a guest keeps the form and reads the player again`() =
+        runTest(dispatcher) {
+            server.submitFailsWith = WyrException(DomainError.ACCOUNT_REQUIRED, "only a registered player may submit")
+            val viewModel = open()
+            server.username = null
+
+            viewModel.write("Fly", "Swim", "FOOD")
+            viewModel.submit()
+            testScheduler.advanceUntilIdle()
+
+            val state = viewModel.state.value
+            val failure = assertNotNull(state.submitFailure)
+            assertEquals(SubmitFailure(DomainError.ACCOUNT_REQUIRED), failure)
+            assertEquals("Register to add a question.", failureMessage(failure, ENGLISH))
+            assertEquals("Региструј се да додаш питање.", failureMessage(failure, CYRILLIC))
+            assertEquals("Fly", state.optionA)
+            assertTrue(state.isGuest)
+            assertFalse(state.canSubmit)
+        }
+
     /** The points moved since they were read: the server's refusal, and the points read again. */
     @Test
     fun `a refusal for points keeps the form and reads the points again`() =
@@ -562,6 +610,9 @@ class SubmitViewModelTest {
         val calls = mutableListOf<String>()
         val stored = mutableListOf<Submission>()
         var points = 5
+
+        /** The player's username, a registered player's unless a test makes them a guest. */
+        var username: String? = "bob"
         var statsFailWith: DomainError? = null
         var submitFailsWith: WyrException? = null
 
@@ -601,7 +652,7 @@ class SubmitViewModelTest {
         override suspend fun stats(): PlayerStats {
             calls += "stats"
             statsFailWith?.let { throw WyrException(it) }
-            return PlayerStats(points, 0, 0, 1, 0, 0)
+            return PlayerStats(totalPoints = points, questionsAnswered = 0, username = username)
         }
     }
 

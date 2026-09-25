@@ -257,13 +257,19 @@ adding another `WyrColors` value.
 
 **Icons** are drawn by hand in the theme too, as `ImageVector`s in `WyrIcons`, a few strokes each on
 a 24 by 24 grid, so no icon library is needed (§2): `Home`, `Account` and `Back` (an arrow pointing
-left) for the top bars (§8d, *Navigation*), `Heart` and `HeartFilled`, the outline and the filled
-heart, for likes, and for the Play screen `Skip` (a triangle against a bar) and `ChevronDown`, the
-small chevron beside the categories played (§8d, *The Play screen*). They carry no colour of their
-own: `Icon` tints each from `WyrColors`, so they follow the light and dark themes as text does.
-Adding an icon = adding a `WyrIcons` value.
+left) for the top bars (§8d, *Navigation*); for the Play screen `Skip` (a triangle against a bar),
+`ChevronDown`, the small chevron beside the categories played, and the reactions' `ThumbUp` and
+`ThumbUpFilled`, and `ThumbDown` and `ThumbDownFilled`, the thumb up turned over (§8d, *The Play
+screen*, *Reactions*); `CoinFace` and `CoinMark`, a disc and the rim and ring on it, the points' coin
+wherever they show (§8f, *Numbers and symbols*); `Globe` for the language menu; and `Players`, two
+players, heading My questions' answers (§8d, *The Account screen*). They carry no colour of their
+own: `Icon` tints each from `WyrColors`, so they follow the light and dark themes as text does. The
+coin is two icons drawn one on the other, the face in `WyrColors.coin` and the mark in
+`WyrColors.onCoin`, the brand's amber and its dark brown, the same in both themes as the cards are
+(`CoinIcon`). Adding an icon = adding a `WyrIcons` value.
 `WyrIconsDrawTest` draws each off screen: every one a figure of the theme's size, no two the same,
-and the filled heart covering the outline and its inside.
+each filled thumb covering its outline and the hand's inside, the thumb down the thumb up turned
+over, and the coin's ring on its face.
 
 The moderation app has a theme of its own, `AdminTheme` in `:app:adminApp` (`io.ntole.wyr.admin.theme`),
 since it may not depend on `:app:shared` (§3): Material 3's default light and dark schemes and type
@@ -581,13 +587,11 @@ EncryptedSharedPreferences: enough for a game that stores nothing personal.
   batch, which the client reads as out of questions. The Categories screen sends the categories
   selected (§8d, *The Categories screen*), so a player reaches this in every build, PROD's included.
   `SkipStoreTest` pins what is built.
-- **The categories row on the Play screen** — *resolved 2026-09-25*: the user picked the redesign's
-  one row between the cards (§8d, *The Play screen*), where the categories share the row with the
-  points, the like and Skip in every question state, at one height, and the cards keep what is left.
-- **The Play row's arrangement** — *provisional — user decision.* Skip went into the row (§8d, *The
-  Play screen*), where the points stand in the middle only while the categories played leave them
-  room, so a long name shows whole at 375 wide. The options: keep it; or the points always in the
-  middle, and a long name cut short.
+- **The categories on the Play screen** — *resolved 2026-09-26*: the user moved them from the row
+  between the cards, where the redesign of 2026-09-25 had put them, to the middle of the top bar
+  (§8d, *The Play screen*).
+- **The Play row's arrangement** — *resolved 2026-09-26*: the user's, the points on the left, the
+  thumbs in the middle and Skip on the right (§8d, *The Play screen*).
 - **One Try again** — *provisional — user decision.* The Play and Account redesigns said Try again
   two ways in Serbian, *Пробај опет* and *Покушај поново*, and so did the Categories screen, with
   *Пробај опет*; it is one text now (§8f, *The strings*), *Покушај поново*, which four of the five
@@ -595,10 +599,8 @@ EncryptedSharedPreferences: enough for a game that stores nothing personal.
   options: keep it; or *Пробај опет*, a little shorter, in `Strings.tryAgain` and that sentence
   both.
 - **What submitting cost, on the Account screen** — *provisional — user decision.* The Account card
-  shows the points and its four counts and not `pointsSpent` (§8d, *Stats*). Two of the four, the
-  answers given and the likes received, are terms of §8c's sum, so once a question has cost a point
-  they add up to more than the points shown. That gap is accepted for less text, and the cost shows
-  on the Submit form's button. The options: keep it; or a fifth number on the card, what was spent.
+  shows the points and the questions answered and not `pointsSpent` (§8d, *Stats*), and the cost
+  shows on the Submit form's button. The options: keep it; or a stat on the card, what was spent.
 - **Retrying a submission** — *decided 2026-09-24: keep it simple.* A submission carries no
   attempt id, so one sent again after its response was lost is stored twice, both pending; the
   moderator rejects the copy, and the 20-pending cap bounds how many there can be. Nothing resends
@@ -906,7 +908,8 @@ game's, or a place on one, theme tokens only (§5b), and its words in `Strings` 
 **Navigation** (*decided 2026-09-25*: no tabs; `App.kt`, `io.ntole.wyr.navigation`, `io.ntole.wyr.home`):
 - The app opens on **Home**: the game's name, a big **Play** button and the account icon top right,
   and nothing else, the user asking for less text. Play opens the **Play** screen under a top bar of
-  the home icon, left, back to Home, and the account icon, right. The account icon, from Home or
+  the home icon, left, back to Home, the categories played in its middle, which open the
+  **Categories** screen, and the account icon, right. The account icon, from Home or
   Play, opens the **Account** screen under a top bar of a back arrow. On it, a guest's one button
   opens the **Auth** page, to register or log in, and My questions' *Ново питање* the **Submit**
   screen's form. On Play, the categories played open the **Categories** screen (*Categories*, *The
@@ -933,30 +936,33 @@ game's, or a place on one, theme tokens only (§5b), and its words in `Strings` 
 - *Heights*: each top bar is `WyrDimens.topBarHeight` high, 48, the tab row's height before it, so
   the Play, Account, Auth, Submit and Categories screens keep the 599 of an iPhone SE's 667 their
   draw tests hold them to. `TopBarsDrawTest` holds every bar to 48 at 375 wide with nothing cut
-  short, in both themes and every language; `HomeScreenDrawTest` holds Home to 599 at 375 wide (276
+  short but a long selection of categories on Play's, cut on its one line, in both themes and every
+  language; `HomeScreenDrawTest` holds Home to 599 at 375 wide (276
   on this Mac) and to its two texts and one icon.
 
 **The Account screen** (`io.ntole.wyr.account`; §8a *Accounts*, *Stats* below):
 - *Its order* (*decided 2026-09-25*, the user's redesign, with less text overall): the player on a
-  card, with a guest's one button to the Auth page; **My questions**; the **language switch** (§8f,
-  `LanguageSwitch`); **Log out**, for a registered player; and the server line, outside PROD. The
-  switch was on top before, in the heading's place (provisional), and is where the user put it now:
-  a player who cannot read the language shown still finds it by its three names, each in itself,
-  under the list when the list is long.
-- *The card*: the username, or *Гост*, and the points as **123 П** (`Strings.points`), read through
-  `GetPlayerStats` each time the screen is shown, since the points move on Play meanwhile; under them
-  the stats, four numbers each over a word (`statCells`): *Одговори*, the answers given, re-answers
-  included; *Питања*, the questions they went to; *Циклус*, with *још 4* under it, the questions
-  still due in it; and *Лајкови*, the likes received; not what the player's questions cost
-  (`pointsSpent`, *Stats*, provisional). A screen reader reads each number with its word. A guest
-  gets **one button** on the card, *Региструј се или се пријави*, to the Auth page (below), instead
-  of the forms; a registered player gets **Log out** further down, after which the device plays on
-  as a fresh guest. A read that fails says so under the card, or in its place before
-  any read worked, with *Покушај поново*; a read that failed whole, the list's too, says so once.
+  card, with a guest's one button to the Auth page; **My questions**, a table; the **language menu**
+  (§8f, `LanguageMenu`) and beside it **Log out**, for a registered player, one row of the two; and
+  the server line, outside PROD.
+- *The card* (*redesigned 2026-09-26*, the user: "a bit nicer... later more things will be added to
+  it"): the player's initial in a circle, the first letter of the username in capitals, or a guest's
+  figure (`Avatar`); the username, or *Гост*; and on the right the points, the coin and the number
+  (`PointsAmount`, §8f), read through `GetPlayerStats` each time the screen is shown, since the points
+  move on Play meanwhile. Under a line, the stats, two to a row so more fit as they come
+  (`statCells`): one for now, *Одговорена питања*, the distinct questions the player has answered.
+  The answers given, the cycle and the likes received left the card (the user: "Remove cycles", "no
+  need for two fields saying the same", "Likes can go to questions table"); not what the player's
+  questions cost either (`pointsSpent`, *Stats*, provisional). A screen reader reads each number with
+  its word. A guest gets **one button** on the card, *Региструј се или се пријави*, to the Auth page
+  (below), instead of the forms; a registered player gets **Log out** beside the language menu, after
+  which the device plays on as a fresh guest. A read that fails says so under the card, beside its
+  *Покушај поново*, or in the card's place before any read worked; a read that failed whole, the
+  list's too, says so once.
 - `AccountScreenDrawTest` holds every state with no question listed to 599 high in every language,
   measured 400 wide as `PlayScreenDrawTest` measures and for DEV, whose server line is the longest
-  (569 on this Mac at the tallest, a registered player whose read again failed), and New question
-  above 599 however long the list (401 at most); a list scrolls with the screen.
+  (566 on this Mac at the tallest, a guest whose read again failed), and New question above 599
+  however long the list; a list scrolls with the screen.
 - **The Auth page** (`AuthScreen`, *decided 2026-09-25*), on the Account screen's ViewModel, shows
   **Register** only (username, and password with a show/hide toggle), which keeps the points, and a
   link, *Већ имаш налог? Пријави се*, that switches the same page to **Log in** (username, password),
@@ -973,8 +979,8 @@ game's, or a place on one, theme tokens only (§5b), and its words in `Strings` 
   in every language.
 - A refusal from the server shows under the form that sent it, in a few words: a taken name, a wrong
   login, a rate limit with its wait, offline. A guest with points who logs in is warned once that the
-  guest's points stay behind, *Поени госта (12 П) неће прећи на налог.*, and the next *Ипак се
-  пријави* goes ahead; switching forms takes the warning down, and a form's failure with it.
+  guest's points stay behind, *Поени госта (12) неће прећи на налог.*, the 12 after a coin
+  (`PointsText`, §8f), and the next *Ипак се пријави* goes ahead; switching forms takes the warning down, and a form's failure with it.
 - Each field names its autofill content type (`NewUsername` and `NewPassword` to register,
   `Username` and `Password` to log in), so the phone's password manager can fill them and offer to
   save them once a register or login that worked takes the page off the screen (Compose on Android
@@ -987,93 +993,107 @@ game's, or a place on one, theme tokens only (§5b), and its words in `Strings` 
   drives it over fakes, `AccountScreenDrawTest` and `AuthScreenDrawTest` draw every state in both
   themes and every language, and `AppNavigationTest` registers through the page, an answer lost
   too, and lands back on Account; theme tokens only (§5b).
-- **My questions** (`MyQuestions`, *decided 2026-09-25*), for guests and registered players alike:
-  the player's submissions, newest first, each with its two options and its status in a word, *На
-  чекању*, *Одобрено*, *Одбијено* with the moderator's reason as they wrote it, *Повучено* (and
-  *Непознато* for a status this build cannot name), read through `GetMySubmissions` after the stats
-  each time the screen is shown and after every action, a login's and a logout's included, since the
-  list is the player's (`AccountState.submissions`). Its heading holds **Ново питање**, which opens
-  the Submit screen's form (*Submitting*). A list that cannot be read says so under it, with Try
-  again, apart from the stats (`AccountState.listFailure`).
+- **My questions** (`MyQuestions`, *decided 2026-09-25*; a table since 2026-09-26, the user: "Make my
+  question section a table, if there is none it still has the empty table calling to make first
+  question"), for guests and registered players alike: the player's submissions, newest first, read
+  through `GetMySubmissions` after the stats each time the screen is shown and after every action, a
+  login's and a logout's included, since the list is the player's (`AccountState.submissions`). A
+  **table**: a heading row, *Питање*, then a column each headed by an icon a screen reader names, a
+  thumb up for the likes (*Лајкови*), a thumb down for the dislikes (*Дислајкови*) and two players for
+  the players who answered (*Одговори*); a row for each question, its two options as *Пица или Бурек*
+  and under them its status in a word, *На чекању*, *Одобрено*, *Одбијено* with the moderator's reason
+  as they wrote it, *Повучено* (and *Непознато* for a status this build cannot name), then its three
+  numbers as the server counted them (`SubmissionDto`, *Reactions*), or a dash, `NOT_SERVED`, for a
+  question never served, pending or rejected (`countsOf`); and a last row, *Укупно*, adding the
+  columns up (`totalOf`), the author's likes and answers received. A screen reader hears a row as
+  one, each number after its column's name, *Лајкови: 5*. With no question the table stays, with one
+  row: **Постави прво питање**, to the form, for a registered player, or for a guest *Региструј се да
+  додаш питање.* Its heading holds **Ново питање**, which opens the Submit screen's form
+  (*Submitting*), a registered player's alone: for a guest it is off, and a guest with questions from
+  before the rule is told under it to register first. A list that cannot be read says so under it,
+  with Try again, apart from the stats (`AccountState.listFailure`).
 - Its last line, in a LOCAL or DEV build, names the server the build talks to and its URL, in the
   language shown, *Сервер: Dev (https://wyr-server-dev.onrender.com)* (`serverLine`, §8e); a PROD
   build shows none. `AccountScreenDrawTest` finds it under everything else in every state and
   language.
 
-**The Play screen** (`io.ntole.wyr.play`; the user's layout, *decided 2026-09-25*) asks a question
-and reveals its tally, holds Skip and Like, and opens the Categories screen (*Skipping*, *Likes*
-and *Categories*, below):
-- Two answer cards in the brand colours (§5b) and, between them, **one row**: on the left the
-  categories played, *Све* or their names, cut to one line, with a small chevron, which opens the
-  Categories screen; in the middle the player's points, *123 П*; on the right the heart, filled
-  while the player likes the question, beside its like count, before answering and after, and
-  **Skip** while the question is not answered yet (*Skipping*), its place kept empty in the reveal
-  so nothing in the row moves. No title, no *OR*, and nothing on the top bar but home and the
-  account icon.
+**The Play screen** (`io.ntole.wyr.play`; the user's layout, *decided 2026-09-25*, rearranged
+2026-09-26) asks a question and reveals its tally, holds Skip and the reactions, and opens the
+Categories screen from its top bar (*Skipping*, *Reactions* and *Categories*, below):
+- Two answer cards in the brand colours (§5b) and, between them, **one row** (the user: reactions "in
+  the middle and points to left"): on the left the player's points, the coin and the number
+  (`PointsAmount`, §8f); in the middle the **thumbs**, a thumb up and a thumb down, each filled while
+  the player holds it and beside how many hold it, before answering and after; and on the right
+  **Skip** while the question is not answered yet (*Skipping*), its place kept empty in the reveal so
+  nothing in the row moves. The **categories played**, *Све* or their names, cut to one line, with a
+  small chevron, are in the middle of the **top bar** (the user: "category goes to top bar in
+  middle"), between home and the account icon (`PlayTopBar`, `CategoriesPlayed`), and open the
+  Categories screen. No title and no *OR*.
 - *The categories' names* are the server's, in the language shown (`categoryName` in
   `io.ntole.wyr.language`, §8f), in the order the server lists them, and one not read yet by its id,
-  after the rest (`categoriesPlayed`).
-- *The row's arrangement* (`CentredRow`; the user asked for Skip in the row, not on the top bar,
-  readable at 375 wide with long Cyrillic category names, and left the arrangement open): the heart,
-  its count and Skip get their whole width first, then the points, no wider than
-  `WyrDimens.playRowMiddleMaxWidth` (104), and the categories what they leave. The points stand in
-  the middle of the screen while the categories leave them room, and move right only as far as a
-  longer selection needs. A plain row keeping the points in the middle gives the categories the same
-  room as the heart, its count and Skip: on this Mac at 375 wide, 115 for the text beside the
-  chevron, where *Начин живота*, the longest of the server's names, needs 125. As built, with *42 П*
-  and 12 likes, it shows whole, the points 10 right of the middle, as do *Супермоћи* and *Храна,
-  Етика*, the points in the middle; *Храна, Начин живота* is cut short, and so is *Начин живота*
-  beside *12345 П*. *Provisional — user decision*: the other option is the points always in the
-  middle and a long name cut short.
+  after the rest (`categoriesPlayed`). On the top bar they have the width home and the account icon
+  leave them, about 250 of 375, where the row gave them 115.
+- *The row's arrangement* (`CentredRow`): Skip gets its whole width first, then the thumbs, and the
+  points what they leave, no wider than `WyrDimens.playRowStartMaxWidth` (88). The thumbs stand in
+  the middle of the screen while the points leave them room, and move right only as far as a wider
+  start needs, which only a reaction's failure is. *Decided 2026-09-26*, replacing the provisional
+  arrangement of the categories, the points in the middle, and the heart.
+- A thumb asks for its reaction, or for none when the player holds it already, so a second tap takes
+  it back (`reactionAfterTap`; *Reactions*).
 - The points are the server's (`PlayViewModel.points`, §8c): read through `GetPlayerStats` each time
   the screen is shown, and moved to a vote's total when its answer arrives, which drops a read still
   in flight; none until the first.
 - Tapping a card answers. In the reveal both cards count their percentage up from 0 to its value
-  over 2.5 seconds, both at once (`COUNT_UP_MILLIS`), and tapping either card again is the next
+  over 2.5 seconds, both at once (`COUNT_UP_MILLIS`), and each card fills a **bar** with it (the
+  user, 2026-09-26): along its edge by the row, the bottom of the top card and the top of the bottom
+  one, inside the card from one side to the other, 6 high (`WyrDimens.revealBarHeight`) and a little
+  in from the edge, past the pick's outline (`revealBarInset`), in the card's text colour on a faint
+  track of it (`WyrColors.revealTrackOnA`, `revealTrackOnB`), filling from its start to the card's
+  share as the number counts (`RevealBar`, one count for both, `rememberCountUp`). Tapping either card
+  again is the next
   question (`PlayViewModel.next`, from the reveal only), once the reveal has shown for half a second
   (`REVEAL_HOLD_MILLIS`), so a double tap cannot answer and skip the reveal: *provisional — user
   decision*, the other option being no hold. Nothing else shows: no verdict, no points of the vote,
   no vote counts (the domain still has `VoteOutcome.agreedWithMajority`). A screen reader hears what
   a tap does where no text says it: *Следеће питање* on a revealed card, *Промени категорије* on the
   categories played.
-- *The count up is drawn, not composed* (`CountedUpText`): the number reached is read only as it is
-  drawn, over the final percentage's own text, laid out once, which sizes it and is what a screen
-  reader reads. So a frame of it draws two numbers and nothing else, where a text changed every frame
-  recomposed both cards, laid them out again and told any accessibility service, too much for a debug
-  build, several times slower, to do 60 times a second.
-- One action at a time (`isBusy`, `canChangeCategories`): while a vote, a skip or a like is in
-  flight, the cards, the heart, Skip and the categories are off, and Skip is drawn muted
-  (`WyrColors.muted`), as it was on the top bar. A like that failed says why in the points' place,
-  in two short lines at most, in a slot as high as the heart's touch target at any font size, so it
-  moves nothing; a skip that failed moves on all the same.
-- Loading is a spinner; a failure is one short sentence, *Покушај поново* (`Strings.tryAgain`, §8f)
-  and the categories played, the way out of a selection with nothing to serve. The words are
-  `PlayStrings` (§8f), but for those the Categories screen says too, *Све* and the spinner's name
-  (`Strings.allCategories`, `Strings.loading`).
+- *The count up is drawn, not composed* (`CountedUpText`, `RevealBar`): the count is read only as it
+  is drawn, the number over the final percentage's own text, laid out once, which sizes it and is
+  what a screen reader reads, and the bar in a layer of its own. So a frame of it draws two numbers
+  and two bars and nothing else, where a text changed every frame recomposed both cards, laid them
+  out again and told any accessibility service, too much for a debug build, several times slower, to
+  do 60 times a second.
+- One action at a time (`isBusy`, `canChangeCategories`): while a vote, a skip or a reaction is in
+  flight, the cards, the thumbs, Skip and the categories are off, and Skip is drawn muted
+  (`WyrColors.muted`). A reaction that failed says why in the points' place, in two short lines at
+  most, in a slot as high as a thumb's touch target at any font size, so it moves nothing; a skip that
+  failed moves on all the same.
+- Loading is a spinner; a failure is one short sentence and *Покушај поново* (`Strings.tryAgain`,
+  §8f), the categories played on the top bar being the way out of a selection with nothing to serve.
+  The words are `PlayStrings` (§8f), but for those the Categories screen says too, *Све* and the
+  spinner's name (`Strings.allCategories`, `Strings.loading`).
 - The categories are picked on the Categories screen (*Categories*, *The Categories screen*), which
   a tap on them opens; the dialog the Play screen had for them is gone. A selection played there
   drops what is on screen, a question asked or answered or a failure, and loads a question from it
-  (`PlayViewModel`'s `init`); while a load, a vote, a skip or a like is in flight it changes
+  (`PlayViewModel`'s `init`); while a load, a vote, a skip or a reaction is in flight it changes
   nothing on screen, and the question after it is the new selection's. A vote lost to `NETWORK` is
   never sent again (*Retry safety*). The selection lives in the repository, in memory for the
   app's life: a launch plays every category again, and a login or a logout keeps it.
 - `PlayViewModelTest` drives it over fakes, a selection played on the Categories screen included.
   `PlayScreenDrawTest` draws every state in both themes and every language at 400x900 and 375x599
-  (an iPhone SE less its status bar and the top bar), with none, one and every one of the server's
-  first five categories played; holds each state to 599 high with each selection (376 on this Mac),
-  measured 400 wide rather than 375 since CI's Linux fonts wrap wider than a phone's, reads each
-  state's texts and nothing else and what a screen reader hears a tap does, taps the cards before
-  and after the reveal, steps the scene's clock through the count up, reading it by its pixels and
-  finding a frame of it composing and moving nothing (`CountedUpTextDrawTest`: each number drawn
-  once, in order), holds the row to 335 wide with only the categories cut, asked with Skip and
-  answered with its place kept, and to one height with a like's failure or without at font scales 1,
-  1.3 and 2, finds Skip after the heart only while a question is asked, off and drawn muted while
-  anything is in flight (by its pixels' colours, in both themes and every language), and nothing in
-  the row moved by the reveal, shows *Начин живота*, *Супермоћи* and *Храна, Етика* whole beside the
-  points and the like (400 wide), names the categories played in each language, and holds
-  `CentredRow` to its rule on boxes of known widths, which no font changes. `AppNavigationTest`
-  skips through it, under a bar of home and the account icon alone, and plays categories picked on
-  the Categories screen.
+  (an iPhone SE less its status bar and the top bar); holds each state to 599 high, measured 400
+  wide rather than 375 since CI's Linux fonts wrap wider than a phone's; reads each state's texts and
+  nothing else, the points as a screen reader hears them, and what it hears a tap does; taps the
+  cards before and after the reveal and each thumb, asking for its reaction or none; steps the
+  scene's clock through the count up, reading the numbers and each bar by their pixels and finding a
+  frame of them composing and moving nothing (`CountedUpTextDrawTest`: each number drawn once, in
+  order); holds the row to 335 wide with nothing cut short, asked with Skip and answered with its
+  place kept, and to one height with a reaction's failure or without at font scales 1, 1.3 and 2;
+  finds Skip after the thumbs only while a question is asked, off and drawn muted while anything is in
+  flight (by its pixels' colours, in both themes and every language), the thumbs in the middle, and
+  nothing in the row moved by the reveal; and holds `CentredRow` to its rule on boxes of known widths,
+  which no font changes. `AppNavigationTest` skips through it, under a bar of home, the categories
+  played and the account icon, and plays categories picked on the Categories screen.
 
 **The Submit screen** (`io.ntole.wyr.submit`), opened from My questions on the Account screen
 (*Navigation*), is the form a question is written in (*Submitting*, below); the player's own are
@@ -1189,7 +1209,7 @@ listed on the Account screen.
     on screen, a question asked, one revealed (in its first half second too) or a failure, out of
     questions or a vote lost to `NETWORK`, which is never sent again (*Retry safety*), and loads a
     question from it (`load`, not `next`, which goes on only from the reveal and waits out its first
-    half second); a load, a vote, a skip or a like in flight there goes on and changes nothing more
+    half second); a load, a vote, a skip or a reaction in flight there goes on and changes nothing more
     on screen, and the question after it is the new selection's, since the change dropped the queue
     (`canChangeCategories`; `PlayViewModelTest` plays a selection from each of those states). The
     Categories screen ticks any of the categories the server lists, and *Све* empties it (*The
@@ -1267,14 +1287,13 @@ listed on the Account screen.
   Built in `StatsStore.of`, as one statement, so the total always agrees with the answers given, the
   likes received and the points spent (§8c). It only reads, and the cycle starts lazily on the next
   feed request, so between the answer that finishes a cycle and that request it reports the finished
-  cycle with nothing due. The Account screen shows the points and four counts, the answers given,
-  the questions they went to, the cycle and the likes received (*The Account screen*), and not
-  `pointsSpent`, for less text (*provisional — user decision*, §8b). The answers given and the likes
-  received are terms of §8c's sum, so once a question has cost a point they add up to more than the
-  points shown, and the card does not say why. That gap is accepted, and the cost shows where it is
-  paid, on the Submit form's button. The client reads only the points, the questions answered and
-  the username: the domain's `PlayerStats` has no field for the answers given, the cycle and what is
-  due in it, the likes received, the points spent or the player id, which the server still sends.
+  cycle with nothing due. The Account screen shows the points and the questions answered (*The
+  Account screen*), and not `pointsSpent`, for less text (*provisional — user decision*, §8b); the
+  likes and answers the player's questions received are in My questions' table, question by question
+  and added up, read with the list rather than with the stats. The client reads only the points, the
+  questions answered and the username: the domain's `PlayerStats` has no field for the answers given,
+  the cycle and what is due in it, the likes received, the points spent or the player id, which the
+  server still sends, the cycle's two for its own tests.
 - **Skipping** *(built; decided 2026-09-23)*: allowed, earns nothing, and never touches the
   tally. The server **records the skip for the player's current cycle only**, so the question is
   no longer due in that cycle and comes back in the **next** one, except through a category filter
@@ -1366,15 +1385,16 @@ listed on the Account screen.
     served them (`QuestionMapper`), and a queued one keeps them as fetched. A `Submission` carries its
     `likeCount`, `dislikeCount` and `answerCount`, and a `ModeratedQuestion` its `dislikeCount`, which
     the moderation app shows beside the likes (`dislikesOf`).
-  - *The Play screen* shows the like count between the cards, asked or revealed, beside the heart,
-    filled while the player likes the question (`PlayViewModel.toggleLike`). It asks for the opposite
-    of what the question on screen shows, then puts the server's answer on that question: only on
-    the one the answer names, and only while it is still on screen. Nothing changes before the
-    answer, so a like that failed, a like lost to `NETWORK` included, leaves the question as it was,
-    and says why in the points' place (*The Play screen*), and pressing again asks for the same
-    like again. It works out no points itself: a like of the player's own question moves their total
-    without a vote, so the points between the cards show it from the next vote on, or from the next
-    time the Play screen is shown, which reads them again.
+  - *The Play screen* shows both counts between the cards, asked or revealed, each beside its thumb,
+    a thumb up for the likes and a thumb down for the dislikes, filled while the player holds it
+    (`PlayViewModel.react`, *The Play screen*). A tap asks for the thumb's reaction, or for none when
+    the player holds it already, then puts the server's answer on that question: only on the one the
+    answer names, and only while it is still on screen. Nothing changes before the answer, so a
+    reaction that failed, one lost to `NETWORK` included, leaves the question as it was, and says why
+    in the points' place (*The Play screen*), and pressing again asks for the same again. It works out
+    no points itself: a like of the player's own question moves their total without a vote, so the
+    points between the cards show it from the next vote on, or from the next time the Play screen is
+    shown, which reads them again. The thumbs, drawn by hand (§5b), took the heart's place.
 - **Submitting** *(built; details decided 2026-09-23; the cost 2026-09-25; registered players only
   2026-09-26)*: **only a registered player may submit** (§8a, *Accounts*); a guest registers first,
   keeping everything it has. It **costs a point** (§8c) and earns no points directly, because authors
@@ -1411,8 +1431,11 @@ listed on the Account screen.
   enforce, and `SubmissionRules` (`:core:domain`) copies the options' rules so a form can check what
   is typed, as `AccountRules` does for accounts (`SubmissionLimitsTest` pins its numbers to
   `WyrApi.Limits`). A status this build cannot name is `SubmissionStatus.OTHER`. The game lists the
-  player's own on the Account screen, *My questions* (*The Account screen*), and writes one on the
-  **Submit** screen's form, opened from there (`SubmitViewModel`, *decided 2026-09-25*): under *Шта
+  player's own on the Account screen, *My questions* (*The Account screen*), and a registered player
+  writes one on the **Submit** screen's form, opened from there (`SubmitViewModel`, *decided
+  2026-09-25*); a guest cannot open it, and one who reaches it anyway (an Android process brought back
+  on it) finds Send off and *Региструј се да додаш питање.* under it, the player being read with the
+  points (`SubmitState.registered`), as is the server's `ACCOUNT_REQUIRED`, said once. Under *Шта
   би радије…*, two options and one or more of the categories the server lists, read
   (`GetCategories`) each time the form is shown, before the points, and named in the language shown
   as on Play (`categoryName`, §8f), what `SubmissionRules` refuses in each option shown under it as
@@ -1423,8 +1446,9 @@ listed on the Account screen.
   has one copy on the client, `SubmissionRules.SUBMISSION_COST`, the domain's copy of
   `WyrApi.Limits.SUBMISSION_COST`, which is what `Scoring.SUBMISSION_COST` charges, so a change to
   the cost fails `SubmissionLimitsTest` until the copy changes too (an installed build shows the
-  cost it was built with). The form shows it on the button, in the points' one unit, *Пошаљи · 1 П*
-  (`Strings.pointsUnit`, §8f), and holds the button off while the player's points, read through
+  cost it was built with). The form shows it on the button, *Пошаљи ·* and the coin and the number
+  (`PointsText`, §8f), which a screen reader hears as *Пошаљи · Поени: 1*, and holds the button off
+  while the player's points, read through
   `GetPlayerStats` each time the form is shown and after every submit, are fewer, with one short
   line saying so, *Немаш довољно поена.* The server's own refusal, `NOT_ENOUGH_POINTS`
   (`DomainError.NOT_ENOUGH_POINTS`, points spent meanwhile), is that same line, shown once: the
@@ -1531,7 +1555,8 @@ listed on the Account screen.
     `ModerationMapperTest` pins to `WyrApi.Limits.MAX_PAGE_SIZE`), since every read is a request of
     the address's admin budget (§8b). A `ModeratedQuestion` holds its categories as a question does,
     its status as a `SubmissionStatus` (`RETIRED`, or `OTHER` for one this build cannot name),
-    whether it is a seed, its times as instants, its `Tally` and its like count. A filter by
+    whether it is a seed, its times as instants, its `Tally`, its like count and its dislike count. A
+    filter by
     `SubmissionStatus.OTHER` is refused before anything is sent; its categories are ids, in id
     order. `WRONG_STATUS`
     is `DomainError.WRONG_STATUS`. `moderationDataModule(environment)` binds it, and only there, for a
@@ -1564,7 +1589,7 @@ listed on the Account screen.
     `OTHER`) and any categories, none being every one: Load reads its first page and Load more the
     next, at the filter the list was read at, with the cursor the page before gave, and changing the
     filter drops what was read at the one before. Each question shows its options, categories,
-    status, whether it is a seed, its votes and likes, its times and a rejection's reason, and what
+    status, whether it is a seed, its votes, likes and dislikes, its times and a rejection's reason, and what
     can be done where it stands: Retire an approved one, only once the moderator confirms it in a
     dialog; Restore a retired one; decide a pending one as in the queue, from the same draft of
     categories and reason. A retirement or restoration puts the question it answers with in its
@@ -1680,7 +1705,7 @@ hand, so the two cannot say different things; and **English** stands beside them
   is checked too: the Latin is the Cyrillic transliterated, every Serbian text is in Cyrillic, and
   no Latin or English one has a Cyrillic letter. Translated so far: the Home screen, the game's name
   (*Шта би радије?*, *Would You Rather?*) and *Играј*; the top bars and the icons' names (*Почетна*,
-  *Налог*, *Назад*); the switch's name, *Језик*; the Play screen's words (`PlayStrings`,
+  *Налог*, *Назад*); the language menu's name, *Језик*; the Play screen's words (`PlayStrings`,
   `Strings.playScreen`); the Categories screen (`CategoryStrings`, `Strings.categoriesScreen`:
   *Претражи категорије*, *Изабрано: 3* and *Нема резултата*); the Account screen, whole, with My
   questions and the server line; the Auth page, whole; and the Submit screen's form, whole
@@ -1706,22 +1731,28 @@ hand, so the two cannot say different things; and **English** stands beside them
   each language to it.
 - **Numbers and symbols** *(built)*: a text holding a number or a name is a template, `{0}` and on,
   filled in by `fill` (`Templates.kt`), so each language puts it where its grammar wants it, and
-  `StringsTest` holds every language's copy of a template to the same placeholders. **Points** have
-  one unit in the whole game, one text of `Strings`, `pointsUnit`: Cyrillic *П* in Serbian, so
-  Serbian Latin's *P* is made from it, and *P* in English, written after the number with a no-break
-  space by `Strings.points` (*123 П*), on the Play screen's row, the Account card, the Auth page's
-  guest-points warning and the Submit form's cost (*Пошаљи · 1 П*, *Pošalji · 1 P*, *Send · 1 P*).
-  The characters a username may hold (`USERNAME_CHARACTERS`, *a–z, 0–9, _*) are the same in every
-  language, so they are not `Strings`, whose Serbian texts hold no Latin letter.
+  `StringsTest` holds every language's copy of a template to the same placeholders. **Points** are a
+  **coin** and the number in the whole game (the user, 2026-09-26, in place of the unit *П* before):
+  `PointsAmount` for an amount on its own, on the Play screen's row and the Account card, and
+  `PointsText` for one in running text, the coin inline where a template's `{0}` is, on the Auth
+  page's guest-points warning and the Submit form's cost (*Пошаљи ·* coin *1*). A screen reader hears
+  the points as `Strings.points`, *Поени: 43*, *Poeni: 43*, *Points: 43*, a label and the number, so
+  no plural form is needed, and the Submit button as *Пошаљи · Поени: 1*. The characters a username
+  may hold (`USERNAME_CHARACTERS`, *a–z, 0–9, _*) are the same in every language, so they are not
+  `Strings`, whose Serbian texts hold no Latin letter; nor is the dash My questions' table shows for a
+  question never served (`NOT_SERVED`), which has no letter at all.
 - **The default** *(built)*: Serbian Cyrillic on a first launch, whatever the device's language:
-  nothing reads the device's locale (`Language.DEFAULT`; `LanguageSwitchTest` sets an English, a
+  nothing reads the device's locale (`Language.DEFAULT`; `LanguageMenuTest` sets an English, a
   German and a Serbian Latin locale on the JVM and still opens in Cyrillic).
-- **The switch** *(built)*: on the Account screen, under My questions (§8d), a segmented row of the
-  three, **Ћирилица**, **Latinica** and **English**, each named in itself whatever the language
-  shown, so a player who picked one they cannot read finds their own (`Language.ownName`, which is
-  why the names are not `Strings`). No label on screen; a screen reader hears it named
-  (`Strings.language`). A tap changes every screen at once and is then kept (`LanguageViewModel`,
-  bound in `uiModule` and asked for once by `App`).
+- **The language menu** *(built; a menu since 2026-09-26, the user: "there will be more languages
+  segmented buttons wont fit everything")*: on the Account screen, under My questions (§8d), a row of
+  a globe, the language shown named in itself and a chevron (`LanguageMenu`); a tap opens a menu of
+  every language, **Ћирилица**, **Latinica** and **English**, each named in itself whatever the
+  language shown, the one shown marked, so a player who picked one they cannot read finds the menu by
+  its globe and their own by its name (`Language.ownName`, which is why the names are not `Strings`).
+  A screen reader hears the row as *Језик: Ћирилица*, in the language shown (`Strings.language`). A
+  tap on a language changes every screen at once and is then kept (`LanguageViewModel`, bound in
+  `uiModule` and asked for once by `App`). `LanguageMenuTest` opens it and picks each.
 - **Kept on the device** *(built)*: under `wyr.language` in the storage the session is kept in (the
   platform's `TokenStorage`: SharedPreferences, `NSUserDefaults`, JVM Preferences, `localStorage`), as
   the language's BCP 47 tag (`sr-Cyrl`, `sr-Latn`, `en`). One key for the device, not one per

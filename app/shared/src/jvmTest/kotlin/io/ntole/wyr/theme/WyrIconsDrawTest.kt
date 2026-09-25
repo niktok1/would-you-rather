@@ -39,20 +39,57 @@ class WyrIconsDrawTest {
         }
     }
 
-    /** The filled heart is the outline's size exactly, with its inside painted too. */
+    /** Each filled thumb is its outline's size exactly, with the hand's inside painted too. */
     @Test
-    fun `the filled heart covers the outline and its inside`() {
-        val outline = painted(WyrIcons.Heart)
-        val filled = painted(WyrIcons.HeartFilled)
+    fun `each filled thumb covers its outline and its inside`() {
+        listOf(
+            Triple("thumb up", WyrIcons.ThumbUp to WyrIcons.ThumbUpFilled, pixelAt(x = 16, y = 14)),
+            // Turned over top to bottom, so the hand's inside is as far above the middle as it was below.
+            Triple("thumb down", WyrIcons.ThumbDown to WyrIcons.ThumbDownFilled, pixelAt(x = 16, y = 9)),
+        ).forEach { (name, icons, inside) ->
+            val outline = painted(icons.first)
+            val filled = painted(icons.second)
 
-        outline.indices.forEach { pixel ->
-            if (outline[pixel]) assertTrue(filled[pixel], "the filled heart leaves pixel $pixel of the outline out")
+            outline.indices.forEach { pixel ->
+                if (outline[pixel]) assertTrue(filled[pixel], "the filled $name leaves pixel $pixel of the outline out")
+            }
+            assertFalse(outline[inside], "the $name's outline paints the hand's inside")
+            assertTrue(filled[inside], "the filled $name leaves the hand's inside empty")
         }
-        // The heart's middle, well inside the outline's stroke.
-        val middle = SIZE / 2 * SIZE + SIZE / 2
-        assertFalse(outline[middle], "the outline paints its own middle")
-        assertTrue(filled[middle], "the filled heart leaves its middle empty")
     }
+
+    /**
+     * The thumb down is the thumb up turned over, top to bottom: the same pixels mirrored, but for a few
+     * at the edges of its strokes, where the rasteriser's rounding is not mirrored with them.
+     */
+    @Test
+    fun `the thumb down is the thumb up turned over`() {
+        val up = painted(WyrIcons.ThumbUp)
+        val down = painted(WyrIcons.ThumbDown)
+
+        val turned = BooleanArray(SIZE * SIZE) { index -> up[pixelAt(x = index % SIZE, y = SIZE - 1 - index / SIZE)] }
+        val differing = turned.indices.count { turned[it] != down[it] }
+        assertTrue(differing * 20 <= down.count { it }, "$differing pixels differ")
+    }
+
+    /** The coin's face is a full disc, and its mark a rim and a ring on it, with the face's middle clear of both. */
+    @Test
+    fun `the coin's face is a disc under the ring of its mark`() {
+        val face = painted(WyrIcons.CoinFace)
+        val mark = painted(WyrIcons.CoinMark)
+        val middle = pixelAt(x = SIZE / 2, y = SIZE / 2)
+
+        assertTrue(face[middle], "the face is a full disc")
+        assertFalse(mark[middle], "the ring leaves the face's middle to show")
+        // The ring, well inside the rim, lies on the face.
+        val ring = pixelAt(x = SIZE / 2 + 5, y = SIZE / 2)
+        assertTrue(mark[ring] && face[ring], "the ring is drawn on the face")
+    }
+
+    private fun pixelAt(
+        x: Int,
+        y: Int,
+    ): Int = y * SIZE + x
 
     /** Which of [icon]'s pixels are painted at all, row by row, drawn untinted at one pixel a dp. */
     private fun painted(icon: ImageVector): BooleanArray {
@@ -82,8 +119,14 @@ class WyrIconsDrawTest {
                 "Back" to WyrIcons.Back,
                 "Skip" to WyrIcons.Skip,
                 "ChevronDown" to WyrIcons.ChevronDown,
-                "Heart" to WyrIcons.Heart,
-                "HeartFilled" to WyrIcons.HeartFilled,
+                "ThumbUp" to WyrIcons.ThumbUp,
+                "ThumbUpFilled" to WyrIcons.ThumbUpFilled,
+                "ThumbDown" to WyrIcons.ThumbDown,
+                "ThumbDownFilled" to WyrIcons.ThumbDownFilled,
+                "CoinFace" to WyrIcons.CoinFace,
+                "CoinMark" to WyrIcons.CoinMark,
+                "Globe" to WyrIcons.Globe,
+                "Players" to WyrIcons.Players,
             )
     }
 }

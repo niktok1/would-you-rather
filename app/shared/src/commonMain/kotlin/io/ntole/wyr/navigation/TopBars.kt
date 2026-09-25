@@ -1,5 +1,6 @@
 package io.ntole.wyr.navigation
 
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
@@ -26,13 +27,22 @@ fun HomeTopBar(onAccount: () -> Unit) {
     TopBar(end = { AccountButton(onAccount) })
 }
 
-/** Play's: home on the left, back to Home, and the account icon on the right. */
+/**
+ * Play's: home on the left, back to Home, the account icon on the right, and between them, in the
+ * middle, [categories]: the categories played, which open the Categories screen (CLAUDE.md §8d,
+ * *The Play screen*).
+ */
 @Composable
 fun PlayTopBar(
     onHome: () -> Unit,
     onAccount: () -> Unit,
+    categories: @Composable () -> Unit,
 ) {
-    TopBar(start = { IconAction(WyrIcons.Home, LocalStrings.current.home, onHome) }, end = { AccountButton(onAccount) })
+    TopBar(
+        start = { IconAction(WyrIcons.Home, LocalStrings.current.home, onHome) },
+        middle = categories,
+        end = { AccountButton(onAccount) },
+    )
 }
 
 /**
@@ -45,9 +55,14 @@ fun BackTopBar(onBack: () -> Unit) {
     TopBar(start = { BackButton(onBack) })
 }
 
+/**
+ * [start] on the left, [end] on the right, and [middle], if any, in what they leave, in its middle: in
+ * the middle of the bar too wherever [start] and [end] are as wide, as two icon buttons are.
+ */
 @Composable
 private fun TopBar(
     start: @Composable RowScope.() -> Unit = {},
+    middle: (@Composable () -> Unit)? = null,
     end: @Composable RowScope.() -> Unit = {},
 ) {
     val dimens = WyrThemeAccessors.dimens
@@ -61,7 +76,11 @@ private fun TopBar(
                 .padding(horizontal = dimens.spaceXs),
     ) {
         start()
-        Spacer(Modifier.weight(1f))
+        if (middle == null) {
+            Spacer(Modifier.weight(1f))
+        } else {
+            Box(contentAlignment = Alignment.Center, modifier = Modifier.weight(1f)) { middle() }
+        }
         end()
     }
 }

@@ -5,12 +5,13 @@ import androidx.lifecycle.viewModelScope
 import io.ntole.wyr.core.domain.category.CategoryRepository
 import io.ntole.wyr.core.domain.error.DomainError
 import io.ntole.wyr.core.domain.error.WyrException
-import io.ntole.wyr.core.domain.like.SetLike
 import io.ntole.wyr.core.domain.player.GetPlayerStats
 import io.ntole.wyr.core.domain.question.GetNextQuestion
 import io.ntole.wyr.core.domain.question.Question
 import io.ntole.wyr.core.domain.question.QuestionRepository
 import io.ntole.wyr.core.domain.question.SkipQuestion
+import io.ntole.wyr.core.domain.reaction.Reaction
+import io.ntole.wyr.core.domain.reaction.SetReaction
 import io.ntole.wyr.core.domain.vote.AttemptId
 import io.ntole.wyr.core.domain.vote.CastVote
 import io.ntole.wyr.core.domain.vote.Side
@@ -38,7 +39,7 @@ class PlayViewModel(
     private val getNextQuestion: GetNextQuestion,
     private val castVote: CastVote,
     private val skipQuestion: SkipQuestion,
-    private val setLike: SetLike,
+    private val setReaction: SetReaction,
     private val getPlayerStats: GetPlayerStats,
     private val questions: QuestionRepository,
     categoryList: CategoryRepository,
@@ -80,7 +81,7 @@ class PlayViewModel(
         // Categories played on the Categories screen (CLAUDE.md §8d, *Categories*) drop the question
         // on screen, asked or answered, or the failure, and a question from them loads: load, not
         // next, which goes on only from the reveal. Only while the categories may change here: a load
-        // or a vote, a skip or a like in flight goes on, and the question after it is the new
+        // or a vote, a skip or a reaction in flight goes on, and the question after it is the new
         // selection's, since the change dropped the queue. Undispatched, so a change made before this
         // runs is not taken for the one played now.
         viewModelScope.launch(start = CoroutineStart.UNDISPATCHED) {
@@ -124,7 +125,7 @@ class PlayViewModel(
     fun choose(side: Side) {
         val asking = _state.value as? PlayUiState.Asking ?: return
 
-        // Guard against a double tap turning into two answers, and against answering mid-like.
+        // Guard against a double tap turning into two answers, and against answering mid-reaction.
         if (asking.isBusy) return
         // One attempt per tap (CLAUDE.md §8d), kept for any retry of this vote.
         submit(PendingVote(asking.question, side, AttemptId.random()))
@@ -144,7 +145,7 @@ class PlayViewModel(
      */
     fun skip() {
         val asking = _state.value as? PlayUiState.Asking ?: return
-        // Not while its vote is in flight, when it is being answered, nor while its like is.
+        // Not while its vote is in flight, when it is being answered, nor while a reaction is.
         if (asking.isBusy) return
         // Loading at once, so a second tap finds nothing to skip.
         _state.value = PlayUiState.Loading
@@ -160,39 +161,44 @@ class PlayViewModel(
     }
 
     /**
-     * Likes the question on screen, or unlikes it if the player likes it (CLAUDE.md §8d, *Likes*),
-     * before answering or after, then shows it with its likes as the server answered them.
+     * Makes [reaction] what the player thinks of the question on screen, [Reaction.NONE] to take
+     * theirs back (CLAUDE.md §8d, *Reactions*), before answering or after, then shows it with its
+     * reactions as the server answered them. The screen asks for the thumb tapped, or for none when it
+     * is the one the player holds.
      *
-     * Which to ask for is read off the question on screen, and the request sets the like rather
-     * than toggling it. Nothing changes on screen until the server answers, so a like that failed
-     * leaves the question as it was, with the failure beside it, and pressing again asks for the
-     * same like again, which the server holds once however many times it lands. Nothing else goes
-     * while it is in flight.
+     * The request sets the reaction rather than toggling it. Nothing changes on screen until the server
+     * answers, so a reaction that failed leaves the question as it was, with the failure beside it, and
+     * pressing again asks for the same again, which the server holds once however many times it lands.
+     * Nothing else goes while it is in flight.
      */
-    fun toggleLike() {
+    fun react(reaction: Reaction) {
         val shown = _state.value as? PlayUiState.OnQuestion ?: return
         if (shown.isBusy) return
         val question = shown.question
-        val liking = shown.withLike(isLiking = true, likeError = null)
-        _state.value = liking
+        val reacting = shown.withReaction(isReacting = true, reactionError = null)
+        _state.value = reacting
 
         viewModelScope.launch {
             val settled =
                 try {
-                    val likes = setLike(question.id, !question.likedByMe)
+                    val reactions = setReaction(question.id, reaction)
                     // Only ever onto the question the server says it answered for.
                     val answered =
-                        if (likes.questionId == question.id) {
-                            question.copy(likeCount = likes.likeCount, likedByMe = likes.likedByMe)
+                        if (reactions.questionId == question.id) {
+                            question.copy(
+                                likeCount = reactions.likeCount,
+                                dislikeCount = reactions.dislikeCount,
+                                myReaction = reactions.myReaction,
+                            )
                         } else {
                             question
                         }
-                    liking.withLike(question = answered, isLiking = false, likeError = null)
+                    reacting.withReaction(question = answered, isReacting = false, reactionError = null)
                 } catch (failure: WyrException) {
-                    liking.withLike(isLiking = false, likeError = failure.error)
+                    reacting.withReaction(isReacting = false, reactionError = failure.error)
                 }
             // Unless the player has moved on meanwhile, when it is no longer the question on screen.
-            _state.update { current -> if (current == liking) settled else current }
+            _state.update { current -> if (current == reacting) settled else current }
         }
     }
 
@@ -209,7 +215,7 @@ class PlayViewModel(
 
     /**
      * Reads the player's points, each time the Play screen is shown: they move meanwhile on other
-     * screens, a login or a logout, a submission, and with other players' likes of the player's
+     * screens, a login or a logout, a submission, and with other players' reactions to the player's
      * questions. A read that fails keeps the points shown and says nothing: the next vote's answer
      * brings them. A vote answered while a read is in flight wins, since the server may have
      * answered the read before it counted the vote.
@@ -254,13 +260,13 @@ class PlayViewModel(
         }
     }
 
-    private fun PlayUiState.OnQuestion.withLike(
+    private fun PlayUiState.OnQuestion.withReaction(
         question: Question = this.question,
-        isLiking: Boolean,
-        likeError: DomainError?,
+        isReacting: Boolean,
+        reactionError: DomainError?,
     ): PlayUiState.OnQuestion =
         when (this) {
-            is PlayUiState.Asking -> copy(question = question, isLiking = isLiking, likeError = likeError)
-            is PlayUiState.Revealed -> copy(question = question, isLiking = isLiking, likeError = likeError)
+            is PlayUiState.Asking -> copy(question = question, isReacting = isReacting, reactionError = reactionError)
+            is PlayUiState.Revealed -> copy(question = question, isReacting = isReacting, reactionError = reactionError)
         }
 }

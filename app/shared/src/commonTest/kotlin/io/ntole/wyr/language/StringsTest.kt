@@ -55,14 +55,14 @@ class StringsTest {
     }
 
     /**
-     * The whole game writes points in one unit, a text of its own: Cyrillic *П* in Serbian, so the
-     * Latin *P* is made from it, and *P* in English; after the number, never broken from it.
+     * On screen the points are a coin and the number, which says nothing to a screen reader: it hears
+     * a label and the number, in the language shown, and so no plural form is needed.
      */
     @Test
-    fun `points are the number and the one unit of the language shown`() {
-        assertEquals("123\u00A0П", SerbianCyrillicStrings.points(123))
-        assertEquals("123\u00A0P", SerbianLatinStrings.points(123))
-        assertEquals("0\u00A0P", EnglishStrings.points(0))
+    fun `a screen reader hears points as a label and the number in the language shown`() {
+        assertEquals("Поени: 123", SerbianCyrillicStrings.points.fill(123))
+        assertEquals("Poeni: 123", SerbianLatinStrings.points.fill(123))
+        assertEquals("Points: 1", EnglishStrings.points.fill(1))
     }
 
     /**

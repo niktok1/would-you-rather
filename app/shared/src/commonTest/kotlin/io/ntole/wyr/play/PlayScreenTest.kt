@@ -3,6 +3,7 @@ package io.ntole.wyr.play
 import io.ntole.wyr.core.domain.category.Category
 import io.ntole.wyr.core.domain.error.DomainError
 import io.ntole.wyr.core.domain.question.Question
+import io.ntole.wyr.core.domain.reaction.Reaction
 import io.ntole.wyr.core.domain.vote.Side
 import io.ntole.wyr.core.domain.vote.Tally
 import io.ntole.wyr.core.domain.vote.VoteOutcome
@@ -87,14 +88,27 @@ class PlayScreenTest {
     }
 
     @Test
+    fun `a thumb asks for its reaction and a second tap takes it back`() {
+        assertEquals(Reaction.LIKE, reactionAfterTap(Reaction.LIKE, held = Reaction.NONE))
+        assertEquals(Reaction.NONE, reactionAfterTap(Reaction.LIKE, held = Reaction.LIKE))
+        assertEquals(
+            Reaction.LIKE,
+            reactionAfterTap(Reaction.LIKE, held = Reaction.DISLIKE),
+            "a like replaces a dislike",
+        )
+        assertEquals(Reaction.DISLIKE, reactionAfterTap(Reaction.DISLIKE, held = Reaction.LIKE))
+        assertEquals(Reaction.NONE, reactionAfterTap(Reaction.DISLIKE, held = Reaction.DISLIKE))
+    }
+
+    @Test
     fun `the categories change only while nothing is loading or in flight`() {
         assertFalse(PlayUiState.Loading.canChangeCategories)
         assertTrue(PlayUiState.Asking(QUESTION).canChangeCategories)
         assertFalse(PlayUiState.Asking(QUESTION, isSubmitting = true).canChangeCategories)
-        assertFalse(PlayUiState.Asking(QUESTION, isLiking = true).canChangeCategories)
+        assertFalse(PlayUiState.Asking(QUESTION, isReacting = true).canChangeCategories)
         val revealed = PlayUiState.Revealed(QUESTION, OUTCOME)
         assertTrue(revealed.canChangeCategories)
-        assertFalse(revealed.copy(isLiking = true).canChangeCategories)
+        assertFalse(revealed.copy(isReacting = true).canChangeCategories)
         // Where a selection with nothing to serve leaves the player.
         assertTrue(PlayUiState.Failed(DomainError.OUT_OF_QUESTIONS).canChangeCategories)
     }

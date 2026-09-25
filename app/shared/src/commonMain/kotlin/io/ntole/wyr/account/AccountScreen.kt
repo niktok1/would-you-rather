@@ -1,40 +1,53 @@
 package io.ntole.wyr.account
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import io.ntole.wyr.core.domain.player.PlayerStats
 import io.ntole.wyr.core.network.environment.WyrEnvironment
 import io.ntole.wyr.language.AccountStrings
 import io.ntole.wyr.language.Language
-import io.ntole.wyr.language.LanguageSwitch
+import io.ntole.wyr.language.LanguageMenu
 import io.ntole.wyr.language.LocalStrings
 import io.ntole.wyr.language.fill
+import io.ntole.wyr.points.PointsAmount
+import io.ntole.wyr.theme.WyrIcons
 import io.ntole.wyr.theme.WyrThemeAccessors
 import io.ntole.wyr.theme.WyrTypeScale
 
 /**
  * The Account screen (CLAUDE.md §8d, *The Account screen*), in the user's order: who is playing on
- * this device, their points and their stats in a few numbers, and for a guest one button to the Auth
- * page, which [onOpenAuth] opens, to register or log in; then My questions, whose New question
- * [onNewQuestion] answers with the Submit screen's form; then the language switch, [language] the one
- * the game is shown in, which [onSelectLanguage] changes (§8f); then Log out for a registered player.
+ * this device, their points and their stats, and for a guest one button to the Auth page, which
+ * [onOpenAuth] opens, to register or log in; then My questions, a table of them, whose New question
+ * [onNewQuestion] answers with the Submit screen's form, for a registered player; then the language
+ * menu, [language] the one the game is shown in, which [onSelectLanguage] changes (§8f), and beside
+ * it Log out for a registered player.
  * A build for any server but production's names that server last ([serverLine]), [environment] being
  * the one the build talks to.
  *
@@ -71,17 +84,16 @@ fun AccountScreen(
             // The player's own questions, once there is a player to read them for.
             if (stats != null) MyQuestions(state, actions, onNewQuestion)
 
-            LanguageSwitch(selected = language, onSelect = onSelectLanguage)
-
-            if (stats?.username != null) {
-                Column(verticalArrangement = Arrangement.spacedBy(dimens.spaceSm)) {
-                    FailureOf(state, AccountAction.LOG_OUT)
-                    OutlinedButton(
-                        onClick = actions::logOut,
-                        enabled = !state.isBusy,
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        Text(strings.logOut)
+            // The language menu, and beside it Log out for a registered player: one row of the two.
+            Column(verticalArrangement = Arrangement.spacedBy(dimens.spaceSm)) {
+                if (stats?.username != null) FailureOf(state, AccountAction.LOG_OUT)
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(dimens.spaceSm),
+                ) {
+                    LanguageMenu(selected = language, onSelect = onSelectLanguage, modifier = Modifier.weight(1f))
+                    if (stats?.username != null) {
+                        OutlinedButton(onClick = actions::logOut, enabled = !state.isBusy) { Text(strings.logOut) }
                     }
                 }
             }
@@ -105,43 +117,12 @@ private fun Player(
 ) {
     val colors = WyrThemeAccessors.colors
     val dimens = WyrThemeAccessors.dimens
-    val strings = LocalStrings.current.accountScreens
     val stats = state.stats
     val failure = state.failure?.takeIf { it.action == AccountAction.LOAD }
 
     Column(verticalArrangement = Arrangement.spacedBy(dimens.spaceSm)) {
         if (stats != null) {
-            Surface(
-                color = colors.surface,
-                shape = RoundedCornerShape(dimens.radiusCard),
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Column(
-                    modifier = Modifier.padding(dimens.spaceMd),
-                    verticalArrangement = Arrangement.spacedBy(dimens.spaceSm),
-                ) {
-                    Text(
-                        text = nameOf(stats, strings),
-                        color = colors.primaryText,
-                        fontSize = WyrTypeScale.sectionTitle,
-                        fontWeight = FontWeight.Bold,
-                    )
-                    Text(
-                        text = LocalStrings.current.points(stats.totalPoints),
-                        color = colors.headingAccent,
-                        fontSize = WyrTypeScale.heading,
-                        fontWeight = FontWeight.ExtraBold,
-                    )
-                    Row(horizontalArrangement = Arrangement.spacedBy(dimens.spaceSm)) {
-                        statCells(stats, strings).forEach { cell -> Stat(cell, Modifier.weight(1f)) }
-                    }
-                    if (stats.username == null) {
-                        Button(onClick = onOpenAuth, enabled = !state.isBusy, modifier = Modifier.fillMaxWidth()) {
-                            Text(strings.openAuth)
-                        }
-                    }
-                }
-            }
+            PlayerCard(stats, busy = state.isBusy, onOpenAuth = onOpenAuth)
         } else if (failure == null) {
             CircularProgressIndicator(color = colors.headingAccent)
         }
@@ -149,8 +130,117 @@ private fun Player(
             LinearProgressIndicator(color = colors.headingAccent, modifier = Modifier.fillMaxWidth())
         }
         if (failure != null) {
-            FailureText(failure)
-            OutlinedButton(onClick = actions::refresh, enabled = !state.isBusy) { Text(LocalStrings.current.tryAgain) }
+            val tryAgain = @Composable {
+                OutlinedButton(
+                    onClick = actions::refresh,
+                    enabled = !state.isBusy,
+                ) { Text(LocalStrings.current.tryAgain) }
+            }
+            if (stats == null) {
+                FailureText(failure)
+                tryAgain()
+            } else {
+                // Under the card, what failed and Try again share a row, so the screen still fits.
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(dimens.spaceSm),
+                ) {
+                    Box(modifier = Modifier.weight(1f)) { FailureText(failure) }
+                    tryAgain()
+                }
+            }
+        }
+    }
+}
+
+/**
+ * The card (CLAUDE.md §8d, *The Account screen*): the player's initial in a circle, a guest's figure
+ * for a guest, their name and their points, a coin and the number; under a line, their stats, two to a
+ * row, so more fit as they come; and for a guest the one button to the Auth page.
+ */
+@Composable
+private fun PlayerCard(
+    stats: PlayerStats,
+    busy: Boolean,
+    onOpenAuth: () -> Unit,
+) {
+    val colors = WyrThemeAccessors.colors
+    val dimens = WyrThemeAccessors.dimens
+    val strings = LocalStrings.current.accountScreens
+
+    Surface(
+        color = colors.surface,
+        shape = RoundedCornerShape(dimens.radiusCard),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(
+            modifier = Modifier.padding(dimens.spaceMd),
+            verticalArrangement = Arrangement.spacedBy(dimens.spaceSm),
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(dimens.spaceSm),
+            ) {
+                Avatar(stats.username)
+                Text(
+                    text = nameOf(stats, strings),
+                    color = colors.primaryText,
+                    fontSize = WyrTypeScale.sectionTitle,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f),
+                )
+                PointsAmount(
+                    points = stats.totalPoints,
+                    fontSize = WyrTypeScale.heading,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = colors.headingAccent,
+                )
+            }
+            HorizontalDivider(color = colors.orPillBackground)
+            statCells(stats, strings).chunked(STATS_PER_ROW).forEach { row ->
+                Row(horizontalArrangement = Arrangement.spacedBy(dimens.spaceSm)) {
+                    row.forEach { cell -> Stat(cell, Modifier.weight(1f)) }
+                    repeat(STATS_PER_ROW - row.size) { Spacer(Modifier.weight(1f)) }
+                }
+            }
+            if (stats.username == null) {
+                Button(onClick = onOpenAuth, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
+                    Text(strings.openAuth)
+                }
+            }
+        }
+    }
+}
+
+/**
+ * The player's initial, the first letter of their username in capitals, in a circle, or a guest's
+ * figure for a guest, who has no name. Nothing for a screen reader: the name beside it says it.
+ */
+@Composable
+private fun Avatar(username: String?) {
+    val colors = WyrThemeAccessors.colors
+    val dimens = WyrThemeAccessors.dimens
+
+    Box(
+        contentAlignment = Alignment.Center,
+        modifier =
+            Modifier
+                .size(dimens.avatarSize)
+                .background(colors.orPillBackground, CircleShape)
+                .clearAndSetSemantics {},
+    ) {
+        val initial = username?.firstOrNull()?.uppercase()
+        if (initial != null) {
+            Text(
+                text = initial,
+                color = colors.orPillText,
+                fontSize = WyrTypeScale.sectionTitle,
+                fontWeight = FontWeight.Bold,
+            )
+        } else {
+            Icon(imageVector = WyrIcons.Account, contentDescription = null, tint = colors.orPillText)
         }
     }
 }
@@ -171,15 +261,13 @@ private fun Stat(
             fontWeight = FontWeight.Bold,
         )
         Text(text = cell.label, color = colors.muted, fontSize = WyrTypeScale.statLabel)
-        cell.note?.let { Text(text = it, color = colors.muted, fontSize = WyrTypeScale.statLabel) }
     }
 }
 
-/** One of the player's stats as the screen shows it: its number, what it counts, and what else it says. */
+/** One of the player's stats as the card shows it: its number, and what it counts. */
 internal data class StatCell(
     val value: String,
     val label: String,
-    val note: String? = null,
 )
 
 /** Who is playing on this device: their username, or [AccountStrings.guest] for a guest. */
@@ -189,21 +277,18 @@ internal fun nameOf(
 ): String = stats.username ?: strings.guest
 
 /**
- * The player's stats, a number each, as the server counted them (CLAUDE.md §8d, *Stats*): the
- * answers given and the questions they went to (a re-answer is one more answer to the same question),
- * the cycle with the questions still due in it, neither answered nor skipped, and the likes the
- * questions the player submitted hold. Nothing is worked out here.
+ * The player's stats on the card, a number each, as the server counted them (CLAUDE.md §8d,
+ * *Stats*): for now the distinct questions they have answered, however often each. What their own
+ * questions hold, the likes and the answers, is in My questions' table, question by question and
+ * added up. Nothing is worked out here.
  */
 internal fun statCells(
     stats: PlayerStats,
     strings: AccountStrings,
-): List<StatCell> =
-    listOf(
-        StatCell(stats.answersGiven.toString(), strings.answers),
-        StatCell(stats.questionsAnswered.toString(), strings.questions),
-        StatCell(stats.cycle.toString(), strings.cycle, strings.cycleLeft.fill(stats.dueThisCycle)),
-        StatCell(stats.likesReceived.toString(), strings.likes),
-    )
+): List<StatCell> = listOf(StatCell(stats.questionsAnswered.toString(), strings.questionsAnswered))
+
+/** How many stats the card sets side by side in a row. */
+private const val STATS_PER_ROW = 2
 
 /**
  * The server a LOCAL or DEV build talks to, by name and URL, so a tester can tell which one they are

@@ -18,11 +18,10 @@ import androidx.compose.ui.unit.Dp
  * (CLAUDE.md §8d, *The Play screen*). What cannot fit is cut from [start]: [end] gets its whole
  * width first, then [middle], and [start] what they leave, with [gap] between each two.
  *
- * The Play screen's row between the cards, where [start] is the categories played, whose names can
- * be long, [middle] the points and [end] the like and Skip. A plain `Row` can keep the points in the
- * middle only by giving the categories the same room as the like and Skip, which cuts a long name
- * short at 375 wide, or give the categories the rest only by moving the points aside always.
- * Internal, not private, so a test can measure it.
+ * The Play screen's row between the cards, where [start] is the player's points, or how a reaction
+ * failed, [middle] the thumbs and [end] Skip. A plain `Row` keeps the thumbs in the middle only by
+ * giving the points the same room as Skip, which cuts a failure's words shorter than need be at 375
+ * wide. Internal, not private, so a test can measure it.
  */
 @Composable
 internal fun CentredRow(

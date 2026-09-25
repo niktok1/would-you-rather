@@ -32,6 +32,7 @@ import io.ntole.wyr.language.LocalStrings
 import io.ntole.wyr.language.Strings
 import io.ntole.wyr.language.categoryName
 import io.ntole.wyr.language.fill
+import io.ntole.wyr.points.PointsText
 import io.ntole.wyr.theme.WyrThemeAccessors
 import io.ntole.wyr.theme.WyrTypeScale
 
@@ -39,8 +40,9 @@ import io.ntole.wyr.theme.WyrTypeScale
  * The Submit screen (CLAUDE.md §8d, *Submitting*), opened from My questions on the Account screen: a
  * question of the player's own, its two options and the categories it is filed under, sent for a
  * moderator to review. The categories are the server's, read each time the form is shown and named
- * in the language shown. Send names what it costs, [SubmissionRules.SUBMISSION_COST], and stays off
- * while the player has fewer points; once a question is stored the app goes back to My questions.
+ * in the language shown. Send names what it costs, [SubmissionRules.SUBMISSION_COST], a coin and the
+ * number, and stays off while the player has fewer points, or is a guest, who is told to register
+ * first (CLAUDE.md §8d, *Submitting*); once a question is stored the app goes back to My questions.
  *
  * Plain on purpose while UI polish is paused, every colour, space and size from the theme (§5b) and
  * every word from [LocalStrings] (§8f). Each option says what [SubmissionRules] refuses in it as it is
@@ -133,13 +135,24 @@ private fun Form(
             OutlinedButton(onClick = actions::refresh, enabled = !state.isBusy) { Text(LocalStrings.current.tryAgain) }
         }
 
-        // The server's refusal for points says what the line under it would: one line of it, not two.
+        // The server's refusal for points, or for a guest, says what the line under it would: one line
+        // of it, not two.
         state.submitFailure
             ?.takeUnless { it.error == DomainError.NOT_ENOUGH_POINTS && state.tooFewPoints }
+            ?.takeUnless { it.error == DomainError.ACCOUNT_REQUIRED && state.isGuest }
             ?.let { FailureText(it) }
-        if (state.tooFewPoints) Text(text = strings.notEnoughPoints, color = colors.primaryText)
+        if (state.isGuest) {
+            Text(text = strings.registerToSubmit, color = colors.primaryText)
+        } else if (state.tooFewPoints) {
+            Text(text = strings.notEnoughPoints, color = colors.primaryText)
+        }
         Button(onClick = actions::submit, enabled = state.canSubmit, modifier = Modifier.fillMaxWidth()) {
-            Text(sendText(LocalStrings.current))
+            val shared = LocalStrings.current
+            PointsText(
+                template = shared.accountScreens.send,
+                points = SubmissionRules.SUBMISSION_COST,
+                spoken = sendText(shared),
+            )
         }
         if (state.isBusy) {
             LinearProgressIndicator(color = colors.headingAccent, modifier = Modifier.fillMaxWidth())
@@ -193,9 +206,12 @@ private fun FailureText(failure: SubmitFailure) {
     )
 }
 
-/** Send, and what sending costs, in the points' one unit: *Пошаљи · 1 П*. */
+/**
+ * Send, and what sending costs, as a screen reader hears it: *Пошаљи · Поени: 1*. On the button the
+ * cost is the coin and the number.
+ */
 internal fun sendText(strings: Strings): String =
-    strings.accountScreens.send.fill(strings.points(SubmissionRules.SUBMISSION_COST))
+    strings.accountScreens.send.fill(strings.points.fill(SubmissionRules.SUBMISSION_COST))
 
 /** The rule an option is held to, what is wrong with the one typed by it, or that the two are the same. */
 internal fun optionHint(
@@ -243,6 +259,10 @@ internal fun failureMessage(
 
         DomainError.NOT_ENOUGH_POINTS -> {
             strings.notEnoughPoints
+        }
+
+        DomainError.ACCOUNT_REQUIRED -> {
+            strings.registerToSubmit
         }
 
         DomainError.RATE_LIMITED -> {

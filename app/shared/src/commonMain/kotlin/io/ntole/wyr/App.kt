@@ -21,14 +21,19 @@ import io.ntole.wyr.categories.CategoriesViewModel
 import io.ntole.wyr.home.HomeScreen
 import io.ntole.wyr.language.Language
 import io.ntole.wyr.language.LanguageViewModel
+import io.ntole.wyr.language.LocalLanguage
+import io.ntole.wyr.language.LocalStrings
 import io.ntole.wyr.language.WyrStrings
 import io.ntole.wyr.navigation.BackTopBar
 import io.ntole.wyr.navigation.Navigator
 import io.ntole.wyr.navigation.PlayTopBar
 import io.ntole.wyr.navigation.Screen
 import io.ntole.wyr.navigation.SystemBack
+import io.ntole.wyr.play.CategoriesPlayed
 import io.ntole.wyr.play.PlayScreen
 import io.ntole.wyr.play.PlayViewModel
+import io.ntole.wyr.play.canChangeCategories
+import io.ntole.wyr.play.categoriesPlayed
 import io.ntole.wyr.submit.SubmitScreen
 import io.ntole.wyr.submit.SubmitViewModel
 import io.ntole.wyr.theme.WyrTheme
@@ -83,19 +88,15 @@ private fun Screens(
 
                 Screen.Play -> {
                     val picker = koinViewModel<CategoriesViewModel>()
-                    PlayTopBar(
+                    Play(
                         onHome = { navigator.open(Screen.Home) },
                         onAccount = { navigator.open(Screen.Account) },
+                        onOpenCategories = {
+                            // A visit of its own: what is played now ticked, and nothing searched.
+                            picker.open()
+                            navigator.open(Screen.Categories)
+                        },
                     )
-                    Below {
-                        Play(
-                            onOpenCategories = {
-                                // A visit of its own: what is played now ticked, and nothing searched.
-                                picker.open()
-                                navigator.open(Screen.Categories)
-                            },
-                        )
-                    }
                 }
 
                 Screen.Account -> {
@@ -231,9 +232,16 @@ private fun Categories(onPlayed: () -> Unit) {
     CategoriesScreen(state = state, actions = viewModel)
 }
 
-/** The Play screen; its categories, tapped, open the Categories screen ([onOpenCategories]). */
+/**
+ * The Play screen under its top bar, whose categories played, in its middle, open the Categories
+ * screen ([onOpenCategories]) while the Play screen can take a change of them.
+ */
 @Composable
-private fun Play(onOpenCategories: () -> Unit) {
+private fun ColumnScope.Play(
+    onHome: () -> Unit,
+    onAccount: () -> Unit,
+    onOpenCategories: () -> Unit,
+) {
     val viewModel = koinViewModel<PlayViewModel>()
     val state by viewModel.state.collectAsStateWithLifecycle()
     val categories by viewModel.categories.collectAsStateWithLifecycle()
@@ -242,15 +250,27 @@ private fun Play(onOpenCategories: () -> Unit) {
     // Every time the screen is shown: the points move on the Account and Submit screens meanwhile.
     LaunchedEffect(viewModel) { viewModel.refreshPoints() }
 
-    PlayScreen(
-        state = state,
-        categories = categories,
-        points = points,
-        onChoose = viewModel::choose,
-        onSkip = viewModel::skip,
-        onToggleLike = viewModel::toggleLike,
-        onNext = viewModel::next,
-        onRetry = viewModel::retry,
-        onOpenCategories = onOpenCategories,
-    )
+    PlayTopBar(onHome = onHome, onAccount = onAccount) {
+        CategoriesPlayed(
+            text =
+                categoriesPlayed(
+                    categories,
+                    all = LocalStrings.current.allCategories,
+                    language = LocalLanguage.current,
+                ),
+            enabled = state.canChangeCategories,
+            onClick = onOpenCategories,
+        )
+    }
+    Below {
+        PlayScreen(
+            state = state,
+            points = points,
+            onChoose = viewModel::choose,
+            onSkip = viewModel::skip,
+            onReact = viewModel::react,
+            onNext = viewModel::next,
+            onRetry = viewModel::retry,
+        )
+    }
 }
