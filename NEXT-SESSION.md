@@ -313,7 +313,8 @@ automatically from every green commit on `main` (its URL is on its Render page).
   secret is kept, even when the guest's cannot be; a recovery lost on the network, refused with a
   bare 404 as a build from before recovery answers, or rate-limited, minting nothing; an unreadable
   store minting; a session with no secret asking once a launch and keeping what it gets, three
-  refusals ending the asking and losses on the network not counting; a held secret, another
+  refusals ending the asking (since changed: only a secret the store could not keep counts, below)
+  and losses on the network not counting; a held secret, another
   player's included, and an unreadable store asking nothing; a dead session recovered before any
   mint, once for two resets at once, and failing the call when its recovery is lost; `clear()`
   dropping the secret, and letting it through where the store can neither clear nor read, and
@@ -345,6 +346,29 @@ automatically from every green commit on `main` (its URL is on its Render page).
   as Android host tests), `:app:shared` 132; every client target compiles, the iOS simulator's and
   its `:app:shared` tests included, and `aapt2` shows each flavor's manifest naming both backup rule
   files, which exclude `wyr.auth.xml` from the cloud backup and the device transfer.
+- Review fixes on `feat/recovery-secret` (CLAUDE.md §8a). `RecoverySecretFlowTest` (32) now pins a
+  guest minted while the store could not be read keeping no secret, so the secret the store held
+  still recovers its player, and asking for its own at the next launch if the store then reads
+  empty; a refused request for a secret (a bare 404, a 503, a 429) made again at every launch until
+  the server gives one, with only a secret the store could not keep counting toward the three; and a
+  held secret stored again once a launch (`backUp`), a failure there failing nothing.
+  `AndroidRecoverySecretStorageTest` (host) pins that store going into the cloud backup once it is
+  encrypted end to end, and never out of it, unknown included; `RecoverySecretStoreTest` its key.
+  `SessionStoreTest` pins a session's own tokens refused while a build without sessions has moved
+  its mirror on from it, the device's token folding as before, and a device whose answer from such a
+  build was lost going on through the mirror's previous slot. Mutation checks, each failing a test:
+  the mint keeping its secret after a failed read, counting the server's refusals again, never
+  storing a held secret again, storing it again out of the cloud backup, and rotating the session a
+  moved mirror names. The eighteen test names with commas are gone, so `:core:network`'s and
+  `:core:data`'s iOS test compiles pass (both failed before), and the ios CI job now compiles them.
+  Live run against the fat jar (JDK 21, `PORT=18094`, no `DATABASE_URL`): Flyway ran V1, V2 and V4,
+  `/health` was 200, the mint carried a 43-character secret, a recovery with it answered the same
+  player with no secret, both sessions refreshed twice, apart and in turn, the mint's first token
+  was then 401 as twice displaced, an unknown secret 401 `INVALID_RECOVERY_SECRET`, and the secret
+  was not in the log. Counts: `:server` 263 (2 skipped), `:core:domain` 34, `:core:data` 156,
+  `:core:network` 87 (102 as Android host tests), `:app:shared` 132; every client target compiles,
+  the iOS simulator's included, and so do `:app:shared`'s, `:core:network`'s and `:core:data`'s
+  tests for it.
 - Client tests: `:core:domain` 34, `:core:data` 120, `:core:network` 58 (64 as Android host tests:
   the common ones and `AndroidTokenStorageTest`), `:app:shared` 122 (the ViewModels, the Koin graph
   and the desktop base URL); `:server` 235, 2 of them skipped. 569 JVM tests in all, those 2
@@ -400,10 +424,11 @@ automatically from every green commit on `main` (its URL is on its Render page).
   §9): no test runs it, the simulator's test binary being no signed app, and whether a
   synchronizable item needs anything of the app's signing beyond its default access group, and how
   soon iCloud Keychain carries it to another iPhone, and which of two iPhones' writes it keeps, is
-  for the first run on a device. A guest from before V4 gets a secret only when a client of this
-  build first opens on it. Nothing here logs a secret or its hash, but a statement that fails on a
-  unique key logs the driver's message, which on PostgreSQL names the key's value, as it does a
-  refresh token's hash; none can collide with 256 random bits behind it.
+  for the first run on a device. That storing a held secret again with the backup on brings it into
+  the cloud backup rests on Google's documentation too. A guest from before V4 gets a secret only
+  when a client of this build first opens on it. Nothing here logs a secret or its hash, but a
+  statement that fails on a unique key logs the driver's message, which on PostgreSQL names the
+  key's value, as it does a refresh token's hash; none can collide with 256 random bits behind it.
 - **The `:core` modules' tests on iOS.** The ios CI job runs `:app:shared`'s tests on the simulator
   and only compiles `:core:data`'s and `:core:network`'s, which Kotlin/Native refused while their
   names held commas (`SharedSessionStoreTest`'s among them, from before this branch); their JVM and
@@ -990,8 +1015,10 @@ Play tab is frozen).
   knows none (`INVALID_RECOVERY_SECRET`): a mint on any other failure would keep a new secret over
   the one that recovers the account, for good. And it asks for a new secret only when the store
   holds none and could be read, because a new secret kills the one before wherever it is kept,
-  another iPhone's Keychain included. Keep `ErrorMapper` mapping the code to its own `DomainError`,
-  never to `UNAUTHORIZED`, and keep `AuthApi.recover` outside the bearer provider
+  another iPhone's Keychain included. A mint after a read that failed keeps no secret, for the same
+  reason, and a refused request for a secret is made again at the next launch: only a secret the
+  store could not keep counts toward the limit. Keep `ErrorMapper` mapping the code to its own
+  `DomainError`, never to `UNAUTHORIZED`, and keep `AuthApi.recover` outside the bearer provider
   (`AuthCircuitBreaker`), or its 401 sets off a refresh. On Android, the session's file
   (`wyr.auth.xml`) and the backup rules that keep it on the phone must be renamed together.
 - **A session write returns once it is durable, and suspends for it** (`TokenStorage.write`,
