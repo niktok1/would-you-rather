@@ -340,8 +340,7 @@ private fun FailureBody(
  *
  * Branching on the domain error, never on a server message: `ErrorDto.message` is diagnostic and
  * unlocalised, so it must never reach a screen. The Play tab never submits or moderates a
- * question, nor recovers a player; the submission, moderation and recovery errors have copy only
- * because every [DomainError] does.
+ * question; the submission and moderation errors have copy only because every [DomainError] does.
  */
 private fun message(error: DomainError): String =
     when (error) {
@@ -349,7 +348,6 @@ private fun message(error: DomainError): String =
         DomainError.OUT_OF_QUESTIONS -> "You've answered everything we have.\nCome back soon."
         DomainError.RATE_LIMITED -> "Slow down a moment, then try again."
         DomainError.UNAUTHORIZED -> "We couldn't verify your session.\nTrying again should fix it."
-        DomainError.INVALID_RECOVERY_SECRET -> "We couldn't bring back your earlier game."
         DomainError.QUESTION_NOT_FOUND -> "That question disappeared.\nLet's find another."
         DomainError.ALREADY_VOTED -> "You've already answered that one."
         DomainError.INVALID_SUBMISSION -> "That question can't be sent as written."

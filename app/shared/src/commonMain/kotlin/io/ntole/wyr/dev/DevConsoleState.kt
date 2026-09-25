@@ -4,7 +4,6 @@ import io.ntole.wyr.core.domain.error.DomainError
 import io.ntole.wyr.core.domain.player.PlayerStats
 import io.ntole.wyr.core.domain.question.Category
 import io.ntole.wyr.core.domain.question.Question
-import io.ntole.wyr.core.domain.session.RecoverySecretStatus
 import io.ntole.wyr.core.domain.session.SessionInfo
 import io.ntole.wyr.core.domain.vote.AttemptId
 import io.ntole.wyr.core.domain.vote.Side
@@ -15,12 +14,11 @@ import io.ntole.wyr.core.network.environment.WyrEnvironment
  * What the dev console shows, apart from the HTTP trace, which it reads from the network layer
  * as it is.
  *
- * [session], [recoverySecret] and [queueSize] are snapshots, taken when the console opens and after
- * every action.
+ * [session] and [queueSize] are snapshots, taken when the console opens and after every action.
  * A snapshot that cannot be taken leaves them as they were and adds a `refreshHeader` log entry.
  *
- * [stats] are read from the server when the console opens, after every vote, Skip, Like, Answer N,
- * New guest and Reinstall, and on Read stats. A vote's outcome drops them, so they are never older than
+ * [stats] are read from the server when the console opens, after every vote, Skip, Like, Answer N
+ * and New guest, and on Read stats. A vote's outcome drops them, so they are never older than
  * [lastOutcome]. A read that fails leaves them as they were, which may be none. Read stats is an
  * action like any other, logged as `readStats` whether it works or not. The other reads are logged
  * only when they fail, as a `refreshStats` entry.
@@ -29,8 +27,6 @@ data class DevConsoleState(
     /** The server environment this build was made for, whose URL every request goes to (CLAUDE.md §8e). */
     val environment: WyrEnvironment,
     val session: SessionInfo? = null,
-    /** Whether a recovery secret is kept for this server (CLAUDE.md §8a, *Recovery*); never the secret. */
-    val recoverySecret: RecoverySecretStatus? = null,
     val queueSize: Int? = null,
     /**
      * The categories the feed is filtered to, none for every category. Followed as the repository

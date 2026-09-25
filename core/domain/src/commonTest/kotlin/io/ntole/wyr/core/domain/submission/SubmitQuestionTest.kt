@@ -64,8 +64,6 @@ class SubmitQuestionTest {
         override suspend fun currentPlayerId(): String = "p1"
 
         override suspend fun clear() = Unit
-
-        override suspend fun clearKeepingSecret() = Unit
     }
 
     private companion object {

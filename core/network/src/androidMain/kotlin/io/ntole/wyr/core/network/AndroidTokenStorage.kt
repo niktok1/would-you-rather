@@ -27,9 +27,10 @@ import java.io.IOException
  * `apply()` on the calling thread never did.
  *
  * The file is `shared_prefs/wyr.auth.xml`, which `:app:androidApp`'s backup rules keep out of the
- * cloud backup and out of a device-to-device transfer (CLAUDE.md §8a, *Recovery*): a new phone gets
- * the recovery secret alone, and opens a session of its own. Renaming the file lets the session into
- * both, unless the rules are renamed with it.
+ * cloud backup and out of a device-to-device transfer (CLAUDE.md §8a): a copy would share one
+ * refresh-token family with the phone it came from, and whichever of the two refreshed less would
+ * be refused and turn into a fresh guest. Renaming the file lets the session into both, unless the
+ * rules are renamed with it.
  */
 public class AndroidTokenStorage internal constructor(
     private val prefs: SharedPreferences,

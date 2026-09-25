@@ -86,35 +86,13 @@ class DevConsoleViewModel(
     fun newGuest() =
         perform("newGuest", readsStats = true) {
             sessions.clear()
-            forgetPlayer()
+            _state.update {
+                it.copy(question = null, lastOutcome = null, lastOutcomePlayerId = null, lastVote = null, stats = null)
+            }
+            questions.reset()
             val playerId = sessions.ensure()
             "playerId=$playerId ${loadQuestion().summary()}"
         }
-
-    /**
-     * What deleting the app and installing it again leaves, then the session the app opens next
-     * (CLAUDE.md §8a, *Recovery*). The session goes and the recovery secret stays, so where the
-     * platform keeps one the player comes back through it, in a session of its own, and elsewhere a
-     * fresh guest is minted. The log says which: `recovered` when the player is the one before, and
-     * `was=` naming that one when not. The queue goes as with New guest, and the categories stay.
-     */
-    fun simulateReinstall() =
-        perform("simulateReinstall", readsStats = true) {
-            val before = sessions.currentPlayerId()
-            sessions.clearKeepingSecret()
-            forgetPlayer()
-            val after = sessions.ensure()
-            val cameBack = if (after == before) "recovered" else "was=${before ?: "none"}"
-            "playerId=$after $cameBack ${loadQuestion().summary()}"
-        }
-
-    /** Forgets what the console showed of the player, and their queue, before another session opens. */
-    private suspend fun forgetPlayer() {
-        _state.update {
-            it.copy(question = null, lastOutcome = null, lastOutcomePlayerId = null, lastVote = null, stats = null)
-        }
-        questions.reset()
-    }
 
     fun nextQuestion() = perform("nextQuestion") { loadQuestion().summary() }
 
@@ -365,9 +343,8 @@ class DevConsoleViewModel(
         val result =
             resultOf {
                 val session = diagnostics.info()
-                val recoverySecret = diagnostics.recoverySecret()
                 val queueSize = queue.count()
-                _state.update { it.copy(session = session, recoverySecret = recoverySecret, queueSize = queueSize) }
+                _state.update { it.copy(session = session, queueSize = queueSize) }
                 "refreshed"
             }
         if (result !is LogResult.Ok) {

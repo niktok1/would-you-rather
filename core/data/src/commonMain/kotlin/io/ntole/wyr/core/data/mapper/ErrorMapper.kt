@@ -86,9 +86,9 @@ internal fun ErrorCode.toDomain(): DomainError =
 
         ErrorCode.UNAUTHORIZED, ErrorCode.INVALID_REFRESH_TOKEN -> DomainError.UNAUTHORIZED
 
-        // Never UNAUTHORIZED, which throws the session away and mints a guest: a dead secret says
-        // nothing about the session, and minting would leave the secret's player behind for good.
-        ErrorCode.INVALID_RECOVERY_SECRET -> DomainError.INVALID_RECOVERY_SECRET
+        // No longer sent, and answered only to a recovery, which this build never asks for. Never
+        // UNAUTHORIZED, which would throw the session away.
+        ErrorCode.INVALID_RECOVERY_SECRET -> DomainError.UNKNOWN
 
         ErrorCode.RATE_LIMITED -> DomainError.RATE_LIMITED
 

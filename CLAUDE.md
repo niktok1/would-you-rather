@@ -446,13 +446,8 @@ auth SDK, satisfying §2.
     (§8b, *Rollbacks*).
   - *A rollback* to such a build refreshes, for each player, the device that opened or refreshed a
     session last, with the grace this build gave its token, and refuses every other device, whose
-    client throws the session away and opens another. A phone that keeps a recovery secret recovers
-    before it mints, and the build before answers the recovery with a bare 404, which mints nothing
-    (*Recovery*): so that phone fails every call until the roll-forward, and so does a phone first
-    installed meanwhile with a restored secret. Desktop, web and a phone with no secret replace their
-    player with a fresh guest. The build before never reads or writes the recovery secret, so once
-    rolled forward a phone that kept its secret recovers its player. The guests it mints have no
-    session, no mark and no secret.
+    client throws the session away and mints a fresh guest in its place. The guests that build mints
+    have no session, no mark and no secret.
   - *Rolling forward* needs nothing by hand. A mirror whose current token is not its mark was moved
     by a build without sessions: during a rollback, or while the build before still serves as a
     deploy's new instance starts, which the first deploy of V4 goes through too. A refresh no
@@ -468,15 +463,13 @@ auth SDK, satisfying §2.
     token, which is the mirror's previous one, and the fold spends it there, under the grace this
     build gives it. `SessionStoreTest` pins the mirror, a build without sessions refreshing from it,
     both folds and their races.
-  - *What a rollback still costs:* every device but the one used last, as above: a phone keeping a
-    secret cannot play until the roll-forward, and any other device loses its player to a fresh
-    guest. And, for a player with more than one session, the chain a build without sessions moved in
-    the mirror, if another of their sessions refreshes first once rolled forward, since a session's
-    rotation always rewrites the mirror: that device is refused, and a phone recovers with its
-    secret, any other device minting a guest. A rollback past V2 still needs the mirror's previous
+  - *What a rollback still costs:* every device but the one used last, as above, loses its player
+    to a fresh guest. And, for a player with more than one session, the chain a build without sessions
+    moved in the mirror, if another of their sessions refreshes first once rolled forward, since a
+    session's rotation always rewrites the mirror: that device is refused, and mints a guest. A rollback past V2 still needs the mirror's previous
     token cleared before rolling forward (*The rotation*, above).
-- **Recovery** (*decided 2026-09-25*, phase 1 of making a guest durable, §8b *Provider linking*): a
-  guest's account survives a reinstall and a phone restore with no click. The mint answers a
+- **Recovery** (*decided 2026-09-25*, and dropped again the same day, §8b *Accounts*): the server
+  half, which no client uses any more (below). The mint answers a
   `GuestSessionDto`, the session's fields with the player's **recovery secret** beside them: 256
   random bits in base64url, kept as a refresh token is, by its SHA-256 alone
   (`players.recovery_secret_hash`, unique), and carried by no other answer, since a refresh and a
@@ -501,81 +494,19 @@ auth SDK, satisfying §2.
     nobody on PROD, and DEV's in-memory database forgets every secret at each restart, where a client
     meets `INVALID_RECOVERY_SECRET`. `RecoveryFlowTest` pins the routes and `SessionStoreTest` the
     store.
-  - *The client* (`DefaultSessionRepository`, built): a device with no session recovers with the
-    secret it keeps before it mints a guest, and so does a dead session before `withSessionRecovery`
-    opens another in its place, which makes a dead session cost nothing where a secret is kept. A
-    secret the server does not know (`INVALID_RECOVERY_SECRET`: DEV after a restart, say) is dropped,
-    and a guest minted, whose secret is kept before its session. Any other failure of a recovery mints
-    nothing and fails the call, and the next call tries again: offline, a 5xx, a 429, or the 404 of a
-    build from before recovery, since a mint would keep its own secret in place of the one that
-    recovers the account. A store that cannot be read counts as empty there, so a phone without Play
-    services plays on as a guest; but that guest's secret is not kept, since the store may hold one
-    it failed to read only for a moment, as a restored phone's may while Play services starts, and
-    the guest's would replace it for good. A later launch asks for the guest's secret only if the
-    store then reads as empty (below).
-  - *A session with no secret kept* (a guest from before recovery, a secret the store could not
-    keep, or a guest minted while it could not be read) asks `POST /v1/me/recovery-secret` for one,
-    once a launch, and only while the store holds none and can be read: a new secret kills the one
-    before, wherever it is kept. So a secret held for another player is left alone, since on iOS it
-    is the account this person's other iPhones share; this device's guest then stays bound to it,
-    and recovers as that account should its session die. A request that fails is made again at the
-    next launch, whatever failed it: offline, a 5xx, a 429, or the bare 404 of a server without
-    recovery, as production answers until it is promoted, so a guest from before V4 gets its secret
-    once the server can give one. A secret the store could not keep counts, and after three
-    (`MAX_FAILED_SECRET_REQUESTS`) the install asks no more for that player. The count is kept
-    beside the session, in the token storage (`RecoverySecretStore`), so it goes where the session
-    goes and never with the secret, and a reinstall starts it again.
-  - `clear()`, the console's *New guest*, drops the secret with the session, since it would otherwise
-    recover the player being cleared away, and fails as NETWORK when it cannot, unless the store
-    cannot read the secret back either, as without Play services, where nothing could recover with
-    it. `RecoverySecretFlowTest` pins every case.
-  - *The console* shows whether a secret is kept (`SessionDiagnostics.recoverySecret`: kept, none,
-    unreadable, or not kept on this platform), never the secret, and *Reinstall (keep secret)* does
-    what deleting the app and installing it again does: `clearKeepingSecret()` drops the session and
-    the count of failed requests, keeps the secret, and the next session opened recovers the player.
-    Its log line ends `recovered` when the player came back, and `was=` the one before when not, as on
-    desktop and web, where it is *New guest*.
-  - *Where it is kept* (*decided 2026-09-25*), bound in each platform's `platformModule`:
-    - *Android* (built): Block Store (§2, `AndroidRecoverySecretStorage` in `:core:network`), which
-      keeps its entries across the app being uninstalled and installed again only while Google's
-      Backup services are on (Settings > Google > Backup, per Google's Block Store guide), and moves
-      them to a new phone set up from this one by device-to-device transfer. Its cloud copy is asked
-      for only while the backup is end-to-end encrypted (`isEndToEndEncryptionAvailable`; a phone
-      that cannot say counts as not), so a phone restored from any other cloud backup mints a guest.
-      Block Store decides that at each store, so a secret stored while the backup was not encrypted
-      (before a screen lock was set, say) is stored again into it by the first launch that finds it
-      encrypted (`backUp`), and never stored again out of it, which would delete the cloud's copy at
-      the next sync. Without Play services every call throws, and the phone plays as a guest. The
-      session store stays out of both the cloud backup and a device-to-device transfer, so a new
-      phone gets only the secret, and recovers with it into a session of its own:
-      `data_extraction_rules.xml` (Android 12 and later) and `backup_rules.xml`
-      (`fullBackupContent`, Android 11 and earlier, for both) in `:app:androidApp` exclude
-      `AndroidTokenStorage`'s `wyr.auth.xml`, which holds the session and the count of failed
-      requests for a secret. `allowBackup` stays on, with nothing else in it yet.
-    - *iOS* (built, compiled only: §9): a generic-password Keychain item per environment
-      (`IosRecoverySecretStorage` in `:core:network`; service `io.ntole.wyr.recovery`, the key as its
-      account), synced through iCloud Keychain (`kSecAttrSynchronizable`), so one person's iPhones
-      share one account, each with a session of its own. It is readable once the phone has been
-      unlocked after starting (`kSecAttrAccessibleAfterFirstUnlock`, never a `ThisDeviceOnly` class,
-      which would not sync), and the Keychain keeps it when the app is deleted. No test runs it: the
-      simulator's test binary is no signed app, so the app on a phone is the first to call it. The
-      one item holds one secret, whoever's: an iPhone that opens the app before the item has synced
-      to it (a new iPhone opened before iCloud Keychain catches up, or iCloud Keychain off and turned
-      on later) reads none, mints a guest and writes the guest's secret into the same item, and once
-      the two meet iCloud Keychain keeps one of them on every iPhone. Should it keep the guest's, the
-      other iPhone's player has no secret left anywhere: that iPhone plays on as its player, holding
-      the guest's secret, which it never replaces since the store holds one, and a reinstall or a
-      dead session there turns it into the guest. An item per player would avoid it, a change of
-      design not yet made.
-    - *Desktop and web* keep none: they bind no `RecoverySecretStorage` (`dataModule`), so they mint as
-      before and never ask for a secret.
-- Provider linking (Play Games Services on Android, Game Center on iOS) is phase 2 (§8b, *Provider
-  linking*); recovery alone already carries a phone's guest across a reinstall.
+  - *No client keeps it* (*decided 2026-09-25*, `feat/simple-accounts`): Block Store on Android, the
+    iCloud Keychain on iOS, recovering before minting, the upkeep of a secret and the console's
+    *Reinstall (keep secret)* are gone. A device with no session, or a dead one, mints a guest, as
+    before recovery. The server still issues and honours secrets until its half goes too.
+- Every device keeps its session to itself. On Android the backup rules
+  (`data_extraction_rules.xml`, Android 12 and later, and `backup_rules.xml`, Android 11 and
+  earlier, in `:app:androidApp`) keep `AndroidTokenStorage`'s `wyr.auth.xml` out of the cloud backup
+  and out of a device-to-device transfer: a copy would share one refresh-token family with the phone
+  it came from, and whichever refreshed less would be refused and become a fresh guest. A new phone
+  starts as a guest of its own. `allowBackup` stays on, with nothing else in it yet.
 - On the client, `SessionStore` is the only copy of the credentials: Ktor's bearer cache is off
   (`cacheTokens = false`), so a session change applies to the very next request. A dead session
-  is replaced through `withSessionRecovery` in `:core:data`, which opens at most one session for it:
-  its own player's, through the recovery secret, where the device keeps one (*Recovery*), and else a
-  fresh guest's.
+  is replaced through `withSessionRecovery` in `:core:data`, which mints at most one guest for it.
 - *Clients sharing one store* (browser tabs, desktop instances) can both refresh one token, and the
   server lets both through, so the store may end up holding the displaced token of the two. The
   server takes that one once more, but a previous token survives only one refresh: the clients share
@@ -610,35 +541,23 @@ auth SDK, satisfying §2.
   cancelled meanwhile. A write that cannot be made durable fails the call as `NETWORK`: the data
   layer writes the session through `runApi`, so no bare storage exception reaches a ViewModel.
 
-**Known limitation, by design for now:** a guest account lives only while some store holds a live
-session of it or its recovery secret. An Android or iOS guest survives a reinstall and a move to a
-new phone through the secret (*Recovery*), none of which has yet run on a phone (NEXT-SESSION.md);
-one whose every copy of the secret is lost is gone all the same, as is an Android guest reinstalled
-with Google's Backup services off, where Block Store keeps nothing across it. A phone whose secret
-store could not be read when the app first started there plays as a new guest, and recovers the
-player only once that guest's session dies or the app is installed again, which leaves the guest
-behind. An iPhone that mints before the Keychain item has synced to it can take another iPhone's
-secret from it for good (*Where it is kept*, iOS). A desktop or web guest stays bound to its one
-storage: lose it and the account — and its points — are gone. A copy of the secret in the wrong
-hands owns the account until it is replaced. Session storage is ordinary preference storage
+**Known limitation, by design for now:** a guest account is bound to one device's storage. Lose
+the device, reinstall the app or clear its storage, and the account — and its points — are gone
+(§8b, *Accounts*, is the way out). Session storage is ordinary preference storage
 (SharedPreferences / NSUserDefaults / JVM Preferences / localStorage), not Keychain or
-EncryptedSharedPreferences. All of it must be revisited before real accounts exist.
+EncryptedSharedPreferences: enough for a game that stores nothing personal.
 
 ## 8b. Open decisions (resolve before relevant work)
 
-- **Provider linking** — *decided 2026-09-25: two phases.* Phase 1, free and zero-click, is the
-  recovery secret (§8a, *Recovery*): built, on the server and in the Android and iOS clients, and
-  yet to run on a phone. Phase 2, next, is a silent Play Games Services v2 link on Android, and Game
-  Center on iOS later; either needs OAuth client credentials, and Apple a paid developer account
-  too. Passkeys have no desktop-JVM story, so desktop would need a browser handoff. The decisions of
-  2026-09-25, every one the research's default: phase 1 now and the store providers' links later; a
-  long-lived recovery secret, whose holder owns the account until it is replaced; a sessions table
-  first, one refresh-token family per device, with no cap per player (§8a, *Sessions*); the session
-  store out of Android's cloud backup and its device-to-device transfer, so only the secret moves
-  between phones; Block Store's cloud copy only where end-to-end encryption is available, else a
-  same-device reinstall only, and that only with Google's Backup services on (§8a); the iOS Keychain
-  item synced through iCloud Keychain; desktop and web guest-only; and Block Store approved as a
-  library exception (§2).
+- **Accounts** — *decided 2026-09-25, not built yet.* This is a simple game that stores nothing
+  personal, and most players stay a day or a few, so the simplest design that is correct enough
+  wins over maximum security. A new player plays at once as a guest (§8a). **Register** is optional
+  and keeps the guest's points; **log in** is how a registered player gets their account on another
+  device, and the app saves the credentials by itself. Passwords are hashed on the server and never
+  logged. No email is collected, so there is **no password reset**: a forgotten password means a new
+  account. No-click sign-in (Play Games Services on Android, Game Center on iOS) comes later, once
+  there is an Apple developer account. The recovery secret this replaces is gone from every client
+  (§8a).
 - **SQLDelight cache** — see §4. Needs a per-platform split because of web. Lower priority now
   that the endless feed (§8d) makes the server the source of truth for what a player has answered:
   the client keeps no record of what it served, so a persisted queue would only save one fetch
@@ -1147,13 +1066,12 @@ and every request shows in its HTTP trace (`HttpTrace` in `:core:network`, never
     `SubmissionStatus.OTHER` or `Category.OTHER` is refused before anything is sent. `WRONG_STATUS`
     is `DomainError.WRONG_STATUS`. `moderationDataModule(environment)` binds it, and only there, for a
     client that only moderates: an HTTP client of its own over an in-memory session store nothing
-    writes, no `TokenStorage` or `RecoverySecretStorage` needed, no session repository, so no bearer
-    token goes out and no guest can be minted or recovered. The game's `dataModule` binds none of it,
+    writes, no `TokenStorage` needed, no session repository, so no bearer token goes out and no guest
+    can be minted. The game's `dataModule` binds none of it,
     so the game cannot moderate (`DataModuleTest` pins both).
   - *The moderation app* (`:app:adminApp`, `io.ntole.wyr.admin`, §3) is where a moderator works: a
     desktop window and a browser page on `moderationDataModule` (`adminModules`), so it never has a
-    player session, sends no bearer token, mints or recovers no guest and keeps no recovery secret
-    (`AdminModuleTest`). Its header always names the server and its URL, production's in the error
+    player session, sends no bearer token and mints no guest (`AdminModuleTest`). Its header always names the server and its URL, production's in the error
     colors, and so does the desktop window's title (§8e). The admin token is typed into a masked
     field and held in `ModerationViewModel`'s memory only, never in saved state or storage, and
     `SecretText` keeps it out of the state's text; Lock forgets it and everything read with it,
@@ -1237,9 +1155,6 @@ base URL, a display name, and whether a build for it shows the developer tools. 
 - *iOS*: the `WYR_ENV` build setting in `app/iosApp/Configuration/Config.xcconfig` (`local` by
   default). `Info.plist` carries it as its `WYR_ENV` key (`$(WYR_ENV)`), and `MainViewController`
   reads that from the main bundle; a missing key is LOCAL.
-- *Guest-only on desktop and web* (*decided 2026-09-25*): neither keeps a recovery secret (§8a,
-  *Recovery*), so a player there is bound to that one storage, and the console's *Reinstall (keep
-  secret)* mints a fresh guest there, as *New guest* does.
 - *In the app.* Koin binds the environment (`appModules`), and `dataModule` sends every request to
   that same environment's URL, so the dev console's header, which shows its name and URL, always says
   where requests go. The console tab is shown only where the environment shows developer
@@ -1254,11 +1169,6 @@ base URL, a display name, and whether a build for it shows the developer tools. 
   Preferences node, one bundle id's `NSUserDefaults`, one origin's `localStorage`. With one key, a
   build for one server sent the other's tokens to it and, once they were refused, replaced that
   guest, and its points, with a new one (§8a). Android's flavors have storage of their own anyway.
-  The recovery secret (§8a, *Recovery*) is one environment's too, since each server's database holds
-  its own, so it is kept under a key per environment the same way (`RecoverySecretStore.secretKeyFor`:
-  `wyr.recovery.local`, `wyr.recovery.dev`, `wyr.recovery.prod`, with no legacy key to keep), one
-  iCloud Keychain item per environment included, or a DEV secret would be sent to PROD and dropped as
-  unknown. Renaming a key strands every secret kept under it.
 ---
 
 ## 9. How to work in this repo

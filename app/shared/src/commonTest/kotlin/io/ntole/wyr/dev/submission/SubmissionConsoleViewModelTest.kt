@@ -399,8 +399,6 @@ class SubmissionConsoleViewModelTest {
         override suspend fun clear() {
             stored = null
         }
-
-        override suspend fun clearKeepingSecret() = clear()
     }
 
     private class FakeSubmissions(

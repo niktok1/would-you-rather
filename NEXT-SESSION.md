@@ -529,20 +529,6 @@ automatically from every green commit on `main` (its URL is on its Render page).
   CLAUDE.md §8a) has run only in `SessionStoreTest`, against that build's statement as copied into
   the test, never against the V3 build itself (`main` at 9a7902f) serving beside this one while a
   deploy's new instance starts, which is when it matters first.
-- **Recovery on a phone.** Nothing has been restored to a new phone, nor reinstalled on one. Block
-  Store has run only behind `AndroidRecoverySecretStorageTest`'s stand-in: that it keeps an entry
-  across an uninstall on the same phone (with Google's Backup services on), hands it on in a
-  device-to-device transfer, and backs it up to the cloud when asked with end-to-end encryption
-  available rests on Google's documentation. The backup rules are checked only in the built APK
-  (`aapt2`), not by a real backup and restore. The iOS Keychain item is compiled only (CLAUDE.md
-  §9): no test runs it, the simulator's test binary being no signed app, and whether a
-  synchronizable item needs anything of the app's signing beyond its default access group, and how
-  soon iCloud Keychain carries it to another iPhone, and which of two iPhones' writes it keeps, is
-  for the first run on a device. That storing a held secret again with the backup on brings it into
-  the cloud backup rests on Google's documentation too. A guest from before V4 gets a secret only
-  when a client of this build first opens on it. Nothing here logs a secret or its hash, but a
-  statement that fails on a unique key logs the driver's message, which on PostgreSQL names the
-  key's value, as it does a refresh token's hash; none can collide with 256 random bits behind it.
 - **The `:core` modules' tests on iOS.** The ios CI job runs `:app:shared`'s tests on the simulator
   and only compiles the `:core` modules' tests, which Kotlin/Native refused while their
   names held commas (`SharedSessionStoreTest`'s among them, from before `feat/recovery-secret`, and
@@ -737,32 +723,7 @@ curl -s -X POST localhost:8080/v1/me/recovery-secret -H "Authorization: Bearer $
 The recovery answers a session of the same `playerId` with a refresh token of its own, and no
 secret; the last call answers a new secret and kills `$SECRET`, which then recovers nobody (401
 `INVALID_RECOVERY_SECRET`). Recoveries are 10 an hour per address (`RATE_LIMIT_RECOVERIES_PER_HOUR`).
-
-**In the app**, on Android or iOS (desktop and web keep no secret, and mint a guest instead):
-
-- *The console.* The header's `recovery secret` line says `kept` once a guest is minted. *Reinstall
-  (keep secret)* drops the session alone and opens the next one, logged `simulateReinstall(...)
-  playerId=<id> recovered` when the player came back; the HTTP trace shows `POST /v1/auth/recover`
-  and no `/v1/auth/guest`. *New guest* drops the secret too, so it mints. Against DEV, a restart of
-  the dev service (a deploy, or its spin-down) forgets every secret: the next session opened sends
-  the secret, gets 401 `INVALID_RECOVERY_SECRET`, and mints a guest whose secret is kept instead.
-- *A real reinstall* (Android, the `dev` flavor on a phone with Google Play services, installed from
-  Android Studio): check that Settings > Google > Backup is on, since Block Store keeps nothing across
-  an uninstall without it; play a little, note the player id in the header, uninstall, install the
-  same build again, from the same machine, so it carries the same debug signing key. The first
-  session opened should recover that player. With Backup off it should mint a guest instead.
-- *A new phone.* Set up a second Android phone from the first, by cable or over Wi-Fi, with the app
-  installed and a guest played on the first. The session stays behind (the backup rules), and the
-  secret should move with Block Store. With Google Backup on and a screen lock set, a phone restored
-  from the cloud backup should get it too; without end-to-end encryption, the secret stays out of
-  the cloud and a restored phone mints a guest. Both restore flows reinstall apps from Google Play,
-  so they are to be tried once the app is on a Play testing track (internal testing will do);
-  whether a build installed by hand after setup gets the entry the restore brought is untested. On
-  iOS, a second iPhone on the same Apple account with iCloud Keychain on should recover the same
-  player, each in a session of its own, once the Keychain item has synced. Open the app there only
-  after that: opened sooner, it mints a guest whose secret goes into the same item, and should
-  iCloud Keychain keep the guest's, the first iPhone's player is left with a secret on neither
-  (CLAUDE.md §8a, *Where it is kept*). Which of the two it keeps is itself worth a look.
+No client calls either route any more (CLAUDE.md §8a).
 
 ### Moderating
 
@@ -886,12 +847,8 @@ The app opens on the **Console** tab (`io.ntole.wyr.dev`). **Play** is the froze
 
 - **Session.** *Ensure session* mints a guest, or reuses the stored one. The header then shows the
   player id and when its access token expires. Opening the console reads the stats, which ensures a
-  session too, so the first open mints a guest. *New guest* drops the session, the recovery secret
-  and the question queue, then mints a fresh player and loads a question for it. The header's
-  `recovery secret` line says whether one is kept (`kept`, `none`, `unreadable`, or `not kept on this
-  platform` on desktop and web), never what it is. *Reinstall (keep secret)* drops the session and
-  the queue and keeps the secret, as deleting the app does, then opens the next session and loads a
-  question: `recovered` in its log line when the player came back (*Recovering a guest*).
+  session too, so the first open mints a guest. *New guest* drops the session and the question
+  queue, then mints a fresh player and loads a question for it.
 - **Play.** *Skip* records the skip of the question on screen (`POST /v1/skips`), then loads the
   next question and reads the stats. The skipped one is not due for the rest of the cycle and
   comes back in the next, `answeredBefore` only if it was ever answered. A skip that fails is
@@ -1030,14 +987,13 @@ rules live in CLAUDE.md §8d. Each item is one short-lived branch, in order:
     console into an app of its own: the list of every question, retiring and restoring (V3;
     provisional, CLAUDE.md §8b), and `:app:adminApp`, with its pending queue and the list of every
     question (*The moderation app*, above), which replaced the dev console's *Moderation* section.
-13. A guest that survives a reinstall and a new phone *(decided 2026-09-25; CLAUDE.md §8a, §8b
-    *Provider linking*)* — phase 1, `feat/recovery-secret` *(done, and merged after the moderation
-    app; not yet run on a phone, see NOT verified)*: sessions per device and the recovery secret on
-    the server (V4) and in the contract, then the client half: Block Store, iCloud Keychain, the
-    session store out of Android's backups, recovering before minting.
-14. **Next:** phase 2, a silent Play Games Services v2 link on Android, then Game Center on iOS
-    (CLAUDE.md §8b, *Provider linking*: OAuth client credentials first, and for Game Center a paid
-    Apple developer account).
+13. `feat/recovery-secret` *(done, merged after the moderation app, deployed to prod at `d4a9dbf`)*:
+    sessions per device (V4) and a recovery secret. The user found the secret, Block Store, the
+    Keychain and the rollback mirror too much for a simple game (2026-09-25), so
+    `feat/simple-accounts` takes them out again, keeping per-device sessions and the grace.
+14. **Next:** `feat/simple-accounts` goes on to simple accounts (CLAUDE.md §8b, *Accounts*): play as a
+    guest at once, register optionally and keep the points, log in on another device. No-click
+    sign-in (Play Games Services, Game Center) comes later, once there is an Apple developer account.
 
 **For the moderation app.** Everything it needs is in `io.ntole.wyr.core.domain.moderation`, and
 none of it needs or makes a player session:
@@ -1256,19 +1212,7 @@ Play tab is frozen).
   contract change. A recovery spends nothing, by the user's decision: whoever holds the secret owns
   the account until it is replaced, and replacing it closes no session. Never log it or its hash,
   in a route or anywhere else (`RateLimitTest` scans a flow's log for both), and never put it in an
-  `ApiFailure`'s message. The client must keep it apart from the session: it is the one credential
-  meant to reach a new phone, and the session store is meant to stay behind.
-- **A failed recovery never mints, and a held secret is never replaced** (CLAUDE.md §8a,
-  *Recovery*). `DefaultSessionRepository` mints in place of a secret only when the server says it
-  knows none (`INVALID_RECOVERY_SECRET`): a mint on any other failure would keep a new secret over
-  the one that recovers the account, for good. And it asks for a new secret only when the store
-  holds none and could be read, because a new secret kills the one before wherever it is kept,
-  another iPhone's Keychain included. A mint after a read that failed keeps no secret, for the same
-  reason, and a refused request for a secret is made again at the next launch: only a secret the
-  store could not keep counts toward the limit. Keep `ErrorMapper` mapping the code to its own
-  `DomainError`, never to `UNAUTHORIZED`, and keep `AuthApi.recover` outside the bearer provider
-  (`AuthCircuitBreaker`), or its 401 sets off a refresh. On Android, the session's file
-  (`wyr.auth.xml`) and the backup rules that keep it on the phone must be renamed together.
+  `ApiFailure`'s message. No client keeps it any more: the server half is what is left of it.
 - **A session write returns once it is durable, and suspends for it** (`TokenStorage.write`,
   CLAUDE.md §8a). `AndroidTokenStorage` used `apply()`, which returns before the file is written,
   so a kill just after a refresh could come back with the rotated-out token and orphan the guest.

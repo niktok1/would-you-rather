@@ -25,9 +25,8 @@ fun initAdminKoin(environmentName: String?): WyrEnvironment {
 /**
  * Every module of the app, for [environment]: the moderator's data module sends every request to its
  * URL, and the environment is bound for the screen that shows it. No platform module: the moderator's
- * data module needs no `TokenStorage` and no `RecoverySecretStorage`, and binds no player session, so
- * nothing this app does can mint, recover or store a guest, or keep a recovery secret (CLAUDE.md §8d,
- * *Moderation*).
+ * data module needs no `TokenStorage` and binds no player session, so nothing this app does can mint
+ * or store a guest (CLAUDE.md §8d, *Moderation*).
  */
 fun adminModules(environment: WyrEnvironment): List<Module> =
     listOf(

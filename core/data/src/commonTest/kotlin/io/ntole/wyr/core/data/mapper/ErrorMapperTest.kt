@@ -27,9 +27,8 @@ class ErrorMapperTest {
                     ApiException(ErrorCode.FORBIDDEN, status = 403) to DomainError.FORBIDDEN,
                     ApiException(ErrorCode.UNAUTHORIZED, status = 401) to DomainError.UNAUTHORIZED,
                     ApiException(ErrorCode.INVALID_REFRESH_TOKEN, status = 401) to DomainError.UNAUTHORIZED,
-                    // A 401 too, and still not UNAUTHORIZED: the session is not what was refused.
-                    ApiException(ErrorCode.INVALID_RECOVERY_SECRET, status = 401) to
-                        DomainError.INVALID_RECOVERY_SECRET,
+                    // No longer sent, and a 401 too: still never UNAUTHORIZED, which would drop the session.
+                    ApiException(ErrorCode.INVALID_RECOVERY_SECRET, status = 401) to DomainError.UNKNOWN,
                     ApiException(ErrorCode.RATE_LIMITED, status = 429) to DomainError.RATE_LIMITED,
                     ApiException(ErrorCode.INTERNAL, status = 500) to DomainError.SERVER,
                     // The code wins over the status whenever there is one.
