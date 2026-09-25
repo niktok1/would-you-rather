@@ -42,10 +42,21 @@ class PlayViewModel(
     val picking: StateFlow<Set<Category>?> = _picking.asStateFlow()
 
     init {
-        next()
+        load()
     }
 
+    /**
+     * The next question, from the reveal (CLAUDE.md §8d, *The Play screen*): only once the question
+     * on screen is answered and nothing is in flight, one action at a time. Before answering, the
+     * way on is an answer or Skip, never this; and a second tap finds the next question loading.
+     */
     fun next() {
+        val revealed = _state.value as? PlayUiState.Revealed ?: return
+        if (revealed.isBusy) return
+        load()
+    }
+
+    private fun load() {
         _state.value = PlayUiState.Loading
 
         viewModelScope.launch {
@@ -96,7 +107,7 @@ class PlayViewModel(
             } catch (unrecorded: WyrException) {
                 // Moved on all the same (above). Only a WyrException: a cancellation must go on up.
             }
-            next()
+            load()
         }
     }
 
@@ -190,7 +201,7 @@ class PlayViewModel(
         viewModelScope.launch {
             // Before the fetch, so the question loaded is already the new selection's.
             questions.setCategories(ticked)
-            next()
+            load()
         }
     }
 
@@ -207,7 +218,7 @@ class PlayViewModel(
         // Only from a failure: a second tap on Try again finds the retry already under way.
         val failed = _state.value as? PlayUiState.Failed ?: return
         val lostVote = failed.lostVote
-        if (lostVote == null) next() else submit(lostVote)
+        if (lostVote == null) load() else submit(lostVote)
     }
 
     private fun submit(vote: PendingVote) {
@@ -224,7 +235,7 @@ class PlayViewModel(
                     // Already voted is not really a failure to show: the question is spent, so move
                     // the player on rather than stranding them on an error they cannot resolve.
                     if (failure.error == DomainError.ALREADY_VOTED) {
-                        next()
+                        load()
                         return@launch
                     }
                     // NETWORK is what retry safety is for: the vote may have landed, and only its

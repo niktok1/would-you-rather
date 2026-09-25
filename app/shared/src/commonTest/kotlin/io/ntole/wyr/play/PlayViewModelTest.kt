@@ -428,8 +428,9 @@ class PlayViewModelTest {
             assertEquals(PlayUiState.Revealed(QUESTION, OUTCOME), viewModel.state.value)
         }
 
+    /** One action at a time: the reveal waits for its like, which then lands on it. */
     @Test
-    fun `a like answered once the player has moved on is not put on the next question`() =
+    fun `Next while a like is in flight does nothing`() =
         runTest(dispatcher) {
             val gate = CompletableDeferred<Unit>()
             val likes = FakeLikeRepository()
@@ -437,7 +438,8 @@ class PlayViewModelTest {
                 gate.await()
                 QuestionLikes(questionId, likeCount = 1, likedByMe = liked)
             }
-            val viewModel = viewModel(FakeQuestionRepository(QUESTION, NEXT_QUESTION), likes = likes)
+            val questions = FakeQuestionRepository(QUESTION, NEXT_QUESTION)
+            val viewModel = viewModel(questions, likes = likes)
             testScheduler.advanceUntilIdle()
             viewModel.choose(Side.A)
             testScheduler.advanceUntilIdle()
@@ -449,7 +451,73 @@ class PlayViewModelTest {
             gate.complete(Unit)
             testScheduler.advanceUntilIdle()
 
+            assertEquals(
+                PlayUiState.Revealed(QUESTION.copy(likeCount = 1, likedByMe = true), OUTCOME),
+                viewModel.state.value,
+            )
+            assertEquals(listOf("next"), questions.calls)
+        }
+
+    @Test
+    fun `Next after the reveal shows the next question`() =
+        runTest(dispatcher) {
+            val viewModel = viewModel(FakeQuestionRepository(QUESTION, NEXT_QUESTION))
+            testScheduler.advanceUntilIdle()
+            viewModel.choose(Side.B)
+            testScheduler.advanceUntilIdle()
+
+            viewModel.next()
+            testScheduler.advanceUntilIdle()
+
             assertEquals(PlayUiState.Asking(NEXT_QUESTION), viewModel.state.value)
+        }
+
+    /** Before the reveal a card is an answer and Skip the way past it: never the next question. */
+    @Test
+    fun `Next before answering does nothing`() =
+        runTest(dispatcher) {
+            val questions = FakeQuestionRepository(QUESTION, NEXT_QUESTION)
+            val viewModel = viewModel(questions)
+            testScheduler.advanceUntilIdle()
+
+            viewModel.next()
+            testScheduler.advanceUntilIdle()
+
+            assertEquals(PlayUiState.Asking(QUESTION), viewModel.state.value)
+            assertEquals(listOf("next"), questions.calls)
+        }
+
+    @Test
+    fun `Next while the vote is in flight does nothing`() =
+        runTest(dispatcher) {
+            val questions = FakeQuestionRepository(QUESTION, NEXT_QUESTION)
+            val viewModel = viewModel(questions)
+            testScheduler.advanceUntilIdle()
+
+            viewModel.choose(Side.A)
+            viewModel.next()
+            testScheduler.advanceUntilIdle()
+
+            assertEquals(PlayUiState.Revealed(QUESTION, OUTCOME), viewModel.state.value)
+            assertEquals(listOf("next"), questions.calls)
+        }
+
+    /** Both taps land before the first one's fetch runs: one question further, not two. */
+    @Test
+    fun `a second tap on Next loads one question`() =
+        runTest(dispatcher) {
+            val questions = FakeQuestionRepository(QUESTION, NEXT_QUESTION, FOOD_QUESTION)
+            val viewModel = viewModel(questions)
+            testScheduler.advanceUntilIdle()
+            viewModel.choose(Side.A)
+            testScheduler.advanceUntilIdle()
+
+            viewModel.next()
+            viewModel.next()
+            testScheduler.advanceUntilIdle()
+
+            assertEquals(PlayUiState.Asking(NEXT_QUESTION), viewModel.state.value)
+            assertEquals(listOf("next", "next"), questions.calls)
         }
 
     @Test
