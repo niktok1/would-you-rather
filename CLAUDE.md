@@ -876,10 +876,12 @@ game's, or a place on one, theme tokens only (§5b), and its words in `Strings` 
   commits autofill when no autofillable field is left, so nothing typed is cleared before then).
   What is typed lives in `AccountViewModel`'s memory only, never in saved state.
 - One action at a time, and the player read again after every one, a failed one too: a registration
-  whose answer was lost shows as the account it made. `AccountViewModelTest` drives it over fakes,
-  `AccountScreenDrawTest` and `AuthScreenDrawTest` draw every state in both themes and every
-  language, and `AppNavigationTest` registers through the page and lands back on Account; theme
-  tokens only (§5b).
+  whose answer was lost shows as the account it made. A register or a login whose read after it
+  names an account goes back to the Account screen as one that answered does, its failure dropped;
+  what was typed is gone by then, so the password manager has nothing to save. `AccountViewModelTest`
+  drives it over fakes, `AccountScreenDrawTest` and `AuthScreenDrawTest` draw every state in both
+  themes and every language, and `AppNavigationTest` registers through the page, an answer lost
+  too, and lands back on Account; theme tokens only (§5b).
 - **My questions** (`MyQuestions`, *decided 2026-09-25*), for guests and registered players alike:
   the player's submissions, newest first, each with its two options and its status in a word, *На
   чекању*, *Одобрено*, *Одбијено* with the moderator's reason as they wrote it, *Повучено* (and

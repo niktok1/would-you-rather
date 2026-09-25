@@ -547,6 +547,24 @@ class AccountViewModelTest {
             assertFalse(viewModel.state.value.signedIn)
         }
 
+    /** The account was made, so the Auth page goes back as for an answer that came, with no failure. */
+    @Test
+    fun `a registration whose answer was lost is signed in as the account it made`() =
+        runTest(dispatcher) {
+            game.registerAnswerLost = true
+            val viewModel = open()
+            viewModel.setRegisterUsername("bob_1")
+            viewModel.setRegisterPassword("correct horse")
+
+            viewModel.register()
+            testScheduler.advanceUntilIdle()
+
+            val state = viewModel.state.value
+            assertTrue(state.signedIn)
+            assertEquals("bob_1", nameOf(state.shown(), ENGLISH))
+            assertNull(state.failure)
+        }
+
     @Test
     fun `a login that worked is signed in`() =
         runTest(dispatcher) {
@@ -658,6 +676,9 @@ class AccountViewModelTest {
         /** When set, a registration waits for it before it answers. */
         var registerWaitsFor: CompletableDeferred<Unit>? = null
 
+        /** When set, a registration makes the account and then fails as offline, its answer lost. */
+        var registerAnswerLost = false
+
         /** The questions each player submitted, by player; none for a player not named. */
         val questionsOf = mutableMapOf<String, List<Submission>>()
         var mineFailsWith: DomainError? = null
@@ -693,6 +714,7 @@ class AccountViewModelTest {
             val name = username.lowercase()
             if (name in accounts) throw WyrException(DomainError.USERNAME_TAKEN)
             accounts[name] = password to ensure()
+            if (registerAnswerLost) throw WyrException(DomainError.NETWORK)
             return name
         }
 

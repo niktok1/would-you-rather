@@ -176,9 +176,11 @@ class AccountViewModel(
      * Reads who is playing, minting a guest where there is none, then the questions they submitted,
      * each whatever became of the other. A registered player sees no form, so what was typed goes
      * then: not before, since the platform's password manager reads the fields as they leave the
-     * screen, and the Auth page leaves on [AccountState.signedIn], which stays up for it. A failed
-     * read keeps what was shown, and says so: the stats' unless the action before it already failed,
-     * which says more, and the list's under the list.
+     * screen, and the Auth page leaves on [AccountState.signedIn], which stays up for it. A register
+     * or a login whose answer was lost worked all the same when the read after it names an account:
+     * it raises [AccountState.signedIn] too, and its failure goes. A failed read keeps what was
+     * shown, and says so: the stats' unless the action before it already failed, which says more,
+     * and the list's under the list.
      */
     private suspend fun load() {
         loadStats()
@@ -201,12 +203,13 @@ class AccountViewModel(
                 if (stats.username == null) {
                     it.copy(stats = stats)
                 } else {
+                    val afterAuth = it.running in AUTH_ACTIONS
                     AccountState(
                         stats = stats,
                         submissions = it.submissions,
-                        failure = it.failure,
+                        failure = it.failure.takeUnless { afterAuth },
                         running = it.running,
-                        signedIn = it.signedIn,
+                        signedIn = it.signedIn || afterAuth,
                     )
                 }
             }

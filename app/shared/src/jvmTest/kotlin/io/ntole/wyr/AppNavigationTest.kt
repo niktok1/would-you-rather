@@ -216,6 +216,26 @@ class AppNavigationTest {
             assertTrue(shown.any { "bob_1" in it }, "the account is not named: $shown")
         }
 
+    /** A registration whose answer was lost made the account all the same: the page goes back as for one that came. */
+    @Test
+    fun `a registration whose answer was lost goes back to Account as the account`() =
+        withApp { scene ->
+            game.registerAnswerLost = true
+            scene.tap(CYRILLIC.account)
+            scene.tap(CYRILLIC.accountScreens.openAuth)
+            scene.type(0, "bob_1")
+            scene.type(1, "correct horse")
+
+            scene.tap(CYRILLIC.accountScreens.register)
+            scene.settle()
+
+            assertEquals("bob_1", game.username)
+            val shown = scene.everyText()
+            assertFalse(CYRILLIC.accountScreens.register in shown, "the Auth page is still shown: $shown")
+            assertFalse(CYRILLIC.accountScreens.offline in shown, "the account was made: $shown")
+            assertTrue(shown.any { "bob_1" in it }, "the account is not named: $shown")
+        }
+
     /** Android's back, button or gesture, goes back through the navigator: from the Auth page to Account. */
     @Test
     fun `back from the Auth page returns to Account`() =
@@ -320,6 +340,9 @@ class AppNavigationTest {
         /** The account the guest registered as, or null while none. */
         var username: String? = null
 
+        /** When set, a registration makes the account and then fails as offline, its answer lost. */
+        var registerAnswerLost = false
+
         /** The questions submitted, newest first. */
         val sent = mutableListOf<Submission>()
 
@@ -359,7 +382,11 @@ class AppNavigationTest {
         override suspend fun register(
             username: String,
             password: String,
-        ): String = username.lowercase().also { this.username = it }
+        ): String =
+            username.lowercase().also {
+                this.username = it
+                if (registerAnswerLost) throw WyrException(DomainError.NETWORK)
+            }
 
         override suspend fun logIn(
             username: String,

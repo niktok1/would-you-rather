@@ -47,9 +47,10 @@ data class AccountState(
     /** The action in flight, or null when idle. Only one runs at a time. */
     val running: AccountAction? = null,
     /**
-     * A register or a login worked, and the Auth page has not gone back to the Account screen for it
-     * yet ([AccountActions.leftAuth]). The next action takes it down too, so it is never left over
-     * for a later showing of the page.
+     * A register or a login worked, as its answer said or, when the answer was lost, as the read after
+     * it names an account, and the Auth page has not gone back to the Account screen for it yet
+     * ([AccountActions.leftAuth]). The next action takes it down too, so it is never left over for a
+     * later showing of the page.
      */
     val signedIn: Boolean = false,
 ) {
