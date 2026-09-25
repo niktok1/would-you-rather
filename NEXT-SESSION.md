@@ -44,8 +44,8 @@ the contract did not. How to try it on a phone is under *Submit on its own tab*.
 Submit and Account and opens on Play (CLAUDE.md §8d, *Current focus*); a LOCAL or DEV build names its
 server on the Account tab's last line (§8e). Changes are tried through the game and the moderation
 app (*Trying a change*, below). What only the console read went with it: the HTTP trace
-(`HttpTrace`, `HttpTracing`). The client alone changed; the server only in a comment and a test's
-name.
+(`HttpTrace`, `HttpTracing`), and `SessionDiagnostics`, the session and token expiry its header
+showed. The client alone changed; the server only in a comment and a test's name.
 
 ### Verified working
 
@@ -694,10 +694,10 @@ Server first, then a client. The server defaults to in-memory H2 and logs a warn
 Android uses `http://10.0.2.2:8080` (the emulator's alias for the host loopback); desktop, iOS
 simulator, and web use `http://localhost:8080`. All four are `WyrEnvironment.LOCAL`'s, which a build
 targets unless it names another environment (below); on Android that is the `localDebug` variant, not
-the default. The **Account** tab's last line names the environment and the URL in use. `WYR_API_BASE_URL`,
-which pointed the desktop client at any server, is retired (CLAUDE.md §8e): name an environment
-instead (below). For the **web** client the server also needs `ALLOWED_WEB_ORIGINS` set or CORS
-preflight will reject every request. The page's dev server takes the first free port from 8080, so
+the default. The **Account** tab's last line names the environment and the URL in use.
+`WYR_API_BASE_URL`, which pointed the desktop client at any server, is retired (CLAUDE.md §8e): name
+an environment instead (below). For the **web** client the server also needs `ALLOWED_WEB_ORIGINS`
+set or CORS preflight will reject every request. The page's dev server takes the first free port from 8080, so
 with the API already there it serves on 8081:
 
 ```bash
@@ -715,8 +715,8 @@ another (CLAUDE.md §8e). `dev` is `wyr-server-dev` at https://wyr-server-dev.on
 H2, reset on every deploy), `prod` is https://wyr-server.onrender.com; both answered `/health` with
 200 on 2026-09-24. The last line of the **Account** tab names the environment and its URL in a
 `local` or `dev` build (*Server: Dev (https://wyr-server-dev.onrender.com)*), and a `prod` build names
-none; every build shows the same three tabs, Play, Submit and Account. Each environment keeps a guest of its own, so switching between them
-loses neither.
+none; every build shows the same three tabs, Play, Submit and Account. Each environment keeps a
+guest of its own, so switching between them loses neither.
 
 - **Android**: Android Studio's *Build Variants* panel, where `devDebug` is the default, since a
   phone can reach dev and not the developer's machine. `localDebug` is for the emulator against

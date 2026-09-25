@@ -7,7 +7,6 @@ import io.ntole.wyr.core.data.like.DefaultLikeRepository
 import io.ntole.wyr.core.data.moderation.DefaultModerationRepository
 import io.ntole.wyr.core.data.player.DefaultPlayerRepository
 import io.ntole.wyr.core.data.question.DefaultQuestionRepository
-import io.ntole.wyr.core.data.session.DefaultSessionDiagnostics
 import io.ntole.wyr.core.data.session.DefaultSessionRepository
 import io.ntole.wyr.core.data.submission.DefaultSubmissionRepository
 import io.ntole.wyr.core.data.vote.DefaultVoteRepository
@@ -30,7 +29,6 @@ import io.ntole.wyr.core.domain.question.GetNextQuestion
 import io.ntole.wyr.core.domain.question.QuestionCache
 import io.ntole.wyr.core.domain.question.QuestionRepository
 import io.ntole.wyr.core.domain.question.SkipQuestion
-import io.ntole.wyr.core.domain.session.SessionDiagnostics
 import io.ntole.wyr.core.domain.session.SessionRepository
 import io.ntole.wyr.core.domain.submission.GetMySubmissions
 import io.ntole.wyr.core.domain.submission.SubmissionRepository
@@ -82,7 +80,6 @@ public fun dataModule(environment: WyrEnvironment): Module =
         // interface.
         single { DefaultSessionRepository(authApi = get(), sessionStore = get()) }
         single<SessionRepository> { get<DefaultSessionRepository>() }
-        single<SessionDiagnostics> { DefaultSessionDiagnostics(sessionStore = get()) }
 
         single<QuestionRepository> { DefaultQuestionRepository(api = get(), session = get(), cache = get()) }
         single<VoteRepository> { DefaultVoteRepository(api = get(), session = get()) }
