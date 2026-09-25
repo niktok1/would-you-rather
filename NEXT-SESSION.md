@@ -795,6 +795,18 @@ focus*, *Stats*), in every build, PROD's included: the answers given and the que
 the cycle and the questions left in it, and the likes the questions the player submitted hold, as
 `GET /v1/me` counts them, read each time the tab is shown. The server needs nothing new.
 
+**On `feat/account-stats`** (from b8d992c; not merged, nothing pushed), the fourth feature moved; the
+client alone changed. Verified on this Mac: `AccountViewModelTest` (17, 14 before) reads a guest's
+stats and a registered player's, and again on each showing; `AccountScreenDrawTest` (3, 1 before)
+draws every state at 400x900 and 375x599 in both themes, reads every line off the screen's semantics,
+and holds every state without a form to 599 high (509 at most); `DevConsoleScreenTest` the console's
+likes-moved line. A screen showing only the points, and the cycle swapped with what is left, each
+broke a test. Counts: `:server` 311, 2 skipped (from the build cache: untouched); `:core:domain` 47;
+`:core:data` 146; `:core:network` 82 (88 as Android host tests); `:app:shared` 135 (129 before);
+`:app:adminApp` 87. Lint, the verify job's tests (client tasks forced to rerun) and client compiles,
+`assembleDebug` included, and the ios job's Kotlin compiles pass. **Not verified:** nothing has run
+on a device or against a server, and the renders were looked at on this Mac only.
+
 **To try it on a phone** (`devDebug`, against the dev server):
 
 1. `./gradlew :app:androidApp:installDevDebug`, answer 3 questions on **Play**, skip 1, and open
