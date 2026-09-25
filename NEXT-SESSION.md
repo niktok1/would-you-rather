@@ -53,27 +53,74 @@ which only it showed; and `PlayerStats.playerId` and `VoteOutcome.questionId`, w
 alone changed; the server only in a comment and a test's name.
 
 **On `feat/server-categories`** (from 40550e9; not merged, nothing pushed; the server and the
-contract, the clients only as far as they must compile): categories are **server data** (CLAUDE.md
+contract first, then the clients): categories are **server data** (CLAUDE.md
 §8d, *Categories*, decided 2026-09-25). V6 adds `categories` (id, Serbian and English names, when
 added), writes the first five, `FOOD`, `LIFESTYLE`, `ETHICS`, `SUPERPOWERS` and `ABSURD`, moves
 everything filed under RANDOM to ABSURD and holds `question_categories` to it with a foreign key.
 RANDOM is no category any more (§8b: *All* is no filter). Every categories field on the wire is
 plain ids, `QuestionCategory` and its list serializer are gone (§5), and the JSON for the first ids
-is what it was. The client maps ABSURD to its `Category.RANDOM` until the next branch lists the
-categories from the server. `GET /v1/categories` lists every category, with its id and both names,
+is what it was. `GET /v1/categories` lists every category, with its id and both names,
 oldest first, to anybody (no bearer), limited per address. The moderator adds a category
 (`POST /v1/admin/categories`, the id given or derived from the English name, 409 `CATEGORY_EXISTS`)
 and renames one (`POST /v1/admin/category-renames`, 404 `CATEGORY_NOT_FOUND`); no delete.
 Submitting costs `Scoring.SUBMISSION_COST`, 1 point until release (CLAUDE.md §8c): too few is 409
 `NOT_ENOUGH_POINTS`, a rejection pays back what the question cost (V7 keeps it on the question,
 `submission_cost`), and `GET /v1/me` reports `pointsSpent`, so the total is what the answers and likes
-earned less that. The client maps `NOT_ENOUGH_POINTS` to `DomainError.UNKNOWN` for now. Every seed
+earned less that. Every seed
 comes with made-up votes (V8, `questions.base_votes_a`/`_b`, CLAUDE.md §8d *Seeds*), which every
 tally the server reports adds to the players' own, and the seeds are in Serbian Cyrillic (V9 rewrote
 production's English ones by id; a new database is seeded in Serbian).
 
+The clients on the same branch (four commits after the server's): categories are **server data on
+the client too** (CLAUDE.md §8d, *Categories*, *The client*). `GET /v1/categories` is read through
+`CategoryApi` behind `CategoryRepository` and `GetCategories` (`runApi` alone: no session ensured,
+recovered or minted), kept in memory and read again when asked. The domain's `Category` enum, its
+`OTHER` and the interim ABSURD-as-RANDOM mapping are gone: a question, a submission, a moderated
+question, a selection and a filter hold category ids, sent in id order, and a screen names each by
+the list last read, in Serbian for now (`categoryName` in `io.ntole.wyr.play`, one place for the
+translations branch to choose the language), one not read yet by its id. The **Play** screen's
+picker reads the list each time it opens; the **Submit** screen's chips are the list, read each time
+the tab is shown; `NOT_ENOUGH_POINTS` is a `DomainError` of its own, and the Submit screen says that a
+question costs 1 point, paid back if it is rejected (the 1 is the screen's copy of
+`Scoring.SUBMISSION_COST`). The **moderation app** reads the categories before every Load, for its
+chips, and has a third tab, **Categories**, which lists them and adds one (id typed or left to the
+server) and puts one's names right (`AddCategory`, `RenameCategory`, `CategoryRules`,
+`CATEGORY_EXISTS` and `CATEGORY_NOT_FOUND` as `DomainError`s). No client reads `pointsSpent` yet:
+the Account screen's lines of answers and likes no longer add up to its points once a question is
+pending or approved, which the Account redesign can show. `App.kt` is untouched: the Play screen's
+two category values changed type under the same names (`PlayedCategories`, `CategoryPicking`).
+
 ### Verified working
 
+- **`feat/server-categories`, the clients** (4ceb426, 4a009e4, a4c05fb, c48aa95), on this machine. At
+  the last, the verify job's lists exactly: `ktlintCheck`; `:server:test :core:domain:jvmTest
+  :core:data:jvmTest :core:network:jvmTest :core:network:testAndroidHostTest :app:shared:jvmTest
+  :app:adminApp:jvmTest`; the client compiles, `:app:androidApp:assembleDebug` and both web targets
+  of `:app:shared` and `:app:adminApp` included; and the ios job's Kotlin compiles
+  (`:app:shared:compileKotlinIosSimulatorArm64` and the `compileTestKotlinIosSimulatorArm64` of
+  `:app:shared` and the three `:core` modules), each Gradle's own exit code 0. Test counts from
+  `build/test-results`: `:server:test` 346 (344 green, 2 skipped), `:core:domain:jvmTest` 56,
+  `:core:data:jvmTest` 142, `:core:network:jvmTest` 72, `:core:network:testAndroidHostTest` 78,
+  `:app:shared:jvmTest` 128, `:app:adminApp:jvmTest` 106, no failure anywhere. At a4c05fb the same
+  compiles and every client suite; at 4ceb426 lint and the JVM client suites; at 4a009e4 lint, the
+  core suites and, built from `git archive` in the scratchpad, every client compile and suite above.
+  New: `DefaultCategoryRepositoryTest` (the server's order, no session sent or minted, a read again
+  that shows a category added meanwhile, a failed read keeping the list), `CategoryApiTest`,
+  `GetCategoriesTest`, `DataModuleTest` (both modules read the categories from their own server),
+  `CategoryRulesTest` and `CategoryLimitsTest`; `QuestionMapperTest` now pins ids kept in the
+  server's order, ABSURD as itself and RANDOM an id like any other; `PlayViewModelTest` the picker's
+  read on opening, its failure, and every category ticked; `SubmitViewModelTest` the chips' read and
+  its failure; `CategoriesViewModelTest` the moderation app's add and rename; the refusal for points
+  in `ErrorMapperTest`, `DefaultSubmissionRepositoryTest` and `SubmitScreenTest`. The fat jar
+  (`WYR_SERVER_ONLY=1 ./gradlew :server:buildFatJar`) booted on JDK 21, port 18097, in-memory H2, a
+  throwaway `ADMIN_TOKEN`: `/health`; the five categories in Serbian; a guest minted; a submission
+  with 0 points 409 `NOT_ENOUGH_POINTS`; `seed-1` served under `FOOD`, and a vote on it answered
+  213/158 (its made-up 212/158 and the vote) with 1 point; a submission 201, the total 0 and
+  `pointsSpent` 1; a second one 409 for points; the moderator's queue listing it, a rejection, and the
+  total back to 1 with `pointsSpent` 0; `FAST_FOOD` added from "Fast food", `FOOD` 409
+  `CATEGORY_EXISTS`, a rename, and the list ending with it; `?category=RANDOM` 400; an admin route
+  with no token 403. Stopped; nothing listens on 18097. No app ran against it: the clients' side of
+  the wire is the tests' MockEngine and `FakeServer`, with the same DTOs.
 - **`feat/server-categories`**, on this machine, at its last code commit: `ktlintCheck`, the verify
   job's tests and client compiles (`:app:androidApp:assembleDebug` and both web targets included)
   and the ios job's Kotlin compiles, all green; at each commit before it, lint, the server suite,
@@ -133,13 +180,13 @@ production's English ones by id; a new database is seeded in Serbian).
   the rows, and the author's list in the same number of statements whatever its length.
   `WyrJsonTest` and `ServerJsonTest` pin categories as plain ids on both sides, the first ones'
   JSON as the enum sent it. On the client, `QuestionMapperTest` pins a question's categories as a
-  set, each once in declaration order, with an id this build cannot name as `OTHER` beside the rest,
-  ABSURD as `RANDOM`, and an empty or missing list as `OTHER` alone; `QuestionApiTest`, one
-  `?category=` per category, in the order given;
-  `DefaultQuestionRepositoryTest`, a selection of several sent whole with every refill, any change to
-  it dropping the queue (a refill in flight included), the same set keeping it, and `OTHER` refused;
+  set of ids, each once in the server's order, one no build names kept as it came, and an empty or
+  missing list as none; `QuestionApiTest`, one `?category=` per category, in the order given;
+  `DefaultQuestionRepositoryTest`, a selection of several sent whole, in id order, with every refill,
+  any change to it dropping the queue (a refill in flight included), the same set keeping it, and a
+  category added after the build asked for by its id;
   and `PlayViewModelTest`, the Play screen's category picker: ticking, *All categories*, every
-  category ticked played as all five and never as none (`PlayScreenTest` names them, not *All*), the
+  category ticked played as all of them and never as none (`PlayScreenTest` names them, not *All*), the
   selection sent to the repository before the next fetch, the question on screen dropped for one
   from it, the same selection keeping it, a vote lost to `NETWORK` never sent again once the
   categories change from its failure, and no change while anything is in flight
@@ -608,6 +655,15 @@ production's English ones by id; a new database is seeded in Serbian).
   nothing here has read its history. Check, read-only, that it reads `1 BASELINE`, `2 SQL`,
   `3 SQL`, `4 SQL`, and that `sessions` has a row for every `players` row with a
   `refresh_token_hash`. The next script after V4 runs there at the next Manual Deploy.
+- **The clients' categories on a device** (`feat/server-categories`). No build with them has been
+  installed or run: the Play picker, the Submit chips and the moderation app's Categories tab are
+  drawn off screen (`PlayScreenDrawTest`, `SubmitScreenDrawTest`, `ScreensDrawTest`) and driven over
+  fakes, and no app has read `GET /v1/categories` from a real server. Serbian names on a phone's
+  fonts, a picker of many more than five categories, and the Account screen's lines, which no longer
+  add up to the points once a question has cost one (`pointsSpent` is read by no client), are
+  unseen. Installed builds from before this branch against a server from it: a filter or a
+  submission under RANDOM is 400, ABSURD and every new category show as `OTHER`, and a refusal for
+  points reads as `UNKNOWN`, as the server's handoff says; not tried on a phone.
 - **V6 to V9 on PostgreSQL, and on production** (`feat/server-categories`). They have run only on
   H2, here; `SchemaDriftTest` and `MigrationsTest` take them to PostgreSQL in the `server-postgres`
   job, not yet run on the branch. The next Manual Deploy runs V5 to V9 there in one boot: after it,
@@ -904,21 +960,24 @@ registrations 20 an hour per player.
 ### Submit on its own tab
 
 The game's **Submit** tab writes a question and lists your own (CLAUDE.md §8d, *Submitting*), in every
-build, PROD's included. Submitting earns no points;
-once approved, each like the question holds pays you 1.
+build, PROD's included. Submitting costs 1 point (`feat/server-categories`), paid back if the question
+is rejected; once approved, each like the question holds pays you 1.
 
 **To try it on a phone** (`devDebug`, against the dev server, whose in-memory H2 forgets everything on
 a deploy or a spin-down; the server needs nothing new):
 
 1. `./gradlew :app:androidApp:installDevDebug`, open *WYR Dev*, and go to the **Submit** tab, between
    Play and Account. *My submissions* reads *None yet* for a fresh guest.
-2. Type option A and B and tap one or more categories. Each option says what is wrong as it is
+2. Type option A and B and tap one or more categories, the server's, named in Serbian and read each
+   time the tab is shown. Each option says what is wrong as it is
    typed: nothing but spaces is *Write something here*, a line break *One line, with no line breaks
    or tabs*, over 200 characters *At most 200 characters*, and B the same as A, ignoring case and the
    spaces at either end, *The two options must be different*. **Submit** stays off until nothing is
    wrong and a category is picked.
 3. **Submit**: the form clears, *Sent* shows above the button, and the question tops *My
-   submissions*, trimmed, as *Pending: waiting for a moderator*, with its categories.
+   submissions*, trimmed, as *Pending: waiting for a moderator*, with its categories. A fresh guest
+   has no points yet: *You need 1 point to submit. Answer a question to earn it.*, the form kept;
+   answer one on **Play** and submit again.
 4. Approve it in the moderation app (*The moderation app*, below): `WYR_ENV=dev ./gradlew
    :app:adminApp:run`, type dev's `ADMIN_TOKEN` (its Environment tab on Render), *Load pending*,
    pick categories in place of yours if you like, and **Approve**. On the phone, leave the Submit tab
@@ -969,15 +1028,19 @@ a deploy or a spin-down; the server needs nothing new):
 
 The game's **Play** tab picks the categories played (CLAUDE.md §8d, *Categories*), in every build,
 PROD's included. The selection lives in memory for the app's
-life, so a launch plays every category again.
+life, so a launch plays every category again. The categories are the server's
+(`feat/server-categories`), read each time the picker opens, and named in Serbian.
 
 **To try it on a phone** (`devDebug`, as for *Skip and Like on Play*; the server needs nothing new):
 
 1. `./gradlew :app:androidApp:installDevDebug`, open *WYR Dev*, and go to the **Play** tab. Under the
    title: **All** over *change categories*, which should read as something to tap.
-2. Tap it: a dialog of *All categories* (ticked) and the five categories. Tick *Food* and *Ethics*:
-   nothing changes behind the dialog yet. **Play**: the question on screen goes, and the next is filed
-   under Food or Ethics; the header reads *Food, Ethics*, beside the points once you answer.
+2. Tap it: a dialog of *All categories* (ticked) and the server's categories, *Храна* to *Апсурдно*
+   on a fresh server. Tick *Храна* and *Етика*: nothing changes behind the dialog yet. **Play**: the
+   question on screen goes, and the next is filed under either; the header reads *Храна, Етика*,
+   beside the points once you answer. A category the moderation app adds shows the next time the
+   picker opens. Opened offline, it says *Can't reach the game to list the categories.* under the
+   ones read before.
 3. Open it again and **Cancel**, or tap outside it: nothing changes. **Play** with what is already
    played: the question stays.
 4. Tick every category: the header cuts the names short on its one line, and the reveal is as tall as
@@ -1008,7 +1071,7 @@ curl -s -X POST localhost:8080/v1/questions -H "Authorization: Bearer $ACCESS" \
   -H 'Content-Type: application/json' -d '{"optionA":"Fly","optionB":"Swim","categories":["SUPERPOWERS"]}'
 curl -s localhost:8080/v1/admin/submissions -H "X-Admin-Token: $ADMIN_TOKEN"
 curl -s -X POST localhost:8080/v1/admin/approvals -H "X-Admin-Token: $ADMIN_TOKEN" \
-  -H 'Content-Type: application/json' -d '{"questionId":"<id from the queue>","categories":["SUPERPOWERS","RANDOM"]}'
+  -H 'Content-Type: application/json' -d '{"questionId":"<id from the queue>","categories":["SUPERPOWERS","ABSURD"]}'
 ```
 
 Or moderate from the moderation app (*The moderation app*, below). Leave `categories` out to keep
@@ -1036,6 +1099,17 @@ curl -s -X POST localhost:8080/v1/admin/retirements -H "X-Admin-Token: $ADMIN_TO
   -H 'Content-Type: application/json' -d '{"questionId":"seed-1"}'
 curl -s -X POST localhost:8080/v1/admin/restorations -H "X-Admin-Token: $ADMIN_TOKEN" \
   -H 'Content-Type: application/json' -d '{"questionId":"seed-1"}'
+```
+
+To add a category, its id made from the English name when none is given (409 `CATEGORY_EXISTS` for
+one a category has), and to put its names right; `GET /v1/categories` lists them to anybody:
+
+```bash
+curl -s -X POST localhost:8080/v1/admin/categories -H "X-Admin-Token: $ADMIN_TOKEN" \
+  -H 'Content-Type: application/json' -d '{"nameSr":"Брза храна","nameEn":"Fast food"}'
+curl -s -X POST localhost:8080/v1/admin/category-renames -H "X-Admin-Token: $ADMIN_TOKEN" \
+  -H 'Content-Type: application/json' -d '{"id":"FAST_FOOD","nameSr":"Брза клопа","nameEn":"Fast food"}'
+curl -s localhost:8080/v1/categories
 ```
 
 ### The moderation app
@@ -1102,6 +1176,17 @@ where it now stands without losing your place. A question another moderator move
 status changed first (409)`. Every admin request spends the address's 60 a minute (CLAUDE.md §8b): a
 retirement or restoration is one; a decision is one, one more for the queue, and one per 100
 questions the list shows; nothing is read again after a 403 or a 429.
+
+Every *Load*, on any tab, reads the categories first (`GET /v1/categories`, no admin request and no
+token spent): they are the chips, named in Serbian, and a category not listed shows by its id.
+**Categories** (`feat/server-categories`) lists them, oldest first, each with its id and both names.
+*Add a category* takes a Serbian name, an English name and an id, which the server makes from the
+English name when left blank (*Fast food* is `FAST_FOOD`; a name of no Latin letter or digit needs
+one typed); *Add* stays off until the names are one line of at most 40 and the id, if typed, is 1 to
+32 of `A`-`Z`, `0`-`9` and `_`. *Rename...* opens a category's names in its card, its id fixed, and
+*Save names* sends them. After an add or a rename the list is read again whatever became of it; an
+id a category has already says `A category has that id already (409)` under the form. *Lock* forgets
+what was typed there and keeps the categories read.
 
 ### Trying a change
 
