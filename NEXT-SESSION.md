@@ -26,7 +26,7 @@ here: install a build from this branch on it.
 
 ### Verified working
 
-- `:server` on H2: 272 tests, 270 green and 2 skipped (the PostgreSQL-only boot races), including
+- `:server` on H2: 311 tests, 309 green and 2 skipped (the PostgreSQL-only boot races), including
   78 end-to-end flow tests in `ApiFlowTest`. Flat scoring is covered there (every vote pays 1,
   majority and minority alike, and the total accumulates) and by `PlayerStoreTest`, which races
   awards for one player, and `SessionStoreTest`, which races refreshes of one token. The endless
@@ -447,6 +447,20 @@ here: install a build from this branch on it.
   trace, its session untouched; the right one played as the account; a logout answered 204 and the
   next read minted a fresh guest; the first device stayed logged in. No password, hash or token was
   in the server's log. The server was stopped.
+- Review fixes on `feat/simple-accounts`. A login trims its username (a keyboard's suggestion
+  leaves a space after the word, which read as a wrong password); `AccountFlowTest` logs in as
+  `bob `, ` bob` and a tab-and-newline-wrapped `BoB`, and still refuses `b ob` and the password with
+  a space added (without the trim the test fails). The Account screen's section titles take
+  `WyrTypeScale.sectionTitle`. CLAUDE.md §8b now says the app saves the session, not the password,
+  and names the `d4a9dbf` phone build that breaks. Counts: `:server` 311, 2 skipped; `:core:domain`
+  47; `:core:data` 146; `:core:network` 82 (88 as Android host tests); `:app:shared` 123;
+  `:app:adminApp` 87. Lint (forced), the verify job's tests (each forced to rerun) and client
+  compiles, and the ios job's Kotlin compiles pass. The fat jar on JDK 21, `PORT=18096`, no
+  `DATABASE_URL`: V1 to V5 applied, `/health` 200; a guest voted and registered as `Smoke_4`
+  (`smoke_4`, 1 point), a wrong login was 401 `INVALID_LOGIN`, a login as `SMOKE_4 ` (trailing
+  space) from a second device answered the same player, both refreshed, the first logged out (204)
+  and its token was 401 after, the second refreshed with the point kept. No password or refresh
+  token in the log. The server was stopped.
 - `:app:androidApp:assembleDebug` produces a real APK.
 - `ktlintCheck` clean across every module.
 
@@ -624,7 +638,7 @@ Every client build targets one server environment, chosen when it is built, `loc
 another (CLAUDE.md §8e). `dev` is `wyr-server-dev` at https://wyr-server-dev.onrender.com (in-memory
 H2, reset on every deploy), `prod` is https://wyr-server.onrender.com; both answered `/health` with
 200 on 2026-09-24. The console's header shows the environment and its URL, and a `prod` build has no
-console at all, only Play. Each environment keeps a guest of its own, so switching between them
+console at all, only Play and Account. Each environment keeps a guest of its own, so switching between them
 loses neither.
 
 - **Android**: Android Studio's *Build Variants* panel, where `devDebug` is the default, since a
