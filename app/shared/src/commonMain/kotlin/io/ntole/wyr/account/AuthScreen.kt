@@ -39,7 +39,8 @@ import io.ntole.wyr.theme.WyrThemeAccessors
  * The Auth page (CLAUDE.md §8d, *The Account screen*), opened by a guest's one button on the Account
  * screen: Register, which keeps the guest's points, and a link that switches the same page to Log in,
  * with a link back ([AccountState.authMode]). A register or a login that worked raises
- * [AccountState.signedIn], on which the app goes back to the Account screen.
+ * [AccountState.signedIn], on which the app goes back to the Account screen. Shown before any player
+ * is read, a read that failed says so on top, with Try again.
  *
  * Plain on purpose, every colour, space and size from the theme (§5b), and every word from
  * [LocalStrings] (§8f). Each field names its autofill content type, so the platform's password manager
@@ -63,6 +64,7 @@ fun AuthScreen(
                     .padding(dimens.screenPadding),
             verticalArrangement = Arrangement.spacedBy(dimens.spaceSm),
         ) {
+            ReadFailure(state, actions)
             when (state.authMode) {
                 AuthMode.REGISTER -> RegisterForm(state, actions)
                 AuthMode.LOG_IN -> LogInForm(state, actions)
@@ -169,6 +171,23 @@ private fun LogInForm(
     }
     TextButton(onClick = { actions.setAuthMode(AuthMode.REGISTER) }, enabled = !state.isBusy) {
         Text(strings.toRegister)
+    }
+}
+
+/**
+ * Why no player could be read, with Try again, while none is: Log in waits on one, since the warning
+ * names the points a login leaves behind ([AccountState.canLogIn]).
+ */
+@Composable
+private fun ReadFailure(
+    state: AccountState,
+    actions: AccountActions,
+) {
+    if (state.stats != null) return
+    val failure = state.failure?.takeIf { it.action == AccountAction.LOAD } ?: return
+    FailureText(failure)
+    OutlinedButton(onClick = actions::refresh, enabled = !state.isBusy) {
+        Text(LocalStrings.current.accountScreens.tryAgain)
     }
 }
 

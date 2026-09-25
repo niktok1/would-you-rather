@@ -43,9 +43,10 @@ class AuthScreenDrawTest {
     }
 
     /**
-     * Two fields, a button and a link, or the warning's two buttons in the button's place: the page
-     * needs no scrolling on an iPhone SE in any state and any language. Measured 400 wide, as the
-     * Account screen is, since CI's Linux fonts wrap wider than a phone's.
+     * Two fields, a button and a link, or the warning's two buttons in the button's place, and a failed
+     * read with Try again over them before any player is read: the page needs no scrolling on an
+     * iPhone SE in any state and any language. Measured 400 wide, as the Account screen is, since CI's
+     * Linux fonts wrap wider than a phone's.
      */
     @Test
     fun `every state fits a short phone whole in every language`() {
@@ -177,6 +178,26 @@ class AuthScreenDrawTest {
         }
     }
 
+    /** Shown before any player is read, a read that failed says so on top, with Try again, and only then. */
+    @Test
+    fun `a failed read before any shows on top with Try again`() {
+        Language.entries.forEach { language ->
+            val strings = stringsOf(language).accountScreens
+            val actions = Recorder()
+            val failed = AccountState(failure = READ_FAILED)
+
+            listOf(failed, failed.copy(authMode = AuthMode.LOG_IN)).forEach { state ->
+                val shown = textsOf(state, language)
+                assertEquals(listOf(strings.offline, strings.tryAgain), shown.take(2), "$language: $shown")
+            }
+            tapping(failed, language, actions) { it.tap(strings.tryAgain) }
+            assertEquals(listOf("refresh"), actions.calls, "$language")
+
+            val read = textsOf(AccountState(stats = GUEST, failure = READ_FAILED), language)
+            assertFalse(strings.tryAgain in read, "$language: the player is read: $read")
+        }
+    }
+
     private fun tapping(
         state: AccountState,
         language: Language,
@@ -274,10 +295,20 @@ class AuthScreenDrawTest {
 
         val GUEST = PlayerStats(12, 12, 10, 1, 4, 0)
 
+        val READ_FAILED = AccountFailure(AccountAction.LOAD, DomainError.NETWORK)
+
         val STATES =
             listOf(
                 AccountState(stats = GUEST),
                 AccountState(),
+                AccountState(failure = READ_FAILED),
+                AccountState(
+                    authMode = AuthMode.LOG_IN,
+                    loginUsername = "bob_1",
+                    loginPassword = "correct horse",
+                    failure = READ_FAILED,
+                    running = AccountAction.LOAD,
+                ),
                 AccountState(stats = GUEST, registerUsername = "bob_1", registerPassword = "correct horse"),
                 AccountState(
                     stats = GUEST,

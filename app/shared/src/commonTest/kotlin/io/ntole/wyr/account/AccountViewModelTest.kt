@@ -630,6 +630,34 @@ class AccountViewModelTest {
             assertEquals(listOf("stats", "mine"), game.calls)
         }
 
+    /** The one warning names the guest's points, so a login waits until they are read. */
+    @Test
+    fun `Log in waits for a player read`() =
+        runTest(dispatcher) {
+            game.points = 5
+            game.statsFailWith = DomainError.NETWORK
+            game.accounts["bob_1"] = "correct horse" to "bob-player"
+            val viewModel = viewModel()
+            viewModel.authShown()
+            testScheduler.advanceUntilIdle()
+            viewModel.setAuthMode(AuthMode.LOG_IN)
+            viewModel.setLoginUsername("bob_1")
+            viewModel.setLoginPassword("correct horse")
+            assertEquals(AccountFailure(AccountAction.LOAD, DomainError.NETWORK), viewModel.state.value.failure)
+            game.calls.clear()
+
+            assertFalse(viewModel.state.value.canLogIn)
+            viewModel.logIn()
+            testScheduler.advanceUntilIdle()
+            assertEquals(emptyList(), game.calls, "nothing sent before the player is read")
+
+            game.statsFailWith = null
+            viewModel.refresh()
+            testScheduler.advanceUntilIdle()
+            viewModel.logIn()
+            assertEquals(5, viewModel.state.value.guestPointsWarning)
+        }
+
     /** The player the screen shows, which a test expects there to be. */
     private fun AccountState.shown(): PlayerStats = assertNotNull(stats, "no player read")
 

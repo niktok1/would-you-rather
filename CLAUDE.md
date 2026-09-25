@@ -864,8 +864,10 @@ game's, or a place on one, theme tokens only (§5b), and its words in `Strings` 
   that worked goes back to the Account screen, which reads the player again (`AccountState.signedIn`,
   which the page takes down as it goes and the next action takes down too, so a page left before its
   answer came is not sent back later). Shown with no player read yet (an Android process brought
-  back on it), it reads the player first (`authShown`), so the warning below knows the points.
-  `AuthScreenDrawTest` holds every state to 599 high, measured 400 wide, in every language.
+  back on it), it reads the player first (`authShown`), so the warning below knows the points: a read
+  that fails says so on top, with *Покушај поново*, and Log in stays off until a player is read
+  (`AccountState.canLogIn`). `AuthScreenDrawTest` holds every state to 599 high, measured 400 wide,
+  in every language.
 - A refusal from the server shows under the form that sent it, in a few words: a taken name, a wrong
   login, a rate limit with its wait, offline. A guest with points who logs in is warned once that the
   guest's points stay behind, *Поени госта (12 P) неће прећи на налог.*, and the next *Ипак се

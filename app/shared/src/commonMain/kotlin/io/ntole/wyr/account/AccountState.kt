@@ -70,9 +70,12 @@ data class AccountState(
             !isBusy && registerUsername.isNotEmpty() && registerPassword.isNotEmpty() &&
                 usernameProblem == null && passwordProblem == null
 
-    /** Whether Log in can go: both fields typed and nothing in flight. The rest is the server's word. */
+    /**
+     * Whether Log in can go: both fields typed, a player read, whose points the one warning names,
+     * and nothing in flight. The rest is the server's word.
+     */
     val canLogIn: Boolean
-        get() = !isBusy && loginUsername.isNotEmpty() && loginPassword.isNotEmpty()
+        get() = !isBusy && stats != null && loginUsername.isNotEmpty() && loginPassword.isNotEmpty()
 
     /** The points a login would leave behind, for a guest who has any, or null. */
     val pointsLeftBehindByLogIn: Int?
