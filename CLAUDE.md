@@ -1280,11 +1280,12 @@ hand, so the two cannot say different things; and **English** stands beside them
   `io.ntole.wyr.core.domain.language`), Serbian's exact letter-for-letter transliteration. Љ, Њ and Џ
   are Lj, Nj and Dž, and LJ, NJ and DŽ in a word written in capitals (two letters or more, none
   small; a word is a run of letters, so a hyphen or a full stop ends one); Ђ, Ж, Ћ, Ч and Ш are the
-  precomposed Đ, Ž, Ć, Č and Š, and Dž is two letters, never Unicode's one-character digraph. Latin
-  letters, digits, punctuation, spacing and the Cyrillic letters Serbian does not use (Я, Щ, Ы...)
-  come back as they were. Pure and in the domain, so a question's text can go through it later.
-  `SerbianScriptTest` pins every letter, capital and small, the digraphs in each case, and text that
-  must not change.
+  precomposed Đ, Ž, Ć, Č and Š, the accented Ѐ and Ѝ (ѝ, her, beside и, and) the precomposed È and
+  Ì, and Dž is two letters, never Unicode's one-character digraph. Latin letters, digits,
+  punctuation, spacing and the Cyrillic letters Serbian does not use (Я, Щ, Ы...) come back as they
+  were. Pure and in the domain, so a question's text can go through it later. `SerbianScriptTest`
+  pins every letter, capital and small, the digraphs in each case, the accented letters, and text
+  that must not change.
 - **The strings** *(built)*: `Strings` (`:app:shared`, `io.ntole.wyr.language`), a data class of
   every translated text, one value per `Language`: `SerbianCyrillicStrings` written by hand,
   `SerbianLatinStrings` made from it by `Strings.map(SerbianScript::toLatin)`, and `EnglishStrings`.

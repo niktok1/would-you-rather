@@ -86,6 +86,13 @@ class SerbianScriptTest {
         )
     }
 
+    /** Ѐ, ѐ, Ѝ and ѝ each written as one character, not a letter and an accent; È, è, Ì and ì too. */
+    @Test
+    fun `the accented letters keep their accent in Latin`() {
+        assertEquals("\u00C8 \u00E8 \u00CC \u00EC", SerbianScript.toLatin("\u0400 \u0450 \u040D \u045D"))
+        assertEquals("Reci ì. RECI Ì!", SerbianScript.toLatin("Реци \u045D. РЕЦИ \u040D!"))
+    }
+
     @Test
     fun `Cyrillic letters Serbian does not use come back as they were`() {
         assertEquals("Я Щ Ы Э Ё й ъ ь ю ї є і ґ ѓ ќ ѕ", SerbianScript.toLatin("Я Щ Ы Э Ё й ъ ь ю ї є і ґ ѓ ќ ѕ"))

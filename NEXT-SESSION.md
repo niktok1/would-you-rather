@@ -62,7 +62,7 @@ the Account screen and kept on the device: Serbian Cyrillic, the default whateve
 language, Serbian Latin made from it by `SerbianScript.toLatin` (`:core:domain`), and English
 (§8f). Only Home, the top bars and the switch are translated; the Play, Account and Submit screens'
 own copy stays English for the branches that redesign them. The client alone changed. Tests:
-`:core:domain` 69 (`SerbianScriptTest` 15 new), `:app:shared` 171 (`NavigatorTest`,
+`:core:domain` 70 (`SerbianScriptTest` 16 new), `:app:shared` 171 (`NavigatorTest`,
 `AppNavigationTest`, `HomeScreenDrawTest`, `TopBarsDrawTest`, `WyrIconsDrawTest`, the language
 tests; `RootScreensTest` went with the tabs). Not seen on a device: Android's back, and any screen of
 it on a phone; nor whether the web build's default font draws Cyrillic.

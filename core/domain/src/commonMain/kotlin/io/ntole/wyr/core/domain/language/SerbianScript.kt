@@ -17,9 +17,10 @@ public object SerbianScript {
      * has two letters or more and none of them small. A word of one capital letter, as an initial
      * is, gets a capital and a small letter: Љ. is Lj.
      *
-     * The rest are one letter for one, Ђ, Ж, Ћ, Ч and Ш as the precomposed Đ, Ž, Ć, Č and Š. Dž is two
-     * letters, D and ž, never the one-character digraph Unicode also has, which keyboards do not
-     * type and searches do not find.
+     * The rest are one letter for one, Ђ, Ж, Ћ, Ч and Ш as the precomposed Đ, Ž, Ć, Č and Š, and the
+     * accented Ѐ and Ѝ, as in ѝ (her) beside и (and), as the precomposed È and Ì. Dž is two letters,
+     * D and ž, never the one-character digraph Unicode also has, which keyboards do not type and
+     * searches do not find.
      */
     public fun toLatin(text: String): String {
         val latin = StringBuilder(text.length)
@@ -60,11 +61,12 @@ public object SerbianScript {
     /** Each of [CYRILLIC]'s letters in Latin, in the same order, as a capital begins a word. */
     private val LATIN_CAPITALS = "A B V G D Đ E Ž Z I J K L Lj M N Nj O P R S T Ć U F H C Č Dž Š".split(" ")
 
+    /** The two accented letters Unicode has as letters of their own, Ѐ and Ѝ, in Latin. */
+    private val ACCENTED_CAPITALS = listOf('Ѐ' to "È", 'Ѝ' to "Ì")
+
     /** Every Serbian Cyrillic letter, capital and small, to its Latin spelling. */
     private val LATIN: Map<Char, String> =
-        CYRILLIC
-            .toList()
-            .zip(LATIN_CAPITALS)
+        (CYRILLIC.toList().zip(LATIN_CAPITALS) + ACCENTED_CAPITALS)
             .flatMap { (capital, spelled) ->
                 listOf(capital to spelled, capital.lowercaseChar() to spelled.lowercase())
             }.toMap()
