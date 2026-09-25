@@ -741,6 +741,40 @@ Raise any budget for a session with its variable, and a refused request says whi
 RATE_LIMIT_GUESTS_PER_HOUR=1000 ./gradlew :server:run
 ```
 
+### Stats on Account
+
+The game's **Account** tab (*Accounts*, below) shows the player's stats under the points (CLAUDE.md
+§8d, *Current focus*, *Stats*), in every build, PROD's included: the answers given and the questions
+they went to, the cycle and the questions left in it, and the likes the questions the player
+submitted hold, as `GET /v1/me` counts them, read each time the tab is shown. The server needs
+nothing new.
+
+**On `feat/account-stats`** (from b8d992c; not merged, nothing pushed), the fourth feature moved; the
+client alone changed. Verified on this Mac: `AccountViewModelTest` (17, 14 before) reads a guest's
+stats and a registered player's, and again on each showing; `AccountScreenDrawTest` (3, 1 before)
+draws every state at 400x900 and 375x599 in both themes, reads every line off the screen's semantics,
+and holds every state without a form to 599 high (509 at most); `DevConsoleScreenTest` the console's
+likes-moved line. A screen showing only the points, and the cycle swapped with what is left, each
+broke a test. Counts: `:server` 311, 2 skipped (from the build cache: untouched); `:core:domain` 47;
+`:core:data` 146; `:core:network` 82 (88 as Android host tests); `:app:shared` 135 (129 before);
+`:app:adminApp` 87. Lint, the verify job's tests (client tasks forced to rerun) and client compiles,
+`assembleDebug` included, and the ios job's Kotlin compiles pass. **Not verified:** nothing has run
+on a device or against a server, and the renders were looked at on this Mac only.
+
+**To try it on a phone** (`devDebug`, against the dev server, whose in-memory H2 forgets everything
+on a deploy or a spin-down). The numbers are a fresh guest's, with only the 24 seeds on the server
+and no category picked:
+
+1. `./gradlew :app:androidApp:installDevDebug`, then *New guest* on the **Console** tab (an install
+   over an old one keeps its session, and its numbers), or uninstall first. Answer 3 questions on
+   **Play**, skip 1, and open **Account**: *3 points*, *3 answers to 3 questions*, *Cycle 1: 20
+   questions left* (the 24 seeds less the 4), *0 likes on questions you submitted*.
+2. Answer or skip on Play until no question is left: once Play has asked for more, Account shows
+   *Cycle 2: 24 questions left*, the answers and questions as they were (*Cycle 1: 0 questions left*
+   before, if it has not asked yet).
+3. A like of one of your own questions (*Skip and Like on Play*, step 6) shows as *1 like on questions
+   you submitted*, and a point more.
+
 ### Accounts
 
 A guest registers to keep its points and logs in with the same name and password on another device
@@ -787,39 +821,6 @@ password and a name with no account are the same 401 `INVALID_LOGIN`. The logout
 ends only the session `$ACCESS` was issued for: that session's refresh token is 401 from then on, and
 the login's session lives on. Logins are 20 a minute per address (`RATE_LIMIT_LOGINS_PER_MINUTE`),
 registrations 20 an hour per player.
-
-### Stats on Account
-
-The game's **Account** tab shows the player's stats under the points (CLAUDE.md §8d, *Current
-focus*, *Stats*), in every build, PROD's included: the answers given and the questions they went to,
-the cycle and the questions left in it, and the likes the questions the player submitted hold, as
-`GET /v1/me` counts them, read each time the tab is shown. The server needs nothing new.
-
-**On `feat/account-stats`** (from b8d992c; not merged, nothing pushed), the fourth feature moved; the
-client alone changed. Verified on this Mac: `AccountViewModelTest` (17, 14 before) reads a guest's
-stats and a registered player's, and again on each showing; `AccountScreenDrawTest` (3, 1 before)
-draws every state at 400x900 and 375x599 in both themes, reads every line off the screen's semantics,
-and holds every state without a form to 599 high (509 at most); `DevConsoleScreenTest` the console's
-likes-moved line. A screen showing only the points, and the cycle swapped with what is left, each
-broke a test. Counts: `:server` 311, 2 skipped (from the build cache: untouched); `:core:domain` 47;
-`:core:data` 146; `:core:network` 82 (88 as Android host tests); `:app:shared` 135 (129 before);
-`:app:adminApp` 87. Lint, the verify job's tests (client tasks forced to rerun) and client compiles,
-`assembleDebug` included, and the ios job's Kotlin compiles pass. **Not verified:** nothing has run
-on a device or against a server, and the renders were looked at on this Mac only.
-
-**To try it on a phone** (`devDebug`, against the dev server, whose in-memory H2 forgets everything
-on a deploy or a spin-down). The numbers are a fresh guest's, with only the 24 seeds on the server
-and no category picked:
-
-1. `./gradlew :app:androidApp:installDevDebug`, then *New guest* on the **Console** tab (an install
-   over an old one keeps its session, and its numbers), or uninstall first. Answer 3 questions on
-   **Play**, skip 1, and open **Account**: *3 points*, *3 answers to 3 questions*, *Cycle 1: 20
-   questions left* (the 24 seeds less the 4), *0 likes on questions you submitted*.
-2. Answer or skip on Play until no question is left: once Play has asked for more, Account shows
-   *Cycle 2: 24 questions left*, the answers and questions as they were (*Cycle 1: 0 questions left*
-   before, if it has not asked yet).
-3. A like of one of your own questions (*Skip and Like on Play*, step 6) shows as *1 like on questions
-   you submitted*, and a point more.
 
 ### Skip and Like on Play
 
