@@ -926,9 +926,10 @@ game's, or a place on one, theme tokens only (§5b), and its words in `Strings` 
   on this Mac) and to its two texts and one icon.
 
 **Wide screens** (*decided 2026-09-26*: of two options, the user picked the cards side by side over
-the row with the top bar as it is, the other being the row moved into the top bar): what a screen
-does with more width than height, a phone on its side, a tablet on its side or a desktop window,
-decided by the room it gets, never by the device's orientation, in common code alone:
+the row with the top bar as it is, the other being the row moved into the top bar; and the other
+screens' content held to a column): what a screen does with more width than height, a phone on its
+side, a tablet on its side or a desktop window, decided by the room it gets, never by the device's
+orientation, in common code alone:
 - *The Play screen* stands its two cards side by side, card A first, `WyrDimens.spaceMd` apart and
   sharing the width, with the row under them across the whole width, when the room inside its padding
   is wider than tall and at least `WyrDimens.wideLayoutMinWidth`, 600, across: a phone on its side
@@ -941,13 +942,18 @@ decided by the room it gets, never by the device's orientation, in common code a
   The cards are then the same composables whichever way they stand, so a window resized across the
   rule, or an iPhone turned, keeps a reveal's count up where it is; an Android activity, made anew on
   a rotation, counts it up again.
+- *The Account screen, the Auth page, the Submit form and the Categories screen* hold their content to
+  a column `WyrDimens.contentMaxWidth`, 600, wide down the middle (`contentWidth`), placed after the
+  scroll, so the whole width still scrolls; the Categories screen's list scrolls in its column. Home is
+  centred already and stays as it is.
 - `QuestionLayoutDrawTest` holds the rule to boxes of known sizes, which no font changes: side by side
   from 600 across while wider than tall, stacked at 599, when square and on a tablet held upright, and
   the height it needs by the same rule. `PlayScreenDrawTest` draws every state on two phones on their
   side and in a desktop window, holds each state to the room a 360-by-780 phone on its side (720 by
   256) and an iPhone SE on its side (667 by 327) give, measured wider for CI's fonts as the portrait
   test is, finds the row under the cards with the points in the middle of the screen, and nothing in
-  it moved by the reveal.
+  it moved by the reveal. The Account, Auth, Submit and Categories draw tests find every text, button
+  and field in a column of 600 down the middle of a desktop window's 800, and something spanning it.
 
 **The Account screen** (`io.ntole.wyr.account`; §8a *Accounts*, *Stats* below):
 - *Its order* (*decided 2026-09-25*, the user's redesign, with less text overall): the player on a

@@ -38,6 +38,7 @@ import io.ntole.wyr.language.categoryName
 import io.ntole.wyr.language.fill
 import io.ntole.wyr.theme.WyrThemeAccessors
 import io.ntole.wyr.theme.WyrTypeScale
+import io.ntole.wyr.theme.contentWidth
 
 /**
  * The Categories screen (CLAUDE.md §8d, *Categories*), opened from the Play screen under a top bar of
@@ -61,7 +62,13 @@ fun CategoriesScreen(
     val language = LocalLanguage.current
 
     Surface(color = colors.pageBackground, contentColor = colors.primaryText, modifier = modifier.fillMaxSize()) {
-        Column(modifier = Modifier.fillMaxSize().padding(horizontal = dimens.screenPadding)) {
+        Column(
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = dimens.screenPadding)
+                    .contentWidth(dimens.contentMaxWidth),
+        ) {
             OutlinedTextField(
                 value = state.query,
                 onValueChange = actions::search,

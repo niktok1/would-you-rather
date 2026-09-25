@@ -34,6 +34,7 @@ import io.ntole.wyr.language.categoryName
 import io.ntole.wyr.language.fill
 import io.ntole.wyr.theme.WyrThemeAccessors
 import io.ntole.wyr.theme.WyrTypeScale
+import io.ntole.wyr.theme.contentWidth
 
 /**
  * The Submit screen (CLAUDE.md §8d, *Submitting*), opened from My questions on the Account screen: a
@@ -61,7 +62,8 @@ fun SubmitScreen(
                 Modifier
                     .fillMaxSize()
                     .verticalScroll(rememberScrollState())
-                    .padding(dimens.screenPadding),
+                    .padding(dimens.screenPadding)
+                    .contentWidth(dimens.contentMaxWidth),
         ) {
             Form(state, actions)
         }
