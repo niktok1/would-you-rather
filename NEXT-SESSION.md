@@ -17,9 +17,9 @@ automatically from every green commit on `main` (its URL is on its Render page).
 
 - `:server` on H2: 292 tests, 290 green and 2 skipped (the PostgreSQL-only boot races), including
   76 end-to-end flow tests in `ApiFlowTest`. Flat scoring is covered there (every vote pays 1,
-  majority and minority alike, and the total
-  accumulates) and by `PlayerStoreTest`, which races awards for one player and refreshes of one
-  token. The endless feed, re-answering and attempt replay are covered there too, and by
+  majority and minority alike, and the total accumulates) and by `PlayerStoreTest`, which races
+  awards for one player, and `SessionStoreTest`, which races refreshes of one token. The endless
+  feed, re-answering and attempt replay are covered there too, and by
   `QuestionStoreTest` and `VoteStoreTest`. Feed cycles are pinned in `QuestionStoreTest`,
   including two requests racing to start the next cycle, and in `VoteStoreTest`, an answer that
   waited on its vote's lock while a cycle started. `GET /v1/me` is covered in `ApiFlowTest` (a
