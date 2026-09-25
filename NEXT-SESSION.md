@@ -289,7 +289,10 @@ over the final percentage laid out once. Nothing is composed or laid out per fra
 reader reads the final share. The look and timing are unchanged: the end is pixel-identical to the old
 `Text`. The client alone changed. Tests: `:app:shared` 315 (309 before: `PlayScreenDrawTest` 2 more,
 its count-up test now read by pixels, and `CountedUpTextDrawTest` 4 new). The new
-`Recompositions` counts what a frame composes through the runtime's own `CompositionObserver`. The
+`Recompositions` counts what a frame composes through the runtime's own `CompositionObserver`, from
+once the first composition is applied, and fails if the composition cannot be observed. A test that
+finds the count unchanged ends by recomposing a scope of its own and seeing it counted
+(`assertCounting`), since an observer that never attached would count nothing too. The
 pixel test steps the clock a frame at a time, as a phone does: jumping from 0 to halfway failed now
 and then, when the desktop's snapshot manager, on Swing's thread, told the scene of the jump a
 drawing late. **`devRelease` is how fast the game really is**

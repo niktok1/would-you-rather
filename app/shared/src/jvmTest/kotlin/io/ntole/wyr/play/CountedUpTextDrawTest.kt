@@ -99,6 +99,7 @@ class CountedUpTextDrawTest {
                     "composed, measured and placed by ${time / 1_000_000} ms",
                 )
             }
+            recompositions.assertCounting(scene, FRAMES.last())
         }
     }
 

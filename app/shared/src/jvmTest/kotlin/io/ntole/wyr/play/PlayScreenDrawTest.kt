@@ -540,11 +540,13 @@ class PlayScreenDrawTest {
             scene.renderAt(FRAME)
             val composed = recompositions.scopesEntered
             val laidOut = scene.everyNode().map { it.boundsInRoot }
-            (2..COUNTED_UP / FRAME + 1).forEach { frame ->
+            val frames = 2..COUNTED_UP / FRAME + 1
+            frames.forEach { frame ->
                 scene.renderAt(frame * FRAME)
                 assertEquals(composed, recompositions.scopesEntered, "scopes composed by frame $frame")
                 assertEquals(laidOut, scene.everyNode().map { it.boundsInRoot }, "the screen at frame $frame")
             }
+            recompositions.assertCounting(scene, frames.last * FRAME)
         }
     }
 
