@@ -11,6 +11,7 @@ import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.unit.Density
+import io.ntole.wyr.assertInCentredColumn
 import io.ntole.wyr.core.domain.category.Category
 import io.ntole.wyr.core.domain.error.DomainError
 import io.ntole.wyr.descriptions
@@ -317,6 +318,22 @@ class CategoriesScreenDrawTest {
         }
     }
 
+    /**
+     * On a wide screen, a desktop window less the top bar, the content is a column no wider than
+     * `WyrDimens.contentMaxWidth` down the middle, not stretched across (CLAUDE.md §8d, *Wide screens*).
+     */
+    @Test
+    fun `on a wide screen the content is a column down the middle`() {
+        STATES.forEach { state ->
+            val scene = scene(state, Language.DEFAULT, width = WINDOW_WIDTH, height = WINDOW_HEIGHT)
+            try {
+                scene.assertInCentredColumn(WINDOW_WIDTH, CONTENT_MAX_WIDTH, "$state")
+            } finally {
+                scene.close()
+            }
+        }
+    }
+
     private fun scene(
         state: CategoriesState,
         language: Language,
@@ -372,6 +389,13 @@ class CategoriesScreenDrawTest {
         nodes().single { text in it.texts }.config.getOrNull(SemanticsProperties.ToggleableState)
 
     private companion object {
+        /** A desktop window as Compose first opens one (800 by 600) less the top bar. */
+        const val WINDOW_WIDTH = 800
+        const val WINDOW_HEIGHT = 552
+
+        /** The widest a screen's content gets (`WyrDimens.contentMaxWidth`). */
+        const val CONTENT_MAX_WIDTH = 600
+
         const val WIDTH = 400
         const val HEIGHT = 900
 

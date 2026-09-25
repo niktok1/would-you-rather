@@ -34,6 +34,7 @@ import io.ntole.wyr.language.USERNAME_CHARACTERS
 import io.ntole.wyr.language.fill
 import io.ntole.wyr.points.PointsText
 import io.ntole.wyr.theme.WyrThemeAccessors
+import io.ntole.wyr.theme.contentWidth
 
 /**
  * The Auth page (CLAUDE.md §8d, *The Account screen*), opened by a guest's one button on the Account
@@ -61,7 +62,8 @@ fun AuthScreen(
                 Modifier
                     .fillMaxSize()
                     .verticalScroll(rememberScrollState())
-                    .padding(dimens.screenPadding),
+                    .padding(dimens.screenPadding)
+                    .contentWidth(dimens.contentMaxWidth),
             verticalArrangement = Arrangement.spacedBy(dimens.spaceSm),
         ) {
             ReadFailure(state, actions)

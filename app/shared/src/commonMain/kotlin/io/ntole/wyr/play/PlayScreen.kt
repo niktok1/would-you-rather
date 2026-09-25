@@ -29,11 +29,17 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.takeOrElse
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.onClick
@@ -57,10 +63,11 @@ import io.ntole.wyr.theme.WyrTypeScale
 
 /**
  * The game (CLAUDE.md §8d, *The Play screen*): two answer cards and, between them, one row of the
- * player's points, the like and the dislike, and Skip. Tapping a card answers ([onChoose]); Skip
- * ([onSkip]) goes past a question not answered yet; once the answer is revealed, tapping either card
- * goes on to the next question ([onNext]). The thumbs ask for a reaction ([onReact]): the one tapped,
- * or none when it is the one the player holds.
+ * player's points, the like and the dislike, and Skip; on a wide screen the cards stand side by side
+ * over the row (§8d, *Wide screens*). Tapping a card answers ([onChoose]); Skip ([onSkip]) goes past a
+ * question not answered yet; once the answer is revealed, tapping either card goes on to the next
+ * question ([onNext]). The thumbs ask for a reaction ([onReact]): the one tapped, or none when it is
+ * the one the player holds.
  *
  * [points] are the player's as the server last reported them, `null` until it has. The categories
  * played are on the top bar above it (`PlayTopBar`, [CategoriesPlayed]).
@@ -113,9 +120,10 @@ fun PlayScreen(
 }
 
 /**
- * The two cards and the row between them. Before the answer a card answers for its side, and Skip
- * goes past it; once it is revealed, either card is the way on, and Skip is gone. Off while anything
- * is in flight, one action at a time.
+ * The two cards and the row between them, or under them side by side on a wide screen
+ * ([QuestionLayout]). Before the answer a card answers for its side, and Skip goes past it; once it
+ * is revealed, either card is the way on, and Skip is gone. Off while anything is in flight, one
+ * action at a time.
  */
 @Composable
 private fun QuestionBody(
@@ -127,24 +135,36 @@ private fun QuestionBody(
     onReact: (Reaction) -> Unit,
 ) {
     val colors = WyrThemeAccessors.colors
+    val dimens = WyrThemeAccessors.dimens
+    val density = LocalDensity.current
     val outcome = (state as? PlayUiState.Revealed)?.outcome
     // Before the answer a card's text says what a tap on it does; after, a screen reader is told.
     val clickLabel = if (outcome == null) null else LocalStrings.current.playScreen.nextQuestion
+    // Whether the cards stand side by side, the row under both, as they were last laid out: each bar
+    // stands along its card's edge by the row, so card B's is then along its bottom, as card A's is.
+    // Known by the time a reveal draws a bar, a question having been asked first.
+    var sideBySide by remember { mutableStateOf(false) }
 
-    Column(modifier = Modifier.fillMaxSize()) {
+    QuestionLayout(
+        wideMinWidth = dimens.wideLayoutMinWidth,
+        gap = dimens.spaceMd,
+        modifier =
+            Modifier.fillMaxSize().onSizeChanged { size ->
+                sideBySide = with(density) { standsSideBySide(size.width, size.height, dimens.wideLayoutMinWidth) }
+            },
+    ) {
         OptionCard(
             text = state.question.optionA,
             background = colors.optionA,
             contentColor = colors.onOptionA,
             barTrack = colors.revealTrackOnA,
-            // The bars stand along the edges by the row between the cards.
+            // The bars stand along the edges by the row, between the cards or under them.
             barAt = Alignment.BottomCenter,
             percent = outcome?.tally?.percentA,
             isYourPick = outcome?.yourSide == Side.A,
             enabled = !state.isBusy,
             clickLabel = clickLabel,
             onClick = { if (outcome == null) onChoose(Side.A) else onNext() },
-            modifier = Modifier.weight(1f),
         )
 
         MiddleRow(
@@ -162,13 +182,12 @@ private fun QuestionBody(
             background = colors.optionB,
             contentColor = colors.onOptionB,
             barTrack = colors.revealTrackOnB,
-            barAt = Alignment.TopCenter,
+            barAt = if (sideBySide) Alignment.BottomCenter else Alignment.TopCenter,
             percent = outcome?.tally?.percentB,
             isYourPick = outcome?.yourSide == Side.B,
             enabled = !state.isBusy,
             clickLabel = clickLabel,
             onClick = { if (outcome == null) onChoose(Side.B) else onNext() },
-            modifier = Modifier.weight(1f),
         )
     }
 }

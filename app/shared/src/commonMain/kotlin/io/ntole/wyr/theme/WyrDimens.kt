@@ -43,6 +43,18 @@ data class WyrDimens(
     val topBarHeight: Dp = 48.dp,
     val playButtonWidth: Dp = 240.dp,
     val playButtonHeight: Dp = 64.dp,
+    /**
+     * The least width, inside the screen's padding, at which the Play screen stands its cards side by
+     * side over the row, when it is also wider than tall (CLAUDE.md §8d, *Wide screens*): a phone on
+     * its side, a tablet on its side or a desktop window, never a phone held upright.
+     */
+    val wideLayoutMinWidth: Dp = 600.dp,
+    /**
+     * The widest the Account, Auth, Submit and Categories screens' content gets, centred on anything
+     * wider (CLAUDE.md §8d, *Wide screens*), so fields and buttons do not stretch across a phone on its
+     * side or a desktop window.
+     */
+    val contentMaxWidth: Dp = 600.dp,
 )
 
 val WyrDefaultDimens: WyrDimens = WyrDimens()

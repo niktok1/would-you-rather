@@ -940,6 +940,39 @@ game's, or a place on one, theme tokens only (§5b), and its words in `Strings` 
   language; `HomeScreenDrawTest` holds Home to 599 at 375 wide (276
   on this Mac) and to its two texts and one icon.
 
+**Wide screens** (*decided 2026-09-26*: of two options, the user picked the cards side by side over
+the row with the top bar as it is, the other being the row moved into the top bar; and the other
+screens' content held to a column): what a screen does with more width than height, a phone on its
+side, a tablet on its side or a desktop window, decided by the room it gets, never by the device's
+orientation, in common code alone:
+- *The Play screen* stands its two cards side by side, card A first, `WyrDimens.spaceMd` apart and
+  sharing the width, with the row under them across the whole width, when the room inside its padding
+  is wider than tall and at least `WyrDimens.wideLayoutMinWidth`, 600, across: a phone on its side
+  (an iPhone SE's gives 627), a tablet on its side, and a desktop window, which Compose opens at 800
+  by 600. On anything else, a phone held upright above all, a tablet held upright or a narrow window,
+  they stay stacked around the row. Stacked on a phone on its side, a card got about 90 high, too
+  little for a revealed option of two lines, whose percentage was cut off. The top bar stays as it is.
+- One layout does both, `QuestionLayout`, a custom `Layout`: `BoxWithConstraints` would decide the
+  same, but a subcomposition cannot answer the intrinsic heights the draw tests measure the screen by.
+  The cards are then the same composables whichever way they stand, so a window resized across the
+  rule, or an iPhone turned, keeps a reveal's count up where it is; an Android activity, made anew on
+  a rotation, counts it up again. Each card's bar in the reveal stands along its edge by the row: side
+  by side, along both cards' bottoms, card B's too, which stacked stands along its top; the Play
+  screen asks QuestionLayout's rule of the size it was last laid out at (`standsSideBySide`).
+- *The Account screen, the Auth page, the Submit form and the Categories screen* hold their content to
+  a column `WyrDimens.contentMaxWidth`, 600, wide down the middle (`contentWidth`), placed after the
+  scroll, so the whole width still scrolls; the Categories screen's list scrolls in its column. Home is
+  centred already and stays as it is.
+- `QuestionLayoutDrawTest` holds the rule to boxes of known sizes, which no font changes: side by side
+  from 600 across while wider than tall, stacked at 599, when square and on a tablet held upright, and
+  the height it needs by the same rule. `PlayScreenDrawTest` draws every state on two phones on their
+  side and in a desktop window, holds each state to the room a 360-by-780 phone on its side (720 by
+  256) and an iPhone SE on its side (667 by 327) give, measured wider for CI's fonts as the portrait
+  test is, finds the row under the cards, the points under card A, Skip under card B and the thumbs
+  in the middle of the screen, card B's bar along its bottom, and nothing in the row moved by the
+  reveal. The Account, Auth, Submit and Categories draw tests find every text, button
+  and field in a column of 600 down the middle of a desktop window's 800, and something spanning it.
+
 **The Account screen** (`io.ntole.wyr.account`; §8a *Accounts*, *Stats* below):
 - *Its order* (*decided 2026-09-25*, the user's redesign, with less text overall): the player on a
   card, with a guest's one button to the Auth page; **My questions**, a table; the **language menu**
@@ -1020,15 +1053,15 @@ game's, or a place on one, theme tokens only (§5b), and its words in `Strings` 
 **The Play screen** (`io.ntole.wyr.play`; the user's layout, *decided 2026-09-25*, rearranged
 2026-09-26) asks a question and reveals its tally, holds Skip and the reactions, and opens the
 Categories screen from its top bar (*Skipping*, *Reactions* and *Categories*, below):
-- Two answer cards in the brand colours (§5b) and, between them, **one row** (the user: reactions "in
-  the middle and points to left"): on the left the player's points, the coin and the number
-  (`PointsAmount`, §8f); in the middle the **thumbs**, a thumb up and a thumb down, each filled while
-  the player holds it and beside how many hold it, before answering and after; and on the right
-  **Skip** while the question is not answered yet (*Skipping*), its place kept empty in the reveal so
-  nothing in the row moves. The **categories played**, *Све* or their names, cut to one line, with a
-  small chevron, are in the middle of the **top bar** (the user: "category goes to top bar in
-  middle"), between home and the account icon (`PlayTopBar`, `CategoriesPlayed`), and open the
-  Categories screen. No title and no *OR*.
+- Two answer cards in the brand colours (§5b) and, between them, **one row** (on a wide screen the
+  cards side by side over it, *Wide screens*; the user: reactions "in the middle and points to
+  left"): on the left the player's points, the coin and the number (`PointsAmount`, §8f); in the
+  middle the **thumbs**, a thumb up and a thumb down, each filled while the player holds it and beside
+  how many hold it, before answering and after; and on the right **Skip** while the question is not
+  answered yet (*Skipping*), its place kept empty in the reveal so nothing in the row moves. The
+  **categories played**, *Све* or their names, cut to one line, with a small chevron, are in the middle
+  of the **top bar** (the user: "category goes to top bar in middle"), between home and the account
+  icon (`PlayTopBar`, `CategoriesPlayed`), and open the Categories screen. No title and no *OR*.
 - *The categories' names* are the server's, in the language shown (`categoryName` in
   `io.ntole.wyr.language`, §8f), in the order the server lists them, and one not read yet by its id,
   after the rest (`categoriesPlayed`). On the top bar they have the width home and the account icon

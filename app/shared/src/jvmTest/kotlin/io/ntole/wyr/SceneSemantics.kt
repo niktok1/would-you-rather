@@ -4,6 +4,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.snapshots.Snapshot
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.ImageComposeScene
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsNode
@@ -12,6 +13,8 @@ import androidx.compose.ui.semantics.getAllSemanticsNodes
 import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.toSize
+import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
@@ -53,6 +56,36 @@ internal val SemanticsNode.texts: List<String>
 
 internal val SemanticsNode.descriptions: List<String>
     get() = config.getOrNull(SemanticsProperties.ContentDescription).orEmpty()
+
+/**
+ * That everything the scene lays out that shows or does something, each text, named icon, button,
+ * field and ticked line, lies in a column [column] wide down the middle of the scene's [width], and
+ * that something spans it: a screen's content held to `WyrDimens.contentMaxWidth` on a wide screen
+ * (CLAUDE.md §8d, *Wide screens*).
+ */
+internal fun ImageComposeScene.assertInCentredColumn(
+    width: Int,
+    column: Int,
+    what: String,
+    // Whether something in it spans the column whole, which proves the column is not narrower.
+    spanned: Boolean = true,
+) {
+    val left = (width - column) / 2f
+    // Where each is laid out, scrolled out of sight or not: bounds in the root are clipped to the screen.
+    val parts = everyNode().filter { it.showsOrDoes }.map { Rect(it.positionInRoot, it.size.toSize()) }
+    assertTrue(parts.isNotEmpty(), "$what shows nothing")
+    parts.forEach { part ->
+        assertTrue(part.left >= left - 0.5f && part.right <= left + column + 0.5f, "$what: $part is out of the column")
+    }
+    if (spanned) assertEquals(column.toFloat(), parts.maxOf { it.width }, 0.5f, "$what: nothing spans the column")
+}
+
+private val SemanticsNode.showsOrDoes: Boolean
+    get() =
+        texts.isNotEmpty() ||
+            descriptions.isNotEmpty() ||
+            SemanticsActions.OnClick in config ||
+            SemanticsActions.SetText in config
 
 /** Taps the one node showing [text] or named [text], as a finger or a screen reader would, and draws again. */
 internal fun ImageComposeScene.tap(text: String) {

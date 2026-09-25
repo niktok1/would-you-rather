@@ -40,6 +40,7 @@ import io.ntole.wyr.points.PointsAmount
 import io.ntole.wyr.theme.WyrIcons
 import io.ntole.wyr.theme.WyrThemeAccessors
 import io.ntole.wyr.theme.WyrTypeScale
+import io.ntole.wyr.theme.contentWidth
 
 /**
  * The Account screen (CLAUDE.md §8d, *The Account screen*), in the user's order: who is playing on
@@ -76,7 +77,8 @@ fun AccountScreen(
                 Modifier
                     .fillMaxSize()
                     .verticalScroll(rememberScrollState())
-                    .padding(dimens.screenPadding),
+                    .padding(dimens.screenPadding)
+                    .contentWidth(dimens.contentMaxWidth),
             verticalArrangement = Arrangement.spacedBy(dimens.spaceMd),
         ) {
             Player(state, actions, onOpenAuth)
