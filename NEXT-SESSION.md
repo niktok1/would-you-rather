@@ -211,7 +211,7 @@ two category values changed type under the same names (`PlayedCategories`, `Cate
 
 ### Verified working
 
-- - **`merge/redesign` with `main` merged in** (60b0d7f merged `--no-ff`), on this machine, the
+- **`merge/redesign` with `main` merged in** (60b0d7f merged `--no-ff`), on this machine, the
   merge commit's tree: the verify job's lists exactly, `ktlintCheck`; `:server:test
   :core:domain:jvmTest :core:data:jvmTest :core:network:jvmTest :core:network:testAndroidHostTest
   :app:shared:jvmTest :app:adminApp:jvmTest`, each with `--rerun`, so none came from the build
@@ -795,7 +795,7 @@ two category values changed type under the same names (`PlayedCategories`, `Cate
   nothing here has read its history. Check, read-only, that it reads `1 BASELINE`, `2 SQL`,
   `3 SQL`, `4 SQL`, and that `sessions` has a row for every `players` row with a
   `refresh_token_hash`. The next script after V4 runs there at the next Manual Deploy.
-- - **The clients' categories on a device** (`feat/server-categories`). No build with them has been
+- **The clients' categories on a device** (`feat/server-categories`). No build with them has been
   installed or run: the Play picker, the Submit chips and the moderation app's Categories tab are
   drawn off screen (`PlayScreenDrawTest`, `SubmitScreenDrawTest`, `ScreensDrawTest`) and driven over
   fakes, and no app has read `GET /v1/categories` from a real server. Serbian names on a phone's

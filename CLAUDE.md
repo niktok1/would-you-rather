@@ -1142,7 +1142,7 @@ listed on the Account screen.
   change their pick. Every answer, first or not, counts for the player's current cycle. The tally
   always holds **one vote per player per question**, their latest, beside a seed's made-up votes
   (*Seeds*). Built in `VoteStore.cast`, which moves the player's vote.
-- - **Retry safety** *(built)*: every vote carries a client-generated idempotency key. A repeat of
+- **Retry safety** *(built)*: every vote carries a client-generated idempotency key. A repeat of
   the key last recorded for that question is replayed: nothing is written, it pays nothing, and it
   reports the stored side with the current tally and total, not the result first returned. Any other
   key is a fresh answer. Only the latest key per question is kept, so an older key arriving after a
@@ -1242,7 +1242,7 @@ listed on the Account screen.
     like again. It works out no points itself: a like of the player's own question moves their total
     without a vote, so the points between the cards show it from the next vote on, or from the next
     time the Play screen is shown, which reads them again.
-- - **Submitting** *(built; details decided 2026-09-23; the cost 2026-09-25)*: **costs a point**
+- **Submitting** *(built; details decided 2026-09-23; the cost 2026-09-25)*: **costs a point**
   (§8c) and earns no points directly, because authors earn through likes. The author writes both
   options and **picks one or more categories** (each a category's id; *Categories*). A player may
   have at most **20 submissions pending** moderation at once. A submitted question is served only
