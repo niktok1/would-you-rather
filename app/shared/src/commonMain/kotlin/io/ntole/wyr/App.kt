@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.safeContentPadding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -21,6 +22,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.ntole.wyr.account.AccountScreen
 import io.ntole.wyr.account.AccountViewModel
 import io.ntole.wyr.account.AuthScreen
+import io.ntole.wyr.analytics.LocalAnalytics
 import io.ntole.wyr.analytics.UsageTracker
 import io.ntole.wyr.analytics.rememberConfigurationChanging
 import io.ntole.wyr.categories.CategoriesScreen
@@ -66,8 +68,11 @@ fun App() {
     val language by languages.language.collectAsStateWithLifecycle()
     ReportForegroundAndBackground(koinInject(), language)
 
-    WyrTheme {
-        WyrStrings(language) { Screens(language, onSelectLanguage = languages::select) }
+    // Every tap on every screen is counted there (CLAUDE.md §8g, [io.ntole.wyr.analytics.tapped]).
+    CompositionLocalProvider(LocalAnalytics provides koinInject()) {
+        WyrTheme {
+            WyrStrings(language) { Screens(language, onSelectLanguage = languages::select) }
+        }
     }
 }
 

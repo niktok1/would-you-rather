@@ -26,6 +26,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
+import io.ntole.wyr.analytics.tapped
 import io.ntole.wyr.core.domain.account.AccountRules
 import io.ntole.wyr.core.domain.error.DomainError
 import io.ntole.wyr.language.AccountStrings
@@ -111,17 +112,21 @@ private fun RegisterForm(
                 imeAction = ImeAction.Done,
             ),
         trailingIcon = {
-            TextButton(onClick = actions::toggleShowRegisterPassword) {
+            TextButton(onClick = tapped("auth.show_password", onClick = actions::toggleShowRegisterPassword)) {
                 Text(if (state.showRegisterPassword) strings.hide else strings.show)
             }
         },
         modifier = Modifier.fillMaxWidth().semantics { contentType = ContentType.NewPassword },
     )
     FailureOf(state, AccountAction.REGISTER)
-    Button(onClick = actions::register, enabled = state.canRegister, modifier = Modifier.fillMaxWidth()) {
+    Button(
+        onClick = tapped("auth.register", onClick = actions::register),
+        enabled = state.canRegister,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
         Text(strings.register)
     }
-    TextButton(onClick = { actions.setAuthMode(AuthMode.LOG_IN) }, enabled = !state.isBusy) {
+    TextButton(onClick = tapped("auth.to_log_in") { actions.setAuthMode(AuthMode.LOG_IN) }, enabled = !state.isBusy) {
         Text(strings.toLogIn)
     }
 }
@@ -161,7 +166,11 @@ private fun LogInForm(
 
     val warning = state.guestPointsWarning
     if (warning == null) {
-        Button(onClick = actions::logIn, enabled = state.canLogIn, modifier = Modifier.fillMaxWidth()) {
+        Button(
+            onClick = tapped("auth.log_in", onClick = actions::logIn),
+            enabled = state.canLogIn,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
             Text(strings.logIn)
         }
     } else {
@@ -172,13 +181,18 @@ private fun LogInForm(
             color = colors.primaryText,
         )
         Row(horizontalArrangement = Arrangement.spacedBy(dimens.spaceSm)) {
-            Button(onClick = actions::logIn, enabled = state.canLogIn) { Text(strings.logInAnyway) }
-            OutlinedButton(onClick = actions::cancelLogIn, enabled = !state.isBusy) {
+            Button(onClick = tapped("auth.log_in_anyway", onClick = actions::logIn), enabled = state.canLogIn) {
+                Text(strings.logInAnyway)
+            }
+            OutlinedButton(onClick = tapped("auth.cancel", onClick = actions::cancelLogIn), enabled = !state.isBusy) {
                 Text(LocalStrings.current.cancel)
             }
         }
     }
-    TextButton(onClick = { actions.setAuthMode(AuthMode.REGISTER) }, enabled = !state.isBusy) {
+    TextButton(
+        onClick = tapped("auth.to_register") { actions.setAuthMode(AuthMode.REGISTER) },
+        enabled = !state.isBusy,
+    ) {
         Text(strings.toRegister)
     }
 }
@@ -195,7 +209,7 @@ private fun ReadFailure(
     if (state.stats != null) return
     val failure = state.failure?.takeIf { it.action == AccountAction.LOAD } ?: return
     FailureText(failure)
-    OutlinedButton(onClick = actions::refresh, enabled = !state.isBusy) {
+    OutlinedButton(onClick = tapped("auth.try_again", onClick = actions::refresh), enabled = !state.isBusy) {
         Text(LocalStrings.current.tryAgain)
     }
 }

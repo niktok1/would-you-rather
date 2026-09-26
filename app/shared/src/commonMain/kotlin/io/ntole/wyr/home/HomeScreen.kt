@@ -16,6 +16,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import io.ntole.wyr.analytics.tapped
 import io.ntole.wyr.language.LocalStrings
 import io.ntole.wyr.navigation.HomeTopBar
 import io.ntole.wyr.theme.WyrThemeAccessors
@@ -55,7 +56,7 @@ fun HomeScreen(
                         textAlign = TextAlign.Center,
                     )
                     Button(
-                        onClick = onPlay,
+                        onClick = tapped("home.play", onClick = onPlay),
                         modifier = Modifier.width(dimens.playButtonWidth).heightIn(min = dimens.playButtonHeight),
                     ) {
                         Text(text = strings.play, fontSize = WyrTypeScale.playButton, fontWeight = FontWeight.Bold)

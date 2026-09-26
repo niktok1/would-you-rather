@@ -1908,6 +1908,21 @@ the same events. The moderation app sends none.
   only to start again, reports neither (`rememberConfigurationChanging`, over the activity's
   `isChangingConfigurations`: the one piece of it per platform). `UsageTrackerTest`, and
   `AppNavigationTest` through the whole app.
+- **Taps** *(built)*: every button, card, chip, line and menu item of the game's screens hands its
+  `onClick` through `tapped(element, properties)` (`io.ntole.wyr.analytics`), which reports a `tap`
+  with `element` to `LocalAnalytics` (the app's, which `App` provides; none for a screen drawn alone)
+  before it acts, so a tap is counted by a name that never changes with the language or the text, and
+  `$screen_name` says where. An element is `screen.what`, lower case and underscores: `home.play`;
+  `top_bar.home`, `.account`, `.back`, `.categories`; `play.card_a` and `.card_b` (with `answered`,
+  whether the tap went on from the reveal), `.like`, `.dislike`, `.skip`, `.try_again`;
+  `account.open_auth`, `.log_out`, `.try_again`; `my_questions.new_question`, `.first_question`,
+  `.try_again`; `language.menu` and `language.option` (with its `language` tag); `auth.register`,
+  `.show_password`, `.to_log_in`, `.log_in`, `.log_in_anyway`, `.cancel`, `.to_register`,
+  `.try_again`; `submit.category` (with its `category` id), `.send`, `.categories_try_again`,
+  `.try_again`; `categories.all`, `.category` (with its id), `.play`, `.try_again`. A text field is no
+  tap. `TapsTest` draws every screen in the states that show all it can be tapped on, taps everything a
+  screen reader could, and fails on anything that reports no tap, or a name not in its lists: a new
+  button gets its name by being written with `tapped`, and a name once sent never changes.
 - **The switch** *(built in the sender)*: on by default, and off is kept for the device, under
   `wyr.analytics.enabled` (`on` or `off`), whatever the environment, as the language is (§8f): the
   choice is the person's. Off sends nothing more and drops what waited. A build with no key keeps the

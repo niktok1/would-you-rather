@@ -17,6 +17,9 @@ public object AnalyticsProperty {
     /** Category ids: those a question is filed under, or those played. */
     public const val CATEGORIES: String = "categories"
 
+    /** One category's id: the one tapped, say. */
+    public const val CATEGORY: String = "category"
+
     /** How many of something: categories played, say. */
     public const val COUNT: String = "count"
 

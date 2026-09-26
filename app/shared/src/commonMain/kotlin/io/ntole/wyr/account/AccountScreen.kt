@@ -29,6 +29,7 @@ import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import io.ntole.wyr.analytics.tapped
 import io.ntole.wyr.core.domain.player.PlayerStats
 import io.ntole.wyr.core.network.environment.WyrEnvironment
 import io.ntole.wyr.language.AccountStrings
@@ -95,7 +96,12 @@ fun AccountScreen(
                 ) {
                     LanguageMenu(selected = language, onSelect = onSelectLanguage, modifier = Modifier.weight(1f))
                     if (stats?.username != null) {
-                        OutlinedButton(onClick = actions::logOut, enabled = !state.isBusy) { Text(strings.logOut) }
+                        OutlinedButton(
+                            onClick = tapped("account.log_out", onClick = actions::logOut),
+                            enabled = !state.isBusy,
+                        ) {
+                            Text(strings.logOut)
+                        }
                     }
                 }
             }
@@ -134,7 +140,7 @@ private fun Player(
         if (failure != null) {
             val tryAgain = @Composable {
                 OutlinedButton(
-                    onClick = actions::refresh,
+                    onClick = tapped("account.try_again", onClick = actions::refresh),
                     enabled = !state.isBusy,
                 ) { Text(LocalStrings.current.tryAgain) }
             }
@@ -208,7 +214,11 @@ private fun PlayerCard(
                 }
             }
             if (stats.username == null) {
-                Button(onClick = onOpenAuth, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
+                Button(
+                    onClick = tapped("account.open_auth", onClick = onOpenAuth),
+                    enabled = !busy,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
                     Text(strings.openAuth)
                 }
             }

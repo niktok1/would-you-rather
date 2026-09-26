@@ -30,6 +30,7 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.withStyle
+import io.ntole.wyr.analytics.tapped
 import io.ntole.wyr.core.domain.submission.Submission
 import io.ntole.wyr.core.domain.submission.SubmissionStatus
 import io.ntole.wyr.language.AccountStrings
@@ -69,7 +70,9 @@ internal fun MyQuestions(
                 fontWeight = FontWeight.Bold,
                 modifier = Modifier.weight(1f),
             )
-            Button(onClick = onNewQuestion, enabled = canAsk) { Text(strings.newQuestion) }
+            Button(onClick = tapped("my_questions.new_question", onClick = onNewQuestion), enabled = canAsk) {
+                Text(strings.newQuestion)
+            }
         }
         val submissions = state.submissions
         // With none listed, the empty table says it (below).
@@ -88,7 +91,12 @@ internal fun MyQuestions(
         // again reads both.
         if (failure != null && state.failure?.action != AccountAction.LOAD) {
             FailureText(failure)
-            OutlinedButton(onClick = actions::refresh, enabled = !state.isBusy) { Text(LocalStrings.current.tryAgain) }
+            OutlinedButton(
+                onClick = tapped("my_questions.try_again", onClick = actions::refresh),
+                enabled = !state.isBusy,
+            ) {
+                Text(LocalStrings.current.tryAgain)
+            }
         }
     }
 }
@@ -135,7 +143,9 @@ private fun QuestionsTable(
                     modifier = Modifier.fillMaxWidth().padding(vertical = dimens.spaceXs),
                 ) {
                     if (canAsk) {
-                        TextButton(onClick = onNewQuestion) { Text(strings.firstQuestion) }
+                        TextButton(onClick = tapped("my_questions.first_question", onClick = onNewQuestion)) {
+                            Text(strings.firstQuestion)
+                        }
                     } else {
                         Text(
                             text = strings.registerToSubmit,

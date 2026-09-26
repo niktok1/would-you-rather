@@ -48,6 +48,8 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import io.ntole.wyr.analytics.tapped
+import io.ntole.wyr.core.domain.analytics.AnalyticsProperty
 import io.ntole.wyr.core.domain.error.DomainError
 import io.ntole.wyr.core.domain.question.Question
 import io.ntole.wyr.core.domain.reaction.Reaction
@@ -164,7 +166,10 @@ private fun QuestionBody(
             isYourPick = outcome?.yourSide == Side.A,
             enabled = !state.isBusy,
             clickLabel = clickLabel,
-            onClick = { if (outcome == null) onChoose(Side.A) else onNext() },
+            onClick =
+                tapped("play.card_a", mapOf(AnalyticsProperty.ANSWERED to (outcome != null))) {
+                    if (outcome == null) onChoose(Side.A) else onNext()
+                },
         )
 
         MiddleRow(
@@ -187,7 +192,10 @@ private fun QuestionBody(
             isYourPick = outcome?.yourSide == Side.B,
             enabled = !state.isBusy,
             clickLabel = clickLabel,
-            onClick = { if (outcome == null) onChoose(Side.B) else onNext() },
+            onClick =
+                tapped("play.card_b", mapOf(AnalyticsProperty.ANSWERED to (outcome != null))) {
+                    if (outcome == null) onChoose(Side.B) else onNext()
+                },
         )
     }
 }
@@ -258,7 +266,10 @@ internal fun MiddleRow(
                     heldIcon = WyrIcons.ThumbUpFilled,
                     name = strings.like,
                     enabled = idle,
-                    onClick = { onReact(reactionAfterTap(Reaction.LIKE, held = question.myReaction)) },
+                    onClick =
+                        tapped(
+                            "play.like",
+                        ) { onReact(reactionAfterTap(Reaction.LIKE, held = question.myReaction)) },
                 )
                 ReactionToggle(
                     held = question.myReaction == Reaction.DISLIKE,
@@ -267,13 +278,16 @@ internal fun MiddleRow(
                     heldIcon = WyrIcons.ThumbDownFilled,
                     name = strings.dislike,
                     enabled = idle,
-                    onClick = { onReact(reactionAfterTap(Reaction.DISLIKE, held = question.myReaction)) },
+                    onClick =
+                        tapped(
+                            "play.dislike",
+                        ) { onReact(reactionAfterTap(Reaction.DISLIKE, held = question.myReaction)) },
                 )
             }
         },
         end = {
             if (onSkip != null) {
-                IconButton(onClick = onSkip, enabled = idle) {
+                IconButton(onClick = tapped("play.skip", onClick = onSkip), enabled = idle) {
                     // Muted while off: a tint of its own hides the button's off colour.
                     Icon(
                         imageVector = WyrIcons.Skip,
@@ -342,7 +356,7 @@ internal fun CategoriesPlayed(
                     enabled = enabled,
                     onClickLabel = strings.changeCategories,
                     role = Role.Button,
-                    onClick = onClick,
+                    onClick = tapped("top_bar.categories", onClick = onClick),
                 ).minimumInteractiveComponentSize(),
     ) {
         Text(
@@ -509,7 +523,7 @@ private fun FailureBody(
                 textAlign = TextAlign.Center,
                 fontWeight = FontWeight.Medium,
             )
-            Button(onClick = onRetry) { Text(shared.tryAgain) }
+            Button(onClick = tapped("play.try_again", onClick = onRetry)) { Text(shared.tryAgain) }
         }
     }
 }
