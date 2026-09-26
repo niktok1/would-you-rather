@@ -4,6 +4,8 @@ import io.ntole.wyr.core.question.QuestionDto
 import io.ntole.wyr.core.question.QuestionPageDto
 import io.ntole.wyr.core.question.QuestionStatus
 import io.ntole.wyr.server.db.Categories
+import io.ntole.wyr.server.db.HiddenAuthors
+import io.ntole.wyr.server.db.HiddenQuestions
 import io.ntole.wyr.server.db.QuestionCategories
 import io.ntole.wyr.server.db.Questions
 import io.ntole.wyr.server.db.Skips
@@ -25,6 +27,7 @@ import org.jetbrains.exposed.v1.core.inList
 import org.jetbrains.exposed.v1.core.intParam
 import org.jetbrains.exposed.v1.core.isNull
 import org.jetbrains.exposed.v1.core.less
+import org.jetbrains.exposed.v1.core.notExists
 import org.jetbrains.exposed.v1.core.or
 import org.jetbrains.exposed.v1.core.wrapAsExpression
 import org.jetbrains.exposed.v1.jdbc.Query
@@ -122,9 +125,9 @@ object QuestionStore {
     internal fun servable(): Op<Boolean> = standsAt(QuestionStatus.APPROVED)
 
     /**
-     * The questions in [categories] (every one for none) that are [servable]: only those due in
-     * [dueIn], unless it is null. Selects what a batch is built from, unless [columns] asks for
-     * something else.
+     * The questions in [categories] (every one for none) that are [servable] and [visibleTo] the player:
+     * only those due in [dueIn], unless it is null. Selects what a batch is built from, unless [columns]
+     * asks for something else.
      */
     private fun candidates(
         playerId: String,
@@ -136,7 +139,7 @@ object QuestionStore {
             .join(Votes, JoinType.LEFT, Questions.id, Votes.questionId) { Votes.playerId eq playerId }
             .join(Skips, JoinType.LEFT, Questions.id, Skips.questionId) { Skips.playerId eq playerId }
             .select(columns)
-            .where { servable() and inCategories(categories) and isDue(dueIn) }
+            .where { servable() and visibleTo(playerId) and inCategories(categories) and isDue(dueIn) }
 
     /** What [toDto] reads, and no more: the moderation columns are not the feed's business. */
     private val BATCH_COLUMNS: List<Expression<*>> =
@@ -161,6 +164,30 @@ object QuestionStore {
                 answeredBefore = row.getOrNull(Votes.answeredInCycle) != null,
             )
         }
+    }
+
+    /**
+     * Not hidden from [playerId] (CLAUDE.md §8d, *Reports*): neither the question itself, by a report or
+     * a hide, nor its author. A seed has no author to hide. One more predicate on the feed's one
+     * statement, so a hidden question is neither served nor due, and a cycle finishes without it: a
+     * player is never stuck on what they hid, and one who hid every question is served none, which the
+     * client reads as out of questions. Each `NOT EXISTS` is found through its table's key.
+     *
+     * Only the feed and what counts it read this. A vote, skip or reaction to a hidden question still
+     * lands ([isServable]), as one in flight when it was hidden would.
+     */
+    private fun visibleTo(playerId: String): Op<Boolean> {
+        val hiddenQuestion =
+            HiddenQuestions
+                .select(HiddenQuestions.questionId)
+                .where { (HiddenQuestions.playerId eq playerId) and (HiddenQuestions.questionId eq Questions.id) }
+        val hiddenAuthor =
+            HiddenAuthors
+                .select(HiddenAuthors.authorPlayerId)
+                .where {
+                    (HiddenAuthors.playerId eq playerId) and (HiddenAuthors.authorPlayerId eq Questions.authorPlayerId)
+                }
+        return notExists(hiddenQuestion) and notExists(hiddenAuthor)
     }
 
     /**

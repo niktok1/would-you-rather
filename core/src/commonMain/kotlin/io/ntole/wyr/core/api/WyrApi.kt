@@ -130,6 +130,34 @@ public object WyrApi {
         public const val REACTIONS: String = "/$VERSION/reactions"
 
         /**
+         * Reports a question to the moderator (CLAUDE.md §8d, *Reports*), with a
+         * [io.ntole.wyr.core.report.ReportRequest], answered 204. Requires a session. A player holds
+         * one report per question, and a report sent again replaces its reason. Reporting also hides
+         * the question from the player, as [HIDDEN_QUESTIONS] does, and the moderator dismissing the
+         * report leaves it hidden. A question no player is served is 404, as for [VOTES]; a reason that
+         * is none, [io.ntole.wyr.core.report.ReportReason.UNKNOWN] or absent, 400
+         * [io.ntole.wyr.core.error.ErrorCode.VALIDATION_FAILED]. Limited per player.
+         */
+        public const val REPORTS: String = "/$VERSION/reports"
+
+        /**
+         * Hides a question from the session player for good, with a
+         * [io.ntole.wyr.core.report.HideQuestionRequest], answered 204 (CLAUDE.md §8d, *Reports*): the
+         * feed never serves it to them again, and it is never due for them. Requires a session. Hiding
+         * it again changes nothing. A question no player is served is 404, as for [VOTES]. Limited per
+         * player, with [HIDDEN_AUTHORS].
+         */
+        public const val HIDDEN_QUESTIONS: String = "/$VERSION/hidden-questions"
+
+        /**
+         * Hides every question by the author of the one a [io.ntole.wyr.core.report.HideAuthorRequest]
+         * names from the session player for good, those approved later included, answered 204
+         * (CLAUDE.md §8d, *Reports*). Requires a session. The author stays anonymous. A question nobody
+         * wrote, a seed, hides only itself. Refused as [HIDDEN_QUESTIONS] refuses.
+         */
+        public const val HIDDEN_AUTHORS: String = "/$VERSION/hidden-authors"
+
+        /**
          * GET: every category questions are filed under, with its id and both its names, as a
          * [io.ntole.wyr.core.category.CategoryListDto], oldest first (CLAUDE.md §8d, *Categories*).
          * Needs no session, and reads none: the list is the same for everybody, so a client can have it

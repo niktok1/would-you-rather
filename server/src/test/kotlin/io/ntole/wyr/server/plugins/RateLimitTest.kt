@@ -36,6 +36,10 @@ import io.ntole.wyr.core.question.SubmissionListDto
 import io.ntole.wyr.core.question.SubmitQuestionRequest
 import io.ntole.wyr.core.reaction.Reaction
 import io.ntole.wyr.core.reaction.ReactionRequest
+import io.ntole.wyr.core.report.HideAuthorRequest
+import io.ntole.wyr.core.report.HideQuestionRequest
+import io.ntole.wyr.core.report.ReportReason
+import io.ntole.wyr.core.report.ReportRequest
 import io.ntole.wyr.core.vote.OptionSide
 import io.ntole.wyr.core.vote.VoteRequest
 import io.ntole.wyr.server.NO_PRACTICAL_LIMIT
@@ -478,6 +482,20 @@ class RateLimitTest {
             ) {
                 it.client.vote(it.player)
                 it.client.submit(it.player, "Question ${it.sent++}")
+            },
+            // A report and a hide of one question, each answered alike by every one after the first.
+            Group("reports", { copy(reports = it) }, allowed = HttpStatusCode.NoContent) { caller ->
+                caller.client.post(WyrApi.Paths.REPORTS) {
+                    json(caller.player, ReportRequest(SEED, ReportReason.SPAM))
+                }
+            },
+            // Both routes, one after the other, so either left out of the group leaves its budget unspent.
+            Group("hides", { copy(hides = it) }, allowed = HttpStatusCode.NoContent) { caller ->
+                if (caller.sent++ % 2 == 0) {
+                    caller.client.post(WyrApi.Paths.HIDDEN_QUESTIONS) { json(caller.player, HideQuestionRequest(SEED)) }
+                } else {
+                    caller.client.post(WyrApi.Paths.HIDDEN_AUTHORS) { json(caller.player, HideAuthorRequest(SEED)) }
+                }
             },
             Group("stats", { copy(stats = it) }) { caller ->
                 caller.client.get(WyrApi.Paths.ME) { bearerAuth(caller.player.accessToken) }

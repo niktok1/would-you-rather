@@ -141,5 +141,11 @@ internal const val INSERTING_INTO_QUESTIONS = "UPPER(EXECUTING_STATEMENT) LIKE '
 /** As [INSERTING_INTO_VOTES], for an insert into `categories`, such as a moderator's new category. */
 internal const val INSERTING_INTO_CATEGORIES = "UPPER(EXECUTING_STATEMENT) LIKE 'INSERT INTO CATEGORIES%'"
 
+/** As [INSERTING_INTO_VOTES], for an insert into `reports`. */
+internal const val INSERTING_INTO_REPORTS = "UPPER(EXECUTING_STATEMENT) LIKE 'INSERT INTO REPORTS%'"
+
+/** As [INSERTING_INTO_VOTES], for an insert into `hidden_questions`. */
+internal const val INSERTING_INTO_HIDDEN_QUESTIONS = "UPPER(EXECUTING_STATEMENT) LIKE 'INSERT INTO HIDDEN_QUESTIONS%'"
+
 private const val TIMEOUT_SECONDS = 10L
 private const val POLL_MILLIS = 5L

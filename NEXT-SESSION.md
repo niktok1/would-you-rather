@@ -322,6 +322,10 @@ smallest client compile fixes.
   client sends `X-Client-Platform` and `X-Client-Version` yet, so nothing is refused until one does;
   the client branch that sends them gives `UPGRADE_REQUIRED` a `DomainError` of its own (it reads as
   `UNKNOWN` for now) and a screen that says to update.
+- **Reports and hiding** (§8d, *Reports*; V11): `POST /v1/reports` with a reason, one per player and
+  question, and `POST /v1/hidden-questions` and `/v1/hidden-authors`, each hiding from the player for
+  good; the feed and the due count leave hidden questions out. To ask the user: hiding a seed's author
+  hides that seed (provisional, the options were 409 or nothing), and nothing unhides yet.
 
 ### Verified working
 

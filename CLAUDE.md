@@ -161,18 +161,20 @@ failing:
   racer re-checks it against the first's commit).
   Or the read takes the row lock (`SELECT ... FOR UPDATE`), so a concurrent writer waits and then
   reads the row as committed (`VoteStore.cast` and `ReactionStore.set`, which branch on more than
-  one outcome, and `SkipStore.skip`).
+  one outcome, and `SkipStore.skip` and `ReportStore.report`).
   A read of rows a racing writer is about to add has no row to lock, so it locks a parent row that
   every such writer locks first (`SubmissionStore.submit` counts an author's pending questions
   under the author's `players` row).
   The one exception is a value copied from another row, which may be a plain read where a stale
   copy is provably harmless, with the proof at the read (`VoteStore.currentCycle`: the feed moves
   the cycle on only once the answer's question is already answered or skipped in the one read).
-- Uniqueness is a constraint (the `Votes`, `Skips`, `Reactions` and `Categories` primary keys,
-  `players.username`'s unique constraint), never a prior `SELECT`. A violation is never caught and
+- Uniqueness is a constraint (the `Votes`, `Skips`, `Reactions`, `Reports`, `HiddenQuestions`,
+  `HiddenAuthors` and `Categories` primary keys, `players.username`'s unique constraint), never a
+  prior `SELECT`. A violation is never caught and
   carried on from: PostgreSQL aborts a transaction at its first error. It propagates, and Exposed
   rolls back and reruns the whole transaction, which then sees the committed row (`VoteStore.cast`,
-  `SkipStore.skip`, `ReactionStore.set`, `AccountStore.register`, which `AccountStoreTest` races,
+  `SkipStore.skip`, `ReactionStore.set`, `ReportStore.report` and its hides, which `ReportStoreTest`
+  races, `AccountStore.register`, which `AccountStoreTest` races,
   `CategoryStore.create`, which `CategoryStoreTest` races, and `Seed.writeMissing`, which
   `SeedTest` races). A plain read before such an insert only spares
   a certain violation, and needs no lock when finding the row writes nothing.
@@ -630,6 +632,7 @@ EncryptedSharedPreferences: enough for a game that stores nothing personal.
   - *Per player*, so players behind one address do not share a budget: registrations 20 an hour
     (every one the rules take costs a password hash), logouts 30 a minute, the feed, votes and skips
     120 a minute each, reactions 60 a minute, submissions 30 an hour (the 20-pending cap still applies),
+    reports 30 an hour, hiding a question or an author 60 an hour together,
     `GET /v1/me` and `GET /v1/me/questions` 120 a minute each. The key is the player id in the
     bearer token, which the limiter verifies itself (`verifiedPlayerId`): it runs before
     authentication, so no principal is there yet. A request without a token this server signed
@@ -769,8 +772,9 @@ seed (`Migrations`, `DatabaseFactory.init`). Nothing builds a table any other wa
   (sessions and the recovery secret, since dropped) there; the next Manual Deploy runs V5 there
   (a player's username and password hash, *Accounts*, above), which every player already there takes
   as a guest, and every later script: V6 (the categories table, §8d *Categories*), V7 (what a
-  question cost, §8c), V8 (the seeds' made-up votes), V9 (the seeds in Serbian, §8d *Seeds*) and
-  V10 (likes become reactions, §8d *Reactions*).
+  question cost, §8c), V8 (the seeds' made-up votes), V9 (the seeds in Serbian, §8d *Seeds*),
+  V10 (likes become reactions, §8d *Reactions*) and V11 (reports and hidden questions, §8d
+  *Reports*).
   `Migrations.migrate` takes the baseline itself (`baselineVersion` 1), and only for a database
   holding every table V1 builds (`TABLES_BEFORE_MIGRATIONS`) and no history table; Flyway's
   `baselineOnMigrate` is off. Any other database with tables and no history fails the boot, rather
@@ -848,7 +852,9 @@ seed (`Migrations`, `DatabaseFactory.init`). Nothing builds a table any other wa
   and pays nothing back for a rejection, and its tallies leave out the made-up votes; V9 only
   rewrites the seeds' text. V10 moves every like into `reactions`, as a like, and drops `likes`, which
   every build before it reads, so none of them runs on what it leaves: accepted, since nothing is live
-  yet and so no build before it is a rollback target (the user, 2026-09-26). `MigrationsTest` reads a
+  yet and so no build before it is a rollback target (the user, 2026-09-26). V11 only adds tables,
+  which a build before never names, so it serves hidden questions again and takes no report until
+  the roll forward. `MigrationsTest` reads a
   table a later script dropped by name (`DROPPED_TABLES`), since `Tables.kt` no longer names it.
 - *Several instances booting at once* (Render starts a deploy's new instance before it stops the old
   one): on PostgreSQL each script runs under Flyway's advisory lock, so one boot migrates while the
@@ -1453,6 +1459,38 @@ listed on the Account screen.
     no points itself: a like of the player's own question moves their total without a vote, so the
     points between the cards show it from the next vote on, or from the next time the Play screen is
     shown, which reads them again. The thumbs, drawn by hand (§5b), took the heart's place.
+- **Reports** *(decided 2026-09-26, what Google Play asks of a game with players' questions: a way to
+  report one and to block its author; built on the server, no client yet)*: a player may **report** a
+  question to the moderator, **hide** it, or **hide its author**, and each hides from that player
+  alone, for good. The client will offer them in a list on the Play screen that stays out of the way
+  (the user). Comments on questions are not built: later, if at all.
+  - *Reporting* is `POST /v1/reports` (`WyrApi.Paths.REPORTS`) with a `ReportRequest`, the question
+    and a `ReportReason`: `OFFENSIVE`, `REAL_PERSON`, `SPAM`, `NOT_A_CHOICE` or `OTHER`, a growable
+    wire enum with `UNKNOWN` (§5), which, or no reason at all, is 400. A player holds **one report per
+    question** (`reports`, V11, under a primary key on both): a report sent again replaces its reason
+    and time, read under its row lock, and two first reports racing are the key's to decide (§4). A
+    report also hides the question from the reporter, and a moderator's dismissal (*Moderation*)
+    leaves it hidden. Answered 204.
+  - *Hiding a question* is `POST /v1/hidden-questions` with a `HideQuestionRequest`: the question is
+    never served to the player again, in any cycle (`hidden_questions`, V11). *Hiding an author* is
+    `POST /v1/hidden-authors` with a `HideAuthorRequest`, naming a question of theirs: every question
+    that author wrote, those approved later included, is never served to the player again
+    (`hidden_authors`, V11). The author stays anonymous: the player names them only by a question,
+    and learns nothing of who they are. A **seed** has no author, so hiding its author hides only that
+    seed: *provisional — user decision*, since a player cannot tell a seed from any other question and
+    a refusal would be a failure they could do nothing about; the options were 409 or doing nothing.
+    An author may hide their own questions from themselves. Hiding again writes nothing. Each is 204,
+    and **nothing unhides** a question or an author, for now.
+  - *The feed* leaves out what a player hid: one more predicate beside the category filter
+    (`QuestionStore.visibleTo`, two `NOT EXISTS` found through the tables' keys), which the due count
+    shares, so a hidden question is neither served nor due and a cycle finishes without it. A player is
+    never stuck on what they hid, and one who hid every question is served an empty batch, which the
+    client reads as out of questions. A vote, skip or reaction to a hidden question still lands, as one
+    in flight when it was hidden would (`isServable` is unchanged).
+  - Each takes only a question the player may be served, 404 for any other, and resolves the player
+    before it writes, 401 for one who is gone, as a vote does. Limited per player: reports 30 an hour,
+    the two hides 60 an hour together (§8b). Nothing about them pays, costs, or touches the tally, the
+    reactions or the cycle. `ReportStoreTest`, `ReportFlowTest`.
 - **Submitting** *(built; details decided 2026-09-23; the cost 2026-09-25; registered players only
   2026-09-26)*: **only a registered player may submit** (§8a, *Accounts*); a guest registers first,
   keeping everything it has. It **costs a point** (§8c) and earns no points directly, because authors

@@ -3,6 +3,7 @@ package io.ntole.wyr.server.db
 import io.ntole.wyr.core.api.WyrApi
 import io.ntole.wyr.core.question.QuestionStatus
 import io.ntole.wyr.core.reaction.Reaction
+import io.ntole.wyr.core.report.ReportReason
 import org.jetbrains.exposed.v1.core.Table
 
 /**
@@ -370,10 +371,84 @@ object Reactions : Table("reactions") {
 }
 
 /**
+ * The reports players have made of questions (CLAUDE.md §8d, *Reports*), for the moderator to look at
+ * (`ModerationStore.reports`), until a moderator dismisses a question's. A report also hides its
+ * question from the player who made it, in [HiddenQuestions], which a dismissal leaves alone.
+ */
+object Reports : Table("reports") {
+    val playerId = varchar("player_id", 36).references(Players.id)
+    val questionId = varchar("question_id", 36).references(Questions.id)
+
+    /** Why, as the player last said: never [ReportReason.UNKNOWN], which a report is refused for. */
+    val reason = enumerationByName<ReportReason>("reason", 16)
+
+    /** When the player last reported the question, the reason a repeat replaced included. */
+    val reportedAt = long("reported_at")
+
+    /**
+     * A player holds one report per question. The key is what enforces it, as for a reaction: two
+     * first reports racing both find none, and only the key refuses the second.
+     */
+    override val primaryKey = PrimaryKey(playerId, questionId)
+
+    init {
+        // For the moderator's list, which counts a question's reports, and each reason's, and a
+        // dismissal, which deletes them. question_id is the key's second column, so the key cannot find
+        // one question's reports.
+        index(isUnique = false, questionId, reason)
+    }
+}
+
+/**
+ * The questions each player has hidden from themselves (CLAUDE.md §8d, *Reports*), by reporting one or
+ * hiding it: never served to them again, and never due for them (`QuestionStore.visibleTo`). A row is
+ * for good: nothing unhides a question, for now.
+ */
+object HiddenQuestions : Table("hidden_questions") {
+    val playerId = varchar("player_id", 36).references(Players.id)
+    val questionId = varchar("question_id", 36).references(Questions.id)
+
+    /** A question is hidden once. The feed finds a player's row for a question by this key. */
+    override val primaryKey = PrimaryKey(playerId, questionId)
+}
+
+/**
+ * The authors each player has hidden from themselves (CLAUDE.md §8d, *Reports*): every question an
+ * author wrote, those approved later included, is never served to the player again (`QuestionStore.visibleTo`).
+ * Named only through a question of theirs, so the author stays anonymous to the player. A row is for good.
+ */
+object HiddenAuthors : Table("hidden_authors") {
+    val playerId = varchar("player_id", 36).references(Players.id)
+    val authorPlayerId = varchar("author_player_id", 36).references(Players.id)
+
+    /** An author is hidden once. The feed finds a player's row for an author by this key. */
+    override val primaryKey = PrimaryKey(playerId, authorPlayerId)
+
+    init {
+        // For the rows that hide an author, found by author when the author's account goes, and for the
+        // foreign key's check as their row goes, which PostgreSQL does not index by itself. With
+        // player_id in it, as the reactions' is, so it is no copy of the index H2 makes for the key.
+        index(isUnique = false, authorPlayerId, playerId)
+    }
+}
+
+/**
  * Every table the server owns. The migrations build the schema (`Migrations`), and SchemaDriftTest
  * holds them to this list: a new table belongs here and in a migration, or the build fails. The store
  * tests build their tables straight from it with `SchemaUtils.create`, which that same test shows
  * builds what the migrations do.
  */
 val appTables: Array<Table> =
-    arrayOf(Players, Sessions, Questions, Categories, QuestionCategories, Votes, Skips, Reactions)
+    arrayOf(
+        Players,
+        Sessions,
+        Questions,
+        Categories,
+        QuestionCategories,
+        Votes,
+        Skips,
+        Reactions,
+        Reports,
+        HiddenQuestions,
+        HiddenAuthors,
+    )
