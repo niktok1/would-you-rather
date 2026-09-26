@@ -11,6 +11,7 @@ import io.ntole.wyr.server.db.Questions
 import io.ntole.wyr.server.db.Skips
 import io.ntole.wyr.server.db.Votes
 import io.ntole.wyr.server.player.PlayerStore
+import io.ntole.wyr.server.plugins.ApiFailure
 import io.ntole.wyr.server.reaction.ReactionStore
 import org.jetbrains.exposed.v1.core.Column
 import org.jetbrains.exposed.v1.core.Expression
@@ -77,13 +78,17 @@ object QuestionStore {
      * one thinks of it, sent whether or not the player has answered it (CLAUDE.md §8d). A reaction
      * committed after the batch was chosen shows in them, which is harmless, since it is then how the
      * question stands.
+     *
+     * A player who is gone is 401, as for a vote: a validly signed token can outlive its player, and
+     * a read can come just after the player's account's deletion commits (`AccountDeletion`). Serving
+     * the feed of a player with no answers would only put the 401 off until its first vote.
      */
     fun feed(
         playerId: String,
         limit: Int,
         categories: Set<String>,
     ): QuestionPageDto {
-        val cycle = checkNotNull(PlayerStore.find(playerId)) { "player $playerId vanished mid-transaction" }.cycle
+        val cycle = PlayerStore.find(playerId)?.cycle ?: throw ApiFailure.unauthorized("unknown player")
         val current = intParam(cycle)
 
         val due = candidates(playerId, categories, dueIn = current).randomBatch(playerId, limit)

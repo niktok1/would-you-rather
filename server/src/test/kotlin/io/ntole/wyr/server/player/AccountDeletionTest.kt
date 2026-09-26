@@ -27,6 +27,7 @@ import io.ntole.wyr.server.db.h2Url
 import io.ntole.wyr.server.db.raceBehindFirst
 import io.ntole.wyr.server.moderation.ModerationStore
 import io.ntole.wyr.server.plugins.ApiFailure
+import io.ntole.wyr.server.question.QuestionStore
 import io.ntole.wyr.server.question.SkipStore
 import io.ntole.wyr.server.reaction.ReactionStore
 import io.ntole.wyr.server.report.ReportStore
@@ -152,6 +153,47 @@ class AccountDeletionTest {
     }
 
     @Test
+    fun `a re-answer from another device waiting on the deletion is 401`() {
+        val deleted = newPlayer()
+        transaction(database) { VoteStore.cast(deleted, "seed-1", OptionSide.A, attemptId = "a1") }
+
+        val refusal =
+            refusalBehindDeletion(deleted) { VoteStore.cast(deleted, "seed-1", OptionSide.B, attemptId = "a2") }
+
+        assertEquals(ErrorCode.UNAUTHORIZED, refusal.code)
+    }
+
+    @Test
+    fun `a re-skip from another device waiting on the deletion is 401`() {
+        val deleted = newPlayer()
+        transaction(database) { SkipStore.skip(deleted, "seed-1") }
+
+        val refusal = refusalBehindDeletion(deleted) { SkipStore.skip(deleted, "seed-1") }
+
+        assertEquals(ErrorCode.UNAUTHORIZED, refusal.code)
+    }
+
+    @Test
+    fun `a feed read that finds the player deleted is 401`() {
+        val deleted = newPlayer()
+        transaction(database) { AccountDeletion.delete(deleted) }
+
+        val refusal =
+            assertFailsWith<ApiFailure> { transaction(database) { QuestionStore.feed(deleted, 10, emptySet()) } }
+
+        assertEquals(ErrorCode.UNAUTHORIZED, refusal.code)
+    }
+
+    @Test
+    fun `a registration waiting on the deletion is 401`() {
+        val deleted = newPlayer()
+
+        val refusal = refusalBehindDeletion(deleted) { AccountStore.register(deleted, "late", "not-a-password-hash") }
+
+        assertEquals(ErrorCode.UNAUTHORIZED, refusal.code)
+    }
+
+    @Test
     fun `a like of the deleted player's question in flight lands and pays nobody`() {
         val (deleted, liker) = newPlayer() to newPlayer()
         val approved = question(deleted)
@@ -167,6 +209,24 @@ class AccountDeletionTest {
         assertEquals(1, assertIs<ReactionResultDto>(liked).likeCount)
         assertEquals(QuestionStatus.APPROVED to null, statusAndAuthorOf(approved), "by nobody")
         assertEquals(0, rowsOf(Players.id, deleted))
+    }
+
+    /**
+     * What [request] by [deleted] is refused with when it waits on the deletion of [deleted]'s account
+     * for a lock and then finds what it waited on gone, as PostgreSQL's READ COMMITTED leaves it.
+     */
+    private fun refusalBehindDeletion(
+        deleted: String,
+        request: () -> Unit,
+    ): ApiFailure {
+        val (_, refused) =
+            raceBehindFirst<Any?>(
+                url,
+                database,
+                { AccountDeletion.delete(deleted) },
+                { runCatching(request).exceptionOrNull() },
+            )
+        return assertIs<ApiFailure>(refused)
     }
 
     private fun newPlayer(): String = transaction(database) { PlayerStore.createGuest().id }

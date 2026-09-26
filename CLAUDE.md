@@ -164,7 +164,10 @@ failing:
   one outcome, and `SkipStore.skip` and `ReportStore.report`). `AccountDeletion.delete` locks the
   player's row before anything of theirs is read, so each row of theirs a racing writer would add
   waits on it through its foreign key and fails once the deletion commits, and its rerun finds them
-  gone; it locks their reactions before it counts their likes.
+  gone. A writer that waited instead on a row the deletion removes (a re-answer on their vote, a
+  re-skip on their skip, a registration on their `players` row) finds no row once it commits, then
+  no player, and is 401 (`VoteStore.currentCycle`, `SkipStore.currentCycle`,
+  `AccountStore.register`). It locks their reactions before it counts their likes.
   A read of rows a racing writer is about to add has no row to lock, so it locks a parent row that
   every such writer locks first (`SubmissionStore.submit` counts an author's pending questions
   under the author's `players` row, and `ModerationStore.blockAuthor` reads them under it too, so a
@@ -533,11 +536,13 @@ decided in §8b).
   every other author's total still adds up. A player who hid the deleted author keeps each of their
   approved questions hidden, one by one. The username is free for another from then on. The client
   then plays on as a fresh guest. A token of a player deleted already is 401 `UNAUTHORIZED`, as on
-  every route, and so is a second deletion; limited per player, 10 an hour (§8b). One INFO line
-  names the player. Edge cases, accepted: a deleted author's approved question reads as a seed to
-  the moderator (`seed`, and no `authorId`), since nothing tells the two apart; a like, a refund or a
-  hide of an author racing the deletion pays or hides nobody (`PlayerStore.payAuthor`,
-  `AccountDeletionTest`); and a login to the account racing its deletion can fail as a 500.
+  every route, and so is a second deletion; limited per player, 10 an hour (§8b). A request of
+  theirs from another device that finds the player gone mid-request is 401 too, a vote, a skip, a
+  feed read or a registration (§4). One INFO line names the player. Edge cases, accepted: a deleted
+  author's approved question reads as a seed to the moderator (`seed`, and no `authorId`), since
+  nothing tells the two apart; a like, a refund or a hide of an author racing the deletion pays or
+  hides nobody (`PlayerStore.payAuthor`, `AccountDeletionTest`); and a login to the account racing
+  its deletion can fail as a 500.
   `AccountDeletionTest`, `AccountDeletionFlowTest`.
 
 **Known limitation, by design for now:** a guest account is bound to one device's storage. Lose

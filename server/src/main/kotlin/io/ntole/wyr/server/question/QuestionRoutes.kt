@@ -12,8 +12,6 @@ import io.ntole.wyr.server.auth.JWT_AUTH
 import io.ntole.wyr.server.auth.authenticatedPlayerId
 import io.ntole.wyr.server.category.CategoryStore
 import io.ntole.wyr.server.db.Db
-import io.ntole.wyr.server.player.PlayerStore
-import io.ntole.wyr.server.plugins.ApiFailure
 import io.ntole.wyr.server.plugins.RouteLimit
 import io.ntole.wyr.server.plugins.pageLimit
 import io.ntole.wyr.server.plugins.rateLimit
@@ -40,9 +38,7 @@ fun Route.questionRoutes(db: Db) {
                         // Filtering by an id no category has would always answer an empty batch, which the
                         // feed otherwise never does while it has questions, so it is refused.
                         val filter = CategoryStore.checked(categories).toSet()
-                        // As for a vote: a validly signed token can outlive its player. Serving it the feed
-                        // of a player with no answers would only put the 401 off until its first vote.
-                        if (PlayerStore.find(playerId) == null) throw ApiFailure.unauthorized("unknown player")
+                        // Which answers 401 for a player who is gone.
                         QuestionStore.feed(playerId, limit, filter)
                     }
 
