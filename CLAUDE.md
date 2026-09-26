@@ -416,6 +416,20 @@ This project must never be attributed to any employer identity.
 - The paths: push to `main` → CI (ktlint + tests) → Render builds and publishes **dev**; then, by
   hand, Manual Deploy that same commit to **prod**. Never deploy prod a commit CI has not passed or
   dev has not run.
+- **Release builds** (*decided 2026-09-26*, for the Google Play launch, §8b *The launch*), in
+  `:app:androidApp`:
+  - *Signing*: a release build is signed with the **Play upload key** when `local.properties` (which
+    git ignores) names all four of `wyr.upload.storeFile`, `wyr.upload.storePassword`,
+    `wyr.upload.keyAlias` and `wyr.upload.keyPassword`, each else read from the environment
+    (`WYR_UPLOAD_STORE_FILE`, `WYR_UPLOAD_STORE_PASSWORD`, `WYR_UPLOAD_KEY_ALIAS`,
+    `WYR_UPLOAD_KEY_PASSWORD`); the store file's path is absolute or from the repository's root. Short
+    of all four, a release APK is signed with the debug key, so it still installs on a phone for
+    testing, and its packaging says so in one warning line; every `bundle*Release` task, which makes
+    what Play takes, fails before anything runs, naming what is missing. The keystore is the user's,
+    never committed (`.gitignore` refuses `*.jks` and `*.keystore`), made and uploaded as
+    NEXT-SESSION.md says (*Release builds and Google Play*). **Play App Signing**: Play keeps the app
+    signing key, which signs what phones install; the upload key only proves an upload is the
+    developer's, and a lost one is reset in the Play Console without touching the app.
 
 ## 8a. Authentication — resolved
 

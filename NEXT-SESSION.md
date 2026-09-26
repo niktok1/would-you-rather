@@ -1652,6 +1652,55 @@ Every event names the app's version, `wyr.app.version` in `gradle.properties` (1
 platform's build reads; a release bumps `MARKETING_VERSION` in `app/iosApp/Configuration/Config.xcconfig`
 with it, or Gradle refuses to build.
 
+### Release builds and Google Play
+
+A release build is signed with the Play upload key once it is set up (CLAUDE.md §8, *Release
+builds*). Until then `./gradlew :app:androidApp:installDevRelease` still puts a release build on a
+phone, signed with the debug key and saying so in one warning line, and `bundleProdRelease`, the file
+Play takes, refuses at once, naming what is missing.
+
+**Play App Signing, in short.** Play keeps the *app signing key* and signs what phones install with
+it; the *upload key*, yours, only proves an upload came from you. A lost or leaked upload key is reset
+in the Play Console (*Test and release → Setup → App signing → Request upload key reset*), and the app
+and its players are untouched. So the keystore below deserves a backup, but it is not the app.
+
+**What you do, once:**
+
+1. Make the upload key, outside the repository. keytool asks for a password, then a name and a place
+   for the certificate (anything; Play shows none of it):
+
+   ```bash
+   keytool -genkeypair -v -keystore ~/wyr-upload.jks -alias upload \
+     -keyalg RSA -keysize 4096 -validity 10000
+   ```
+
+   keytool's own kind of keystore (PKCS12) has one password for the store and the key, so the same
+   value goes in both password lines below. Back up `wyr-upload.jks` and the password, in a password
+   manager say.
+2. Name it in `local.properties` at the repository's root (git ignores it), by its absolute path, as
+   `~` is not expanded there:
+
+   ```properties
+   wyr.upload.storeFile=/Users/<you>/wyr-upload.jks
+   wyr.upload.storePassword=<the password>
+   wyr.upload.keyAlias=upload
+   wyr.upload.keyPassword=<the same password>
+   ```
+
+   A build machine can set `WYR_UPLOAD_STORE_FILE`, `WYR_UPLOAD_STORE_PASSWORD`,
+   `WYR_UPLOAD_KEY_ALIAS` and `WYR_UPLOAD_KEY_PASSWORD` instead. `./gradlew
+   :app:androidApp:signingReport` then says *Config: upload* for every release variant.
+3. Build the bundle: `./gradlew :app:androidApp:bundleProdRelease`, which writes
+   `app/androidApp/build/outputs/bundle/prodRelease/androidApp-prod-release.aab`.
+4. In the Play Console (the developer account is CLAUDE.md §8b *Play Games sign-in*'s step 1):
+   *Create app*, then *Test and release → Testing → Internal testing → Create new release*. On the
+   first release keep Play App Signing with a key Google makes (the default), upload the `.aab`, which
+   registers your upload key, and roll it out to a list of testers' Google accounts, who install it
+   from the opt-in link the page gives. Every later upload needs a higher `versionCode`.
+5. From *Test and release → Setup → App signing*, copy the **app signing key's SHA-1**: Play Games'
+   Android credential needs it (CLAUDE.md §8b, *Play Games sign-in*, step 3), beside the upload key's
+   and the debug key's for builds made on a laptop, which `signingReport` prints.
+
 ### Trying a change
 
 There is no dev console (`chore/remove-console`): a change is tried through the game, as a player

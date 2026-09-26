@@ -1,4 +1,6 @@
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+import java.io.StringReader
+import java.util.Properties
 
 plugins {
     alias(libs.plugins.androidApplication)
@@ -14,6 +16,62 @@ val appVersion = extra["wyrAppVersion"] as String
 apply(from = rootProject.file("gradle/wyr-analytics.gradle.kts"))
 val posthogKey = extra["wyrPosthogKey"] as String
 val posthogHost = extra["wyrPosthogHost"] as String
+
+// The Play upload key (CLAUDE.md §8, *Release builds*): each of the four settings from local.properties,
+// which git ignores, or else from the environment, and never committed. With all four a release build
+// is signed with it; with fewer, with the debug key, so a release build still installs on a phone for
+// testing, and every bundle*Release task, which makes what Play takes, fails before anything runs.
+val localProperties =
+    Properties().apply {
+        providers
+            .fileContents(rootProject.layout.projectDirectory.file("local.properties"))
+            .asText
+            .orNull
+            ?.let { text -> load(StringReader(text)) }
+    }
+
+fun uploadSetting(
+    property: String,
+    variable: String,
+): String? =
+    (localProperties.getProperty(property) ?: providers.environmentVariable(variable).orNull)
+        ?.takeIf { it.isNotBlank() }
+
+val uploadStoreFile = uploadSetting("wyr.upload.storeFile", "WYR_UPLOAD_STORE_FILE")
+val uploadStorePassword = uploadSetting("wyr.upload.storePassword", "WYR_UPLOAD_STORE_PASSWORD")
+val uploadKeyAlias = uploadSetting("wyr.upload.keyAlias", "WYR_UPLOAD_KEY_ALIAS")
+val uploadKeyPassword = uploadSetting("wyr.upload.keyPassword", "WYR_UPLOAD_KEY_PASSWORD")
+val uploadKeyMissing =
+    mapOf(
+        "wyr.upload.storeFile" to uploadStoreFile,
+        "wyr.upload.storePassword" to uploadStorePassword,
+        "wyr.upload.keyAlias" to uploadKeyAlias,
+        "wyr.upload.keyPassword" to uploadKeyPassword,
+    ).filterValues { it == null }.keys
+
+if (uploadKeyMissing.isNotEmpty()) {
+    val missing = uploadKeyMissing.joinToString()
+    val modulePath = path
+    // Asked once the task graph is known, so a bundle fails before any task runs.
+    gradle.taskGraph.whenReady {
+        val bundles =
+            allTasks
+                .filter { it.project.path == modulePath && Regex("""bundle\w*Release""").matches(it.name) }
+                .map { it.name }
+        if (bundles.isNotEmpty()) {
+            throw GradleException(
+                "${bundles.joinToString()} makes what Google Play takes, which must be signed with the Play " +
+                    "upload key, and it is not configured: set $missing in local.properties, or the " +
+                    "WYR_UPLOAD_* variables (NEXT-SESSION.md, Release builds and Google Play).",
+            )
+        }
+    }
+    // Said by each release APK's packaging as it signs one: an APK up to date signs nothing.
+    val warning = "Signed with the debug key: the Play upload key is not configured ($missing)."
+    tasks.named { Regex("""package\w*Release""").matches(it) }.configureEach {
+        doFirst { logger.warn("$name: $warning") }
+    }
+}
 
 kotlin {
     compilerOptions {
@@ -57,12 +115,23 @@ android {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
         }
     }
+    signingConfigs {
+        if (uploadKeyMissing.isEmpty()) {
+            create("upload") {
+                // A path relative to the repository's root, where local.properties is, or absolute.
+                storeFile = rootProject.file(uploadStoreFile.orEmpty())
+                storePassword = uploadStorePassword
+                keyAlias = uploadKeyAlias
+                keyPassword = uploadKeyPassword
+            }
+        }
+    }
     buildTypes {
         release {
-            // Signed with the debug key until there is a Play upload key, so a release build (not
-            // debuggable, so Compose runs at full speed) installs on a phone for testing. Google Play
-            // refuses a debug-signed build, so publishing needs a real signing config first.
-            signingConfig = signingConfigs.getByName("debug")
+            // The upload key when it is configured (above); otherwise the debug key, so a release build
+            // (not debuggable, so Compose runs at full speed) still installs on a phone for testing,
+            // which Google Play would refuse.
+            signingConfig = signingConfigs.getByName(if (uploadKeyMissing.isEmpty()) "upload" else "debug")
             isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
