@@ -1694,8 +1694,8 @@ Play takes, refuses at once, naming what is missing.
 
 **Play App Signing, in short.** Play keeps the *app signing key* and signs what phones install with
 it; the *upload key*, yours, only proves an upload came from you. A lost or leaked upload key is reset
-in the Play Console (*Test and release → Setup → App signing → Request upload key reset*), and the app
-and its players are untouched. So the keystore below deserves a backup, but it is not the app.
+from the Play Console's *App signing* page (*Request upload key reset*), and the app and its players
+are untouched. So the keystore below deserves a backup, but it is not the app.
 
 **What you do, once:**
 
@@ -1730,7 +1730,7 @@ and its players are untouched. So the keystore below deserves a backup, but it i
    first release keep Play App Signing with a key Google makes (the default), upload the `.aab`, which
    registers your upload key, and roll it out to a list of testers' Google accounts, who install it
    from the opt-in link the page gives. Every later upload needs a higher `versionCode`.
-5. From *Test and release → Setup → App signing*, copy the **app signing key's SHA-1**: Play Games'
+5. From the Play Console's *App signing* page, copy the **app signing key's SHA-1**: Play Games'
    Android credential needs it (CLAUDE.md §8b, *Play Games sign-in*, step 3), beside the upload key's
    and the debug key's for builds made on a laptop, which `signingReport` prints.
 6. R8's mapping travels inside the bundle, so Android vitals shows crashes in this code's names
