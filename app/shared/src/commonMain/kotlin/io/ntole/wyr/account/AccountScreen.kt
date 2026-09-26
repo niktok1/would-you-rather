@@ -60,7 +60,8 @@ import io.ntole.wyr.theme.contentWidth
  * it the Statistics switch, [statisticsOn] whether the player lets the game send analytics, which
  * [onStatisticsChange] changes (§8g); under them Log out for a registered player.
  * A build for any server but production's names that server last ([serverLine]), [environment] being
- * the one the build talks to.
+ * the one the build talks to. The questions in [newDecisions] a moderator decided since the player last
+ * saw them, and My questions marks each (CLAUDE.md §8d, *Submitting*).
  *
  * Plain on purpose, and short, the user asking for less text: every colour, space and size from the
  * theme (§5b), every word from [LocalStrings] (§8f).
@@ -77,6 +78,7 @@ fun AccountScreen(
     onOpenAuth: () -> Unit,
     onNewQuestion: () -> Unit,
     modifier: Modifier = Modifier,
+    newDecisions: Set<String> = emptySet(),
 ) {
     val colors = WyrThemeAccessors.colors
     val dimens = WyrThemeAccessors.dimens
@@ -96,7 +98,7 @@ fun AccountScreen(
             Player(state, actions, onOpenAuth)
 
             // The player's own questions, once there is a player to read them for.
-            if (stats != null) MyQuestions(state, actions, onNewQuestion)
+            if (stats != null) MyQuestions(state, actions, onNewQuestion, newDecisions)
 
             // The language menu and beside it the Statistics switch, one row of the two, and under them
             // Log out for a registered player (provisional, CLAUDE.md §8b: Log out was beside the menu).

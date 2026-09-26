@@ -1445,6 +1445,26 @@ orientation, in common code alone:
   (*Submitting*), a registered player's alone: for a guest it is off, and a guest with questions from
   before the rule is told under it to register first. A list that cannot be read says so under it,
   with Try again, apart from the stats (`AccountState.listFailure`).
+- **The notice of a decision** (*built 2026-09-26*, the user: a notification when their question is
+  approved, and the game saying so too): common code, every platform, pushes or none
+  (`DecisionNotices`, `io.ntole.wyr.core.domain.notice`). `AppServices` reads the player's questions
+  (`GET /v1/me/questions`, only when a session is stored: it mints nobody) at launch for the session
+  stored and for every session after it, each time the app comes back to the foreground, and when a
+  push arrives while it is open (§8a, *Push tokens*). A question decided, approved or rejected (a
+  retired one was approved, and a status this build cannot name is none), that this device has not
+  shown the player yet is **news**: a **dot** on the account icon of the Home and Play top bars, in
+  the brand's pink (`WyrColors.optionA`, Material's `Badge`), which a screen reader hears in the
+  icon's name, *Налог: ново* (`NoticeStrings`); and, once the Account screen reads the list, a dot on
+  each of those rows of My questions, *Ново* to a screen reader, for that visit (a rotation's
+  included), after which every decision in the list is seen and the icon's dot goes. No banner and no
+  text on screen, the user asking for less. What is seen is kept on the device beside the session, per
+  environment (`StoredSeenDecisions`, `wyr.decisions.seen.local`, `.dev` or `.prod`), one player's at a
+  time: a player's first read on a device seeds it, so nothing decided before badges, and another
+  player's first read seeds theirs. A read that fails changes nothing; one read for a player who plays
+  here no more, a login or a logout having come meanwhile, is dropped. `DecisionNoticesTest`,
+  `StoredSeenDecisionsTest`, `AppServicesTest`, `TopBarsDrawTest` (both bars with the dot, still 48
+  high at 375 wide with nothing cut short, in both themes and every language), `AccountScreenDrawTest`,
+  and `AppNavigationTest`, which dots the icon on Home and Play and takes the dot down on Account.
 - Its last line, in a LOCAL or DEV build, names the server the build talks to and its URL, in the
   language shown, *Сервер: Dev (https://wyr-server-dev.onrender.com)* (`serverLine`, §8e); a PROD
   build shows none. `AccountScreenDrawTest` finds it under everything else in every state and

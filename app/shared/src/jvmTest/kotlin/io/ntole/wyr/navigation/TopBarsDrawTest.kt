@@ -8,6 +8,7 @@ import io.ntole.wyr.language.Language
 import io.ntole.wyr.language.LocalStrings
 import io.ntole.wyr.language.Strings
 import io.ntole.wyr.language.WyrStrings
+import io.ntole.wyr.language.fill
 import io.ntole.wyr.language.stringsOf
 import io.ntole.wyr.play.CategoriesPlayed
 import io.ntole.wyr.sizeNeeded
@@ -22,7 +23,8 @@ import kotlin.test.assertTrue
 /**
  * The top bars above the Play, Account, Auth, Submit and Categories screens (CLAUDE.md §8d,
  * *Navigation*), drawn off screen at a short phone's width, in each theme and each language, and read
- * through their semantics. Home's is drawn with the Home screen (`HomeScreenDrawTest`).
+ * through their semantics. Home's is drawn with the Home screen (`HomeScreenDrawTest`), and here with
+ * the dot of a decision not seen yet, as Play's is.
  */
 class TopBarsDrawTest {
     @Test
@@ -175,6 +177,34 @@ class TopBarsDrawTest {
                             )
                         }
                     },
+                ),
+                // A moderator decided a question of the player's: a dot on the account icon, which a
+                // screen reader hears in its name, and nothing else changes.
+                Bar(
+                    name = "Play's, with news",
+                    icons = { listOf(it.home, it.notice.accountWithNews.fill(it.account)) },
+                    texts = { listOf(it.allCategories) },
+                    taps = listOf("home", "account", "categories"),
+                    draw = { actions ->
+                        PlayTopBar(
+                            onHome = actions.record("home"),
+                            onAccount = actions.record("account"),
+                            news = true,
+                        ) {
+                            CategoriesPlayed(
+                                text = LocalStrings.current.allCategories,
+                                enabled = true,
+                                onClick = actions.record("categories"),
+                            )
+                        }
+                    },
+                ),
+                Bar(
+                    name = "Home's, with news",
+                    icons = { listOf(it.notice.accountWithNews.fill(it.account)) },
+                    texts = { emptyList() },
+                    taps = listOf("account"),
+                    draw = { HomeTopBar(onAccount = it.record("account"), news = true) },
                 ),
                 Bar(
                     name = "Account's, the Auth page's, Submit's and the Categories screen's",

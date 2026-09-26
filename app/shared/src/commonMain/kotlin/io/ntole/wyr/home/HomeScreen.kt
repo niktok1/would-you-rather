@@ -24,14 +24,15 @@ import io.ntole.wyr.theme.WyrTypeScale
 
 /**
  * The Home screen, the one the app opens on (CLAUDE.md §8d, *Navigation*): the game's name, a big
- * Play button, which [onPlay] answers, and the account icon top right, which [onAccount] answers.
- * Nothing else, the user asking for less text.
+ * Play button, which [onPlay] answers, and the account icon top right, which [onAccount] answers,
+ * with a dot while [news] waits there. Nothing else, the user asking for less text.
  */
 @Composable
 fun HomeScreen(
     onPlay: () -> Unit,
     onAccount: () -> Unit,
     modifier: Modifier = Modifier,
+    news: Boolean = false,
 ) {
     val colors = WyrThemeAccessors.colors
     val dimens = WyrThemeAccessors.dimens
@@ -39,7 +40,7 @@ fun HomeScreen(
 
     Surface(color = colors.pageBackground, modifier = modifier.fillMaxSize()) {
         Column {
-            HomeTopBar(onAccount = onAccount)
+            HomeTopBar(onAccount = onAccount, news = news)
 
             Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxWidth().weight(1f)) {
                 Column(

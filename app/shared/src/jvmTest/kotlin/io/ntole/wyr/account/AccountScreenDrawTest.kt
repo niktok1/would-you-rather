@@ -274,6 +274,33 @@ class AccountScreenDrawTest {
         }
     }
 
+    /**
+     * A decision the player had not seen has a dot on its row, which a screen reader hears as a word
+     * with the row, in every theme and language; the rest have none (CLAUDE.md §8d, *Submitting*).
+     */
+    @Test
+    fun `a decision not seen is marked on its row and the rest are not`() {
+        Language.entries.forEach { language ->
+            val word = stringsOf(language).notice.newMark
+            val state = AccountState(stats = REGISTERED, submissions = EVERY_STATUS)
+            listOf(false, true).forEach { dark ->
+                val scene = scene(state, language, dark = dark, newDecisions = setOf("q2", "q4"))
+                try {
+                    val marked = scene.nodes().filter { word in it.descriptions }
+                    assertEquals(2, marked.size, "$language")
+                    val options = marked.map { row -> row.texts.first() }
+                    assertEquals(
+                        listOf(optionsOf(EVERY_STATUS[1], language), optionsOf(EVERY_STATUS[3], language)),
+                        options,
+                    )
+                } finally {
+                    scene.close()
+                }
+            }
+            assertFalse(word in descriptionsOf(state, language), "$language: nothing new, nothing marked")
+        }
+    }
+
     @Test
     fun `a read that fails offers to try again`() {
         Language.entries.forEach { language ->
@@ -568,6 +595,7 @@ class AccountScreenDrawTest {
         height: Int = HEIGHT,
         statisticsOn: Boolean = true,
         onStatisticsChange: (Boolean) -> Unit = {},
+        newDecisions: Set<String> = emptySet(),
     ): ImageComposeScene =
         ImageComposeScene(width = width, height = height, density = Density(1f)) {
             WyrTheme(darkTheme = dark) {
@@ -581,6 +609,7 @@ class AccountScreenDrawTest {
                         actions,
                         statisticsOn,
                         onStatisticsChange,
+                        newDecisions,
                     )
                 }
             }
@@ -596,6 +625,7 @@ class AccountScreenDrawTest {
         actions: AccountActions = Recorder(),
         statisticsOn: Boolean = true,
         onStatisticsChange: (Boolean) -> Unit = {},
+        newDecisions: Set<String> = emptySet(),
     ) {
         AccountScreen(
             state = state,
@@ -607,6 +637,7 @@ class AccountScreenDrawTest {
             onStatisticsChange = onStatisticsChange,
             onOpenAuth = onOpenAuth,
             onNewQuestion = onNewQuestion,
+            newDecisions = newDecisions,
         )
     }
 

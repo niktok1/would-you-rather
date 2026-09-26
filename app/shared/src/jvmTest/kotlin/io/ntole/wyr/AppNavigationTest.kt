@@ -28,6 +28,9 @@ import io.ntole.wyr.core.domain.category.CategoryRepository
 import io.ntole.wyr.core.domain.category.GetCategories
 import io.ntole.wyr.core.domain.error.DomainError
 import io.ntole.wyr.core.domain.error.WyrException
+import io.ntole.wyr.core.domain.notice.DecisionNotices
+import io.ntole.wyr.core.domain.notice.SeenDecisions
+import io.ntole.wyr.core.domain.notice.SeenDecisionsStore
 import io.ntole.wyr.core.domain.player.GetPlayerStats
 import io.ntole.wyr.core.domain.player.PlayerRepository
 import io.ntole.wyr.core.domain.player.PlayerStats
@@ -68,8 +71,10 @@ import io.ntole.wyr.language.LanguageViewModel
 import io.ntole.wyr.language.SerbianCyrillicStrings
 import io.ntole.wyr.language.categoryName
 import io.ntole.wyr.language.fill
+import io.ntole.wyr.services.AppServices
 import io.ntole.wyr.submit.sendText
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -82,6 +87,7 @@ import kotlinx.coroutines.test.setMain
 import org.koin.core.context.startKoin
 import org.koin.core.context.stopKoin
 import org.koin.dsl.module
+import org.koin.mp.KoinPlatform
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
@@ -109,6 +115,7 @@ class AppNavigationTest {
     private val storage = InMemoryTokenStorage()
     private val owner = TestOwner()
     private val clock = TestTimeSource()
+    private val seen = KeptSeenDecisions()
     private var restored: Map<String, List<Any?>>? = null
     private var saved: Map<String, List<Any?>>? = null
 
@@ -117,7 +124,17 @@ class AppNavigationTest {
         // viewModelScope runs on Dispatchers.Main, which the JVM has none of under test.
         Dispatchers.setMain(UnconfinedTestDispatcher())
         // The clock the analytics time with, which a test moves by hand.
-        startKoin { modules(fakes(), uiModule, module { single<TimeSource.WithComparableMarks> { clock } }) }
+        startKoin {
+            modules(
+                fakes(),
+                uiModule,
+                module {
+                    single<TimeSource.WithComparableMarks> { clock }
+                    // What runs by itself runs here and now, on the test's Main, so a test sees what it did.
+                    single { AppServices(get(), get(), get(), get(), get(), scope = CoroutineScope(Dispatchers.Main)) }
+                },
+            )
+        }
     }
 
     @AfterTest
@@ -193,6 +210,39 @@ class AppNavigationTest {
         assertEquals(2, analytics.named(AnalyticsEvent.ACCOUNT_OPENED).size, "back on Account is a visit of its own")
         // Account, Account rotated, the form, the form rotated, and Account again: each reads the points.
         assertEquals(5, game.statsRead)
+    }
+
+    /**
+     * A moderator decided a question of the player's after the launch's read: a dot on the account icon
+     * of Home and of Play, named for a screen reader, until the Account screen shows the list, where its
+     * row is marked; then the dot is gone (CLAUDE.md §8d, *Submitting*).
+     */
+    @Test
+    fun `a decision not seen dots the account icon until the Account screen shows it`() {
+        game.username = "bob"
+        game.sent += submission("n1", SubmissionStatus.PENDING)
+        val dotted = CYRILLIC.notice.accountWithNews.fill(CYRILLIC.account)
+        withApp { scene ->
+            assertEquals(listOf(CYRILLIC.account), scene.descriptions(), "what the launch read is not news")
+
+            game.sent[0] = submission("n1", SubmissionStatus.APPROVED)
+            // As the app coming back to the foreground, or a push while it is open, reads it again.
+            KoinPlatform.getKoin().get<AppServices>().foreground()
+            scene.settle()
+
+            assertEquals(listOf(dotted), scene.descriptions(), "on Home")
+            scene.tap(CYRILLIC.play)
+            assertTrue(dotted in scene.descriptions(), "on Play")
+
+            scene.tap(dotted)
+            // The list is read as the screen is shown, and its rows marked a frame after.
+            scene.settle()
+            assertTrue(CYRILLIC.notice.newMark in scene.descriptions(), "its row is marked")
+            scene.tap(CYRILLIC.back)
+
+            assertFalse(dotted in scene.descriptions(), "seen: no dot")
+            assertTrue(CYRILLIC.account in scene.descriptions())
+        }
     }
 
     @Test
@@ -569,6 +619,8 @@ class AppNavigationTest {
             single<CurrentSession> { game }
             single { LinkPlayGames(PlayGames.None, NoPlayGamesLink, get(), get(), get()) }
             single<DevicePush> { DevicePush.None }
+            // The questions the notice reads, the game's own list, read without counting a read of it.
+            single { DecisionNotices(ListedWithoutCounting(game), get(), seen) }
             factory { KeepPushTokenRegistered(get(), NoPushTokens, get()) }
         }
 
@@ -607,6 +659,23 @@ class AppNavigationTest {
         override fun isSettled(): Boolean = error("no Play Games here")
 
         override suspend fun signIn(serverAuthCode: String): String = error("no Play Games here")
+    }
+
+    /** The game's questions for the notice, read without counting a read of them, which the screens' are. */
+    private class ListedWithoutCounting(
+        private val game: FakeGame,
+    ) : SubmissionRepository by game {
+        override suspend fun mine(): List<Submission> = game.sent.toList()
+    }
+
+    private class KeptSeenDecisions : SeenDecisionsStore {
+        private var kept: SeenDecisions? = null
+
+        override fun read(): SeenDecisions? = kept
+
+        override suspend fun write(seen: SeenDecisions) {
+            kept = seen
+        }
     }
 
     /** Pushes are never there in these builds, so nothing registers a token. */
@@ -735,6 +804,19 @@ class AppNavigationTest {
             return sent.toList()
         }
     }
+
+    private fun submission(
+        id: String,
+        status: SubmissionStatus,
+    ) = Submission(
+        id = id,
+        optionA = "$id-a",
+        optionB = "$id-b",
+        categories = setOf(FOOD.id),
+        status = status,
+        rejectionReason = null,
+        submittedAt = Instant.fromEpochMilliseconds(1_790_000_000_000L),
+    )
 
     private companion object {
         val CYRILLIC = SerbianCyrillicStrings

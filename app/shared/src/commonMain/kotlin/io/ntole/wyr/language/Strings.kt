@@ -70,6 +70,8 @@ data class Strings(
     val accountScreens: AccountStrings,
     /** The words about Google Play Games Services, on the Account screen. */
     val playGames: PlayGamesStrings,
+    /** The words of the notice that a moderator decided a question of the player's. */
+    val notice: NoticeStrings,
 ) {
     /**
      * These strings with [transform] applied to every one of them, which is how Serbian Latin is made.
@@ -94,6 +96,7 @@ data class Strings(
             language = transform(language),
             accountScreens = accountScreens.map(transform),
             playGames = playGames.map(transform),
+            notice = notice.map(transform),
         )
 }
 
@@ -116,6 +119,7 @@ val SerbianCyrillicStrings: Strings =
         language = "Језик",
         accountScreens = SerbianCyrillicAccountStrings,
         playGames = SerbianCyrillicPlayGamesStrings,
+        notice = SerbianCyrillicNoticeStrings,
     )
 
 /** Made from [SerbianCyrillicStrings], never written by hand, so the two cannot say different things. */
@@ -139,6 +143,7 @@ val EnglishStrings: Strings =
         language = "Language",
         accountScreens = EnglishAccountStrings,
         playGames = EnglishPlayGamesStrings,
+        notice = EnglishNoticeStrings,
     )
 
 /** The strings [language] is written in. */

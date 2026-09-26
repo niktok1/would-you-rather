@@ -5,6 +5,7 @@ import io.ntole.wyr.core.data.account.DefaultAccountRepository
 import io.ntole.wyr.core.data.cache.InMemoryQuestionCache
 import io.ntole.wyr.core.data.category.DefaultCategoryRepository
 import io.ntole.wyr.core.data.moderation.DefaultModerationRepository
+import io.ntole.wyr.core.data.notice.StoredSeenDecisions
 import io.ntole.wyr.core.data.player.DefaultPlayerRepository
 import io.ntole.wyr.core.data.playgames.DefaultPlayGamesRepository
 import io.ntole.wyr.core.data.push.DefaultPushTokenRepository
@@ -30,6 +31,8 @@ import io.ntole.wyr.core.domain.moderation.RejectSubmission
 import io.ntole.wyr.core.domain.moderation.RenameCategory
 import io.ntole.wyr.core.domain.moderation.RestoreQuestion
 import io.ntole.wyr.core.domain.moderation.RetireQuestion
+import io.ntole.wyr.core.domain.notice.DecisionNotices
+import io.ntole.wyr.core.domain.notice.SeenDecisionsStore
 import io.ntole.wyr.core.domain.player.GetPlayerStats
 import io.ntole.wyr.core.domain.player.PlayerRepository
 import io.ntole.wyr.core.domain.playgames.LinkPlayGames
@@ -145,6 +148,9 @@ public fun dataModule(
         factory { LogOut(accounts = get(), questions = get(), analytics = get()) }
         factory { GetCategories(categories = get()) }
         factory { KeepPushTokenRegistered(push = get(), tokens = get(), session = get()) }
+        single<SeenDecisionsStore> { StoredSeenDecisions(get<TokenStorage>(), environment) }
+        // Once for the app: the badge on the account icon is its unseen, whoever reads it.
+        single { DecisionNotices(submissions = get(), session = get(), seen = get()) }
         // Once for the app: the launch's sign-in and a tap on the Auth page's button take turns.
         single {
             LinkPlayGames(playGames = playGames, link = get(), session = get(), questions = get(), analytics = get())

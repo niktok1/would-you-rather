@@ -12,8 +12,12 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.saveable.Saver
+import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -29,6 +33,7 @@ import io.ntole.wyr.analytics.UsageTracker
 import io.ntole.wyr.analytics.rememberConfigurationChanging
 import io.ntole.wyr.categories.CategoriesScreen
 import io.ntole.wyr.categories.CategoriesViewModel
+import io.ntole.wyr.core.domain.notice.DecisionNotices
 import io.ntole.wyr.home.HomeScreen
 import io.ntole.wyr.language.Language
 import io.ntole.wyr.language.LanguageViewModel
@@ -93,6 +98,10 @@ private fun Screens(
     SystemBack(enabled = navigator.canGoBack, onBack = { navigator.back() })
     val usage = koinInject<UsageTracker>()
     LaunchedEffect(navigator.current) { usage.show(navigator.current.key) }
+    // A moderator decided a question of the player's, which they have not seen: a dot on the account icon.
+    val notices = koinInject<DecisionNotices>()
+    val unseen by notices.unseen.collectAsStateWithLifecycle()
+    val news = unseen.isNotEmpty()
 
     Surface(color = MaterialTheme.colorScheme.background, modifier = Modifier.fillMaxSize()) {
         // The insets are applied once here, so the screens below find them already consumed.
@@ -102,6 +111,7 @@ private fun Screens(
                     HomeScreen(
                         onPlay = { navigator.open(Screen.Play) },
                         onAccount = { navigator.open(Screen.Account) },
+                        news = news,
                     )
                 }
 
@@ -110,6 +120,7 @@ private fun Screens(
                     Play(
                         onHome = { navigator.open(Screen.Home) },
                         onAccount = { navigator.open(Screen.Account) },
+                        news = news,
                         onOpenCategories = {
                             // A visit of its own: what is played now ticked, and nothing searched.
                             picker.open()
@@ -126,6 +137,7 @@ private fun Screens(
                             onSelectLanguage = onSelectLanguage,
                             onOpenAuth = { navigator.open(Screen.Auth) },
                             onNewQuestion = { navigator.open(Screen.Submit) },
+                            notices = notices,
                         )
                     }
                 }
@@ -199,9 +211,18 @@ private fun Account(
     onSelectLanguage: (Language) -> Unit,
     onOpenAuth: () -> Unit,
     onNewQuestion: () -> Unit,
+    notices: DecisionNotices,
 ) {
     val viewModel = koinViewModel<AccountViewModel>()
     val state by viewModel.state.collectAsStateWithLifecycle()
+
+    // The decisions the player had not seen, marked on their rows for this visit, a rotation's included,
+    // and seen from the list's first read on, which takes the account icon's dot down (CLAUDE.md §8d,
+    // *Submitting*). A visit's own, so the next starts with none.
+    var newDecisions by rememberSaveable(stateSaver = DECISIONS_SAVER) { mutableStateOf(emptySet<String>()) }
+    LaunchedEffect(state.submissions) {
+        state.submissions?.let { listed -> newDecisions = newDecisions + notices.shown(listed) }
+    }
     val submit = koinViewModel<SubmitViewModel>()
     val submitState by submit.state.collectAsStateWithLifecycle()
 
@@ -232,8 +253,13 @@ private fun Account(
         onStatisticsChange = analytics::setEnabled,
         onOpenAuth = onOpenAuth,
         onNewQuestion = onNewQuestion,
+        newDecisions = newDecisions,
     )
 }
+
+/** A visit's new decisions, saved as a list, which every platform's saved state can hold. */
+private val DECISIONS_SAVER: Saver<Set<String>, Any> =
+    listSaver(save = { it.sorted() }, restore = { it.toSet() })
 
 /**
  * The Auth page, on the Account screen's ViewModel: what it reads and what is typed are the Account
@@ -305,6 +331,7 @@ private fun Categories(onPlayed: () -> Unit) {
 private fun ColumnScope.Play(
     onHome: () -> Unit,
     onAccount: () -> Unit,
+    news: Boolean,
     onOpenCategories: () -> Unit,
 ) {
     val viewModel = koinViewModel<PlayViewModel>()
@@ -321,7 +348,7 @@ private fun ColumnScope.Play(
         onStopOrDispose { viewModel.screenHidden() }
     }
 
-    PlayTopBar(onHome = onHome, onAccount = onAccount) {
+    PlayTopBar(onHome = onHome, onAccount = onAccount, news = news) {
         CategoriesPlayed(
             text =
                 categoriesPlayed(

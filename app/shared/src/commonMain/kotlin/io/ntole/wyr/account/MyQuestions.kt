@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Badge
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
@@ -47,13 +48,15 @@ import io.ntole.wyr.theme.WyrTypeScale
  * up. With none, the table stays, with the way to ask the first. New question, which [onNewQuestion]
  * answers by opening the Submit screen's form, is a registered player's: a guest is told to register
  * first, in the empty table or, with questions of before, under the heading. The list is read with the
- * player, each time the screen is shown.
+ * player, each time the screen is shown, and a question whose decision the player had not seen, in
+ * [newDecisions], has a dot before where it stands, as the account icon had.
  */
 @Composable
 internal fun MyQuestions(
     state: AccountState,
     actions: AccountActions,
     onNewQuestion: () -> Unit,
+    newDecisions: Set<String> = emptySet(),
 ) {
     val colors = WyrThemeAccessors.colors
     val dimens = WyrThemeAccessors.dimens
@@ -83,7 +86,7 @@ internal fun MyQuestions(
 
         val failure = state.listFailure
         if (submissions != null) {
-            QuestionsTable(submissions, canAsk = canAsk, onNewQuestion = onNewQuestion)
+            QuestionsTable(submissions, canAsk = canAsk, onNewQuestion = onNewQuestion, newDecisions = newDecisions)
         } else if (failure == null) {
             // With no failure a read is on its way: every read of the player reads the list too.
             CircularProgressIndicator(color = colors.headingAccent)
@@ -113,6 +116,7 @@ private fun QuestionsTable(
     submissions: List<Submission>,
     canAsk: Boolean,
     onNewQuestion: () -> Unit,
+    newDecisions: Set<String>,
 ) {
     val colors = WyrThemeAccessors.colors
     val dimens = WyrThemeAccessors.dimens
@@ -158,7 +162,7 @@ private fun QuestionsTable(
                 }
             } else {
                 submissions.forEach { submission ->
-                    QuestionRow(submission, strings)
+                    QuestionRow(submission, strings, isNew = submission.id in newDecisions)
                     HorizontalDivider(color = colors.orPillBackground)
                 }
                 TotalRow(submissions, strings)
@@ -167,11 +171,15 @@ private fun QuestionsTable(
     }
 }
 
-/** A question's row: its options and where it stands, then its numbers, read out as one. */
+/**
+ * A question's row: its options and where it stands, with a dot before it when [isNew], a decision the
+ * player had not seen, then its numbers, read out as one.
+ */
 @Composable
 private fun QuestionRow(
     submission: Submission,
     strings: AccountStrings,
+    isNew: Boolean,
 ) {
     val colors = WyrThemeAccessors.colors
     val counts = countsOf(submission)
@@ -185,17 +193,36 @@ private fun QuestionRow(
     TableRow(modifier = Modifier.semantics(mergeDescendants = true) {}) {
         Column(modifier = Modifier.weight(1f)) {
             Text(text = options, color = colors.primaryText)
-            Text(
-                text = statusText(submission, strings),
-                color = colors.headingAccent,
-                fontSize = WyrTypeScale.statLabel,
-                fontWeight = FontWeight.Bold,
-            )
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(WyrThemeAccessors.dimens.spaceXs),
+            ) {
+                if (isNew) NewMark()
+                Text(
+                    text = statusText(submission, strings),
+                    color = colors.headingAccent,
+                    fontSize = WyrTypeScale.statLabel,
+                    fontWeight = FontWeight.Bold,
+                )
+            }
         }
         NumberCell(counts?.likes, strings.likes)
         NumberCell(counts?.dislikes, strings.dislikes)
         NumberCell(counts?.answers, strings.answers)
     }
+}
+
+/**
+ * The dot of a decision the player had not seen (CLAUDE.md §8d, *Submitting*), the account icon's, which
+ * a screen reader hears as a word.
+ */
+@Composable
+private fun NewMark() {
+    val word = LocalStrings.current.notice.newMark
+    Badge(
+        containerColor = WyrThemeAccessors.colors.optionA,
+        modifier = Modifier.clearAndSetSemantics { contentDescription = word },
+    )
 }
 
 /** The last row: every question's likes, dislikes and answers, added up. */
