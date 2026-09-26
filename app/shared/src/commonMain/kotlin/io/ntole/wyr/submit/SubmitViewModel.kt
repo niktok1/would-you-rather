@@ -39,7 +39,7 @@ interface SubmitActions {
  * Drives the Submit screen's form (CLAUDE.md §8d, *Submitting*): a question written and filed under
  * the categories picked from the server's, read through [GetCategories], sent through
  * [SubmitQuestion], and the player's points read through [GetPlayerStats], since a question costs
- * [io.ntole.wyr.core.domain.submission.SubmissionRules.SUBMISSION_COST].
+ * points, as many as the server says with them ([SubmitState.submissionCost], CLAUDE.md §8c).
  *
  * One action at a time, and the points read again after every submit, a failed one too: a submission
  * whose answer was lost may have been stored, and paid for.
@@ -163,7 +163,9 @@ class SubmitViewModel(
     private suspend fun load() {
         try {
             val stats = getPlayerStats()
-            _state.update { it.copy(points = stats.totalPoints, registered = stats.username != null) }
+            _state.update {
+                it.copy(points = stats.totalPoints, cost = stats.submissionCost, registered = stats.username != null)
+            }
         } catch (failure: WyrException) {
             reportShown(failure.error, ACTION_POINTS)
             _state.update { it.copy(pointsFailure = failure.toSubmitFailure()) }

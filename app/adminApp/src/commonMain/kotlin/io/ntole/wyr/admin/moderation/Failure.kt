@@ -93,6 +93,7 @@ private fun describe(
         DomainError.SUBMISSION_LIMIT,
         DomainError.NOT_ENOUGH_POINTS,
         DomainError.ACCOUNT_REQUIRED,
+        DomainError.SUBMISSIONS_BLOCKED,
         DomainError.OUT_OF_QUESTIONS,
         DomainError.INVALID_USERNAME,
         DomainError.INVALID_PASSWORD,

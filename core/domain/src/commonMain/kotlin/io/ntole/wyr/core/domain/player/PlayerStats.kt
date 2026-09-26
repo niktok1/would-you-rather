@@ -1,5 +1,7 @@
 package io.ntole.wyr.core.domain.player
 
+import io.ntole.wyr.core.domain.submission.SubmissionRules
+
 /**
  * The player's stats, as the server counts them (CLAUDE.md §8d). The client never works any of
  * them out itself.
@@ -15,9 +17,13 @@ package io.ntole.wyr.core.domain.player
  *
  * [username] is the player's account name, lower-cased as the server keeps it, or null for a guest,
  * who has none (CLAUDE.md §8a, *Accounts*). Read with the points, so the two are one moment's.
+ *
+ * [submissionCost] is what submitting a question costs on the server, in points: its own setting
+ * (CLAUDE.md §8c), which the Submit form shows and holds the points to.
  */
 public data class PlayerStats(
     public val totalPoints: Int,
     public val questionsAnswered: Int,
     public val username: String? = null,
+    public val submissionCost: Int = SubmissionRules.SUBMISSION_COST,
 )

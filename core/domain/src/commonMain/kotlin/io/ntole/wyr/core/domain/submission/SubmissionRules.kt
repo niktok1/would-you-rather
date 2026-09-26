@@ -20,10 +20,11 @@ public object SubmissionRules {
     public const val MAX_PENDING_SUBMISSIONS: Int = 20
 
     /**
-     * What submitting a question costs, in points, and so the fewest a player needs to submit
-     * (CLAUDE.md §8c), 1 until the game is released: the client's one copy, which the Submit screen
-     * shows on its button and holds the button off by while the player has fewer. The server charges
-     * it, and refuses too few as `NOT_ENOUGH_POINTS`.
+     * What submitting a question costs, in points, until the server has said (CLAUDE.md §8c): the
+     * wire's default, 1, which is what a server that names no cost charges. The server's own cost comes
+     * with the player's stats (`PlayerStats.submissionCost`), and the Submit screen shows that on its
+     * button and holds the button off by it while the player has fewer; the server charges it, and
+     * refuses too few as `NOT_ENOUGH_POINTS`.
      */
     public const val SUBMISSION_COST: Int = 1
 

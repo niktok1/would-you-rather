@@ -117,8 +117,8 @@ internal fun ErrorCode.toDomain(): DomainError =
         ErrorCode.ACCOUNT_REQUIRED -> DomainError.ACCOUNT_REQUIRED
 
         // A blocked author's submission, with a 403: never UNAUTHORIZED, which would throw the session
-        // away. UNKNOWN until the Submit form's branch gives it a DomainError and words of its own.
-        ErrorCode.SUBMISSIONS_BLOCKED -> DomainError.UNKNOWN
+        // away. The Submit form says so in a few words.
+        ErrorCode.SUBMISSIONS_BLOCKED -> DomainError.SUBMISSIONS_BLOCKED
 
         ErrorCode.ALREADY_DECIDED -> DomainError.ALREADY_DECIDED
 

@@ -177,7 +177,7 @@ class AppNavigationTest {
         assertEquals(1, analytics.named(AnalyticsEvent.ACCOUNT_OPENED).size)
 
         afterRotation { scene ->
-            assertTrue(sendText(CYRILLIC) in scene.descriptions(), "the form is not shown")
+            assertTrue(sendText(CYRILLIC, 1) in scene.descriptions(), "the form is not shown")
             scene.tap(CYRILLIC.back)
         }
 
@@ -328,7 +328,7 @@ class AppNavigationTest {
 
             scene.tap(CYRILLIC.accountScreens.newQuestion)
             // Its cost is a coin and the number, which a screen reader hears in words.
-            assertTrue(sendText(CYRILLIC) in scene.descriptions(), "the form is not shown")
+            assertTrue(sendText(CYRILLIC, 1) in scene.descriptions(), "the form is not shown")
             assertEquals(listOf(CYRILLIC.back), scene.descriptions().take(1))
             assertEquals(2, game.statsRead)
 
@@ -349,7 +349,7 @@ class AppNavigationTest {
             scene.type(1, "Swim")
             scene.tap(categoryName(FOOD, Language.SERBIAN_CYRILLIC))
 
-            scene.tap(sendText(CYRILLIC))
+            scene.tap(sendText(CYRILLIC, 1))
             scene.settle()
 
             assertEquals(listOf("Fly"), game.sent.map { it.optionA })
@@ -375,7 +375,7 @@ class AppNavigationTest {
             scene.type(0, "Fly")
             scene.type(1, "Swim")
             scene.tap(categoryName(FOOD, Language.SERBIAN_CYRILLIC))
-            scene.tap(sendText(CYRILLIC))
+            scene.tap(sendText(CYRILLIC, 1))
 
             scene.tap(CYRILLIC.back)
             assertEquals(2, game.submissionsRead, "read as the Account screen is shown again")

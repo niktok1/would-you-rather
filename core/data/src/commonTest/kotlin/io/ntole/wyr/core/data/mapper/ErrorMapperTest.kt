@@ -27,7 +27,7 @@ class ErrorMapperTest {
                     // A guest's submission, with a 403: never UNAUTHORIZED, which would drop the session.
                     ApiException(ErrorCode.ACCOUNT_REQUIRED, status = 403) to DomainError.ACCOUNT_REQUIRED,
                     // A blocked author's, with a 403 too: never UNAUTHORIZED, which would drop the session.
-                    ApiException(ErrorCode.SUBMISSIONS_BLOCKED, status = 403) to DomainError.UNKNOWN,
+                    ApiException(ErrorCode.SUBMISSIONS_BLOCKED, status = 403) to DomainError.SUBMISSIONS_BLOCKED,
                     ApiException(ErrorCode.ALREADY_DECIDED, status = 409) to DomainError.ALREADY_DECIDED,
                     ApiException(ErrorCode.WRONG_STATUS, status = 409) to DomainError.WRONG_STATUS,
                     // A moderator's, adding or renaming a category: never ALREADY_DECIDED or QUESTION_NOT_FOUND.

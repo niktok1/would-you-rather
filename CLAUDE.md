@@ -1651,7 +1651,8 @@ listed on the Account screen.
   Account screen*), and not `pointsSpent`, for less text (*provisional — user decision*, §8b); the
   likes and answers the player's questions received are in My questions' table, question by question
   and added up, read with the list rather than with the stats. The client reads only the points, the
-  questions answered and the username: the domain's `PlayerStats` has no field for the answers given,
+  questions answered, the username and what submitting costs (`submissionCost`, §8c): the domain's
+  `PlayerStats` has no field for the answers given,
   the cycle and what is due in it, the likes received, the points spent or the player id, which the
   server still sends, the cycle's two for its own tests.
 - **Skipping** *(built; decided 2026-09-23)*: allowed, earns nothing, and never touches the
@@ -1839,12 +1840,12 @@ listed on the Account screen.
   categories that fails says so under them in one line, *Категорије нису учитане.* (*Нема интернет
   везе.* offline), with Try again, and those read before stay to pick from; when the points could
   not be read either, the one failure under Send says so, and its Try again reads both. **The cost**
-  has one copy on the client, `SubmissionRules.SUBMISSION_COST`, the domain's copy of
-  `WyrApi.Limits.SUBMISSION_COST`, which is what `Scoring.SUBMISSION_COST` charges, so a change to
-  the cost fails `SubmissionLimitsTest` until the copy changes too (an installed build shows the
-  cost it was built with). The form shows it on the button, *Пошаљи ·* and the coin and the number
-  (`PointsText`, §8f), which a screen reader hears as *Пошаљи · Поени: 1*, and holds the button off
-  while the player's points, read through
+  is the server's (§8c, *built 2026-09-26*): read with the points, `PlayerStats.submissionCost`
+  (`SubmitState.cost`), and until a read works the domain's copy of the wire's default,
+  `SubmissionRules.SUBMISSION_COST`, 1, which `SubmissionLimitsTest` pins to
+  `WyrApi.Limits.SUBMISSION_COST` (`SubmitState.submissionCost`). The form shows it on the button,
+  *Пошаљи ·* and the coin and the number (`PointsText`, §8f), which a screen reader hears as *Пошаљи ·
+  Поени: 1*, and holds the button off while the player's points, read through
   `GetPlayerStats` each time the form is shown and after every submit, are fewer, with one short
   line saying so, *Немаш довољно поена.* The server's own refusal, `NOT_ENOUGH_POINTS`
   (`DomainError.NOT_ENOUGH_POINTS`, points spent meanwhile), is that same line, shown once: the
@@ -1853,7 +1854,9 @@ listed on the Account screen.
   list again (`SubmitState.sent`, which the form takes down as it goes and the next action takes
   down too), and one stored once the player had gone back is read again by the Account screen if it
   is shown then, which takes `sent` down; a refusal keeps it and says why under it,
-  `INVALID_SUBMISSION`, `SUBMISSION_LIMIT` with the 20, a rate limit with its wait, or offline.
+  `INVALID_SUBMISSION`, `SUBMISSION_LIMIT` with the 20, a blocked author's `SUBMISSIONS_BLOCKED`
+  (*Не можеш да шаљеш питања.*, `DomainError.SUBMISSIONS_BLOCKED`), a rate limit with its wait, or
+  offline.
   Points that cannot be read say so under Send, with Try again, apart from a refusal
   (`SubmitState.submitFailure`, `pointsFailure`, `categoriesFailure`). One action at a time, and the
   form cannot change while it is sent. `SubmitViewModelTest` drives it over fakes, the categories'
@@ -1962,8 +1965,9 @@ listed on the Account screen.
     and again under their row lock, which the block takes too, so a submission racing a block is either
     rejected by it or refused (`AuthorBlockTest`). `POST /v1/admin/author-unblocks` with an
     `UnblockAuthorRequest` lets them submit again; what the block rejected stays rejected. An id no
-    player has is 404 `AUTHOR_NOT_FOUND`. On the client, `SUBMISSIONS_BLOCKED` and `AUTHOR_NOT_FOUND`
-    read as `DomainError.UNKNOWN` until the branches that show them give each one of its own.
+    player has is 404 `AUTHOR_NOT_FOUND`. On the client, `SUBMISSIONS_BLOCKED` is
+    `DomainError.SUBMISSIONS_BLOCKED`, which the Submit form says (*Submitting*), and `AUTHOR_NOT_FOUND`
+    reads as `DomainError.UNKNOWN` until the branch that shows it gives it one of its own.
   - *The client* is `ModerationRepository` in `:core:domain`, behind `GetPendingSubmissions`,
     `ApproveSubmission` and `RejectSubmission`, none of which ensures a session: the moderator is
     not a player. `DefaultModerationRepository` calls `ModerationApi` through `runApi` alone, never

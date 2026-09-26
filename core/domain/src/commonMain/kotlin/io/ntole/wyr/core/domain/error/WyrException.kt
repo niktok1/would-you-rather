@@ -33,6 +33,13 @@ public enum class DomainError {
      */
     ACCOUNT_REQUIRED,
 
+    /**
+     * A moderator has blocked the player from submitting (CLAUDE.md §8d, *Authors*). Nothing was stored
+     * or taken, and nothing the player can do puts it right. Never [UNAUTHORIZED]: it comes with a 403,
+     * and the session is fine.
+     */
+    SUBMISSIONS_BLOCKED,
+
     /** A moderator tried to decide a submission that a moderator has already approved or rejected. */
     ALREADY_DECIDED,
 
