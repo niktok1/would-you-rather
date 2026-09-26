@@ -661,6 +661,24 @@ EncryptedSharedPreferences: enough for a game that stores no sensitive personal 
 
 ## 8b. Open decisions (resolve before relevant work)
 
+- **The launch** — *decided 2026-09-26; mostly not built yet.* The goal is a public Google Play
+  release, Android first; iOS and the web follow it.
+  - *Countries*: Serbia, Bosnia and Herzegovina, Montenegro and North Macedonia (RS, BA, ME, MK), the
+    Play Console's availability. The seeds are universal already (§8d, *Seeds*); local questions
+    come later (*Local questions*, below).
+  - *Age*: **16 and over**, for the store listing's target audience and in the terms.
+  - *Languages*: Serbian in both scripts. **English is hidden** at launch: its strings stay in the
+    code (§8f), and the language menu shows Ћирилица and Latinica only (not built).
+  - *Submitting* costs **50 points** from the release, 1 until then (§8c), and the server will tell
+    the client the cost rather than the client keeping a copy (not built).
+  - *Email*: none, for now, so no password reset either (*Accounts*, below).
+  - *Analytics* is PostHog (§8g); a moderator's decision is pushed to its author through Firebase
+    Cloud Messaging on Android, and shown in the game too (§8a, *Push tokens*; the client adopts it
+    later).
+  - *Staging*: dev gets a PostgreSQL database of its own, so it runs as production does before a
+    commit is promoted (§8); a paid instance type, so the `render.yaml` change waits for the user's go.
+  - *Domain*: `stabiradije.rs`, with `stabiradije.com` beside it, and the API at
+    `api.stabiradije.rs`; both were free on 2026-09-26 and are the user's to buy.
 - **Accounts** — *decided 2026-09-25; built (§8a, *Accounts*; the Account screen, §8d).* This
   is a simple game that stores no sensitive personal data, and most players stay a day or a few, so the
   simplest design that is correct enough wins over maximum security. A new player plays at once as a
@@ -679,7 +697,7 @@ EncryptedSharedPreferences: enough for a game that stores no sensitive personal 
   server (*decided 2026-09-26*, §8a *Play Games sign-in*; the client adopts it later), and the
   register screen stays as the fallback, and the only way on iOS and the web until then; Game Center
   on iOS comes once there is an Apple developer account, as another `IdentityProvider`. An optional
-  email, for a password reset, is not built. This replaces the recovery
+  email, for a password reset, is dropped for now (*decided 2026-09-26*). This replaces the recovery
   secret (V4), which is gone from the server and every client; its column stays, unused, until a
   later migration drops it. A `d4a9dbf` phone build that keeps a secret fails every call once its
   session dies, since the recovery it tries first is now 404: install a current build on it.
@@ -1143,7 +1161,7 @@ returns and never recomputes points, so the two cannot disagree.
   (§8a), so a dislike that cost its author a point would let a script drive any author below zero,
   and so stop them submitting. It is a count, for now for the players and the moderator to see.
 - Submitting a question **costs** its author `Scoring.SUBMISSION_COST`, **1 point** until the game is
-  released (*decided 2026-09-25*), taken in the submission's own transaction (§8d, *Submitting*). The
+  released (*decided 2026-09-25*) and **50** from then on (*decided 2026-09-26*, §8b *The launch*), taken in the submission's own transaction (§8d, *Submitting*). The
   number is the wire's, `WyrApi.Limits.SUBMISSION_COST`, so a client can say what it is (the game's
   one copy, `SubmissionRules.SUBMISSION_COST`, is on the Submit form's button, §8d); only the server
   charges it. A player needs at least that many points to submit, or it is 409
