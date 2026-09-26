@@ -143,6 +143,25 @@ class PostHogAnalyticsTest {
             assertTrue(properties.string("\$session_id").isNotEmpty(), "the session")
         }
 
+    /** PostHog would add a country, a city and coordinates from the request's address to each (CLAUDE.md §8g). */
+    @Test
+    fun `every event asks PostHog to look up no location`() =
+        runTest {
+            val posthog = FakePostHog(this)
+            val analytics = analytics(posthog)
+
+            analytics.track("app_opened")
+            analytics.screen("play")
+            analytics.identify("player-1")
+            analytics.flush()
+            testScheduler.runCurrent()
+
+            assertEquals(3, posthog.events.size)
+            posthog.events.forEach { event ->
+                assertEquals(JsonPrimitive(true), event.getValue("properties").jsonObject["\$geoip_disable"], "$event")
+            }
+        }
+
     @Test
     fun `the batch goes to the host the build names`() =
         runTest {

@@ -608,6 +608,14 @@ EncryptedSharedPreferences: enough for a game that stores nothing personal.
   So Log out stands under the row, at its end, for a registered player (574 at the tallest). The
   options: keep it; Log out on the card, where a guest's button to the Auth page is; or the switch
   elsewhere, off the Account screen's first view.
+- **Where players are, in analytics** — *provisional — user decision.* By default PostHog keeps the
+  address each event's request came from and adds a country, a city and coordinates from it, which
+  is personal data under the GDPR and would have to be in the privacy policy (§8g, *Consent*). Built
+  as the stricter choice: every event asks for no location (`$geoip_disable`), and the project
+  discards the address (§8g, *Where the player is*). The options: keep it; or let PostHog add a
+  location (drop `$geoip_disable`, still discarding the address), for players by country on the
+  dashboards, and say in the privacy policy that an approximate location is derived from the
+  address. A country the game itself keeps is another matter (*Local questions*, below).
 - **One Try again** — *provisional — user decision.* The Play and Account redesigns said Try again
   two ways in Serbian, *Пробај опет* and *Покушај поново*, and so did the Categories screen, with
   *Пробај опет*; it is one text now (§8f, *The strings*), *Покушај поново*, which four of the five
@@ -1892,6 +1900,14 @@ the same events. The moderation app sends none.
 - **What is never sent**: the username, an email, a password, any question's or option's text, the
   moderator's reason, anything typed, a token or the admin token. A question is its id, a category
   its id, a failure the domain's name for it (`DomainError`).
+- **Where the player is** *(built; provisional — user decision, §8b, Where players are, in
+  analytics)*: nowhere. A request to PostHog comes from the player's address, as one to the game's
+  server does, and by default PostHog keeps that address as `$ip` and adds a country, a city and
+  coordinates to every event from it (GeoIP). So every event carries `$geoip_disable: true`, which
+  has PostHog add no location (`PostHogAnalytics.GEOIP_DISABLE`, `PostHogAnalyticsTest`), and the
+  project is set to discard the address (*Setting up PostHog*, below), which no code can do. What
+  stays is pseudonymous: the install's random id, and an account's player id once it registers or
+  logs in; the privacy policy says so.
 - **The key, per platform** *(built)*: a PostHog project's key and host, set when a build is made or
   started as the environment is (§8e), never committed; **no key is analytics off**, a no-op, which is
   how every test and every CI build runs. The key is the project's public one, which can only send.
@@ -1968,13 +1984,16 @@ the same events. The moderation app sends none.
   draws it on and off and taps it, and `AppNavigationTest` turns the app's analytics off and on.
 - **Consent** (*the user's, 2026-09-26*): on by default, under legitimate interest, for a game for
   16 and over; the privacy policy says what is sent, that it is on, and how to turn it off (the
-  Statistics switch). *To check before an EU launch*: whether the install id kept on the device (the
+  Statistics switch), and that PostHog sees the address each request comes from, discards it and
+  derives no location from it (*Where the player is*). *To check before an EU launch*: whether the install id kept on the device (the
   browser's in `localStorage`) is itself a storing the ePrivacy rules want consent for, whatever the
   basis for the rest.
 - **Setting up PostHog** (*the user's, not in the repository*): make a project on the **EU** cloud
-  (https://eu.posthog.com), put its *Project API key* in each build's settings (above; for a phone,
-  `wyr.posthog.key` in `local.properties`), and build a dashboard, filtered to `environment = prod`
-  (a DEV or LOCAL build's events are tests), of these insights:
+  (https://eu.posthog.com), turn on *Settings → Project → IP data capture configuration → Discard
+  client IP data*, so the address events come from is not kept (*Where the player is*, above), put
+  its *Project API key* in each build's settings (above; for a phone, `wyr.posthog.key` in
+  `local.properties`), and build a dashboard, filtered to `environment = prod` (a DEV or LOCAL build's
+  events are tests), of these insights:
   - *Live players*: Trends, unique users of any event, the last hour by 5 minutes (and PostHog's own
     *Activity* for the events as they come).
   - *Active players and retention*: unique users of `app_opened` by day and week, and a Retention

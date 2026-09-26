@@ -13,8 +13,9 @@ import kotlinx.coroutines.flow.asStateFlow
  * fails being the implementation's to retry or drop. Events are named by [AnalyticsEvent] and their
  * properties by [AnalyticsProperty].
  *
- * A property holds a string, a number, a boolean, a list of those, or null. Never anything personal:
- * no username, no email, no password, and no question's text, only its id; a category is its id too.
+ * A property holds a string, a number, a boolean, a list of those, or null. Never anything that names
+ * the player or says where they are: no username, no email, no password, no place, and no question's
+ * text, only its id; a category is its id too.
  */
 public interface Analytics {
     /**

@@ -1517,8 +1517,9 @@ sends nothing. The key is never committed.
 
 **To see events from a phone** (`devDebug`, against the dev server):
 
-1. Make a project on PostHog's **EU** cloud (https://eu.posthog.com), and copy its *Project API key*
-   (`phc_...`) from *Settings → Project → General*.
+1. Make a project on PostHog's **EU** cloud (https://eu.posthog.com), turn on *Settings → Project →
+   IP data capture configuration → Discard client IP data* (CLAUDE.md §8g, *Where the player is*),
+   and copy its *Project API key* (`phc_...`) from *Settings → Project → General*.
 2. Put it in `local.properties`, at the repository's root (git ignores it), and install:
 
    ```properties
