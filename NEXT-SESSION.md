@@ -1728,9 +1728,9 @@ sends nothing. The key is never committed.
 
 **To see events from a phone** (`devDebug`, against the dev server):
 
-1. Make a project on PostHog's **EU** cloud (https://eu.posthog.com), turn on *Settings → Project →
-   IP data capture configuration → Discard client IP data* (CLAUDE.md §8g, *Where the player is*),
-   and copy its *Project API key* (`phc_...`) from *Settings → Project → General*.
+1. Make a project on PostHog's **EU** cloud (https://eu.posthog.com), leave *IP data capture* as it
+   is (CLAUDE.md §8g, *Where the player is*: the address and a location are kept), and copy its
+   *Project API key* (`phc_...`) from *Settings → Project → General*.
 2. Put it in `local.properties`, at the repository's root (git ignores it), and install:
 
    ```properties
@@ -1860,9 +1860,9 @@ delete their account in the app (`feat/account-client`) and through a web page P
     questions shown, answered (the side and the time) and skipped, reactions, registrations, logins,
     logouts and the language picked.
   - **App info and performance → Diagnostics**: the error codes a screen shows.
-  - With every event, the OS and its version, the device type, the app version and the platform. No
-    location: every event says `$geoip_disable`, and the project discards the address once you turn
-    that setting on (CLAUDE.md §8g, *Setting up PostHog*).
+  - With every event, the OS and its version, the device type, the app version and the platform. And an
+    **approximate location**: PostHog keeps the address and derives a country and city from it
+    (CLAUDE.md §8g, *Where the player is*), so declare *Location → Approximate location* too.
 - *To Google*, by its own libraries once `feat/android-services` lands: Firebase Cloud Messaging (the
   push token, and Firebase's own installation id) and Play Games Services (sign-in). Google and PostHog
   process it for the game, as service providers, which Play's form does not count as sharing.
