@@ -401,6 +401,63 @@ engine at stop. Docs only: the cascades, CIO, push timing and the §8b list of s
 registered player, for good, with no unlink: provisional); and "stores nothing personal" is now "no
 sensitive personal data", the privacy policy to name FCM and Play Games (§8b *Personalization*).
 
+**`feat/android-services`** (from 2a4f96e, Wave 2; nothing pushed or merged): the Android client
+side of **Play Games sign-in** and **FCM pushes**, and the **in-app notice** of a moderator's
+decision on every platform, all off until the user gives a build its ids (*Play Games and pushes on a
+phone*, below). One commit each:
+- **A Play Games player is registered** (600ecf6; CLAUDE.md §8a *Play Games sign-in*, §8d *The
+  Account screen*): `PlayerStats.playGamesLinked` and `registered`; such a player submits and logs out,
+  and a card with no username reads *Google Play Игре* with a quiet *Додај корисничко име*.
+- **The launch signs in with Play Games** (b82f07f; §8a *The client*): `LinkPlayGames` behind the
+  `PlayGames` port, `CurrentSession` (every session stored, never minting), `PlayGamesSettled`, and
+  `AppServices`, which starts what runs by itself on the app's first coming to the foreground. The two
+  Play Games codes are `DomainError`s of their own.
+- **The Auth page's button** (acd9096): *Пријави се преко Google Play Игара*, first on the page where
+  a build has Play Games and the player is not linked.
+- **Play Games on Android** (2608fb0): `play-services-games-v2` 22.1.0, `AndroidPlayGames`,
+  gradle/wyr-android-services.gradle.kts, the manifest's `APP_ID` and its `PlayGamesInitProvider`
+  taken out, so a build without the ids never starts Play Games.
+- **The push token kept registered** (341bee1; §8a *Push tokens*, *The client*): `KeepPushTokenRegistered`
+  behind the `DevicePush` port, for the session at launch and every one after, and each new token;
+  the Submit form asks for the notifications permission after a question is stored.
+- **The notice** (b0cb7a9; §8d *The notice of a decision*): `DecisionNotices`, a dot on the account
+  icon of Home and Play and on each new row of My questions, the seen set kept per environment and
+  player.
+- **FCM on Android** (686e07d): `firebase-messaging` 25.1.3 from `FirebaseOptions` of the build's ids,
+  no google-services plugin, its `FirebaseInitProvider` taken out; the *Твоја питања* channel, the
+  coin as the small icon, a tap opening the Account screen (`notification_opened`), a push with the app
+  open posting nothing and dotting the icon instead.
+- **A fix** (2b2dab3): the moderation app names the two new `DomainError`s.
+
+**Verified on this machine**: `ktlintCheck`; `:server:test` (480), `:core:domain:jvmTest` (102),
+`:core:data:jvmTest` (161), `:core:network:jvmTest` with `:core:network:testAndroidHostTest` (230),
+`:app:shared:jvmTest` (418), `:app:adminApp:jvmTest` (106), all passing; the verify job's client
+compiles, `:app:androidApp:assembleDebug` and `:app:androidApp:assembleProdRelease`; the iOS Kotlin
+compiles (`:app:shared` main and test, each `:core` module's test). A dev build made with made-up ids
+(`-Pwyr.playgames.*`, `-Pwyr.firebase.*`, never kept) put them in `BuildConfig` and the
+`game_services_project_id` string, a malformed id failed the build naming it, and the merged
+manifest has neither SDK's init provider. No test reaches Google: every one runs with both off.
+**Not verified**: nothing ran on a phone or an emulator, so none of Play Games' automatic sign-in,
+`requestServerSideAccess`, its sign-in dialog, an FCM token, a notification posted in the background,
+a tap on it opening Account, the permission dialog or the channel's name in the phone's settings has
+been seen; whether the Play Console takes Android credentials for `io.ntole.wyr.dev` and `.local` in
+the one game project (Google's documentation neither says so nor forbids it, CLAUDE.md §8b step 3);
+the release build under R8, which `feat/android-release` turns on (both SDKs ship consumer rules);
+and the iOS link and simulator tests (CI's `ios` job).
+
+**At the merges**: `feat/account-client`'s deletion should drop the session through
+`DefaultSessionRepository.clear()`, so its fresh guest registers the push token again (`CurrentSession`
+hears the mint) and a launch does not sign the device back in with Play Games (`clear` settles it);
+`feat/android-release` and this branch both add to `app/androidApp`'s manifest and build file; the
+Account screen, `AccountViewModel`, `SubmitViewModel`, `Strings`, `App.kt` and `DataModule` were added
+to, not rewritten.
+
+**For the user** (CLAUDE.md §8b, each *provisional — user decision*): *When a launch signs in with
+Play Games* (a login and a logout settle it, only a dead session forgets it, not every replacement as
+the scope asked, which would undo a login at the next launch); *Where the Auth page offers Play Games*
+(whenever the player is not linked, signed in to Play Games or not); *A Play Games player's name on the
+card* (*Google Play Игре*); *The notice's look* (a pink dot, no text). And the setup below.
+
 ### Verified working
 
 - **`feat/server-engagement`**, on this machine, at 8660e01 and again at a371b0e after the review's
@@ -1233,6 +1290,62 @@ ALLOWED_WEB_ORIGINS=localhost:8081 ./gradlew :server:run
 ```bash
 ./gradlew :app:webApp:wasmJsBrowserDevelopmentRun
 ```
+
+### Play Games and pushes on a phone
+
+Both are off on every build until it is given the ids (CLAUDE.md §8a, *Play Games sign-in* and *Push
+tokens*, *On Android*); `adb logcat -s WYR` says which is off and why at launch. None of the ids is a
+secret, but none is committed: they go in `local.properties` (git ignores it), or as `-P` Gradle
+properties. The two secrets, the game server's client secret and the FCM service account key, go on
+Render only, as CLAUDE.md §8b says. Once:
+
+1. **Play Console** (a Google Play developer account, the game created with package `io.ntole.wyr`):
+   *Grow users → Play Games Services → Setup and management → Configuration*, create a Play Games
+   Services project; it makes a Google Cloud project, whose OAuth consent screen it asks you to fill in
+   (app name, support email; *External*). Its **Project ID**, the digits on that page, is
+   `wyr.playgames.appId`.
+2. Same page, **Credentials → Add credential → Android**: *Create OAuth client* opens Google Cloud;
+   there pick *Android*, package `io.ntole.wyr`, and the SHA-1 of the Play app signing key (*Test and
+   release → App integrity → App signing*); *Create*, then back in the Play Console pick it and *Save
+   changes*. For builds made on this Mac, add one more for `io.ntole.wyr.dev` with the debug key's SHA-1,
+   `keytool -list -v -keystore ~/.android/debug.keystore -alias androiddebugkey -storepass android`
+   (and `io.ntole.wyr.local` for the emulator). If the Play Console will not take a package that is not
+   its app's, Play Games works on the PROD flavor only; a DEV build then just finds nobody signed in.
+3. **Add credential → Game server**: *Create OAuth client*, type *Web application*; its **client ID**
+   is `wyr.playgames.serverClientId` here and `PLAY_GAMES_CLIENT_ID` on Render, its **client secret**
+   `PLAY_GAMES_CLIENT_SECRET` on Render only (§8b, *Play Games sign-in*, step 5).
+4. **Testers** tab: add every Google account that will try it, yours too, or Play Games refuses them
+   until the game is published.
+5. **Firebase console**: *Add project* and choose the Google Cloud project step 1 made (one project for
+   both), then *Add app → Android* three times: `io.ntole.wyr`, `io.ntole.wyr.dev`, `io.ntole.wyr.local`
+   (no SHA-1 needed for pushes). Skip the SDK and plugin steps. Download the last app's
+   `google-services.json`, do not put it in the repository, and copy out of it: `project_id` to
+   `wyr.firebase.projectId`, `project_number` to `wyr.firebase.senderId`, the `current_key` under
+   `api_key` to `wyr.firebase.apiKey`, and each client's `mobilesdk_app_id` to
+   `wyr.firebase.appId.prod`, `.dev` and `.local` by its `package_name`.
+6. The server's side of pushes: CLAUDE.md §8b, *Push notifications*, steps 2 and 3 (a service account
+   key as `FCM_SERVICE_ACCOUNT_JSON` on Render).
+
+`local.properties` then holds, beside `sdk.dir`:
+
+```properties
+wyr.playgames.appId=<the Play Games project id, digits>
+wyr.playgames.serverClientId=<the game server client id>.apps.googleusercontent.com
+wyr.firebase.projectId=<project_id>
+wyr.firebase.apiKey=<current_key>
+wyr.firebase.senderId=<project_number>
+wyr.firebase.appId.prod=<io.ntole.wyr's mobilesdk_app_id>
+wyr.firebase.appId.dev=<io.ntole.wyr.dev's mobilesdk_app_id>
+wyr.firebase.appId.local=<io.ntole.wyr.local's mobilesdk_app_id>
+```
+
+To try it, build the DEV flavor from Android Studio as usual (a new worktree needs `local.properties`
+copied in): with a tester signed in to Play Games on the phone, a fresh install signs in by itself once
+the first question loads, and the Account card reads *Google Play Игре*; or tap the Auth page's
+*Пријави се преко Google Play Игара*. Submit a question, allow notifications when asked, and approve it
+in the moderation app against DEV (`WYR_ENV=dev ./gradlew :app:adminApp:run`): with the app in the
+background a notification comes, *Твоје питање је одобрено*, and a tap opens Account, the row dotted;
+with the app open, the account icon gets its dot instead.
 
 ### How to run against dev/prod
 

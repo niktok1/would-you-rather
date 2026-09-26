@@ -755,8 +755,8 @@ EncryptedSharedPreferences: enough for a game that stores no sensitive personal 
     the client the cost rather than the client keeping a copy (not built).
   - *Email*: none, for now, so no password reset either (*Accounts*, below).
   - *Analytics* is PostHog (§8g); a moderator's decision is pushed to its author through Firebase
-    Cloud Messaging on Android, and shown in the game too (§8a, *Push tokens*; the client adopts it
-    later).
+    Cloud Messaging on Android, and shown in the game too, on every platform (§8a, *Push tokens*;
+    §8d, *The notice of a decision*).
   - *Staging*: dev gets a PostgreSQL database of its own, so it runs as production does before a
     commit is promoted (§8); a paid instance type, so the `render.yaml` change waits for the user's go.
   - *Domain*: `stabiradije.rs`, with `stabiradije.com` beside it, and the API at
@@ -776,7 +776,7 @@ EncryptedSharedPreferences: enough for a game that stores no sensitive personal 
   No email is collected, so there is **no password reset**: a forgotten password means a new
   account. **No-click sign-in** links a platform's player to a player here as registering links a
   username, beside the password or in its place: Play Games Services on Android is built on the
-  server (*decided 2026-09-26*, §8a *Play Games sign-in*; the client adopts it later), and the
+  server and the Android client (*decided 2026-09-26*, §8a *Play Games sign-in*), and the
   register screen stays as the fallback, and the only way on iOS and the web until then; Game Center
   on iOS comes once there is an Apple developer account, as another `IdentityProvider`. An optional
   email, for a password reset, is dropped for now (*decided 2026-09-26*). This replaces the recovery
@@ -1058,6 +1058,22 @@ EncryptedSharedPreferences: enough for a game that stores no sensitive personal 
   One edge, accepted: a device from before this build holds a session and no flag, so its next launch
   signs in with Play Games, and when the Play Games player is linked to another player already, the
   device becomes theirs (only testers' devices).
+- **Where the Auth page offers Play Games** — *provisional — user decision.* The scope asked for the
+  button "when Play Games is configured and the player is not signed in to it"; built, it shows where
+  Play Games is set up and the player read is not linked to it (`AccountState.offersPlayGames`), signed
+  in to Play Games or not, and signs them in to Play Games first only when they are not. So a player
+  who logged out of a Play Games account, and whose device then signs in with Play Games by itself no
+  more (*When a launch signs in with Play Games*), gets back in with one tap. The options: keep it; or
+  only while not signed in to Play Games, as asked, which leaves that player the username form alone.
+- **A Play Games player's name on the card** — *provisional — user decision.* A player registered by
+  Play Games alone has no username, so the card names them *Google Play Игре* (§8d, *The Account
+  screen*), with a quiet *Додај корисничко име* in place of the button to register. The options: keep
+  it; *Играч*; or their Play Games name, which Play Games' `PlayersClient` would have to be asked for
+  on the device, since the server keeps none.
+- **The notice's look** — *provisional — user decision.* A dot in the brand's pink on the account
+  icon, and on each new row of My questions for the visit that first shows it (§8d, *The notice of a
+  decision*); no banner and no text on screen (the user: less text). The options: keep it; a number of
+  decisions in the dot; or the heading's accent in place of the pink.
 - **Push notifications** — *built on the server 2026-09-26 (§8a, *Push tokens*); off until the user
   sets it up.* The server sends through Firebase Cloud Messaging as a Google service account, whose
   JSON key file `FCM_SERVICE_ACCOUNT_JSON` holds whole (`sync: false` in `render.yaml`, set by hand in
@@ -1764,8 +1780,8 @@ listed on the Account screen.
   points spent: what the player's questions not rejected
   cost them (`pointsSpent`, *Submitting*), and the player's username, null for a guest (§8a,
   *Accounts*; `PlayerStats.username` on the client, so a screen reads the name with the points), and
-  whether they signed in with Play Games (`playGamesLinked`, §8a, *Play Games sign-in*; the client
-  adopts it later).
+  whether they signed in with Play Games (`playGamesLinked`, §8a, *Play Games sign-in*;
+  `PlayerStats.playGamesLinked` on the client, which counts such a player registered).
   Built in `StatsStore.of`, as one statement, so the total always agrees with the answers given, the
   likes received and the points spent (§8c). It only reads, and the cycle starts lazily on the next
   feed request, so between the answer that finishes a cycle and that request it reports the finished
