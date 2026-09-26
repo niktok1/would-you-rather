@@ -55,9 +55,11 @@ import io.ntole.wyr.core.domain.question.Question
 import io.ntole.wyr.core.domain.reaction.Reaction
 import io.ntole.wyr.core.domain.vote.Side
 import io.ntole.wyr.language.Language
+import io.ntole.wyr.language.LocalLanguage
 import io.ntole.wyr.language.LocalStrings
 import io.ntole.wyr.language.PlayStrings
 import io.ntole.wyr.language.categoryName
+import io.ntole.wyr.language.optionText
 import io.ntole.wyr.points.PointsAmount
 import io.ntole.wyr.theme.WyrIcons
 import io.ntole.wyr.theme.WyrThemeAccessors
@@ -140,6 +142,8 @@ private fun QuestionBody(
     val dimens = WyrThemeAccessors.dimens
     val density = LocalDensity.current
     val outcome = (state as? PlayUiState.Revealed)?.outcome
+    // In Serbian Latin made Latin, as every Serbian Latin text is; as its author wrote it otherwise (§8f).
+    val language = LocalLanguage.current
     // Before the answer a card's text says what a tap on it does; after, a screen reader is told.
     val clickLabel = if (outcome == null) null else LocalStrings.current.playScreen.nextQuestion
     // Whether the cards stand side by side, the row under both, as they were last laid out: each bar
@@ -156,7 +160,7 @@ private fun QuestionBody(
             },
     ) {
         OptionCard(
-            text = state.question.optionA,
+            text = optionText(state.question.optionA, language),
             background = colors.optionA,
             contentColor = colors.onOptionA,
             barTrack = colors.revealTrackOnA,
@@ -183,7 +187,7 @@ private fun QuestionBody(
         )
 
         OptionCard(
-            text = state.question.optionB,
+            text = optionText(state.question.optionB, language),
             background = colors.optionB,
             contentColor = colors.onOptionB,
             barTrack = colors.revealTrackOnB,

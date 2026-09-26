@@ -2129,7 +2129,8 @@ hand, so the two cannot say different things; and **English** stands beside them
   precomposed Đ, Ž, Ć, Č and Š, the accented Ѐ and Ѝ (ѝ, her, beside и, and) the precomposed È and
   Ì, and Dž is two letters, never Unicode's one-character digraph. Latin letters, digits,
   punctuation, spacing and the Cyrillic letters Serbian does not use (Я, Щ, Ы...) come back as they
-  were. Pure and in the domain, so a question's text can go through it later. `SerbianScriptTest`
+  were. Pure and in the domain, so a question's options go through it too (*Questions in Latin*,
+  below). `SerbianScriptTest`
   pins every letter, capital and small, the digraphs in each case, the accented letters, and text
   that must not change.
 - **The strings** *(built)*: `Strings` (`:app:shared`, `io.ntole.wyr.language`), a data class of
@@ -2222,9 +2223,14 @@ hand, so the two cannot say different things; and **English** stands beside them
     Romance adjective, *content*/*contente*), and how an option avoids it; and whether the game
     says the familiar or the formal *you* (*du* or *Sie*, *tu* or *vous*). Croatian and Bosnian
     would take Serbian's answers.
-- **Not translated yet**: question texts stay as their authors wrote them (server data; a later
-  change may put Serbian ones through `SerbianScript.toLatin`; a local question is never
-  translated, §8b *Local questions*), and the moderation app
+- **Questions in Latin** *(built 2026-09-26)*: in Serbian Latin a question's options show through
+  `SerbianScript.toLatin`, as the categories' names do, and in Serbian Cyrillic and English as their
+  author wrote them; a Latin letter comes back as it was, so an option written in Latin or in English
+  reads the same in all three. One function makes the choice, `optionText(option, language)`
+  (`io.ntole.wyr.language`), for the Play screen's cards and My questions alike (`OptionTextTest`,
+  `PlayScreenDrawTest`, `AccountScreenDrawTest`).
+- **Not translated yet**: question texts stay as their authors wrote them, but for the script above
+  (server data; a local question is never translated, §8b *Local questions*), and the moderation app
   (`:app:adminApp`) stays English, naming categories in Serbian (`nameOf`).
 
 ## 8g. Analytics — decided 2026-09-26

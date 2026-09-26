@@ -239,6 +239,29 @@ class PlayScreenDrawTest {
         }
     }
 
+    /**
+     * A question's options in Serbian Latin are made Latin, as every Serbian Latin text is, and in
+     * Cyrillic and English shown as stored (CLAUDE.md §8f), asked and revealed.
+     */
+    @Test
+    fun `a question's options show in Latin in Serbian Latin and as stored otherwise`() {
+        val cyrillic = QUESTION.copy(optionA = "Јести пљескавицу", optionB = "Пити бозу")
+        Language.entries.forEach { language ->
+            val expected =
+                if (language == Language.SERBIAN_LATIN) {
+                    listOf("Jesti pljeskavicu", "Piti bozu")
+                } else {
+                    listOf(cyrillic.optionA, cyrillic.optionB)
+                }
+            listOf(PlayUiState.Asking(cyrillic), PlayUiState.Revealed(cyrillic, OUTCOME)).forEach { state ->
+                withScreen(state, language = language) { scene, _ ->
+                    val shown = scene.texts()
+                    assertTrue(shown.containsAll(expected), "$state in $language: $shown")
+                }
+            }
+        }
+    }
+
     @Test
     fun `a card answers before the reveal and goes on to the next question after it`() {
         withScreen(PlayUiState.Asking(QUESTION)) { scene, actions ->

@@ -261,6 +261,23 @@ class AccountScreenDrawTest {
         }
     }
 
+    /** A question's options as the Play screen shows them: made Latin in Serbian Latin, as written otherwise. */
+    @Test
+    fun `My questions shows a question's options in Latin in Serbian Latin`() {
+        val cyrillic = QUESTION.copy(optionA = "Јести пљескавицу", optionB = "Пити бозу")
+        Language.entries.forEach { language ->
+            val or = stringsOf(language).accountScreens.or
+            val shown = textsOf(AccountState(stats = REGISTERED, submissions = listOf(cyrillic)), language)
+            val expected =
+                if (language == Language.SERBIAN_LATIN) {
+                    "Jesti pljeskavicu $or Piti bozu"
+                } else {
+                    "${cyrillic.optionA} $or ${cyrillic.optionB}"
+                }
+            assertTrue(expected in shown, "$language: $shown")
+        }
+    }
+
     /**
      * Each question's likes, dislikes and players who answered it, a served one's as the server counted
      * them and a question never served, pending or rejected, a dash; then a last row adding them up.
