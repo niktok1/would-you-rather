@@ -1719,8 +1719,10 @@ orientation, in common code alone:
   returning player, would otherwise mark that player's old decisions as news). What is seen is only
   ever added to, since a decision stays one, so no list read before another can make one news again.
   `DecisionNoticesTest`,
-  `StoredSeenDecisionsTest`, `AppServicesTest`, `TopBarsDrawTest` (both bars with the dot, still 48
-  high at 375 wide with nothing cut short, in both themes and every language), `AccountScreenDrawTest`,
+  `StoredSeenDecisionsTest`, `AppServicesTest`, `TopBarsDrawTest` (both bars with the dot, Play's with
+  the menu before it, still 48 high at 375 wide with nothing cut short but a long selection, in both
+  themes and every language, and the dot drawn inside the account icon's 48 and on no bar without
+  news), `AccountScreenDrawTest`,
   and `AppNavigationTest`, which dots the icon on Home and Play and takes the dot down on Account.
 - Its last line, in a LOCAL or DEV build, names the server the build talks to and its URL, in the
   language shown, *Сервер: Dev (https://wyr-server-dev.onrender.com)* (`serverLine`, §8e); a PROD

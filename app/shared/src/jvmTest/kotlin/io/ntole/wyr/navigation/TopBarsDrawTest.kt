@@ -2,6 +2,10 @@ package io.ntole.wyr.navigation
 
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.ImageComposeScene
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.graphics.toComposeImageBitmap
+import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.unit.Density
 import io.ntole.wyr.descriptions
 import io.ntole.wyr.language.Language
@@ -10,12 +14,15 @@ import io.ntole.wyr.language.Strings
 import io.ntole.wyr.language.WyrStrings
 import io.ntole.wyr.language.fill
 import io.ntole.wyr.language.stringsOf
+import io.ntole.wyr.nodes
 import io.ntole.wyr.play.CategoriesPlayed
 import io.ntole.wyr.play.QuestionMenu
 import io.ntole.wyr.sizeNeeded
 import io.ntole.wyr.tap
 import io.ntole.wyr.texts
+import io.ntole.wyr.theme.WyrDarkColors
 import io.ntole.wyr.theme.WyrDefaultDimens
+import io.ntole.wyr.theme.WyrLightColors
 import io.ntole.wyr.theme.WyrTheme
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -102,6 +109,43 @@ class TopBarsDrawTest {
         }
     }
 
+    /**
+     * The notice's dot is drawn inside the account icon's touch target, 48 square, on Home's bar and
+     * Play's, in both themes, and nowhere else on the bar: a bar with no news draws none.
+     */
+    @Test
+    fun `the dot is drawn inside the account icon's touch target and only with news`() {
+        listOf(WyrLightColors, WyrDarkColors).forEach { colors ->
+            BARS.forEach { bar ->
+                val strings = stringsOf(Language.DEFAULT)
+                val dotted = strings.notice.accountWithNews.fill(strings.account)
+                val scene = scene(bar, Language.DEFAULT, dark = colors.isDark)
+                try {
+                    val pixels = scene.render().toComposeImageBitmap().toPixelMap()
+                    val dot =
+                        (0 until pixels.height).flatMap { y ->
+                            (0 until pixels.width)
+                                .filter { x -> pixels[x, y].toArgb() == colors.optionA.toArgb() }
+                                .map { x -> Offset(x.toFloat(), y.toFloat()) }
+                        }
+                    val name = "${bar.name}, dark: ${colors.isDark}"
+                    if (dotted !in bar.icons(strings)) {
+                        assertEquals(emptyList(), dot, "$name: no dot")
+                    } else {
+                        assertTrue(dot.isNotEmpty(), "$name: no dot drawn")
+                        val icon = scene.nodes().single { dotted in it.descriptions }.boundsInRoot
+                        // The icon button's bounds are 40 square inside its touch target of 48.
+                        val target = icon.inflate((TOUCH_TARGET - icon.width) / 2)
+                        assertEquals(TOUCH_TARGET.toFloat(), target.width, name)
+                        assertTrue(dot.all { target.contains(it) }, "$name: a dot outside $target")
+                    }
+                } finally {
+                    scene.close()
+                }
+            }
+        }
+    }
+
     /** What the bars' buttons were tapped for, in order. */
     private class Actions {
         val tapped = mutableListOf<String>()
@@ -141,8 +185,27 @@ class TopBarsDrawTest {
 
         val TOP_BAR_HEIGHT = WyrDefaultDimens.topBarHeight.value.toInt()
 
+        /** An icon button's touch target, as Material sets it. */
+        const val TOUCH_TARGET = 48
+
         /** The server's first five categories, every one played, as the Play screen names them in Cyrillic. */
         const val LONG_SELECTION = "Храна, Начин живота, Етика, Супермоћи, Апсурдно"
+
+        /** Play's bar with the menu, a dot on the account icon, and [categories] played. */
+        @Composable
+        private fun PlayBarWithNews(
+            actions: Actions,
+            categories: String,
+        ) {
+            PlayTopBar(
+                onHome = actions.record("home"),
+                onAccount = actions.record("account"),
+                news = true,
+                menu = { QuestionMenu(enabled = true, onPick = { actions.tapped += "pick $it" }) },
+            ) {
+                CategoriesPlayed(text = categories, enabled = true, onClick = actions.record("categories"))
+            }
+        }
 
         val BARS =
             listOf(
@@ -189,25 +252,22 @@ class TopBarsDrawTest {
                     },
                 ),
                 // A moderator decided a question of the player's: a dot on the account icon, which a
-                // screen reader hears in its name, and nothing else changes.
+                // screen reader hears in its name, and nothing else changes, the menu before it included.
                 Bar(
                     name = "Play's, with news",
-                    icons = { listOf(it.home, it.notice.accountWithNews.fill(it.account)) },
+                    icons = { listOf(it.home, it.playScreen.menu.name, it.notice.accountWithNews.fill(it.account)) },
                     texts = { listOf(it.allCategories) },
                     taps = listOf("home", "account", "categories"),
-                    draw = { actions ->
-                        PlayTopBar(
-                            onHome = actions.record("home"),
-                            onAccount = actions.record("account"),
-                            news = true,
-                        ) {
-                            CategoriesPlayed(
-                                text = LocalStrings.current.allCategories,
-                                enabled = true,
-                                onClick = actions.record("categories"),
-                            )
-                        }
-                    },
+                    draw = { actions -> PlayBarWithNews(actions, LocalStrings.current.allCategories) },
+                ),
+                // The dot takes no width of the categories': a long selection is cut as it is without it.
+                Bar(
+                    name = "Play's, with news and a long selection",
+                    icons = { listOf(it.home, it.playScreen.menu.name, it.notice.accountWithNews.fill(it.account)) },
+                    texts = { listOf(LONG_SELECTION) },
+                    taps = listOf("home", "account", "categories"),
+                    cutShort = true,
+                    draw = { actions -> PlayBarWithNews(actions, LONG_SELECTION) },
                 ),
                 Bar(
                     name = "Home's, with news",
