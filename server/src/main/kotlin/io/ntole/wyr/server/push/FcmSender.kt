@@ -36,7 +36,8 @@ import java.util.Date
  * assertion signed with the account's private key (RS256, through `java-jwt`), exchanged at the
  * account's token endpoint. The token is kept until a minute before it expires, so one exchange serves
  * every push for about an hour, and pushes asking at once wait for the one exchange. A send Google
- * refuses for its access token (401) gets a new one and tries once more.
+ * refuses for its access token (401 with no error code of FCM's own) gets a new one and tries once
+ * more; a 401 naming one, THIRD_PARTY_AUTH_ERROR, fails that push alone and keeps the token.
  *
  * Never logged: the private key, the assertion, the access token, and the device's token. A failure is
  * logged by Google's status and error codes alone.
@@ -102,13 +103,16 @@ class FcmSender(
                 )
             }
         if (response.status.isSuccess()) return Attempt.Done(PushOutcome.SENT)
-        if (response.status == HttpStatusCode.Unauthorized) return Attempt.AccessRefused
 
         val error = response.fcmError()
+        // A 401 naming an error code of FCM's own is not about the access token, which then stays:
+        // THIRD_PARTY_AUTH_ERROR is an iOS or web device's, whose APNs key or web push key Firebase lacks.
+        if (response.status == HttpStatusCode.Unauthorized && error?.errorCode == null) return Attempt.AccessRefused
         if (error?.errorCode == UNREGISTERED) return Attempt.Done(PushOutcome.UNREGISTERED)
         log.warn(
             "FCM refused a push: ${response.status.value} ${error?.status ?: "no status"}" +
-                (error?.errorCode?.let { code -> " $code" } ?: ""),
+                (error?.errorCode?.let { code -> " $code" } ?: "") +
+                (if (error?.errorCode == THIRD_PARTY_AUTH_ERROR) THIRD_PARTY_AUTH_HINT else ""),
         )
         return Attempt.Done(PushOutcome.FAILED)
     }
@@ -237,6 +241,11 @@ class FcmSender(
 
         /** FCM's code for a token no device has any more, answered with 404. */
         const val UNREGISTERED = "UNREGISTERED"
+
+        /** FCM's code, answered with 401, for a device Firebase has no APNs key or web push key for. */
+        const val THIRD_PARTY_AUTH_ERROR = "THIRD_PARTY_AUTH_ERROR"
+        const val THIRD_PARTY_AUTH_HINT =
+            " (an iOS or web device: Firebase has no valid APNs key or web push key for the app)"
 
         /** An assertion's lifetime: Google takes an hour at most. */
         const val ASSERTION_LIFETIME_MILLIS = 60L * 60L * 1_000L

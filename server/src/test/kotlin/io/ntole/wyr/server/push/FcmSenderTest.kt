@@ -152,6 +152,39 @@ class FcmSenderTest {
             assertEquals(2, google.sends.size, "tried once more, and no more")
         }
 
+    /**
+     * FCM's 401 for an iOS or web device whose APNs key or web push key Firebase lacks: the access token
+     * was fine, so it is kept for the next push, and the log names the code rather than the token.
+     */
+    @Test
+    fun `a 401 naming an FCM error code fails that push alone and keeps the access token`() =
+        withLogCapture { logged ->
+            runBlocking {
+                var sends = 0
+                val google =
+                    FakeGoogle(fcm = {
+                        if (sends++ == 0) {
+                            respondFcmError(HttpStatusCode.Unauthorized, "UNAUTHENTICATED", "THIRD_PARTY_AUTH_ERROR")
+                        } else {
+                            respondOk()
+                        }
+                    })
+                val sender = google.sender()
+
+                assertEquals(PushOutcome.FAILED, sender.send(DEVICE, MESSAGE))
+                assertEquals(1, google.exchanges.size, "no exchange for a token that was fine")
+                assertEquals(1, google.sends.size, "not tried again")
+
+                assertEquals(PushOutcome.SENT, sender.send(DEVICE, MESSAGE))
+                assertEquals(1, google.exchanges.size, "the next push keeps the token")
+                assertEquals(listOf("Bearer access-1", "Bearer access-1"), google.sends.map { it.authorization })
+
+                val printed = logged.printed().joinToString("\n")
+                assertTrue(printed.contains("401 UNAUTHENTICATED THIRD_PARTY_AUTH_ERROR"), printed)
+                assertFalse(printed.contains("fresh access token"), printed)
+            }
+        }
+
     @Test
     fun `Google refusing the assertion fails the push and sends nothing to FCM`() =
         runBlocking {

@@ -553,7 +553,9 @@ decided in §8b).
   - *FCM* is its HTTP v1 API (`FcmSender`), as the service account in `FCM_SERVICE_ACCOUNT_JSON`
     (§8b, *Push notifications*): a JWT assertion signed RS256 with `java-jwt`, exchanged at the key
     file's `token_uri` for an access token kept until a minute before it expires, so one exchange
-    serves an hour of pushes; a 401 from FCM gets a new one and one more try. Through
+    serves an hour of pushes; a 401 from FCM with no error code of its own gets a new one and one
+    more try, and one naming `THIRD_PARTY_AUTH_ERROR` (an iOS or web device whose APNs key or web push
+    key Firebase lacks) fails that push alone, logged with its code, and keeps the token. Through
     `googleHttpClient` over CIO (§4), 5 s to connect and 10 s a request. Every test answers for Google
     with a MockEngine (`FcmSenderTest`, `PushFlowTest`). Never logged: the key, the assertion, the
     access token, or a device's token. Unset, pushes are off: nothing is sent, and the boot says so.
@@ -835,6 +837,9 @@ EncryptedSharedPreferences: enough for a game that stores nothing personal.
      is a secret: never commit it, never paste it in a chat.
   3. On Render, paste the whole file as `FCM_SERVICE_ACCOUNT_JSON` on `wyr-server`, and a second key
      of the same account on `wyr-server-dev` (so one can be revoked alone), then restart each.
+  4. For iOS and the web, once their clients adopt pushes: an APNs key and a web push key in
+     Firebase's *Cloud Messaging* settings. Until then a push to such a device fails, logged as
+     `THIRD_PARTY_AUTH_ERROR`, and no other push is held up by it.
 - **Personalization** — *design decided 2026-09-26; only the answer time is built.* In the end each
   player is served the questions that suit them best, and the game's own questions are how the server
   finds out: no survey, no profile form, nothing asked of the player but to play.
