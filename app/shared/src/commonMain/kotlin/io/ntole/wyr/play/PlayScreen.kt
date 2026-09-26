@@ -531,10 +531,11 @@ private val OptionTextAutoSize: TextAutoSize =
 
 /**
  * The style of the reveal's percentages, as a `Text` of their size and weight takes it on the card: the
- * theme's text style, in the card's content colour.
+ * theme's text style, in the card's content colour. The Home screen's Play buttons show their shares in
+ * it too, as the game does.
  */
 @Composable
-private fun percentStyle(): TextStyle {
+internal fun percentStyle(): TextStyle {
     val style = LocalTextStyle.current
     return style.merge(
         color = style.color.takeOrElse { LocalContentColor.current },

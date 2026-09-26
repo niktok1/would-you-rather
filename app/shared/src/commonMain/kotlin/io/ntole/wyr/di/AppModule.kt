@@ -7,6 +7,7 @@ import io.ntole.wyr.categories.CategoriesViewModel
 import io.ntole.wyr.core.data.di.dataModule
 import io.ntole.wyr.core.network.analytics.PostHogConfig
 import io.ntole.wyr.core.network.environment.WyrEnvironment
+import io.ntole.wyr.home.HomeViewModel
 import io.ntole.wyr.language.LanguageViewModel
 import io.ntole.wyr.play.PlayViewModel
 import io.ntole.wyr.submit.SubmitViewModel
@@ -21,6 +22,7 @@ import kotlin.time.TimeSource
 internal val uiModule =
     module {
         viewModelOf(::PlayViewModel)
+        viewModelOf(::HomeViewModel)
         viewModelOf(::AccountViewModel)
         viewModelOf(::SubmitViewModel)
         viewModelOf(::LanguageViewModel)

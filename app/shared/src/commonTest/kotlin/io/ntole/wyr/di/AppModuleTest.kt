@@ -9,6 +9,7 @@ import io.ntole.wyr.core.network.InMemoryTokenStorage
 import io.ntole.wyr.core.network.SessionStore
 import io.ntole.wyr.core.network.TokenStorage
 import io.ntole.wyr.core.network.environment.WyrEnvironment
+import io.ntole.wyr.home.HomeViewModel
 import io.ntole.wyr.language.Language
 import io.ntole.wyr.language.LanguageViewModel
 import io.ntole.wyr.play.PlayViewModel
@@ -57,6 +58,7 @@ class AppModuleTest {
         val koin = koinFor(WyrEnvironment.LOCAL)
 
         koin.get<PlayViewModel>()
+        koin.get<HomeViewModel>()
         koin.get<AccountViewModel>()
         koin.get<SubmitViewModel>()
         koin.get<LanguageViewModel>()

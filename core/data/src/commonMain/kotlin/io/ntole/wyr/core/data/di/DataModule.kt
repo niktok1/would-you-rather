@@ -4,6 +4,7 @@ import io.ktor.client.HttpClient
 import io.ntole.wyr.core.data.account.DefaultAccountRepository
 import io.ntole.wyr.core.data.cache.InMemoryQuestionCache
 import io.ntole.wyr.core.data.category.DefaultCategoryRepository
+import io.ntole.wyr.core.data.home.DefaultHomePickRepository
 import io.ntole.wyr.core.data.moderation.DefaultModerationRepository
 import io.ntole.wyr.core.data.player.DefaultPlayerRepository
 import io.ntole.wyr.core.data.question.DefaultQuestionRepository
@@ -19,6 +20,9 @@ import io.ntole.wyr.core.domain.account.RegisterAccount
 import io.ntole.wyr.core.domain.analytics.Analytics
 import io.ntole.wyr.core.domain.category.CategoryRepository
 import io.ntole.wyr.core.domain.category.GetCategories
+import io.ntole.wyr.core.domain.home.GetHomePicks
+import io.ntole.wyr.core.domain.home.HomePickRepository
+import io.ntole.wyr.core.domain.home.PickOnHome
 import io.ntole.wyr.core.domain.moderation.AddCategory
 import io.ntole.wyr.core.domain.moderation.ApproveSubmission
 import io.ntole.wyr.core.domain.moderation.GetPendingSubmissions
@@ -54,6 +58,7 @@ import io.ntole.wyr.core.network.analytics.PostHogAnalytics
 import io.ntole.wyr.core.network.analytics.PostHogConfig
 import io.ntole.wyr.core.network.api.AuthApi
 import io.ntole.wyr.core.network.api.CategoryApi
+import io.ntole.wyr.core.network.api.HomePickApi
 import io.ntole.wyr.core.network.api.ModerationApi
 import io.ntole.wyr.core.network.api.PlayerApi
 import io.ntole.wyr.core.network.api.QuestionApi
@@ -94,6 +99,7 @@ public fun dataModule(
         single { SubmissionApi(get()) }
         single { ReactionApi(get()) }
         single { ReportApi(get()) }
+        single { HomePickApi(get()) }
         single { CategoryApi(get()) }
 
         single<QuestionCache> { InMemoryQuestionCache() }
@@ -110,6 +116,7 @@ public fun dataModule(
         single<SubmissionRepository> { DefaultSubmissionRepository(api = get(), session = get()) }
         single<ReactionRepository> { DefaultReactionRepository(api = get(), session = get()) }
         single<ReportRepository> { DefaultReportRepository(api = get(), session = get()) }
+        single<HomePickRepository> { DefaultHomePickRepository(api = get(), session = get()) }
         single<AccountRepository> { DefaultAccountRepository(api = get(), session = get()) }
         single<CategoryRepository> { DefaultCategoryRepository(api = get()) }
 
@@ -123,6 +130,8 @@ public fun dataModule(
         factory { ReportQuestion(reports = get(), session = get()) }
         factory { HideQuestion(reports = get(), session = get()) }
         factory { HideAuthor(reports = get(), questions = get(), session = get()) }
+        factory { GetHomePicks(picks = get()) }
+        factory { PickOnHome(picks = get(), session = get()) }
         factory { RegisterAccount(accounts = get(), session = get(), analytics = get()) }
         factory { LogIn(accounts = get(), questions = get(), session = get(), analytics = get()) }
         factory { LogOut(accounts = get(), questions = get(), analytics = get()) }

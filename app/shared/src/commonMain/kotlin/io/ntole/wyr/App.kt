@@ -30,6 +30,7 @@ import io.ntole.wyr.analytics.rememberConfigurationChanging
 import io.ntole.wyr.categories.CategoriesScreen
 import io.ntole.wyr.categories.CategoriesViewModel
 import io.ntole.wyr.home.HomeScreen
+import io.ntole.wyr.home.HomeViewModel
 import io.ntole.wyr.language.Language
 import io.ntole.wyr.language.LanguageViewModel
 import io.ntole.wyr.language.LocalLanguage
@@ -100,10 +101,7 @@ private fun Screens(
         Column(modifier = Modifier.fillMaxSize().safeContentPadding()) {
             when (navigator.current) {
                 Screen.Home -> {
-                    HomeScreen(
-                        onPlay = { navigator.open(Screen.Play) },
-                        onAccount = { navigator.open(Screen.Account) },
-                    )
+                    Home(onPlay = { navigator.open(Screen.Play) }, onAccount = { navigator.open(Screen.Account) })
                 }
 
                 Screen.Play -> {
@@ -148,6 +146,31 @@ private fun Screens(
             }
         }
     }
+}
+
+/**
+ * The Home screen, whose two Play buttons show how many picked each, read each time it is shown
+ * (CLAUDE.md §8d, *Home picks*). A tap on either opens Play at once, [onPlay], and is counted in the
+ * background, never holding the game up.
+ */
+@Composable
+private fun Home(
+    onPlay: () -> Unit,
+    onAccount: () -> Unit,
+) {
+    val viewModel = koinViewModel<HomeViewModel>()
+    val picks by viewModel.picks.collectAsStateWithLifecycle()
+
+    LaunchedEffect(viewModel) { viewModel.shown() }
+
+    HomeScreen(
+        picks = picks,
+        onPlay = { side ->
+            viewModel.pick(side)
+            onPlay()
+        },
+        onAccount = onAccount,
+    )
 }
 
 /**

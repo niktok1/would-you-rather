@@ -42,7 +42,7 @@ data class WyrDimens(
      * SE's 667 that its draw test holds it to (667 less the status bar's 20 and this).
      */
     val topBarHeight: Dp = 48.dp,
-    val playButtonWidth: Dp = 240.dp,
+    /** The least height of each of the Home screen's two Play buttons, however little room it has. */
     val playButtonHeight: Dp = 64.dp,
     /**
      * The least width, inside the screen's padding, at which the Play screen stands its cards side by

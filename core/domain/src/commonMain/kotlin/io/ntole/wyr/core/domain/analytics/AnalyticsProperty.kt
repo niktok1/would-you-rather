@@ -23,7 +23,7 @@ public object AnalyticsProperty {
     /** How many of something: categories played, say. */
     public const val COUNT: String = "count"
 
-    /** The side answered, `A` or `B`. */
+    /** The side answered, or the Home screen's Play button tapped, in that card's colour: `A` or `B`. */
     public const val SIDE: String = "side"
 
     /** From the question shown to the tap that answered it, in whole milliseconds. */

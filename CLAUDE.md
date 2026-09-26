@@ -1232,8 +1232,9 @@ feature is tried through the game and the moderation app. A new feature gets a p
 game's, or a place on one, theme tokens only (§5b), and its words in `Strings` (§8f).
 
 **Navigation** (*decided 2026-09-25*: no tabs; `App.kt`, `io.ntole.wyr.navigation`, `io.ntole.wyr.home`):
-- The app opens on **Home**: the game's name, a big **Play** button and the account icon top right,
-  and nothing else, the user asking for less text. Play opens the **Play** screen under a top bar of
+- The app opens on **Home**: the game's name, two big **Play** buttons in the cards' colours, each
+  with how many picked it (*Home picks*), and the account icon top right, and nothing else, the user
+  asking for less text. Either Play opens the **Play** screen under a top bar of
   the home icon, left, back to Home, the categories played in its middle, which open the
   **Categories** screen, and the account icon, right. The account icon, from Home or
   Play, opens the **Account** screen under a top bar of a back arrow. On it, a guest's one button
@@ -1263,8 +1264,8 @@ game's, or a place on one, theme tokens only (§5b), and its words in `Strings` 
   the Play, Account, Auth, Submit and Categories screens keep the 599 of an iPhone SE's 667 their
   draw tests hold them to. `TopBarsDrawTest` holds every bar to 48 at 375 wide with nothing cut
   short but a long selection of categories on Play's, cut on its one line, in both themes and every
-  language; `HomeScreenDrawTest` holds Home to 599 at 375 wide (276
-  on this Mac) and to its two texts and one icon.
+  language; `HomeScreenDrawTest` holds Home to 599 at 375 wide (436
+  on this Mac, the name on two lines, 390 in Latin, on one) and to its texts and one icon.
 
 **Wide screens** (*decided 2026-09-26*: of two options, the user picked the cards side by side over
 the row with the top bar as it is, the other being the row moved into the top bar; and the other
@@ -1287,8 +1288,8 @@ orientation, in common code alone:
   screen asks QuestionLayout's rule of the size it was last laid out at (`standsSideBySide`).
 - *The Account screen, the Auth page, the Submit form and the Categories screen* hold their content to
   a column `WyrDimens.contentMaxWidth`, 600, wide down the middle (`contentWidth`), placed after the
-  scroll, so the whole width still scrolls; the Categories screen's list scrolls in its column. Home is
-  centred already and stays as it is.
+  scroll, so the whole width still scrolls; the Categories screen's list scrolls in its column. Home's
+  two Play buttons stand as the Play screen's cards do, by the same `QuestionLayout` (*Home picks*).
 - `QuestionLayoutDrawTest` holds the rule to boxes of known sizes, which no font changes: side by side
   from 600 across while wider than tall, stacked at 599, when square and on a tablet held upright, and
   the height it needs by the same rule. `PlayScreenDrawTest` draws every state on two phones on their
@@ -2100,9 +2101,10 @@ listed on the Account screen.
     scripted repositories,
     `ModerationOverHttpTest` over the real client configuration, and `ScreensDrawTest` draws every
     screen off screen at a desktop window's size. The game's builds do not moderate at all.
-- **Home picks** *(decided 2026-09-26; built on the server, the client adopts later)*: the Home screen
-  will show **two Play buttons**, one in each card's colour (§5b), both starting the game alike, each
-  with how many times players have tapped it, to fill the screen as a question would. A tap pays and
+- **Home picks** *(decided 2026-09-26; built on the server and the game)*: the Home screen shows
+  **two Play buttons**, one in each card's colour (§5b), both starting the game alike, each with how
+  many times players have tapped it, to fill the screen as a question would (the user: a Home that
+  "mimics the game"). A tap pays and
   costs nothing and is no answer. **Every tap counts**, a player's repeats included, bounded only by
   the per-player rate limit (§8b). `GET /v1/home-picks` (`WyrApi.Paths.HOME_PICKS`) answers both
   counts, a `HomePicksDto` (`picksA`, `picksB`), and needs no session, so Home can show them before it
@@ -2111,6 +2113,24 @@ listed on the Account screen.
   naming no side. Built in `home_picks` (V15), one row per side written at 0, moved only by an SQL
   increment (`HomePickStore.pick`, §4) and read in one statement (`HomePickStore.counts`).
   `HomePickStoreTest` races 8 taps of one button, `HomePickFlowTest` the routes.
+  - *The Home screen* (`io.ntole.wyr.home`, *built 2026-09-26*): under the game's name, the two
+    buttons, *Играј* each, card A's pink and card B's amber, stand as the Play screen's cards do, stacked
+    on a phone and side by side on a wide screen (the same `QuestionLayout`, a gap of `spaceMd` in the
+    row's place), at least `WyrDimens.playButtonHeight`, 64, high. Each shows its share of all taps,
+    `Tally.percentA` and `percentB` as a question's are, counted up from 0 as the reveal's percentages
+    are, drawn, not composed (`CountedUpText`, `rememberCountUp`, `percentStyle`); no number until the
+    counts are read, none while nobody has tapped, and nothing said when a read fails, which keeps what
+    was read before. They are read each time Home is shown (`HomeViewModel.shown`). A tap opens Play at
+    once and is counted in the background, best effort (`HomeViewModel.pick`), its answer not shown.
+  - *The client* is `HomePickRepository` in `:core:domain` (`io.ntole.wyr.core.domain.home`), the
+    counts as a `Tally`, one tap a vote: `GetHomePicks`, which ensures no session, and `PickOnHome`,
+    which ensures one first, as a vote does, so a first launch's tap and the game it opens mint one
+    guest between them. `DefaultHomePickRepository` reads through `runApi` alone, as the categories
+    are, and counts a tap through `withSessionRecovery`, over `HomePickApi`. `HomePickUseCasesTest`,
+    `DefaultHomePickRepositoryTest`, `HomeViewModelTest`, `HomeScreenDrawTest` (599 on an iPhone SE,
+    both themes, every language, the buttons side by side on a desktop window, the shares read as they
+    are through the count up), `AppNavigationTest` (read each time Home is shown; Play opens before the
+    tap is counted).
 
 ## 8e. Client environments — decided 2026-09-24
 
@@ -2399,7 +2419,8 @@ the same events. The moderation app sends none.
   `onClick` through `tapped(element, properties)` (`io.ntole.wyr.analytics`), which reports a `tap`
   with `element` to `LocalAnalytics` (the app's, which `App` provides; none for a screen drawn alone)
   before it acts, so a tap is counted by a name that never changes with the language or the text, and
-  `$screen_name` says where. An element is `screen.what`, lower case and underscores: `home.play`;
+  `$screen_name` says where. An element is `screen.what`, lower case and underscores: `home.play` (with
+  its `side`, `A` or `B`, since Home's two buttons are one element);
   `top_bar.home`, `.account`, `.back`, `.categories`; `play.card_a` and `.card_b` (with `answered`,
   whether the tap went on from the reveal), `.like`, `.dislike`, `.skip`, `.try_again`;
   `question_menu.open`, `.report`, `.reason` (with its `reason`), `.hide_question`, `.hide_author`;

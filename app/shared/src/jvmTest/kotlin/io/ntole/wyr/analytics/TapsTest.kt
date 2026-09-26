@@ -71,7 +71,17 @@ class TapsTest {
 
     @Test
     fun `every tap on Home and the top bars is reported`() {
-        assertEquals(setOf("home.play", "top_bar.account"), elementsTapped { HomeScreen(onPlay = {}, onAccount = {}) })
+        assertEquals(
+            setOf("home.play", "top_bar.account"),
+            elementsTapped { HomeScreen(picks = Tally(votesA = 3, votesB = 1), onPlay = {}, onAccount = {}) },
+        )
+        // Home's two Play buttons are one element, told apart by their side (CLAUDE.md §8d, *Home picks*).
+        val sides =
+            analytics
+                .named(AnalyticsEvent.TAP)
+                .filter { it.properties[AnalyticsProperty.ELEMENT] == "home.play" }
+                .map { it.properties[AnalyticsProperty.SIDE] }
+        assertEquals(listOf("A", "B"), sides)
         // The question's menu too, and what it lists once open (CLAUDE.md §8d, *Reports*).
         assertEquals(
             setOf("top_bar.home", "top_bar.categories", "top_bar.account") +
