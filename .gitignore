@@ -40,3 +40,7 @@ node_modules/
 # Claude Code: per-machine settings and agent worktrees.
 .claude/settings.local.json
 .claude/worktrees/
+
+# Firebase: the app config and the service account key never go in the repository.
+google-services.json
+*firebase-adminsdk*.json

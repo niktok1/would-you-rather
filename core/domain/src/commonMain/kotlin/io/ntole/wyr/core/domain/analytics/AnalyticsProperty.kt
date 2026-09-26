@@ -23,7 +23,7 @@ public object AnalyticsProperty {
     /** How many of something: categories played, say. */
     public const val COUNT: String = "count"
 
-    /** The side answered, `A` or `B`. */
+    /** The side answered, or the Home screen's Play button tapped, in that card's colour: `A` or `B`. */
     public const val SIDE: String = "side"
 
     /** From the question shown to the tap that answered it, in whole milliseconds. */
@@ -38,6 +38,9 @@ public object AnalyticsProperty {
     /** A reaction: `like`, `dislike` or `none`. */
     public const val REACTION: String = "reaction"
 
+    /** Why a question was reported: `offensive`, `real_person`, `spam`, `not_a_choice` or `other`. */
+    public const val REASON: String = "reason"
+
     /** Whether the question was answered already. */
     public const val ANSWERED: String = "answered"
 
@@ -45,8 +48,8 @@ public object AnalyticsProperty {
     public const val CODE: String = "code"
 
     /**
-     * What failed: `question`, `vote`, `reaction`, `account`, `my_questions`, `register`, `log_in`,
-     * `log_out`, `submit`, `points` or `categories`.
+     * What failed: `question`, `vote`, `reaction`, `report`, `hide_question`, `hide_author`,
+     * `account`, `my_questions`, `register`, `log_in`, `log_out`, `submit`, `points` or `categories`.
      */
     public const val ACTION: String = "action"
 

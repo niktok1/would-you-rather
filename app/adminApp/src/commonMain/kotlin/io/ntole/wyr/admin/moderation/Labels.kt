@@ -2,6 +2,7 @@ package io.ntole.wyr.admin.moderation
 
 import io.ntole.wyr.core.domain.category.Category
 import io.ntole.wyr.core.domain.moderation.AdminToken
+import io.ntole.wyr.core.domain.moderation.AuthorBlock
 import kotlin.time.Duration.Companion.days
 import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.minutes
@@ -55,3 +56,58 @@ fun tokenStatusOf(typed: String): String =
         AdminToken.of(typed) == null -> "That cannot be a token: visible ASCII only, no spaces."
         else -> "Held in memory only, until Lock or the app closes."
     }
+
+/**
+ * An author's opaque id, a player id, shortened to its first [AUTHOR_SHOWN] characters: enough to tell
+ * one author's questions from another's on screen, and nothing about who they are.
+ */
+fun shortAuthorOf(authorId: String): String = authorId.take(AUTHOR_SHOWN)
+
+private const val AUTHOR_SHOWN = 8
+
+/**
+ * Who wrote a question: its author, shortened, and whether they are blocked when the server has said
+ * ([blocked], null while it has not), or that it is a seed, or that no author is known, as for a
+ * question whose author deleted their account.
+ */
+fun authorLabelOf(
+    authorId: String?,
+    isSeed: Boolean,
+    blocked: Boolean?,
+): String =
+    when {
+        authorId != null -> {
+            val standing =
+                when (blocked) {
+                    true -> " · blocked"
+                    false -> " · not blocked"
+                    null -> ""
+                }
+            "Author ${shortAuthorOf(authorId)}$standing"
+        }
+
+        isSeed -> {
+            "Seed"
+        }
+
+        else -> {
+            "No author known"
+        }
+    }
+
+/** What a block did, for the line under the screen it was done from. */
+fun blockedNoticeOf(block: AuthorBlock): String {
+    val rejected =
+        when (block.rejectedSubmissions) {
+            0 -> "nothing of theirs was pending"
+            1 -> "1 pending question of theirs rejected"
+            else -> "${block.rejectedSubmissions} pending questions of theirs rejected"
+        }
+    return "Blocked author ${shortAuthorOf(block.authorId)}: they can submit nothing until unblocked; $rejected."
+}
+
+/** What blocking the author [authorId] does, for the moderator to confirm it. */
+fun blockWarningOf(authorId: String): String =
+    "Author ${shortAuthorOf(authorId)} can submit no more questions until unblocked. Each question of " +
+        "theirs still pending is rejected with the reason below, which they see, and its point paid back. " +
+        "Their approved questions stay served."

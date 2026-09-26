@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+        The window's colour before Compose draws its first frame: a platform copy of
+        WyrColors.pageBackground (CLAUDE.md §5b), light here and dark in values-night, which
+        WindowThemeTest holds equal to WyrLightColors and WyrDarkColors.
+    -->
+    <color name="wyr_page_background">#FFF7FA</color>
+</resources>

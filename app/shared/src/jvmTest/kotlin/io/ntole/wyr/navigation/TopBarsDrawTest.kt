@@ -10,6 +10,7 @@ import io.ntole.wyr.language.Strings
 import io.ntole.wyr.language.WyrStrings
 import io.ntole.wyr.language.stringsOf
 import io.ntole.wyr.play.CategoriesPlayed
+import io.ntole.wyr.play.QuestionMenu
 import io.ntole.wyr.sizeNeeded
 import io.ntole.wyr.tap
 import io.ntole.wyr.texts
@@ -143,13 +144,18 @@ class TopBarsDrawTest {
 
         val BARS =
             listOf(
+                // Home, the categories, the question's menu, whose tap only opens it, and the account icon.
                 Bar(
                     name = "Play's",
-                    icons = { listOf(it.home, it.account) },
+                    icons = { listOf(it.home, it.playScreen.menu.name, it.account) },
                     texts = { listOf(it.allCategories) },
                     taps = listOf("home", "account", "categories"),
                     draw = { actions ->
-                        PlayTopBar(onHome = actions.record("home"), onAccount = actions.record("account")) {
+                        PlayTopBar(
+                            onHome = actions.record("home"),
+                            onAccount = actions.record("account"),
+                            menu = { QuestionMenu(enabled = true, onPick = { actions.tapped += "pick $it" }) },
+                        ) {
                             CategoriesPlayed(
                                 text = LocalStrings.current.allCategories,
                                 enabled = true,
@@ -162,12 +168,16 @@ class TopBarsDrawTest {
                 // never the icons, and never a second line.
                 Bar(
                     name = "Play's, with a long selection",
-                    icons = { listOf(it.home, it.account) },
+                    icons = { listOf(it.home, it.playScreen.menu.name, it.account) },
                     texts = { listOf(LONG_SELECTION) },
                     taps = listOf("home", "account", "categories"),
                     cutShort = true,
                     draw = { actions ->
-                        PlayTopBar(onHome = actions.record("home"), onAccount = actions.record("account")) {
+                        PlayTopBar(
+                            onHome = actions.record("home"),
+                            onAccount = actions.record("account"),
+                            menu = { QuestionMenu(enabled = true, onPick = { actions.tapped += "pick $it" }) },
+                        ) {
                             CategoriesPlayed(
                                 text = LONG_SELECTION,
                                 enabled = true,

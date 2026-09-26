@@ -5,6 +5,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -16,6 +17,7 @@ import androidx.compose.foundation.layout.safeContentPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -34,12 +36,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.takeOrElse
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.semantics
@@ -54,9 +58,11 @@ import io.ntole.wyr.core.domain.question.Question
 import io.ntole.wyr.core.domain.reaction.Reaction
 import io.ntole.wyr.core.domain.vote.Side
 import io.ntole.wyr.language.Language
+import io.ntole.wyr.language.LocalLanguage
 import io.ntole.wyr.language.LocalStrings
 import io.ntole.wyr.language.PlayStrings
 import io.ntole.wyr.language.categoryName
+import io.ntole.wyr.language.optionText
 import io.ntole.wyr.loading.LoadingSpinner
 import io.ntole.wyr.points.PointsAmount
 import io.ntole.wyr.theme.WyrIcons
@@ -94,19 +100,23 @@ fun PlayScreen(
                 Modifier
                     .fillMaxSize()
                     .safeContentPadding()
-                    .padding(dimens.screenPadding),
+                    // The top's padding is the repeat notice's slot on a question, and a spacer otherwise.
+                    .padding(start = dimens.screenPadding, end = dimens.screenPadding, bottom = dimens.screenPadding),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             when (state) {
                 PlayUiState.Loading -> {
+                    Spacer(Modifier.height(dimens.screenPadding))
                     LoadingBody()
                 }
 
                 is PlayUiState.Failed -> {
+                    Spacer(Modifier.height(dimens.screenPadding))
                     FailureBody(state.error, onRetry = onRetry)
                 }
 
                 is PlayUiState.OnQuestion -> {
+                    RepeatNotice(shown = state.question.answeredBefore)
                     QuestionBody(
                         state = state,
                         points = points,
@@ -122,13 +132,41 @@ fun PlayScreen(
 }
 
 /**
+ * *Answered before*, small and muted, above the cards while the player has answered the question on
+ * screen before (CLAUDE.md §8d, *The Play screen*). Its slot is there for every question, in the
+ * screen's top padding, which it grows only past the padding's height, at a large font size: so a
+ * question answered before moves nothing on the screen, and one not answered shows and says nothing.
+ */
+@Composable
+private fun RepeatNotice(shown: Boolean) {
+    val dimens = WyrThemeAccessors.dimens
+
+    Box(
+        contentAlignment = Alignment.Center,
+        modifier = Modifier.fillMaxWidth().heightIn(min = dimens.screenPadding),
+    ) {
+        Text(
+            text = LocalStrings.current.playScreen.answeredBefore,
+            color = WyrThemeAccessors.colors.muted,
+            fontSize = WyrTypeScale.statLabel,
+            lineHeight = WyrTypeScale.statLabelLineHeight,
+            fontWeight = FontWeight.Medium,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            // Laid out whatever it shows, so its slot is as high either way.
+            modifier = if (shown) Modifier else Modifier.alpha(0f).clearAndSetSemantics {},
+        )
+    }
+}
+
+/**
  * The two cards and the row between them, or under them side by side on a wide screen
  * ([QuestionLayout]). Before the answer a card answers for its side, and Skip goes past it; once it
  * is revealed, either card is the way on, and Skip is gone. Off while anything is in flight, one
  * action at a time.
  */
 @Composable
-private fun QuestionBody(
+private fun ColumnScope.QuestionBody(
     state: PlayUiState.OnQuestion,
     points: Int?,
     onChoose: (Side) -> Unit,
@@ -140,6 +178,8 @@ private fun QuestionBody(
     val dimens = WyrThemeAccessors.dimens
     val density = LocalDensity.current
     val outcome = (state as? PlayUiState.Revealed)?.outcome
+    // In Serbian Latin made Latin, as every Serbian Latin text is; as its author wrote it otherwise (§8f).
+    val language = LocalLanguage.current
     // Before the answer a card's text says what a tap on it does; after, a screen reader is told.
     val clickLabel = if (outcome == null) null else LocalStrings.current.playScreen.nextQuestion
     // Whether the cards stand side by side, the row under both, as they were last laid out: each bar
@@ -151,12 +191,12 @@ private fun QuestionBody(
         wideMinWidth = dimens.wideLayoutMinWidth,
         gap = dimens.spaceMd,
         modifier =
-            Modifier.fillMaxSize().onSizeChanged { size ->
+            Modifier.fillMaxWidth().weight(1f).onSizeChanged { size ->
                 sideBySide = with(density) { standsSideBySide(size.width, size.height, dimens.wideLayoutMinWidth) }
             },
     ) {
         OptionCard(
-            text = state.question.optionA,
+            text = optionText(state.question.optionA, language),
             background = colors.optionA,
             contentColor = colors.onOptionA,
             barTrack = colors.revealTrackOnA,
@@ -175,7 +215,7 @@ private fun QuestionBody(
         MiddleRow(
             question = state.question,
             points = points,
-            reactionError = state.reactionError,
+            rowError = state.rowError,
             idle = !state.isBusy,
             onReact = onReact,
             // Only before answering (CLAUDE.md §8d, *Skipping*): once revealed, a card is the way on.
@@ -183,7 +223,7 @@ private fun QuestionBody(
         )
 
         OptionCard(
-            text = state.question.optionB,
+            text = optionText(state.question.optionB, language),
             background = colors.optionB,
             contentColor = colors.onOptionB,
             barTrack = colors.revealTrackOnB,
@@ -218,7 +258,7 @@ private fun QuestionBody(
 internal fun MiddleRow(
     question: Question,
     points: Int?,
-    reactionError: DomainError?,
+    rowError: DomainError?,
     idle: Boolean,
     onReact: (Reaction) -> Unit,
     onSkip: (() -> Unit)?,
@@ -243,9 +283,9 @@ internal fun MiddleRow(
                 contentAlignment = Alignment.CenterStart,
                 modifier = Modifier.widthIn(max = dimens.playRowStartMaxWidth).height(touchTarget),
             ) {
-                if (reactionError != null) {
+                if (rowError != null) {
                     Text(
-                        text = failureText(reactionError, strings),
+                        text = failureText(rowError, strings),
                         color = MaterialTheme.colorScheme.error,
                         fontSize = WyrTypeScale.statLabel,
                         lineHeight = WyrTypeScale.statLabelLineHeight,
@@ -440,11 +480,17 @@ private fun OptionCard(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 modifier = Modifier.align(Alignment.Center).padding(dimens.spaceMd),
             ) {
+                // As large as the card leaves it room for, the percentage's room taken first, and in steps no
+                // smaller than the floor, so a long option shrinks rather than being cut (§8d, *The Play
+                // screen*).
                 Text(
                     text = text,
                     fontSize = WyrTypeScale.optionText,
+                    lineHeight = WyrTypeScale.optionLineHeight,
                     fontWeight = FontWeight.Bold,
                     textAlign = TextAlign.Center,
+                    autoSize = OptionTextAutoSize,
+                    modifier = Modifier.weight(1f, fill = false),
                 )
 
                 if (percent != null && counted != null) {
@@ -472,11 +518,24 @@ private fun OptionCard(
 }
 
 /**
+ * How an option fits its card: from [WyrTypeScale.optionText] down to [WyrTypeScale.optionTextMin],
+ * [WyrTypeScale.optionTextStep] at a time, the largest that fits whole. One instance, as a text's
+ * auto-size is compared by equality on every layout.
+ */
+private val OptionTextAutoSize: TextAutoSize =
+    TextAutoSize.StepBased(
+        minFontSize = WyrTypeScale.optionTextMin,
+        maxFontSize = WyrTypeScale.optionText,
+        stepSize = WyrTypeScale.optionTextStep,
+    )
+
+/**
  * The style of the reveal's percentages, as a `Text` of their size and weight takes it on the card: the
- * theme's text style, in the card's content colour.
+ * theme's text style, in the card's content colour. The Home screen's Play buttons show their shares in
+ * it too, as the game does.
  */
 @Composable
-private fun percentStyle(): TextStyle {
+internal fun percentStyle(): TextStyle {
     val style = LocalTextStyle.current
     return style.merge(
         color = style.color.takeOrElse { LocalContentColor.current },

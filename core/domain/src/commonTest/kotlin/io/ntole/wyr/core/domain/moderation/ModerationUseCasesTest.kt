@@ -104,6 +104,38 @@ class ModerationUseCasesTest {
             assertEquals(listOf(token), moderation.tokens)
         }
 
+    @Test
+    fun `the reported questions are listed with the token`() =
+        runTest {
+            assertEquals(listOf(REPORTED), GetReportedQuestions(moderation)(token))
+            assertEquals(listOf("reports"), moderation.calls)
+            assertEquals(listOf(token), moderation.tokens)
+        }
+
+    @Test
+    fun `a dismissal sends the question's id with the token`() =
+        runTest {
+            DismissReports(moderation)(token, "q1")
+
+            assertEquals(listOf("dismissReports q1"), moderation.calls)
+            assertEquals(listOf(token), moderation.tokens)
+        }
+
+    @Test
+    fun `a block sends the author's id and its reason and an unblock the id alone`() =
+        runTest {
+            val reason = assertNotNull(RejectionReason.of("Увредљиво"))
+
+            val blocked = BlockAuthor(moderation)(token, "p1", reason)
+            val unblocked = UnblockAuthor(moderation)(token, "p1")
+
+            assertEquals(AuthorBlock("p1", isBlocked = true, rejectedSubmissions = 2), blocked)
+            assertEquals(AuthorBlock("p1", isBlocked = false, rejectedSubmissions = 0), unblocked)
+
+            assertEquals(listOf("blockAuthor p1 Увредљиво", "unblockAuthor p1"), moderation.calls)
+            assertEquals(listOf(token, token), moderation.tokens)
+        }
+
     private class RecordingModeration : ModerationRepository {
         val calls = mutableListOf<String>()
         val tokens = mutableListOf<AdminToken>()
@@ -183,6 +215,39 @@ class ModerationUseCasesTest {
             calls += "renameCategory $id|$nameSr|$nameEn"
             return Category(id, nameSr, nameEn)
         }
+
+        override suspend fun reports(token: AdminToken): List<ReportedQuestion> {
+            tokens += token
+            calls += "reports"
+            return listOf(REPORTED)
+        }
+
+        override suspend fun dismissReports(
+            token: AdminToken,
+            questionId: String,
+        ) {
+            tokens += token
+            calls += "dismissReports $questionId"
+        }
+
+        override suspend fun blockAuthor(
+            token: AdminToken,
+            authorId: String,
+            reason: RejectionReason,
+        ): AuthorBlock {
+            tokens += token
+            calls += "blockAuthor $authorId ${reason.value}"
+            return AuthorBlock(authorId, isBlocked = true, rejectedSubmissions = 2)
+        }
+
+        override suspend fun unblockAuthor(
+            token: AdminToken,
+            authorId: String,
+        ): AuthorBlock {
+            tokens += token
+            calls += "unblockAuthor $authorId"
+            return AuthorBlock(authorId, isBlocked = false, rejectedSubmissions = 0)
+        }
     }
 
     private companion object {
@@ -214,5 +279,13 @@ class ModerationUseCasesTest {
             )
 
         val PAGE = ModeratedQuestionPage(listOf(LISTED), next = QuestionCursor("after-q1"))
+
+        val REPORTED =
+            ReportedQuestion(
+                question = LISTED,
+                reportCount = 3,
+                reasons = mapOf(ReportReason.OFFENSIVE to 2, ReportReason.OTHER to 1),
+                lastReportedAt = Instant.fromEpochMilliseconds(1_790_000_002_000L),
+            )
     }
 }

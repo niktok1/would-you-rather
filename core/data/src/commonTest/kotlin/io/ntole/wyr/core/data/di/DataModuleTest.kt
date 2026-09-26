@@ -16,13 +16,17 @@ import io.ntole.wyr.core.domain.analytics.Analytics
 import io.ntole.wyr.core.domain.category.GetCategories
 import io.ntole.wyr.core.domain.moderation.AddCategory
 import io.ntole.wyr.core.domain.moderation.ApproveSubmission
+import io.ntole.wyr.core.domain.moderation.BlockAuthor
+import io.ntole.wyr.core.domain.moderation.DismissReports
 import io.ntole.wyr.core.domain.moderation.GetPendingSubmissions
 import io.ntole.wyr.core.domain.moderation.GetQuestions
+import io.ntole.wyr.core.domain.moderation.GetReportedQuestions
 import io.ntole.wyr.core.domain.moderation.ModerationRepository
 import io.ntole.wyr.core.domain.moderation.RejectSubmission
 import io.ntole.wyr.core.domain.moderation.RenameCategory
 import io.ntole.wyr.core.domain.moderation.RestoreQuestion
 import io.ntole.wyr.core.domain.moderation.RetireQuestion
+import io.ntole.wyr.core.domain.moderation.UnblockAuthor
 import io.ntole.wyr.core.domain.session.SessionRepository
 import io.ntole.wyr.core.domain.update.AppUpdate
 import io.ntole.wyr.core.network.ApiException
@@ -156,6 +160,10 @@ class DataModuleTest {
         assertNull(koin.getOrNull<RestoreQuestion>())
         assertNull(koin.getOrNull<AddCategory>())
         assertNull(koin.getOrNull<RenameCategory>())
+        assertNull(koin.getOrNull<GetReportedQuestions>())
+        assertNull(koin.getOrNull<DismissReports>())
+        assertNull(koin.getOrNull<BlockAuthor>())
+        assertNull(koin.getOrNull<UnblockAuthor>())
         koin.close()
     }
 
@@ -251,6 +259,10 @@ class DataModuleTest {
                     koin.get<RestoreQuestion>(),
                     koin.get<AddCategory>(),
                     koin.get<RenameCategory>(),
+                    koin.get<GetReportedQuestions>(),
+                    koin.get<DismissReports>(),
+                    koin.get<BlockAuthor>(),
+                    koin.get<UnblockAuthor>(),
                 ).forEach { useCase -> assertNotNull(useCase, environment.name) }
                 assertNull(koin.getOrNull<SessionRepository>(), "nothing can mint a guest")
                 assertNull(koin.getOrNull<TokenStorage>())

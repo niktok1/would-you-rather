@@ -4,10 +4,12 @@ import io.ktor.client.HttpClient
 import io.ntole.wyr.core.data.account.DefaultAccountRepository
 import io.ntole.wyr.core.data.cache.InMemoryQuestionCache
 import io.ntole.wyr.core.data.category.DefaultCategoryRepository
+import io.ntole.wyr.core.data.home.DefaultHomePickRepository
 import io.ntole.wyr.core.data.moderation.DefaultModerationRepository
 import io.ntole.wyr.core.data.player.DefaultPlayerRepository
 import io.ntole.wyr.core.data.question.DefaultQuestionRepository
 import io.ntole.wyr.core.data.reaction.DefaultReactionRepository
+import io.ntole.wyr.core.data.report.DefaultReportRepository
 import io.ntole.wyr.core.data.session.DefaultSessionRepository
 import io.ntole.wyr.core.data.submission.DefaultSubmissionRepository
 import io.ntole.wyr.core.data.vote.DefaultVoteRepository
@@ -19,15 +21,22 @@ import io.ntole.wyr.core.domain.account.RegisterAccount
 import io.ntole.wyr.core.domain.analytics.Analytics
 import io.ntole.wyr.core.domain.category.CategoryRepository
 import io.ntole.wyr.core.domain.category.GetCategories
+import io.ntole.wyr.core.domain.home.GetHomePicks
+import io.ntole.wyr.core.domain.home.HomePickRepository
+import io.ntole.wyr.core.domain.home.PickOnHome
 import io.ntole.wyr.core.domain.moderation.AddCategory
 import io.ntole.wyr.core.domain.moderation.ApproveSubmission
+import io.ntole.wyr.core.domain.moderation.BlockAuthor
+import io.ntole.wyr.core.domain.moderation.DismissReports
 import io.ntole.wyr.core.domain.moderation.GetPendingSubmissions
 import io.ntole.wyr.core.domain.moderation.GetQuestions
+import io.ntole.wyr.core.domain.moderation.GetReportedQuestions
 import io.ntole.wyr.core.domain.moderation.ModerationRepository
 import io.ntole.wyr.core.domain.moderation.RejectSubmission
 import io.ntole.wyr.core.domain.moderation.RenameCategory
 import io.ntole.wyr.core.domain.moderation.RestoreQuestion
 import io.ntole.wyr.core.domain.moderation.RetireQuestion
+import io.ntole.wyr.core.domain.moderation.UnblockAuthor
 import io.ntole.wyr.core.domain.player.GetPlayerStats
 import io.ntole.wyr.core.domain.player.PlayerRepository
 import io.ntole.wyr.core.domain.question.GetNextQuestion
@@ -36,6 +45,10 @@ import io.ntole.wyr.core.domain.question.QuestionRepository
 import io.ntole.wyr.core.domain.question.SkipQuestion
 import io.ntole.wyr.core.domain.reaction.ReactionRepository
 import io.ntole.wyr.core.domain.reaction.SetReaction
+import io.ntole.wyr.core.domain.report.HideAuthor
+import io.ntole.wyr.core.domain.report.HideQuestion
+import io.ntole.wyr.core.domain.report.ReportQuestion
+import io.ntole.wyr.core.domain.report.ReportRepository
 import io.ntole.wyr.core.domain.session.SessionRepository
 import io.ntole.wyr.core.domain.submission.GetMySubmissions
 import io.ntole.wyr.core.domain.submission.SubmissionRepository
@@ -53,10 +66,12 @@ import io.ntole.wyr.core.network.analytics.PostHogAnalytics
 import io.ntole.wyr.core.network.analytics.PostHogConfig
 import io.ntole.wyr.core.network.api.AuthApi
 import io.ntole.wyr.core.network.api.CategoryApi
+import io.ntole.wyr.core.network.api.HomePickApi
 import io.ntole.wyr.core.network.api.ModerationApi
 import io.ntole.wyr.core.network.api.PlayerApi
 import io.ntole.wyr.core.network.api.QuestionApi
 import io.ntole.wyr.core.network.api.ReactionApi
+import io.ntole.wyr.core.network.api.ReportApi
 import io.ntole.wyr.core.network.api.SubmissionApi
 import io.ntole.wyr.core.network.api.VoteApi
 import io.ntole.wyr.core.network.environment.WyrEnvironment
@@ -104,6 +119,8 @@ public fun dataModule(
         single { PlayerApi(get()) }
         single { SubmissionApi(get()) }
         single { ReactionApi(get()) }
+        single { ReportApi(get()) }
+        single { HomePickApi(get()) }
         single { CategoryApi(get()) }
 
         single<QuestionCache> { InMemoryQuestionCache() }
@@ -119,6 +136,8 @@ public fun dataModule(
         single<PlayerRepository> { DefaultPlayerRepository(api = get(), session = get()) }
         single<SubmissionRepository> { DefaultSubmissionRepository(api = get(), session = get()) }
         single<ReactionRepository> { DefaultReactionRepository(api = get(), session = get()) }
+        single<ReportRepository> { DefaultReportRepository(api = get(), session = get()) }
+        single<HomePickRepository> { DefaultHomePickRepository(api = get(), session = get()) }
         single<AccountRepository> { DefaultAccountRepository(api = get(), session = get()) }
         single<CategoryRepository> { DefaultCategoryRepository(api = get()) }
 
@@ -129,6 +148,11 @@ public fun dataModule(
         factory { SubmitQuestion(submissions = get(), session = get()) }
         factory { GetMySubmissions(submissions = get(), session = get()) }
         factory { SetReaction(reactions = get(), session = get()) }
+        factory { ReportQuestion(reports = get(), session = get()) }
+        factory { HideQuestion(reports = get(), session = get()) }
+        factory { HideAuthor(reports = get(), questions = get(), session = get()) }
+        factory { GetHomePicks(picks = get()) }
+        factory { PickOnHome(picks = get(), session = get()) }
         factory { RegisterAccount(accounts = get(), session = get(), analytics = get()) }
         factory { LogIn(accounts = get(), questions = get(), session = get(), analytics = get()) }
         factory { LogOut(accounts = get(), questions = get(), analytics = get()) }
@@ -169,5 +193,9 @@ public fun moderationDataModule(environment: WyrEnvironment): Module =
         factory { RestoreQuestion(moderation = get()) }
         factory { AddCategory(moderation = get()) }
         factory { RenameCategory(moderation = get()) }
+        factory { GetReportedQuestions(moderation = get()) }
+        factory { DismissReports(moderation = get()) }
+        factory { BlockAuthor(moderation = get()) }
+        factory { UnblockAuthor(moderation = get()) }
         factory { GetCategories(categories = get()) }
     }

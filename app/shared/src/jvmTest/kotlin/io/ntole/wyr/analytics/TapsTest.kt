@@ -28,6 +28,7 @@ import io.ntole.wyr.core.domain.category.Category
 import io.ntole.wyr.core.domain.error.DomainError
 import io.ntole.wyr.core.domain.player.PlayerStats
 import io.ntole.wyr.core.domain.question.Question
+import io.ntole.wyr.core.domain.report.ReportReason
 import io.ntole.wyr.core.domain.submission.Submission
 import io.ntole.wyr.core.domain.submission.SubmissionStatus
 import io.ntole.wyr.core.domain.vote.Side
@@ -37,6 +38,7 @@ import io.ntole.wyr.core.network.environment.WyrEnvironment
 import io.ntole.wyr.descriptions
 import io.ntole.wyr.home.HomeScreen
 import io.ntole.wyr.language.Language
+import io.ntole.wyr.language.SerbianCyrillicStrings
 import io.ntole.wyr.language.WyrStrings
 import io.ntole.wyr.navigation.AccountTopBar
 import io.ntole.wyr.navigation.BackTopBar
@@ -45,11 +47,13 @@ import io.ntole.wyr.nodes
 import io.ntole.wyr.play.CategoriesPlayed
 import io.ntole.wyr.play.PlayScreen
 import io.ntole.wyr.play.PlayUiState
+import io.ntole.wyr.play.QuestionMenu
 import io.ntole.wyr.settle
 import io.ntole.wyr.submit.SubmitActions
 import io.ntole.wyr.submit.SubmitFailure
 import io.ntole.wyr.submit.SubmitScreen
 import io.ntole.wyr.submit.SubmitState
+import io.ntole.wyr.tap
 import io.ntole.wyr.texts
 import io.ntole.wyr.theme.WyrTheme
 import io.ntole.wyr.update.UpdateButton
@@ -78,11 +82,26 @@ class TapsTest {
 
     @Test
     fun `every tap on Home and the top bars is reported`() {
-        assertEquals(setOf("home.play", "top_bar.account"), elementsTapped { HomeScreen(onPlay = {}, onAccount = {}) })
         assertEquals(
-            setOf("top_bar.home", "top_bar.categories", "top_bar.account"),
+            setOf("home.play", "top_bar.account"),
+            elementsTapped { HomeScreen(picks = Tally(votesA = 3, votesB = 1), onPlay = {}, onAccount = {}) },
+        )
+        // Home's two Play buttons are one element, told apart by their side (CLAUDE.md §8d, *Home picks*).
+        val sides =
+            analytics
+                .named(AnalyticsEvent.TAP)
+                .filter { it.properties[AnalyticsProperty.ELEMENT] == "home.play" }
+                .map { it.properties[AnalyticsProperty.SIDE] }
+        assertEquals(listOf("A", "B"), sides)
+        // The question's menu too, and what it lists once open (CLAUDE.md §8d, *Reports*).
+        assertEquals(
+            setOf("top_bar.home", "top_bar.categories", "top_bar.account") +
+                setOf("question_menu.open", "question_menu.report", "question_menu.hide_question") +
+                "question_menu.hide_author",
             elementsTapped {
-                PlayTopBar(onHome = {}, onAccount = {}) { CategoriesPlayed(text = "Све", enabled = true, onClick = {}) }
+                PlayTopBar(onHome = {}, onAccount = {}, menu = { QuestionMenu(enabled = true, onPick = {}) }) {
+                    CategoriesPlayed(text = "Све", enabled = true, onClick = {})
+                }
             },
         )
         assertEquals(setOf("top_bar.back"), elementsTapped { BackTopBar(onBack = {}) })
@@ -117,6 +136,35 @@ class TapsTest {
         assertEquals(setOf("play.card_a", "play.card_b", "play.like", "play.dislike", "play.skip"), asked)
         assertEquals(setOf("play.card_a", "play.card_b", "play.like", "play.dislike"), revealed)
         assertEquals(setOf("play.try_again"), failed)
+    }
+
+    /** Each reason a report may give is its own tap, named by the reason (CLAUDE.md §8d, *Reports*). */
+    @Test
+    fun `the question menu's every reason is reported by its name`() {
+        val scene =
+            ImageComposeScene(width = WIDTH, height = HEIGHT, density = Density(1f)) {
+                CompositionLocalProvider(LocalAnalytics provides analytics) {
+                    WyrTheme { WyrStrings(Language.DEFAULT) { QuestionMenu(enabled = true, onPick = {}) } }
+                }
+            }
+        val menu = SerbianCyrillicStrings.playScreen.menu
+        try {
+            scene.settle()
+            ReportReason.entries.forEach { reason ->
+                scene.tap(menu.name)
+                scene.tap(menu.report)
+                scene.tap(menu.reason(reason))
+            }
+        } finally {
+            scene.close()
+        }
+
+        val reasons =
+            analytics
+                .named(AnalyticsEvent.TAP)
+                .filter { it.properties[AnalyticsProperty.ELEMENT] == "question_menu.reason" }
+                .map { it.properties[AnalyticsProperty.REASON] }
+        assertEquals(ReportReason.entries.map { it.name.lowercase() }, reasons)
     }
 
     /** A card answers before the reveal and goes on after it: the tap says which. */

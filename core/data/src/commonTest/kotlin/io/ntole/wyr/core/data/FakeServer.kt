@@ -78,6 +78,9 @@ internal class FakeServer {
     /** The attempt id of every vote, in arrival order. */
     val voteAttempts = mutableListOf<String>()
 
+    /** How long each vote's answer took, as sent, in arrival order. */
+    val voteAnswerMillis = mutableListOf<Long?>()
+
     /** The `Authorization` header of every feed request, in arrival order. */
     val feedsSentAs = mutableListOf<String?>()
 
@@ -190,8 +193,9 @@ internal class FakeServer {
             WyrApi.Paths.VOTES -> {
                 val authorization = request.headers[HttpHeaders.Authorization]
                 votesSentAs += authorization
-                voteAttempts +=
-                    WyrJson.decodeFromString<VoteRequest>(request.body.toByteArray().decodeToString()).attemptId
+                val vote = WyrJson.decodeFromString<VoteRequest>(request.body.toByteArray().decodeToString())
+                voteAttempts += vote.attemptId
+                voteAnswerMillis += vote.answerMillis
                 val player = authorization?.removePrefix("Bearer access-")
                 val refusal = refuseVotesWith
                 when {

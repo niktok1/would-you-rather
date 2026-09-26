@@ -29,20 +29,24 @@ fun HomeTopBar(onAccount: () -> Unit) {
 }
 
 /**
- * Play's: home on the left, back to Home, the account icon on the right, and between them, in the
- * middle, [categories]: the categories played, which open the Categories screen (CLAUDE.md §8d,
- * *The Play screen*).
+ * Play's: home on the left, back to Home, the account icon on the right with [menu] before it, the
+ * menu about the question on screen, and between them, in what they leave, [categories]: the
+ * categories played, which open the Categories screen (CLAUDE.md §8d, *The Play screen*).
  */
 @Composable
 fun PlayTopBar(
     onHome: () -> Unit,
     onAccount: () -> Unit,
+    menu: @Composable () -> Unit = {},
     categories: @Composable () -> Unit,
 ) {
     TopBar(
         start = { IconAction(WyrIcons.Home, LocalStrings.current.home, "top_bar.home", onHome) },
         middle = categories,
-        end = { AccountButton(onAccount) },
+        end = {
+            menu()
+            AccountButton(onAccount)
+        },
     )
 }
 

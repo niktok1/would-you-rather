@@ -287,8 +287,9 @@ left) for the top bars (§8d, *Navigation*); for the Play screen `Skip` (a trian
 `ThumbUpFilled`, and `ThumbDown` and `ThumbDownFilled`, the thumb up turned over (§8d, *The Play
 screen*, *Reactions*); `CoinFace` and `CoinMark`, a disc and the rim and ring on it, the points' coin
 wherever they show (§8f, *Numbers and symbols*); `Globe` for the language menu; `Players`, two
-players, heading My questions' answers (§8d, *The Account screen*); and `Info`, an i in a circle, the
-Account screen's way to the About screen (§8d, *About*). They carry no colour of their
+players, heading My questions' answers (§8d, *The Account screen*); `Info`, an i in a circle, the
+Account screen's way to the About screen (§8d, *About*); and `More`, three dots one over the
+other, the Play screen's menu about the question (§8d, *The Play screen*, *Reports*). They carry no colour of their
 own: `Icon` tints each from `WyrColors`, so they follow the light and dark themes as text does. The
 coin is two icons drawn one on the other, the face in `WyrColors.coin` and the mark in
 `WyrColors.onCoin`, the brand's amber and its dark brown, the same in both themes as the cards are
@@ -296,6 +297,13 @@ coin is two icons drawn one on the other, the face in `WyrColors.coin` and the m
 `WyrIconsDrawTest` draws each off screen: every one a figure of the theme's size, no two the same,
 each filled thumb covering its outline and the hand's inside, the thumb down the thumb up turned
 over, and the coin's ring on its face.
+
+**Platform copies.** Android draws its window and splash screen before Compose starts, from
+resources, which cannot read `WyrColors`: so `:app:androidApp`'s `res/values/colors.xml` and
+`res/values-night/colors.xml` copy `pageBackground`, light and dark, as `wyr_page_background` (§8,
+*Release builds*), and `WindowThemeTest` holds the copy equal, so a palette change fails it until the
+copy changes too. The launcher icon's two drawables copy `optionA` and `optionB`, unpinned, being a
+placeholder.
 
 The moderation app has a theme of its own, `AdminTheme` in `:app:adminApp` (`io.ntole.wyr.admin.theme`),
 since it may not depend on `:app:shared` (§3): Material 3's default light and dark schemes and type
@@ -319,11 +327,20 @@ or sp literal outside that file.
 | primary text     | `#412402`  | `#F3EDEF`  |
 | heading accent   | `#993556`  | `#ED93B1`  |
 | OR pill text/bg  | `#993556` on `#FBEAF0` | `#F4C0D1` on `#3A2330` |
-| muted (pts)      | `#888780`  | `#888780`  |
+| muted (pts)      | `#6F6E68`  | `#888780`  |
+| error (failures) | `#B83A65`  | `#EC7AA0`  |
 
-**Open check (not blocking):** verify every text/background pair meets WCAG AA contrast — the
-amber block (`#412402` on `#EF9F27`) and `muted` `#888780` on both backgrounds are the ones to
-confirm. Not yet done.
+**Contrast** (*checked 2026-09-26*): every pair the theme puts text or an icon on meets WCAG AA in
+both themes, 4.5 to 1 for text, and 3 to 1 for large text (18.66 bold, 24 otherwise) and for icons
+and a graphic's edge, computed from the tokens and from the Material scheme they are mirrored into
+(`materialSchemeOf`) by `WyrContrastTest`. Two tokens changed for it: `muted` in the light theme,
+`#888780` before, 3.4 to 1 on the page (now 4.9), and `error`, a token of its own, where Material's
+error was card A's pink, 3.7 to 1 on the light page and 4.1 on the dark surface (now 5.2 and 6.1).
+The amber block, `#412402` on `#EF9F27`, reads at 6.5. The coin's face on the light page is 2.1, but
+its rim, drawn round it, is 13.5. One pair is left to the user: white on card A's pink is 3.9 to 1,
+enough for its large text but not for an option shrunk below large text (§8d, *The Play screen*), and
+the brand's colours stay unless the user changes them (§8b, *Card A's contrast*). The Material
+defaults the scheme does not set (secondary, tertiary, outline and the rest) are Material's own.
 
 ---
 
@@ -427,6 +444,50 @@ This project must never be attributed to any employer identity.
 - The paths: push to `main` → CI (ktlint + tests) → Render builds and publishes **dev**; then, by
   hand, Manual Deploy that same commit to **prod**. Never deploy prod a commit CI has not passed or
   dev has not run.
+- **Release builds** (*decided 2026-09-26*, for the Google Play launch, §8b *The launch*), in
+  `:app:androidApp`:
+  - *Signing*: only `prod` goes to Play, so only its release build is signed with the **Play upload
+    key**, when `local.properties` (which git ignores) names all four of `wyr.upload.storeFile`,
+    `wyr.upload.storePassword`, `wyr.upload.keyAlias` and `wyr.upload.keyPassword`, each else read
+    from the environment (`WYR_UPLOAD_STORE_FILE`, `WYR_UPLOAD_STORE_PASSWORD`,
+    `WYR_UPLOAD_KEY_ALIAS`, `WYR_UPLOAD_KEY_PASSWORD`); the store file's path is absolute or from the
+    repository's root. Short of all four, it is signed with the debug key, so it still installs on a
+    phone for testing, and its packaging says so in one warning line; `signProdReleaseBundle`, which
+    writes the `.aab` Play takes and which `bundleProdRelease` and `bundleRelease` run, is refused
+    before anything runs, naming what is missing. `dev`'s and `local`'s release builds always take the
+    debug key, as their debug builds do (a signing config per flavor, since a build type's would win
+    over the flavors'), so each installs over the other and back, keeping its data: Android refuses an
+    update signed with another key. CI's verify job holds all three rules (*Release signing*). The
+    keystore is the user's, never committed (`.gitignore` refuses `*.jks` and `*.keystore`), made
+    and uploaded as NEXT-SESSION.md says (*Release builds and Google Play*). **Play App Signing**:
+    Play keeps the app signing key, which signs what phones install; the upload key only proves an
+    upload is the developer's, and a lost one is reset in the Play Console without touching the app.
+  - *R8*: `isMinifyEnabled` and `isShrinkResources` on. The libraries ship their own keep rules
+    (kotlinx.serialization, Ktor, OkHttp, coroutines, Koin, Compose); `proguard-rules.pro` adds only
+    the line numbers a stack trace keeps. The mapping lands in
+    `app/androidApp/build/outputs/mapping/<variant>/mapping.txt`, and a bundle carries it inside, so
+    Play deobfuscates Android vitals' crashes by itself. CI's verify job builds `assembleProdRelease`,
+    so a shrink that fails the build fails CI; one that fails only at run time shows on a device
+    alone (NEXT-SESSION.md, *Release builds and Google Play*, has the emulator check). R8 warns that
+    it cannot read Kotlin 2.4's metadata (§8b, *R8 and Kotlin 2.4's metadata*).
+  - *The launcher icon*: adaptive (`mipmap-anydpi-v26/ic_launcher.xml`, and `_round`), of
+    `drawable/launcher_background.xml`, option A's pink over option B's amber (§5b), and
+    `drawable/launcher_foreground.xml`, a white question mark inside the 66dp circle every launcher's
+    mask keeps, which is the themed icon's monochrome layer too; Android 7 gets the two layers square
+    (`mipmap/ic_launcher.xml`). A placeholder (§8b, *The launcher icon and name*): the final icon
+    replaces the two drawables. The Play listing's own 512 by 512 icon is uploaded in the Play Console.
+  - *The label*: *Шта би радије?* for `prod`, *WYR Dev* and *WYR Local* for the others (§8e).
+  - *The window and the splash*: `Theme.Wyr` (`values/themes.xml`, dark in `values-night`) gives the
+    window and the status bar the page background before Compose's first frame, so a dark phone never
+    flashes white; on Android 12 and later (`values-v31`) the system's own splash screen is the page
+    background and the launcher icon, with no library. The colour is a platform copy (§5b), held equal
+    by `WindowThemeTest`, the app module's unit test, in CI's verify job.
+  - *What Google Play asks of the build* (checked 2026-09-26): target API 36, which `android-targetSdk`
+    is; a bundle signed with the upload key (above); and 16 KB memory pages. The APK's one native
+    library, Compose's `libandroidx.graphics.path.so` (`androidx.graphics:graphics-path` 1.0.1), has
+    every LOAD segment 16 KB aligned and is stored uncompressed on a 16 KB boundary for all four ABIs;
+    a native library added later is checked the same way (NEXT-SESSION.md). What the app collects, for
+    the Data safety form, is listed there too.
 
 ## 8a. Authentication — resolved
 
@@ -742,8 +803,8 @@ EncryptedSharedPreferences: enough for a game that stores no sensitive personal 
   `RenameCategoryRequest`, the `X-Admin-Token` header (`WyrApi.Headers`), `QuestionStatus.RETIRED`
   and the error codes `FORBIDDEN`, `ALREADY_DECIDED`, `WRONG_STATUS`, `CATEGORY_EXISTS` and
   `CATEGORY_NOT_FOUND`. The moderator's client (`ModerationApi` calls every admin route) and the
-  moderation app are built on it (§8d, *Moderation*). Since 2026-09-26 the server has more that no
-  client calls yet: the reported questions and their dismissal (`AdminReportListDto`,
+  moderation app are built on it (§8d, *Moderation*). Since 2026-09-26 the server has more, which the
+  moderator's client calls too: the reported questions and their dismissal (`AdminReportListDto`,
   `DismissReportsRequest`), an author's opaque id on the admin DTOs (`authorId`), blocking and
   unblocking an author (`BlockAuthorRequest`, `UnblockAuthorRequest`, `AuthorBlockDto`), and the error
   codes `SUBMISSIONS_BLOCKED` and `AUTHOR_NOT_FOUND` (§8d, *Moderation*, *Reports* and *Authors*).
@@ -752,6 +813,27 @@ EncryptedSharedPreferences: enough for a game that stores no sensitive personal 
   U+2029 (`checkedRejection`). Chosen as the stricter reading, since a reason is shown to its author
   as a line of text; allowing line breaks later breaks no client. The options: keep it, or allow
   line breaks in a reason.
+- **Ready-made rejection reasons** — *provisional — user decision.* The moderation app offers six
+  reasons a tap puts in the reason field, to reject a question or to block its author with (§8d,
+  *Moderation*, `READY_REASONS`): the wording is this build's, in Serbian Cyrillic, one per question
+  rule the moderator holds a question to, the topics rule naming the four topics the user banned.
+  The options: keep them; reword or add to them, which is the one list; or none, the reason always
+  typed.
+- **Where an author stands, in the moderation app** — *provisional — user decision.* The server says
+  whether an author is blocked only in answer to a block or an unblock (`AuthorBlockDto`), and none of
+  its lists says it, so the moderation app shows it only for an author it blocked or unblocked since
+  the token was typed, and offers both Block author and Unblock author for any other (§8d,
+  *Moderation*). Chosen so the client alone changes; an author blocked in an earlier session reads as
+  unknown until unblocked or blocked again, which changes nothing but rejects what they have pending.
+  The options: keep it; or the server sends `authorBlocked` beside `authorId` on the admin DTOs, a
+  field with a default, so no installed client breaks, and the app shows it for every author.
+- **A move from the Reports tab** — *provisional — user decision.* A retirement or restoration from
+  the moderation app's Reports tab puts the question the server answers with in its row on both
+  tabs, its reports as they were, as a move from All questions does, and reads nothing again; one
+  that failed reads the Reports tab again (§8d, *Moderation*). Chosen since the answer is the
+  question as a read lists it, so a read would spend one more of the address's admin budget (§8b,
+  *Rate limiting*) to show the same, but for reports given meanwhile. The options: keep it; or read
+  the reports again after every move, which shows those too.
 - **Retiring a question** — *provisional — user decision.* The user asked for a way to take an
   approved question out of play and put it back (§8d, *Moderation*); the details are this build's.
   Built: a moderator retires an approved question, a seed included, and restores a retired one.
@@ -780,6 +862,17 @@ EncryptedSharedPreferences: enough for a game that stores no sensitive personal 
   batch, which the client reads as out of questions. The Categories screen sends the categories
   selected (§8d, *The Categories screen*), so a player reaches this in every build, PROD's included.
   `SkipStoreTest` pins what is built.
+- **The launcher icon and name** — *provisional — user decision* (§8, *Release builds*). Built: a
+  placeholder icon, option A's pink over option B's amber and a white question mark, and the `prod`
+  label *Шта би радије?* in Cyrillic whatever the phone's language, as the game opens in Cyrillic
+  (§8f). The options: the user's own icon, in the placeholder's two drawables; and the label in Latin,
+  *Šta bi radije?*, on a phone set to Serbian Latin (one more string, in `values-b+sr+Latn`).
+- **R8 and Kotlin 2.4's metadata** — *provisional — user decision.* AGP 9.0.1's R8 warns, a dozen
+  times a release build, that it cannot parse the metadata of Kotlin 2.4.10's classes. Only
+  kotlin-reflect reads that metadata at run time, and the app has none; the shrunk build played on an
+  emulator without an error (§8, *Release builds*). The options: keep it until an AGP whose R8 reads
+  Kotlin 2.4; or pin a newer R8 (`com.android.tools:r8` on the build's classpath), a build dependency
+  of its own (§4).
 - **The categories on the Play screen** — *resolved 2026-09-26*: the user moved them from the row
   between the cards, where the redesign of 2026-09-25 had put them, to the middle of the top bar
   (§8d, *The Play screen*).
@@ -804,20 +897,37 @@ EncryptedSharedPreferences: enough for a game that stores no sensitive personal 
   So Log out stands under the row, at its end, for a registered player (574 at the tallest). The
   options: keep it; Log out on the card, where a guest's button to the Auth page is; or the switch
   elsewhere, off the Account screen's first view.
-- **Where players are, in analytics** — *provisional — user decision.* By default PostHog keeps the
-  address each event's request came from and adds a country, a city and coordinates from it, which
-  is personal data under the GDPR and would have to be in the privacy policy (§8g, *Consent*). Built
-  as the stricter choice: every event asks for no location (`$geoip_disable`), and the project
-  discards the address (§8g, *Where the player is*). The options: keep it; or let PostHog add a
-  location (drop `$geoip_disable`, still discarding the address), for players by country on the
-  dashboards, and say in the privacy policy that an approximate location is derived from the
-  address. A country the game itself keeps is another matter (*Local questions*, below).
+- **Where players are, in analytics** — *decided 2026-09-27: PostHog keeps it* (the user: "I would
+  leave IP capture"). PostHog keeps the address each event's request came from and adds a country, a
+  city and coordinates from it, so the dashboards can show players by country (§8g, *Where the
+  player is*). That is personal data under the GDPR and the ZZPL, so the privacy policy says PostHog
+  receives the address and derives an approximate location from it (§8g, *Consent*), and the Data
+  safety form declares an approximate location. Rejected: every event asking for no location
+  (`$geoip_disable`) and the project discarding the address. A country the game itself keeps is
+  another matter (*Local questions*, below).
 - **One Try again** — *provisional — user decision.* The Play and Account redesigns said Try again
   two ways in Serbian, *Пробај опет* and *Покушај поново*, and so did the Categories screen, with
   *Пробај опет*; it is one text now (§8f, *The strings*), *Покушај поново*, which four of the five
   screens before it and the Account screens' *Нешто није у реду. Покушај поново.* already used. The
   options: keep it; or *Пробај опет*, a little shorter, in `Strings.tryAgain` and that sentence
   both.
+- **After a report or a hide** — *provisional — user decision.* Each of the Play screen's menu
+  choices (§8d, *The Play screen*) goes on to the next question once the server has it, with nothing
+  said, as a skip does: the question going is the acknowledgement, the least in the way. The options:
+  keep it; or a brief line in the row's slot on the next question, *Пријављено.* or *Скривено.*, until
+  the next action.
+- **The question's menu on the top bar** — *provisional — user decision.* The ⋮ stands before the
+  account icon, so the account icon keeps its place on every bar, and the categories played give up
+  48 of their width and the bar's exact middle (223 of 375 left them). The options: keep it; the ⋮
+  last, after the account icon, where Android puts an overflow menu; or an empty 48 beside home, to
+  keep the categories in the middle, at 175 wide.
+- **The report reasons' wording** — *provisional — user decision.* The menu's five reasons (§8d, *The
+  Play screen*; `QuestionMenuStrings`) are *Увредљиво је*, *Помиње стварну особу*, *Реклама или спам*,
+  *Нема шта да се бира* and *Нешто друго*. The options: keep the five phrases; or reword them, in
+  `QuestionMenuStrings` alone.
+- **Home's two labels** — *provisional — user decision.* Both of Home's Play buttons say *Играј*
+  (§8d, *Home picks*), since both start the game alike. The options: *Играј* on both; or a different
+  word on each card.
 - **What submitting cost, on the Account screen** — *provisional — user decision.* The Account card
   shows the points and the questions answered and not `pointsSpent` (§8d, *Stats*), and the cost
   shows on the Submit form's button. The options: keep it; or a stat on the card, what was spent.
@@ -926,7 +1036,13 @@ EncryptedSharedPreferences: enough for a game that stores no sensitive personal 
   too leaves a spent token, refused at the next refresh. That takes two lost answers in a row, or a
   settling refresh (`refreshAs`, §8a) whose answer is lost when the stored token was already the
   previous one.
-- **WCAG AA contrast audit** — see §5b. Paused along with UI polish (§8d).
+- **WCAG AA contrast audit** — *done 2026-09-26* (§5b, *Contrast*), but for card A, below.
+- **Card A's contrast** — *provisional — user decision.* White on card A's pink, `#D4537E`, is 3.9 to
+  1: AA for large text, which an option is at its own 22 bold and the percentage at 34, but not for an
+  option a long question shrinks below 18.66 bold (§8d, *The Play screen*), which needs 4.5. The brand's
+  colours were left as they are (§5b). The options: keep it; card A a little deeper, `#C4466F`, white
+  on it 4.7 to 1, the one token to change, the dark theme's included; or the option's floor at 19,
+  large text, which cuts a 200-character option on an iPhone SE.
 - **Local questions** — *design decided 2026-09-26; not built.* The game is for Serbia first and
   more countries later. Most questions translate, but some matter only in one place: a region of
   several countries (the former Yugoslavia), one country, or one city. Such a question reaches only
@@ -1022,7 +1138,10 @@ EncryptedSharedPreferences: enough for a game that stores no sensitive personal 
     question's latest side, and every re-answer), skips (per cycle), reactions (a like or a dislike),
     and **how long each answer took** (`VoteRequest.answerMillis`, kept on the vote as
     `votes.answer_millis`, V16: from 0 to `WyrApi.Limits.MAX_ANSWER_MILLIS`, 10 minutes, and none
-    otherwise, never a refusal; the latest answer's, as the side is; the client adopts it later).
+    otherwise, never a refusal; the latest answer's, as the side is). The game sends it with every
+    vote: the time the Play screen measures from the question shown to the tap, counted only while
+    the screen is shown (`ScreenStopwatch`, §8g), and a resend of the same attempt sends the same
+    value (`PendingVote.answerMillis`, through `CastVote` and `VoteRepository.cast`).
     Nothing reads any of them to choose a question yet.
   - *Later, not built*: **question traits** a moderator sets beside the categories (light or deep,
     silly or serious, and the like, the list to settle then); a **per-player affinity** for each
@@ -1260,10 +1379,11 @@ feature is tried through the game and the moderation app. A new feature gets a p
 game's, or a place on one, theme tokens only (§5b), and its words in `Strings` (§8f).
 
 **Navigation** (*decided 2026-09-25*: no tabs; `App.kt`, `io.ntole.wyr.navigation`, `io.ntole.wyr.home`):
-- The app opens on **Home**: the game's name, a big **Play** button and the account icon top right,
-  and nothing else, the user asking for less text. Play opens the **Play** screen under a top bar of
+- The app opens on **Home**: the game's name, two big **Play** buttons in the cards' colours, each
+  with how many picked it (*Home picks*), and the account icon top right, and nothing else, the user
+  asking for less text. Either Play opens the **Play** screen under a top bar of
   the home icon, left, back to Home, the categories played in its middle, which open the
-  **Categories** screen, and the account icon, right. The account icon, from Home or
+  **Categories** screen, and the question's menu and the account icon, right. The account icon, from Home or
   Play, opens the **Account** screen under a top bar of a back arrow and, on the right, an info icon
   to the **About** screen (*About*, below). On it, a guest's one button
   opens the **Auth** page, to register or log in, and My questions' *Ново питање* the **Submit**
@@ -1292,8 +1412,8 @@ game's, or a place on one, theme tokens only (§5b), and its words in `Strings` 
   the Play, Account, Auth, Submit and Categories screens keep the 599 of an iPhone SE's 667 their
   draw tests hold them to. `TopBarsDrawTest` holds every bar to 48 at 375 wide with nothing cut
   short but a long selection of categories on Play's, cut on its one line, in both themes and every
-  language; `HomeScreenDrawTest` holds Home to 599 at 375 wide (276
-  on this Mac) and to its two texts and one icon.
+  language; `HomeScreenDrawTest` holds Home to 599 at 375 wide (436
+  on this Mac, the name on two lines, 390 in Latin, on one) and to its texts and one icon.
 
 **Wide screens** (*decided 2026-09-26*: of two options, the user picked the cards side by side over
 the row with the top bar as it is, the other being the row moved into the top bar; and the other
@@ -1316,8 +1436,8 @@ orientation, in common code alone:
   screen asks QuestionLayout's rule of the size it was last laid out at (`standsSideBySide`).
 - *The Account screen, the Auth page, the Submit form and the Categories screen* hold their content to
   a column `WyrDimens.contentMaxWidth`, 600, wide down the middle (`contentWidth`), placed after the
-  scroll, so the whole width still scrolls; the Categories screen's list scrolls in its column. Home is
-  centred already and stays as it is.
+  scroll, so the whole width still scrolls; the Categories screen's list scrolls in its column. Home's
+  two Play buttons stand as the Play screen's cards do, by the same `QuestionLayout` (*Home picks*).
 - `QuestionLayoutDrawTest` holds the rule to boxes of known sizes, which no font changes: side by side
   from 600 across while wider than tall, stacked at 599, when square and on a tablet held upright, and
   the height it needs by the same rule. `PlayScreenDrawTest` draws every state on two phones on their
@@ -1455,7 +1575,8 @@ of the test's own, one that opens nothing, the links above 599 before any scroll
 
 **The Play screen** (`io.ntole.wyr.play`; the user's layout, *decided 2026-09-25*, rearranged
 2026-09-26) asks a question and reveals its tally, holds Skip and the reactions, and opens the
-Categories screen from its top bar (*Skipping*, *Reactions* and *Categories*, below):
+Categories screen and the question's menu from its top bar (*Skipping*, *Reactions*, *Reports* and
+*Categories*, below):
 - Two answer cards in the brand colours (§5b) and, between them, **one row** (on a wide screen the
   cards side by side over it, *Wide screens*; the user: reactions "in the middle and points to
   left"): on the left the player's points, the coin and the number (`PointsAmount`, §8f); in the
@@ -1463,12 +1584,30 @@ Categories screen from its top bar (*Skipping*, *Reactions* and *Categories*, be
   how many hold it, before answering and after; and on the right **Skip** while the question is not
   answered yet (*Skipping*), its place kept empty in the reveal so nothing in the row moves. The
   **categories played**, *Све* or their names, cut to one line, with a small chevron, are in the middle
-  of the **top bar** (the user: "category goes to top bar in middle"), between home and the account
-  icon (`PlayTopBar`, `CategoriesPlayed`), and open the Categories screen. No title and no *OR*.
+  of the **top bar** (the user: "category goes to top bar in middle"), between home and the question's
+  **menu**, a ⋮ before the account icon (`PlayTopBar`, `CategoriesPlayed`, `QuestionMenu`), and open
+  the Categories screen. No title and no *OR*.
+- *The question's menu* (*built 2026-09-26*; the user: report "in the least obstructive way"): the ⋮
+  (`WyrIcons.More`, named *Опције питања* for a screen reader) opens a small menu about the question on
+  screen, asked or revealed: **Пријави питање**, which lists in its place the five reasons, one tap
+  each (*Увредљиво је*, *Помиње стварну особу*, *Реклама или спам*, *Нема шта да се бира*, *Нешто
+  друго*: `QuestionMenuStrings`, `ReportReason`'s five; the wording provisional, §8b); **Не приказуј ми ово питање**; and **Не
+  приказуј питања овог аутора** (*Reports*). A choice closes the menu and goes to
+  `PlayViewModel.pickFromMenu`, and once the server has it the next question shows, with nothing more
+  said, as after a skip: each hides the question for good (*provisional — user decision*, §8b). One
+  that failed leaves the question on screen and says why in the row's failure slot, as a reaction's
+  does (`OnQuestion.rowError`, which a reaction's failure shares). Off, and drawn muted, with no
+  question on screen and while anything is in flight (`canUseMenu`; `isHiding` while its own request
+  is). The categories played take what width the bar's three icon buttons leave, 223 of 375, cut on their one
+  line, and no longer stand in the bar's exact middle, the end holding two icons to the start's one.
+  `QuestionMenuDrawTest` opens it in both themes and every language and taps each choice and reason;
+  `TopBarsDrawTest` holds Play's bar to 48 and 375 wide with it; `PlayViewModelTest` drives each
+  choice, from the reveal too, its failure and the one action at a time; `AppNavigationTest` reports a
+  question through it and moves on.
 - *The categories' names* are the server's, in the language shown (`categoryName` in
   `io.ntole.wyr.language`, §8f), in the order the server lists them, and one not read yet by its id,
-  after the rest (`categoriesPlayed`). On the top bar they have the width home and the account icon
-  leave them, about 250 of 375, where the row gave them 115.
+  after the rest (`categoriesPlayed`). On the top bar they have the width home, the menu and the
+  account icon leave them, about 223 of 375, where the row gave them 115.
 - *The row's arrangement* (`CentredRow`): Skip gets its whole width first, then the thumbs, and the
   points what they leave, no wider than `WyrDimens.playRowStartMaxWidth` (88). The thumbs stand in
   the middle of the screen while the points leave them room, and move right only as far as a wider
@@ -1493,15 +1632,32 @@ Categories screen from its top bar (*Skipping*, *Reactions* and *Categories*, be
   no vote counts (the domain still has `VoteOutcome.agreedWithMajority`). A screen reader hears what
   a tap does where no text says it: *Следеће питање* on a revealed card, *Промени категорије* on the
   categories played.
+- *An option that fits* (*built 2026-09-26*): an option too long for its card shrinks its type in steps
+  rather than being cut, from `WyrTypeScale.optionText`, 22, down 2 at a time to a floor,
+  `optionTextMin`, 14, the largest that fits whole (Compose's `TextAutoSize.StepBased`, in
+  multiplatform foundation since 1.8; one `OptionTextAutoSize`), stacked or side by side, the
+  percentage's room taken first on the reveal (the option is the card column's weighted child), its
+  line in `em` (`optionLineHeight`) so it shrinks with it. An option that fits keeps 22. At the floor
+  what still does not fit is cut, which only a phone smaller than an iPhone SE on its side, or a large
+  font size, does to a 200-character option. `PlayScreenDrawTest` holds two options of 200 characters
+  whole, their type no smaller than the floor, on an iPhone SE and on one on its side, asked and
+  revealed, in every language, and a short option at 22.
+- *The repeat notice* (*built 2026-09-26*): a question the feed serves as answered before
+  (`Question.answeredBefore`) shows a small muted *Већ одговорено* (`PlayStrings.answeredBefore`)
+  above the cards, asked and revealed, in a slot of its own (`RepeatNotice`): every question has it,
+  in the screen's top padding, which it grows only past the padding's height at a large font size, the
+  notice laid out unseen and unheard when not shown, so nothing on the screen moves for it. The pick
+  made before is not shown. `PlayScreenDrawTest` finds it above card A, and every part of the screen
+  where it is for a question not answered before, at font scales 1, 1.3 and 2.
 - *The count up is drawn, not composed* (`CountedUpText`, `RevealBar`): the count is read only as it
   is drawn, the number over the final percentage's own text, laid out once, which sizes it and is
   what a screen reader reads, and the bar in a layer of its own. So a frame of it draws two numbers
   and two bars and nothing else, where a text changed every frame recomposed both cards, laid them
   out again and told any accessibility service, too much for a debug build, several times slower, to
   do 60 times a second.
-- One action at a time (`isBusy`, `canChangeCategories`): while a vote, a skip or a reaction is in
-  flight, the cards, the thumbs, Skip and the categories are off, and Skip is drawn muted
-  (`WyrColors.muted`). A reaction that failed says why in the points' place, in two short lines at
+- One action at a time (`isBusy`, `canChangeCategories`): while a vote, a skip, a reaction or a menu
+  choice is in flight, the cards, the thumbs, Skip, the categories and the menu are off, and Skip and
+  the menu are drawn muted (`WyrColors.muted`). A reaction that failed says why in the points' place, in two short lines at
   most, in a slot as high as a thumb's touch target at any font size, so it moves nothing; a skip that
   failed moves on all the same.
 - Loading is a spinner, with *Још мало…* under it after 5 seconds (*A slow first load*); a failure is one short sentence and *Покушај поново* (`Strings.tryAgain`,
@@ -1564,8 +1720,9 @@ listed on the Account screen.
     too, so a skip does not hold through a category filter: *provisional — user decision* (§8b). The
     client selects any number (`QuestionRepository.setCategories`, from the Categories screen), none
     for every category; a change drops the queue, and a login or a logout keeps the selection.
-  - `answeredBefore` (`QuestionDto`) means the player has a vote on the question, from any cycle. No
-    client reads it: the domain's `Question` has no such field since the dev console went.
+  - `answeredBefore` (`QuestionDto`) means the player has a vote on the question, from any cycle.
+    The domain's `Question` has it again (`QuestionMapper`), and the Play screen says so, quietly
+    (*The Play screen*, the repeat notice).
 - **Categories** *(decided 2026-09-24; server data since 2026-09-25; built)*: a
   question is filed under **any number of categories, at least one**. A player may pick **several**
   categories to play, and a question matches when it is filed under **any** of them; none picked
@@ -1837,10 +1994,20 @@ listed on the Account screen.
     points between the cards show it from the next vote on, or from the next time the Play screen is
     shown, which reads them again. The thumbs, drawn by hand (§5b), took the heart's place.
 - **Reports** *(decided 2026-09-26, what Google Play asks of a game with players' questions: a way to
-  report one and to block its author; built on the server, no client yet)*: a player may **report** a
+  report one and to block its author; built on the server and the game)*: a player may **report** a
   question to the moderator, **hide** it, or **hide its author**, and each hides from that player
-  alone, for good. The client will offer them in a list on the Play screen that stays out of the way
-  (the user). Comments on questions are not built: later, if at all.
+  alone, for good. The game offers them in the menu on the Play screen's top bar, which stays out of
+  the way (the user; *The Play screen*, the question's menu). Comments on questions are not built:
+  later, if at all.
+  - *The client* is `ReportRepository` in `:core:domain` (`io.ntole.wyr.core.domain.report`), behind
+    `ReportQuestion`, `HideQuestion` and `HideAuthor`, each ensuring a session first, over a domain
+    `ReportReason` of its own, the wire's five without its `UNKNOWN`, which no report may give
+    (`ReportMapper`). `DefaultReportRepository` sends each through `withSessionRecovery`, as reactions
+    go, over `ReportApi`; a resend is safe, a report replacing its reason and a hide changing nothing.
+    `HideAuthor` then drops the question queue (`QuestionRepository.reset`), which may hold the
+    author's other questions, fetched before: the client never knows who wrote a question, so the
+    whole queue goes. `ReportUseCasesTest`, `DefaultReportRepositoryTest` (over `PlayServer`, a fake of
+    its own beside `FakeServer`).
   - *Reporting* is `POST /v1/reports` (`WyrApi.Paths.REPORTS`) with a `ReportRequest`, the question
     and a `ReportReason`: `OFFENSIVE`, `REAL_PERSON`, `SPAM`, `NOT_A_CHOICE` or `OTHER`, a growable
     wire enum with `UNKNOWN` (§5), which, or no reason at all, is 400. A player holds **one report per
@@ -2014,7 +2181,7 @@ listed on the Account screen.
     as a status: `statusOf` and `standsAt` read the two columns as one status, so a rollback to the
     build before reads every row. The seed writes only what a database lacks and changes nothing
     there, so a retired seed stays retired through every boot. `RetirementTest` pins it, the races included.
-  - *Reports* (*built on the server 2026-09-26; the moderation app does not show them yet*):
+  - *Reports* (*built on the server 2026-09-26; the moderation app's Reports tab shows them*):
     `GET /v1/admin/reports` lists the reported questions (§8d, *Reports*), most reported first, then
     the most lately reported, then by id, bounded by `?limit=` and with no cursor, since a moderator
     works from the head as in the queue: an `AdminReportListDto` of `AdminReportDto`s, each the
@@ -2028,7 +2195,8 @@ listed on the Account screen.
     through *Retiring*; nothing retires one by itself, however many report it: *provisional — user
     decision*, the other option being a threshold that retires it until a moderator looks.
     `ReportModerationFlowTest`.
-  - *Authors* (*built on the server 2026-09-26; the moderation app does not use them yet*): every
+  - *Authors* (*built on the server 2026-09-26; the moderation app blocks and unblocks from each tab
+    that shows authors*): every
     admin DTO names a question's author by an opaque id, `authorId`, the author's player id, which says
     nothing about them but which questions are theirs; never a username, and null for a seed and for
     a question whose author deleted their account (§8a).
@@ -2046,7 +2214,7 @@ listed on the Account screen.
     `UnblockAuthorRequest` lets them submit again; what the block rejected stays rejected. An id no
     player has is 404 `AUTHOR_NOT_FOUND`. On the client, `SUBMISSIONS_BLOCKED` is
     `DomainError.SUBMISSIONS_BLOCKED`, which the Submit form says (*Submitting*), and `AUTHOR_NOT_FOUND`
-    reads as `DomainError.UNKNOWN` until the branch that shows it gives it one of its own.
+    is `DomainError.AUTHOR_NOT_FOUND` (*The client*, below).
   - *The client* is `ModerationRepository` in `:core:domain`, behind `GetPendingSubmissions`,
     `ApproveSubmission` and `RejectSubmission`, none of which ensures a session: the moderator is
     not a player. `DefaultModerationRepository` calls `ModerationApi` through `runApi` alone, never
@@ -2073,7 +2241,18 @@ listed on the Account screen.
     filter by
     `SubmissionStatus.OTHER` is refused before anything is sent; its categories are ids, in id
     order. `WRONG_STATUS`
-    is `DomainError.WRONG_STATUS`. `moderationDataModule(environment)` binds it, and only there, for a
+    is `DomainError.WRONG_STATUS`. The reported questions and the authors (*Reports*, *Authors*, above)
+    are `GetReportedQuestions`, a `ReportedQuestion` each (its `ModeratedQuestion`, how many report it,
+    its `reasons` counted most given first, and when it was last reported), read
+    `ModerationRepository.PAGE_SIZE` at a time as the queue is; `DismissReports`; and `BlockAuthor`,
+    with a `RejectionReason`, and `UnblockAuthor`, each answered with an `AuthorBlock` (blocked or not,
+    and how many it rejected), the one place the server says where an author stands; through `runApi`
+    alone, as the rest. A domain `ReportReason` names each reason, and `UNKNOWN` one this build cannot
+    name, where every such reason lands with their counts added, so they still add up to the reports.
+    `ModeratedQuestion.authorId`, and the queue's and the decisions' `Submission.authorId`
+    (`toModeratorsSubmission`), carry the author's opaque id; a player's own `Submission` never does,
+    whatever it is sent (`SubmissionMapperTest`). `AUTHOR_NOT_FOUND` is `DomainError.AUTHOR_NOT_FOUND`.
+    `moderationDataModule(environment)` binds it, and only there, for a
     client that only moderates: an HTTP client of its own over an in-memory session store nothing
     writes, no `TokenStorage` needed, no session repository, so no bearer token goes out and no guest
     can be minted. The game's `dataModule` binds none of it,
@@ -2088,29 +2267,56 @@ listed on the Account screen.
     anew on every Lock (`ModerationState.locks`): a text field keeps its undo history for as
     long as it is shown, so Undo in the one that held the token gave it back (`TokenBarTest`).
     Nothing is sent until what is typed can be a token (`AdminToken.of`), and one action runs at
-    a time. Every Load, of either tab, reads the categories first (`GetCategories`, needing no
+    a time. Every Load, of any tab, reads the categories first (`GetCategories`, needing no
     token), since a moderator adds them without a build: they are the approval's and the filter's
     chips, and name a question's categories, in Serbian, one not listed by its id
     (`ModerationState.categories`); a read that fails says so above the tab and keeps those read
     before, and Lock keeps them, being the same for everybody. *Pending* lists the queue, oldest
     first, each submission with its options,
     categories and age: Approve files it under the categories picked for it, none keeping the
-    author's, and Reject sends the reason typed once it is a `RejectionReason`. The queue is
+    author's, and Reject sends the reason typed once it is a `RejectionReason`. Beside the reason
+    field, a chip for each ready reason (`READY_REASONS`, provisional, §8b) puts it in the field, to
+    send as it is or edit first, in Serbian Cyrillic, since the author reads it in the game while the
+    app's own words stay English: *Није избор између две ствари*, *Увредљиво*, *Помиње стварну особу*,
+    *Дупликат*, *Тема није дозвољена (вера, политика, здравље, сексуалност)*, the question rules (§8b,
+    *Personalization*), and *Неразумљиво*; `ReadyReasonsTest` holds each to `RejectionReason`'s rules
+    as it reads, and to Serbian Cyrillic. The queue is
     read again after every decision, whatever became of it. A read lists at most
     `ModerationRepository.PAGE_SIZE`, and a queue that long says more may be waiting,
-    its tab `Pending (100+)`, rather than naming itself the whole. *All questions* is the
+    its tab `Pending (100+)`, rather than naming itself the whole. *Reports* lists the reported
+    questions (*Reports*, above), most reported first, at most `ModerationRepository.PAGE_SIZE`, a list
+    that long saying more may be reported, its tab `Reports (100+)`: each with how many players report
+    it and how many give each reason, one this build cannot name as such, when it was last reported,
+    its status, options, categories, votes, likes, dislikes and id, and Dismiss reports, which clears
+    them and reads the reports again, whatever became of it, and Retire, confirmed in the same dialog,
+    or Restore, as in the list. A retirement or restoration, from either tab, puts the question it
+    answers with in its row on both, its reports as they were, and one that failed reads again the tab
+    it was started from (provisional, §8b, *A move from the Reports tab*). *All questions* is the
     list, seeds included, newest first, filtered by any statuses (`RETIRED` among them; never
     `OTHER`) and any categories, none being every one: Load reads its first page and Load more the
     next, at the filter the list was read at, with the cursor the page before gave, and changing the
     filter drops what was read at the one before. Each question shows its options, categories,
-    status, whether it is a seed, its votes, likes and dislikes, its times and a rejection's reason, and what
-    can be done where it stands: Retire an approved one, only once the moderator confirms it in a
-    dialog; Restore a retired one; decide a pending one as in the queue, from the same draft of
+    status, its author or that it is a seed, its votes, likes and dislikes, its times and a
+    rejection's reason, and what can be done where it stands: Retire an approved one, only once the
+    moderator confirms it in a dialog; Restore a retired one; decide a pending one as in the queue, from the same draft of
     categories and reason. A retirement or restoration puts the question it answers with in its
     row, or drops it once the list's filter no longer picks it: the server reads that answer as it
     reads a page's row. A decision, whose answer lacks the row's tally and likes, reads the list
     again as many pages deep as were shown, and so does a move that failed, so the list shows what
     the server holds without losing the moderator's place; a decision reads the queue again too.
+    *Authors* show on Pending, Reports and All questions alike (`AuthorControls`): each question
+    names its author by the first 8 characters of their opaque id (`shortAuthorOf`), or says it is a
+    seed, with Block author... and Unblock author beside it. Block asks first, in a dialog that says
+    what it does and takes the reason each of the author's pending questions is rejected with, typed
+    or a ready reason picked and edited, and sends it once it is a `RejectionReason`; then reads again
+    whatever was read, the queue, the reports and the list as deep as it was shown, whatever became
+    of it, since the block rejects what the author had pending. Unblock goes at once and reads
+    nothing again, since nothing the server lists shows it. The server says whether an author is
+    blocked only in answer to a block or an unblock (`AuthorBlock`), so the app keeps each answer for
+    as long as the token is held (`ModerationState.authors`; Lock forgets them) and names it beside
+    the author, `· blocked` or `· not blocked`, offering the one action that changes it; an author it
+    has no answer for offers both (provisional, §8b). A block's line says how many pending questions
+    it rejected, and `AUTHOR_NOT_FOUND` reads as no such author, their account maybe deleted.
     Nothing is read again after a 403 or a 429, which did nothing and would refuse the read too:
     after a wrong token the read would only spend another of the address's ten a minute, past which
     every admin request from it is refused (§8b). A failure shows where it happened: a read's above
@@ -2120,7 +2326,7 @@ listed on the Account screen.
     named (`WyrException.retryAfter`, §8b). An answer the data layer cannot name (`UNKNOWN`) claims
     no status, leaving it to the detail line under it, and says a bare 404 means moderation is off
     on that server: a proxy's own page or an error code newer than the build reads as `UNKNOWN` too.
-    *Categories*, the third tab, lists every category, oldest first, with its id and both names, and
+    *Categories*, the fourth tab, lists every category, oldest first, with its id and both names, and
     adds one and puts one's names right (*Categories*, above): Add, from a form of the two names and
     an id, blank for the server to make one, goes once `CategoryDraft.isValid` holds by
     `CategoryRules`, and clears the form once added; Rename... opens a category's names in its own
@@ -2128,13 +2334,16 @@ listed on the Account screen.
     rename, whatever became of it (the list is no admin route, so the rule above for a 403 or a 429
     does not apply), and a failure shows under the form or the card it came from, a 409 as an id a
     category has already. Lock forgets what was typed for a category and keeps the categories read.
-    `ModerationViewModelTest`, `QuestionListViewModelTest` and `CategoriesViewModelTest` drive it over
-    scripted repositories,
+    `ModerationViewModelTest`, `ReportsViewModelTest`, `AuthorsViewModelTest`,
+    `QuestionListViewModelTest` and `CategoriesViewModelTest` drive it over scripted repositories,
+    `ModerationTapsTest` taps its chips and buttons, a ready reason and the block's dialog among them,
     `ModerationOverHttpTest` over the real client configuration, and `ScreensDrawTest` draws every
-    screen off screen at a desktop window's size. The game's builds do not moderate at all.
-- **Home picks** *(decided 2026-09-26; built on the server, the client adopts later)*: the Home screen
-  will show **two Play buttons**, one in each card's colour (§5b), both starting the game alike, each
-  with how many times players have tapped it, to fill the screen as a question would. A tap pays and
+    screen off screen at a desktop window's size, and reads the Reports tab's and the author actions'
+    texts. The game's builds do not moderate at all.
+- **Home picks** *(decided 2026-09-26; built on the server and the game)*: the Home screen shows
+  **two Play buttons**, one in each card's colour (§5b), both starting the game alike, each with how
+  many times players have tapped it, to fill the screen as a question would (the user: a Home that
+  "mimics the game"). A tap pays and
   costs nothing and is no answer. **Every tap counts**, a player's repeats included, bounded only by
   the per-player rate limit (§8b). `GET /v1/home-picks` (`WyrApi.Paths.HOME_PICKS`) answers both
   counts, a `HomePicksDto` (`picksA`, `picksB`), and needs no session, so Home can show them before it
@@ -2143,6 +2352,26 @@ listed on the Account screen.
   naming no side. Built in `home_picks` (V15), one row per side written at 0, moved only by an SQL
   increment (`HomePickStore.pick`, §4) and read in one statement (`HomePickStore.counts`).
   `HomePickStoreTest` races 8 taps of one button, `HomePickFlowTest` the routes.
+  - *The Home screen* (`io.ntole.wyr.home`, *built 2026-09-26*): under the game's name, the two
+    buttons, *Играј* each (provisional, §8b), card A's pink and card B's amber, stand as the Play screen's cards do, stacked
+    on a phone and side by side on a wide screen (the same `QuestionLayout`, a gap of `spaceMd` in the
+    row's place), sharing the room under the name: `WyrDimens.playButtonHeight`, 64, is what each asks
+    for where the room is unbounded, not a floor, since `QuestionLayout` gives each its share of the
+    room there is. Each shows its share of all taps,
+    `Tally.percentA` and `percentB` as a question's are, counted up from 0 as the reveal's percentages
+    are, drawn, not composed (`CountedUpText`, `rememberCountUp`, `percentStyle`); no number until the
+    counts are read, none while nobody has tapped, and nothing said when a read fails, which keeps what
+    was read before. They are read each time Home is shown (`HomeViewModel.shown`). A tap opens Play at
+    once and is counted in the background, best effort (`HomeViewModel.pick`), its answer not shown.
+  - *The client* is `HomePickRepository` in `:core:domain` (`io.ntole.wyr.core.domain.home`), the
+    counts as a `Tally`, one tap a vote: `GetHomePicks`, which ensures no session, and `PickOnHome`,
+    which ensures one first, as a vote does, so a first launch's tap and the game it opens mint one
+    guest between them. `DefaultHomePickRepository` reads through `runApi` alone, as the categories
+    are, and counts a tap through `withSessionRecovery`, over `HomePickApi`. `HomePickUseCasesTest`,
+    `DefaultHomePickRepositoryTest`, `HomeViewModelTest`, `HomeScreenDrawTest` (599 on an iPhone SE,
+    both themes, every language, the buttons side by side on a desktop window, the shares read as they
+    are through the count up), `AppNavigationTest` (read each time Home is shown; Play opens before the
+    tap is counted).
 
 ## 8e. Client environments — decided 2026-09-24
 
@@ -2166,7 +2395,7 @@ game UI (the moderation app, `:app:adminApp`, §3) can name one too.
 - *Android*: product flavors `local`, `dev` and `prod` in one `environment` dimension;
   `BuildConfig.WYR_ENV` is the flavor's name, which `WyrApplication` passes on. Each installs beside
   the others: application id suffix `.local`, `.dev` or none, launcher label *WYR Local*, *WYR Dev* or
-  *WYR*. Cleartext HTTP (the `usesCleartextTraffic` manifest placeholder) is on for `local` alone;
+  *Шта би радије?* (§8, *Release builds*). Cleartext HTTP (the `usesCleartextTraffic` manifest placeholder) is on for `local` alone;
   `dev` and `prod` are https only. `dev` is Android Studio's default variant, since a physical phone
   cannot reach LOCAL. `assembleDebug` builds all three.
 - *Desktop*: the `WYR_ENV` environment variable, read in `:app:shared`'s jvmMain
@@ -2239,7 +2468,8 @@ hand, so the two cannot say different things; and **English** stands beside them
   precomposed Đ, Ž, Ć, Č and Š, the accented Ѐ and Ѝ (ѝ, her, beside и, and) the precomposed È and
   Ì, and Dž is two letters, never Unicode's one-character digraph. Latin letters, digits,
   punctuation, spacing and the Cyrillic letters Serbian does not use (Я, Щ, Ы...) come back as they
-  were. Pure and in the domain, so a question's text can go through it later. `SerbianScriptTest`
+  were. Pure and in the domain, so a question's options go through it too (*Questions in Latin*,
+  below). `SerbianScriptTest`
   pins every letter, capital and small, the digraphs in each case, the accented letters, and text
   that must not change.
 - **The strings** *(built)*: `Strings` (`:app:shared`, `io.ntole.wyr.language`), a data class of
@@ -2254,7 +2484,8 @@ hand, so the two cannot say different things; and **English** stands beside them
   no Latin or English one has a Cyrillic letter. Translated so far: the Home screen, the game's name
   (*Шта би радије?*, *Would You Rather?*) and *Играј*; the top bars and the icons' names (*Почетна*,
   *Налог*, *Назад*); the language menu's name, *Језик*; the Play screen's words (`PlayStrings`,
-  `Strings.playScreen`); the Categories screen (`CategoryStrings`, `Strings.categoriesScreen`:
+  `Strings.playScreen`), its repeat notice and its question's menu (`QuestionMenuStrings`,
+  `PlayStrings.menu`) among them; the Categories screen (`CategoryStrings`, `Strings.categoriesScreen`:
   *Претражи категорије*, *Изабрано: 3* and *Нема резултата*); the Account screen, whole, with My
   questions and the server line; the Auth page, whole; and the Submit screen's form, whole
   (`Strings.accountScreens`, an `AccountStrings` of the Account screen's words and those of the
@@ -2340,9 +2571,14 @@ hand, so the two cannot say different things; and **English** stands beside them
     Romance adjective, *content*/*contente*), and how an option avoids it; and whether the game
     says the familiar or the formal *you* (*du* or *Sie*, *tu* or *vous*). Croatian and Bosnian
     would take Serbian's answers.
-- **Not translated yet**: question texts stay as their authors wrote them (server data; a later
-  change may put Serbian ones through `SerbianScript.toLatin`; a local question is never
-  translated, §8b *Local questions*), and the moderation app
+- **Questions in Latin** *(built 2026-09-26)*: in Serbian Latin a question's options show through
+  `SerbianScript.toLatin`, as the categories' names do, and in Serbian Cyrillic and English as their
+  author wrote them; a Latin letter comes back as it was, so an option written in Latin or in English
+  reads the same in all three. One function makes the choice, `optionText(option, language)`
+  (`io.ntole.wyr.language`), for the Play screen's cards and My questions alike (`OptionTextTest`,
+  `PlayScreenDrawTest`, `AccountScreenDrawTest`).
+- **Not translated yet**: question texts stay as their authors wrote them, but for the script above
+  (server data; a local question is never translated, §8b *Local questions*), and the moderation app
   (`:app:adminApp`) stays English, naming categories in Serbian (`nameOf`).
 
 ## 8g. Analytics — decided 2026-09-26
@@ -2395,14 +2631,13 @@ the same events. The moderation app sends none.
 - **What is never sent**: the username, an email, a password, any question's or option's text, the
   moderator's reason, anything typed, a token or the admin token. A question is its id, a category
   its id, a failure the domain's name for it (`DomainError`).
-- **Where the player is** *(built; provisional — user decision, §8b, Where players are, in
-  analytics)*: nowhere. A request to PostHog comes from the player's address, as one to the game's
-  server does, and by default PostHog keeps that address as `$ip` and adds a country, a city and
-  coordinates to every event from it (GeoIP). So every event carries `$geoip_disable: true`, which
-  has PostHog add no location (`PostHogAnalytics.GEOIP_DISABLE`, `PostHogAnalyticsTest`), and the
-  project is set to discard the address (*Setting up PostHog*, below), which no code can do. What
-  stays is pseudonymous: the install's random id, and an account's player id once it registers or
-  logs in; the privacy policy says so.
+- **Where the player is** *(built; decided 2026-09-27, §8b, Where players are, in analytics)*:
+  PostHog's own reading of it. A request to PostHog comes from the player's address, as one to the
+  game's server does, and PostHog keeps that address as `$ip` and adds a country, a city and
+  coordinates to every event from it (GeoIP); the game sends no location of its own, and no event
+  asks PostHog to skip the lookup (`PostHogAnalyticsTest`). Beside that, what is sent is
+  pseudonymous: the install's random id, and an account's player id once it registers or logs in;
+  the privacy policy says so.
 - **The key, per platform** *(built)*: a PostHog project's key and host, set when a build is made or
   started as the environment is (§8e), never committed; **no key is analytics off**, a no-op, which is
   how every test and every CI build runs. The key is the project's public one, which can only send.
@@ -2463,10 +2698,12 @@ the same events. The moderation app sends none.
   `onClick` through `tapped(element, properties)` (`io.ntole.wyr.analytics`), which reports a `tap`
   with `element` to `LocalAnalytics` (the app's, which `App` provides; none for a screen drawn alone)
   before it acts, so a tap is counted by a name that never changes with the language or the text, and
-  `$screen_name` says where. An element is `screen.what`, lower case and underscores: `home.play`;
+  `$screen_name` says where. An element is `screen.what`, lower case and underscores: `home.play` (with
+  its `side`, `A` or `B`, since Home's two buttons are one element);
   `top_bar.home`, `.account`, `.back`, `.categories`, `.about`; `about.privacy`, `.terms`,
   `.delete_account`, `.contact` and `.licence`; `play.card_a` and `.card_b` (with `answered`,
   whether the tap went on from the reveal), `.like`, `.dislike`, `.skip`, `.try_again`;
+  `question_menu.open`, `.report`, `.reason` (with its `reason`), `.hide_question`, `.hide_author`;
   `account.open_auth`, `.log_out`, `.try_again`; `my_questions.new_question`, `.first_question`,
   `.try_again`; `language.menu` and `language.option` (with its `language` tag); `auth.register`,
   `.show_password`, `.to_log_in`, `.terms`, `.privacy`, `.log_in`, `.log_in_anyway`, `.cancel`, `.to_register`,
@@ -2482,7 +2719,9 @@ the same events. The moderation app sends none.
     once the vote is counted (`side`, `answer_ms` from the question shown to the tap, a retry's the
     first tap's, and `agreed_with_majority`); `question_skipped` (`duration_ms` on it, and
     `recorded`, whether the server heard); `reaction_set` (`reaction`, `like`, `dislike` or `none`,
-    and `answered`). The time is the app's `TimeSource.WithComparableMarks` (`uiModule`), and a
+    and `answered`); and from the question's menu, once the server has each, `question_reported`
+    (`reason`, `offensive`, `real_person`, `spam`, `not_a_choice` or `other`, and `answered`),
+    `question_hidden` and `author_hidden` (`answered`). The time is the app's `TimeSource.WithComparableMarks` (`uiModule`), and a
     question's counts only while the Play screen is shown and the app in the foreground
     (`ScreenStopwatch`, which the Play screen's `LifecycleStartEffect` stops and starts), so a detour
     to Account or the categories, or an hour in the background, is not time taken over it.
@@ -2501,8 +2740,9 @@ the same events. The moderation app sends none.
     (`categories`, `count`, none being every category); what is played already sends nothing.
   - *Language* (`LanguageViewModel`): `language_changed` (`language`, its tag).
   - `error_shown` for every failure a screen shows (`code`, the `DomainError`'s name, and `action`:
-    `question`, `vote`, `reaction`, `account`, `my_questions`, `register`, `log_in`, `log_out`,
-    `delete_account`, `submit`, `points`, `categories`), but a vote already counted, which moves on and shows nothing,
+    `question`, `vote`, `reaction`, `report`, `hide_question`, `hide_author`, `account`,
+    `my_questions`, `register`, `log_in`, `log_out`, `delete_account`,
+    `submit`, `points`, `categories`), but a vote already counted, which moves on and shows nothing,
     and a skip, which says nothing.
   - The ViewModel tests hold each, and that nothing typed is ever in one.
 - **The switch** *(built)*: **Статистика** on the Account screen, beside the language menu (§8d,
@@ -2514,13 +2754,13 @@ the same events. The moderation app sends none.
   draws it on and off and taps it, and `AppNavigationTest` turns the app's analytics off and on.
 - **Consent** (*the user's, 2026-09-26*): on by default, under legitimate interest, for a game for
   16 and over; the privacy policy says what is sent, that it is on, and how to turn it off (the
-  Statistics switch), and that PostHog sees the address each request comes from, discards it and
-  derives no location from it (*Where the player is*). *To check before an EU launch*: whether the install id kept on the device (the
+  Statistics switch), and that PostHog sees the address each request comes from, keeps it and
+  derives an approximate location from it (*Where the player is*). *To check before an EU launch*: whether the install id kept on the device (the
   browser's in `localStorage`) is itself a storing the ePrivacy rules want consent for, whatever the
   basis for the rest.
 - **Setting up PostHog** (*the user's, not in the repository*): make a project on the **EU** cloud
-  (https://eu.posthog.com), turn on *Settings → Project → IP data capture configuration → Discard
-  client IP data*, so the address events come from is not kept (*Where the player is*, above), put
+  (https://eu.posthog.com), leave *IP data capture* as it is, so the address and a location are kept
+  (*Where the player is*, above), put
   its *Project API key* in each build's settings (above; for a phone, `wyr.posthog.key` in
   `local.properties`), and build a dashboard, filtered to `environment = prod` (a DEV or LOCAL build's
   events are tests), of these insights:

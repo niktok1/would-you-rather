@@ -29,21 +29,26 @@ import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.toSize
 import io.ntole.wyr.CountedBy
 import io.ntole.wyr.Recompositions
 import io.ntole.wyr.core.domain.error.DomainError
 import io.ntole.wyr.core.domain.question.Question
 import io.ntole.wyr.core.domain.reaction.Reaction
+import io.ntole.wyr.core.domain.submission.SubmissionRules
 import io.ntole.wyr.core.domain.vote.Side
 import io.ntole.wyr.core.domain.vote.Tally
 import io.ntole.wyr.core.domain.vote.VoteOutcome
 import io.ntole.wyr.descriptions
 import io.ntole.wyr.everyNode
+import io.ntole.wyr.everyText
 import io.ntole.wyr.language.Language
 import io.ntole.wyr.language.Strings
 import io.ntole.wyr.language.WyrStrings
 import io.ntole.wyr.language.fill
+import io.ntole.wyr.language.optionText
 import io.ntole.wyr.language.stringsOf
 import io.ntole.wyr.nodes
 import io.ntole.wyr.renderAt
@@ -125,6 +130,55 @@ class PlayScreenDrawTest {
     }
 
     /**
+     * An option as long as a question may have, 200 characters, on both cards, fits its card whole on
+     * an iPhone SE, asked and revealed with its percentage under it, stacked, and on one on its side,
+     * side by side: its type shrunk in steps, never below the floor, and nothing of it cut short or cut
+     * off, in every language. Measured wider than drawn, as the fit tests above are, for CI's fonts.
+     */
+    @Test
+    fun `an option of 200 characters fits its card whole on a short phone`() {
+        listOf(LONG_QUESTION.optionA, LONG_QUESTION.optionB).forEach { option ->
+            assertEquals(SubmissionRules.MAX_OPTION_LENGTH, option.length, option)
+        }
+        val states = listOf(PlayUiState.Asking(LONG_QUESTION), PlayUiState.Revealed(LONG_QUESTION, OUTCOME))
+        listOf(
+            WIDTH to SHORT_PHONE_HEIGHT,
+            SE_ON_ITS_SIDE_WIDTH * WIDTH / SHORT_PHONE_WIDTH to SE_ON_ITS_SIDE_HEIGHT,
+        ).forEach { (width, height) ->
+            Language.entries.forEach { language ->
+                states.forEach { state ->
+                    withScreen(state, language = language, width = width, height = height) { scene, _ ->
+                        scene.renderAt(COUNTED_UP)
+                        scene.assertLongOptionsWhole(state, language, "$state in $language at $width by $height")
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * An option that fits at the largest size stays at it, and a long one shrinks where it must, on
+     * the reveal, where its percentage takes room: told by its lines, as tall as its type is large.
+     */
+    @Test
+    fun `only an option that needs it shrinks`() {
+        withScreen(PlayUiState.Revealed(QUESTION, OUTCOME)) { scene, _ ->
+            scene.renderAt(COUNTED_UP)
+            listOf(QUESTION.optionA, QUESTION.optionB).forEach { option ->
+                val layout = textLayoutOf(scene.everyNode().single { option in it.texts })
+                assertEquals(lineAt(WyrTypeScale.optionText), lineOf(layout), 1f, option)
+            }
+        }
+        withScreen(PlayUiState.Revealed(LONG_QUESTION, OUTCOME)) { scene, _ ->
+            scene.renderAt(COUNTED_UP)
+            listOf(LONG_QUESTION.optionA, LONG_QUESTION.optionB).forEach { option ->
+                val layout = textLayoutOf(scene.everyNode().single { option in it.texts })
+                assertTrue(lineOf(layout) < lineAt(WyrTypeScale.optionText) - 1f, "${lineOf(layout)}: $option")
+            }
+        }
+    }
+
+    /**
      * On a phone on its side the cards stand side by side, card A first, sharing the width, and the
      * row runs under them across it, the points under card A, Skip under card B, and the thumbs in the
      * middle of the screen.
@@ -190,7 +244,7 @@ class PlayScreenDrawTest {
                     assertEquals(
                         heightNeeded(asked, WIDTH, language = language, fontScale = fontScale),
                         heightNeeded(
-                            asked.copy(reactionError = error),
+                            asked.copy(rowError = error),
                             WIDTH,
                             language = language,
                             fontScale = fontScale,
@@ -200,7 +254,7 @@ class PlayScreenDrawTest {
                     assertEquals(
                         heightNeeded(revealed, WIDTH, language = language, fontScale = fontScale),
                         heightNeeded(
-                            revealed.copy(reactionError = error),
+                            revealed.copy(rowError = error),
                             WIDTH,
                             language = language,
                             fontScale = fontScale,
@@ -235,6 +289,29 @@ class PlayScreenDrawTest {
                 assertEquals(listOf(QUESTION.optionA, "0", "0", QUESTION.optionB).sorted(), scene.texts().sorted())
                 val strings = shown.playScreen
                 assertEquals(listOf(strings.like, strings.dislike, strings.skip), scene.descriptions(), "in $language")
+            }
+        }
+    }
+
+    /**
+     * A question's options in Serbian Latin are made Latin, as every Serbian Latin text is, and in
+     * Cyrillic and English shown as stored (CLAUDE.md §8f), asked and revealed.
+     */
+    @Test
+    fun `a question's options show in Latin in Serbian Latin and as stored otherwise`() {
+        val cyrillic = QUESTION.copy(optionA = "Јести пљескавицу", optionB = "Пити бозу")
+        Language.entries.forEach { language ->
+            val expected =
+                if (language == Language.SERBIAN_LATIN) {
+                    listOf("Jesti pljeskavicu", "Piti bozu")
+                } else {
+                    listOf(cyrillic.optionA, cyrillic.optionB)
+                }
+            listOf(PlayUiState.Asking(cyrillic), PlayUiState.Revealed(cyrillic, OUTCOME)).forEach { state ->
+                withScreen(state, language = language) { scene, _ ->
+                    val shown = scene.texts()
+                    assertTrue(shown.containsAll(expected), "$state in $language: $shown")
+                }
             }
         }
     }
@@ -348,6 +425,40 @@ class PlayScreenDrawTest {
     }
 
     /**
+     * A question the player answered before says so above the cards, in a slot of its own that every
+     * question has, so nothing on the screen moves for it, asked or revealed, at any font size; and one
+     * not answered before shows and says nothing there.
+     */
+    @Test
+    fun `a question answered before says so in a slot of its own and moves nothing`() {
+        val strings = stringsOf(Language.DEFAULT).playScreen
+        val parts = listOf(REACTED_TO.optionA, POINTS_SHOWN, strings.like, "$DISLIKES", REACTED_TO.optionB)
+        listOf<(Question) -> PlayUiState>({ PlayUiState.Asking(it) }, { PlayUiState.Revealed(it, OUTCOME) })
+            .forEach { stateOf ->
+                val fresh = stateOf(REACTED_TO)
+                val again = stateOf(REACTED_TO.copy(answeredBefore = true))
+                val before = mutableListOf<Rect>()
+                withScreen(fresh) { scene, _ ->
+                    assertFalse(strings.answeredBefore in scene.everyText(), "$fresh")
+                    parts.mapTo(before) { scene.node(it).boundsInRoot }
+                }
+                withScreen(again) { scene, _ ->
+                    val notice = scene.node(strings.answeredBefore).boundsInRoot
+                    val cardA = scene.node(REACTED_TO.optionA).boundsInRoot
+                    assertTrue(notice.bottom <= cardA.top, "the notice at $notice is not above card A at $cardA")
+                    assertEquals(before, parts.map { scene.node(it).boundsInRoot }, "$again")
+                }
+                FONT_SCALES.forEach { fontScale ->
+                    assertEquals(
+                        heightNeeded(fresh, WIDTH, fontScale = fontScale),
+                        heightNeeded(again, WIDTH, fontScale = fontScale),
+                        "$again at font scale $fontScale",
+                    )
+                }
+            }
+    }
+
+    /**
      * Each thumb shows whether the player holds its reaction and how many hold it, and a tap asks for
      * it, or for none when the player holds it already, so a second tap takes it back.
      */
@@ -444,7 +555,7 @@ class PlayScreenDrawTest {
         Language.entries.forEach { language ->
             val strings = stringsOf(language).playScreen
             REACTION_FAILURES.forEach { error ->
-                withRow(WIDTH - 2 * PADDING, language = language, reactionError = error) { scene ->
+                withRow(WIDTH - 2 * PADDING, language = language, rowError = error) { scene ->
                     val failure = failureText(assertNotNull(error), strings)
                     assertTrue(failure in scene.texts(), "$error in $language")
                     assertFalse(POINTS_SHOWN in scene.descriptions(), "the points make way in $language")
@@ -671,7 +782,7 @@ class PlayScreenDrawTest {
                                     MiddleRow(
                                         question = question,
                                         points = 12345,
-                                        reactionError = error,
+                                        rowError = error,
                                         idle = true,
                                         onReact = {},
                                         onSkip = onSkip,
@@ -780,6 +891,60 @@ class PlayScreenDrawTest {
         return colours
     }
 
+    /**
+     * That both of [LONG_QUESTION]'s options, as [state] shows them in [language], are laid out whole in
+     * their cards, at a size no smaller than the floor, and on the reveal each card's percentage too.
+     */
+    private fun ImageComposeScene.assertLongOptionsWhole(
+        state: PlayUiState,
+        language: Language,
+        at: String,
+    ) {
+        val strings = stringsOf(language).playScreen
+        listOf(
+            LONG_QUESTION.optionA to strings.percent(70),
+            LONG_QUESTION.optionB to strings.percent(30),
+        ).forEach { (option, percent) ->
+            val shown = optionText(option, language)
+            val card = node(shown).boundsInRoot
+            val text = everyNode().single { shown in it.texts }
+            val layout = textLayoutOf(text)
+            assertFalse(layout.hasVisualOverflow, "$at: the option overflows")
+            assertFalse(layout.multiParagraph.didExceedMaxLines, "$at: the option is cut short")
+            // Told by its lines, as tall as its type is large: its style names the largest size.
+            assertTrue(lineOf(layout) >= lineAt(WyrTypeScale.optionTextMin) - 1f, "$at: ${lineOf(layout)}")
+            assertTrue(card.containsWhole(text.laidOut()), "$at: ${text.laidOut()} is not in $card")
+            if (state is PlayUiState.Revealed) {
+                val counted = everyNode().single { percent in it.texts }.laidOut()
+                assertTrue(card.containsWhole(counted), "$at: $percent at $counted is not in $card")
+            }
+        }
+    }
+
+    /** The layout of [node]'s text, as the text it shows last laid it out. */
+    private fun textLayoutOf(node: SemanticsNode): TextLayoutResult {
+        val layouts = mutableListOf<TextLayoutResult>()
+        val layout = assertNotNull(node.config.getOrNull(SemanticsActions.GetTextLayoutResult)?.action, "$node")
+        layout(layouts)
+        return layouts.single()
+    }
+
+    /** The height of [layout]'s first line, at one pixel a dp and the font's own size. */
+    private fun lineOf(layout: TextLayoutResult): Float = layout.getLineBottom(0) - layout.getLineTop(0)
+
+    /** An option's line at [size], as `WyrTypeScale.optionLineHeight` sets it, at one pixel a dp. */
+    private fun lineAt(size: TextUnit): Float = size.value * WyrTypeScale.optionLineHeight.value
+
+    /** Where [this] is laid out in the scene, clipped or not. */
+    private fun SemanticsNode.laidOut(): Rect = Rect(positionInRoot, size.toSize())
+
+    /** Whether [other] lies inside this whole, to the half pixel a layout rounds to. */
+    private fun Rect.containsWhole(other: Rect): Boolean =
+        other.left >= left - HALF_PIXEL &&
+            other.top >= top - HALF_PIXEL &&
+            other.right <= right + HALF_PIXEL &&
+            other.bottom <= bottom + HALF_PIXEL
+
     /** Whether the one node showing [text] cuts it short: it needs more lines than it may take. */
     private fun ImageComposeScene.isCutShort(text: String): Boolean {
         val layouts = mutableListOf<TextLayoutResult>()
@@ -791,12 +956,12 @@ class PlayScreenDrawTest {
 
     /**
      * [test] on the row alone, [width] wide, in [language], asked with Skip: [POINTS], or how a
-     * reaction failed, [reactionError], and [LIKES] likes and [DISLIKES] dislikes.
+     * reaction failed, [rowError], and [LIKES] likes and [DISLIKES] dislikes.
      */
     private fun withRow(
         width: Int,
         language: Language = Language.DEFAULT,
-        reactionError: DomainError? = null,
+        rowError: DomainError? = null,
         test: (ImageComposeScene) -> Unit,
     ) {
         val scene =
@@ -806,7 +971,7 @@ class PlayScreenDrawTest {
                         MiddleRow(
                             question = REACTED_TO,
                             points = POINTS,
-                            reactionError = reactionError,
+                            rowError = rowError,
                             idle = true,
                             onReact = {},
                             onSkip = {},
@@ -997,6 +1162,9 @@ class PlayScreenDrawTest {
         /** How far a bar's fill may end from its share of the card's width: a pixel and its rounding. */
         const val BAR_TOLERANCE = 0.01f
 
+        /** How far a layout's rounding may put one edge past another. */
+        const val HALF_PIXEL = 0.5f
+
         /** The scene's clock, in nanoseconds, once the reveal has counted up. */
         const val COUNTED_UP = COUNT_UP_MILLIS * 1_000_000L
 
@@ -1024,6 +1192,19 @@ class PlayScreenDrawTest {
                 categories = setOf("SUPERPOWERS"),
             )
         val ONE_LINE_QUESTION = QUESTION.copy(optionA = "Fly", optionB = "Swim")
+
+        /** Both options as long as a question's may be, 200 characters, in Serbian, as a player would write. */
+        val LONG_QUESTION =
+            QUESTION.copy(
+                optionA =
+                    "Да ти до краја живота сваки пут кад кинеш неко из публике аплаудира, а кад се насмејеш да сви " +
+                        "у близини почну да играју коло, чак и на сахрани, у болници, на испиту или усред важног " +
+                        "састанка на послу.",
+                optionB =
+                    "Да сваки пут кад отвориш фрижидер у њему нађеш тачно оно што ти се тог тренутка једе, али " +
+                        "само ако пре тога наглас отпеваш целу химну уназад, на ногама, пред свима који су у кући и " +
+                        "пред свим комшијама",
+            )
 
         /** [QUESTION] with [LIKES] likes and [DISLIKES] dislikes, neither the player's. */
         val REACTED_TO = QUESTION.copy(likeCount = LIKES, dislikeCount = DISLIKES)
@@ -1055,7 +1236,7 @@ class PlayScreenDrawTest {
                 PlayUiState.Asking(question),
                 PlayUiState.Asking(question, isSubmitting = true),
                 PlayUiState.Asking(question.copy(likeCount = 1, myReaction = Reaction.LIKE), isReacting = true),
-                PlayUiState.Asking(question.copy(likeCount = 12), reactionError = DomainError.NETWORK),
+                PlayUiState.Asking(question.copy(likeCount = 12), rowError = DomainError.NETWORK),
                 PlayUiState.Asking(question.copy(likeCount = 4, dislikeCount = 2, myReaction = Reaction.DISLIKE)),
                 PlayUiState.Revealed(question, OUTCOME),
                 PlayUiState.Revealed(question, OUTCOME.copy(pointsAwarded = 0, replayed = true)),
@@ -1064,8 +1245,10 @@ class PlayScreenDrawTest {
                     question.copy(likeCount = 1234, dislikeCount = 99, myReaction = Reaction.LIKE),
                     OUTCOME,
                 ),
-                PlayUiState.Revealed(question, OUTCOME, reactionError = DomainError.NETWORK),
-                PlayUiState.Revealed(question, OUTCOME, reactionError = DomainError.QUESTION_NOT_FOUND),
+                PlayUiState.Revealed(question, OUTCOME, rowError = DomainError.NETWORK),
+                PlayUiState.Revealed(question, OUTCOME, rowError = DomainError.QUESTION_NOT_FOUND),
+                PlayUiState.Asking(question.copy(answeredBefore = true)),
+                PlayUiState.Revealed(question.copy(answeredBefore = true), OUTCOME),
             )
 
         /**
@@ -1093,16 +1276,20 @@ class PlayScreenDrawTest {
                     (listOf(strings.outOfQuestions, tryAgain) to emptyList()),
                 PlayUiState.Failed(DomainError.SERVER) to (listOf(strings.somethingWrong, tryAgain) to emptyList()),
                 PlayUiState.Asking(QUESTION) to (listOf(a, "0", "0", b) to thumbsAndSkip + points),
-                PlayUiState.Asking(QUESTION.copy(likeCount = 12), reactionError = DomainError.NETWORK) to
+                PlayUiState.Asking(QUESTION.copy(likeCount = 12), rowError = DomainError.NETWORK) to
                     (listOf(a, strings.cannotReach, "12", "0", b) to thumbsAndSkip),
                 PlayUiState.Revealed(QUESTION, OUTCOME) to
                     (listOf(a, revealedA, "0", "0", b, revealedB) to thumbs + points),
+                PlayUiState.Asking(QUESTION.copy(answeredBefore = true)) to
+                    (listOf(strings.answeredBefore, a, "0", "0", b) to thumbsAndSkip + points),
+                PlayUiState.Revealed(QUESTION.copy(answeredBefore = true), OUTCOME) to
+                    (listOf(strings.answeredBefore, a, revealedA, "0", "0", b, revealedB) to thumbs + points),
                 PlayUiState.Revealed(QUESTION, OUTCOME.copy(pointsAwarded = 0, replayed = true)) to
                     (listOf(a, revealedA, "0", "0", b, revealedB) to thumbs + points),
                 PlayUiState.Revealed(
                     QUESTION.copy(likeCount = 3, dislikeCount = 1),
                     OUTCOME,
-                    reactionError = DomainError.QUESTION_NOT_FOUND,
+                    rowError = DomainError.QUESTION_NOT_FOUND,
                 ) to
                     (listOf(a, revealedA, strings.questionGone, "3", "1", b, revealedB) to thumbs),
             )

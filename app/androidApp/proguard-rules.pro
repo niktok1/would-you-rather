@@ -1,21 +1,8 @@
-# Add project specific ProGuard rules here.
-# You can control the set of applied configuration files using the
-# proguardFiles setting in build.gradle.
-#
-# For more details, see
-#   http://developer.android.com/guide/developing/tools/proguard.html
+# R8's rules for the release build (CLAUDE.md §8, Release builds). The libraries bring their own
+# (kotlinx.serialization, Ktor, OkHttp, coroutines, Koin, Compose, AndroidX), so this holds only what
+# this code needs beyond them.
 
-# If your project uses WebView with JS, uncomment the following
-# and specify the fully qualified class name to the JavaScript interface
-# class:
-#-keepclassmembers class fqcn.of.javascript.interface.for.webview {
-#   public *;
-#}
-
-# Uncomment this to preserve the line number information for
-# debugging stack traces.
-#-keepattributes SourceFile,LineNumberTable
-
-# If you keep the line number information, uncomment this to
-# hide the original source file name.
-#-renamesourcefileattribute SourceFile
+# Keep the line numbers in a crash's stack trace, which the mapping file turns back into this code's
+# names, and name every class's source file alike, so the trace gives away no more than it must.
+-keepattributes SourceFile,LineNumberTable
+-renamesourcefileattribute SourceFile
