@@ -38,7 +38,7 @@ jobs:
         run: ./gradlew :server:test :core:domain:jvmTest :core:data:jvmTest :core:network:jvmTest :core:network:testAndroidHostTest :app:shared:jvmTest :app:adminApp:jvmTest --no-daemon
 
       # The game's Android host tests: its common tests again on Android's JVM, and the Android-only
-      # code no JVM test reaches (ActivityTracker), over the Android jar's stubs.
+      # code no JVM test reaches (ActivityTracker, a notification's tap), over the Android jar's stubs.
       - name: Android host tests
         run: ./gradlew :app:shared:testAndroidHostTest --no-daemon
 

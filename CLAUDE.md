@@ -644,7 +644,9 @@ decided in §8b).
     phone's settings (`NoticeStrings.channel`, in Serbian Cyrillic, as the push's text is; the
     manifest's `default_notification_channel_id`), with the game's small icon, the coin
     (`ic_notification`), and a tap opens the app on the **Account screen**, where My questions shows it
-    (`openedFromNotification`, from `MainActivity`'s intent, never a rotation's;
+    (`openedFromNotification`, from `MainActivity`'s intent, never a rotation's, nor the one Recents
+    relaunches the task with, `FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY`, which a tap that made the task
+    leaves behind on Android 11 and before, where Back on Home finishes the activity; `NotificationsTest`;
     `AppServices.accountAsked`; `notification_opened`, §8g); **with the app open** it reaches
     `WyrMessagingService.onMessageReceived`, which posts nothing, and the in-app notice reads the list
     and dots the account icon instead (§8d, *The notice of a decision*). A new token

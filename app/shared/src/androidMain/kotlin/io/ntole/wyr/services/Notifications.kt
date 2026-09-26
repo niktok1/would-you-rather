@@ -33,14 +33,28 @@ internal fun createDecisionsChannel(application: Application) {
  */
 private const val SUBMISSION_DECIDED = "submission_decided"
 
+/** The extra naming what the push was about. */
+private const val TYPE = "type"
+
 /**
  * Called by the activity with the intent it was opened with, or given later: a tap on a decision's
  * notification opens the Account screen, where My questions shows it. Any other intent, a launcher's,
  * does nothing. Called once per intent, never for a rotation's.
  */
 fun openedFromNotification(intent: Intent?) {
-    if (intent?.getStringExtra("type") != SUBMISSION_DECIDED) return
+    if (intent == null || !isDecisionTap(intent.getStringExtra(TYPE), intent.flags)) return
     // Handled once: an intent kept for the activity must not open the screen again.
-    intent.removeExtra("type")
+    intent.removeExtra(TYPE)
     KoinPlatform.getKoin().get<AppServices>().notificationOpened()
 }
+
+/**
+ * Whether an intent of [type] and [flags] is a tap on a decision's notification. Not when Recents
+ * relaunches the task with the intent it began with: a tap that made the task leaves its intent there,
+ * and Android 11 and before finish the activity at Back on Home, so reopening the app from Recents
+ * would open the Account screen again, and count a tap again (`notification_opened`).
+ */
+internal fun isDecisionTap(
+    type: String?,
+    flags: Int,
+): Boolean = type == SUBMISSION_DECIDED && (flags and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY) == 0
