@@ -1351,13 +1351,22 @@ Deploy → Deploy a specific commit* on `wyr-server`. For the Google Play releas
    Submit form shows it from its next read.
 2. **The version**: bump `wyr.app.version` in `gradle.properties`, and `MARKETING_VERSION` and
    `CURRENT_PROJECT_VERSION` in `app/iosApp/Configuration/Config.xcconfig` with it (the build names
-   the number to set: MAJOR * 10000 + MINOR * 100 + PATCH). Android's `versionCode` follows by itself.
+   the number to set: MAJOR * 10000 + MINOR * 100 + PATCH). Android's `versionCode` follows by itself,
+   and from nothing else, and Play refuses a `versionCode` it has seen: bump PATCH (or MINOR) for
+   **every** upload to any Play track, internal testing included.
 3. **An old build to refuse**: `MIN_CLIENT_VERSION_ANDROID` (or `_IOS`, `_WEB`, `_DESKTOP`) = the
-   oldest build number to serve, and restart; an older build shows *Нова верзија је доступна*.
+   oldest build number to serve, and restart; an older build shows *Нова верзија је доступна*. Set it
+   only once every store serves the new build to all its users (review passed, a staged rollout at
+   100%): before that, the update screen sends players to a store page with no update on it.
 4. **The licences**: compare the About screen's list (`OPEN_SOURCE_LIBRARIES`, `Licences.kt`) with
    `./gradlew :app:androidApp:dependencies --configuration prodReleaseRuntimeClasspath` (and, for a
    desktop release, `:app:desktopApp:dependencies --configuration runtimeClasspath`): every library
    there is in the list under its own licence, with the copyright line an MIT or BSD licence asks for.
+5. **The web's headers**: production runs `d4a9dbf`, whose CORS allows only `Authorization`,
+   `Content-Type` and `X-Admin-Token`, so a browser's preflight for this branch's `X-Client-Platform`
+   and `X-Client-Version` fails and so does every web request. Move `wyr-server` to a `main` commit
+   whose CORS allows the two (any from `baa71b1f` on) before a web build from this branch points at
+   it. Android, iOS and the desktop send no preflight and are not affected.
 
 ### Rate limits
 

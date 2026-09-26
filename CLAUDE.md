@@ -406,7 +406,9 @@ This project must never be attributed to any employer identity.
   restarting the service. `GET /v1/me` names it, so the game says what the server charges.
 - `MIN_CLIENT_VERSION_ANDROID`, `_IOS`, `_WEB` and `_DESKTOP` each name the oldest build of the game
   the server serves on that platform (§8b, *Minimum client version*); none is set, so no build is
-  refused. Read at boot: raising one is changing the variable and restarting the service.
+  refused. Read at boot: raising one is changing the variable and restarting the service, and only
+  once that platform's store serves the newer build to all its users, or the update screen sends
+  players to a store page with nothing new on it.
 - `FCM_SERVICE_ACCOUNT_JSON` is the Firebase service account's key file, whole, which pushes a
   moderator's decision to its author (§8a, *Push tokens*), `sync: false` in `render.yaml`, one key per
   service. It has no default: unset turns pushes off. Setting it up is §8b, *Push notifications*.
@@ -2433,7 +2435,9 @@ the same events. The moderation app sends none.
     `wyr.app.build` system property, the web build's `BUILD_NUMBER` constant beside `APP_VERSION`, and
     iOS's `CFBundleVersion`, from `CURRENT_PROJECT_VERSION` in `Config.xcconfig`, which the Gradle
     build checks as it checks `MARKETING_VERSION`. Every request of the game's names it (§8e, *The
-    build on every request*), and the About screen shows it (§8d, *About*).
+    build on every request*), and the About screen shows it (§8d, *About*). Nothing else sets
+    `versionCode`, and Play refuses one it has seen, so every upload to any Play track, internal
+    testing included, bumps PATCH (or MINOR) first (NEXT-SESSION's *Releasing to production*).
 - **The app and its screens** *(built)*: `UsageTracker` (`io.ntole.wyr.analytics`), one for the app's
   life, which `App` tells of the platform lifecycle's start and stop: Android's activity, the iOS view
   controller, the desktop window minimized and back, the browser page hidden and shown. `app_opened`
