@@ -2121,6 +2121,14 @@ game UI (the moderation app, `:app:adminApp`, §3) can name one too.
   headers. The first answer `UPGRADE_REQUIRED`, or a bare 426, raises the `UpgradeSignal` the client is
   given, bound as the domain's `AppUpdate`, whichever call it was. `WyrHttpClientTest`,
   `ClientBuildTest`, `DataModuleTest`, `DesktopBuildNumberTest`, `BundledBuildNumberTest`.
+  - *The update screen* (`io.ntole.wyr.update`): once `AppUpdate` is raised, `App` shows one full
+    screen in place of every other, for the app's life, *Нова верзија је доступна*
+    (`Strings.updateScreen`), and one button, the platform's (`rememberUpdateButton`): on Android
+    **Ажурирај**, the game's Play Store page (`market://details?id=` the build's own application id,
+    or the `https://play.google.com` page where no app takes that), on the web **Освежи**, which
+    loads the page again, and on the desktop and iOS none, no store having the build yet. No top bar
+    and no way back: every call would be refused again. `UpdateScreenDrawTest`, `AppNavigationTest`,
+    `TapsTest`. A DEV or LOCAL flavor's id has no store page, so its button finds none: accepted.
 - *Analytics* (§8g). Each entry point reads the PostHog project the build sends to where it reads the
   environment's name, and hands both to `initKoin`. Every event names its environment, and an
   install's analytics id is one per environment, as its session is.
@@ -2358,7 +2366,8 @@ the same events. The moderation app sends none.
   `.try_again`; `language.menu` and `language.option` (with its `language` tag); `auth.register`,
   `.show_password`, `.to_log_in`, `.log_in`, `.log_in_anyway`, `.cancel`, `.to_register`,
   `.try_again`; `submit.category` (with its `category` id), `.send`, `.categories_try_again`,
-  `.try_again`; `categories.all`, `.category` (with its id), `.play`, `.try_again`. A text field is no
+  `.try_again`; `categories.all`, `.category` (with its id), `.play`, `.try_again`; `update.store` and
+  `.reload`. A text field is no
   tap. `TapsTest` draws every screen in the states that show all it can be tapped on, taps everything a
   screen reader could, and fails on anything that reports no tap, or a name not in its lists: a new
   button gets its name by being written with `tapped`, and a name once sent never changes.

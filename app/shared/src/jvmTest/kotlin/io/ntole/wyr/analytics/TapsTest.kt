@@ -47,6 +47,9 @@ import io.ntole.wyr.submit.SubmitScreen
 import io.ntole.wyr.submit.SubmitState
 import io.ntole.wyr.texts
 import io.ntole.wyr.theme.WyrTheme
+import io.ntole.wyr.update.UpdateButton
+import io.ntole.wyr.update.UpdateScreen
+import io.ntole.wyr.update.UpdateWay
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
@@ -75,6 +78,12 @@ class TapsTest {
             },
         )
         assertEquals(setOf("top_bar.back"), elementsTapped { BackTopBar(onBack = {}) })
+    }
+
+    @Test
+    fun `every tap on the update screen is reported`() {
+        assertEquals(setOf("update.store"), elementsTapped { UpdateScreen(UpdateButton(UpdateWay.STORE) {}) })
+        assertEquals(setOf("update.reload"), elementsTapped { UpdateScreen(UpdateButton(UpdateWay.RELOAD) {}) })
     }
 
     @Test

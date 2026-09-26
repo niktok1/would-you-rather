@@ -5,6 +5,7 @@ import io.ntole.wyr.analytics.AnalyticsSettings
 import io.ntole.wyr.categories.CategoriesViewModel
 import io.ntole.wyr.core.auth.SessionDto
 import io.ntole.wyr.core.domain.analytics.Analytics
+import io.ntole.wyr.core.domain.update.AppUpdate
 import io.ntole.wyr.core.network.InMemoryTokenStorage
 import io.ntole.wyr.core.network.SessionStore
 import io.ntole.wyr.core.network.TokenStorage
@@ -61,6 +62,8 @@ class AppModuleTest {
         koin.get<SubmitViewModel>()
         koin.get<LanguageViewModel>()
         koin.get<CategoriesViewModel>()
+        // What App asks for before any screen: whether the server refused this build.
+        koin.get<AppUpdate>()
     }
 
     @Test

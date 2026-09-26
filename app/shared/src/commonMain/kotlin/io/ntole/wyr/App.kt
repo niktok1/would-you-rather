@@ -29,6 +29,7 @@ import io.ntole.wyr.analytics.UsageTracker
 import io.ntole.wyr.analytics.rememberConfigurationChanging
 import io.ntole.wyr.categories.CategoriesScreen
 import io.ntole.wyr.categories.CategoriesViewModel
+import io.ntole.wyr.core.domain.update.AppUpdate
 import io.ntole.wyr.home.HomeScreen
 import io.ntole.wyr.language.Language
 import io.ntole.wyr.language.LanguageViewModel
@@ -48,6 +49,8 @@ import io.ntole.wyr.play.categoriesPlayed
 import io.ntole.wyr.submit.SubmitScreen
 import io.ntole.wyr.submit.SubmitViewModel
 import io.ntole.wyr.theme.WyrTheme
+import io.ntole.wyr.update.UpdateScreen
+import io.ntole.wyr.update.rememberUpdateButton
 import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
 
@@ -62,19 +65,35 @@ import org.koin.compose.viewmodel.koinViewModel
  * *Navigation*): Home first, and the rest opened from it through a [Navigator], a back stack made by
  * hand, no tabs and no navigation library. They are shown in the language picked on the Account
  * screen, Serbian Cyrillic until one is (§8f). The app's comings and goings and every screen shown
- * are reported to the analytics (§8g, [UsageTracker]).
+ * are reported to the analytics (§8g, [UsageTracker]). Once the server serves this build nothing more,
+ * the one screen shown says a new version is available ([AppUpdate], §8e), whatever was shown before.
  */
 @Composable
 fun App() {
     val languages = koinViewModel<LanguageViewModel>()
     val language by languages.language.collectAsStateWithLifecycle()
     ReportForegroundAndBackground(koinInject(), language)
+    val updateRequired by koinInject<AppUpdate>().required.collectAsStateWithLifecycle()
 
     // Every tap on every screen is counted there (CLAUDE.md §8g, [io.ntole.wyr.analytics.tapped]).
     CompositionLocalProvider(LocalAnalytics provides koinInject()) {
         WyrTheme {
-            WyrStrings(language) { Screens(language, onSelectLanguage = languages::select) }
+            WyrStrings(language) {
+                if (updateRequired) {
+                    UpdateRequired()
+                } else {
+                    Screens(language, onSelectLanguage = languages::select)
+                }
+            }
         }
+    }
+}
+
+/** The update screen, where the screens were, inside the same insets. */
+@Composable
+private fun UpdateRequired() {
+    Surface(color = MaterialTheme.colorScheme.background, modifier = Modifier.fillMaxSize()) {
+        Box(modifier = Modifier.fillMaxSize().safeContentPadding()) { UpdateScreen(button = rememberUpdateButton()) }
     }
 }
 

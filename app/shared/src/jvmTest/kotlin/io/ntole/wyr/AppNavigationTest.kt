@@ -45,6 +45,7 @@ import io.ntole.wyr.core.domain.submission.Submission
 import io.ntole.wyr.core.domain.submission.SubmissionRepository
 import io.ntole.wyr.core.domain.submission.SubmissionStatus
 import io.ntole.wyr.core.domain.submission.SubmitQuestion
+import io.ntole.wyr.core.domain.update.AppUpdate
 import io.ntole.wyr.core.domain.vote.AttemptId
 import io.ntole.wyr.core.domain.vote.CastVote
 import io.ntole.wyr.core.domain.vote.Side
@@ -95,6 +96,7 @@ import kotlin.time.TimeSource
 class AppNavigationTest {
     private val game = FakeGame()
     private val categories = FakeCategories()
+    private val update = FakeUpdate()
     private val analytics = RecordingAnalytics()
     private val storage = InMemoryTokenStorage()
     private val owner = TestOwner()
@@ -184,6 +186,23 @@ class AppNavigationTest {
         // Account, Account rotated, the form, the form rotated, and Account again: each reads the points.
         assertEquals(5, game.statsRead)
     }
+
+    /**
+     * Once any call is answered that this build is too old, the one screen shown says a new version is
+     * available, whatever was shown before (CLAUDE.md §8e, *The build on every request*). The desktop
+     * has no store to open, so no button.
+     */
+    @Test
+    fun `once the server refuses the build the app shows only that a new version is available`() =
+        withApp { scene ->
+            scene.tap(CYRILLIC.play)
+
+            update.required.value = true
+            scene.settle()
+
+            assertEquals(listOf(CYRILLIC.updateScreen.newVersion), scene.texts())
+            assertEquals(emptyList(), scene.descriptions())
+        }
 
     @Test
     fun `Play opens under a bar with home and the account icon`() =
@@ -545,6 +564,7 @@ class AppNavigationTest {
             single<SubmissionRepository> { game }
             single<CategoryRepository> { categories }
             single<Analytics> { analytics }
+            single<AppUpdate> { update }
             factory { GetNextQuestion(questions = get(), session = get()) }
             factory { SkipQuestion(questions = get(), session = get()) }
             factory { CastVote(votes = get(), session = get()) }
@@ -576,6 +596,11 @@ class AppNavigationTest {
             categories.value = LISTED
             return LISTED
         }
+    }
+
+    /** Whether the server has refused this build as too old, which a test raises by hand. */
+    private class FakeUpdate : AppUpdate {
+        override val required = MutableStateFlow(false)
     }
 
     /** A resumed lifecycle and a ViewModel store, as an activity or a window gives the app. */
