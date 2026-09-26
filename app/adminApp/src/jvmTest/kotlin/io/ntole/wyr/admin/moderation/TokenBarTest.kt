@@ -14,15 +14,6 @@ import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.unit.Density
 import io.ntole.wyr.admin.moderation.FakeModeration.Companion.TOKEN
 import io.ntole.wyr.admin.theme.AdminTheme
-import io.ntole.wyr.core.domain.category.GetCategories
-import io.ntole.wyr.core.domain.moderation.AddCategory
-import io.ntole.wyr.core.domain.moderation.ApproveSubmission
-import io.ntole.wyr.core.domain.moderation.GetPendingSubmissions
-import io.ntole.wyr.core.domain.moderation.GetQuestions
-import io.ntole.wyr.core.domain.moderation.RejectSubmission
-import io.ntole.wyr.core.domain.moderation.RenameCategory
-import io.ntole.wyr.core.domain.moderation.RestoreQuestion
-import io.ntole.wyr.core.domain.moderation.RetireQuestion
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
@@ -31,18 +22,7 @@ import kotlin.test.assertNull
 @OptIn(InternalComposeUiApi::class)
 class TokenBarTest {
     private val moderation = FakeModeration()
-    private val viewModel =
-        ModerationViewModel(
-            getPendingSubmissions = GetPendingSubmissions(moderation),
-            approveSubmission = ApproveSubmission(moderation),
-            rejectSubmission = RejectSubmission(moderation),
-            getQuestions = GetQuestions(moderation),
-            retireQuestion = RetireQuestion(moderation),
-            restoreQuestion = RestoreQuestion(moderation),
-            getCategories = GetCategories(FakeCategories()),
-            addCategory = AddCategory(moderation),
-            renameCategory = RenameCategory(moderation),
-        )
+    private val viewModel = moderationViewModelOver(moderation, FakeCategories())
 
     @Test
     fun `undo in the token field after Lock brings nothing back`() {

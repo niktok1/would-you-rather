@@ -20,6 +20,11 @@ import kotlin.time.Instant
  * [answerCount] how many players have answered it, each once however often they answered, as the
  * server counted them with the question, one moment's numbers (CLAUDE.md §8d, *The Account screen*).
  * A question never served, pending or rejected, has none; a retired one keeps what it had.
+ *
+ * [authorId] is the moderator's alone: the author's opaque id, which the moderator's queue and
+ * decisions carry so an author can be blocked
+ * ([io.ntole.wyr.core.domain.moderation.ModerationRepository.blockAuthor]). A player's own submission
+ * never carries it, whatever the server sends: it is null there.
  */
 public data class Submission(
     public val id: String,
@@ -32,6 +37,7 @@ public data class Submission(
     public val likeCount: Int = 0,
     public val dislikeCount: Int = 0,
     public val answerCount: Int = 0,
+    public val authorId: String? = null,
 )
 
 /**

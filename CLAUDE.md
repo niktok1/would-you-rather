@@ -768,8 +768,8 @@ EncryptedSharedPreferences: enough for a game that stores no sensitive personal 
   `RenameCategoryRequest`, the `X-Admin-Token` header (`WyrApi.Headers`), `QuestionStatus.RETIRED`
   and the error codes `FORBIDDEN`, `ALREADY_DECIDED`, `WRONG_STATUS`, `CATEGORY_EXISTS` and
   `CATEGORY_NOT_FOUND`. The moderator's client (`ModerationApi` calls every admin route) and the
-  moderation app are built on it (§8d, *Moderation*). Since 2026-09-26 the server has more that no
-  client calls yet: the reported questions and their dismissal (`AdminReportListDto`,
+  moderation app are built on it (§8d, *Moderation*). Since 2026-09-26 the server has more, which the
+  moderator's client calls too: the reported questions and their dismissal (`AdminReportListDto`,
   `DismissReportsRequest`), an author's opaque id on the admin DTOs (`authorId`), blocking and
   unblocking an author (`BlockAuthorRequest`, `UnblockAuthorRequest`, `AuthorBlockDto`), and the error
   codes `SUBMISSIONS_BLOCKED` and `AUTHOR_NOT_FOUND` (§8d, *Moderation*, *Reports* and *Authors*).
@@ -778,6 +778,27 @@ EncryptedSharedPreferences: enough for a game that stores no sensitive personal 
   U+2029 (`checkedRejection`). Chosen as the stricter reading, since a reason is shown to its author
   as a line of text; allowing line breaks later breaks no client. The options: keep it, or allow
   line breaks in a reason.
+- **Ready-made rejection reasons** — *provisional — user decision.* The moderation app offers six
+  reasons a tap puts in the reason field, to reject a question or to block its author with (§8d,
+  *Moderation*, `READY_REASONS`): the wording is this build's, in Serbian Cyrillic, one per question
+  rule the moderator holds a question to, the topics rule naming the four topics the user banned.
+  The options: keep them; reword or add to them, which is the one list; or none, the reason always
+  typed.
+- **Where an author stands, in the moderation app** — *provisional — user decision.* The server says
+  whether an author is blocked only in answer to a block or an unblock (`AuthorBlockDto`), and none of
+  its lists says it, so the moderation app shows it only for an author it blocked or unblocked since
+  the token was typed, and offers both Block author and Unblock author for any other (§8d,
+  *Moderation*). Chosen so the client alone changes; an author blocked in an earlier session reads as
+  unknown until unblocked or blocked again, which changes nothing but rejects what they have pending.
+  The options: keep it; or the server sends `authorBlocked` beside `authorId` on the admin DTOs, a
+  field with a default, so no installed client breaks, and the app shows it for every author.
+- **A move from the Reports tab** — *provisional — user decision.* A retirement or restoration from
+  the moderation app's Reports tab puts the question the server answers with in its row on both
+  tabs, its reports as they were, as a move from All questions does, and reads nothing again; one
+  that failed reads the Reports tab again (§8d, *Moderation*). Chosen since the answer is the
+  question as a read lists it, so a read would spend one more of the address's admin budget (§8b,
+  *Rate limiting*) to show the same, but for reports given meanwhile. The options: keep it; or read
+  the reports again after every move, which shows those too.
 - **Retiring a question** — *provisional — user decision.* The user asked for a way to take an
   approved question out of play and put it back (§8d, *Moderation*); the details are this build's.
   Built: a moderator retires an approved question, a seed included, and restores a retired one.
@@ -1984,7 +2005,7 @@ listed on the Account screen.
     as a status: `statusOf` and `standsAt` read the two columns as one status, so a rollback to the
     build before reads every row. The seed writes only what a database lacks and changes nothing
     there, so a retired seed stays retired through every boot. `RetirementTest` pins it, the races included.
-  - *Reports* (*built on the server 2026-09-26; the moderation app does not show them yet*):
+  - *Reports* (*built on the server 2026-09-26; the moderation app's Reports tab shows them*):
     `GET /v1/admin/reports` lists the reported questions (§8d, *Reports*), most reported first, then
     the most lately reported, then by id, bounded by `?limit=` and with no cursor, since a moderator
     works from the head as in the queue: an `AdminReportListDto` of `AdminReportDto`s, each the
@@ -1998,7 +2019,8 @@ listed on the Account screen.
     through *Retiring*; nothing retires one by itself, however many report it: *provisional — user
     decision*, the other option being a threshold that retires it until a moderator looks.
     `ReportModerationFlowTest`.
-  - *Authors* (*built on the server 2026-09-26; the moderation app does not use them yet*): every
+  - *Authors* (*built on the server 2026-09-26; the moderation app blocks and unblocks from each tab
+    that shows authors*): every
     admin DTO names a question's author by an opaque id, `authorId`, the author's player id, which says
     nothing about them but which questions are theirs; never a username, and null for a seed and for
     a question whose author deleted their account (§8a).
@@ -2014,8 +2036,9 @@ listed on the Account screen.
     and again under their row lock, which the block takes too, so a submission racing a block is either
     rejected by it or refused (`AuthorBlockTest`). `POST /v1/admin/author-unblocks` with an
     `UnblockAuthorRequest` lets them submit again; what the block rejected stays rejected. An id no
-    player has is 404 `AUTHOR_NOT_FOUND`. On the client, `SUBMISSIONS_BLOCKED` and `AUTHOR_NOT_FOUND`
-    read as `DomainError.UNKNOWN` until the branches that show them give each one of its own.
+    player has is 404 `AUTHOR_NOT_FOUND`. On the client, `SUBMISSIONS_BLOCKED` reads as
+    `DomainError.UNKNOWN` until the branch that shows it gives it one of its own, and `AUTHOR_NOT_FOUND`
+    is `DomainError.AUTHOR_NOT_FOUND` (*The client*, below).
   - *The client* is `ModerationRepository` in `:core:domain`, behind `GetPendingSubmissions`,
     `ApproveSubmission` and `RejectSubmission`, none of which ensures a session: the moderator is
     not a player. `DefaultModerationRepository` calls `ModerationApi` through `runApi` alone, never
@@ -2042,7 +2065,18 @@ listed on the Account screen.
     filter by
     `SubmissionStatus.OTHER` is refused before anything is sent; its categories are ids, in id
     order. `WRONG_STATUS`
-    is `DomainError.WRONG_STATUS`. `moderationDataModule(environment)` binds it, and only there, for a
+    is `DomainError.WRONG_STATUS`. The reported questions and the authors (*Reports*, *Authors*, above)
+    are `GetReportedQuestions`, a `ReportedQuestion` each (its `ModeratedQuestion`, how many report it,
+    its `reasons` counted most given first, and when it was last reported), read
+    `ModerationRepository.PAGE_SIZE` at a time as the queue is; `DismissReports`; and `BlockAuthor`,
+    with a `RejectionReason`, and `UnblockAuthor`, each answered with an `AuthorBlock` (blocked or not,
+    and how many it rejected), the one place the server says where an author stands; through `runApi`
+    alone, as the rest. A domain `ReportReason` names each reason, and `UNKNOWN` one this build cannot
+    name, where every such reason lands with their counts added, so they still add up to the reports.
+    `ModeratedQuestion.authorId`, and the queue's and the decisions' `Submission.authorId`
+    (`toModeratorsSubmission`), carry the author's opaque id; a player's own `Submission` never does,
+    whatever it is sent (`SubmissionMapperTest`). `AUTHOR_NOT_FOUND` is `DomainError.AUTHOR_NOT_FOUND`.
+    `moderationDataModule(environment)` binds it, and only there, for a
     client that only moderates: an HTTP client of its own over an in-memory session store nothing
     writes, no `TokenStorage` needed, no session repository, so no bearer token goes out and no guest
     can be minted. The game's `dataModule` binds none of it,
@@ -2057,29 +2091,56 @@ listed on the Account screen.
     anew on every Lock (`ModerationState.locks`): a text field keeps its undo history for as
     long as it is shown, so Undo in the one that held the token gave it back (`TokenBarTest`).
     Nothing is sent until what is typed can be a token (`AdminToken.of`), and one action runs at
-    a time. Every Load, of either tab, reads the categories first (`GetCategories`, needing no
+    a time. Every Load, of any tab, reads the categories first (`GetCategories`, needing no
     token), since a moderator adds them without a build: they are the approval's and the filter's
     chips, and name a question's categories, in Serbian, one not listed by its id
     (`ModerationState.categories`); a read that fails says so above the tab and keeps those read
     before, and Lock keeps them, being the same for everybody. *Pending* lists the queue, oldest
     first, each submission with its options,
     categories and age: Approve files it under the categories picked for it, none keeping the
-    author's, and Reject sends the reason typed once it is a `RejectionReason`. The queue is
+    author's, and Reject sends the reason typed once it is a `RejectionReason`. Beside the reason
+    field, a chip for each ready reason (`READY_REASONS`, provisional, §8b) puts it in the field, to
+    send as it is or edit first, in Serbian Cyrillic, since the author reads it in the game while the
+    app's own words stay English: *Није избор између две ствари*, *Увредљиво*, *Помиње стварну особу*,
+    *Дупликат*, *Тема није дозвољена (вера, политика, здравље, сексуалност)*, the question rules (§8b,
+    *Personalization*), and *Неразумљиво*; `ReadyReasonsTest` holds each to `RejectionReason`'s rules
+    as it reads, and to Serbian Cyrillic. The queue is
     read again after every decision, whatever became of it. A read lists at most
     `ModerationRepository.PAGE_SIZE`, and a queue that long says more may be waiting,
-    its tab `Pending (100+)`, rather than naming itself the whole. *All questions* is the
+    its tab `Pending (100+)`, rather than naming itself the whole. *Reports* lists the reported
+    questions (*Reports*, above), most reported first, at most `ModerationRepository.PAGE_SIZE`, a list
+    that long saying more may be reported, its tab `Reports (100+)`: each with how many players report
+    it and how many give each reason, one this build cannot name as such, when it was last reported,
+    its status, options, categories, votes, likes, dislikes and id, and Dismiss reports, which clears
+    them and reads the reports again, whatever became of it, and Retire, confirmed in the same dialog,
+    or Restore, as in the list. A retirement or restoration, from either tab, puts the question it
+    answers with in its row on both, its reports as they were, and one that failed reads again the tab
+    it was started from (provisional, §8b, *A move from the Reports tab*). *All questions* is the
     list, seeds included, newest first, filtered by any statuses (`RETIRED` among them; never
     `OTHER`) and any categories, none being every one: Load reads its first page and Load more the
     next, at the filter the list was read at, with the cursor the page before gave, and changing the
     filter drops what was read at the one before. Each question shows its options, categories,
-    status, whether it is a seed, its votes, likes and dislikes, its times and a rejection's reason, and what
-    can be done where it stands: Retire an approved one, only once the moderator confirms it in a
-    dialog; Restore a retired one; decide a pending one as in the queue, from the same draft of
+    status, its author or that it is a seed, its votes, likes and dislikes, its times and a
+    rejection's reason, and what can be done where it stands: Retire an approved one, only once the
+    moderator confirms it in a dialog; Restore a retired one; decide a pending one as in the queue, from the same draft of
     categories and reason. A retirement or restoration puts the question it answers with in its
     row, or drops it once the list's filter no longer picks it: the server reads that answer as it
     reads a page's row. A decision, whose answer lacks the row's tally and likes, reads the list
     again as many pages deep as were shown, and so does a move that failed, so the list shows what
     the server holds without losing the moderator's place; a decision reads the queue again too.
+    *Authors* show on Pending, Reports and All questions alike (`AuthorControls`): each question
+    names its author by the first 8 characters of their opaque id (`shortAuthorOf`), or says it is a
+    seed, with Block author... and Unblock author beside it. Block asks first, in a dialog that says
+    what it does and takes the reason each of the author's pending questions is rejected with, typed
+    or a ready reason picked and edited, and sends it once it is a `RejectionReason`; then reads again
+    whatever was read, the queue, the reports and the list as deep as it was shown, whatever became
+    of it, since the block rejects what the author had pending. Unblock goes at once and reads
+    nothing again, since nothing the server lists shows it. The server says whether an author is
+    blocked only in answer to a block or an unblock (`AuthorBlock`), so the app keeps each answer for
+    as long as the token is held (`ModerationState.authors`; Lock forgets them) and names it beside
+    the author, `· blocked` or `· not blocked`, offering the one action that changes it; an author it
+    has no answer for offers both (provisional, §8b). A block's line says how many pending questions
+    it rejected, and `AUTHOR_NOT_FOUND` reads as no such author, their account maybe deleted.
     Nothing is read again after a 403 or a 429, which did nothing and would refuse the read too:
     after a wrong token the read would only spend another of the address's ten a minute, past which
     every admin request from it is refused (§8b). A failure shows where it happened: a read's above
@@ -2089,7 +2150,7 @@ listed on the Account screen.
     named (`WyrException.retryAfter`, §8b). An answer the data layer cannot name (`UNKNOWN`) claims
     no status, leaving it to the detail line under it, and says a bare 404 means moderation is off
     on that server: a proxy's own page or an error code newer than the build reads as `UNKNOWN` too.
-    *Categories*, the third tab, lists every category, oldest first, with its id and both names, and
+    *Categories*, the fourth tab, lists every category, oldest first, with its id and both names, and
     adds one and puts one's names right (*Categories*, above): Add, from a form of the two names and
     an id, blank for the server to make one, goes once `CategoryDraft.isValid` holds by
     `CategoryRules`, and clears the form once added; Rename... opens a category's names in its own
@@ -2097,10 +2158,12 @@ listed on the Account screen.
     rename, whatever became of it (the list is no admin route, so the rule above for a 403 or a 429
     does not apply), and a failure shows under the form or the card it came from, a 409 as an id a
     category has already. Lock forgets what was typed for a category and keeps the categories read.
-    `ModerationViewModelTest`, `QuestionListViewModelTest` and `CategoriesViewModelTest` drive it over
-    scripted repositories,
+    `ModerationViewModelTest`, `ReportsViewModelTest`, `AuthorsViewModelTest`,
+    `QuestionListViewModelTest` and `CategoriesViewModelTest` drive it over scripted repositories,
+    `ModerationTapsTest` taps its chips and buttons, a ready reason and the block's dialog among them,
     `ModerationOverHttpTest` over the real client configuration, and `ScreensDrawTest` draws every
-    screen off screen at a desktop window's size. The game's builds do not moderate at all.
+    screen off screen at a desktop window's size, and reads the Reports tab's and the author actions'
+    texts. The game's builds do not moderate at all.
 - **Home picks** *(decided 2026-09-26; built on the server, the client adopts later)*: the Home screen
   will show **two Play buttons**, one in each card's colour (§5b), both starting the game alike, each
   with how many times players have tapped it, to fill the screen as a question would. A tap pays and

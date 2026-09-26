@@ -14,8 +14,10 @@ import kotlin.time.Instant
  * [categories] are ids, held as a question holds its own
  * ([io.ntole.wyr.core.domain.question.Question.categories]). [status] is where it stands, [SubmissionStatus.RETIRED] once a moderator
  * retired it, and [SubmissionStatus.OTHER] for a status this build cannot name. [isSeed] is true for
- * one of the server's starter questions, which nobody wrote and which is approved from the start. No
- * author is known: the server sends none.
+ * one of the server's starter questions, which nobody wrote and which is approved from the start.
+ * [authorId] names who wrote it, opaquely, the author's player id, which says nothing of them but
+ * which questions are theirs and is what [ModerationRepository.blockAuthor] takes: null for a seed,
+ * and for a question whose author deleted their account.
  *
  * [submittedAt] is when the server stored it, [reviewedAt] when a moderator approved or rejected it
  * (null for a seed and while pending), and [retiredAt] when a moderator retired it, null unless it is
@@ -37,4 +39,5 @@ public data class ModeratedQuestion(
     public val tally: Tally,
     public val likeCount: Int,
     public val dislikeCount: Int = 0,
+    public val authorId: String? = null,
 )
