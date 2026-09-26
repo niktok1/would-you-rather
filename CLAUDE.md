@@ -428,7 +428,10 @@ This project must never be attributed to any employer identity.
   `у изради` / `coming` pill (`.soon`), and `CHECK` comments mark what to confirm (NEXT-SESSION.md
   lists what to do before publishing). The privacy policy and the deletion page describe what the
   game processes, so a change that makes either untrue changes them, both languages, in the same
-  commit, and a feature that ships drops its pill there.
+  commit, and a feature that ships drops its pill there. Google Play also asks two things of the app
+  itself, neither built: a link to the privacy policy inside the app, and the terms accepted before
+  a player can submit a question, which for this game means at registration and at a first Play
+  Games sign-in (the terms' section 1; NEXT-SESSION.md).
 
 ## 8a. Authentication — resolved
 
