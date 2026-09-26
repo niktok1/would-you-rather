@@ -67,6 +67,13 @@ services:
       # Unset means pushes are off: devices still register their tokens, and nothing is sent.
       - key: FCM_SERVICE_ACCOUNT_JSON
         sync: false
+      # The game's OAuth client in Google Cloud (type Web application), which exchanges a Play Games
+      # sign-in's server auth code (CLAUDE.md §8b, Play Games sign-in). Set by hand, never committed.
+      # Both unset means the sign-in is off: its route is not served. One without the other fails at boot.
+      - key: PLAY_GAMES_CLIENT_ID
+        sync: false
+      - key: PLAY_GAMES_CLIENT_SECRET
+        sync: false
 
   - type: web
     name: wyr-server-dev
@@ -98,6 +105,10 @@ services:
         value: CF-Connecting-IP
       # A key of its own, so production's can be revoked alone.
       - key: FCM_SERVICE_ACCOUNT_JSON
+        sync: false
+      - key: PLAY_GAMES_CLIENT_ID
+        sync: false
+      - key: PLAY_GAMES_CLIENT_SECRET
         sync: false
 
 databases:

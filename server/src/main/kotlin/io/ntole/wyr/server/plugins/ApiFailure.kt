@@ -77,6 +77,18 @@ class ApiFailure(
                 "no account has that username and password",
             )
 
+        /** A Play Games sign-in's server auth code Google refused. Never [unauthorized]: see the code's doc. */
+        fun playGamesCodeRefused() =
+            ApiFailure(
+                HttpStatusCode.UnprocessableEntity,
+                ErrorCode.PLAY_GAMES_CODE_REFUSED,
+                "Google refused the Play Games code; ask Play Games for a new one",
+            )
+
+        /** Google could not be asked who a Play Games sign-in's code names. */
+        fun playGamesUnavailable() =
+            ApiFailure(HttpStatusCode.BadGateway, ErrorCode.PLAY_GAMES_UNAVAILABLE, "Play Games could not be asked")
+
         fun unauthorized(message: String = "missing or invalid credentials") =
             ApiFailure(HttpStatusCode.Unauthorized, ErrorCode.UNAUTHORIZED, message)
 

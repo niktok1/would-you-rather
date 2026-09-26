@@ -4,6 +4,7 @@ import io.ntole.wyr.core.api.WyrApi
 import io.ntole.wyr.core.push.PushPlatform
 import io.ntole.wyr.core.question.QuestionStatus
 import io.ntole.wyr.core.reaction.Reaction
+import io.ntole.wyr.server.auth.IdentityProvider
 import org.jetbrains.exposed.v1.core.ReferenceOption
 import org.jetbrains.exposed.v1.core.Table
 
@@ -433,6 +434,38 @@ object PushTokens : Table("push_tokens") {
 }
 
 /**
+ * The players of other services linked to players here (CLAUDE.md §8a, *Play Games sign-in*): a
+ * Google Play Games player, and later a Game Center one, signing in as the player it is linked to
+ * (V18). Two constraints decide every race (CLAUDE.md §4): a service's player is linked to one player
+ * here (the primary key), and a player here to one of each service's (the unique index).
+ *
+ * The foreign key cascades, as `push_tokens`' do: deleting a player deletes their links, with no store
+ * having to know this table is there. Nothing else deletes one: a link, once made, stands.
+ */
+object Identities : Table("identities") {
+    val provider = enumerationByName<IdentityProvider>("provider", 16)
+
+    /** The service's own id for its player: the Play Games player id Google answered with. */
+    val subject = varchar("subject", MAX_SUBJECT_LENGTH)
+
+    val playerId = varchar("player_id", 36).references(Players.id, onDelete = ReferenceOption.CASCADE)
+
+    /** When the link was made. */
+    val createdAt = long("created_at")
+
+    override val primaryKey = PrimaryKey(provider, subject)
+
+    init {
+        // A player here is linked to one player of each service. Also what finds a player's links, the
+        // stats' among them, and the cascade from a player.
+        index(isUnique = true, playerId, provider)
+    }
+
+    /** Longest id a service's player can have here: Play Games' are about twenty digits. */
+    const val MAX_SUBJECT_LENGTH: Int = 255
+}
+
+/**
  * Every table the server owns. The migrations build the schema (`Migrations`), and SchemaDriftTest
  * holds them to this list: a new table belongs here and in a migration, or the build fails. The store
  * tests build their tables straight from it with `SchemaUtils.create`, which that same test shows
@@ -450,4 +483,5 @@ val appTables: Array<Table> =
         Reactions,
         HomePicks,
         PushTokens,
+        Identities,
     )

@@ -496,8 +496,8 @@ internal class MigrationsTest(
      * was under RANDOM under ABSURD instead. V7 gives every question a cost of 0. V8 gives every
      * question no made-up votes, then each seed those `Seed` gives it, and V9 each seed the Serbian
      * options `Seed` gives it. V10 moves every like into reactions, as a like, and drops likes. V15
-     * adds the Home screen's two counts, each at 0, V16 gives every vote no answer time, and V17 adds
-     * no push token. None changes anything else. A later script that changes the rows already there adds what it does to
+     * adds the Home screen's two counts, each at 0, V16 gives every vote no answer time, and V17 and
+     * V18 add no push token and no Play Games link. None changes anything else. A later script that changes the rows already there adds what it does to
      * them here.
      */
     private fun afterLaterScripts(before: Contents): Contents {
@@ -565,6 +565,7 @@ internal class MigrationsTest(
                     Questions.tableName to questions,
                     HomePicks.tableName to NO_HOME_PICKS_YET,
                     PushTokens.tableName to emptyList(),
+                    Identities.tableName to emptyList(),
                 )
         ).mapValues { (_, rows) -> rows.canonical() }
     }
@@ -596,6 +597,7 @@ internal class MigrationsTest(
                 "15 SQL",
                 "16 SQL",
                 "17 SQL",
+                "18 SQL",
             )
 
         /** The Home screen's two counts as V15 writes them, as JDBC reads them back as strings. */

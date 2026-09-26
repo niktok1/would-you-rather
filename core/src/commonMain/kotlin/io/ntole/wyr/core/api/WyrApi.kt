@@ -63,6 +63,31 @@ public object WyrApi {
         public const val AUTH_LOGOUT: String = "/$VERSION/auth/logout"
 
         /**
+         * POST: signs in with Google Play Games Services, with a
+         * [io.ntole.wyr.core.auth.PlayGamesSignInRequest], answered with a
+         * [io.ntole.wyr.core.auth.SessionDto] for a new session, this device's own (CLAUDE.md §8a, *Play
+         * Games sign-in*): the no-click way to an account, beside [AUTH_REGISTER]'s username and
+         * password. A bearer token is optional. The server asks Google which Play Games player the code
+         * names, and then:
+         *  - one already linked to a player here signs in as that player, as a login does, whoever the
+         *    bearer names: a guest meeting it switches to it, and leaves its own points behind;
+         *  - one linked to no player is linked to the player the bearer names, who keeps everything they
+         *    have, unless that player is linked to another Play Games player already, or there is no
+         *    bearer, and then to a new player minted for it.
+         * Either way the player is registered from then on, as one with a username is: they may submit.
+         *
+         * A code Google refuses (spent, expired, or another app's) is 422
+         * [io.ntole.wyr.core.error.ErrorCode.PLAY_GAMES_CODE_REFUSED], answered by asking Play Games for a
+         * new one; Google not answering is 502 [io.ntole.wyr.core.error.ErrorCode.PLAY_GAMES_UNAVAILABLE].
+         * Neither changes anything here. An expired bearer token is 401
+         * [io.ntole.wyr.core.error.ErrorCode.UNAUTHORIZED] before the code is sent anywhere, so the
+         * refreshed retry can send it still unspent. A malformed body is 400
+         * [io.ntole.wyr.core.error.ErrorCode.VALIDATION_FAILED]. A server without Play Games configured
+         * has no such route: 404. Limited per client address, as a login is.
+         */
+        public const val AUTH_PLAY_GAMES: String = "/$VERSION/auth/play-games"
+
+        /**
          * GET: the next batch of questions for the player the bearer token names. Requires a
          * session, because the feed is per player (CLAUDE.md §8d): it runs in cycles, serving each
          * question once per cycle in a new random order, and a batch holds only what the player has
@@ -420,5 +445,12 @@ public object WyrApi {
          * characters, each visible ASCII. A Firebase token is about 160.
          */
         public const val MAX_PUSH_TOKEN_LENGTH: Int = 1024
+
+        /**
+         * Longest server auth code a Play Games sign-in may carry
+         * ([io.ntole.wyr.core.auth.PlayGamesSignInRequest]), in characters, each visible ASCII. One is
+         * about a hundred.
+         */
+        public const val MAX_SERVER_AUTH_CODE_LENGTH: Int = 2048
     }
 }

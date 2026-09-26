@@ -11,8 +11,10 @@ import io.ktor.server.response.respond
 import io.ktor.server.routing.get
 import io.ktor.server.routing.routing
 import io.ntole.wyr.core.api.WyrApi
+import io.ntole.wyr.server.auth.GooglePlayGames
 import io.ntole.wyr.server.auth.TokenService
 import io.ntole.wyr.server.auth.authRoutes
+import io.ntole.wyr.server.auth.playGamesRoutes
 import io.ntole.wyr.server.category.categoryRoutes
 import io.ntole.wyr.server.config.ServerConfig
 import io.ntole.wyr.server.db.DatabaseFactory
@@ -78,7 +80,8 @@ fun Application.wyrModule(
     // Work a request starts and does not wait for, a decision's pushes: it outlives the request, never
     // the server.
     val background = CoroutineScope(SupervisorJob() + Dispatchers.IO + CoroutineName("wyr-background"))
-    val google = config.fcmServiceAccount?.let { googleHttpClient(googleEngine()) }
+    val google =
+        if (config.fcmServiceAccount != null || config.playGames != null) googleHttpClient(googleEngine()) else null
     monitor.subscribe(ApplicationStopped) {
         background.cancel()
         google?.close()
@@ -87,6 +90,7 @@ fun Application.wyrModule(
         config.fcmServiceAccount?.let { account ->
             DecisionNotifier(db, FcmSender(account, checkNotNull(google)), background)
         }
+    val playGames = config.playGames?.let { client -> GooglePlayGames(client, checkNotNull(google)) }
 
     routing {
         // Render pings this to decide whether the service is live. In no rate-limit group, so a check
@@ -96,6 +100,8 @@ fun Application.wyrModule(
         }
 
         authRoutes(db, tokens, config)
+        // Not registered at all without Play Games configured, so its path is 404 (CLAUDE.md §8a).
+        playGamesRoutes(db, tokens, config, playGames)
         categoryRoutes(db)
         questionRoutes(db)
         submissionRoutes(db)
@@ -133,6 +139,12 @@ private fun Application.warnAboutInsecureDefaults(config: ServerConfig) {
         log.info(
             "FCM_SERVICE_ACCOUNT_JSON is unset — push notifications are off. Devices still register their " +
                 "push tokens, and no moderator's decision is pushed to its author.",
+        )
+    }
+    if (config.playGames == null) {
+        log.info(
+            "PLAY_GAMES_CLIENT_ID and PLAY_GAMES_CLIENT_SECRET are unset — Play Games sign-in is off. Its " +
+                "route is not served, and players register with a username and password alone.",
         )
     }
     if (config.allowedWebOrigins.isEmpty()) {

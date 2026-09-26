@@ -37,6 +37,11 @@ data class RateLimits(
      */
     val logins: RequestBudget,
     /**
+     * `POST /v1/auth/play-games`, per address, as the caller may have no session: each sign-in costs two
+     * calls to Google.
+     */
+    val playGames: RequestBudget,
+    /**
      * `POST /v1/auth/register`. A player registers once, but a name they want may be taken, and every
      * try but one that breaks a rule costs a password hash.
      */
@@ -94,6 +99,7 @@ data class RateLimits(
                 guests = RequestBudget(requests = 10, per = 1.hours),
                 refreshes = RequestBudget(requests = 30, per = 1.minutes),
                 logins = RequestBudget(requests = 20, per = 1.minutes),
+                playGames = RequestBudget(requests = 20, per = 1.minutes),
                 registrations = RequestBudget(requests = 20, per = 1.hours),
                 logouts = RequestBudget(requests = 30, per = 1.minutes),
                 feed = RequestBudget(requests = 120, per = 1.minutes),
@@ -134,6 +140,7 @@ data class RateLimits(
                     guests = budget("RATE_LIMIT_GUESTS_PER_HOUR", guests),
                     refreshes = budget("RATE_LIMIT_REFRESHES_PER_MINUTE", refreshes),
                     logins = budget("RATE_LIMIT_LOGINS_PER_MINUTE", logins),
+                    playGames = budget("RATE_LIMIT_PLAY_GAMES_PER_MINUTE", playGames),
                     registrations = budget("RATE_LIMIT_REGISTRATIONS_PER_HOUR", registrations),
                     logouts = budget("RATE_LIMIT_LOGOUTS_PER_MINUTE", logouts),
                     feed = budget("RATE_LIMIT_FEED_PER_MINUTE", feed),

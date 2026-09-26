@@ -171,13 +171,15 @@ failing:
   The one exception is a value copied from another row, which may be a plain read where a stale
   copy is provably harmless, with the proof at the read (`VoteStore.currentCycle`: the feed moves
   the cycle on only once the answer's question is already answered or skipped in the one read).
-- Uniqueness is a constraint (the `Votes`, `Skips`, `Reactions` and `Categories` primary keys,
-  `players.username`'s unique constraint), never a prior `SELECT`. A violation is never caught and
+- Uniqueness is a constraint (the `Votes`, `Skips`, `Reactions`, `Categories`, `PushTokens` and
+  `Identities` primary keys, `players.username`'s unique constraint and `identities`' on a player and
+  a provider), never a prior `SELECT`. A violation is never caught and
   carried on from: PostgreSQL aborts a transaction at its first error. It propagates, and Exposed
   rolls back and reruns the whole transaction, which then sees the committed row (`VoteStore.cast`,
   `SkipStore.skip`, `ReactionStore.set`, `AccountStore.register`, which `AccountStoreTest` races,
-  `CategoryStore.create`, which `CategoryStoreTest` races, and `Seed.writeMissing`, which
-  `SeedTest` races). A plain read before such an insert only spares
+  `CategoryStore.create`, which `CategoryStoreTest` races, `Seed.writeMissing`, which
+  `SeedTest` races, `PushTokenStore.register`, which `PushTokenStoreTest` races, and
+  `IdentityStore.signIn`, which `IdentityStoreTest` races on both constraints). A plain read before such an insert only spares
   a certain violation, and needs no lock when finding the row writes nothing.
 - Numbers that must agree with one another are read in one statement, which sees one committed
   state; two statements can straddle another transaction's commit (the tally in `VoteStore`,
@@ -379,6 +381,10 @@ This project must never be attributed to any employer identity.
 - `FCM_SERVICE_ACCOUNT_JSON` is the Firebase service account's key file, whole, which pushes a
   moderator's decision to its author (§8a, *Push tokens*), `sync: false` in `render.yaml`, one key per
   service. It has no default: unset turns pushes off. Setting it up is §8b, *Push notifications*.
+- `PLAY_GAMES_CLIENT_ID` and `PLAY_GAMES_CLIENT_SECRET` are the game's OAuth client in Google Cloud,
+  which exchanges a Play Games sign-in's code (§8a, *Play Games sign-in*), both `sync: false`. No
+  default: both unset turns the sign-in off, one alone fails the boot. Setting it up is §8b, *Play
+  Games sign-in*.
 - The Docker build sets `WYR_SERVER_ONLY=1`, which makes `settings.gradle.kts` skip the app
   modules. Without it the Android Gradle plugin fails at configuration time for want of an SDK.
 - Free tier caveats to design around: free web services spin down after ~15 min idle (cold
@@ -552,6 +558,43 @@ decided in §8b).
     with a MockEngine (`FcmSenderTest`, `PushFlowTest`). Never logged: the key, the assertion, the
     access token, or a device's token. Unset, pushes are off: nothing is sent, and the boot says so.
 
+- **Play Games sign-in** (*decided 2026-09-26: the user's "no-click register", with the register
+  screen kept as the fallback; built on the server, the client adopts later*): a player on Android
+  gets an account with no form, as Google Play Games Services v2 vouches for who they are.
+  - *Signing in* is `POST /v1/auth/play-games` with a `PlayGamesSignInRequest`, the one-time server
+    auth code Play Games gave the app (`requestServerSideAccess`), answered with a `SessionDto` for a
+    new session, this device's own. A bearer token is optional. The server exchanges the code at
+    Google's OAuth token endpoint as the game's client (`PLAY_GAMES_CLIENT_ID`,
+    `PLAY_GAMES_CLIENT_SECRET`, §8b *Play Games sign-in*; the redirect URI empty, as Google's example
+    for a code an installed app got has it), reads the Play Games player the access token names from
+    `games/v1/players/me` (`playerId`), and keeps neither token (`GooglePlayGames`). Then
+    (`IdentityStore.signIn`): a Play Games player linked already signs in as its player, as a login
+    does, whoever the bearer names, so a guest meeting it switches to it and leaves its own points
+    behind (the user's earlier decision); one linked to nobody is linked to the bearer's player, who
+    keeps everything they have, or to a player minted for it when there is no bearer, the bearer's
+    player is linked to another Play Games player already, or the token outlived its player. Once
+    Google has vouched, nothing refuses the sign-in, since the code is spent.
+  - *Stored* in `identities` (V18): a provider (`IdentityProvider.PLAY_GAMES`, server-only, Game
+    Center to come), its player's id and the player here, the primary key on the provider and its
+    player and a unique constraint on the player here and the provider deciding every race (§4,
+    `IdentityStoreTest` races both). The foreign key cascades, as push tokens' do: deleting a player
+    deletes their links. Nothing else unlinks one.
+  - *A linked player is registered*, as one with a username is: they may submit (§8d, *Submitting*),
+    and `GET /v1/me` says so (`PlayerStatsDto.playGamesLinked`). They may still register a username and
+    password, to log in where there is no Play Games: on iOS and the web.
+  - *Refusals*: a code Google refuses (`invalid_grant`: spent, expired, another app's) is 422
+    `PLAY_GAMES_CODE_REFUSED`, answered by asking Play Games for a new one; Google not answering, or
+    refusing the server itself (`invalid_client`), is 502 `PLAY_GAMES_UNAVAILABLE`, logged; neither
+    changes anything. An expired or forged bearer is 401 before the code goes anywhere (the route's
+    authentication is optional, which still refuses a bad token), so the refreshed retry can spend it.
+    A code is 1 to `WyrApi.Limits.MAX_SERVER_AUTH_CODE_LENGTH` (2048) of visible ASCII, or 400. Off
+    (the variables unset), the route is not served: 404. Limited per address, 20 a minute (§8b). On
+    the client both codes are mapped, never to `UNAUTHORIZED` (`ErrorMapper`).
+  - *A client signs in with Play Games* once per device, or once its session has died, not at every
+    launch: every sign-in answers a new session, and the one before is abandoned, as a login's guest
+    is. Never logged: the code, the client secret, an access token (`GooglePlayGamesTest`).
+    `PlayGamesFlowTest` takes every path with Google answered by a MockEngine.
+
 **Known limitation, by design for now:** a guest account is bound to one device's storage. Lose
 the device, reinstall the app or clear its storage, and the account — and its points — are gone,
 unless the guest registered (*Accounts*, above), and then only until it logs in again. Session storage is ordinary preference storage
@@ -573,9 +616,12 @@ EncryptedSharedPreferences: enough for a game that stores nothing personal.
   names its algorithm and cost, `pbkdf2-sha256$<iterations>$<salt>$<hash>`, so the cost can be
   raised later and the hashes already stored still verify; nothing rehashes one at a new cost yet.
   No email is collected, so there is **no password reset**: a forgotten password means a new
-  account. No-click sign-in (Play Games Services on Android, Game Center on iOS) comes later, once
-  there is an Apple developer account: it would link a platform's player to a player here as
-  registering links a username, beside the password or in its place. This replaces the recovery
+  account. **No-click sign-in** links a platform's player to a player here as registering links a
+  username, beside the password or in its place: Play Games Services on Android is built on the
+  server (*decided 2026-09-26*, §8a *Play Games sign-in*; the client adopts it later), and the
+  register screen stays as the fallback, and the only way on iOS and the web until then; Game Center
+  on iOS comes once there is an Apple developer account, as another `IdentityProvider`. An optional
+  email, for a password reset, is not built. This replaces the recovery
   secret (V4), which is gone from the server and every client; its column stays, unused, until a
   later migration drops it. A `d4a9dbf` phone build that keeps a secret fails every call once its
   session dies, since the recovery it tries first is now 404: install a current build on it.
@@ -655,7 +701,8 @@ EncryptedSharedPreferences: enough for a game that stores nothing personal.
   one window ends and the next begins, while over any longer span the average holds:
   - *Per client address* (on Render, Cloudflare's `CF-Connecting-IP`: `CLIENT_IP_HEADER`, §8), for a
     caller with no session to name: guest minting 10 an hour, refreshes 30 a minute, logins 20 a
-    minute (what bounds guessing a password, as each costs a hash), the categories list 120 a minute
+    minute (what bounds guessing a password, as each costs a hash), Play Games sign-ins 20 a minute
+    (each costs two calls to Google), the categories list 120 a minute
     (it needs no session), the Home screen's counts (`GET /v1/home-picks`) 120 a minute (nor does
     that), the admin routes 60 a minute together, and on top of that, admin requests with a wrong or missing token 10 a minute. A
     request with the right token spends none of that last budget, but once an address has spent it,
@@ -753,6 +800,26 @@ EncryptedSharedPreferences: enough for a game that stores nothing personal.
     from §8f's *nothing reads the device's locale*.
   - *Rollbacks*: a build before the migration ignores audiences and serves local questions to
     everyone. Accepted (the user: the game is not released yet).
+- **Play Games sign-in** — *built on the server 2026-09-26 (§8a, *Play Games sign-in*); off until the
+  user sets it up.* The server exchanges a Play Games server auth code as the game's OAuth client in
+  Google Cloud, `PLAY_GAMES_CLIENT_ID` and `PLAY_GAMES_CLIENT_SECRET` (`sync: false`, set by hand,
+  never committed). Both unset or blank, the route is not served (404) and the boot says so; one
+  without the other fails the boot, naming the missing one and neither value. **What the user sets
+  up**, once:
+  1. A Google Play developer account (a one-time fee), and the game created in the Play Console.
+  2. In the Play Console, *Play Games Services → Setup and management → Configuration*: create a
+     Play Games Services project, which makes or links a Google Cloud project, and fill in the OAuth
+     consent screen it asks for.
+  3. Add two credentials there. An **Android** one for the app, `io.ntole.wyr`, with the SHA-1 of the
+     key it is signed with (the Play app signing key, and the debug key for builds made on a laptop);
+     the DEV and LOCAL flavors, `io.ntole.wyr.dev` and `io.ntole.wyr.local`, need their own to sign in,
+     to be settled when the client adopts it. And a **game server** one, an OAuth client of type *Web
+     application*: its client ID and secret are `PLAY_GAMES_CLIENT_ID` and `PLAY_GAMES_CLIENT_SECRET`,
+     and the same client ID is what the Android app passes to `requestServerSideAccess`.
+  4. Until the game is published, add each tester's Google account under *Testers*, or Play Games
+     refuses them.
+  5. On Render, set both variables on `wyr-server`, and on `wyr-server-dev` too to try it there, then
+     restart each.
 - **Push notifications** — *built on the server 2026-09-26 (§8a, *Push tokens*); off until the user
   sets it up.* The server sends through Firebase Cloud Messaging as a Google service account, whose
   JSON key file `FCM_SERVICE_ACCOUNT_JSON` holds whole (`sync: false` in `render.yaml`, set by hand in
@@ -824,7 +891,7 @@ seed (`Migrations`, `DatabaseFactory.init`). Nothing builds a table any other wa
   question cost, §8c), V8 (the seeds' made-up votes), V9 (the seeds in Serbian, §8d *Seeds*),
   V10 (likes become reactions, §8d *Reactions*) and `feat/server-engagement`'s V15 (the Home
   screen's two counts, §8d *Home picks*), V16 (an answer's time, *Personalization*, above) and V17
-  (push tokens, §8a). V11 to V14 are `feat/server-safety`'s, which merges first;
+  (push tokens, §8a) and V18 (Play Games links, §8a). V11 to V14 are `feat/server-safety`'s, which merges first;
   Flyway runs whatever versions are there in order, a gap included, and `MigrationsTest` steps
   through the scripts by their own versions.
   `Migrations.migrate` takes the baseline itself (`baselineVersion` 1), and only for a database
@@ -908,7 +975,9 @@ seed (`Migrations`, `DatabaseFactory.init`). Nothing builds a table any other wa
   table a later script dropped by name (`DROPPED_TABLES`), since `Tables.kt` no longer names it. V15
   only adds a table no build before names, and V16 a nullable column: a build before it moves a vote
   and leaves the answer time the answer before it left. V17 adds a table no build before names; a
-  logout there still deletes its session, and the cascade still takes its tokens.
+  logout there still deletes its session, and the cascade still takes its tokens. V18 adds a table no
+  build before names: a player signed in with Play Games plays on there as a guest, through their
+  sessions, and submits only with a username too, until the roll forward.
 - *Several instances booting at once* (Render starts a deploy's new instance before it stops the old
   one): on PostgreSQL each script runs under Flyway's advisory lock, so one boot migrates while the
   rest wait, up to 50 tries a second apart, and then find nothing to do. Every boot that finds a
@@ -1401,7 +1470,9 @@ listed on the Account screen.
   (`ReactionStore.likesReceivedBy`, *Reactions*; dislikes are worth nothing, so not counted), the
   points spent: what the player's questions not rejected
   cost them (`pointsSpent`, *Submitting*), and the player's username, null for a guest (§8a,
-  *Accounts*; `PlayerStats.username` on the client, so a screen reads the name with the points).
+  *Accounts*; `PlayerStats.username` on the client, so a screen reads the name with the points), and
+  whether they signed in with Play Games (`playGamesLinked`, §8a, *Play Games sign-in*; the client
+  adopts it later).
   Built in `StatsStore.of`, as one statement, so the total always agrees with the answers given, the
   likes received and the points spent (§8c). It only reads, and the cycle starts lazily on the next
   feed request, so between the answer that finishes a cycle and that request it reports the finished
@@ -1514,16 +1585,18 @@ listed on the Account screen.
     points between the cards show it from the next vote on, or from the next time the Play screen is
     shown, which reads them again. The thumbs, drawn by hand (§5b), took the heart's place.
 - **Submitting** *(built; details decided 2026-09-23; the cost 2026-09-25; registered players only
-  2026-09-26)*: **only a registered player may submit** (§8a, *Accounts*); a guest registers first,
-  keeping everything it has. It **costs a point** (§8c) and earns no points directly, because authors
+  2026-09-26)*: **only a registered player may submit** (§8a, *Accounts*): one with a username, or
+  signed in with Play Games (§8a, *Play Games sign-in*), which registers a player as a username does;
+  a guest registers first, keeping everything it has. It **costs a point** (§8c) and earns no points directly, because authors
   earn through likes. The author writes both
   options (in Serbian, as §8f, *How an option is phrased*, asks, which the moderator holds them
   to) and **picks one or more categories** (each a category's id; *Categories*). A player may
   have at most **20 submissions pending** moderation at once. A submitted question is served only
   after a moderator approves it; once approved it is due for every player in their current cycle.
   Built as `POST /v1/questions`, in `SubmissionStore.submit` after `checkedSubmission`. A guest's
-  submission is 403 `ACCOUNT_REQUIRED` before anything it holds is checked (a plain read of the
-  player, `PlayerStore.find`: nothing unregisters one); a guest still lists whatever it submitted
+  submission is 403 `ACCOUNT_REQUIRED` before anything it holds is checked (plain reads of the
+  player, `PlayerStore.find`, and of their links, `IdentityStore.isLinked`: nothing unregisters or
+  unlinks one); a guest still lists whatever it submitted
   before the rule. Both options
   are trimmed, then each must be non-blank, at most `WyrApi.Limits.MAX_OPTION_LENGTH` (200, UTF-16
   units) and one line (no control character, nor U+2028 or U+2029, the line and paragraph

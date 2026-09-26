@@ -18,6 +18,7 @@ import io.ktor.serialization.kotlinx.json.json
 import io.ktor.server.testing.testApplication
 import io.ntole.wyr.core.api.WyrApi
 import io.ntole.wyr.core.auth.LoginRequest
+import io.ntole.wyr.core.auth.PlayGamesSignInRequest
 import io.ntole.wyr.core.auth.RefreshRequest
 import io.ntole.wyr.core.auth.RegisterRequest
 import io.ntole.wyr.core.auth.SessionDto
@@ -43,6 +44,8 @@ import io.ntole.wyr.core.reaction.ReactionRequest
 import io.ntole.wyr.core.vote.OptionSide
 import io.ntole.wyr.core.vote.VoteRequest
 import io.ntole.wyr.server.NO_PRACTICAL_LIMIT
+import io.ntole.wyr.server.auth.FakePlayGames
+import io.ntole.wyr.server.auth.TEST_PLAY_GAMES_CLIENT
 import io.ntole.wyr.server.auth.TokenService
 import io.ntole.wyr.server.config.RateLimits
 import io.ntole.wyr.server.config.RequestBudget
@@ -462,6 +465,18 @@ class RateLimitTest {
             ) { caller ->
                 caller.client.login("nobody", "password")
             },
+            // A code Google refuses as spent, so every one is answered alike and links nothing.
+            Group(
+                "play games",
+                { copy(playGames = it) },
+                allowed = HttpStatusCode.UnprocessableEntity,
+                needsSession = false,
+            ) { caller ->
+                caller.client.post(WyrApi.Paths.AUTH_PLAY_GAMES) {
+                    contentType(ContentType.Application.Json)
+                    setBody(PlayGamesSignInRequest("spent-code"))
+                }
+            },
             Group("feed", { copy(feed = it) }) { caller ->
                 caller.client.get(WyrApi.Paths.QUESTIONS) { bearerAuth(caller.player.accessToken) }
             },
@@ -559,9 +574,12 @@ class RateLimitTest {
                 rateLimits = limits,
                 clientIpHeader = clientIpHeader,
                 onRender = onRender,
+                // Signing in with Play Games is its own group, with Google answered by a MockEngine that
+                // refuses every code.
+                playGames = TEST_PLAY_GAMES_CLIENT,
             )
 
-        application { wyrModule(config) }
+        application { wyrModule(config) { FakePlayGames().engine } }
 
         block(createClient { install(ContentNegotiation) { json(Json { ignoreUnknownKeys = true }) } })
     }

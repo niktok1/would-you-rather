@@ -9,6 +9,7 @@ import io.ktor.server.routing.post
 import io.ntole.wyr.core.api.WyrApi
 import io.ntole.wyr.core.question.SubmissionListDto
 import io.ntole.wyr.core.question.SubmitQuestionRequest
+import io.ntole.wyr.server.auth.IdentityStore
 import io.ntole.wyr.server.auth.JWT_AUTH
 import io.ntole.wyr.server.auth.authenticatedPlayerId
 import io.ntole.wyr.server.category.CategoryStore
@@ -51,11 +52,16 @@ fun Route.submissionRoutes(db: Db) {
                 val stored =
                     db.query {
                         // Only a registered player may submit (CLAUDE.md §8d, *Submitting*), so a guest is
-                        // refused before anything they sent is checked. A plain read: nothing unregisters a
-                        // player, and a guest registering meanwhile sent this as a guest. As for the list, a
-                        // validly signed token can outlive its player.
+                        // refused before anything they sent is checked: one with neither a username nor a
+                        // Play Games link. Plain reads: nothing unregisters a player or unlinks one, and a
+                        // guest registering meanwhile sent this as a guest. As for the list, a validly signed
+                        // token can outlive its player.
                         val author = PlayerStore.find(authorId) ?: throw ApiFailure.unauthorized("unknown player")
-                        if (author.username == null) throw ApiFailure.accountRequired()
+                        if (author.username == null &&
+                            !IdentityStore.isLinked(authorId)
+                        ) {
+                            throw ApiFailure.accountRequired()
+                        }
 
                         // An id no category has is a malformed request, which comes before any rule the
                         // player can break by typing (checkedSubmission).

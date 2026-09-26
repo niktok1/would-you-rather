@@ -1,5 +1,6 @@
 package io.ntole.wyr.server.config
 
+import io.ntole.wyr.server.auth.PlayGamesClient
 import io.ntole.wyr.server.push.FcmServiceAccount
 
 /**
@@ -67,6 +68,13 @@ data class ServerConfig(
      * that is no service account's key fails at boot, naming the variable and none of its value.
      */
     val fcmServiceAccount: FcmServiceAccount? = null,
+    /**
+     * The game's OAuth client in Google Cloud, which exchanges a Play Games server auth code (CLAUDE.md
+     * §8b, *Play Games sign-in*), from `PLAY_GAMES_CLIENT_ID` and `PLAY_GAMES_CLIENT_SECRET`, or null
+     * when both are unset or blank, which turns Play Games sign-in off: its route is not served. One set
+     * without the other fails at boot, naming the missing one and neither value.
+     */
+    val playGames: PlayGamesClient? = null,
 ) {
     /** True when running against the throwaway in-memory database. */
     val isEphemeralDatabase: Boolean get() = jdbcUrl.startsWith("jdbc:h2:")
@@ -127,7 +135,30 @@ data class ServerConfig(
                 onRender = env("RENDER") == "true",
                 fcmServiceAccount =
                     env("FCM_SERVICE_ACCOUNT_JSON")?.takeIf { it.isNotBlank() }?.let(FcmServiceAccount::parse),
+                playGames = parsePlayGames(env("PLAY_GAMES_CLIENT_ID"), env("PLAY_GAMES_CLIENT_SECRET")),
             )
+        }
+
+        /**
+         * The Play Games OAuth client [clientId] and [clientSecret] name, each trimmed, or null when both
+         * are unset or blank. One without the other is a half-made configuration, and fails at config
+         * load naming the one missing, rather than leaving sign-in off unnoticed. Neither value is ever in
+         * the message: the secret is a secret, and the id sits beside it.
+         */
+        internal fun parsePlayGames(
+            clientId: String?,
+            clientSecret: String?,
+        ): PlayGamesClient? {
+            val id = clientId?.trim()?.takeIf { it.isNotEmpty() }
+            val secret = clientSecret?.trim()?.takeIf { it.isNotEmpty() }
+            if (id == null && secret == null) return null
+            require(
+                id != null,
+            ) { "PLAY_GAMES_CLIENT_SECRET is set but PLAY_GAMES_CLIENT_ID is not; set both, or neither." }
+            require(
+                secret != null,
+            ) { "PLAY_GAMES_CLIENT_ID is set but PLAY_GAMES_CLIENT_SECRET is not; set both, or neither." }
+            return PlayGamesClient(clientId = id, clientSecret = secret)
         }
 
         /**

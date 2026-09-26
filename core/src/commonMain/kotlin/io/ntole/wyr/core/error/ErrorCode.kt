@@ -112,6 +112,20 @@ public enum class ErrorCode {
      */
     INVALID_LOGIN,
 
+    /**
+     * Google refused the server auth code a Play Games sign-in sent
+     * ([io.ntole.wyr.core.auth.PlayGamesSignInRequest]): spent already, expired, or another app's.
+     * Nothing changed; a client asks Play Games for a new code. Sent with 422, never 401: the session,
+     * if one was sent, is fine.
+     */
+    PLAY_GAMES_CODE_REFUSED,
+
+    /**
+     * The server could not ask Google who a Play Games sign-in's code names: Google did not answer, or
+     * refused the server itself. Nothing changed, and the code may be spent. Sent with 502.
+     */
+    PLAY_GAMES_UNAVAILABLE,
+
     /** Caller is not authenticated, or the credential is expired. */
     UNAUTHORIZED,
 

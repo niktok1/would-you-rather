@@ -35,6 +35,7 @@ enum class RouteLimit(
     GUESTS(RateLimits::guests, KeyedBy.ADDRESS),
     REFRESHES(RateLimits::refreshes, KeyedBy.ADDRESS),
     LOGINS(RateLimits::logins, KeyedBy.ADDRESS),
+    PLAY_GAMES(RateLimits::playGames, KeyedBy.ADDRESS),
     REGISTRATIONS(RateLimits::registrations, KeyedBy.PLAYER),
     LOGOUTS(RateLimits::logouts, KeyedBy.PLAYER),
     FEED(RateLimits::feed, KeyedBy.PLAYER),
@@ -72,7 +73,7 @@ internal enum class KeyedBy {
 
     /**
      * The client's address, for a caller with no session to name: one minting a guest, refreshing,
-     * logging in, or moderating, or with none needed: one reading the categories or the home picks.
+     * logging in, signing in with Play Games, or moderating, or with none needed: one reading the categories or the home picks.
      */
     ADDRESS,
 }

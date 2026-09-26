@@ -98,6 +98,45 @@ class ServerConfigTest {
     }
 
     @Test
+    fun `Play Games sign-in needs both its client id and secret and neither is ever in a message`() {
+        val both =
+            ServerConfig.fromEnvironment(
+                mapOf(
+                    "PLAY_GAMES_CLIENT_ID" to " the-id ",
+                    "PLAY_GAMES_CLIENT_SECRET" to " the-secret ",
+                )::get,
+            )
+
+        assertEquals("the-id", both.playGames?.clientId)
+        assertEquals("the-secret", both.playGames?.clientSecret)
+        assertFalse("the-secret" in both.toString(), "printing the configuration shows no secret")
+        assertEquals(null, ServerConfig.fromEnvironment { null }.playGames)
+        assertEquals(
+            null,
+            ServerConfig
+                .fromEnvironment(
+                    mapOf(
+                        "PLAY_GAMES_CLIENT_ID" to " ",
+                        "PLAY_GAMES_CLIENT_SECRET" to "",
+                    )::get,
+                ).playGames,
+        )
+
+        for ((set, missing) in listOf(
+            "PLAY_GAMES_CLIENT_ID" to "PLAY_GAMES_CLIENT_SECRET",
+            "PLAY_GAMES_CLIENT_SECRET" to "PLAY_GAMES_CLIENT_ID",
+        )) {
+            val failure =
+                assertFailsWith<IllegalArgumentException> {
+                    ServerConfig.fromEnvironment(mapOf(set to "half-of-it")::get)
+                }
+
+            assertContains(failure.message.orEmpty(), "$missing is not")
+            assertFalse("half-of-it" in failure.message.orEmpty(), "the message gives neither value away")
+        }
+    }
+
+    @Test
     fun `the rate limits default to the budgets section 8b records`() {
         val limits = ServerConfig.fromEnvironment { null }.rateLimits
 
@@ -105,6 +144,7 @@ class ServerConfigTest {
         assertEquals(RequestBudget(10, 1.hours), limits.guests)
         assertEquals(RequestBudget(30, 1.minutes), limits.refreshes)
         assertEquals(RequestBudget(20, 1.minutes), limits.logins)
+        assertEquals(RequestBudget(20, 1.minutes), limits.playGames)
         assertEquals(RequestBudget(20, 1.hours), limits.registrations)
         assertEquals(RequestBudget(30, 1.minutes), limits.logouts)
         listOf(limits.feed, limits.votes, limits.skips, limits.stats, limits.mySubmissions).forEach { budget ->
@@ -126,6 +166,7 @@ class ServerConfigTest {
                 Triple("RATE_LIMIT_GUESTS_PER_HOUR", RateLimits::guests, 1.hours),
                 Triple("RATE_LIMIT_REFRESHES_PER_MINUTE", RateLimits::refreshes, 1.minutes),
                 Triple("RATE_LIMIT_LOGINS_PER_MINUTE", RateLimits::logins, 1.minutes),
+                Triple("RATE_LIMIT_PLAY_GAMES_PER_MINUTE", RateLimits::playGames, 1.minutes),
                 Triple("RATE_LIMIT_REGISTRATIONS_PER_HOUR", RateLimits::registrations, 1.hours),
                 Triple("RATE_LIMIT_LOGOUTS_PER_MINUTE", RateLimits::logouts, 1.minutes),
                 Triple("RATE_LIMIT_FEED_PER_MINUTE", RateLimits::feed, 1.minutes),
