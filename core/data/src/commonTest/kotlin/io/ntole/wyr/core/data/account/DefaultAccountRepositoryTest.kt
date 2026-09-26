@@ -10,6 +10,7 @@ import io.ntole.wyr.core.data.session
 import io.ntole.wyr.core.data.session.DefaultSessionRepository
 import io.ntole.wyr.core.data.storeHolding
 import io.ntole.wyr.core.domain.account.RegisterAccount
+import io.ntole.wyr.core.domain.analytics.Analytics
 import io.ntole.wyr.core.domain.error.DomainError
 import io.ntole.wyr.core.domain.error.WyrException
 import io.ntole.wyr.core.domain.player.GetPlayerStats
@@ -54,7 +55,7 @@ class DefaultAccountRepositoryTest {
         runTest {
             val device = Device(storeHolding(null))
 
-            val username = RegisterAccount(device.accounts, device.sessions)("Bob_1", "correct horse")
+            val username = RegisterAccount(device.accounts, device.sessions, Analytics.None)("Bob_1", "correct horse")
 
             assertEquals("bob_1", username)
             // Not refused and then recovered: the session was ensured before the registration went.

@@ -17,6 +17,7 @@ import io.ntole.wyr.core.domain.account.AccountRepository
 import io.ntole.wyr.core.domain.account.LogIn
 import io.ntole.wyr.core.domain.account.LogOut
 import io.ntole.wyr.core.domain.account.RegisterAccount
+import io.ntole.wyr.core.domain.analytics.Analytics
 import io.ntole.wyr.core.domain.category.Category
 import io.ntole.wyr.core.domain.category.CategoryRepository
 import io.ntole.wyr.core.domain.category.GetCategories
@@ -83,6 +84,7 @@ import kotlin.time.Instant
 class AppNavigationTest {
     private val game = FakeGame()
     private val categories = FakeCategories()
+    private val analytics: Analytics = Analytics.None
     private val storage = InMemoryTokenStorage()
     private val owner = TestOwner()
 
@@ -424,14 +426,15 @@ class AppNavigationTest {
             single<AccountRepository> { game }
             single<SubmissionRepository> { game }
             single<CategoryRepository> { categories }
+            single<Analytics> { analytics }
             factory { GetNextQuestion(questions = get(), session = get()) }
             factory { SkipQuestion(questions = get(), session = get()) }
             factory { CastVote(votes = get(), session = get()) }
             factory { SetReaction(reactions = get(), session = get()) }
             factory { GetPlayerStats(players = get(), session = get()) }
-            factory { RegisterAccount(accounts = get(), session = get()) }
-            factory { LogIn(accounts = get(), questions = get()) }
-            factory { LogOut(accounts = get(), questions = get()) }
+            factory { RegisterAccount(accounts = get(), session = get(), analytics = get()) }
+            factory { LogIn(accounts = get(), questions = get(), session = get(), analytics = get()) }
+            factory { LogOut(accounts = get(), questions = get(), analytics = get()) }
             factory { SubmitQuestion(submissions = get(), session = get()) }
             factory { GetMySubmissions(submissions = get(), session = get()) }
             factory { GetCategories(categories = get()) }

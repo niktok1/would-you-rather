@@ -112,9 +112,9 @@ public fun dataModule(
         factory { SubmitQuestion(submissions = get(), session = get()) }
         factory { GetMySubmissions(submissions = get(), session = get()) }
         factory { SetReaction(reactions = get(), session = get()) }
-        factory { RegisterAccount(accounts = get(), session = get()) }
-        factory { LogIn(accounts = get(), questions = get()) }
-        factory { LogOut(accounts = get(), questions = get()) }
+        factory { RegisterAccount(accounts = get(), session = get(), analytics = get()) }
+        factory { LogIn(accounts = get(), questions = get(), session = get(), analytics = get()) }
+        factory { LogOut(accounts = get(), questions = get(), analytics = get()) }
         factory { GetCategories(categories = get()) }
     }
 

@@ -518,6 +518,8 @@ decided in §8b).
     refresh token's 30 days; one idle longer plays on as a fresh guest, and logs in again. No
     password is stored, anywhere: the phone's password manager may keep it, offered as the Auth page,
     where the game's client registers and logs in, leaves the screen (§8d, *The Account screen*).
+    Both, once they worked, tell the analytics who plays here by player id, and a logout has them
+    forget (§8g, *Who*).
 
 **Known limitation, by design for now:** a guest account is bound to one device's storage. Lose
 the device, reinstall the app or clear its storage, and the account — and its points — are gone,
@@ -1860,7 +1862,12 @@ the same events. The moderation app sends none.
   sends PostHog's `$identify` with the install's id as `$anon_distinct_id`, which joins what the
   install sent before to the player, and makes the player id the install's from then on; `reset()`,
   on a logout, makes a fresh random one, in a fresh session. The player id is the server's random id,
-  as a question's is; never the username.
+  as a question's is; never the username. The account's use cases do both (`RegisterAccount` and
+  `LogIn` once the server took them, by the player id of the session then stored, `LogOut` once the
+  session is dropped), so a login on a second device joins its install to the same player, and the
+  guest a logout leaves is nobody's. An account's deletion, once there is one, resets too. Not
+  joined: a registration whose answer was lost (its read after names the account, but no id), which
+  stays the install's until a login.
 - **What every event carries** *(built)*: `distinct_id`; `$session_id`, a version 7 UUID, a new one
   after 30 minutes without an event or 24 hours on (as PostHog's own SDKs count sessions, which its
   session views need); `$screen_name`, the screen last shown; `$lib` (`wyr-kotlin`),

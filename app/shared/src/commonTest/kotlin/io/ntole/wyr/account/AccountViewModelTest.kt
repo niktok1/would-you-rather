@@ -5,6 +5,7 @@ import io.ntole.wyr.core.domain.account.LogIn
 import io.ntole.wyr.core.domain.account.LogOut
 import io.ntole.wyr.core.domain.account.RegisterAccount
 import io.ntole.wyr.core.domain.account.UsernameProblem
+import io.ntole.wyr.core.domain.analytics.Analytics
 import io.ntole.wyr.core.domain.error.DomainError
 import io.ntole.wyr.core.domain.error.WyrException
 import io.ntole.wyr.core.domain.player.GetPlayerStats
@@ -657,9 +658,9 @@ class AccountViewModelTest {
         AccountViewModel(
             getPlayerStats = GetPlayerStats(game, game),
             getMySubmissions = GetMySubmissions(game, game),
-            registerAccount = RegisterAccount(game, game),
-            logInToAccount = LogIn(game, game),
-            logOutOfAccount = LogOut(game, game),
+            registerAccount = RegisterAccount(game, game, Analytics.None),
+            logInToAccount = LogIn(game, game, game, Analytics.None),
+            logOutOfAccount = LogOut(game, game, Analytics.None),
         )
 
     /**
