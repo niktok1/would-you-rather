@@ -97,15 +97,18 @@ internal class MigrationsTest(
             buildAsBeforeMigrations(pool)
             val before = pool.inTransaction { contents() }
             serverFlyway(pool).baseline()
-            val latest = BASELINED_HISTORY.size
-            for (version in 2 until latest) {
+            // By each script's own version, not its place in the list: the versions have a gap (V11 to
+            // V14 are another branch's), and Flyway runs whatever is there in order.
+            val versions = BASELINED_HISTORY.map { entry -> entry.substringBefore(' ') }
+            for (index in 1 until versions.lastIndex) {
+                val version = versions[index]
                 Migrations
                     .configuration()
                     .dataSource(pool)
-                    .target("$version")
+                    .target(version)
                     .load()
                     .migrate()
-                assertEquals(BASELINED_HISTORY.take(version), history(pool), "the build whose latest is V$version")
+                assertEquals(BASELINED_HISTORY.take(index + 1), history(pool), "the build whose latest is V$version")
             }
 
             val result = Migrations.migrate(pool)
@@ -487,8 +490,8 @@ internal class MigrationsTest(
      * with no username and no password. V6 adds the first categories ([Seed.CATEGORIES]) and files what
      * was under RANDOM under ABSURD instead. V7 gives every question a cost of 0. V8 gives every
      * question no made-up votes, then each seed those `Seed` gives it, and V9 each seed the Serbian
-     * options `Seed` gives it. V10 moves every like into reactions, as a like, and drops likes. None
-     * changes anything else. A later script that changes the rows already there adds what it does to
+     * options `Seed` gives it. V10 moves every like into reactions, as a like, and drops likes. V15
+     * adds the Home screen's two counts, each at 0. None changes anything else. A later script that changes the rows already there adds what it does to
      * them here.
      */
     private fun afterLaterScripts(before: Contents): Contents {
@@ -554,6 +557,7 @@ internal class MigrationsTest(
                     Categories.tableName to categories,
                     QuestionCategories.tableName to filings,
                     Questions.tableName to questions,
+                    HomePicks.tableName to NO_HOME_PICKS_YET,
                 )
         ).mapValues { (_, rows) -> rows.canonical() }
     }
@@ -571,7 +575,23 @@ internal class MigrationsTest(
          * without running it, then every later script run.
          */
         private val BASELINED_HISTORY =
-            listOf("1 BASELINE", "2 SQL", "3 SQL", "4 SQL", "5 SQL", "6 SQL", "7 SQL", "8 SQL", "9 SQL", "10 SQL")
+            listOf(
+                "1 BASELINE",
+                "2 SQL",
+                "3 SQL",
+                "4 SQL",
+                "5 SQL",
+                "6 SQL",
+                "7 SQL",
+                "8 SQL",
+                "9 SQL",
+                "10 SQL",
+                "15 SQL",
+            )
+
+        /** The Home screen's two counts as V15 writes them, as JDBC reads them back as strings. */
+        private val NO_HOME_PICKS_YET =
+            listOf(mapOf("side" to "A", "picks" to "0"), mapOf("side" to "B", "picks" to "0"))
 
         /** V1's table of likes, which V10 replaced with reactions, so Tables.kt no longer names it. */
         private const val LIKES = "likes"

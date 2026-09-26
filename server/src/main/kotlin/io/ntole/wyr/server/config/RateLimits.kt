@@ -18,9 +18,9 @@ data class RequestBudget(
 
 /**
  * What one client may send (CLAUDE.md §8b, *Rate limiting*): a budget for each group of routes, spent
- * apart from every other group's. Registrations, logouts, the feed, votes, skips, reactions, submissions and
- * the two reads of the player's own are per player, so players behind one address do not share them; the
- * rest, whose caller has no session to name, or needs none, per client address.
+ * apart from every other group's. Registrations, logouts, the feed, votes, skips, reactions, submissions,
+ * home picks and the two reads of the player's own are per player, so players behind one address do not
+ * share them; the rest, whose caller has no session to name, or needs none, per client address.
  *
  * Each is overridable by the environment variable [fromEnvironment] names, a count per the period the
  * name ends in. The periods are fixed.
@@ -61,6 +61,13 @@ data class RateLimits(
      * starts and when a picker opens, and players behind one address share this.
      */
     val categories: RequestBudget,
+    /**
+     * `GET /v1/home-picks`, per address, since it needs no session. The Home screen reads the counts each
+     * time it is shown, and players behind one address share this.
+     */
+    val homePickCounts: RequestBudget,
+    /** `POST /v1/home-picks`. Every tap counts, so this bounds how fast one player can move a count. */
+    val homePicks: RequestBudget,
     /** Every admin route together, per address, whatever token the request carries. */
     val admin: RequestBudget,
     /**
@@ -91,6 +98,8 @@ data class RateLimits(
                 stats = RequestBudget(requests = 120, per = 1.minutes),
                 mySubmissions = RequestBudget(requests = 120, per = 1.minutes),
                 categories = RequestBudget(requests = 120, per = 1.minutes),
+                homePickCounts = RequestBudget(requests = 120, per = 1.minutes),
+                homePicks = RequestBudget(requests = 30, per = 1.minutes),
                 admin = RequestBudget(requests = 60, per = 1.minutes),
                 adminTokenFailures = RequestBudget(requests = 10, per = 1.minutes),
             )
@@ -128,6 +137,8 @@ data class RateLimits(
                     stats = budget("RATE_LIMIT_STATS_PER_MINUTE", stats),
                     mySubmissions = budget("RATE_LIMIT_MY_SUBMISSIONS_PER_MINUTE", mySubmissions),
                     categories = budget("RATE_LIMIT_CATEGORIES_PER_MINUTE", categories),
+                    homePickCounts = budget("RATE_LIMIT_HOME_PICK_COUNTS_PER_MINUTE", homePickCounts),
+                    homePicks = budget("RATE_LIMIT_HOME_PICKS_PER_MINUTE", homePicks),
                     admin = budget("RATE_LIMIT_ADMIN_PER_MINUTE", admin),
                     adminTokenFailures = budget("RATE_LIMIT_ADMIN_TOKEN_FAILURES_PER_MINUTE", adminTokenFailures),
                 )

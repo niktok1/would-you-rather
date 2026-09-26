@@ -370,10 +370,25 @@ object Reactions : Table("reactions") {
 }
 
 /**
+ * How many times each of the Home screen's two Play buttons has been tapped, by every player together
+ * (CLAUDE.md §8d, *Home picks*): one row per side, which V15 wrote at 0. Nothing adds or deletes a row;
+ * only `HomePickStore.pick` moves a count, as an SQL increment.
+ */
+object HomePicks : Table("home_picks") {
+    /** `A` or `B`, an [io.ntole.wyr.core.vote.OptionSide] by name, as a vote's side is. */
+    val side = varchar("side", 1)
+
+    /** Every tap of that side's button, a player's repeats included. */
+    val picks = long("picks").default(0)
+
+    override val primaryKey = PrimaryKey(side)
+}
+
+/**
  * Every table the server owns. The migrations build the schema (`Migrations`), and SchemaDriftTest
  * holds them to this list: a new table belongs here and in a migration, or the build fails. The store
  * tests build their tables straight from it with `SchemaUtils.create`, which that same test shows
  * builds what the migrations do.
  */
 val appTables: Array<Table> =
-    arrayOf(Players, Sessions, Questions, Categories, QuestionCategories, Votes, Skips, Reactions)
+    arrayOf(Players, Sessions, Questions, Categories, QuestionCategories, Votes, Skips, Reactions, HomePicks)

@@ -150,7 +150,8 @@ COMMITTED**, PostgreSQL's default, set on the pool in `DatabaseFactory.poolConfi
 follow, and code that breaks one loses updates or shows numbers that disagree, silently rather than
 failing:
 - A counter is an SQL increment (`total_points = total_points + n`), never a read then a write.
-  A burst on one row then just queues on its lock; `PlayerStoreTest` pins 8 at once.
+  A burst on one row then just queues on its lock; `PlayerStoreTest` pins 8 at once, and
+  `HomePickStoreTest` 8 taps of one Home button (`HomePickStore.pick`).
 - Any other read-then-write is a compare-and-set: the `UPDATE`'s `WHERE` repeats what the read
   relied on, and 0 rows updated means another transaction won (`PlayerStore.startNextCycle`,
   `ModerationStore.decide`, a retirement or restoration, `ModerationStore.move`, a registration
@@ -180,8 +181,8 @@ failing:
   state; two statements can straddle another transaction's commit (the tally in `VoteStore`,
   `StatsStore.of`, a question's like and dislike counts beside the player's own reaction in
   `ReactionStore.reactionsOf`, a question's tally and reaction counts in the moderator's list,
-  `ModerationStore.questions`, and a submission's counts in its author's list,
-  `SubmissionStore.byAuthor`).
+  `ModerationStore.questions`, a submission's counts in its author's list,
+  `SubmissionStore.byAuthor`, and the Home screen's two counts, `HomePickStore.counts`).
 
 REPEATABLE_READ was dropped because it refuses the second of two concurrent writes to a row
 (SQLState 40001) and Exposed makes only 3 attempts with no delay, so a burst on one row, such as
@@ -616,7 +617,8 @@ EncryptedSharedPreferences: enough for a game that stores nothing personal.
   - *Per client address* (on Render, Cloudflare's `CF-Connecting-IP`: `CLIENT_IP_HEADER`, §8), for a
     caller with no session to name: guest minting 10 an hour, refreshes 30 a minute, logins 20 a
     minute (what bounds guessing a password, as each costs a hash), the categories list 120 a minute
-    (it needs no session), the admin routes 60 a minute together, and on top of that, admin requests with a wrong or missing token 10 a minute. A
+    (it needs no session), the Home screen's counts (`GET /v1/home-picks`) 120 a minute (nor does
+    that), the admin routes 60 a minute together, and on top of that, admin requests with a wrong or missing token 10 a minute. A
     request with the right token spends none of that last budget, but once an address has spent it,
     every admin request from the address is refused until the budget is back, the right token's too
     (`LockingOut`): were that one let in, its 200 among the 429s would give it away, and guessing
@@ -626,7 +628,8 @@ EncryptedSharedPreferences: enough for a game that stores nothing personal.
   - *Per player*, so players behind one address do not share a budget: registrations 20 an hour
     (every one the rules take costs a password hash), logouts 30 a minute, the feed, votes and skips
     120 a minute each, reactions 60 a minute, submissions 30 an hour (the 20-pending cap still applies),
-    `GET /v1/me` and `GET /v1/me/questions` 120 a minute each. The key is the player id in the
+    `GET /v1/me` and `GET /v1/me/questions` 120 a minute each, a tap on a Home button
+    (`POST /v1/home-picks`) 30 a minute. The key is the player id in the
     bearer token, which the limiter verifies itself (`verifiedPlayerId`): it runs before
     authentication, so no principal is there yet. A request without a token this server signed
     spends its address's budget of the group instead, and then gets its 401, so a forged token
@@ -744,8 +747,11 @@ seed (`Migrations`, `DatabaseFactory.init`). Nothing builds a table any other wa
   (sessions and the recovery secret, since dropped) there; the next Manual Deploy runs V5 there
   (a player's username and password hash, *Accounts*, above), which every player already there takes
   as a guest, and every later script: V6 (the categories table, §8d *Categories*), V7 (what a
-  question cost, §8c), V8 (the seeds' made-up votes), V9 (the seeds in Serbian, §8d *Seeds*) and
-  V10 (likes become reactions, §8d *Reactions*).
+  question cost, §8c), V8 (the seeds' made-up votes), V9 (the seeds in Serbian, §8d *Seeds*),
+  V10 (likes become reactions, §8d *Reactions*) and `feat/server-engagement`'s V15 (the Home
+  screen's two counts, §8d *Home picks*). V11 to V14 are `feat/server-safety`'s, which merges first;
+  Flyway runs whatever versions are there in order, a gap included, and `MigrationsTest` steps
+  through the scripts by their own versions.
   `Migrations.migrate` takes the baseline itself (`baselineVersion` 1), and only for a database
   holding every table V1 builds (`TABLES_BEFORE_MIGRATIONS`) and no history table; Flyway's
   `baselineOnMigrate` is off. Any other database with tables and no history fails the boot, rather
@@ -824,7 +830,8 @@ seed (`Migrations`, `DatabaseFactory.init`). Nothing builds a table any other wa
   rewrites the seeds' text. V10 moves every like into `reactions`, as a like, and drops `likes`, which
   every build before it reads, so none of them runs on what it leaves: accepted, since nothing is live
   yet and so no build before it is a rollback target (the user, 2026-09-26). `MigrationsTest` reads a
-  table a later script dropped by name (`DROPPED_TABLES`), since `Tables.kt` no longer names it.
+  table a later script dropped by name (`DROPPED_TABLES`), since `Tables.kt` no longer names it. V15
+  only adds a table no build before names.
 - *Several instances booting at once* (Render starts a deploy's new instance before it stops the old
   one): on PostgreSQL each script runs under Flyway's advisory lock, so one boot migrates while the
   rest wait, up to 50 tries a second apart, and then find nothing to do. Every boot that finds a
@@ -1651,6 +1658,17 @@ listed on the Account screen.
     scripted repositories,
     `ModerationOverHttpTest` over the real client configuration, and `ScreensDrawTest` draws every
     screen off screen at a desktop window's size. The game's builds do not moderate at all.
+- **Home picks** *(decided 2026-09-26; built on the server, the client adopts later)*: the Home screen
+  will show **two Play buttons**, one in each card's colour (§5b), both starting the game alike, each
+  with how many times players have tapped it, to fill the screen as a question would. A tap pays and
+  costs nothing and is no answer. **Every tap counts**, a player's repeats included, bounded only by
+  the per-player rate limit (§8b). `GET /v1/home-picks` (`WyrApi.Paths.HOME_PICKS`) answers both
+  counts, a `HomePicksDto` (`picksA`, `picksB`), and needs no session, so Home can show them before it
+  has a player; `POST` with a `HomePickRequest` (`side`, an `OptionSide`, closed as a vote's is) counts
+  one tap of the bearer's and answers both counts after it, 401 without a session and 400 for a body
+  naming no side. Built in `home_picks` (V15), one row per side written at 0, moved only by an SQL
+  increment (`HomePickStore.pick`, §4) and read in one statement (`HomePickStore.counts`).
+  `HomePickStoreTest` races 8 taps of one button, `HomePickFlowTest` the routes.
 
 ## 8e. Client environments — decided 2026-09-24
 

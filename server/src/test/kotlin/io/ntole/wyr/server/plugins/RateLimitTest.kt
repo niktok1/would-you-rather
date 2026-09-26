@@ -25,6 +25,7 @@ import io.ntole.wyr.core.category.CreateCategoryRequest
 import io.ntole.wyr.core.category.RenameCategoryRequest
 import io.ntole.wyr.core.error.ErrorCode
 import io.ntole.wyr.core.error.ErrorDto
+import io.ntole.wyr.core.home.HomePickRequest
 import io.ntole.wyr.core.player.PlayerStatsDto
 import io.ntole.wyr.core.question.ApproveSubmissionRequest
 import io.ntole.wyr.core.question.QuestionPageDto
@@ -487,6 +488,12 @@ class RateLimitTest {
             },
             Group("categories", { copy(categories = it) }, needsSession = false) { caller ->
                 caller.client.get(WyrApi.Paths.CATEGORIES)
+            },
+            Group("home pick counts", { copy(homePickCounts = it) }, needsSession = false) { caller ->
+                caller.client.get(WyrApi.Paths.HOME_PICKS)
+            },
+            Group("home picks", { copy(homePicks = it) }) { caller ->
+                caller.client.post(WyrApi.Paths.HOME_PICKS) { json(caller.player, HomePickRequest(OptionSide.A)) }
             },
             Group("admin", { copy(admin = it) }, needsSession = false) { caller ->
                 caller.client.queue(ADMIN_TOKEN)

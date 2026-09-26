@@ -153,6 +153,23 @@ public object WyrApi {
         public const val MY_QUESTIONS: String = "/$VERSION/me/questions"
 
         /**
+         * The Home screen's two Play buttons, each in a card's colour and each starting the game
+         * (CLAUDE.md §8d, *Home picks*).
+         *
+         * GET: how many times each has been tapped, by every player together, as a
+         * [io.ntole.wyr.core.home.HomePicksDto]. Needs no session, and reads none: the counts are the
+         * same for everybody, so the Home screen can show them before it has a player. Limited per
+         * client address.
+         *
+         * POST: counts one tap of the session player's, with a
+         * [io.ntole.wyr.core.home.HomePickRequest], answered with both counts as they stand after it.
+         * Requires a session. Every tap counts, a player's repeats included, and none pays or costs
+         * anything. A malformed body is 400 [io.ntole.wyr.core.error.ErrorCode.VALIDATION_FAILED].
+         * Limited per player.
+         */
+        public const val HOME_PICKS: String = "/$VERSION/home-picks"
+
+        /**
          * The moderator's queue (CLAUDE.md §8d, *Moderation*): the submissions waiting for a decision,
          * oldest first, as a [io.ntole.wyr.core.question.SubmissionListDto], so its head is the next
          * to decide and asking again after deciding it gets the rest. [Query.STATUS] lists those of
