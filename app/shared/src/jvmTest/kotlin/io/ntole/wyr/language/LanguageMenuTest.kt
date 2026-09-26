@@ -9,6 +9,7 @@ import androidx.compose.ui.semantics.getAllSemanticsNodes
 import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.unit.Density
 import io.ntole.wyr.core.network.InMemoryTokenStorage
+import io.ntole.wyr.renderAt
 import io.ntole.wyr.theme.WyrTheme
 import java.util.Locale
 import kotlin.test.Test
@@ -70,7 +71,8 @@ class LanguageMenuTest {
                 val option = nodes(scene).single { textOf(it) == tapped.ownName && isOption(it) }
                 val click = assertNotNull(option.config.getOrNull(SemanticsActions.OnClick)?.action)
                 click()
-                scene.render()
+                // Past the menu's closing animation, which keeps it drawn until it ends.
+                scene.frames(from = OPENED)
                 assertEquals(listOf(tapped), picked)
                 assertEquals(emptyList(), options(scene), "closed once one is picked")
             } finally {
@@ -121,7 +123,7 @@ class LanguageMenuTest {
         scene(shown, selected, onSelect).also { scene ->
             val open = assertNotNull(menuNode(scene).config.getOrNull(SemanticsActions.OnClick)?.action)
             open()
-            scene.render()
+            scene.frames(from = 0)
             assertTrue(options(scene).isNotEmpty(), "the menu opens")
         }
 
@@ -133,6 +135,16 @@ class LanguageMenuTest {
         ImageComposeScene(width = WIDTH, height = HEIGHT, density = Density(1f)) {
             WyrTheme { WyrStrings(shown) { LanguageMenu(selected = selected, onSelect = onSelect) } }
         }.also { it.render() }
+
+    /**
+     * Draws the scene a frame at a time, at 60 a second, for a second of its clock from [from], so what
+     * the last tap changed has shown, an animation's end included: drawn once, a frame can miss what the
+     * desktop's snapshot manager does meanwhile (`renderAt`), and a scene's clock stands still unless
+     * it is given.
+     */
+    private fun ImageComposeScene.frames(from: Long) {
+        generateSequence(from) { it + FRAME }.takeWhile { it <= from + OPENED }.forEach { renderAt(it) }
+    }
 
     private fun nodes(scene: ImageComposeScene): List<SemanticsNode> =
         scene.semanticsOwners.flatMap { owner -> owner.getAllSemanticsNodes(mergingEnabled = true) }
@@ -152,5 +164,11 @@ class LanguageMenuTest {
     private companion object {
         const val WIDTH = 375
         const val HEIGHT = 300
+
+        /** One frame at 60 a second, in nanoseconds. */
+        const val FRAME = 1_000_000_000L / 60
+
+        /** A second of the scene's clock, in nanoseconds: the menu opened and its animation done by then. */
+        const val OPENED = 1_000_000_000L
     }
 }
