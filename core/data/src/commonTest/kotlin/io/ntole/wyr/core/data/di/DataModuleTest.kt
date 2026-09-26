@@ -7,6 +7,7 @@ import io.ntole.wyr.core.api.WyrApi
 import io.ntole.wyr.core.domain.account.LogIn
 import io.ntole.wyr.core.domain.account.LogOut
 import io.ntole.wyr.core.domain.account.RegisterAccount
+import io.ntole.wyr.core.domain.analytics.Analytics
 import io.ntole.wyr.core.domain.category.GetCategories
 import io.ntole.wyr.core.domain.moderation.AddCategory
 import io.ntole.wyr.core.domain.moderation.ApproveSubmission
@@ -45,7 +46,10 @@ class DataModuleTest {
             WyrEnvironment.entries.forEach { environment ->
                 val koin =
                     koinApplication {
-                        modules(module { single<TokenStorage> { InMemoryTokenStorage() } }, dataModule(environment))
+                        modules(
+                            module { single<TokenStorage> { InMemoryTokenStorage() } },
+                            dataModule(environment, analytics = null),
+                        )
                     }.koin
                 val client = koin.get<HttpClient>()
                 client.plugin(HttpSend).intercept { request -> throw NotSent(request.url.buildString()) }
@@ -62,7 +66,10 @@ class DataModuleTest {
     fun `the game's data module binds nothing of the moderator's`() {
         val koin =
             koinApplication {
-                modules(module { single<TokenStorage> { InMemoryTokenStorage() } }, dataModule(WyrEnvironment.LOCAL))
+                modules(
+                    module { single<TokenStorage> { InMemoryTokenStorage() } },
+                    dataModule(WyrEnvironment.LOCAL, analytics = null),
+                )
             }.koin
 
         // Moderating is the moderation app's alone (CLAUDE.md §8d, Moderation).
@@ -83,7 +90,10 @@ class DataModuleTest {
     fun `the game's data module binds the account's use cases`() {
         val koin =
             koinApplication {
-                modules(module { single<TokenStorage> { InMemoryTokenStorage() } }, dataModule(WyrEnvironment.LOCAL))
+                modules(
+                    module { single<TokenStorage> { InMemoryTokenStorage() } },
+                    dataModule(WyrEnvironment.LOCAL, analytics = null),
+                )
             }.koin
 
         assertNotNull(koin.get<RegisterAccount>())
@@ -92,11 +102,47 @@ class DataModuleTest {
         koin.close()
     }
 
+    /** No key, as in every test and CI build: the switch is there, and nothing is kept or sent (§8g). */
+    @Test
+    fun `the game's data module binds analytics that without a key keeps nothing`() =
+        runTest {
+            val storage = InMemoryTokenStorage()
+            val koin =
+                koinApplication {
+                    modules(
+                        module { single<TokenStorage> { storage } },
+                        dataModule(WyrEnvironment.LOCAL, analytics = null),
+                    )
+                }.koin
+
+            val analytics = koin.get<Analytics>()
+            analytics.track("app_opened")
+            analytics.identify("player-1")
+            analytics.flush()
+
+            assertEquals(true, analytics.enabled.value)
+            assertNull(storage.read("wyr.analytics.id.local"))
+            koin.close()
+        }
+
+    /** The moderator's app reports nothing (§8g). */
+    @Test
+    fun `a client that only moderates binds no analytics`() {
+        val koin = koinApplication { modules(moderationDataModule(WyrEnvironment.LOCAL)) }.koin
+
+        assertNull(koin.getOrNull<Analytics>())
+        koin.close()
+    }
+
     @Test
     fun `the game and a client that only moderates both read the categories from their own server`() =
         runTest {
             WyrEnvironment.entries.forEach { environment ->
-                val game = listOf(module { single<TokenStorage> { InMemoryTokenStorage() } }, dataModule(environment))
+                val game =
+                    listOf(
+                        module { single<TokenStorage> { InMemoryTokenStorage() } },
+                        dataModule(environment, analytics = null),
+                    )
                 listOf(game, listOf(moderationDataModule(environment))).forEach { modules ->
                     val koin = koinApplication { modules(modules) }.koin
                     val client = koin.get<HttpClient>()

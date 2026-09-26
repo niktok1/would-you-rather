@@ -1717,6 +1717,9 @@ game UI (the moderation app, `:app:adminApp`, §3) can name one too.
   Preferences node, one bundle id's `NSUserDefaults`, one origin's `localStorage`. With one key, a
   build for one server sent the other's tokens to it and, once they were refused, replaced that
   guest, and its points, with a new one (§8a). Android's flavors have storage of their own anyway.
+- *Analytics* (§8g). Each entry point reads the PostHog project the build sends to where it reads the
+  environment's name, and hands both to `initKoin`. Every event names its environment, and an
+  install's analytics id is one per environment, as its session is.
 
 ## 8f. Languages — decided 2026-09-25
 
@@ -1867,6 +1870,26 @@ the same events. The moderation app sends none.
 - **What is never sent**: the username, an email, a password, any question's or option's text, the
   moderator's reason, anything typed, a token or the admin token. A question is its id, a category
   its id, a failure the domain's name for it (`DomainError`).
+- **The key, per platform** *(built)*: a PostHog project's key and host, set when a build is made or
+  started as the environment is (§8e), never committed; **no key is analytics off**, a no-op, which is
+  how every test and every CI build runs. The key is the project's public one, which can only send.
+  - *Android and web*: the Gradle properties `wyr.posthog.key` and `wyr.posthog.host` (`-P`, or
+    `~/.gradle/gradle.properties`), or the same names in `local.properties`, read by
+    `gradle/wyr-analytics.gradle.kts`: into `BuildConfig.POSTHOG_KEY` and `POSTHOG_HOST`, one key for
+    every flavor, and for the web into generated constants (`generateWyrAnalytics`) beside `WYR_ENV`.
+    A key of anything but letters, digits, `_` and `-`, or a host holding a quote, a backslash, a `$`
+    or a space, fails the build.
+  - *Desktop*: the `WYR_POSTHOG_KEY` and `WYR_POSTHOG_HOST` variables (`desktopAnalyticsSettings`).
+  - *iOS*: the `WYR_POSTHOG_KEY` and `WYR_POSTHOG_HOST` build settings, set in
+    `app/iosApp/Configuration/Local.xcconfig`, which git ignores and `Config.xcconfig` includes if it
+    is there; the Info.plist carries them as keys of the same names (`bundledAnalyticsSettings`). A
+    host is written there without `https://`, since `//` begins an `.xcconfig` comment.
+  - The entry point hands them to `initKoin` as an `AnalyticsSettings`, with the app's version
+    (Android's `versionName`, iOS's `MARKETING_VERSION`, desktop's `packageVersion` through the
+    `wyr.app.version` property, the web build's `wyrAppVersion`), and `PostHogConfig.of` makes them a
+    configuration: no key is none, no host the EU cloud, `eu.i.posthog.com` is `https://`, and a host
+    that is none stops the app at launch, naming it, as an environment's name does. `dataModule` binds
+    the `Analytics` for it; `moderationDataModule` binds none.
 - **The switch** *(built in the sender)*: on by default, and off is kept for the device, under
   `wyr.analytics.enabled` (`on` or `off`), whatever the environment, as the language is (§8f): the
   choice is the person's. Off sends nothing more and drops what waited. A build with no key keeps the

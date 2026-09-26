@@ -1,8 +1,10 @@
 package io.ntole.wyr.di
 
 import io.ntole.wyr.account.AccountViewModel
+import io.ntole.wyr.analytics.AnalyticsSettings
 import io.ntole.wyr.categories.CategoriesViewModel
 import io.ntole.wyr.core.auth.SessionDto
+import io.ntole.wyr.core.domain.analytics.Analytics
 import io.ntole.wyr.core.network.InMemoryTokenStorage
 import io.ntole.wyr.core.network.SessionStore
 import io.ntole.wyr.core.network.TokenStorage
@@ -127,7 +129,7 @@ class AppModuleTest {
         ).forEach { (name, environment) ->
             // Only the environment is resolved: the platform's own storage is never built, so nothing
             // of this machine's is read or written.
-            initKoin(environmentName = name)
+            initKoin(environmentName = name, analytics = NO_ANALYTICS)
 
             assertEquals(environment, KoinPlatform.getKoin().get<WyrEnvironment>(), "\"$name\"")
             stopKoin()
@@ -136,10 +138,39 @@ class AppModuleTest {
 
     @Test
     fun `an environment name it does not know stops the app before Koin starts`() {
-        val failure = assertFailsWith<IllegalArgumentException> { initKoin(environmentName = "staging") }
+        val failure =
+            assertFailsWith<IllegalArgumentException> {
+                initKoin(
+                    environmentName = "staging",
+                    analytics = NO_ANALYTICS,
+                )
+            }
 
         assertTrue("\"staging\"" in failure.message.orEmpty(), failure.message)
         assertNull(KoinPlatform.getKoinOrNull())
+    }
+
+    @Test
+    fun `a PostHog host that is none stops the app before Koin starts`() {
+        val analytics = AnalyticsSettings(key = "phc_key", host = "eu posthog com", appVersion = "1.0")
+
+        val failure = assertFailsWith<IllegalArgumentException> { initKoin(environmentName = "dev", analytics) }
+
+        assertTrue("eu posthog com" in failure.message.orEmpty(), failure.message)
+        assertNull(KoinPlatform.getKoinOrNull())
+    }
+
+    /** No key, as every test and CI build has: the switch is there, and nothing is kept or sent (§8g). */
+    @Test
+    fun `the analytics bound without a key keep nothing`() {
+        val storage = InMemoryTokenStorage()
+        val analytics = koinFor(WyrEnvironment.DEV, storage).get<Analytics>()
+
+        analytics.track("app_opened")
+        analytics.flush()
+
+        assertTrue(analytics.enabled.value)
+        assertNull(storage.read("wyr.analytics.id.dev"))
     }
 
     private fun koinFor(
@@ -147,10 +178,12 @@ class AppModuleTest {
         storage: TokenStorage = InMemoryTokenStorage(),
     ): Koin {
         val platform = module { single<TokenStorage> { storage } }
-        return koinApplication { modules(listOf(platform) + appModules(environment)) }.koin
+        return koinApplication { modules(listOf(platform) + appModules(environment, analytics = null)) }.koin
     }
 
     private companion object {
+        val NO_ANALYTICS = AnalyticsSettings(key = null, host = null, appVersion = "")
+
         val DEV_SESSION =
             SessionDto(
                 playerId = "dev-player",

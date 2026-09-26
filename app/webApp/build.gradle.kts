@@ -11,6 +11,13 @@ plugins {
 extra["wyrEnvPackage"] = "io.ntole.wyr"
 apply(from = rootProject.file("gradle/wyr-env.gradle.kts"))
 
+// The PostHog project this web build sends analytics to (CLAUDE.md §8g), from wyr.posthog.key and
+// wyr.posthog.host, as a Gradle property or in local.properties: generateWyrAnalytics writes them, and
+// the app's version, into io.ntole.wyr's POSTHOG_KEY, POSTHOG_HOST and APP_VERSION. None is off.
+extra["wyrAnalyticsPackage"] = "io.ntole.wyr"
+extra["wyrAppVersion"] = "1.0"
+apply(from = rootProject.file("gradle/wyr-analytics.gradle.kts"))
+
 kotlin {
     js {
         browser()
@@ -31,6 +38,7 @@ kotlin {
         }
         webMain.configure {
             kotlin.srcDir(tasks.named("generateWyrEnv"))
+            kotlin.srcDir(tasks.named("generateWyrAnalytics"))
         }
     }
 }

@@ -1,6 +1,7 @@
 package io.ntole.wyr
 
 import androidx.compose.ui.window.ComposeUIViewController
+import io.ntole.wyr.analytics.AnalyticsSettings
 import io.ntole.wyr.di.initKoin
 import org.koin.mp.KoinPlatform
 import platform.Foundation.NSBundle
@@ -19,7 +20,7 @@ import platform.Foundation.NSBundle
 fun MainViewController() =
     ComposeUIViewController {
         if (KoinPlatform.getKoinOrNull() == null) {
-            initKoin(environmentName = bundledEnvironmentName())
+            initKoin(environmentName = bundledEnvironmentName(), analytics = bundledAnalyticsSettings())
         }
         App()
     }
@@ -38,4 +39,27 @@ internal fun bundledEnvironmentName(): String? =
  */
 internal fun environmentNameFrom(lookup: (String) -> Any?): String? = lookup(ENVIRONMENT_KEY)?.toString()
 
+/**
+ * The analytics the app sends (CLAUDE.md §8g): the `WYR_POSTHOG_KEY` and `WYR_POSTHOG_HOST` Info.plist
+ * keys, which the build settings of the same names fill in, from `Local.xcconfig`, and the app's
+ * version, `CFBundleShortVersionString`, which Xcode makes from `MARKETING_VERSION`; read from the main
+ * bundle by [analyticsSettingsFrom].
+ */
+internal fun bundledAnalyticsSettings(): AnalyticsSettings =
+    analyticsSettingsFrom { key -> NSBundle.mainBundle.objectForInfoDictionaryKey(key) }
+
+/**
+ * The analytics [lookup] names: no key, or a blank one, is analytics off, which a build without the
+ * settings is. Apart from the bundle, as [environmentNameFrom] is, so a test can give the keys values.
+ */
+internal fun analyticsSettingsFrom(lookup: (String) -> Any?): AnalyticsSettings =
+    AnalyticsSettings(
+        key = lookup(POSTHOG_KEY)?.toString(),
+        host = lookup(POSTHOG_HOST)?.toString(),
+        appVersion = lookup(APP_VERSION_KEY)?.toString().orEmpty(),
+    )
+
 private const val ENVIRONMENT_KEY = "WYR_ENV"
+private const val POSTHOG_KEY = "WYR_POSTHOG_KEY"
+private const val POSTHOG_HOST = "WYR_POSTHOG_HOST"
+private const val APP_VERSION_KEY = "CFBundleShortVersionString"

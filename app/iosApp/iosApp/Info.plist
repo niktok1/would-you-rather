@@ -6,5 +6,9 @@
 	<true/>
 	<key>WYR_ENV</key>
 	<string>$(WYR_ENV)</string>
+	<key>WYR_POSTHOG_KEY</key>
+	<string>$(WYR_POSTHOG_KEY)</string>
+	<key>WYR_POSTHOG_HOST</key>
+	<string>$(WYR_POSTHOG_HOST)</string>
 </dict>
 </plist>

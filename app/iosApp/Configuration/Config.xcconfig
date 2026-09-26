@@ -9,3 +9,14 @@ MARKETING_VERSION=1.0
 // The server environment this build targets (CLAUDE.md, section 8e): local, dev or prod.
 // Info.plist carries it as its WYR_ENV key, which the app reads at start; none is local.
 WYR_ENV=local
+
+// The PostHog project this build sends analytics to (CLAUDE.md, section 8g): none here, which is
+// analytics off. Set them in Local.xcconfig beside this file, which git ignores, never in this one:
+//   WYR_POSTHOG_KEY=phc_...
+//   WYR_POSTHOG_HOST=eu.i.posthog.com
+// A host is written without its scheme, since two slashes begin a comment here; none is the EU cloud.
+// Info.plist carries both as keys of the same names, which the app reads at start.
+WYR_POSTHOG_KEY=
+WYR_POSTHOG_HOST=
+
+#include? "Local.xcconfig"

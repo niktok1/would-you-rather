@@ -5,6 +5,12 @@ plugins {
     alias(libs.plugins.composeCompiler)
 }
 
+// The PostHog project this build sends analytics to (CLAUDE.md §8g), from wyr.posthog.key and
+// wyr.posthog.host, as a Gradle property or in local.properties: none is analytics off.
+apply(from = rootProject.file("gradle/wyr-analytics.gradle.kts"))
+val posthogKey = extra["wyrPosthogKey"] as String
+val posthogHost = extra["wyrPosthogHost"] as String
+
 kotlin {
     compilerOptions {
         jvmTarget = JvmTarget.JVM_11
@@ -38,6 +44,9 @@ android {
                 .toInt()
         versionCode = 1
         versionName = "1.0"
+        // One project for every flavor: each event names its environment (CLAUDE.md §8g).
+        buildConfigField("String", "POSTHOG_KEY", "\"$posthogKey\"")
+        buildConfigField("String", "POSTHOG_HOST", "\"$posthogHost\"")
     }
     packaging {
         resources {
@@ -63,7 +72,8 @@ android {
     }
     buildFeatures {
         compose = true
-        // BuildConfig carries each flavor's environment to WyrApplication, and resValue its label.
+        // BuildConfig carries each flavor's environment and the analytics project to WyrApplication, and
+        // resValue its label.
         buildConfig = true
         resValues = true
     }

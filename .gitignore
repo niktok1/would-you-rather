@@ -22,6 +22,8 @@ captures
 
 ### Xcode / iOS
 xcuserdata
+# The PostHog key an iOS build sends analytics to (CLAUDE.md §8g): the user's, never committed.
+app/iosApp/Configuration/Local.xcconfig
 *.xcodeproj/*
 !*.xcodeproj/project.pbxproj
 !*.xcodeproj/xcshareddata/

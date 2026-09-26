@@ -1495,6 +1495,40 @@ one typed); *Add* stays off until the names are one line of at most 40 and the i
 id a category has already says `A category has that id already (409)` under the form. *Lock* forgets
 what was typed there and keeps the categories read.
 
+### Analytics
+
+The game reports what players do to PostHog (CLAUDE.md §8g), from shared code, on all four
+platforms, but only a build given a project's key: without one, as every test and CI build runs, it
+sends nothing. The key is never committed.
+
+**To see events from a phone** (`devDebug`, against the dev server):
+
+1. Make a project on PostHog's **EU** cloud (https://eu.posthog.com), and copy its *Project API key*
+   (`phc_...`) from *Settings → Project → General*.
+2. Put it in `local.properties`, at the repository's root (git ignores it), and install:
+
+   ```properties
+   wyr.posthog.key=phc_...
+   ```
+
+   ```bash
+   ./gradlew :app:androidApp:installDevDebug
+   ```
+
+   A US project needs `wyr.posthog.host=us.i.posthog.com` beside it; none is the EU cloud.
+3. Play a little, wait 30 s (a batch goes every 20 events or 30 s), and open PostHog's *Activity*:
+   the events arrive, each with `environment: dev`.
+
+The other platforms read the same key where they read their environment (CLAUDE.md §8e):
+
+- **Web**: `local.properties` too, or `-Pwyr.posthog.key=phc_...` on the build.
+- **Desktop**: `WYR_POSTHOG_KEY=phc_... WYR_ENV=dev ./gradlew :app:desktopApp:run`.
+- **iOS**: `app/iosApp/Configuration/Local.xcconfig` (git ignores it), holding
+  `WYR_POSTHOG_KEY=phc_...`, and a host, if any, without `https://`.
+
+A key someone else can read is no harm: a project's key can only send events, never read them. A
+key rotated in PostHog needs a build again.
+
 ### Trying a change
 
 There is no dev console (`chore/remove-console`): a change is tried through the game, as a player
