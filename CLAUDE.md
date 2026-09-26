@@ -81,7 +81,8 @@ dependency.
                      Depends on :core:domain, :core, and :core:network.
 
 :app:shared          Compose Multiplatform UI shared across all client platforms:
-                     screens, theme, ViewModels, DI wiring.
+                     screens, theme, ViewModels, DI wiring; and in its androidMain
+                     Android's Google services behind :core:domain's ports (§8a).
                      Depends on :core:domain, :core:data, :core:network.
 
 :app:androidApp      Android Application/Activity, manifest, Android-only wiring, and one
