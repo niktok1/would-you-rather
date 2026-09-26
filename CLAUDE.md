@@ -294,6 +294,13 @@ coin is two icons drawn one on the other, the face in `WyrColors.coin` and the m
 each filled thumb covering its outline and the hand's inside, the thumb down the thumb up turned
 over, and the coin's ring on its face.
 
+**Platform copies.** Android draws its window and splash screen before Compose starts, from
+resources, which cannot read `WyrColors`: so `:app:androidApp`'s `res/values/colors.xml` and
+`res/values-night/colors.xml` copy `pageBackground`, light and dark, as `wyr_page_background` (§8,
+*Release builds*), and `WindowThemeTest` holds the copy equal, so a palette change fails it until the
+copy changes too. The launcher icon's two drawables copy `optionA` and `optionB`, unpinned, being a
+placeholder.
+
 The moderation app has a theme of its own, `AdminTheme` in `:app:adminApp` (`io.ntole.wyr.admin.theme`),
 since it may not depend on `:app:shared` (§3): Material 3's default light and dark schemes and type
 scale, with `AdminDimens` and `AdminType` beside them. The same rule holds in its screens: no hex, dp
@@ -426,6 +433,50 @@ This project must never be attributed to any employer identity.
 - The paths: push to `main` → CI (ktlint + tests) → Render builds and publishes **dev**; then, by
   hand, Manual Deploy that same commit to **prod**. Never deploy prod a commit CI has not passed or
   dev has not run.
+- **Release builds** (*decided 2026-09-26*, for the Google Play launch, §8b *The launch*), in
+  `:app:androidApp`:
+  - *Signing*: only `prod` goes to Play, so only its release build is signed with the **Play upload
+    key**, when `local.properties` (which git ignores) names all four of `wyr.upload.storeFile`,
+    `wyr.upload.storePassword`, `wyr.upload.keyAlias` and `wyr.upload.keyPassword`, each else read
+    from the environment (`WYR_UPLOAD_STORE_FILE`, `WYR_UPLOAD_STORE_PASSWORD`,
+    `WYR_UPLOAD_KEY_ALIAS`, `WYR_UPLOAD_KEY_PASSWORD`); the store file's path is absolute or from the
+    repository's root. Short of all four, it is signed with the debug key, so it still installs on a
+    phone for testing, and its packaging says so in one warning line; `signProdReleaseBundle`, which
+    writes the `.aab` Play takes and which `bundleProdRelease` and `bundleRelease` run, is refused
+    before anything runs, naming what is missing. `dev`'s and `local`'s release builds always take the
+    debug key, as their debug builds do (a signing config per flavor, since a build type's would win
+    over the flavors'), so each installs over the other and back, keeping its data: Android refuses an
+    update signed with another key. CI's verify job holds all three rules (*Release signing*). The
+    keystore is the user's, never committed (`.gitignore` refuses `*.jks` and `*.keystore`), made
+    and uploaded as NEXT-SESSION.md says (*Release builds and Google Play*). **Play App Signing**:
+    Play keeps the app signing key, which signs what phones install; the upload key only proves an
+    upload is the developer's, and a lost one is reset in the Play Console without touching the app.
+  - *R8*: `isMinifyEnabled` and `isShrinkResources` on. The libraries ship their own keep rules
+    (kotlinx.serialization, Ktor, OkHttp, coroutines, Koin, Compose); `proguard-rules.pro` adds only
+    the line numbers a stack trace keeps. The mapping lands in
+    `app/androidApp/build/outputs/mapping/<variant>/mapping.txt`, and a bundle carries it inside, so
+    Play deobfuscates Android vitals' crashes by itself. CI's verify job builds `assembleProdRelease`,
+    so a shrink that fails the build fails CI; one that fails only at run time shows on a device
+    alone (NEXT-SESSION.md, *Release builds and Google Play*, has the emulator check). R8 warns that
+    it cannot read Kotlin 2.4's metadata (§8b, *R8 and Kotlin 2.4's metadata*).
+  - *The launcher icon*: adaptive (`mipmap-anydpi-v26/ic_launcher.xml`, and `_round`), of
+    `drawable/launcher_background.xml`, option A's pink over option B's amber (§5b), and
+    `drawable/launcher_foreground.xml`, a white question mark inside the 66dp circle every launcher's
+    mask keeps, which is the themed icon's monochrome layer too; Android 7 gets the two layers square
+    (`mipmap/ic_launcher.xml`). A placeholder (§8b, *The launcher icon and name*): the final icon
+    replaces the two drawables. The Play listing's own 512 by 512 icon is uploaded in the Play Console.
+  - *The label*: *Шта би радије?* for `prod`, *WYR Dev* and *WYR Local* for the others (§8e).
+  - *The window and the splash*: `Theme.Wyr` (`values/themes.xml`, dark in `values-night`) gives the
+    window and the status bar the page background before Compose's first frame, so a dark phone never
+    flashes white; on Android 12 and later (`values-v31`) the system's own splash screen is the page
+    background and the launcher icon, with no library. The colour is a platform copy (§5b), held equal
+    by `WindowThemeTest`, the app module's unit test, in CI's verify job.
+  - *What Google Play asks of the build* (checked 2026-09-26): target API 36, which `android-targetSdk`
+    is; a bundle signed with the upload key (above); and 16 KB memory pages. The APK's one native
+    library, Compose's `libandroidx.graphics.path.so` (`androidx.graphics:graphics-path` 1.0.1), has
+    every LOAD segment 16 KB aligned and is stored uncompressed on a 16 KB boundary for all four ABIs;
+    a native library added later is checked the same way (NEXT-SESSION.md). What the app collects, for
+    the Data safety form, is listed there too.
 
 ## 8a. Authentication — resolved
 
@@ -727,8 +778,8 @@ EncryptedSharedPreferences: enough for a game that stores no sensitive personal 
   `RenameCategoryRequest`, the `X-Admin-Token` header (`WyrApi.Headers`), `QuestionStatus.RETIRED`
   and the error codes `FORBIDDEN`, `ALREADY_DECIDED`, `WRONG_STATUS`, `CATEGORY_EXISTS` and
   `CATEGORY_NOT_FOUND`. The moderator's client (`ModerationApi` calls every admin route) and the
-  moderation app are built on it (§8d, *Moderation*). Since 2026-09-26 the server has more that no
-  client calls yet: the reported questions and their dismissal (`AdminReportListDto`,
+  moderation app are built on it (§8d, *Moderation*). Since 2026-09-26 the server has more, which the
+  moderator's client calls too: the reported questions and their dismissal (`AdminReportListDto`,
   `DismissReportsRequest`), an author's opaque id on the admin DTOs (`authorId`), blocking and
   unblocking an author (`BlockAuthorRequest`, `UnblockAuthorRequest`, `AuthorBlockDto`), and the error
   codes `SUBMISSIONS_BLOCKED` and `AUTHOR_NOT_FOUND` (§8d, *Moderation*, *Reports* and *Authors*).
@@ -737,6 +788,27 @@ EncryptedSharedPreferences: enough for a game that stores no sensitive personal 
   U+2029 (`checkedRejection`). Chosen as the stricter reading, since a reason is shown to its author
   as a line of text; allowing line breaks later breaks no client. The options: keep it, or allow
   line breaks in a reason.
+- **Ready-made rejection reasons** — *provisional — user decision.* The moderation app offers six
+  reasons a tap puts in the reason field, to reject a question or to block its author with (§8d,
+  *Moderation*, `READY_REASONS`): the wording is this build's, in Serbian Cyrillic, one per question
+  rule the moderator holds a question to, the topics rule naming the four topics the user banned.
+  The options: keep them; reword or add to them, which is the one list; or none, the reason always
+  typed.
+- **Where an author stands, in the moderation app** — *provisional — user decision.* The server says
+  whether an author is blocked only in answer to a block or an unblock (`AuthorBlockDto`), and none of
+  its lists says it, so the moderation app shows it only for an author it blocked or unblocked since
+  the token was typed, and offers both Block author and Unblock author for any other (§8d,
+  *Moderation*). Chosen so the client alone changes; an author blocked in an earlier session reads as
+  unknown until unblocked or blocked again, which changes nothing but rejects what they have pending.
+  The options: keep it; or the server sends `authorBlocked` beside `authorId` on the admin DTOs, a
+  field with a default, so no installed client breaks, and the app shows it for every author.
+- **A move from the Reports tab** — *provisional — user decision.* A retirement or restoration from
+  the moderation app's Reports tab puts the question the server answers with in its row on both
+  tabs, its reports as they were, as a move from All questions does, and reads nothing again; one
+  that failed reads the Reports tab again (§8d, *Moderation*). Chosen since the answer is the
+  question as a read lists it, so a read would spend one more of the address's admin budget (§8b,
+  *Rate limiting*) to show the same, but for reports given meanwhile. The options: keep it; or read
+  the reports again after every move, which shows those too.
 - **Retiring a question** — *provisional — user decision.* The user asked for a way to take an
   approved question out of play and put it back (§8d, *Moderation*); the details are this build's.
   Built: a moderator retires an approved question, a seed included, and restores a retired one.
@@ -765,6 +837,17 @@ EncryptedSharedPreferences: enough for a game that stores no sensitive personal 
   batch, which the client reads as out of questions. The Categories screen sends the categories
   selected (§8d, *The Categories screen*), so a player reaches this in every build, PROD's included.
   `SkipStoreTest` pins what is built.
+- **The launcher icon and name** — *provisional — user decision* (§8, *Release builds*). Built: a
+  placeholder icon, option A's pink over option B's amber and a white question mark, and the `prod`
+  label *Шта би радије?* in Cyrillic whatever the phone's language, as the game opens in Cyrillic
+  (§8f). The options: the user's own icon, in the placeholder's two drawables; and the label in Latin,
+  *Šta bi radije?*, on a phone set to Serbian Latin (one more string, in `values-b+sr+Latn`).
+- **R8 and Kotlin 2.4's metadata** — *provisional — user decision.* AGP 9.0.1's R8 warns, a dozen
+  times a release build, that it cannot parse the metadata of Kotlin 2.4.10's classes. Only
+  kotlin-reflect reads that metadata at run time, and the app has none; the shrunk build played on an
+  emulator without an error (§8, *Release builds*). The options: keep it until an AGP whose R8 reads
+  Kotlin 2.4; or pin a newer R8 (`com.android.tools:r8` on the build's classpath), a build dependency
+  of its own (§4).
 - **The categories on the Play screen** — *resolved 2026-09-26*: the user moved them from the row
   between the cards, where the redesign of 2026-09-25 had put them, to the middle of the top bar
   (§8d, *The Play screen*).
@@ -777,14 +860,14 @@ EncryptedSharedPreferences: enough for a game that stores no sensitive personal 
   So Log out stands under the row, at its end, for a registered player (574 at the tallest). The
   options: keep it; Log out on the card, where a guest's button to the Auth page is; or the switch
   elsewhere, off the Account screen's first view.
-- **Where players are, in analytics** — *provisional — user decision.* By default PostHog keeps the
-  address each event's request came from and adds a country, a city and coordinates from it, which
-  is personal data under the GDPR and would have to be in the privacy policy (§8g, *Consent*). Built
-  as the stricter choice: every event asks for no location (`$geoip_disable`), and the project
-  discards the address (§8g, *Where the player is*). The options: keep it; or let PostHog add a
-  location (drop `$geoip_disable`, still discarding the address), for players by country on the
-  dashboards, and say in the privacy policy that an approximate location is derived from the
-  address. A country the game itself keeps is another matter (*Local questions*, below).
+- **Where players are, in analytics** — *decided 2026-09-27: PostHog keeps it* (the user: "I would
+  leave IP capture"). PostHog keeps the address each event's request came from and adds a country, a
+  city and coordinates from it, so the dashboards can show players by country (§8g, *Where the
+  player is*). That is personal data under the GDPR and the ZZPL, so the privacy policy says PostHog
+  receives the address and derives an approximate location from it (§8g, *Consent*), and the Data
+  safety form declares an approximate location. Rejected: every event asking for no location
+  (`$geoip_disable`) and the project discarding the address. A country the game itself keeps is
+  another matter (*Local questions*, below).
 - **One Try again** — *provisional — user decision.* The Play and Account redesigns said Try again
   two ways in Serbian, *Пробај опет* and *Покушај поново*, and so did the Categories screen, with
   *Пробај опет*; it is one text now (§8f, *The strings*), *Покушај поново*, which four of the five
@@ -2006,7 +2089,7 @@ listed on the Account screen.
     as a status: `statusOf` and `standsAt` read the two columns as one status, so a rollback to the
     build before reads every row. The seed writes only what a database lacks and changes nothing
     there, so a retired seed stays retired through every boot. `RetirementTest` pins it, the races included.
-  - *Reports* (*built on the server 2026-09-26; the moderation app does not show them yet*):
+  - *Reports* (*built on the server 2026-09-26; the moderation app's Reports tab shows them*):
     `GET /v1/admin/reports` lists the reported questions (§8d, *Reports*), most reported first, then
     the most lately reported, then by id, bounded by `?limit=` and with no cursor, since a moderator
     works from the head as in the queue: an `AdminReportListDto` of `AdminReportDto`s, each the
@@ -2020,7 +2103,8 @@ listed on the Account screen.
     through *Retiring*; nothing retires one by itself, however many report it: *provisional — user
     decision*, the other option being a threshold that retires it until a moderator looks.
     `ReportModerationFlowTest`.
-  - *Authors* (*built on the server 2026-09-26; the moderation app does not use them yet*): every
+  - *Authors* (*built on the server 2026-09-26; the moderation app blocks and unblocks from each tab
+    that shows authors*): every
     admin DTO names a question's author by an opaque id, `authorId`, the author's player id, which says
     nothing about them but which questions are theirs; never a username, and null for a seed and for
     a question whose author deleted their account (§8a).
@@ -2036,8 +2120,9 @@ listed on the Account screen.
     and again under their row lock, which the block takes too, so a submission racing a block is either
     rejected by it or refused (`AuthorBlockTest`). `POST /v1/admin/author-unblocks` with an
     `UnblockAuthorRequest` lets them submit again; what the block rejected stays rejected. An id no
-    player has is 404 `AUTHOR_NOT_FOUND`. On the client, `SUBMISSIONS_BLOCKED` and `AUTHOR_NOT_FOUND`
-    read as `DomainError.UNKNOWN` until the branches that show them give each one of its own.
+    player has is 404 `AUTHOR_NOT_FOUND`. On the client, `SUBMISSIONS_BLOCKED` reads as
+    `DomainError.UNKNOWN` until the branch that shows it gives it one of its own, and `AUTHOR_NOT_FOUND`
+    is `DomainError.AUTHOR_NOT_FOUND` (*The client*, below).
   - *The client* is `ModerationRepository` in `:core:domain`, behind `GetPendingSubmissions`,
     `ApproveSubmission` and `RejectSubmission`, none of which ensures a session: the moderator is
     not a player. `DefaultModerationRepository` calls `ModerationApi` through `runApi` alone, never
@@ -2064,7 +2149,18 @@ listed on the Account screen.
     filter by
     `SubmissionStatus.OTHER` is refused before anything is sent; its categories are ids, in id
     order. `WRONG_STATUS`
-    is `DomainError.WRONG_STATUS`. `moderationDataModule(environment)` binds it, and only there, for a
+    is `DomainError.WRONG_STATUS`. The reported questions and the authors (*Reports*, *Authors*, above)
+    are `GetReportedQuestions`, a `ReportedQuestion` each (its `ModeratedQuestion`, how many report it,
+    its `reasons` counted most given first, and when it was last reported), read
+    `ModerationRepository.PAGE_SIZE` at a time as the queue is; `DismissReports`; and `BlockAuthor`,
+    with a `RejectionReason`, and `UnblockAuthor`, each answered with an `AuthorBlock` (blocked or not,
+    and how many it rejected), the one place the server says where an author stands; through `runApi`
+    alone, as the rest. A domain `ReportReason` names each reason, and `UNKNOWN` one this build cannot
+    name, where every such reason lands with their counts added, so they still add up to the reports.
+    `ModeratedQuestion.authorId`, and the queue's and the decisions' `Submission.authorId`
+    (`toModeratorsSubmission`), carry the author's opaque id; a player's own `Submission` never does,
+    whatever it is sent (`SubmissionMapperTest`). `AUTHOR_NOT_FOUND` is `DomainError.AUTHOR_NOT_FOUND`.
+    `moderationDataModule(environment)` binds it, and only there, for a
     client that only moderates: an HTTP client of its own over an in-memory session store nothing
     writes, no `TokenStorage` needed, no session repository, so no bearer token goes out and no guest
     can be minted. The game's `dataModule` binds none of it,
@@ -2079,29 +2175,56 @@ listed on the Account screen.
     anew on every Lock (`ModerationState.locks`): a text field keeps its undo history for as
     long as it is shown, so Undo in the one that held the token gave it back (`TokenBarTest`).
     Nothing is sent until what is typed can be a token (`AdminToken.of`), and one action runs at
-    a time. Every Load, of either tab, reads the categories first (`GetCategories`, needing no
+    a time. Every Load, of any tab, reads the categories first (`GetCategories`, needing no
     token), since a moderator adds them without a build: they are the approval's and the filter's
     chips, and name a question's categories, in Serbian, one not listed by its id
     (`ModerationState.categories`); a read that fails says so above the tab and keeps those read
     before, and Lock keeps them, being the same for everybody. *Pending* lists the queue, oldest
     first, each submission with its options,
     categories and age: Approve files it under the categories picked for it, none keeping the
-    author's, and Reject sends the reason typed once it is a `RejectionReason`. The queue is
+    author's, and Reject sends the reason typed once it is a `RejectionReason`. Beside the reason
+    field, a chip for each ready reason (`READY_REASONS`, provisional, §8b) puts it in the field, to
+    send as it is or edit first, in Serbian Cyrillic, since the author reads it in the game while the
+    app's own words stay English: *Није избор између две ствари*, *Увредљиво*, *Помиње стварну особу*,
+    *Дупликат*, *Тема није дозвољена (вера, политика, здравље, сексуалност)*, the question rules (§8b,
+    *Personalization*), and *Неразумљиво*; `ReadyReasonsTest` holds each to `RejectionReason`'s rules
+    as it reads, and to Serbian Cyrillic. The queue is
     read again after every decision, whatever became of it. A read lists at most
     `ModerationRepository.PAGE_SIZE`, and a queue that long says more may be waiting,
-    its tab `Pending (100+)`, rather than naming itself the whole. *All questions* is the
+    its tab `Pending (100+)`, rather than naming itself the whole. *Reports* lists the reported
+    questions (*Reports*, above), most reported first, at most `ModerationRepository.PAGE_SIZE`, a list
+    that long saying more may be reported, its tab `Reports (100+)`: each with how many players report
+    it and how many give each reason, one this build cannot name as such, when it was last reported,
+    its status, options, categories, votes, likes, dislikes and id, and Dismiss reports, which clears
+    them and reads the reports again, whatever became of it, and Retire, confirmed in the same dialog,
+    or Restore, as in the list. A retirement or restoration, from either tab, puts the question it
+    answers with in its row on both, its reports as they were, and one that failed reads again the tab
+    it was started from (provisional, §8b, *A move from the Reports tab*). *All questions* is the
     list, seeds included, newest first, filtered by any statuses (`RETIRED` among them; never
     `OTHER`) and any categories, none being every one: Load reads its first page and Load more the
     next, at the filter the list was read at, with the cursor the page before gave, and changing the
     filter drops what was read at the one before. Each question shows its options, categories,
-    status, whether it is a seed, its votes, likes and dislikes, its times and a rejection's reason, and what
-    can be done where it stands: Retire an approved one, only once the moderator confirms it in a
-    dialog; Restore a retired one; decide a pending one as in the queue, from the same draft of
+    status, its author or that it is a seed, its votes, likes and dislikes, its times and a
+    rejection's reason, and what can be done where it stands: Retire an approved one, only once the
+    moderator confirms it in a dialog; Restore a retired one; decide a pending one as in the queue, from the same draft of
     categories and reason. A retirement or restoration puts the question it answers with in its
     row, or drops it once the list's filter no longer picks it: the server reads that answer as it
     reads a page's row. A decision, whose answer lacks the row's tally and likes, reads the list
     again as many pages deep as were shown, and so does a move that failed, so the list shows what
     the server holds without losing the moderator's place; a decision reads the queue again too.
+    *Authors* show on Pending, Reports and All questions alike (`AuthorControls`): each question
+    names its author by the first 8 characters of their opaque id (`shortAuthorOf`), or says it is a
+    seed, with Block author... and Unblock author beside it. Block asks first, in a dialog that says
+    what it does and takes the reason each of the author's pending questions is rejected with, typed
+    or a ready reason picked and edited, and sends it once it is a `RejectionReason`; then reads again
+    whatever was read, the queue, the reports and the list as deep as it was shown, whatever became
+    of it, since the block rejects what the author had pending. Unblock goes at once and reads
+    nothing again, since nothing the server lists shows it. The server says whether an author is
+    blocked only in answer to a block or an unblock (`AuthorBlock`), so the app keeps each answer for
+    as long as the token is held (`ModerationState.authors`; Lock forgets them) and names it beside
+    the author, `· blocked` or `· not blocked`, offering the one action that changes it; an author it
+    has no answer for offers both (provisional, §8b). A block's line says how many pending questions
+    it rejected, and `AUTHOR_NOT_FOUND` reads as no such author, their account maybe deleted.
     Nothing is read again after a 403 or a 429, which did nothing and would refuse the read too:
     after a wrong token the read would only spend another of the address's ten a minute, past which
     every admin request from it is refused (§8b). A failure shows where it happened: a read's above
@@ -2111,7 +2234,7 @@ listed on the Account screen.
     named (`WyrException.retryAfter`, §8b). An answer the data layer cannot name (`UNKNOWN`) claims
     no status, leaving it to the detail line under it, and says a bare 404 means moderation is off
     on that server: a proxy's own page or an error code newer than the build reads as `UNKNOWN` too.
-    *Categories*, the third tab, lists every category, oldest first, with its id and both names, and
+    *Categories*, the fourth tab, lists every category, oldest first, with its id and both names, and
     adds one and puts one's names right (*Categories*, above): Add, from a form of the two names and
     an id, blank for the server to make one, goes once `CategoryDraft.isValid` holds by
     `CategoryRules`, and clears the form once added; Rename... opens a category's names in its own
@@ -2119,10 +2242,12 @@ listed on the Account screen.
     rename, whatever became of it (the list is no admin route, so the rule above for a 403 or a 429
     does not apply), and a failure shows under the form or the card it came from, a 409 as an id a
     category has already. Lock forgets what was typed for a category and keeps the categories read.
-    `ModerationViewModelTest`, `QuestionListViewModelTest` and `CategoriesViewModelTest` drive it over
-    scripted repositories,
+    `ModerationViewModelTest`, `ReportsViewModelTest`, `AuthorsViewModelTest`,
+    `QuestionListViewModelTest` and `CategoriesViewModelTest` drive it over scripted repositories,
+    `ModerationTapsTest` taps its chips and buttons, a ready reason and the block's dialog among them,
     `ModerationOverHttpTest` over the real client configuration, and `ScreensDrawTest` draws every
-    screen off screen at a desktop window's size. The game's builds do not moderate at all.
+    screen off screen at a desktop window's size, and reads the Reports tab's and the author actions'
+    texts. The game's builds do not moderate at all.
 - **Home picks** *(decided 2026-09-26; built on the server and the game)*: the Home screen shows
   **two Play buttons**, one in each card's colour (§5b), both starting the game alike, each with how
   many times players have tapped it, to fill the screen as a question would (the user: a Home that
@@ -2178,7 +2303,7 @@ game UI (the moderation app, `:app:adminApp`, §3) can name one too.
 - *Android*: product flavors `local`, `dev` and `prod` in one `environment` dimension;
   `BuildConfig.WYR_ENV` is the flavor's name, which `WyrApplication` passes on. Each installs beside
   the others: application id suffix `.local`, `.dev` or none, launcher label *WYR Local*, *WYR Dev* or
-  *WYR*. Cleartext HTTP (the `usesCleartextTraffic` manifest placeholder) is on for `local` alone;
+  *Шта би радије?* (§8, *Release builds*). Cleartext HTTP (the `usesCleartextTraffic` manifest placeholder) is on for `local` alone;
   `dev` and `prod` are https only. `dev` is Android Studio's default variant, since a physical phone
   cannot reach LOCAL. `assembleDebug` builds all three.
 - *Desktop*: the `WYR_ENV` environment variable, read in `:app:shared`'s jvmMain
@@ -2385,14 +2510,13 @@ the same events. The moderation app sends none.
 - **What is never sent**: the username, an email, a password, any question's or option's text, the
   moderator's reason, anything typed, a token or the admin token. A question is its id, a category
   its id, a failure the domain's name for it (`DomainError`).
-- **Where the player is** *(built; provisional — user decision, §8b, Where players are, in
-  analytics)*: nowhere. A request to PostHog comes from the player's address, as one to the game's
-  server does, and by default PostHog keeps that address as `$ip` and adds a country, a city and
-  coordinates to every event from it (GeoIP). So every event carries `$geoip_disable: true`, which
-  has PostHog add no location (`PostHogAnalytics.GEOIP_DISABLE`, `PostHogAnalyticsTest`), and the
-  project is set to discard the address (*Setting up PostHog*, below), which no code can do. What
-  stays is pseudonymous: the install's random id, and an account's player id once it registers or
-  logs in; the privacy policy says so.
+- **Where the player is** *(built; decided 2026-09-27, §8b, Where players are, in analytics)*:
+  PostHog's own reading of it. A request to PostHog comes from the player's address, as one to the
+  game's server does, and PostHog keeps that address as `$ip` and adds a country, a city and
+  coordinates to every event from it (GeoIP); the game sends no location of its own, and no event
+  asks PostHog to skip the lookup (`PostHogAnalyticsTest`). Beside that, what is sent is
+  pseudonymous: the install's random id, and an account's player id once it registers or logs in;
+  the privacy policy says so.
 - **The key, per platform** *(built)*: a PostHog project's key and host, set when a build is made or
   started as the environment is (§8e), never committed; **no key is analytics off**, a no-op, which is
   how every test and every CI build runs. The key is the project's public one, which can only send.
@@ -2497,13 +2621,13 @@ the same events. The moderation app sends none.
   draws it on and off and taps it, and `AppNavigationTest` turns the app's analytics off and on.
 - **Consent** (*the user's, 2026-09-26*): on by default, under legitimate interest, for a game for
   16 and over; the privacy policy says what is sent, that it is on, and how to turn it off (the
-  Statistics switch), and that PostHog sees the address each request comes from, discards it and
-  derives no location from it (*Where the player is*). *To check before an EU launch*: whether the install id kept on the device (the
+  Statistics switch), and that PostHog sees the address each request comes from, keeps it and
+  derives an approximate location from it (*Where the player is*). *To check before an EU launch*: whether the install id kept on the device (the
   browser's in `localStorage`) is itself a storing the ePrivacy rules want consent for, whatever the
   basis for the rest.
 - **Setting up PostHog** (*the user's, not in the repository*): make a project on the **EU** cloud
-  (https://eu.posthog.com), turn on *Settings → Project → IP data capture configuration → Discard
-  client IP data*, so the address events come from is not kept (*Where the player is*, above), put
+  (https://eu.posthog.com), leave *IP data capture* as it is, so the address and a location are kept
+  (*Where the player is*, above), put
   its *Project API key* in each build's settings (above; for a phone, `wyr.posthog.key` in
   `local.properties`), and build a dashboard, filtered to `environment = prod` (a DEV or LOCAL build's
   events are tests), of these insights:

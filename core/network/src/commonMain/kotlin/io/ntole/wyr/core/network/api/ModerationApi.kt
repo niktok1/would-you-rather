@@ -9,6 +9,9 @@ import io.ktor.client.request.parameter
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
 import io.ntole.wyr.core.api.WyrApi
+import io.ntole.wyr.core.author.AuthorBlockDto
+import io.ntole.wyr.core.author.BlockAuthorRequest
+import io.ntole.wyr.core.author.UnblockAuthorRequest
 import io.ntole.wyr.core.category.CategoryDto
 import io.ntole.wyr.core.category.CreateCategoryRequest
 import io.ntole.wyr.core.category.RenameCategoryRequest
@@ -21,12 +24,15 @@ import io.ntole.wyr.core.question.RestoreQuestionRequest
 import io.ntole.wyr.core.question.RetireQuestionRequest
 import io.ntole.wyr.core.question.SubmissionDto
 import io.ntole.wyr.core.question.SubmissionListDto
+import io.ntole.wyr.core.report.AdminReportListDto
+import io.ntole.wyr.core.report.DismissReportsRequest
 
 /**
  * The moderator's routes (CLAUDE.md §8d, *Moderation*): the queue and its decisions, the list of
- * every question with its retirement and restoration, and adding and renaming a category. Each call carries [adminToken] in
- * [WyrApi.Headers.ADMIN_TOKEN], and only that call: the token is the caller's to hold, in memory,
- * and is never set on the client or stored.
+ * every question with its retirement and restoration, adding and renaming a category, the reported
+ * questions and their dismissal, and blocking and unblocking an author. Each call carries
+ * [adminToken] in [WyrApi.Headers.ADMIN_TOKEN], and only that call: the token is the caller's to hold,
+ * in memory, and is never set on the client or stored.
  *
  * The player's session is left alone. The Auth plugin still attaches the bearer token when there is
  * one, as it does to every request, and the admin routes ignore it. They answer a wrong token 403,
@@ -136,6 +142,53 @@ public class ModerationApi(
     ): CategoryDto =
         client
             .post(WyrApi.Paths.ADMIN_CATEGORY_RENAMES) {
+                admin(adminToken)
+                setBody(request)
+            }.body()
+
+    /**
+     * The questions players reported, most reported first, at most [limit] of them, each with its
+     * reports counted. No cursor: a moderator works from the head, and a dismissal takes one off it.
+     */
+    public suspend fun reports(
+        adminToken: String,
+        limit: Int = WyrApi.Limits.DEFAULT_PAGE_SIZE,
+    ): AdminReportListDto =
+        client
+            .get(WyrApi.Paths.ADMIN_REPORTS) {
+                admin(adminToken)
+                parameter(WyrApi.Query.LIMIT, limit)
+            }.body()
+
+    /** Clears every report of a question, answered 204, with nothing to read back. */
+    public suspend fun dismissReports(
+        adminToken: String,
+        request: DismissReportsRequest,
+    ) {
+        client.post(WyrApi.Paths.ADMIN_REPORT_DISMISSALS) {
+            admin(adminToken)
+            setBody(request)
+        }
+    }
+
+    /** Blocks an author and rejects what they have pending, answered with where they now stand. */
+    public suspend fun blockAuthor(
+        adminToken: String,
+        request: BlockAuthorRequest,
+    ): AuthorBlockDto =
+        client
+            .post(WyrApi.Paths.ADMIN_AUTHOR_BLOCKS) {
+                admin(adminToken)
+                setBody(request)
+            }.body()
+
+    /** Lets a blocked author submit again, answered with where they now stand. */
+    public suspend fun unblockAuthor(
+        adminToken: String,
+        request: UnblockAuthorRequest,
+    ): AuthorBlockDto =
+        client
+            .post(WyrApi.Paths.ADMIN_AUTHOR_UNBLOCKS) {
                 admin(adminToken)
                 setBody(request)
             }.body()

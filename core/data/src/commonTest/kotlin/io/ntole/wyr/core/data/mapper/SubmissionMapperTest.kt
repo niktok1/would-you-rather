@@ -47,6 +47,14 @@ class SubmissionMapperTest {
     }
 
     @Test
+    fun `a player's own submission never carries its author's id`() {
+        // Only the admin routes send one, but a player's list maps none whatever it is sent.
+        val sent = SubmissionDto("q1", "Fly", "Swim", listOf("FOOD"), submittedAt = 1L, authorId = "p1")
+
+        assertEquals(null, sent.toDomain().authorId)
+    }
+
+    @Test
     fun `every wire status maps to its domain namesake and UNKNOWN to OTHER`() {
         QuestionStatus.entries.forEach { wire ->
             val expected =

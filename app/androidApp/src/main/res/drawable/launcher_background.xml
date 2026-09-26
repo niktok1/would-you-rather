@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    The launcher icon's background (CLAUDE.md §8, Release builds): the two answers' brand colours
+    (§5b), option A's pink over option B's amber, as the Play screen stacks the cards. A placeholder:
+    the final icon replaces this file and launcher_foreground.xml, and nothing else.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#D4537E"
+        android:pathData="M0,0h108v54h-108z" />
+    <path
+        android:fillColor="#EF9F27"
+        android:pathData="M0,54h108v54h-108z" />
+</vector>

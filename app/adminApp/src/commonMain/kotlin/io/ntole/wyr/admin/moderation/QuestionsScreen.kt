@@ -34,8 +34,8 @@ import kotlin.time.Instant
 /**
  * Every question, seeds included, newest first (CLAUDE.md §8d, *Moderation*), at the statuses and
  * categories picked, a page at a time: each with its options, categories, status, where it came
- * from, its votes, likes and dislikes, its times and a rejected one's reason, and what can be done with it
- * where it stands. Retire asks first.
+ * from, its votes, likes and dislikes, its times and a rejected one's reason, its author with Block
+ * author and Unblock author, and what can be done with it where it stands. Retire asks first.
  */
 @Composable
 fun QuestionsScreen(
@@ -140,16 +140,8 @@ private fun QuestionCard(
             modifier = Modifier.fillMaxWidth().padding(AdminDimens.spaceMd),
             verticalArrangement = Arrangement.spacedBy(AdminDimens.spaceSm),
         ) {
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(AdminDimens.spaceSm),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                StatusBadge(question.status)
-                Text(
-                    text = if (question.isSeed) "Seed" else "Submitted by a player",
-                    style = MaterialTheme.typography.labelMedium,
-                )
-            }
+            // Where it came from, a seed or its author, is the author line's to say, beside its buttons.
+            StatusBadge(question.status)
             Text(text = "A: ${question.optionA}", style = MaterialTheme.typography.titleMedium)
             Text(text = "B: ${question.optionB}", style = MaterialTheme.typography.titleMedium)
             Text(
@@ -165,6 +157,7 @@ private fun QuestionCard(
                 Text(text = "Rejected because: $reason", style = MaterialTheme.typography.bodyMedium)
             }
             Text(text = question.id, style = AdminType.code, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            AuthorControls(question.authorId, question.isSeed, question.id, Screen.QUESTIONS, state, actions)
             QuestionActions(question, state, actions)
             state.questions.outcomes.failures[question.id]
                 ?.let { FailureLine(it.failure) }
@@ -179,31 +172,45 @@ private fun QuestionActions(
     state: ModerationState,
     actions: ModerationActions,
 ) {
+    if (question.status == SubmissionStatus.PENDING) {
+        DecisionControls(question.id, question.categories, Screen.QUESTIONS, state, actions)
+    } else {
+        MoveButton(question, Screen.QUESTIONS, state, actions)
+    }
+}
+
+/**
+ * Retire for an approved [question], which asks first, and Restore for a retired one, from [from];
+ * nothing for any other: a rejection is final, and a status this build cannot name has nothing this
+ * build can do.
+ */
+@Composable
+fun MoveButton(
+    question: ModeratedQuestion,
+    from: Screen,
+    state: ModerationState,
+    actions: ModerationActions,
+) {
     when (question.status) {
         SubmissionStatus.APPROVED -> {
-            OutlinedButton(onClick = { actions.askToRetire(question.id) }, enabled = state.canSend) {
+            OutlinedButton(onClick = { actions.askToRetire(question.id, from) }, enabled = state.canSend) {
                 Text(if (state.running == Running(Action.RETIRE, question.id)) "Retiring..." else "Retire...")
             }
         }
 
         SubmissionStatus.RETIRED -> {
-            Button(onClick = { actions.restore(question.id) }, enabled = state.canSend) {
+            Button(onClick = { actions.restore(question.id, from) }, enabled = state.canSend) {
                 Text(if (state.running == Running(Action.RESTORE, question.id)) "Restoring..." else "Restore")
             }
         }
 
-        SubmissionStatus.PENDING -> {
-            DecisionControls(question.id, question.categories, Screen.QUESTIONS, state, actions)
-        }
-
-        // A rejection is final, and a status this build cannot name has nothing this build can do.
-        SubmissionStatus.REJECTED, SubmissionStatus.OTHER -> {}
+        SubmissionStatus.PENDING, SubmissionStatus.REJECTED, SubmissionStatus.OTHER -> {}
     }
 }
 
 /** Where [status] stands, in the colors of the scheme: approved and pending apart, rejected in red. */
 @Composable
-private fun StatusBadge(status: SubmissionStatus) {
+fun StatusBadge(status: SubmissionStatus) {
     val colors = MaterialTheme.colorScheme
     val (container, content) =
         when (status) {

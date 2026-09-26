@@ -62,8 +62,8 @@ import kotlin.uuid.Uuid
  * Every event carries the install's id, a session ([SESSION_IDLE] without an event starts another, by
  * the wall clock as well as the monotonic one, since the monotonic stops while a phone sleeps), the
  * screen shown, the app's version, the platform and its OS, and the environment; nothing that names
- * the player. Nor where they are: every event asks the service to look up no location from the address
- * the request came from ([GEOIP_DISABLE]), which the project is set to discard (CLAUDE.md §8g). With no
+ * the player. Where they are is the service's own reading of the address the request came from, which
+ * it keeps (CLAUDE.md §8g, *Where the player is*): the game sends no location. With no
  * [config], a build with no key, nothing is kept, read or sent but the choice itself.
  */
 public class PostHogAnalytics(
@@ -207,7 +207,6 @@ public class PostHogAnalytics(
                     put("\$device_type", platform.deviceType)
                     put("platform", platform.name)
                     put("environment", environmentName)
-                    put(GEOIP_DISABLE, true)
                 },
             )
         }
@@ -396,12 +395,6 @@ public class PostHogAnalytics(
         const val SCREEN_NAME: String = "\$screen_name"
         const val IDENTIFY_EVENT: String = "\$identify"
         const val ANON_DISTINCT_ID: String = "\$anon_distinct_id"
-
-        /**
-         * Asks the service to add no location to the event from the request's address: no country, city
-         * or coordinates (CLAUDE.md §8b, *Where players are, in analytics*; provisional).
-         */
-        const val GEOIP_DISABLE: String = "\$geoip_disable"
 
         private const val TIMEOUT = 408
         private const val TOO_MANY_REQUESTS = 429

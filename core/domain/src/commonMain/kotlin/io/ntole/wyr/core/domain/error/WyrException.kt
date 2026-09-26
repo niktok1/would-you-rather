@@ -51,6 +51,9 @@ public enum class DomainError {
     /** A moderator tried to rename a category no category's id names. Nothing changed. */
     CATEGORY_NOT_FOUND,
 
+    /** A moderator tried to block or unblock an author no player's id names. Nothing changed. */
+    AUTHOR_NOT_FOUND,
+
     /**
      * A moderator's request did not carry the server's admin token. Nothing to do with the player's
      * session, which stays as it is.

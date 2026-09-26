@@ -31,13 +31,16 @@ jobs:
         run: ./gradlew ktlintCheck --no-daemon
 
       # JVM-hosted tests: the whole server suite plus the shared client tests, the moderation app's
-      # (its screens drawn off screen among them), and :core:network's Android host tests
-      # (AndroidTokenStorage against a recording SharedPreferences). iOS and Android instrumented
-      # tests need a mac runner and an emulator respectively, so they are not here.
+      # (its screens drawn off screen among them), :core:network's Android host tests
+      # (AndroidTokenStorage against a recording SharedPreferences), and the Android app's own (its
+      # window theme against the theme's colours). iOS and Android instrumented tests need a mac
+      # runner and an emulator respectively, so they are not here.
       - name: Test
-        run: ./gradlew :server:test :core:domain:jvmTest :core:data:jvmTest :core:network:jvmTest :core:network:testAndroidHostTest :app:shared:jvmTest :app:adminApp:jvmTest --no-daemon
+        run: ./gradlew :server:test :core:domain:jvmTest :core:data:jvmTest :core:network:jvmTest :core:network:testAndroidHostTest :app:shared:jvmTest :app:adminApp:jvmTest :app:androidApp:testDevDebugUnitTest --no-daemon
 
-      # Proves every in-scope client target still compiles, including both web targets.
+      # Proves every in-scope client target still compiles, including both web targets, and that R8
+      # still shrinks the release build (CLAUDE.md §8, Release builds): without the upload key, which
+      # CI never has, it is signed with the debug key, as on a laptop.
       - name: Compile all client targets
         run: |
           ./gradlew --no-daemon \
@@ -47,7 +50,30 @@ jobs:
             :app:adminApp:compileKotlinJvm \
             :app:adminApp:compileKotlinJs \
             :app:adminApp:compileKotlinWasmJs \
-            :app:androidApp:assembleDebug
+            :app:androidApp:assembleDebug \
+            :app:androidApp:assembleProdRelease
+
+      # The release signing rules (CLAUDE.md §8, Release builds), which no compile checks. Without the
+      # upload key, which CI never has, what signs prod's bundle, the file Play takes, must refuse before
+      # it runs, whether asked for by the bundle's task or by its signing task alone. With one, only prod's
+      # release build takes it, so dev's and local's still install over their debug builds: the four
+      # values below are placeholders, no key, since signingReport only names each variant's config.
+      - name: Release signing
+        run: |
+          log="$RUNNER_TEMP/release-signing.log"
+          for task in bundleProdRelease signProdReleaseBundle; do
+            if ./gradlew --no-daemon --dry-run ":app:androidApp:$task" > "$log" 2>&1; then
+              cat "$log"; echo "$task ran without the Play upload key"; exit 1
+            fi
+            grep -q 'must be signed with the Play upload key' "$log" || { cat "$log"; exit 1; }
+          done
+          WYR_UPLOAD_STORE_FILE=/nonexistent.jks WYR_UPLOAD_STORE_PASSWORD=placeholder \
+            WYR_UPLOAD_KEY_ALIAS=placeholder WYR_UPLOAD_KEY_PASSWORD=placeholder \
+            ./gradlew --no-daemon :app:androidApp:signingReport > "$log" 2>&1 || { cat "$log"; exit 1; }
+          for expected in localRelease:debug devRelease:debug prodRelease:upload; do
+            grep -A1 -x "Variant: ${expected%:*}" "$log" | grep -qx "Config: ${expected#*:}" ||
+              { cat "$log"; echo "${expected%:*} is not signed with the ${expected#*:} config"; exit 1; }
+          done
 
       - name: Upload test reports
         if: failure()
