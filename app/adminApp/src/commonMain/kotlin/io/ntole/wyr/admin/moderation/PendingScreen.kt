@@ -112,7 +112,7 @@ fun queueSummaryOf(submissions: List<Submission>?): String =
     }
 
 /**
- * Whether [submissions] is as many as one read of the queue lists ([ModerationRepository.PAGE_SIZE]),
- * so more may be waiting behind them.
+ * Whether [listed] is as many as one read of the queue or the reports lists
+ * ([ModerationRepository.PAGE_SIZE]), so more may be waiting behind them.
  */
-fun isFull(submissions: List<Submission>): Boolean = submissions.size >= ModerationRepository.PAGE_SIZE
+fun isFull(listed: List<*>): Boolean = listed.size >= ModerationRepository.PAGE_SIZE

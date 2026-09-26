@@ -31,6 +31,8 @@ import io.ntole.wyr.admin.moderation.ModerationState
 import io.ntole.wyr.admin.moderation.ModerationViewModel
 import io.ntole.wyr.admin.moderation.PendingScreen
 import io.ntole.wyr.admin.moderation.QuestionsScreen
+import io.ntole.wyr.admin.moderation.ReportsScreen
+import io.ntole.wyr.admin.moderation.Retiring
 import io.ntole.wyr.admin.moderation.Screen
 import io.ntole.wyr.admin.moderation.TokenBar
 import io.ntole.wyr.admin.moderation.isFull
@@ -93,12 +95,13 @@ fun ModerationApp(
                     }
                     when (screen) {
                         Screen.PENDING -> PendingScreen(state, actions, modifier = Modifier.weight(1f))
+                        Screen.REPORTS -> ReportsScreen(state, actions, modifier = Modifier.weight(1f))
                         Screen.QUESTIONS -> QuestionsScreen(state, actions, modifier = Modifier.weight(1f))
                         Screen.CATEGORIES -> CategoriesScreen(state, actions, modifier = Modifier.weight(1f))
                     }
                 }
             }
-            state.retiring?.let { questionId -> RetireDialog(questionId, state, actions) }
+            state.retiring?.let { retiring -> RetireDialog(retiring, state, actions) }
         }
     }
 }
@@ -106,11 +109,11 @@ fun ModerationApp(
 /** Retire asks first: it takes a question out of play for every player. */
 @Composable
 private fun RetireDialog(
-    questionId: String,
+    retiring: Retiring,
     state: ModerationState,
     actions: ModerationActions,
 ) {
-    val question = state.questions.questions?.firstOrNull { it.id == questionId }
+    val question = state.shownOn(retiring.from, retiring.questionId)
     AlertDialog(
         onDismissRequest = actions::cancelRetire,
         title = { Text("Retire this question?") },
@@ -121,8 +124,8 @@ private fun RetireDialog(
 }
 
 /**
- * A tab's name, with how many it lists once it has read them, and a `+` on a queue that may hold
- * more than one read lists.
+ * A tab's name, with how many it lists once it has read them, and a `+` on the queue or the reports
+ * when they may hold more than one read lists.
  */
 fun tabLabelOf(
     screen: Screen,
@@ -131,6 +134,7 @@ fun tabLabelOf(
     val count =
         when (screen) {
             Screen.PENDING -> state.pending.submissions?.let { if (isFull(it)) "${it.size}+" else "${it.size}" }
+            Screen.REPORTS -> state.reports.reports?.let { if (isFull(it)) "${it.size}+" else "${it.size}" }
             Screen.QUESTIONS -> state.questions.questions?.let { "${it.size}" }
             Screen.CATEGORIES -> state.categories.categories?.let { "${it.size}" }
         }

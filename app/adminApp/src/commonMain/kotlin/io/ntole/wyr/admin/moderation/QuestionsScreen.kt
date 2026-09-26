@@ -179,31 +179,45 @@ private fun QuestionActions(
     state: ModerationState,
     actions: ModerationActions,
 ) {
+    if (question.status == SubmissionStatus.PENDING) {
+        DecisionControls(question.id, question.categories, Screen.QUESTIONS, state, actions)
+    } else {
+        MoveButton(question, Screen.QUESTIONS, state, actions)
+    }
+}
+
+/**
+ * Retire for an approved [question], which asks first, and Restore for a retired one, from [from];
+ * nothing for any other: a rejection is final, and a status this build cannot name has nothing this
+ * build can do.
+ */
+@Composable
+fun MoveButton(
+    question: ModeratedQuestion,
+    from: Screen,
+    state: ModerationState,
+    actions: ModerationActions,
+) {
     when (question.status) {
         SubmissionStatus.APPROVED -> {
-            OutlinedButton(onClick = { actions.askToRetire(question.id) }, enabled = state.canSend) {
+            OutlinedButton(onClick = { actions.askToRetire(question.id, from) }, enabled = state.canSend) {
                 Text(if (state.running == Running(Action.RETIRE, question.id)) "Retiring..." else "Retire...")
             }
         }
 
         SubmissionStatus.RETIRED -> {
-            Button(onClick = { actions.restore(question.id) }, enabled = state.canSend) {
+            Button(onClick = { actions.restore(question.id, from) }, enabled = state.canSend) {
                 Text(if (state.running == Running(Action.RESTORE, question.id)) "Restoring..." else "Restore")
             }
         }
 
-        SubmissionStatus.PENDING -> {
-            DecisionControls(question.id, question.categories, Screen.QUESTIONS, state, actions)
-        }
-
-        // A rejection is final, and a status this build cannot name has nothing this build can do.
-        SubmissionStatus.REJECTED, SubmissionStatus.OTHER -> {}
+        SubmissionStatus.PENDING, SubmissionStatus.REJECTED, SubmissionStatus.OTHER -> {}
     }
 }
 
 /** Where [status] stands, in the colors of the scheme: approved and pending apart, rejected in red. */
 @Composable
-private fun StatusBadge(status: SubmissionStatus) {
+fun StatusBadge(status: SubmissionStatus) {
     val colors = MaterialTheme.colorScheme
     val (container, content) =
         when (status) {

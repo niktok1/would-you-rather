@@ -3,20 +3,11 @@ package io.ntole.wyr.admin.moderation
 import io.ntole.wyr.admin.moderation.FakeModeration.Companion.LISTED
 import io.ntole.wyr.admin.moderation.FakeModeration.Companion.TOKEN
 import io.ntole.wyr.admin.moderation.FakeModeration.Companion.pageOf
-import io.ntole.wyr.core.domain.category.GetCategories
 import io.ntole.wyr.core.domain.error.DomainError
 import io.ntole.wyr.core.domain.error.WyrException
-import io.ntole.wyr.core.domain.moderation.AddCategory
-import io.ntole.wyr.core.domain.moderation.ApproveSubmission
-import io.ntole.wyr.core.domain.moderation.GetPendingSubmissions
-import io.ntole.wyr.core.domain.moderation.GetQuestions
 import io.ntole.wyr.core.domain.moderation.ModeratedQuestionPage
 import io.ntole.wyr.core.domain.moderation.QuestionCursor
 import io.ntole.wyr.core.domain.moderation.QuestionFilter
-import io.ntole.wyr.core.domain.moderation.RejectSubmission
-import io.ntole.wyr.core.domain.moderation.RenameCategory
-import io.ntole.wyr.core.domain.moderation.RestoreQuestion
-import io.ntole.wyr.core.domain.moderation.RetireQuestion
 import io.ntole.wyr.core.domain.submission.SubmissionStatus
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
@@ -104,7 +95,7 @@ class QuestionListViewModelTest {
         runTest(dispatcher) {
             val viewModel = openWithList()
             moderation.retire = { throw WyrException(DomainError.WRONG_STATUS) }
-            viewModel.askToRetire("seed-1")
+            viewModel.askToRetire("seed-1", Screen.QUESTIONS)
             viewModel.confirmRetire()
             testScheduler.advanceUntilIdle()
 
@@ -171,15 +162,15 @@ class QuestionListViewModelTest {
         runTest(dispatcher) {
             val viewModel = openWithList()
 
-            viewModel.askToRetire("seed-1")
+            viewModel.askToRetire("seed-1", Screen.QUESTIONS)
             testScheduler.advanceUntilIdle()
-            assertEquals("seed-1", viewModel.state.value.retiring)
+            assertEquals(Retiring("seed-1", Screen.QUESTIONS), viewModel.state.value.retiring)
             viewModel.cancelRetire()
             testScheduler.advanceUntilIdle()
             assertNull(viewModel.state.value.retiring)
             assertEquals(listOf("questions [] [] after=null"), moderation.calls)
 
-            viewModel.askToRetire("seed-1")
+            viewModel.askToRetire("seed-1", Screen.QUESTIONS)
             viewModel.confirmRetire()
             testScheduler.advanceUntilIdle()
 
@@ -197,11 +188,11 @@ class QuestionListViewModelTest {
             val viewModel = openWithList()
 
             listOf("q1", "q3", "q4", "not-listed").forEach { id ->
-                viewModel.askToRetire(id)
+                viewModel.askToRetire(id, Screen.QUESTIONS)
                 assertNull(viewModel.state.value.retiring, id)
             }
             viewModel.setAdminToken(" ")
-            viewModel.askToRetire("seed-1")
+            viewModel.askToRetire("seed-1", Screen.QUESTIONS)
             assertNull(viewModel.state.value.retiring)
             viewModel.confirmRetire()
             testScheduler.advanceUntilIdle()
@@ -247,7 +238,7 @@ class QuestionListViewModelTest {
             moderation.retire = { retired }
             moderation.calls.clear()
 
-            viewModel.askToRetire("seed-1")
+            viewModel.askToRetire("seed-1", Screen.QUESTIONS)
             viewModel.confirmRetire()
             testScheduler.advanceUntilIdle()
 
@@ -266,7 +257,7 @@ class QuestionListViewModelTest {
             testScheduler.advanceUntilIdle()
             moderation.calls.clear()
 
-            viewModel.restore("q3")
+            viewModel.restore("q3", Screen.QUESTIONS)
             testScheduler.advanceUntilIdle()
 
             assertEquals(listOf("restore q3"), moderation.calls)
@@ -291,7 +282,7 @@ class QuestionListViewModelTest {
                     ?.map { it.id },
             )
 
-            viewModel.askToRetire("seed-1")
+            viewModel.askToRetire("seed-1", Screen.QUESTIONS)
             viewModel.confirmRetire()
             testScheduler.advanceUntilIdle()
 
@@ -309,7 +300,7 @@ class QuestionListViewModelTest {
             val viewModel = openWithList()
             moderation.retire = { throw WyrException(DomainError.WRONG_STATUS, "not approved") }
 
-            viewModel.askToRetire("seed-1")
+            viewModel.askToRetire("seed-1", Screen.QUESTIONS)
             viewModel.confirmRetire()
             testScheduler.advanceUntilIdle()
 
@@ -345,10 +336,10 @@ class QuestionListViewModelTest {
                 moderation.restore = { throw WyrException(error, "refused") }
                 moderation.calls.clear()
 
-                viewModel.askToRetire("seed-1")
+                viewModel.askToRetire("seed-1", Screen.QUESTIONS)
                 viewModel.confirmRetire()
                 testScheduler.advanceUntilIdle()
-                viewModel.restore("q3")
+                viewModel.restore("q3", Screen.QUESTIONS)
                 testScheduler.advanceUntilIdle()
 
                 // Neither moved anything, and a read now would be refused the same way.
@@ -469,7 +460,7 @@ class QuestionListViewModelTest {
         runTest(dispatcher) {
             val viewModel = openWithList()
             moderation.retire = { throw WyrException(DomainError.WRONG_STATUS) }
-            viewModel.askToRetire("seed-1")
+            viewModel.askToRetire("seed-1", Screen.QUESTIONS)
             viewModel.confirmRetire()
             testScheduler.advanceUntilIdle()
             assertEquals(setOf("seed-1"), viewModel.state.value.questions.outcomes.failures.keys)
@@ -489,7 +480,7 @@ class QuestionListViewModelTest {
             viewModel.loadQuestions()
             viewModel.loadPending()
             testScheduler.advanceUntilIdle()
-            viewModel.askToRetire("seed-1")
+            viewModel.askToRetire("seed-1", Screen.QUESTIONS)
 
             viewModel.lock()
 
@@ -505,17 +496,7 @@ class QuestionListViewModelTest {
         }
 
     private fun TestScope.open(): ModerationViewModel =
-        ModerationViewModel(
-            getPendingSubmissions = GetPendingSubmissions(moderation),
-            approveSubmission = ApproveSubmission(moderation),
-            rejectSubmission = RejectSubmission(moderation),
-            getQuestions = GetQuestions(moderation),
-            retireQuestion = RetireQuestion(moderation),
-            restoreQuestion = RestoreQuestion(moderation),
-            getCategories = GetCategories(categories),
-            addCategory = AddCategory(moderation),
-            renameCategory = RenameCategory(moderation),
-        ).also { testScheduler.advanceUntilIdle() }
+        moderationViewModelOver(moderation, categories).also { testScheduler.advanceUntilIdle() }
 
     /** The app with the token typed and the list's first page read, the one call so far. */
     private fun TestScope.openWithList(): ModerationViewModel =

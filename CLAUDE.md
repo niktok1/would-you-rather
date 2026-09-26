@@ -1922,7 +1922,7 @@ listed on the Account screen.
     as a status: `statusOf` and `standsAt` read the two columns as one status, so a rollback to the
     build before reads every row. The seed writes only what a database lacks and changes nothing
     there, so a retired seed stays retired through every boot. `RetirementTest` pins it, the races included.
-  - *Reports* (*built on the server 2026-09-26; the moderation app does not show them yet*):
+  - *Reports* (*built on the server 2026-09-26; the moderation app's Reports tab shows them*):
     `GET /v1/admin/reports` lists the reported questions (§8d, *Reports*), most reported first, then
     the most lately reported, then by id, bounded by `?limit=` and with no cursor, since a moderator
     works from the head as in the queue: an `AdminReportListDto` of `AdminReportDto`s, each the
@@ -2007,7 +2007,7 @@ listed on the Account screen.
     anew on every Lock (`ModerationState.locks`): a text field keeps its undo history for as
     long as it is shown, so Undo in the one that held the token gave it back (`TokenBarTest`).
     Nothing is sent until what is typed can be a token (`AdminToken.of`), and one action runs at
-    a time. Every Load, of either tab, reads the categories first (`GetCategories`, needing no
+    a time. Every Load, of any tab, reads the categories first (`GetCategories`, needing no
     token), since a moderator adds them without a build: they are the approval's and the filter's
     chips, and name a question's categories, in Serbian, one not listed by its id
     (`ModerationState.categories`); a read that fails says so above the tab and keeps those read
@@ -2017,7 +2017,15 @@ listed on the Account screen.
     author's, and Reject sends the reason typed once it is a `RejectionReason`. The queue is
     read again after every decision, whatever became of it. A read lists at most
     `ModerationRepository.PAGE_SIZE`, and a queue that long says more may be waiting,
-    its tab `Pending (100+)`, rather than naming itself the whole. *All questions* is the
+    its tab `Pending (100+)`, rather than naming itself the whole. *Reports* lists the reported
+    questions (*Reports*, above), most reported first, at most `ModerationRepository.PAGE_SIZE`, a list
+    that long saying more may be reported, its tab `Reports (100+)`: each with how many players report
+    it and how many give each reason, one this build cannot name as such, when it was last reported,
+    its status, options, categories, votes, likes, dislikes and id, and Dismiss reports, which clears
+    them and reads the reports again, whatever became of it, and Retire, confirmed in the same dialog,
+    or Restore, as in the list. A retirement or restoration, from either tab, puts the question it
+    answers with in its row on both, its reports as they were, and one that failed reads again the tab
+    it was started from. *All questions* is the
     list, seeds included, newest first, filtered by any statuses (`RETIRED` among them; never
     `OTHER`) and any categories, none being every one: Load reads its first page and Load more the
     next, at the filter the list was read at, with the cursor the page before gave, and changing the
@@ -2039,7 +2047,7 @@ listed on the Account screen.
     named (`WyrException.retryAfter`, §8b). An answer the data layer cannot name (`UNKNOWN`) claims
     no status, leaving it to the detail line under it, and says a bare 404 means moderation is off
     on that server: a proxy's own page or an error code newer than the build reads as `UNKNOWN` too.
-    *Categories*, the third tab, lists every category, oldest first, with its id and both names, and
+    *Categories*, the fourth tab, lists every category, oldest first, with its id and both names, and
     adds one and puts one's names right (*Categories*, above): Add, from a form of the two names and
     an id, blank for the server to make one, goes once `CategoryDraft.isValid` holds by
     `CategoryRules`, and clears the form once added; Rename... opens a category's names in its own
@@ -2047,8 +2055,8 @@ listed on the Account screen.
     rename, whatever became of it (the list is no admin route, so the rule above for a 403 or a 429
     does not apply), and a failure shows under the form or the card it came from, a 409 as an id a
     category has already. Lock forgets what was typed for a category and keeps the categories read.
-    `ModerationViewModelTest`, `QuestionListViewModelTest` and `CategoriesViewModelTest` drive it over
-    scripted repositories,
+    `ModerationViewModelTest`, `ReportsViewModelTest`, `QuestionListViewModelTest` and
+    `CategoriesViewModelTest` drive it over scripted repositories,
     `ModerationOverHttpTest` over the real client configuration, and `ScreensDrawTest` draws every
     screen off screen at a desktop window's size. The game's builds do not moderate at all.
 - **Home picks** *(decided 2026-09-26; built on the server, the client adopts later)*: the Home screen

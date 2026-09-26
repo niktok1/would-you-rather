@@ -15,12 +15,15 @@ import io.ntole.wyr.admin.moderation.NoActions
 import io.ntole.wyr.admin.moderation.Outcomes
 import io.ntole.wyr.admin.moderation.PendingQueue
 import io.ntole.wyr.admin.moderation.QuestionList
+import io.ntole.wyr.admin.moderation.ReportList
+import io.ntole.wyr.admin.moderation.Retiring
 import io.ntole.wyr.admin.moderation.Running
 import io.ntole.wyr.admin.moderation.Screen
 import io.ntole.wyr.admin.moderation.SecretText
 import io.ntole.wyr.core.domain.error.DomainError
 import io.ntole.wyr.core.domain.moderation.QuestionCursor
 import io.ntole.wyr.core.domain.moderation.QuestionFilter
+import io.ntole.wyr.core.domain.moderation.ReportReason
 import io.ntole.wyr.core.domain.submission.SubmissionStatus
 import io.ntole.wyr.core.network.environment.WyrEnvironment
 import kotlin.test.Test
@@ -85,7 +88,41 @@ class ScreensDrawTest {
 
         draw(WyrEnvironment.DEV, list, Screen.QUESTIONS)
         // Retire waiting to be confirmed, its dialog over the list.
-        draw(WyrEnvironment.PROD, list.copy(running = null, retiring = "seed-1"), Screen.QUESTIONS)
+        draw(
+            WyrEnvironment.PROD,
+            list.copy(running = null, retiring = Retiring("seed-1", Screen.QUESTIONS)),
+            Screen.QUESTIONS,
+        )
+    }
+
+    @Test
+    fun `the app draws the reported questions with everything a report can show`() {
+        val retired = FakeModeration.reported("q3", mapOf(ReportReason.UNKNOWN to 2, ReportReason.OTHER to 1))
+        val failures =
+            mapOf(
+                "q5" to ItemFailure("\"Early\" or \"Late\"", Failure.Refused(DomainError.QUESTION_NOT_FOUND)),
+                "gone" to ItemFailure("\"Cats\" or \"Dogs\"", Failure.Refused(DomainError.NETWORK, detail = "lost")),
+            )
+        val reports =
+            ModerationState(
+                adminToken = SecretText("typed"),
+                reports =
+                    ReportList(
+                        reports = FakeModeration.REPORTED + retired + FakeModeration.reported("q4", emptyMap()),
+                        failure = Failure.Refused(DomainError.RATE_LIMITED, 12.seconds),
+                        outcomes = Outcomes(failures, notice = "Dismissed the reports of \"Tea\" or \"Tea\"."),
+                    ),
+                categories = CategoryList(FakeCategories.LISTED),
+                running = Running(Action.DISMISS_REPORTS, "q5"),
+            )
+
+        WyrEnvironment.entries.forEach { environment -> draw(environment, reports, Screen.REPORTS) }
+        // Retire waiting to be confirmed from the reports, its dialog over them.
+        draw(
+            WyrEnvironment.PROD,
+            reports.copy(running = null, retiring = Retiring("q5", Screen.REPORTS)),
+            Screen.REPORTS,
+        )
     }
 
     @Test

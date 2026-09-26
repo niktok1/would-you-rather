@@ -7,14 +7,15 @@ import io.ntole.wyr.core.domain.moderation.ModeratedQuestion
 import io.ntole.wyr.core.domain.moderation.QuestionCursor
 import io.ntole.wyr.core.domain.moderation.QuestionFilter
 import io.ntole.wyr.core.domain.moderation.RejectionReason
+import io.ntole.wyr.core.domain.moderation.ReportedQuestion
 import io.ntole.wyr.core.domain.submission.Submission
 import io.ntole.wyr.core.domain.submission.SubmissionStatus
 import kotlin.jvm.JvmInline
 
 /**
- * Everything the moderation app shows: the admin token as typed, the pending queue, the list of every
- * question, the categories, and what the moderator has picked or typed for each pending one and for a
- * category.
+ * Everything the moderation app shows: the admin token as typed, the pending queue, the reported
+ * questions, the list of every question, the categories, and what the moderator has picked or typed
+ * for each pending one and for a category.
  *
  * Nothing is read until the moderator asks, since no token has been typed yet. One action runs at a
  * time ([running]), so what the screens show changes in the order things happened.
@@ -27,6 +28,7 @@ data class ModerationState(
      */
     val adminToken: SecretText = SecretText(""),
     val pending: PendingQueue = PendingQueue(),
+    val reports: ReportList = ReportList(),
     val questions: QuestionList = QuestionList(),
     val categories: CategoryList = CategoryList(),
     /**
@@ -35,7 +37,7 @@ data class ModerationState(
      */
     val drafts: Map<String, DecisionDraft> = emptyMap(),
     /** The approved question the moderator asked to retire, waiting for them to confirm it. */
-    val retiring: String? = null,
+    val retiring: Retiring? = null,
     /** The action in flight, or `null` when idle. */
     val running: Running? = null,
     /**
@@ -65,10 +67,25 @@ data class ModerationState(
      */
     fun rejectionOf(questionId: String): RejectionReason? = RejectionReason.of(draftOf(questionId).reason)
 
+    /**
+     * The question [questionId] as [screen] shows it: a row of the list of every question, or a
+     * reported one's; `null` on any other screen, and when it does not show it.
+     */
+    fun shownOn(
+        screen: Screen,
+        questionId: String,
+    ): ModeratedQuestion? =
+        when (screen) {
+            Screen.QUESTIONS -> questions.questions?.firstOrNull { it.id == questionId }
+            Screen.REPORTS -> reports.reports?.firstOrNull { it.question.id == questionId }?.question
+            Screen.PENDING, Screen.CATEGORIES -> null
+        }
+
     /** What [screen] shows of its actions' outcomes. */
     fun outcomesOf(screen: Screen): Outcomes =
         when (screen) {
             Screen.PENDING -> pending.outcomes
+            Screen.REPORTS -> reports.outcomes
             Screen.QUESTIONS -> questions.outcomes
             Screen.CATEGORIES -> categories.outcomes
         }
@@ -85,6 +102,7 @@ enum class Screen(
     val label: String,
 ) {
     PENDING("Pending"),
+    REPORTS("Reports"),
     QUESTIONS("All questions"),
     CATEGORIES("Categories"),
 }
@@ -102,6 +120,28 @@ data class PendingQueue(
     /** Why the last read failed, or `null` once one works. */
     val failure: Failure? = null,
     val outcomes: Outcomes = Outcomes(),
+)
+
+/**
+ * The questions players reported, most reported first, as the server last listed them, or `null` until
+ * a read works (CLAUDE.md §8d, *Moderation*, *Reports*). It is read on Load reports and again after
+ * every dismissal, whatever became of it, since a dismissal takes a question off it; a retirement or
+ * restoration shows the question the server answered with in its row, as the list of every question
+ * does, and one that failed reads it again. Nothing is read again after a refusal as a wrong token or
+ * by the rate limit, which did nothing. A read that fails keeps what was listed and says why in
+ * [failure].
+ */
+data class ReportList(
+    val reports: List<ReportedQuestion>? = null,
+    /** Why the last read failed, or `null` once one works. */
+    val failure: Failure? = null,
+    val outcomes: Outcomes = Outcomes(),
+)
+
+/** The approved question [questionId] the moderator asked to retire from [from], until they confirm it. */
+data class Retiring(
+    val questionId: String,
+    val from: Screen,
 )
 
 /**
@@ -218,6 +258,8 @@ enum class Action {
     LOAD_PENDING,
     APPROVE,
     REJECT,
+    LOAD_REPORTS,
+    DISMISS_REPORTS,
     LOAD_QUESTIONS,
     LOAD_MORE,
     RETIRE,
