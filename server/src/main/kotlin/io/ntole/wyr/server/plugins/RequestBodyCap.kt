@@ -9,9 +9,11 @@ import java.io.IOException
 
 /**
  * The largest request body the server takes, 64 KiB (CLAUDE.md §8b, *Request bodies*). The largest a
- * correct client sends is a submission, two options of [io.ntole.wyr.core.api.WyrApi.Limits.MAX_OPTION_LENGTH]
- * characters and its categories, well under 4 KiB even in the widest UTF-8, so anything past this is
- * no client's: it is refused before it costs the server more than the cap in memory.
+ * correct client sends is a submission: two options of at most
+ * [io.ntole.wyr.core.api.WyrApi.Limits.MAX_OPTION_LENGTH] characters, under 1.5 KiB in the widest UTF-8,
+ * and the ids of the categories picked, about 34 bytes each, so some 10 KiB with 300 of them picked.
+ * Anything past the cap is no client's: it is refused before it costs the server more than the cap in
+ * memory.
  */
 const val MAX_REQUEST_BODY_BYTES: Long = 64L * 1024L
 

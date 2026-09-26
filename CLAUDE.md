@@ -694,7 +694,8 @@ EncryptedSharedPreferences: enough for a game that stores nothing personal.
   A restart, which a deploy or a free instance's spin-down is, resets them.
 - **Request bodies** *(built 2026-09-26)* — no request body over 64 KiB is read
   (`MAX_REQUEST_BODY_BYTES`, `RequestBodyCap`, no dependency of its own): Ktor reads a whole body
-  into memory to decode it, and the largest a correct client sends, a submission, is under 4 KiB. A
+  into memory to decode it, and the largest a correct client sends, a submission, is some 10 KiB
+  with 300 categories picked. A
   request whose `Content-Length` says more is 413 before anything else of it runs, its rate limit and
   authentication included, whether or not its route reads a body; one that says no length, a chunked
   body, is counted as it is read and stopped one byte past the cap (`BodyOverCap`), which
