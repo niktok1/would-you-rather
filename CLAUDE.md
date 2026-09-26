@@ -1924,10 +1924,16 @@ the same events. The moderation app sends none.
     host is written there without `https://`, since `//` begins an `.xcconfig` comment.
   - The entry point hands them to `initKoin` as an `AnalyticsSettings`, with the app's version
     (Android's `versionName`, iOS's `MARKETING_VERSION`, desktop's `packageVersion` through the
-    `wyr.app.version` property, the web build's `wyrAppVersion`), and `PostHogConfig.of` makes them a
-    configuration: no key is none, no host the EU cloud, `eu.i.posthog.com` is `https://`, and a host
+    `wyr.app.version` system property, the web build's `APP_VERSION`), and `PostHogConfig.of` makes
+    them a configuration: no key is none, no host the EU cloud, `eu.i.posthog.com` is `https://`, and a host
     that is none stops the app at launch, naming it, as an environment's name does. `dataModule` binds
     the `Analytics` for it; `moderationDataModule` binds none.
+  - *The version is named once*, so a breakdown by `$app_version` never splits one release:
+    `wyr.app.version` in the repository's `gradle.properties`, MAJOR.MINOR.PATCH (the one form a
+    desktop MSI takes), which `gradle/wyr-version.gradle.kts` hands Android's `versionName`, desktop's
+    `packageVersion` and the web build's `APP_VERSION`. Xcode reads iOS's `MARKETING_VERSION` from
+    `Config.xcconfig`, which Gradle cannot write, so every Gradle build fails, naming both, until the
+    two agree: a release changes them together.
 - **The app and its screens** *(built)*: `UsageTracker` (`io.ntole.wyr.analytics`), one for the app's
   life, which `App` tells of the platform lifecycle's start and stop: Android's activity, the iOS view
   controller, the desktop window minimized and back, the browser page hidden and shown. `app_opened`

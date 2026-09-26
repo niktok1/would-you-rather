@@ -1545,6 +1545,10 @@ The other platforms read the same key where they read their environment (CLAUDE.
 A key someone else can read is no harm: a project's key can only send events, never read them. A
 key rotated in PostHog needs a build again.
 
+Every event names the app's version, `wyr.app.version` in `gradle.properties` (1.0.0), which every
+platform's build reads; a release bumps `MARKETING_VERSION` in `app/iosApp/Configuration/Config.xcconfig`
+with it, or Gradle refuses to build.
+
 ### Trying a change
 
 There is no dev console (`chore/remove-console`): a change is tried through the game, as a player

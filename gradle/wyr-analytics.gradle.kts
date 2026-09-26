@@ -9,10 +9,11 @@
  *
  * - `:app:androidApp` reads `extra["wyrPosthogKey"]` and `extra["wyrPosthogHost"]` into its
  *   BuildConfig, one key for every flavor (events name their environment).
- * - `:app:webApp` sets `extra["wyrAnalyticsPackage"]` and `extra["wyrAppVersion"]` first, and this
- *   registers `generateWyrAnalytics`, which writes the two, with the version, into Kotlin constants in
- *   that package, `POSTHOG_KEY`, `POSTHOG_HOST` and `APP_VERSION`, whose output directory the module
- *   adds to its `webMain` sources, as `generateWyrEnv` does the environment (gradle/wyr-env.gradle.kts).
+ * - `:app:webApp` sets `extra["wyrAnalyticsPackage"]` first, and applies gradle/wyr-version.gradle.kts,
+ *   which sets `extra["wyrAppVersion"]`; this registers `generateWyrAnalytics`, which writes the two
+ *   settings, with the version, into Kotlin constants in that package, `POSTHOG_KEY`, `POSTHOG_HOST`
+ *   and `APP_VERSION`, whose output directory the module adds to its `webMain` sources, as
+ *   `generateWyrEnv` does the environment (gradle/wyr-env.gradle.kts).
  *
  * Desktop and iOS name theirs as they name the environment, when the app starts: the `WYR_POSTHOG_KEY`
  * and `WYR_POSTHOG_HOST` variables, and the same build settings in the Xcode project's
