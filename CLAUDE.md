@@ -457,6 +457,12 @@ This project must never be attributed to any employer identity.
     flashes white; on Android 12 and later (`values-v31`) the system's own splash screen is the page
     background and the launcher icon, with no library. The colour is a platform copy (§5b), held equal
     by `WindowThemeTest`, the app module's unit test, in CI's verify job.
+  - *What Google Play asks of the build* (checked 2026-09-26): target API 36, which `android-targetSdk`
+    is; a bundle signed with the upload key (above); and 16 KB memory pages. The APK's one native
+    library, Compose's `libandroidx.graphics.path.so` (`androidx.graphics:graphics-path` 1.0.1), has
+    every LOAD segment 16 KB aligned and is stored uncompressed on a 16 KB boundary for all four ABIs;
+    a native library added later is checked the same way (NEXT-SESSION.md). What the app collects, for
+    the Data safety form, is listed there too.
 
 ## 8a. Authentication — resolved
 

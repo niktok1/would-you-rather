@@ -401,8 +401,37 @@ engine at stop. Docs only: the cascades, CIO, push timing and the §8b list of s
 registered player, for good, with no unlink: provisional); and "stores nothing personal" is now "no
 sensitive personal data", the privacy policy to name FCM and Play Games (§8b *Personalization*).
 
+**On `feat/android-release`** (from 2a4f96e; nothing pushed): the Android build Google Play takes
+(CLAUDE.md §8, *Release builds*). A release build is signed with the **Play upload key** once
+`local.properties` names it, and otherwise with the debug key, one warning line saying so, while every
+`bundle*Release` refuses; **R8** shrinks the code and the resources; a placeholder **adaptive icon**
+(pink over amber, a white question mark, a themed icon's layer too) and the prod label **Шта би
+радије?** replace the wizard's; and the **window and Android 12's splash screen** are the page
+background, light and dark, so a dark phone never flashes white. CI's verify job builds
+`assembleProdRelease` and runs the app module's first unit test, `WindowThemeTest`. **What you do**:
+*Release builds and Google Play*, under *Running it locally*, the upload key and the Data safety form
+among it. **For you to decide**: CLAUDE.md §8b, *The launcher icon and name* and *R8 and Kotlin 2.4's
+metadata*.
+
 ### Verified working
 
+- **`feat/android-release`**, on this machine: `ktlintCheck`; the verify job's tests (server 480,
+  2 skipped; `:core:domain` 76, `:core:data` 145, `:core:network` 112 and 118 as Android host tests,
+  `:app:shared` 395, `:app:adminApp` 106, all from the build cache, their modules untouched; and
+  `:app:androidApp:testDevDebugUnitTest`, `WindowThemeTest` 5, which fails with a colour changed) and
+  client compiles, `assembleDebug` and `assembleProdRelease` among them; `assembleDevRelease` and
+  `assembleLocalRelease`; the ios job's Kotlin compiles. `bundleProdRelease` fails at once, naming
+  the four settings, and `signingReport` names the upload config for every release variant once the
+  four are given (placeholders, and a keystore that does not exist). The prod APK: label *Шта би
+  радије?*, the adaptive icon with its monochrome layer, `Theme.Wyr` with the splash items on v31,
+  and its one native library 16 KB aligned (`zipalign -c -P 16` and its ELF LOAD segments); an
+  unsigned bundle (`packageLocalReleaseBundle`) carries R8's mapping, as
+  `BUNDLE-METADATA/com.android.tools.build.obfuscation/proguard.map`. **On an
+  emulator** (the `Emu` AVD, API 35, booted read-only, the app uninstalled after) against a local
+  server: the shrunk `localRelease` APK opened Home, Play, a like, an answer, the next question, a
+  skip, Account and the Categories screen, every request 200 or 204, and logcat showed no crash and
+  no serialization error; the launcher showed the icon as *WYR Local*; a cold start in dark mode
+  showed the splash in #161417 with the icon and then Home, no white frame.
 - **`feat/server-engagement`**, on this machine, at 8660e01 and again at a371b0e after the review's
   fixes: `ktlintCheck`; `:server:test` (431 at a371b0e, 2 skipped: the PostgreSQL-only boots),
   `:core:domain:jvmTest`, `:core:data:jvmTest`, `:core:network:jvmTest`, `:core:network:testAndroidHostTest`, `:app:shared:jvmTest` and
@@ -1027,6 +1056,10 @@ sensitive personal data", the privacy policy to name FCM and Play Games (§8b *P
 
 ### NOT verified
 
+- **`feat/android-release`**: a build signed with a real upload key, and any upload to Play (the
+  key is the user's to make); the themed icon on a launcher that themes icons (the emulator's does
+  not); the icon on Android 7; a shrunk build on a physical phone, and on Play's pre-launch report;
+  Play reading the mapping from the bundle.
 - **`feat/server-engagement` against real Google.** No push has reached a phone and no Play Games
   code has been exchanged: the requests are built from Google's documentation (FCM HTTP v1's
   `messages:send`, the JWT bearer grant with the `firebase.messaging` scope, the authorization code
@@ -1710,6 +1743,51 @@ against a local server: `WYR_SERVER_ONLY=1 ./gradlew :server:buildFatJar`, then
 `PORT=8080 java -jar server/build/libs/server-all.jar` (JDK 21), `./gradlew
 :app:androidApp:installLocalRelease`, and in the app Home, Play, a like, an answer, a skip, Account
 and the categories, with `adb logcat` open for `FATAL` and `Serializ`.
+
+**What Google Play asks of this build** (checked 2026-09-26):
+
+- *Target API* 36 (`android-targetSdk` in the catalog), Play's level for new apps and updates in
+  2026. Play raises it every year: check its policy page before a release.
+- *16 KB pages*: the APK's one native library, Compose's `libandroidx.graphics.path.so`, is 16 KB
+  aligned for all four ABIs. After adding a library, check a release APK again:
+  `$ANDROID_HOME/build-tools/36.1.0/zipalign -c -P 16 -v 4 <apk>` must end in *Verification
+  successful*, and Android Studio's *Build → Analyze APK* flags a `.so` whose segments are not.
+- *The Data safety form*, which is yours to fill in, from the list below.
+
+**Data safety: what the app collects and sends.** No ads, no advertising id, nothing sold. Everything
+travels over HTTPS (only the LOCAL flavor, which never ships, allows plain http), and a player can
+delete their account in the app (`feat/account-client`) and through a web page Play asks you to link
+(`docs/site`).
+
+- *To the game's server* (Render), for the game to work, not optional:
+  - **User IDs**: the player id, random and made by the server, for every player, a guest's
+    included; the username, once a player registers; the Play Games player id, once Play Games
+    sign-in lands (`feat/android-services`). The password is sent to register and to log in, and kept
+    only as a salted hash.
+  - **App activity**: answers, with the side picked and how long each took; skips; likes and
+    dislikes; reports and hidden questions and authors (*App interactions*, *Other actions*); and the
+    questions a player writes (*Other user-generated content*).
+  - **Device or other IDs**: the device's push token (FCM, `feat/android-services`), to tell an
+    author a moderator decided their question.
+  - The address each request comes from, which the rate limits count by, in memory; the server logs
+    no address (Render's and Cloudflare's own logs may) and derives no location from it.
+- *To PostHog* (analytics, CLAUDE.md §8g), only while **Statistics** is on: on by default, and the
+  player can turn it off, so it is optional:
+  - **Device or other IDs**: a random id per install. **User IDs**: the player id, once the player
+    registers or logs in.
+  - **App activity → App interactions**: screens shown and for how long, taps by the button's name,
+    questions shown, answered (the side and the time) and skipped, reactions, registrations, logins,
+    logouts and the language picked.
+  - **App info and performance → Diagnostics**: the error codes a screen shows.
+  - With every event, the OS and its version, the device type, the app version and the platform. No
+    location: every event says `$geoip_disable`, and the project discards the address once you turn
+    that setting on (CLAUDE.md §8g, *Setting up PostHog*).
+- *To Google*, by its own libraries once `feat/android-services` lands: Firebase Cloud Messaging (the
+  push token, and Firebase's own installation id) and Play Games Services (sign-in). Google and PostHog
+  process it for the game, as service providers, which Play's form does not count as sharing.
+- *Not collected*: an email, a name, a phone number, contacts, photos or files, location, financial or
+  health data, messages, audio, the calendar, browsing history, or crash logs (the app has no crash
+  reporter; Android vitals is Play's own).
 
 ### Trying a change
 
