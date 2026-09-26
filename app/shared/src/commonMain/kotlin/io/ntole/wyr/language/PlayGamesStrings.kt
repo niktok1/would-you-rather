@@ -2,9 +2,9 @@ package io.ntole.wyr.language
 
 /**
  * The words about Google Play Games Services (CLAUDE.md §8a, *Play Games sign-in*; §8f), a part of
- * [Strings] of their own, on the Account screen's card. Each names the service by [GOOGLE_PLAY], the
- * same in every language, a template's `{0}`, which [fill] fills in: a brand's name is not translated,
- * and a Serbian text holds no Latin letter.
+ * [Strings] of their own, on the Account screen's card and the Auth page. Each names the service by
+ * [GOOGLE_PLAY], the same in every language, a template's `{0}`, which [fill] fills in: a brand's
+ * name is not translated, and a Serbian text holds no Latin letter.
  */
 data class PlayGamesStrings(
     /**
@@ -18,12 +18,18 @@ data class PlayGamesStrings(
      * the web.
      */
     val addUsername: String,
+    /**
+     * The Auth page's button that signs in with Play Games, where Play Games is set up and the player is
+     * not linked to it yet: *Пријави се преко Google Play Игара*.
+     */
+    val signIn: String,
 ) {
     /** These strings with [transform] applied to every one of them, as [Strings.map] does. */
     internal fun map(transform: (String) -> String): PlayGamesStrings =
         PlayGamesStrings(
             name = transform(name),
             addUsername = transform(addUsername),
+            signIn = transform(signIn),
         )
 }
 
@@ -38,10 +44,12 @@ internal val SerbianCyrillicPlayGamesStrings: PlayGamesStrings =
     PlayGamesStrings(
         name = "{0} Игре",
         addUsername = "Додај корисничко име",
+        signIn = "Пријави се преко {0} Игара",
     )
 
 internal val EnglishPlayGamesStrings: PlayGamesStrings =
     PlayGamesStrings(
         name = "{0} Games",
         addUsername = "Add a username",
+        signIn = "Sign in with {0} Games",
     )

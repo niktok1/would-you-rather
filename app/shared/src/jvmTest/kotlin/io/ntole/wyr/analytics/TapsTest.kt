@@ -184,7 +184,11 @@ class TapsTest {
                 )
             }
 
+        val playGames =
+            elementsTapped { AuthScreen(state = typed.copy(playGamesAvailable = true), actions = NoAccountActions) }
+
         assertEquals(setOf("auth.show_password", "auth.register", "auth.to_log_in"), register)
+        assertEquals(setOf("auth.play_games", "auth.show_password", "auth.register", "auth.to_log_in"), playGames)
         assertEquals(setOf("auth.log_in", "auth.to_register"), logIn)
         assertEquals(setOf("auth.log_in_anyway", "auth.cancel", "auth.to_register"), warned)
         assertEquals(setOf("auth.try_again", "auth.show_password", "auth.to_log_in"), unread)

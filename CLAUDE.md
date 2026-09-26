@@ -1352,8 +1352,14 @@ orientation, in common code alone:
   **Register** only (username, and password with a show/hide toggle), which keeps the points, and a
   link, *Већ имаш налог? Пријави се*, that switches the same page to **Log in** (username, password),
   with a link back, *Немаш налог? Региструј се* (`AccountState.authMode`, Register on a first
-  showing; not while an action runs). No heading and no notes, the user asking for less text. Under
-  each register field its rule, *3–20 знакова: a–z, 0–9, _* and *6–128 знакова*, in the error colour
+  showing; not while an action runs). Where Play Games is set up (§8a, *Play Games sign-in*) and the
+  player is not linked to it, one more button comes first, over either form, **Пријави се преко
+  Google Play Игара** (`AccountState.offersPlayGames`, `LinkPlayGames.manually`): it asks the player
+  to sign in to Play Games unless they are, then signs in with it, the guest linked and keeping
+  everything or the device the player it was linked to already, and goes back to the Account screen
+  as a login does; a player who does not sign in to Play Games stays with nothing sent, and a refusal
+  says *Нешто није у реду. Покушај поново.* under the button. No heading and no notes, the user asking
+  for less text. Under each register field its rule, *3–20 знакова: a–z, 0–9, _* and *6–128 знакова*, in the error colour
   while what is typed breaks it, and Register sends nothing until both pass. A register or a login
   that worked goes back to the Account screen, which reads the player again (`AccountState.signedIn`,
   which the page takes down as it goes and the next action takes down too, so a page left before its
@@ -2376,7 +2382,7 @@ the same events. The moderation app sends none.
   `account.open_auth`, `.add_username`, `.log_out`, `.try_again`; `my_questions.new_question`, `.first_question`,
   `.try_again`; `language.menu` and `language.option` (with its `language` tag); `auth.register`,
   `.show_password`, `.to_log_in`, `.log_in`, `.log_in_anyway`, `.cancel`, `.to_register`,
-  `.try_again`; `submit.category` (with its `category` id), `.send`, `.categories_try_again`,
+  `.play_games`, `.try_again`; `submit.category` (with its `category` id), `.send`, `.categories_try_again`,
   `.try_again`; `categories.all`, `.category` (with its id), `.play`, `.try_again`. A text field is no
   tap. `TapsTest` draws every screen in the states that show all it can be tapped on, taps everything a
   screen reader could, and fails on anything that reports no tap, or a name not in its lists: a new
@@ -2408,8 +2414,8 @@ the same events. The moderation app sends none.
     (`categories`, `count`, none being every category); what is played already sends nothing.
   - *Language* (`LanguageViewModel`): `language_changed` (`language`, its tag).
   - `error_shown` for every failure a screen shows (`code`, the `DomainError`'s name, and `action`:
-    `question`, `vote`, `reaction`, `account`, `my_questions`, `register`, `log_in`, `log_out`,
-    `submit`, `points`, `categories`), but a vote already counted, which moves on and shows nothing,
+    `question`, `vote`, `reaction`, `account`, `my_questions`, `register`, `log_in`, `play_games`,
+    `log_out`, `submit`, `points`, `categories`), but a vote already counted, which moves on and shows nothing,
     and a skip, which says nothing.
   - The ViewModel tests hold each, and that nothing typed is ever in one.
 - **The switch** *(built)*: **Статистика** on the Account screen, beside the language menu (§8d,

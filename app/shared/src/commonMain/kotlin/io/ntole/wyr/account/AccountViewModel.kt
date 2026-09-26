@@ -10,6 +10,7 @@ import io.ntole.wyr.core.domain.analytics.AnalyticsEvent
 import io.ntole.wyr.core.domain.analytics.AnalyticsProperty
 import io.ntole.wyr.core.domain.error.WyrException
 import io.ntole.wyr.core.domain.player.GetPlayerStats
+import io.ntole.wyr.core.domain.playgames.LinkPlayGames
 import io.ntole.wyr.core.domain.submission.GetMySubmissions
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -48,6 +49,9 @@ interface AccountActions {
     /** Takes the guest-progress warning down, and logs in to nothing. */
     fun cancelLogIn()
 
+    /** Signs in with Google Play Games Services, where [AccountState.offersPlayGames]. */
+    fun signInWithPlayGames() = Unit
+
     fun logOut()
 }
 
@@ -70,9 +74,10 @@ class AccountViewModel(
     private val logInToAccount: LogIn,
     private val logOutOfAccount: LogOut,
     private val analytics: Analytics,
+    private val linkPlayGames: LinkPlayGames,
 ) : ViewModel(),
     AccountActions {
-    private val _state = MutableStateFlow(AccountState())
+    private val _state = MutableStateFlow(AccountState(playGamesAvailable = linkPlayGames.available))
     val state: StateFlow<AccountState> = _state.asStateFlow()
 
     /**
@@ -156,6 +161,18 @@ class AccountViewModel(
     }
 
     override fun cancelLogIn() = _state.update { it.copy(guestPointsWarning = null) }
+
+    /**
+     * Signs in with Play Games, asking the player to sign in to it first unless they are: the player
+     * playing is linked to it, keeping everything, or the device is the player it was linked to
+     * already. A player who does not sign in to Play Games stays on the page, with nothing sent.
+     */
+    override fun signInWithPlayGames() {
+        if (!_state.value.offersPlayGames) return
+        perform(AccountAction.PLAY_GAMES) {
+            if (linkPlayGames.manually()) _state.update { it.copy(signedIn = true) }
+        }
+    }
 
     /** Logs this device out, best effort; it plays on as a fresh guest, whom the read after mints. */
     override fun logOut() =
@@ -253,17 +270,24 @@ class AccountViewModel(
     }
 
     /**
-     * Reads who is playing, and answers whether that shows the register or the login in flight to have
-     * worked: the player has a username now. Only a player with none reaches the Auth page, a guest or
-     * one registered by Play Games alone (CLAUDE.md §8a), so a failed one leaves none.
+     * Reads who is playing, and answers whether that shows the Auth page's action in flight to have
+     * worked: a register or a login, the player has a username now, and a Play Games sign-in, they are
+     * linked to it. Only a player with no username reaches the Auth page, a guest or one registered by
+     * Play Games alone (CLAUDE.md §8a), and one linked to it is offered no Play Games, so a failed one
+     * leaves neither.
      */
     private suspend fun loadStats(): Boolean =
         try {
             val stats = getPlayerStats()
             var confirmed = false
             _state.update {
-                confirmed = it.running in AUTH_ACTIONS && stats.username != null
-                if (stats.username == null) {
+                confirmed =
+                    when (it.running) {
+                        AccountAction.REGISTER, AccountAction.LOG_IN -> stats.username != null
+                        AccountAction.PLAY_GAMES -> stats.playGamesLinked
+                        else -> false
+                    }
+                if (stats.username == null && !confirmed) {
                     it.copy(stats = stats)
                 } else {
                     AccountState(
@@ -272,6 +296,7 @@ class AccountViewModel(
                         failure = it.failure.takeUnless { confirmed },
                         running = it.running,
                         signedIn = it.signedIn || confirmed,
+                        playGamesAvailable = it.playGamesAvailable,
                     )
                 }
             }
@@ -284,8 +309,8 @@ class AccountViewModel(
         }
 }
 
-/** The actions the Auth page's forms send, whose failures show under them. */
-private val AUTH_ACTIONS = setOf(AccountAction.REGISTER, AccountAction.LOG_IN)
+/** The actions the Auth page sends, whose failures show under what sent them. */
+private val AUTH_ACTIONS = setOf(AccountAction.REGISTER, AccountAction.LOG_IN, AccountAction.PLAY_GAMES)
 
 /** What failed, as the analytics name it (CLAUDE.md §8g). */
 private fun actionName(action: AccountAction): String =
@@ -293,6 +318,7 @@ private fun actionName(action: AccountAction): String =
         AccountAction.LOAD -> "account"
         AccountAction.REGISTER -> "register"
         AccountAction.LOG_IN -> "log_in"
+        AccountAction.PLAY_GAMES -> "play_games"
         AccountAction.LOG_OUT -> "log_out"
     }
 

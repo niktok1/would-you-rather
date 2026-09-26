@@ -15,8 +15,12 @@ import io.ntole.wyr.core.domain.error.WyrException
 import io.ntole.wyr.core.domain.player.GetPlayerStats
 import io.ntole.wyr.core.domain.player.PlayerRepository
 import io.ntole.wyr.core.domain.player.PlayerStats
+import io.ntole.wyr.core.domain.playgames.LinkPlayGames
+import io.ntole.wyr.core.domain.playgames.PlayGames
+import io.ntole.wyr.core.domain.playgames.PlayGamesRepository
 import io.ntole.wyr.core.domain.question.Question
 import io.ntole.wyr.core.domain.question.QuestionRepository
+import io.ntole.wyr.core.domain.session.CurrentSession
 import io.ntole.wyr.core.domain.session.SessionRepository
 import io.ntole.wyr.core.domain.submission.GetMySubmissions
 import io.ntole.wyr.core.domain.submission.Submission
@@ -28,8 +32,10 @@ import io.ntole.wyr.language.SerbianLatinStrings
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.resetMain
@@ -51,6 +57,7 @@ class AccountViewModelTest {
     private val dispatcher = StandardTestDispatcher()
     private val analytics = RecordingAnalytics()
     private val game = FakeGame()
+    private val playGames = FakePlayGames()
 
     @BeforeTest
     fun setUp() {
@@ -300,6 +307,93 @@ class AccountViewModelTest {
             assertTrue(added.signedIn)
             assertNull(added.failure)
             assertEquals("bob_2", nameOf(added.shown(), EnglishStrings))
+        }
+
+    @Test
+    fun `a build without Play Games offers none and signs in with none`() =
+        runTest(dispatcher) {
+            val viewModel = open()
+
+            assertFalse(viewModel.state.value.offersPlayGames)
+            viewModel.signInWithPlayGames()
+            testScheduler.advanceUntilIdle()
+            assertFalse("playGames code-1" in game.calls)
+        }
+
+    /** The no-click way: the guest playing is linked, keeping everything, and the page goes back. */
+    @Test
+    fun `Play Games signs the guest in and goes back to the Account screen`() =
+        runTest(dispatcher) {
+            playGames.available = true
+            game.points = 5
+            val viewModel = open()
+            assertTrue(viewModel.state.value.offersPlayGames)
+
+            viewModel.signInWithPlayGames()
+            testScheduler.advanceUntilIdle()
+
+            val state = viewModel.state.value
+            assertTrue(state.signedIn)
+            assertNull(state.failure)
+            assertTrue(state.shown().registered)
+            assertEquals("Google Play Games", nameOf(state.shown(), EnglishStrings))
+            assertFalse(state.offersPlayGames, "linked already")
+            assertTrue(state.playGamesAvailable, "the build still has it")
+            assertTrue("playGames code-1" in game.calls)
+        }
+
+    /** A Play Games player linked to another player already: the device is theirs, its queue dropped. */
+    @Test
+    fun `Play Games signs in as the player it was linked to already`() =
+        runTest(dispatcher) {
+            playGames.available = true
+            game.accounts["bob_1"] = "correct horse" to "bob-player"
+            game.playGamesPlayer = "bob-player"
+            val viewModel = open()
+
+            viewModel.signInWithPlayGames()
+            testScheduler.advanceUntilIdle()
+
+            assertTrue(viewModel.state.value.signedIn)
+            assertEquals("bob_1", nameOf(viewModel.state.value.shown(), EnglishStrings))
+            assertTrue("reset" in game.calls, "the queue was the guest's")
+        }
+
+    @Test
+    fun `a player who does not sign in to Play Games stays on the page with nothing sent`() =
+        runTest(dispatcher) {
+            playGames.available = true
+            playGames.authenticated = false
+            val viewModel = open()
+
+            viewModel.signInWithPlayGames()
+            testScheduler.advanceUntilIdle()
+
+            val state = viewModel.state.value
+            assertFalse(state.signedIn)
+            assertNull(state.failure)
+            assertFalse("playGames code-1" in game.calls)
+        }
+
+    @Test
+    fun `a Play Games sign-in the server refuses says so under the button and is reported`() =
+        runTest(dispatcher) {
+            playGames.available = true
+            game.playGamesRefusedWith = DomainError.PLAY_GAMES_UNAVAILABLE
+            val viewModel = open()
+
+            viewModel.signInWithPlayGames()
+            testScheduler.advanceUntilIdle()
+
+            val state = viewModel.state.value
+            assertEquals(AccountFailure(AccountAction.PLAY_GAMES, DomainError.PLAY_GAMES_UNAVAILABLE), state.failure)
+            assertEquals(ENGLISH.somethingWrong, failureMessage(assertNotNull(state.failure), ENGLISH))
+            assertFalse(state.signedIn)
+            val shown = analytics.named(AnalyticsEvent.ERROR_SHOWN).single()
+            assertEquals("play_games", shown.properties[AnalyticsProperty.ACTION])
+            // The other form takes it down, as it does a form's.
+            viewModel.setAuthMode(AuthMode.LOG_IN)
+            assertNull(viewModel.state.value.failure)
         }
 
     @Test
@@ -892,6 +986,7 @@ class AccountViewModelTest {
             logInToAccount = LogIn(game, game, game, Analytics.None),
             logOutOfAccount = LogOut(game, game, Analytics.None),
             analytics = analytics,
+            linkPlayGames = LinkPlayGames(playGames, game, game, game, Analytics.None),
         )
 
     /**
@@ -903,8 +998,16 @@ class AccountViewModelTest {
         SessionRepository,
         AccountRepository,
         SubmissionRepository,
-        QuestionRepository {
+        QuestionRepository,
+        CurrentSession,
+        PlayGamesRepository {
         val calls = mutableListOf<String>()
+
+        /** When set, a Play Games sign-in is refused with it. */
+        var playGamesRefusedWith: DomainError? = null
+
+        /** The player a Play Games sign-in makes the device, when not the one playing. */
+        var playGamesPlayer: String? = null
 
         /** Each account's password and player, by username, lower-cased. */
         val accounts = mutableMapOf<String, Pair<String, String>>()
@@ -939,6 +1042,20 @@ class AccountViewModelTest {
         private var guestsMinted = 0
 
         override suspend fun ensure(): String = player ?: "guest${++guestsMinted}".also { player = it }
+
+        override fun current(): String? = player
+
+        override val sessions: Flow<String> = flow { emit(ensure()) }
+
+        override fun isSettled(): Boolean = false
+
+        override suspend fun signIn(serverAuthCode: String): String {
+            calls += "playGames $serverAuthCode"
+            playGamesRefusedWith?.let { throw WyrException(it) }
+            playGamesPlayer?.let { player = it }
+            playGamesLinked = true
+            return ensure()
+        }
 
         override suspend fun stats(): PlayerStats {
             calls += "stats"
@@ -1007,6 +1124,22 @@ class AccountViewModelTest {
         override suspend fun reset() {
             calls += "reset"
         }
+    }
+
+    /**
+     * Play Games on a build that has it, the player signed in to it, once a test says the build has it:
+     * none by default, as every build without its ids.
+     */
+    private class FakePlayGames : PlayGames {
+        override var available = false
+        var authenticated = true
+        var signsIn = false
+
+        override suspend fun isAuthenticated(): Boolean = authenticated
+
+        override suspend fun signIn(): Boolean = signsIn.also { authenticated = it }
+
+        override suspend fun serverAuthCode(): String = "code-1"
     }
 
     private companion object {

@@ -8,6 +8,7 @@ import io.ntole.wyr.core.domain.player.PlayerStats
 import io.ntole.wyr.descriptions
 import io.ntole.wyr.everyNode
 import io.ntole.wyr.everyText
+import io.ntole.wyr.language.GOOGLE_PLAY
 import io.ntole.wyr.language.Language
 import io.ntole.wyr.language.WyrStrings
 import io.ntole.wyr.language.fill
@@ -60,6 +61,29 @@ class AuthScreenDrawTest {
                     }
                 assertTrue(height <= SHORT_PHONE_HEIGHT, "$state in $language needs $height of $SHORT_PHONE_HEIGHT")
             }
+        }
+    }
+
+    /**
+     * Where Play Games is set up, its button is first on the page, over either form, and signs in with
+     * it; a player linked to it already, and a build without it, get none (CLAUDE.md §8a).
+     */
+    @Test
+    fun `where Play Games is set up its button signs in with it`() {
+        Language.entries.forEach { language ->
+            val signIn = stringsOf(language).playGames.signIn.fill(GOOGLE_PLAY)
+            listOf(AuthMode.REGISTER, AuthMode.LOG_IN).forEach { mode ->
+                val actions = Recorder()
+                val state = AccountState(stats = GUEST, authMode = mode, playGamesAvailable = true)
+                tapping(state, language, actions) { scene ->
+                    assertEquals(signIn, scene.everyText().first(), "$language, $mode: first on the page")
+                    scene.tap(signIn)
+                }
+                assertEquals(listOf("play games"), actions.calls, "$language, $mode")
+            }
+            val linked = AccountState(stats = GUEST.copy(playGamesLinked = true), playGamesAvailable = true)
+            assertFalse(signIn in textsOf(linked, language), "$language: linked already")
+            assertFalse(signIn in textsOf(AccountState(stats = GUEST), language), "$language: no Play Games")
         }
     }
 
@@ -316,6 +340,10 @@ class AuthScreenDrawTest {
         override fun logOut() {
             calls += "log out"
         }
+
+        override fun signInWithPlayGames() {
+            calls += "play games"
+        }
     }
 
     private companion object {
@@ -336,6 +364,31 @@ class AuthScreenDrawTest {
         val GUEST = PlayerStats(totalPoints = 12, questionsAnswered = 10)
 
         val READ_FAILED = AccountFailure(AccountAction.LOAD, DomainError.NETWORK)
+
+        /** Where Play Games is set up: its button above each form, and its failure under it. */
+        val PLAY_GAMES_STATES =
+            listOf(
+                AccountState(stats = GUEST, playGamesAvailable = true),
+                AccountState(failure = READ_FAILED, playGamesAvailable = true),
+                AccountState(
+                    stats = GUEST,
+                    registerUsername = "a b",
+                    registerPassword = "short",
+                    showRegisterPassword = true,
+                    failure = AccountFailure(AccountAction.PLAY_GAMES, DomainError.PLAY_GAMES_UNAVAILABLE),
+                    playGamesAvailable = true,
+                ),
+                AccountState(
+                    stats = GUEST,
+                    authMode = AuthMode.LOG_IN,
+                    loginUsername = "bob_1",
+                    loginPassword = "correct horse",
+                    guestPointsWarning = 123_456,
+                    failure = AccountFailure(AccountAction.LOG_IN, DomainError.RATE_LIMITED, 42.seconds),
+                    running = AccountAction.PLAY_GAMES,
+                    playGamesAvailable = true,
+                ),
+            )
 
         val STATES =
             listOf(
@@ -386,6 +439,6 @@ class AuthScreenDrawTest {
                     failure = AccountFailure(AccountAction.LOG_IN, DomainError.RATE_LIMITED, 42.seconds),
                     running = AccountAction.LOG_IN,
                 ),
-            )
+            ) + PLAY_GAMES_STATES
     }
 }

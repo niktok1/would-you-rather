@@ -53,6 +53,11 @@ data class AccountState(
      * later showing of the page.
      */
     val signedIn: Boolean = false,
+    /**
+     * Whether this build has Google Play Games Services, so the Auth page offers to sign in with it
+     * (CLAUDE.md §8a, *Play Games sign-in*): an Android build that has it set up, and none elsewhere.
+     */
+    val playGamesAvailable: Boolean = false,
 ) {
     val isBusy: Boolean get() = running != null
 
@@ -78,6 +83,13 @@ data class AccountState(
         get() = !isBusy && stats != null && loginUsername.isNotEmpty() && loginPassword.isNotEmpty()
 
     /**
+     * Whether the Auth page offers to sign in with Play Games: this build has it, and the player read is
+     * not linked to it yet.
+     */
+    val offersPlayGames: Boolean
+        get() = playGamesAvailable && stats?.playGamesLinked != true
+
+    /**
      * The points a login would leave behind, for a player with any who has no username: a guest, or
      * one registered by Play Games alone, whose account stays, but not on this device. Null otherwise.
      */
@@ -97,6 +109,9 @@ enum class AccountAction {
     LOAD,
     REGISTER,
     LOG_IN,
+
+    /** Signing in with Google Play Games Services, from the Auth page. */
+    PLAY_GAMES,
     LOG_OUT,
 }
 
