@@ -84,7 +84,7 @@
 
       <h3>Playing as a guest</h3>
       <p>When you first open the game, the server creates a player and gives it a random id. With it your device gets two session tokens: an access token, valid for 15 minutes, and a refresh token, valid for 30 days and replaced every time it is used. The tokens are kept in the app's storage on the device (in a browser, in its <code>localStorage</code>).</p>
-      <p>The server keeps one session for each device: hashes of the current and the previous refresh token (never the tokens themselves), when the session was opened, when its tokens expire and when it was last refreshed. With the session it keeps nothing else about the device, neither its model nor its operating system. The language you pick and your analytics choice are kept on the device only.</p>
+      <p>The server opens a new session each time a device gets new tokens: when you first open the game, at every sign-in, and when you carry on as a new guest after logging out or after a session expired. For each session it keeps hashes of the current and the previous refresh token (never the tokens themselves), when the session was opened, when its tokens expire and when it was last refreshed. Logging out deletes the session you log out of; a session a newer sign-in replaced stays in the database, as an expired one does. With the session it keeps nothing else about the device, neither its model nor its operating system. The language you pick and your analytics choice are kept on the device only.</p>
       <p><strong>Why:</strong> so the game knows it is you, without signing up, and keeps your points.</p>
 
       <h3>An account (optional)</h3>
@@ -175,7 +175,7 @@
       <ul>
         <li><strong>An account</strong>, with a username or linked to Google Play Games: until you delete it.</li>
         <li><strong>A guest:</strong> until you delete it. A guest no device leads to any more (the app was removed, or not used for 30 days so that its session expired, or you logged in to another account on that device): <span class="ph">[РОК / PERIOD]</span>.</li>
-        <li><strong>A device's session:</strong> until you log out on that device or delete your account. The refresh token stops working after 30 days unused; the session can then no longer be used, but stays in the database until the account is deleted.</li>
+        <li><strong>A session:</strong> until you log out of it or delete your account. The refresh token stops working after 30 days unused; the session can then no longer be used, but stays in the database until the player it belongs to is deleted, as does a session a newer sign-in replaced on the device.</li>
         <li><strong>Answers, skipped questions, reactions and points</strong> and, <span class="soon">coming</span>, hidden questions and authors: as long as the account exists.</li>
         <li><strong>Your questions:</strong> approved ones, including those taken out of the game, stay in the game after your account is deleted, without an author; questions waiting for review and rejected ones are deleted with the account.</li>
         <li><span class="soon">coming</span> <strong>Reports of questions:</strong> until the moderator dismisses them, which deletes them, or you delete your account.</li>
