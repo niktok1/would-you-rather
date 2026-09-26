@@ -102,6 +102,15 @@ private fun Screens(
     val notices = koinInject<DecisionNotices>()
     val unseen by notices.unseen.collectAsStateWithLifecycle()
     val news = unseen.isNotEmpty()
+    // A tapped notification of a decision opens the Account screen, where My questions shows it.
+    val services = koinInject<AppServices>()
+    val accountAsked by services.accountAsked.collectAsStateWithLifecycle()
+    LaunchedEffect(accountAsked) {
+        if (accountAsked) {
+            navigator.open(Screen.Account)
+            services.accountShownForNotification()
+        }
+    }
 
     Surface(color = MaterialTheme.colorScheme.background, modifier = Modifier.fillMaxSize()) {
         // The insets are applied once here, so the screens below find them already consumed.

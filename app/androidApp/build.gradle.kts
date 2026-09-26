@@ -15,11 +15,17 @@ apply(from = rootProject.file("gradle/wyr-analytics.gradle.kts"))
 val posthogKey = extra["wyrPosthogKey"] as String
 val posthogHost = extra["wyrPosthogHost"] as String
 
-// The Google services' ids (CLAUDE.md §8a), from wyr.playgames.* as a Gradle property or in
-// local.properties: none is that service off on the build.
+// The Google services' ids (CLAUDE.md §8a), from wyr.playgames.* and wyr.firebase.* as a Gradle
+// property or in local.properties: none is that service off on the build.
 apply(from = rootProject.file("gradle/wyr-android-services.gradle.kts"))
 val playGamesAppId = extra["wyrPlayGamesAppId"] as String
 val playGamesServerClientId = extra["wyrPlayGamesServerClientId"] as String
+val firebaseProjectId = extra["wyrFirebaseProjectId"] as String
+val firebaseApiKey = extra["wyrFirebaseApiKey"] as String
+val firebaseSenderId = extra["wyrFirebaseSenderId"] as String
+
+@Suppress("UNCHECKED_CAST")
+val firebaseAppIds = extra["wyrFirebaseAppIds"] as Map<String, String>
 
 kotlin {
     compilerOptions {
@@ -62,6 +68,10 @@ android {
         buildConfigField("String", "PLAY_GAMES_APP_ID", "\"$playGamesAppId\"")
         buildConfigField("String", "PLAY_GAMES_SERVER_CLIENT_ID", "\"$playGamesServerClientId\"")
         resValue("string", "game_services_project_id", playGamesAppId)
+        // One Firebase project for every flavor, each flavor an app of its own in it (below).
+        buildConfigField("String", "FIREBASE_PROJECT_ID", "\"$firebaseProjectId\"")
+        buildConfigField("String", "FIREBASE_API_KEY", "\"$firebaseApiKey\"")
+        buildConfigField("String", "FIREBASE_SENDER_ID", "\"$firebaseSenderId\"")
     }
     packaging {
         resources {
@@ -119,6 +129,8 @@ android {
             dimension = "environment"
             // The flavor's name is its environment's, as WyrEnvironment.parse reads it.
             buildConfigField("String", "WYR_ENV", "\"$name\"")
+            // Firebase has one Android app per package, so each flavor its own app id (CLAUDE.md §8a).
+            buildConfigField("String", "FIREBASE_APP_ID", "\"${firebaseAppIds.getValue(name)}\"")
         }
     }
 }

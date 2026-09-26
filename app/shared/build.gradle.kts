@@ -69,6 +69,10 @@ kotlin {
             // Google Play Games Services v2, the no-click sign-in (CLAUDE.md §8a): Android's own, the §2
             // platform exception, behind the PlayGames port of :core:domain.
             implementation(libs.play.services.gamesV2)
+            // Firebase Cloud Messaging, a moderator's decision pushed (CLAUDE.md §8a): Android's own too,
+            // behind the DevicePush port, started from FirebaseOptions of the build's ids, with no
+            // google-services plugin.
+            implementation(libs.firebase.messaging)
         }
         commonMain.dependencies {
             // UI works in domain types only; :core:data is here purely to register DI bindings.

@@ -45,8 +45,9 @@ a fifth, used only as the local development database.
 Google's own Android SDKs are the client's one exception, the platform's services with no
 multiplatform equivalent, each Android-only in `:app:shared`'s androidMain behind a port of
 `:core:domain`, so common code never sees them (§4): Google Play Games Services v2
-(`play-services-games-v2`, §8a *Play Games sign-in*; approved 2026-09-26 with the user's choice of
-Play Games).
+(`play-services-games-v2`, §8a *Play Games sign-in*) and Firebase Cloud Messaging
+(`firebase-messaging`, §8a *Push tokens*), approved 2026-09-26 with the user's choice of Play Games
+and FCM.
 
 ---
 
@@ -142,6 +143,7 @@ mechanism; this table is the rationale.
 | Lint               | ktlint (Gradle plugin) | Style pinned in `.editorconfig`                  |
 | Product analytics  | PostHog (service, HTTP API, no SDK) | EU cloud; over the Ktor client (§8g) |
 | Play Games sign-in | Play Games Services v2 | `play-services-games-v2`; Android only, the §2 exception, behind `PlayGames` (§8a) |
+| Push (client)      | Firebase Cloud Messaging | `firebase-messaging`, no BOM, no google-services plugin; Android only, the §2 exception, behind `DevicePush` (§8a) |
 
 Server database engine: **PostgreSQL** (via Exposed). Hosting: **Render** — see §8.
 
@@ -576,8 +578,8 @@ decided in §8b).
   can fail as a 500.
   `AccountDeletionTest`, `AccountDeletionFlowTest`.
 
-- **Push tokens** (*decided 2026-09-26; built on the server, Android first; the client adopts
-  later*): a device's Firebase Cloud Messaging token, so a player hears when a moderator decides one
+- **Push tokens** (*decided 2026-09-26; built on the server, and on the Android client since
+  `feat/android-services`*): a device's Firebase Cloud Messaging token, so a player hears when a moderator decides one
   of their questions.
   - *Registering* is `POST /v1/me/push-tokens` with a `PushTokenRequest` (the `token` and its
     `platform`, a `PushPlatform`: `ANDROID`, `IOS` or `WEB`, and `UNKNOWN`, its default, refused), bearer
@@ -628,9 +630,31 @@ decided in §8b).
     who turns notifications off in the phone's settings sees none, whatever FCM sends.
     `KeepPushTokenRegisteredTest`, `DefaultPushTokenRepositoryTest`, `AppServicesTest`,
     `SubmitViewModelTest`.
+  - *On Android* (`AndroidPush` and `WyrMessagingService` in `:app:shared`'s androidMain, over
+    `firebase-messaging`, §4): Firebase starts from `FirebaseOptions` of the build's ids
+    (`GoogleServiceSettings`: `wyr.firebase.projectId`, `.apiKey` and `.senderId`, one project for
+    every flavor, and `wyr.firebase.appId.local`, `.dev` or `.prod`, the flavor's app in it, since
+    Firebase has one Android app per package; a Gradle property or `local.properties`, never
+    committed), with no `google-services.json` and no plugin; its `FirebaseInitProvider` is taken out
+    of the merged manifest. A build missing any of them has pushes off (`DevicePush.None`), says so in
+    one log line at launch, and never starts Firebase, which is how every test and CI build runs. The
+    decision's push (`DecisionNotifier`) carries a notification and data: **with the app in the
+    background** the system posts it by itself, on the **decisions** channel, *Твоја питања* in the
+    phone's settings (`NoticeStrings.channel`, in Serbian Cyrillic, as the push's text is; the
+    manifest's `default_notification_channel_id`), with the game's small icon, the coin
+    (`ic_notification`), and a tap opens the app on the **Account screen**, where My questions shows it
+    (`openedFromNotification`, from `MainActivity`'s intent, never a rotation's;
+    `AppServices.accountAsked`; `notification_opened`, §8g); **with the app open** it reaches
+    `WyrMessagingService.onMessageReceived`, which posts nothing, and the in-app notice reads the list
+    and dots the account icon instead (§8d, *The notice of a decision*). A new token
+    (`onNewToken`) is registered as above. The notifications permission (`POST_NOTIFICATIONS`, Android
+    13 and later) is asked from the activity on screen, once, ever, and kept as asked in the device's
+    own preferences (`wyr.device`, not the session's `wyr.auth.xml`), only once it was asked. A push the
+    server one day sends as data alone would show nothing with the app in the background: none does.
 
 - **Play Games sign-in** (*decided 2026-09-26: the user's "no-click register", with the register
-  screen kept as the fallback; built on the server, the client adopts later*): a player on Android
+  screen kept as the fallback; built on the server, and on the Android client since
+  `feat/android-services`*): a player on Android
   gets an account with no form, as Google Play Games Services v2 vouches for who they are.
   - *Signing in* is `POST /v1/auth/play-games` with a `PlayGamesSignInRequest`, the one-time server
     auth code Play Games gave the app (`requestServerSideAccess`), answered with a `SessionDto` for a
@@ -1042,9 +1066,11 @@ EncryptedSharedPreferences: enough for a game that stores no sensitive personal 
   boot, so a new key applies once the service restarts. **What the user sets up**, once:
   1. In the Firebase console, create a project (or add Firebase to a Google Cloud project), and add
      the Android app three times, once per flavor (§8e): `io.ntole.wyr`, `io.ntole.wyr.dev` and
-     `io.ntole.wyr.local`. The client branch that adopts pushes takes the `google-services.json`
-     Firebase then offers. The *Firebase Cloud Messaging API (V1)* must be enabled in Google Cloud,
-     which a new Firebase project is.
+     `io.ntole.wyr.local`. The app takes no `google-services.json` and no google-services plugin: the
+     ids in it go in `local.properties`, `wyr.firebase.projectId`, `.apiKey`, `.senderId` and each
+     flavor's `wyr.firebase.appId.<flavor>` (§8a, *Push tokens*, *On Android*; NEXT-SESSION.md, *Play
+     Games and pushes on a phone*, has the exact steps). The *Firebase Cloud Messaging API (V1)* must
+     be enabled in Google Cloud, which a new Firebase project is.
   2. In *Project settings → Service accounts*, *Generate new private key*: a JSON file downloads. It
      is a secret: never commit it, never paste it in a chat.
   3. On Render, paste the whole file as `FCM_SERVICE_ACCOUNT_JSON` on `wyr-server`, and a second key
@@ -2467,6 +2493,8 @@ the same events. The moderation app sends none.
     decided from the action's own answer and that read, never from `AccountState.signedIn`, which the
     Auth page takes down as it leaves, while the read may still run, and fail; `logout`, sent before
     the logout so it is the account's.
+  - *Notifications* (`AppServices`, §8a *Push tokens*): `notification_opened` when a tap on a
+    decision's notification opens the Account screen.
   - *Play Games* (`LinkPlayGames`, §8a *Play Games sign-in*): `play_games_signed_in` once the server
     took a Play Games sign-in, `automatic` whether it was the launch's, with no tap, and `switched`
     whether it made the device another player's; the player id is identified either way.

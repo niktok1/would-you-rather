@@ -34,6 +34,10 @@ class WyrApplication : Application() {
                         GoogleServiceSettings(
                             playGamesAppId = BuildConfig.PLAY_GAMES_APP_ID,
                             playGamesServerClientId = BuildConfig.PLAY_GAMES_SERVER_CLIENT_ID,
+                            firebaseProjectId = BuildConfig.FIREBASE_PROJECT_ID,
+                            firebaseApiKey = BuildConfig.FIREBASE_API_KEY,
+                            firebaseSenderId = BuildConfig.FIREBASE_SENDER_ID,
+                            firebaseAppId = BuildConfig.FIREBASE_APP_ID,
                         ),
                 ),
         ) {

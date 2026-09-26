@@ -1,6 +1,7 @@
 package io.ntole.wyr.services
 
 import io.ntole.wyr.core.domain.analytics.Analytics
+import io.ntole.wyr.core.domain.analytics.AnalyticsEvent
 import io.ntole.wyr.core.domain.notice.DecisionNotices
 import io.ntole.wyr.core.domain.notice.SeenDecisions
 import io.ntole.wyr.core.domain.notice.SeenDecisionsStore
@@ -31,6 +32,7 @@ class AppServicesTest {
     private val signIns = mutableListOf<String>()
     private val tokensRegistered = mutableListOf<String>()
     private var listReads = 0
+    private val analytics = TrackedEvents()
     private val session = FakeSession()
 
     @Test
@@ -107,6 +109,24 @@ class AppServicesTest {
             assertEquals(3, listReads, "a push while open")
         }
 
+    /** A tapped notification asks for the Account screen until the app has opened it, and is reported. */
+    @Test
+    fun `a tapped notification asks for the Account screen and reads the notice`() =
+        runTest {
+            session.player.value = "p1"
+            val services = services()
+            assertEquals(false, services.accountAsked.value)
+
+            services.notificationOpened()
+            testScheduler.runCurrent()
+
+            assertEquals(true, services.accountAsked.value)
+            assertEquals(1, listReads)
+            assertEquals(listOf(AnalyticsEvent.NOTIFICATION_OPENED), analytics.tracked)
+            services.accountShownForNotification()
+            assertEquals(false, services.accountAsked.value)
+        }
+
     private fun TestScope.services(): AppServices =
         AppServices(
             linkPlayGames = LinkPlayGames(SignedInPlayGames, Link(), session, NoQuestions, Analytics.None),
@@ -114,6 +134,7 @@ class AppServicesTest {
             notices = DecisionNotices(Listed(), session, NoSeen),
             session = session,
             devicePush = TokenPush,
+            analytics = analytics,
             scope = backgroundScope,
         )
 
@@ -127,6 +148,17 @@ class AppServicesTest {
         override suspend fun mine(): List<Submission> {
             listReads++
             return emptyList()
+        }
+    }
+
+    private class TrackedEvents : Analytics by Analytics.None {
+        val tracked = mutableListOf<String>()
+
+        override fun track(
+            event: String,
+            properties: Map<String, Any?>,
+        ) {
+            tracked += event
         }
     }
 

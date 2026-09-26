@@ -9,12 +9,17 @@ import kotlin.test.assertTrue
 class GoogleServiceSettingsTest {
     /** As every test and CI build runs: nothing is set, so nothing starts. */
     @Test
-    fun `a build given no ids has Play Games off and says so in one line`() {
+    fun `a build given no ids has every service off and says so in a line each`() {
         val none = GoogleServiceSettings()
 
         assertFalse(none.playGamesOn)
+        assertFalse(none.pushOn)
         assertEquals(
-            listOf("Play Games is off on this build: no wyr.playgames.appId, wyr.playgames.serverClientId"),
+            listOf(
+                "Play Games is off on this build: no wyr.playgames.appId, wyr.playgames.serverClientId",
+                "Pushes are off on this build: no wyr.firebase.projectId, wyr.firebase.apiKey, " +
+                    "wyr.firebase.senderId, this flavor's wyr.firebase.appId",
+            ),
             none.offLines(),
         )
     }
@@ -25,12 +30,42 @@ class GoogleServiceSettingsTest {
         assertFalse(GoogleServiceSettings(playGamesServerClientId = "1-abc.apps.googleusercontent.com").playGamesOn)
         assertFalse(GoogleServiceSettings(playGamesAppId = " ", playGamesServerClientId = "1-abc").playGamesOn)
         assertEquals(
-            listOf("Play Games is off on this build: no wyr.playgames.serverClientId"),
-            GoogleServiceSettings(playGamesAppId = "123456789").offLines(),
+            "Play Games is off on this build: no wyr.playgames.serverClientId",
+            GoogleServiceSettings(playGamesAppId = "123456789").offLines().first(),
+        )
+        assertTrue(GoogleServiceSettings("123456789", "1-abc.apps.googleusercontent.com").playGamesOn)
+    }
+
+    @Test
+    fun `pushes need all four of Firebase's ids`() {
+        val all =
+            GoogleServiceSettings(
+                firebaseProjectId = "wyr-game",
+                firebaseApiKey = "AIzaTest",
+                firebaseSenderId = "123456789",
+                firebaseAppId = "1:123456789:android:abc",
+            )
+        assertTrue(all.pushOn)
+        assertEquals(
+            listOf("Play Games is off on this build: no wyr.playgames.appId, wyr.playgames.serverClientId"),
+            all.offLines(),
         )
 
-        val both = GoogleServiceSettings("123456789", "1-abc.apps.googleusercontent.com")
-        assertTrue(both.playGamesOn)
-        assertEquals(emptyList(), both.offLines())
+        assertFalse(all.copy(firebaseAppId = "").pushOn, "a flavor with no app of its own")
+        assertEquals(
+            "Pushes are off on this build: no this flavor's wyr.firebase.appId",
+            all.copy(firebaseAppId = "").offLines().last(),
+        )
+        assertFalse(all.copy(firebaseApiKey = "").pushOn)
+        assertFalse(all.copy(firebaseProjectId = "").pushOn)
+        assertFalse(all.copy(firebaseSenderId = "").pushOn)
+    }
+
+    @Test
+    fun `a build with every id logs nothing`() {
+        val every = GoogleServiceSettings("123456789", "1-abc", "wyr-game", "AIzaTest", "123456789", "1:1:android:a")
+
+        assertTrue(every.playGamesOn && every.pushOn)
+        assertEquals(emptyList(), every.offLines())
     }
 }

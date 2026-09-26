@@ -38,6 +38,7 @@ internal val uiModule =
                 notices = get(),
                 session = get(),
                 devicePush = get(),
+                analytics = get(),
             )
         }
     }

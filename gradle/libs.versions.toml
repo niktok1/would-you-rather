@@ -28,6 +28,7 @@ logback = "1.5.38"
 material3 = "1.11.0-alpha07"
 # Android only, the §2 platform exception: Google's own SDK, with no multiplatform equivalent (CLAUDE.md §4).
 playServicesGamesV2 = "22.1.0"
+firebaseMessaging = "25.1.3"
 postgresql = "42.7.13"
 sqldelight = "2.3.2"
 
@@ -102,6 +103,7 @@ sqldelight-sqliteDriver = { module = "app.cash.sqldelight:sqlite-driver", versio
 
 # --- Android-only Google services (CLAUDE.md §2, §4, §8a) ---
 play-services-gamesV2 = { module = "com.google.android.gms:play-services-games-v2", version.ref = "playServicesGamesV2" }
+firebase-messaging = { module = "com.google.firebase:firebase-messaging", version.ref = "firebaseMessaging" }
 
 # --- DI ---
 koin-core = { module = "io.insert-koin:koin-core", version.ref = "koin" }

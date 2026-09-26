@@ -55,6 +55,9 @@ public object AnalyticsEvent {
      */
     public const val PLAY_GAMES_SIGNED_IN: String = "play_games_signed_in"
 
+    /** The player tapped a notification of a moderator's decision, which opens the Account screen. */
+    public const val NOTIFICATION_OPENED: String = "notification_opened"
+
     /** The player logged out, and plays on as a fresh guest. */
     public const val LOGOUT: String = "logout"
 

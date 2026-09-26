@@ -131,7 +131,9 @@ class AppNavigationTest {
                 module {
                     single<TimeSource.WithComparableMarks> { clock }
                     // What runs by itself runs here and now, on the test's Main, so a test sees what it did.
-                    single { AppServices(get(), get(), get(), get(), get(), scope = CoroutineScope(Dispatchers.Main)) }
+                    single {
+                        AppServices(get(), get(), get(), get(), get(), get(), scope = CoroutineScope(Dispatchers.Main))
+                    }
                 },
             )
         }
@@ -242,6 +244,21 @@ class AppNavigationTest {
 
             assertFalse(dotted in scene.descriptions(), "seen: no dot")
             assertTrue(CYRILLIC.account in scene.descriptions())
+        }
+    }
+
+    /** A notification of a decision tapped: the app opens on the Account screen, back to Home below it. */
+    @Test
+    fun `a tapped notification opens the Account screen`() {
+        game.username = "bob"
+        KoinPlatform.getKoin().get<AppServices>().notificationOpened()
+
+        withApp { scene ->
+            assertTrue(CYRILLIC.accountScreens.myQuestions in scene.texts(), "the Account screen is shown")
+            assertEquals(1, analytics.named(AnalyticsEvent.NOTIFICATION_OPENED).size)
+
+            scene.tap(CYRILLIC.back)
+            assertEquals(listOf(CYRILLIC.gameName, CYRILLIC.play), scene.texts())
         }
     }
 

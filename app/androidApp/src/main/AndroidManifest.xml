@@ -3,6 +3,9 @@
     xmlns:tools="http://schemas.android.com/tools">
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- A moderator's decision is a notification (CLAUDE.md §8a, Push tokens): asked for on Android 13
+         and later once, right after the player's first question is sent. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <application
         android:name=".WyrApplication"
@@ -37,6 +40,29 @@
             android:name="com.google.android.gms.games.provider.PlayGamesInitProvider"
             android:authorities="${applicationId}.playgamesinitprovider"
             tools:node="remove" />
+
+        <!-- Firebase Cloud Messaging (CLAUDE.md §8a, Push tokens), started by the app from the build's
+             ids, and only with them: its own provider, which starts it from a google-services.json's
+             resources, is taken out. A push that arrives with the app in the background is posted on
+             the decisions channel with the game's own icon; one with the app open reaches the service,
+             which posts nothing. -->
+        <provider
+            android:name="com.google.firebase.provider.FirebaseInitProvider"
+            android:authorities="${applicationId}.firebaseinitprovider"
+            tools:node="remove" />
+        <service
+            android:name="io.ntole.wyr.services.WyrMessagingService"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.google.firebase.MESSAGING_EVENT" />
+            </intent-filter>
+        </service>
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_channel_id"
+            android:value="decisions" />
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_icon"
+            android:resource="@drawable/ic_notification" />
     </application>
 
 </manifest>
