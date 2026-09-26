@@ -657,6 +657,14 @@ EncryptedSharedPreferences: enough for a game that stores nothing personal.
   accepted). Counts are in memory and per instance: right for the one Render instance, but a second
   would grant every budget again, so running two needs a shared store first (Render Key Value, say).
   A restart, which a deploy or a free instance's spin-down is, resets them.
+- **Request bodies** *(built 2026-09-26)* — no request body over 64 KiB is read
+  (`MAX_REQUEST_BODY_BYTES`, `RequestBodyCap`, no dependency of its own): Ktor reads a whole body
+  into memory to decode it, and the largest a correct client sends, a submission, is under 4 KiB. A
+  request whose `Content-Length` says more is 413 before anything else of it runs, its rate limit and
+  authentication included, whether or not its route reads a body; one that says no length, a chunked
+  body, is counted as it is read and stopped one byte past the cap (`BodyOverCap`), which
+  `receiveOrReject` answers 413. The code is `VALIDATION_FAILED`, since no correct client sends one.
+  `RequestBodyCapTest` pins both, and the cap's edge.
 - **Likes from fresh guests** — *decided 2026-09-24: no like limitations.* A like pays its author
   once per player (§8d, *Reactions*), and guests cost nothing to mint (§8a), so a script minting
   guests could pay one author a point per guest for each of their questions. The user accepted that:

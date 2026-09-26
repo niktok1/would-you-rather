@@ -68,6 +68,9 @@ fun Application.installPlugins(
         exposeHeader(HttpHeaders.RetryAfter)
     }
 
+    // After CORS, so a browser can read the 413 as well, and before anything reads a body.
+    install(RequestBodyCap)
+
     install(Authentication) {
         jwt(JWT_AUTH) {
             realm = "wyr"

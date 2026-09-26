@@ -308,6 +308,13 @@ the change, in `devRelease`, and not the count up's doing: the first frames afte
 take up to 750 ms on the UI thread (code not yet compiled, with no baseline profile), and the
 RenderThread sometimes waits 50 to 300 ms on the display's buffers.
 
+**On `feat/server-safety`** (from e603694, in the worktree `~/Projects/.wyr-worktrees/server-safety`;
+nothing pushed or merged): the server side of Google Play readiness (the user's decisions,
+2026-09-26). The clients adopt it on later branches; this one adds only the `:core` contract and the
+smallest client compile fixes.
+- **Request bodies** are capped at 64 KiB (CLAUDE.md §8b, *Request bodies*): 413 on a
+  `Content-Length` over it, before the route runs, and a chunked body stopped one byte past it.
+
 ### Verified working
 
 - **`merge/redesign` after the review of the `feat/category-picker` merge** (6b44dc4, 5a8adf7 and
