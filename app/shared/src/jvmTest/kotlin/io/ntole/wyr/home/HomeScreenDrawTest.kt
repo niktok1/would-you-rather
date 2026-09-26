@@ -9,6 +9,7 @@ import io.ntole.wyr.core.domain.vote.Tally
 import io.ntole.wyr.descriptions
 import io.ntole.wyr.language.Language
 import io.ntole.wyr.language.WyrStrings
+import io.ntole.wyr.language.fill
 import io.ntole.wyr.language.stringsOf
 import io.ntole.wyr.nodes
 import io.ntole.wyr.play.COUNT_UP_MILLIS
@@ -155,6 +156,36 @@ class HomeScreenDrawTest {
         }
     }
 
+    /**
+     * A decision the player has not seen (CLAUDE.md §8d, *The notice of a decision*): the account icon
+     * has its dot, named for a screen reader, and nothing else on Home changes, still inside a short
+     * phone's 599 in every language.
+     */
+    @Test
+    fun `with news the account icon is named for it and nothing else changes`() {
+        Language.entries.forEach { language ->
+            val strings = stringsOf(language)
+            val dotted = strings.notice.accountWithNews.fill(strings.account)
+            var opened = 0
+            val scene = scene(language, PICKS, onAccount = { opened++ }, news = true)
+            try {
+                assertEquals(listOf(dotted), scene.descriptions(), "$language")
+                assertEquals(5, scene.texts().size, "$language: the name and two buttons with their shares")
+                scene.tap(dotted)
+            } finally {
+                scene.close()
+            }
+            assertEquals(1, opened, "$language")
+            val (_, height) =
+                sizeNeeded(SHORT_PHONE_WIDTH, SHORT_PHONE_HEIGHT) {
+                    WyrTheme {
+                        WyrStrings(language) { HomeScreen(picks = PICKS, onPlay = {}, onAccount = {}, news = true) }
+                    }
+                }
+            assertTrue(height <= SHORT_PHONE_HEIGHT, "$language needs $height of $SHORT_PHONE_HEIGHT")
+        }
+    }
+
     private fun scene(
         language: Language,
         picks: Tally?,
@@ -163,10 +194,11 @@ class HomeScreenDrawTest {
         height: Int = SHORT_PHONE_HEIGHT,
         onPlay: (Side) -> Unit = {},
         onAccount: () -> Unit = {},
+        news: Boolean = false,
     ): ImageComposeScene =
         ImageComposeScene(width = width, height = height, density = Density(1f)) {
             WyrTheme(darkTheme = dark) {
-                WyrStrings(language) { HomeScreen(picks = picks, onPlay = onPlay, onAccount = onAccount) }
+                WyrStrings(language) { HomeScreen(picks = picks, onPlay = onPlay, onAccount = onAccount, news = news) }
             }
         }.also { it.render() }
 
