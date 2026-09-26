@@ -444,8 +444,8 @@ size); nothing called a deployed server.
 question is the acknowledgement; or a brief line); *The question's menu on the top bar* (the ⋮ before
 the account icon; or last, or the categories kept in the middle); *Card A's contrast* (white on
 `#D4537E` is 3.9 to 1, AA only for large text, and a long option shrinks below it; `#C4466F` would be
-4.7, the brand colour left as it is until you decide). Also worth a look: the five reasons' wording
-(`QuestionMenuStrings`) and Home's two buttons both saying *Играј*.
+4.7, the brand colour left as it is until you decide); *The report reasons' wording* (keep the five
+phrases, or reword them); *Home's two labels* (*Играј* on both, or a different word on each card).
 
 **Merging it beside the other Wave 2 branches**: `feat/moderation-reports` adds
 `core.domain.moderation.ReportReason` (with `UNKNOWN`, for reading reports) and this branch

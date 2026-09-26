@@ -801,6 +801,13 @@ EncryptedSharedPreferences: enough for a game that stores no sensitive personal 
   48 of their width and the bar's exact middle (223 of 375 left them). The options: keep it; the ⋮
   last, after the account icon, where Android puts an overflow menu; or an empty 48 beside home, to
   keep the categories in the middle, at 175 wide.
+- **The report reasons' wording** — *provisional — user decision.* The menu's five reasons (§8d, *The
+  Play screen*; `QuestionMenuStrings`) are *Увредљиво је*, *Помиње стварну особу*, *Реклама или спам*,
+  *Нема шта да се бира* and *Нешто друго*. The options: keep the five phrases; or reword them, in
+  `QuestionMenuStrings` alone.
+- **Home's two labels** — *provisional — user decision.* Both of Home's Play buttons say *Играј*
+  (§8d, *Home picks*), since both start the game alike. The options: *Играј* on both; or a different
+  word on each card.
 - **What submitting cost, on the Account screen** — *provisional — user decision.* The Account card
   shows the points and the questions answered and not `pointsSpent` (§8d, *Stats*), and the cost
   shows on the Submit form's button. The options: keep it; or a stat on the card, what was spent.
@@ -1412,7 +1419,7 @@ Categories screen and the question's menu from its top bar (*Skipping*, *Reactio
   (`WyrIcons.More`, named *Опције питања* for a screen reader) opens a small menu about the question on
   screen, asked or revealed: **Пријави питање**, which lists in its place the five reasons, one tap
   each (*Увредљиво је*, *Помиње стварну особу*, *Реклама или спам*, *Нема шта да се бира*, *Нешто
-  друго*: `QuestionMenuStrings`, `ReportReason`'s five); **Не приказуј ми ово питање**; and **Не
+  друго*: `QuestionMenuStrings`, `ReportReason`'s five; the wording provisional, §8b); **Не приказуј ми ово питање**; and **Не
   приказуј питања овог аутора** (*Reports*). A choice closes the menu and goes to
   `PlayViewModel.pickFromMenu`, and once the server has it the next question shows, with nothing more
   said, as after a skip: each hides the question for good (*provisional — user decision*, §8b). One
@@ -2129,7 +2136,7 @@ listed on the Account screen.
   increment (`HomePickStore.pick`, §4) and read in one statement (`HomePickStore.counts`).
   `HomePickStoreTest` races 8 taps of one button, `HomePickFlowTest` the routes.
   - *The Home screen* (`io.ntole.wyr.home`, *built 2026-09-26*): under the game's name, the two
-    buttons, *Играј* each, card A's pink and card B's amber, stand as the Play screen's cards do, stacked
+    buttons, *Играј* each (provisional, §8b), card A's pink and card B's amber, stand as the Play screen's cards do, stacked
     on a phone and side by side on a wide screen (the same `QuestionLayout`, a gap of `spaceMd` in the
     row's place), sharing the room under the name: `WyrDimens.playButtonHeight`, 64, is what each asks
     for where the room is unbounded, not a floor, since `QuestionLayout` gives each its share of the
