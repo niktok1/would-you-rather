@@ -8,14 +8,21 @@ import androidx.compose.foundation.layout.safeContentPadding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.ntole.wyr.account.AccountScreen
 import io.ntole.wyr.account.AccountViewModel
 import io.ntole.wyr.account.AuthScreen
+import io.ntole.wyr.analytics.UsageTracker
+import io.ntole.wyr.analytics.rememberConfigurationChanging
 import io.ntole.wyr.categories.CategoriesScreen
 import io.ntole.wyr.categories.CategoriesViewModel
 import io.ntole.wyr.home.HomeScreen
@@ -50,12 +57,14 @@ import org.koin.compose.viewmodel.koinViewModel
  * The screens are the game's, in every build whatever server it talks to (CLAUDE.md §8d,
  * *Navigation*): Home first, and the rest opened from it through a [Navigator], a back stack made by
  * hand, no tabs and no navigation library. They are shown in the language picked on the Account
- * screen, Serbian Cyrillic until one is (§8f).
+ * screen, Serbian Cyrillic until one is (§8f). The app's comings and goings and every screen shown
+ * are reported to the analytics (§8g, [UsageTracker]).
  */
 @Composable
 fun App() {
     val languages = koinViewModel<LanguageViewModel>()
     val language by languages.language.collectAsStateWithLifecycle()
+    ReportForegroundAndBackground(koinInject(), language)
 
     WyrTheme {
         WyrStrings(language) { Screens(language, onSelectLanguage = languages::select) }
@@ -74,6 +83,8 @@ private fun Screens(
 ) {
     val navigator = rememberSaveable(saver = Navigator.Saver) { Navigator() }
     SystemBack(enabled = navigator.canGoBack, onBack = { navigator.back() })
+    val usage = koinInject<UsageTracker>()
+    LaunchedEffect(navigator.current) { usage.show(navigator.current.key) }
 
     Surface(color = MaterialTheme.colorScheme.background, modifier = Modifier.fillMaxSize()) {
         // The insets are applied once here, so the screens below find them already consumed.
@@ -127,6 +138,33 @@ private fun Screens(
                 }
             }
         }
+    }
+}
+
+/**
+ * The app coming to the foreground and going to the background, as the platform's lifecycle tells it,
+ * to [usage]: Android's activity, the iOS view controller, the desktop window (minimized or not) and
+ * the browser page (hidden or not). The app shown in [language].
+ */
+@Composable
+private fun ReportForegroundAndBackground(
+    usage: UsageTracker,
+    language: Language,
+) {
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    val shownIn by rememberUpdatedState(language)
+    val configurationChanging = rememberConfigurationChanging()
+    DisposableEffect(lifecycle, usage) {
+        val observer =
+            LifecycleEventObserver { _, event ->
+                when (event) {
+                    Lifecycle.Event.ON_START -> usage.foreground(shownIn.tag)
+                    Lifecycle.Event.ON_STOP -> usage.background(configurationChanging())
+                    else -> Unit
+                }
+            }
+        lifecycle.addObserver(observer)
+        onDispose { lifecycle.removeObserver(observer) }
     }
 }
 

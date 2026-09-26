@@ -1897,6 +1897,17 @@ the same events. The moderation app sends none.
     configuration: no key is none, no host the EU cloud, `eu.i.posthog.com` is `https://`, and a host
     that is none stops the app at launch, naming it, as an environment's name does. `dataModule` binds
     the `Analytics` for it; `moderationDataModule` binds none.
+- **The app and its screens** *(built)*: `UsageTracker` (`io.ntole.wyr.analytics`), one for the app's
+  life, which `App` tells of the platform lifecycle's start and stop: Android's activity, the iOS view
+  controller, the desktop window minimized and back, the browser page hidden and shown. `app_opened`
+  at launch and from the background (`from_background`, and the `language` shown), then
+  `app_backgrounded` with `duration_ms` in the foreground, and a `flush()`. Every screen the navigator
+  shows is PostHog's `$screen`, named by its key (`home`, `play`, `account`, `auth`, `submit`,
+  `categories`), and the one left is `screen_left`, with `screen` and `duration_ms`, for another screen
+  or for the background, back from which it is shown again. An Android rotation, whose activity stops
+  only to start again, reports neither (`rememberConfigurationChanging`, over the activity's
+  `isChangingConfigurations`: the one piece of it per platform). `UsageTrackerTest`, and
+  `AppNavigationTest` through the whole app.
 - **The switch** *(built in the sender)*: on by default, and off is kept for the device, under
   `wyr.analytics.enabled` (`on` or `off`), whatever the environment, as the language is (§8f): the
   choice is the person's. Off sends nothing more and drops what waited. A build with no key keeps the

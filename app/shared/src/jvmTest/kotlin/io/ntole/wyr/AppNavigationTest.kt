@@ -13,11 +13,14 @@ import androidx.lifecycle.ViewModelStore
 import androidx.lifecycle.ViewModelStoreOwner
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
+import io.ntole.wyr.analytics.RecordingAnalytics
 import io.ntole.wyr.core.domain.account.AccountRepository
 import io.ntole.wyr.core.domain.account.LogIn
 import io.ntole.wyr.core.domain.account.LogOut
 import io.ntole.wyr.core.domain.account.RegisterAccount
 import io.ntole.wyr.core.domain.analytics.Analytics
+import io.ntole.wyr.core.domain.analytics.AnalyticsEvent
+import io.ntole.wyr.core.domain.analytics.AnalyticsProperty
 import io.ntole.wyr.core.domain.category.Category
 import io.ntole.wyr.core.domain.category.CategoryRepository
 import io.ntole.wyr.core.domain.category.GetCategories
@@ -84,7 +87,7 @@ import kotlin.time.Instant
 class AppNavigationTest {
     private val game = FakeGame()
     private val categories = FakeCategories()
-    private val analytics: Analytics = Analytics.None
+    private val analytics = RecordingAnalytics()
     private val storage = InMemoryTokenStorage()
     private val owner = TestOwner()
 
@@ -108,6 +111,23 @@ class AppNavigationTest {
             assertEquals(listOf(CYRILLIC.gameName, CYRILLIC.play), scene.texts())
             assertEquals(listOf(CYRILLIC.account), scene.descriptions())
             assertEquals(0, game.questionsAsked)
+        }
+
+    /** The app opened once, and every screen it shows, each named as it is left (CLAUDE.md §8g). */
+    @Test
+    fun `every screen shown is reported and each left named`() =
+        withApp { scene ->
+            scene.tap(CYRILLIC.play)
+            scene.tap(CYRILLIC.account)
+            scene.tap(CYRILLIC.back)
+
+            val shown = analytics.named(RecordingAnalytics.SCREEN).map { it.properties[RecordingAnalytics.SCREEN_NAME] }
+            assertEquals(listOf("home", "play", "account", "play"), shown)
+            val left = analytics.named(AnalyticsEvent.SCREEN_LEFT).map { it.properties[AnalyticsProperty.SCREEN] }
+            assertEquals(listOf("home", "play", "account"), left)
+            val opened = analytics.named(AnalyticsEvent.APP_OPENED).single()
+            assertEquals(false, opened.properties[AnalyticsProperty.FROM_BACKGROUND])
+            assertEquals(Language.SERBIAN_CYRILLIC.tag, opened.properties[AnalyticsProperty.LANGUAGE])
         }
 
     @Test

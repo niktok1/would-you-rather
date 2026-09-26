@@ -2,6 +2,7 @@ package io.ntole.wyr.di
 
 import io.ntole.wyr.account.AccountViewModel
 import io.ntole.wyr.analytics.AnalyticsSettings
+import io.ntole.wyr.analytics.UsageTracker
 import io.ntole.wyr.categories.CategoriesViewModel
 import io.ntole.wyr.core.data.di.dataModule
 import io.ntole.wyr.core.network.analytics.PostHogConfig
@@ -23,6 +24,8 @@ internal val uiModule =
         viewModelOf(::SubmitViewModel)
         viewModelOf(::LanguageViewModel)
         viewModelOf(::CategoriesViewModel)
+        // One for the app's life, as the analytics are (CLAUDE.md §8g): a rotation's new activity finds it.
+        single { UsageTracker(analytics = get()) }
     }
 
 /**
