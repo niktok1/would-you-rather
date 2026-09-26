@@ -26,8 +26,9 @@ import kotlin.time.Instant
 
 /**
  * The pending queue (CLAUDE.md §8d, *Moderation*): every submission waiting for a decision, oldest
- * first, each with its options, categories and age, and Approve and Reject under it. The queue is
- * read again after every decision, so a decided one leaves it.
+ * first, each with its options, categories, age and author, Block author and Unblock author, and
+ * Approve and Reject under it. The queue is read again after every decision, so a decided one leaves
+ * it.
  */
 @Composable
 fun PendingScreen(
@@ -91,6 +92,7 @@ private fun PendingCard(
                 style = MaterialTheme.typography.bodyMedium,
             )
             Text(text = submission.id, style = AdminType.code, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            AuthorControls(submission.authorId, isSeed = false, submission.id, Screen.PENDING, state, actions)
             DecisionControls(submission.id, submission.categories, Screen.PENDING, state, actions)
             state.pending.outcomes.failures[submission.id]
                 ?.let { FailureLine(it.failure) }
@@ -112,7 +114,7 @@ fun queueSummaryOf(submissions: List<Submission>?): String =
     }
 
 /**
- * Whether [submissions] is as many as one read of the queue lists ([ModerationRepository.PAGE_SIZE]),
- * so more may be waiting behind them.
+ * Whether [listed] is as many as one read of the queue or the reports lists
+ * ([ModerationRepository.PAGE_SIZE]), so more may be waiting behind them.
  */
-fun isFull(submissions: List<Submission>): Boolean = submissions.size >= ModerationRepository.PAGE_SIZE
+fun isFull(listed: List<*>): Boolean = listed.size >= ModerationRepository.PAGE_SIZE

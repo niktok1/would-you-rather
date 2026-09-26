@@ -20,13 +20,17 @@ import io.ntole.wyr.core.domain.category.CategoryRepository
 import io.ntole.wyr.core.domain.category.GetCategories
 import io.ntole.wyr.core.domain.moderation.AddCategory
 import io.ntole.wyr.core.domain.moderation.ApproveSubmission
+import io.ntole.wyr.core.domain.moderation.BlockAuthor
+import io.ntole.wyr.core.domain.moderation.DismissReports
 import io.ntole.wyr.core.domain.moderation.GetPendingSubmissions
 import io.ntole.wyr.core.domain.moderation.GetQuestions
+import io.ntole.wyr.core.domain.moderation.GetReportedQuestions
 import io.ntole.wyr.core.domain.moderation.ModerationRepository
 import io.ntole.wyr.core.domain.moderation.RejectSubmission
 import io.ntole.wyr.core.domain.moderation.RenameCategory
 import io.ntole.wyr.core.domain.moderation.RestoreQuestion
 import io.ntole.wyr.core.domain.moderation.RetireQuestion
+import io.ntole.wyr.core.domain.moderation.UnblockAuthor
 import io.ntole.wyr.core.domain.player.GetPlayerStats
 import io.ntole.wyr.core.domain.player.PlayerRepository
 import io.ntole.wyr.core.domain.question.GetNextQuestion
@@ -150,5 +154,9 @@ public fun moderationDataModule(environment: WyrEnvironment): Module =
         factory { RestoreQuestion(moderation = get()) }
         factory { AddCategory(moderation = get()) }
         factory { RenameCategory(moderation = get()) }
+        factory { GetReportedQuestions(moderation = get()) }
+        factory { DismissReports(moderation = get()) }
+        factory { BlockAuthor(moderation = get()) }
+        factory { UnblockAuthor(moderation = get()) }
         factory { GetCategories(categories = get()) }
     }

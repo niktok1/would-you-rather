@@ -33,7 +33,7 @@ class ErrorMapperTest {
                     // A moderator's, adding or renaming a category: never ALREADY_DECIDED or QUESTION_NOT_FOUND.
                     ApiException(ErrorCode.CATEGORY_EXISTS, status = 409) to DomainError.CATEGORY_EXISTS,
                     ApiException(ErrorCode.CATEGORY_NOT_FOUND, status = 404) to DomainError.CATEGORY_NOT_FOUND,
-                    ApiException(ErrorCode.AUTHOR_NOT_FOUND, status = 404) to DomainError.UNKNOWN,
+                    ApiException(ErrorCode.AUTHOR_NOT_FOUND, status = 404) to DomainError.AUTHOR_NOT_FOUND,
                     ApiException(ErrorCode.FORBIDDEN, status = 403) to DomainError.FORBIDDEN,
                     ApiException(ErrorCode.UNAUTHORIZED, status = 401) to DomainError.UNAUTHORIZED,
                     ApiException(ErrorCode.INVALID_REFRESH_TOKEN, status = 401) to DomainError.UNAUTHORIZED,

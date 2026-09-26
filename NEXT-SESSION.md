@@ -308,6 +308,55 @@ the change, in `devRelease`, and not the count up's doing: the first frames afte
 take up to 750 ms on the UI thread (code not yet compiled, with no baseline profile), and the
 RenderThread sometimes waits 50 to 300 ms on the display's buffers.
 
+**`feat/moderation-reports`** (from 2a4f96e; nothing pushed or merged): the moderator's side of reports
+and author blocks, whose server routes were on main (CLAUDE.md §8d, *Moderation*, *Reports*,
+*Authors*). One commit each:
+- **The client layers** (d508855): `ModerationApi` calls `GET /v1/admin/reports`, the dismissals and the
+  author blocks and unblocks; `ModerationRepository` has them behind `GetReportedQuestions`,
+  `DismissReports`, `BlockAuthor` and `UnblockAuthor`, through `runApi` alone with the admin token. A
+  domain `ReportedQuestion` and `ReportReason` (with `UNKNOWN`, several unknown reasons' counts added
+  into it), `AuthorBlock`, `authorId` on `ModeratedQuestion` and on the moderator's `Submission` (a
+  player's never carries it), and `DomainError.AUTHOR_NOT_FOUND`.
+- **A Reports tab** (d304ff0): most reported first, the count in the tab's title, Dismiss reports,
+  Retire (the same confirm dialog) and Restore.
+- **Ready-made rejection reasons** (04dc332, and 80199b6, ktlint's wrapping of its two test files,
+  which 04dc332 committed unformatted): six chips beside every reason field, in Serbian Cyrillic,
+  `READY_REASONS`.
+- **Author actions** (485af93): Block author (a confirm dialog with the reason and the ready
+  reasons) and Unblock author on Pending, Reports and All questions.
+- **The review's fixes**: a `ModerationMapperTest` case whose unknown reasons, added together, must
+  move ahead of a known one, so the sort most given first is pinned (bcdce03); two KDocs put right,
+  `ReportReason.OTHER`, which carries no words of the player's, and `ModerationViewModel`'s, which
+  left Load reports out of the Loads that read the categories first (d4ffdcb); and the third
+  decision below recorded in CLAUDE.md §8b, where the handoff said it was and it was not.
+
+**To ask the user** (CLAUDE.md §8b, each *provisional — user decision*): the ready reasons' wording
+(*Ready-made rejection reasons*); where an author stands, which the server says only in answer to
+a block or an unblock, so the app shows it only for authors acted on this session and offers both
+buttons otherwise (*Where an author stands, in the moderation app*): the other option is an
+`authorBlocked` field on the admin DTOs, a server change; and a retirement or restoration from the
+Reports tab, which puts the server's answer in the row on both tabs and reads nothing again (*A move
+from the Reports tab*): the other option is reading the reports again after every move, one more
+request of the admin budget. **At the merge**: 04dc332 alone fails `ktlintCheck` (80199b6 is
+ktlintFormat's fix to its two test files), and this repo merges with merge commits, so a plain merge
+puts a commit red in CI into main's history; fold 80199b6 into 04dc332 first, merge with
+`--squash`, or accept it knowingly. For the merge: `feat/play-client` may add a
+player's `ReportReason` in `:core:domain`; this branch's is in `io.ntole.wyr.core.domain.moderation`,
+with `UNKNOWN`, so the two clash only if they share a package, and could become one then.
+`feat/account-client` adds `DomainError`s: the moderation app's `describe` names every one, so each
+needs a line there (its `when` fails to compile until then).
+
+Verified on this Mac, again after the review's fixes: `ktlintCheck`, the verify job's tests
+(`:server` 480, `:core:domain` 79, `:core:data` 155, `:core:network` 115 and 121 as Android host
+tests, `:app:shared` 395,
+`:app:adminApp` 148, 42 of them new: `ReportsViewModelTest`, `AuthorsViewModelTest`, the label tests,
+`ReadyReasonsTest`, `ModerationTapsTest`, which taps a ready reason and the block's dialog through the
+app's semantics, and `ScreensDrawTest` reading the Reports tab's and the author actions' texts) and
+its client compiles with `assembleDebug`, and the three `:core` modules' and `:app:shared`'s iOS
+compiles. **Not verified**: the moderation app against a running server (local or dev) and in a
+browser, since that needs an admin token typed; `ModerationOverHttpTest` drives the new calls over
+the real client configuration instead, 204 dismissal included.
+
 **`feat/analytics`** (from e603694; merged to main 2026-09-26, after `feat/server-engagement`): product analytics on PostHog, from
 shared code on all four platforms (CLAUDE.md §8g): a port in the domain, a PostHog sender over its
 HTTP API with the Ktor client (no SDK, no new library), the key per platform (none is off, as in
@@ -1578,14 +1627,28 @@ closes or *Lock* is pressed, which also forgets everything read with it.
 that long says more may be waiting, and its tab reads `Pending (100+)`): each submission's options,
 categories, age and id. The chips pick the categories *Approve* files it under in place of the
 author's, none keeping the author's; *Reject* stays off until the reason typed is one line of at
-most 200 characters once trimmed. After every decision the queue is read again, so a decided
-submission leaves it, and a line above it says what the decision did; not after a 403 or a 429,
+most 200 characters once trimmed; a chip under the reason field puts a ready reason in it, in
+Serbian Cyrillic, to send as it is or edit first (`feat/moderation-reports`). After every decision
+the queue is read again, so a decided submission leaves it, and a line above it says what the decision did; not after a 403 or a 429,
 which decided nothing and would refuse the read too. A failure shows where it
 happened: under the submission, or above the queue, named by its options, once the read after it no
 longer lists it. `Wrong admin token (403)`; `An answer this build cannot name`, with its status in
 the `server:` line under it, where a bare 404 is a server without `ADMIN_TOKEN` (or a build without
 that route); `Already decided (409)`; and `Too many requests (429): try again in N s`, where ten wrong
 tokens in a minute lock the address out, the right token too, until the wait is over.
+
+**Reports** (`feat/moderation-reports`) is the questions players reported, most reported first, read
+on *Load reports*, 100 at most (`Reports (100+)` past that): each with how many players report it and
+why (*Offensive 3 · Real person 1*), when it was last reported, and the question as the list shows it.
+*Dismiss reports* clears them, which takes it off the list until someone reports it again, and reads
+the reports again; *Retire...* and *Restore* work as in the list, and the answer shows in the
+question's row on both tabs. Every question on Pending, Reports and All questions names its author by
+the first 8 characters of their id (`Author 3f2a9c1e`), or says *Seed*. *Block author...* asks in a
+dialog for the reason each of their pending questions is rejected with (the ready reasons are there
+too), blocks them from submitting, and reads again whatever tabs were read; *Unblock author* goes at
+once. The server says whether an author is blocked only in answer to a block or an unblock, so an
+author shows `· blocked` or `· not blocked` only once you did one of them since typing the token, and
+shows both buttons until then.
 
 **All questions** is every question, seeds included, newest first, read on *Load*, a page of 100 at
 a time with *Load more*. The chips narrow it by status (*Retired* among them) and by category, any

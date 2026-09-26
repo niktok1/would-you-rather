@@ -128,8 +128,9 @@ internal fun ErrorCode.toDomain(): DomainError =
 
         ErrorCode.CATEGORY_NOT_FOUND -> DomainError.CATEGORY_NOT_FOUND
 
-        // A moderator's block of an author no player is, which the moderation app never sends yet.
-        ErrorCode.AUTHOR_NOT_FOUND -> DomainError.UNKNOWN
+        // A moderator's block or unblock of an author no player is: a DomainError of its own, so the
+        // moderation app says which.
+        ErrorCode.AUTHOR_NOT_FOUND -> DomainError.AUTHOR_NOT_FOUND
 
         // Never UNAUTHORIZED: that would throw the player's session away over a moderator's token.
         ErrorCode.FORBIDDEN -> DomainError.FORBIDDEN

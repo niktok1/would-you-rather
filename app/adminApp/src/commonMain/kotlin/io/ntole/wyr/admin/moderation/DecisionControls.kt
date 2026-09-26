@@ -19,8 +19,8 @@ import io.ntole.wyr.core.domain.moderation.RejectionReason
 /**
  * Approve and Reject for the pending question [questionId], filed under [authorsCategories], on
  * [screen]: the categories to approve it under in place of the author's, picked from every category
- * the server listed, none keeping theirs, and the reason to reject it with. Reject stays off until
- * the reason is one the server accepts. What is picked and typed is the question's own, the same on
+ * the server listed, none keeping theirs, and the reason to reject it with, typed or one of
+ * [READY_REASONS] picked and edited. Reject stays off until the reason is one the server accepts. What is picked and typed is the question's own, the same on
  * either screen.
  */
 @Composable
@@ -71,6 +71,7 @@ fun DecisionControls(
             singleLine = true,
             modifier = Modifier.fillMaxWidth(),
         )
+        ReadyReasonChips(reason) { ready -> actions.setReason(questionId, ready) }
         FlowRow(horizontalArrangement = Arrangement.spacedBy(AdminDimens.spaceSm)) {
             Button(onClick = { actions.approve(questionId, screen) }, enabled = state.canSend) {
                 Text(if (state.running == Running(Action.APPROVE, questionId)) "Approving..." else "Approve")
