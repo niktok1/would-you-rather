@@ -384,6 +384,18 @@ This project must never be attributed to any employer identity.
 - The paths: push to `main` → CI (ktlint + tests) → Render builds and publishes **dev**; then, by
   hand, Manual Deploy that same commit to **prod**. Never deploy prod a commit CI has not passed or
   dev has not run.
+- **The public site**, `wyr-site` in `render.yaml` (*drafted 2026-09-26*, `docs/site`): a Render
+  static site, free, with no plan or region, published from `site/`, which holds plain HTML and one
+  CSS file, with no build step and no script. It is the home page, the privacy policy, the terms and
+  question rules, account deletion and contact that Google Play's listing and Data safety form link
+  to, in Serbian Cyrillic at the root and English under `site/en/`, each page linking the other, in
+  §5b's colours, light and dark. It deploys for a commit on `main` that changes `site/` and passes
+  CI. **Every page is a draft, not legal advice**, until the owner completes it and a lawyer checks
+  it: each carries a comment, a `noindex` and a visible banner, the owner's details are placeholders
+  in brackets, and `CHECK` comments mark what describes a feature not built yet (NEXT-SESSION.md
+  lists what to do before publishing). The privacy policy and the deletion page describe what the
+  game processes, so a change that makes either untrue changes them, both languages, in the same
+  commit.
 
 ## 8a. Authentication — resolved
 

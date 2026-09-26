@@ -14,6 +14,29 @@ Postgres, promoted by hand with *Manual Deploy*, runs `d4a9dbf` since 2026-09-25
 applied; **dev** `wyr-server-dev` on in-memory H2, deployed automatically from every green commit on
 `main` (its URL is on its Render page).
 
+**On `docs/site`** (from e603694; nothing pushed or merged): the **public site** Google Play's
+listing and Data safety form link to, `site/`, served by a new Render static site, `wyr-site`
+(CLAUDE.md §8). Five pages, `index`, `privacy`, `terms`, `delete` and `contact`, in Serbian Cyrillic
+(`site/*.html`) and English (`site/en/*.html`), plain HTML and `site/style.css`, no script, nothing
+loaded from another host. Preview: `python3 -m http.server 8123 -d site`, then
+http://localhost:8123. **All drafts, not legal advice.** The privacy policy describes what the game
+is to process at release, which is more than `main` builds: analytics (PostHog EU, with an off
+switch), answer time, reports, push tokens (FCM) for an approved question, Play Games sign-in,
+deleting an account in the app (Налог → Обриши налог), the 90-day clean-up of guests, and
+personalization (planned; never from questions on religion, politics, health or sexuality). Each has
+a `CHECK` comment on the Serbian page. Before Google Play links to it:
+1. Fill the placeholders, `grep -rn 'class="ph"' site/`: name, address, email, date, year, the
+   retention periods, the court's town and the store link.
+2. Settle every `grep -rn 'CHECK' site/` against what ships, in both languages; add the optional
+   email if it ships.
+3. Have a lawyer who knows the ZZPL and the GDPR read both languages.
+4. From every page remove the draft comment, `<meta name="robots" content="noindex">` and the
+   `.draft` banner.
+5. Merge to `main`, and the Blueprint creates `wyr-site` (sync it in the dashboard if not). Its URL
+   is `https://wyr-site.onrender.com` unless a custom domain comes first: Play Console takes
+   `/privacy.html` as the privacy policy and `/delete.html` as the account deletion URL, and the
+   Data safety answers must match the policy.
+
 **`feat/simple-accounts` is on `main`**, and on `origin/main`, at b175247: stage 1 took the recovery
 secret, Block Store, the Keychain, the rollback mirror and the question's row lock out (CLAUDE.md
 §8a, §8b). Stage 2 built simple accounts on the server (§8a, *Accounts*): V5, register, log in, log
