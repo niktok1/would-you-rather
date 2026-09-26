@@ -129,9 +129,9 @@
       <p><strong>Зашто:</strong> да поправљамо грешке и игру чинимо бољом.</p>
 
       <h3>Обавештења (Firebase Cloud Messaging) <span class="soon">у изради</span></h3>
-      <p>Андроид верзија ће моћи да те обавести кад модератор одобри или одбије твоје питање. Ако дозволиш обавештења, телефон добија токен за обавештења од Google-ове услуге Firebase Cloud Messaging, а апликација га шаље нашем серверу. Уз токен чувамо врсту уређаја, сесију уређаја која га је послала и кад је последњи пут послат. Кад модератор одлучи о твом питању, сервер преко Firebase Cloud Messaging-а шаље обавештење на твоје уређаје, највише десет најновијих, а у њему су текст питања и, ако је одбијено, разлог. Токен користимо само за то.</p>
+      <p>Андроид верзија ће моћи да те обавести кад модератор одобри или одбије твоје питање. За то телефон добија токен за обавештења од Google-ове услуге Firebase Cloud Messaging, а апликација га шаље нашем серверу. Уз токен чувамо платформу (Андроид, iOS или веб), сесију уређаја која га је послала и кад је последњи пут послат. Кад модератор одлучи о твом питању, сервер преко Firebase Cloud Messaging-а шаље обавештење на твоје уређаје, највише десет најновијих, а у њему су текст питања и, ако је одбијено, разлог. Токен користимо само за то.</p>
       <p>Токен бришемо кад се на том уређају одјавиш, кад обришеш налог и кад Firebase јави да уређај више не прима обавештења.</p>
-      <!-- CHECK: push is built on the server only (CLAUDE.md §8a, Push tokens); the Android client adopts it later, iOS and the web after (on iOS through Apple's push service: add it here and in section 4 then). Say how a player turns notifications off in the game once that exists (it calls the removal route); turning them off in the phone's settings alone leaves the token on the server. -->
+      <!-- CHECK: push is built on the server only (CLAUDE.md §8a, Push tokens); the Android client adopts it later, iOS and the web after (on iOS through Apple's push service: add it here and in section 4 then). Say how a player turns notifications off in the game once that exists (it calls the removal route); turning them off in the phone's settings alone leaves the token on the server. Whether the app sends its token only once the player allows notifications, or at once, is not decided (§8a, Push tokens, says only that the server takes a token whether or not its pushes are on): if the app asks first, say so here („Ако дозволиш обавештења...“) and in section 3. The platform is push_tokens.platform (ANDROID, IOS or WEB). -->
       <p><strong>Зашто:</strong> да сазнаш шта је било са твојим питањем.</p>
 
       <h3>Персонализација (у плану)</h3>
@@ -154,7 +154,7 @@
     <section id="legal-basis">
       <h2>3. Правни основ</h2>
       <ul>
-        <li><strong>Извршење уговора</strong> (члан 12. став 1. тачка 2) Закона о заштити података о личности; члан 6(1)(b) GDPR): игра као гост и са налогом, сесије, подаци о игри, питања која шаљеш и, кад стигну, пријава преко Google Play игара и обавештења која укључиш. Без тога игра не може да ради онако како је користиш.</li>
+        <li><strong>Извршење уговора</strong> (члан 12. став 1. тачка 2) Закона о заштити података о личности; члан 6(1)(b) GDPR): игра као гост и са налогом, сесије, подаци о игри, питања која шаљеш и, кад стигну, пријава преко Google Play игара и обавештења о твојим питањима. Без тога игра не може да ради онако како је користиш.</li>
         <li><strong>Легитимни интерес</strong> (члан 12. став 1. тачка 6); члан 6(1)(f) GDPR): безбедност и ограничење броја захтева, евиденције сервера, модерација, пријаве и сакривање питања, аналитика ради побољшања игре и, кад буде уведена, персонализација. Овој обради можеш да уложиш приговор, а аналитику искључујеш и сам, прекидачем <strong>Статистика</strong>.</li>
         <li><strong>Правна обавеза</strong> (члан 12. став 1. тачка 3); члан 6(1)(c) GDPR): кад нам закон налаже да податке сачувамо или предамо надлежном органу.</li>
       </ul>
