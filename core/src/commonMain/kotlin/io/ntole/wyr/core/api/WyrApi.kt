@@ -260,6 +260,28 @@ public object WyrApi {
          * admin token configured has no admin routes: each is 404, as a path the server does not have.
          */
         public const val ADMIN_TOKEN: String = "X-Admin-Token"
+
+        /**
+         * Which client sent the request, one of [ClientPlatform]'s names, sent with [CLIENT_VERSION] on
+         * every request of the game's (CLAUDE.md §8b, *Minimum client version*). With the two, a server
+         * that has a minimum build for the platform refuses an older build with 426
+         * [io.ntole.wyr.core.error.ErrorCode.UPGRADE_REQUIRED] before anything else, every path but
+         * [Paths.HEALTH]. A request without them, the moderation app's or a build's from before them,
+         * is never refused for its build, and neither is a platform with no minimum, nor a version that
+         * is no whole number.
+         */
+        public const val CLIENT_PLATFORM: String = "X-Client-Platform"
+
+        /** The client's build number, a whole number that grows with every release: see [CLIENT_PLATFORM]. */
+        public const val CLIENT_VERSION: String = "X-Client-Version"
+    }
+
+    /** What [Headers.CLIENT_PLATFORM] names, in lower case, as a client sends it. */
+    public object ClientPlatform {
+        public const val ANDROID: String = "android"
+        public const val IOS: String = "ios"
+        public const val WEB: String = "web"
+        public const val DESKTOP: String = "desktop"
     }
 
     public object Query {

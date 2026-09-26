@@ -317,6 +317,11 @@ smallest client compile fixes.
 - **Guest minting** defaults to 60 an hour per address, was 10 (§8b, *Rate limiting*): a carrier's
   shared address or a school's Wi-Fi stands for many players. `RATE_LIMIT_GUESTS_PER_HOUR` still
   overrides it.
+- **A minimum build** per platform (§8b, *Minimum client version*): `MIN_CLIENT_VERSION_ANDROID` and
+  the rest make an older build's request 426 `UPGRADE_REQUIRED`, first thing, but for `/health`. No
+  client sends `X-Client-Platform` and `X-Client-Version` yet, so nothing is refused until one does;
+  the client branch that sends them gives `UPGRADE_REQUIRED` a `DomainError` of its own (it reads as
+  `UNKNOWN` for now) and a screen that says to update.
 
 ### Verified working
 

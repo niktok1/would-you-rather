@@ -103,5 +103,16 @@ class ApiFailure(
                 ErrorCode.INVALID_REFRESH_TOKEN,
                 "refresh token unknown, expired, or already rotated",
             )
+
+        /** A build older than its platform's [minimum] ([ClientVersionCheck]). */
+        fun upgradeRequired(
+            platform: String,
+            version: Int,
+            minimum: Int,
+        ) = ApiFailure(
+            HttpStatusCode.UpgradeRequired,
+            ErrorCode.UPGRADE_REQUIRED,
+            "$platform build $version is older than $minimum, the oldest this server serves",
+        )
     }
 }

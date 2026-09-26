@@ -92,6 +92,10 @@ internal fun ErrorCode.toDomain(): DomainError =
 
         ErrorCode.RATE_LIMITED -> DomainError.RATE_LIMITED
 
+        // Sent only to a build that names itself, which none does yet: the client that sends the
+        // headers gives it a DomainError of its own, asking the player to update.
+        ErrorCode.UPGRADE_REQUIRED -> DomainError.UNKNOWN
+
         ErrorCode.INTERNAL -> DomainError.SERVER
 
         // A rejected body means client and server disagree about the contract — a bug on one

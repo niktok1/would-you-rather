@@ -140,6 +140,14 @@ public enum class ErrorCode {
      */
     RATE_LIMITED,
 
+    /**
+     * The client's build is older than the oldest the server serves on its platform
+     * ([io.ntole.wyr.core.api.WyrApi.Headers.CLIENT_VERSION]): the player must update the app. Sent with
+     * 426, before anything else about the request is looked at, so it did nothing, and every request of
+     * that build gets the same until it is updated.
+     */
+    UPGRADE_REQUIRED,
+
     /** Unexpected server-side failure. */
     INTERNAL,
 

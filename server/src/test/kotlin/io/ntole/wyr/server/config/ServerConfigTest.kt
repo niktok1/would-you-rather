@@ -162,6 +162,35 @@ class ServerConfigTest {
         }
     }
 
+    @Test
+    fun `each platform's minimum build comes from its variable and none is set by default`() {
+        assertEquals(emptyMap(), ServerConfig.fromEnvironment { null }.minClientVersions)
+
+        val env =
+            mapOf(
+                "MIN_CLIENT_VERSION_ANDROID" to "12",
+                "MIN_CLIENT_VERSION_IOS" to " 3 ",
+                "MIN_CLIENT_VERSION_WEB" to "",
+                "MIN_CLIENT_VERSION_DESKTOP" to "1",
+            )
+        assertEquals(
+            mapOf("android" to 12, "ios" to 3, "desktop" to 1),
+            ServerConfig.fromEnvironment(env::get).minClientVersions,
+            "blank is unset",
+        )
+    }
+
+    @Test
+    fun `a minimum build that is not a whole number of at least 1 fails at config load and names its variable`() {
+        listOf("0", "-1", "abc", "1.5", "2147483648").forEach { raw ->
+            val failure =
+                assertFailsWith<IllegalArgumentException>("\"$raw\" should be rejected") {
+                    ServerConfig.fromEnvironment(mapOf("MIN_CLIENT_VERSION_IOS" to raw)::get)
+                }
+            assertContains(failure.message.orEmpty(), "MIN_CLIENT_VERSION_IOS")
+        }
+    }
+
     /**
      * No time bound unless one is set (CLAUDE.md §8a), so a refresh whose answer was lost can be sent
      * again however much later the player is back; 600, as the grace was at first, is one variable away.

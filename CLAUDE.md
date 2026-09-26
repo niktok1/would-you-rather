@@ -373,6 +373,9 @@ This project must never be attributed to any employer identity.
   Render is the proxy, one budget for everyone: the server warns at boot when `RENDER` is `true` and
   no header is set. To be checked once deployed (NEXT-SESSION.md). No forwarded-header plugin:
   `ktor-server-forwarded-header` would be a new dependency for the one line this needs.
+- `MIN_CLIENT_VERSION_ANDROID`, `_IOS`, `_WEB` and `_DESKTOP` each name the oldest build of the game
+  the server serves on that platform (§8b, *Minimum client version*); none is set, so no build is
+  refused. Read at boot: raising one is changing the variable and restarting the service.
 - The Docker build sets `WYR_SERVER_ONLY=1`, which makes `settings.gradle.kts` skip the app
   modules. Without it the Android Gradle plugin fails at configuration time for want of an SDK.
 - Free tier caveats to design around: free web services spin down after ~15 min idle (cold
@@ -666,6 +669,19 @@ EncryptedSharedPreferences: enough for a game that stores nothing personal.
   body, is counted as it is read and stopped one byte past the cap (`BodyOverCap`), which
   `receiveOrReject` answers 413. The code is `VALIDATION_FAILED`, since no correct client sends one.
   `RequestBodyCapTest` pins both, and the cap's edge.
+- **Minimum client version** *(built 2026-09-26; no client sends the headers yet)* — every request of
+  the game's will name its build: `X-Client-Platform` (`android`, `ios`, `web` or `desktop`,
+  `WyrApi.ClientPlatform`) and `X-Client-Version`, a whole build number (`WyrApi.Headers`). Each
+  platform's oldest build served comes from `MIN_CLIENT_VERSION_ANDROID`, `_IOS`, `_WEB` or
+  `_DESKTOP` (unset, the default, no minimum; one that is not a whole number of at least 1 fails at
+  boot, naming it). An older build is 426 `UPGRADE_REQUIRED` before anything else of the request,
+  its rate limit, body and authentication included, on every path but `/health`
+  (`ClientVersionCheck`, installed after CORS, which lets a browser send both headers and read the
+  426). A request that names no build passes, the moderation app's and every build's from before the
+  headers, and so do a platform with no minimum and a version that is no whole number: *provisional*,
+  since refusing it would lock a broken build out whatever its number. On the client
+  `UPGRADE_REQUIRED` reads as `DomainError.UNKNOWN` until the branch that sends the headers gives it
+  one of its own. `ClientVersionTest`, `CorsTest`, `ServerConfigTest`.
 - **Likes from fresh guests** — *decided 2026-09-24: no like limitations.* A like pays its author
   once per player (§8d, *Reactions*), and guests cost nothing to mint (§8a), so a script minting
   guests could pay one author a point per guest for each of their questions. The user accepted that:

@@ -61,6 +61,9 @@ fun Application.installPlugins(
         // So a moderator can work from the web client too (CLAUDE.md §8d). Allowing a browser to send
         // it grants nothing by itself: the routes still check its value, and are absent without one.
         allowHeader(WyrApi.Headers.ADMIN_TOKEN)
+        // The web build names itself on every request, so a minimum build can apply to it too.
+        allowHeader(WyrApi.Headers.CLIENT_PLATFORM)
+        allowHeader(WyrApi.Headers.CLIENT_VERSION)
         allowMethod(HttpMethod.Get)
         allowMethod(HttpMethod.Post)
         // A page's script reads only the safelisted response headers and those named here, so without
@@ -68,7 +71,9 @@ fun Application.installPlugins(
         exposeHeader(HttpHeaders.RetryAfter)
     }
 
-    // After CORS, so a browser can read the 413 as well, and before anything reads a body.
+    // After CORS, so a browser can read their refusals as well, and before anything else of a request:
+    // an old build is refused whatever it sent, and then a body over the cap before anything reads it.
+    install(ClientVersionCheck) { minimums = config.minClientVersions }
     install(RequestBodyCap)
 
     install(Authentication) {

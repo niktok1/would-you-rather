@@ -1,5 +1,7 @@
 package io.ntole.wyr.server.config
 
+import io.ntole.wyr.core.api.WyrApi
+
 /**
  * Everything the server reads from the environment.
  *
@@ -58,6 +60,12 @@ data class ServerConfig(
     val clientIpHeader: String?,
     /** True on Render, which sets `RENDER` to `true` for every service. Only a boot warning reads it. */
     val onRender: Boolean,
+    /**
+     * The oldest build the server serves on each platform, by its `WyrApi.ClientPlatform` name, from
+     * `MIN_CLIENT_VERSION_ANDROID`, `_IOS`, `_WEB` and `_DESKTOP` (CLAUDE.md §8b, *Minimum client
+     * version*). A platform left out, the default for every one, has no minimum.
+     */
+    val minClientVersions: Map<String, Int> = emptyMap(),
 ) {
     /** True when running against the throwaway in-memory database. */
     val isEphemeralDatabase: Boolean get() = jdbcUrl.startsWith("jdbc:h2:")
@@ -116,8 +124,34 @@ data class ServerConfig(
                 rateLimits = RateLimits.fromEnvironment(env),
                 clientIpHeader = env("CLIENT_IP_HEADER")?.let(::parseClientIpHeader),
                 onRender = env("RENDER") == "true",
+                minClientVersions = parseMinClientVersions(env),
             )
         }
+
+        /**
+         * Each platform's minimum build whose variable is set, a whole number of at least 1, trimmed;
+         * blank is unset. Anything else fails at config load, naming the variable, rather than leaving
+         * the minimum off unnoticed, or refusing every build of the platform.
+         */
+        internal fun parseMinClientVersions(env: (String) -> String?): Map<String, Int> =
+            MIN_CLIENT_VERSION_VARIABLES
+                .mapNotNull { (platform, variable) ->
+                    val raw = env(variable)?.trim()?.takeIf { it.isNotEmpty() } ?: return@mapNotNull null
+                    val minimum = raw.toIntOrNull()
+                    require(minimum != null && minimum >= 1) {
+                        "$variable is \"$raw\"; expected a whole build number of at least 1, or unset for no minimum."
+                    }
+                    platform to minimum
+                }.toMap()
+
+        /** Each platform's variable naming its minimum build. */
+        private val MIN_CLIENT_VERSION_VARIABLES: Map<String, String> =
+            mapOf(
+                WyrApi.ClientPlatform.ANDROID to "MIN_CLIENT_VERSION_ANDROID",
+                WyrApi.ClientPlatform.IOS to "MIN_CLIENT_VERSION_IOS",
+                WyrApi.ClientPlatform.WEB to "MIN_CLIENT_VERSION_WEB",
+                WyrApi.ClientPlatform.DESKTOP to "MIN_CLIENT_VERSION_DESKTOP",
+            )
 
         /**
          * Refuses an admin token no request could present, so moderation cannot be configured on and
