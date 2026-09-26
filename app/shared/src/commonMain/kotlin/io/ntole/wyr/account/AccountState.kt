@@ -97,11 +97,12 @@ data class AccountState(
         get() = playGamesAvailable && stats?.playGamesLinked != true
 
     /**
-     * The points a login would leave behind, for a player with any who has no username: a guest, or
-     * one registered by Play Games alone, whose account stays, but not on this device. Null otherwise.
+     * The points a login would leave behind, for a guest who has any: nothing brings a guest back. Null
+     * otherwise, a player registered by Play Games alone included, whose points stay on their account,
+     * one tap away on this page.
      */
     val pointsLeftBehindByLogIn: Int?
-        get() = stats?.takeIf { it.username == null && it.totalPoints > 0 }?.totalPoints
+        get() = stats?.takeIf { !it.registered && it.totalPoints > 0 }?.totalPoints
 }
 
 /** The Auth page's two forms (CLAUDE.md §8d, *The Account screen*). */

@@ -527,6 +527,25 @@ class AccountViewModelTest {
             assertNull(state.guestPointsWarning)
         }
 
+    /** Not a guest: their points stay on the Play Games account, which the Auth page signs in to again. */
+    @Test
+    fun `a player registered by Play Games alone logs in without a warning`() =
+        runTest(dispatcher) {
+            game.points = 5
+            game.playGamesLinked = true
+            game.accounts["bob_1"] = "correct horse" to "bob-player"
+            val viewModel = open()
+            viewModel.setAuthMode(AuthMode.LOG_IN)
+            viewModel.setLoginUsername("bob_1")
+            viewModel.setLoginPassword("correct horse")
+
+            viewModel.logIn()
+            testScheduler.advanceUntilIdle()
+
+            assertEquals("bob-player", game.player)
+            assertNull(viewModel.state.value.guestPointsWarning)
+        }
+
     @Test
     fun `cancelling the warning logs in to nothing`() =
         runTest(dispatcher) {

@@ -1466,7 +1466,9 @@ orientation, in common code alone:
 - A refusal from the server shows under the form that sent it, in a few words: a taken name, a wrong
   login, a rate limit with its wait, offline. A guest with points who logs in is warned once that the
   guest's points stay behind, *Поени госта (12) неће прећи на налог.*, the 12 after a coin
-  (`PointsText`, §8f), and the next *Ипак се пријави* goes ahead; switching forms takes the warning down, and a form's failure with it.
+  (`PointsText`, §8f), and the next *Ипак се пријави* goes ahead; a player registered by Play Games
+  alone is not warned, their points staying on that account, which the page's Play Games button signs
+  in to again; switching forms takes the warning down, and a form's failure with it.
 - Each field names its autofill content type (`NewUsername` and `NewPassword` to register,
   `Username` and `Password` to log in), so the phone's password manager can fill them and offer to
   save them once a register or login that worked takes the page off the screen (Compose on Android
