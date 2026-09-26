@@ -156,6 +156,37 @@ class ModerationMapperTest {
     }
 
     @Test
+    fun `reasons this build cannot name are added together and then take their place by count`() {
+        val reported =
+            AdminReportDto(
+                question = AdminQuestionDto("q1", "Fly", "Swim", submittedAt = 1L, tally = VoteTallyDto(0, 0)),
+                reportCount = 10,
+                // The two UNKNOWNs stand for two reasons added server-side since this build.
+                reasons =
+                    listOf(
+                        ReportReasonCountDto(WireReportReason.OFFENSIVE, 3),
+                        ReportReasonCountDto(WireReportReason.SPAM, 2),
+                        ReportReasonCountDto(WireReportReason.UNKNOWN, 2),
+                        ReportReasonCountDto(WireReportReason.UNKNOWN, 2),
+                        ReportReasonCountDto(WireReportReason.OTHER, 1),
+                    ),
+                lastReportedAt = 5_000L,
+            ).toDomain()
+
+        assertEquals(4, reported.reasons[DomainReportReason.UNKNOWN])
+        assertEquals(
+            listOf(
+                DomainReportReason.UNKNOWN,
+                DomainReportReason.OFFENSIVE,
+                DomainReportReason.SPAM,
+                DomainReportReason.OTHER,
+            ),
+            reported.reasons.keys.toList(),
+            "most given first, the reasons added together ahead of the rest",
+        )
+    }
+
+    @Test
     fun `every wire reason maps to its domain namesake`() {
         assertEquals(
             WireReportReason.entries.map { it.name },
