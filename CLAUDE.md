@@ -585,9 +585,10 @@ decided in §8b).
     and `GET /v1/me` says so (`PlayerStatsDto.playGamesLinked`). They may still register a username and
     password, to log in where there is no Play Games: on iOS and the web.
   - *Refusals*: a code Google refuses (`invalid_grant`: spent, expired, another app's) is 422
-    `PLAY_GAMES_CODE_REFUSED`, answered by asking Play Games for a new one; Google not answering, or
-    refusing the server itself (`invalid_client`), is 502 `PLAY_GAMES_UNAVAILABLE`, logged; neither
-    changes anything. An expired or forged bearer is 401 before the code goes anywhere (the route's
+    `PLAY_GAMES_CODE_REFUSED`, answered by asking Play Games for a new one; Google not answering,
+    refusing the server itself (`invalid_client`), or Play Games answering 403, the server's setup and
+    never the code's (its API not enabled in the Cloud project, say), is 502 `PLAY_GAMES_UNAVAILABLE`,
+    logged as a warning with Google's status and reason codes alone; neither changes anything. An expired or forged bearer is 401 before the code goes anywhere (the route's
     authentication is optional, which still refuses a bad token), so the refreshed retry can spend it.
     A code is 1 to `WyrApi.Limits.MAX_SERVER_AUTH_CODE_LENGTH` (2048) of visible ASCII, or 400. Off
     (the variables unset), the route is not served: 404. Limited per address, 20 a minute (§8b). On
@@ -821,7 +822,9 @@ EncryptedSharedPreferences: enough for a game that stores nothing personal.
   4. Until the game is published, add each tester's Google account under *Testers*, or Play Games
      refuses them.
   5. On Render, set both variables on `wyr-server`, and on `wyr-server-dev` too to try it there, then
-     restart each.
+     restart each. A sign-in the server's log warns of as `403 PERMISSION_DENIED SERVICE_DISABLED`
+     means the *Google Play Game Services* API is off in that Cloud project: enable it under *APIs &
+     Services*.
 - **Push notifications** — *built on the server 2026-09-26 (§8a, *Push tokens*); off until the user
   sets it up.* The server sends through Firebase Cloud Messaging as a Google service account, whose
   JSON key file `FCM_SERVICE_ACCOUNT_JSON` holds whole (`sync: false` in `render.yaml`, set by hand in

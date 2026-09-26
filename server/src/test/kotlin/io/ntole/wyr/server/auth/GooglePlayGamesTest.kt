@@ -1,5 +1,6 @@
 package io.ntole.wyr.server.auth
 
+import ch.qos.logback.classic.Level
 import io.ktor.http.HttpStatusCode
 import io.ntole.wyr.server.auth.FakePlayGames.Companion.json
 import io.ntole.wyr.server.google.googleHttpClient
@@ -10,6 +11,7 @@ import java.io.IOException
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 
 /**
  * Asking Google who a Play Games server auth code names (CLAUDE.md §8a, *Play Games sign-in*), with
@@ -49,10 +51,35 @@ class GooglePlayGamesTest {
     @Test
     fun `a grant that does not reach Play Games is Refused`() =
         runBlocking {
-            listOf(HttpStatusCode.Unauthorized, HttpStatusCode.Forbidden).forEach { status ->
-                val google = FakePlayGames(players = mapOf("code-1" to "g-1"), playersMe = { json("{}", status) })
+            val google =
+                FakePlayGames(
+                    players = mapOf("code-1" to "g-1"),
+                    playersMe = { json("{}", HttpStatusCode.Unauthorized) },
+                )
 
-                assertEquals(PlayGamesAnswer.Refused, google.verifier().playerOf("code-1"), "$status")
+            assertEquals(PlayGamesAnswer.Refused, google.verifier().playerOf("code-1"))
+        }
+
+    /**
+     * Google's 403 for an API not enabled in the Cloud project, the likeliest slip in setting Play Games
+     * up: the server's to put right, so the client is not told to get a new code, and the operator is
+     * warned with the reason and none of Google's message.
+     */
+    @Test
+    fun `a 403 from Play Games is Unavailable and warned of with its reason`() =
+        withLogCapture { logged ->
+            runBlocking {
+                val google =
+                    FakePlayGames(
+                        players = mapOf("code-1" to "g-1"),
+                        playersMe = { json(SERVICE_DISABLED, HttpStatusCode.Forbidden) },
+                    )
+
+                assertEquals(PlayGamesAnswer.Unavailable, google.verifier().playerOf("code-1"))
+
+                val warning = logged.list.single { it.level == Level.WARN }.formattedMessage
+                assertTrue(warning.contains("403 PERMISSION_DENIED SERVICE_DISABLED"), warning)
+                assertFalse(logged.printed().joinToString("\n").contains("has not been used"), warning)
             }
         }
 
@@ -127,5 +154,16 @@ class GooglePlayGamesTest {
 
     private companion object {
         const val CODE = "4/0AX4XfWh-a-code-that-must-never-be-logged"
+
+        /** Google's answer when the Play Games API is not enabled in the Cloud project, as its APIs send it. */
+        val SERVICE_DISABLED =
+            """
+            {"error":{"code":403,
+              "message":"Google Play Game Services API has not been used in project 123 before or it is disabled.",
+              "errors":[{"message":"disabled","domain":"usageLimits","reason":"accessNotConfigured"}],
+              "status":"PERMISSION_DENIED",
+              "details":[{"@type":"type.googleapis.com/google.rpc.ErrorInfo","reason":"SERVICE_DISABLED",
+                "domain":"googleapis.com","metadata":{"service":"games.googleapis.com","consumer":"projects/123"}}]}}
+            """.trimIndent()
     }
 }

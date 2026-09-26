@@ -10,6 +10,7 @@ import io.ktor.http.isSuccess
 import io.ktor.http.parameters
 import io.ntole.wyr.server.db.Identities
 import io.ntole.wyr.server.google.GoogleJson
+import io.ntole.wyr.server.google.googleApiErrorCodes
 import io.ntole.wyr.server.google.oauthErrorCode
 import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.SerialName
@@ -115,13 +116,18 @@ class GooglePlayGames(
 
     private suspend fun playerOfToken(accessToken: String): PlayGamesAnswer {
         val response = http.get(PLAYERS_ME) { bearerAuth(accessToken) }
-        if (response.status == HttpStatusCode.Unauthorized || response.status == HttpStatusCode.Forbidden) {
-            // The code's grant does not reach Play Games, a scope the client did not ask for, say.
+        if (response.status == HttpStatusCode.Unauthorized) {
+            // The access the code's grant gave does not reach Play Games.
             log.info("Play Games refused the access a code granted: ${response.status.value}")
             return PlayGamesAnswer.Refused
         }
         if (!response.status.isSuccess()) {
-            log.warn("Play Games did not name the player: ${response.status.value}")
+            // A 403 is this server's setup, never the code's, so a new code would fare no better: the
+            // Play Games API not enabled in the Cloud project above all (PERMISSION_DENIED SERVICE_DISABLED).
+            log.warn(
+                "Play Games did not name the player: ${response.status.value} " +
+                    (response.googleApiErrorCodes() ?: "no error code"),
+            )
             return PlayGamesAnswer.Unavailable
         }
         val playerId = GoogleJson.decodeFromString<PlayerResponse>(response.bodyAsText()).playerId

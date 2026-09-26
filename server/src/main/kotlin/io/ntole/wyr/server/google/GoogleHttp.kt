@@ -61,3 +61,42 @@ internal suspend fun HttpResponse.oauthErrorCode(): String? =
 private class OAuthError(
     val error: String? = null,
 )
+
+/**
+ * The codes of a Google API's error answer, its status and then its reason, as `PERMISSION_DENIED
+ * SERVICE_DISABLED`, or null for an answer that holds neither. The reason is the error details'
+ * (`google.rpc.ErrorInfo`), or else the older `errors` list's (`accessNotConfigured`). Only codes, as
+ * [oauthErrorCode] keeps: never the message, which may quote what was sent.
+ */
+internal suspend fun HttpResponse.googleApiErrorCodes(): String? =
+    try {
+        GoogleJson.decodeFromString<ApiErrorBody>(bodyAsText()).error?.let { fields ->
+            val reason =
+                (fields.details + fields.errors).firstNotNullOfOrNull { it.reason }
+            listOfNotNull(fields.status, reason)
+                .filter { code -> code.isNotEmpty() && code.all { it.isLetterOrDigit() || it == '_' } }
+                .joinToString(" ")
+                .ifEmpty { null }
+        }
+    } catch (_: SerializationException) {
+        null
+    } catch (_: IllegalArgumentException) {
+        null
+    }
+
+@Serializable
+private class ApiErrorBody(
+    val error: ApiErrorFields? = null,
+)
+
+@Serializable
+private class ApiErrorFields(
+    val status: String? = null,
+    val errors: List<ApiErrorReason> = emptyList(),
+    val details: List<ApiErrorReason> = emptyList(),
+)
+
+@Serializable
+private class ApiErrorReason(
+    val reason: String? = null,
+)
