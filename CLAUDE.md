@@ -2307,6 +2307,13 @@ the same events. The moderation app sends none.
     `packageVersion` and the web build's `APP_VERSION`. Xcode reads iOS's `MARKETING_VERSION` from
     `Config.xcconfig`, which Gradle cannot write, so every Gradle build fails, naming both, until the
     two agree: a release changes them together.
+  - *The build number* (*built 2026-09-26*) is made from it, one for every platform: MAJOR * 10000 +
+    MINOR * 100 + PATCH, so 1.0.0 is 10000 and 1.2.3 is 10203, MINOR and PATCH each checked below 100,
+    or the build fails. It is Android's `versionCode` (`BuildConfig.VERSION_CODE`), desktop's
+    `wyr.app.build` system property, the web build's `BUILD_NUMBER` constant beside `APP_VERSION`, and
+    iOS's `CFBundleVersion`, from `CURRENT_PROJECT_VERSION` in `Config.xcconfig`, which the Gradle
+    build checks as it checks `MARKETING_VERSION`. Every request of the game's names it (§8e, *The
+    build on every request*), and the About screen shows it (§8d, *About*).
 - **The app and its screens** *(built)*: `UsageTracker` (`io.ntole.wyr.analytics`), one for the app's
   life, which `App` tells of the platform lifecycle's start and stop: Android's activity, the iOS view
   controller, the desktop window minimized and back, the browser page hidden and shown. `app_opened`

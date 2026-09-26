@@ -10,10 +10,12 @@
  * - `:app:androidApp` reads `extra["wyrPosthogKey"]` and `extra["wyrPosthogHost"]` into its
  *   BuildConfig, one key for every flavor (events name their environment).
  * - `:app:webApp` sets `extra["wyrAnalyticsPackage"]` first, and applies gradle/wyr-version.gradle.kts,
- *   which sets `extra["wyrAppVersion"]`; this registers `generateWyrAnalytics`, which writes the two
- *   settings, with the version, into Kotlin constants in that package, `POSTHOG_KEY`, `POSTHOG_HOST`
- *   and `APP_VERSION`, whose output directory the module adds to its `webMain` sources, as
- *   `generateWyrEnv` does the environment (gradle/wyr-env.gradle.kts).
+ *   which sets `extra["wyrAppVersion"]` and `extra["wyrBuildNumber"]`; this registers
+ *   `generateWyrAnalytics`, which writes the two settings, with the version and the build number,
+ *   into Kotlin constants in that package, `POSTHOG_KEY`, `POSTHOG_HOST`, `APP_VERSION` and
+ *   `BUILD_NUMBER`, whose output directory the module adds to its `webMain` sources, as
+ *   `generateWyrEnv` does the environment (gradle/wyr-env.gradle.kts). The build number is no
+ *   analytics setting, but it is the version's, which is written here already.
  *
  * Desktop and iOS name theirs as they name the environment, when the app starts: the `WYR_POSTHOG_KEY`
  * and `WYR_POSTHOG_HOST` variables, and the same build settings in the Xcode project's
@@ -53,11 +55,13 @@ if (extra.has("wyrAnalyticsPackage")) {
         // Read here, into locals, so the task action captures only these and not the script.
         val packageName = project.extra["wyrAnalyticsPackage"] as String
         val appVersion = project.extra["wyrAppVersion"] as String
+        val buildNumber = project.extra["wyrBuildNumber"] as Int
         val key = posthogKey
         val host = posthogHost
         val outputDir = layout.buildDirectory.dir("generated/wyrAnalytics/kotlin")
         inputs.property("package", packageName)
         inputs.property("appVersion", appVersion)
+        inputs.property("buildNumber", buildNumber)
         inputs.property("key", key)
         inputs.property("host", host)
         outputs.dir(outputDir)
@@ -76,6 +80,7 @@ if (extra.has("wyrAnalyticsPackage")) {
                 |internal const val POSTHOG_KEY: String = "$key"
                 |internal const val POSTHOG_HOST: String = "$host"
                 |internal const val APP_VERSION: String = "$appVersion"
+                |internal const val BUILD_NUMBER: Int = $buildNumber
                 |
                 """.trimMargin(),
             )

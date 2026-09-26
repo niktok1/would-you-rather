@@ -5,9 +5,11 @@ plugins {
     alias(libs.plugins.composeCompiler)
 }
 
-// The app's version, wyr.app.version in gradle.properties, every platform's (CLAUDE.md §8g).
+// The app's version, wyr.app.version in gradle.properties, every platform's (CLAUDE.md §8g), and the
+// build number made from it, which every request names (§8b, *Minimum client version*).
 apply(from = rootProject.file("gradle/wyr-version.gradle.kts"))
 val appVersion = extra["wyrAppVersion"] as String
+val buildNumber = extra["wyrBuildNumber"] as Int
 
 // The PostHog project this build sends analytics to (CLAUDE.md §8g), from wyr.posthog.key and
 // wyr.posthog.host, as a Gradle property or in local.properties: none is analytics off.
@@ -46,7 +48,7 @@ android {
             libs.versions.android.targetSdk
                 .get()
                 .toInt()
-        versionCode = 1
+        versionCode = buildNumber
         versionName = appVersion
         // One project for every flavor: each event names its environment (CLAUDE.md §8g).
         buildConfigField("String", "POSTHOG_KEY", "\"$posthogKey\"")
