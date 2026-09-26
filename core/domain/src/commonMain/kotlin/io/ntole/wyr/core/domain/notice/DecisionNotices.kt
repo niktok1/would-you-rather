@@ -22,7 +22,9 @@ import kotlinx.coroutines.sync.withLock
  * their rows to say so while it is shown. The first read of a player's on a device seeds what is seen,
  * so nothing decided before badges.
  *
- * Nothing here mints a session, and a read that fails changes nothing.
+ * With no session stored it reads nothing, so it never mints a first one; a dead session its read
+ * replaces with a fresh guest, as any call's does ([SubmissionRepository.mine]). A read that fails
+ * changes nothing.
  */
 public class DecisionNotices(
     private val submissions: SubmissionRepository,

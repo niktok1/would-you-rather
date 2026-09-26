@@ -1509,7 +1509,8 @@ orientation, in common code alone:
 - **The notice of a decision** (*built 2026-09-26*, the user: a notification when their question is
   approved, and the game saying so too): common code, every platform, pushes or none
   (`DecisionNotices`, `io.ntole.wyr.core.domain.notice`). `AppServices` reads the player's questions
-  (`GET /v1/me/questions`, only when a session is stored: it mints nobody) at launch for the session
+  (`GET /v1/me/questions`, only when a session is stored, so it never mints a first one; a dead one its
+  read replaces with a fresh guest, as any call's does, `withSessionRecovery`) at launch for the session
   stored and for every session after it, each time the app comes back to the foreground, and when a
   push arrives while it is open (§8a, *Push tokens*). A question decided, approved or rejected (a
   retired one was approved, and a status this build cannot name is none), that this device has not
