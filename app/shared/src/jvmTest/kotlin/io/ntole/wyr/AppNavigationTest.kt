@@ -78,7 +78,13 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
+import kotlin.time.Duration.Companion.hours
+import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Duration.Companion.minutes
+import kotlin.time.Duration.Companion.seconds
 import kotlin.time.Instant
+import kotlin.time.TestTimeSource
+import kotlin.time.TimeSource
 
 /**
  * The whole app, [App] as every platform shows it, drawn off screen over fakes of the game and driven
@@ -92,6 +98,7 @@ class AppNavigationTest {
     private val analytics = RecordingAnalytics()
     private val storage = InMemoryTokenStorage()
     private val owner = TestOwner()
+    private val clock = TestTimeSource()
     private var restored: Map<String, List<Any?>>? = null
     private var saved: Map<String, List<Any?>>? = null
 
@@ -99,7 +106,8 @@ class AppNavigationTest {
     fun setUp() {
         // viewModelScope runs on Dispatchers.Main, which the JVM has none of under test.
         Dispatchers.setMain(UnconfinedTestDispatcher())
-        startKoin { modules(fakes(), uiModule) }
+        // The clock the analytics time with, which a test moves by hand.
+        startKoin { modules(fakes(), uiModule, module { single<TimeSource.WithComparableMarks> { clock } }) }
     }
 
     @AfterTest
@@ -239,6 +247,32 @@ class AppNavigationTest {
             // Once for the Account screen, and once more for Play shown again.
             assertEquals(3, game.statsRead)
         }
+
+    /**
+     * The time a question was on screen, which a skip reports, counts while Play is shown and the app
+     * in the foreground: not the time on Account, nor in the background (CLAUDE.md §8g).
+     */
+    @Test
+    fun `a question's time counts only while Play is shown`() {
+        game.serving = QUESTION
+        withApp { scene ->
+            scene.tap(CYRILLIC.play)
+            clock += 2.seconds
+            scene.tap(CYRILLIC.account)
+            clock += 10.minutes
+            scene.tap(CYRILLIC.back)
+            clock += 1.seconds
+            owner.lifecycle.currentState = Lifecycle.State.CREATED
+            clock += 1.hours
+            owner.lifecycle.currentState = Lifecycle.State.RESUMED
+            clock += 500.milliseconds
+
+            scene.tap(CYRILLIC.playScreen.skip)
+
+            val skipped = analytics.named(AnalyticsEvent.QUESTION_SKIPPED).single()
+            assertEquals(3_500L, skipped.properties[AnalyticsProperty.DURATION_MS])
+        }
+    }
 
     @Test
     fun `Play keeps its question through Home and back`() =
@@ -548,7 +582,7 @@ class AppNavigationTest {
     private class TestOwner :
         LifecycleOwner,
         ViewModelStoreOwner {
-        override val lifecycle: Lifecycle =
+        override val lifecycle: LifecycleRegistry =
             LifecycleRegistry.createUnsafe(this).apply { currentState = Lifecycle.State.RESUMED }
 
         override val viewModelStore: ViewModelStore = ViewModelStore()

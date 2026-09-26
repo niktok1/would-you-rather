@@ -17,6 +17,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LifecycleStartEffect
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.ntole.wyr.account.AccountScreen
@@ -301,6 +302,12 @@ private fun ColumnScope.Play(
 
     // Every time the screen is shown: the points move on the Account and Submit screens meanwhile.
     LaunchedEffect(viewModel) { viewModel.refreshPoints() }
+    // How long a question is on screen counts only while this screen is, the app in the foreground
+    // (CLAUDE.md §8g): not while Account or the categories are shown over it, nor in the background.
+    LifecycleStartEffect(viewModel) {
+        viewModel.screenShown()
+        onStopOrDispose { viewModel.screenHidden() }
+    }
 
     PlayTopBar(onHome = onHome, onAccount = onAccount) {
         CategoriesPlayed(

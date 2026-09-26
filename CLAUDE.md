@@ -1961,7 +1961,10 @@ the same events. The moderation app sends none.
     once the vote is counted (`side`, `answer_ms` from the question shown to the tap, a retry's the
     first tap's, and `agreed_with_majority`); `question_skipped` (`duration_ms` on it, and
     `recorded`, whether the server heard); `reaction_set` (`reaction`, `like`, `dislike` or `none`,
-    and `answered`). The time is the app's `TimeSource.WithComparableMarks` (`uiModule`).
+    and `answered`). The time is the app's `TimeSource.WithComparableMarks` (`uiModule`), and a
+    question's counts only while the Play screen is shown and the app in the foreground
+    (`ScreenStopwatch`, which the Play screen's `LifecycleStartEffect` stops and starts), so a detour
+    to Account or the categories, or an hour in the background, is not time taken over it.
   - *Account* (`AccountViewModel`): `account_opened` for each visit of the screen (`shown`, from
     `ShownEffect`, whose saved state tells a visit begun from the one an Android rotation's new
     composition shows again, which reads the player again and reports nothing);

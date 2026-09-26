@@ -30,7 +30,6 @@ import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import kotlin.time.ComparableTimeMark
 import kotlin.time.TimeSource
 
 /**
@@ -44,7 +43,7 @@ internal const val REVEAL_HOLD_MILLIS: Long = 500
  * Drives the Play screen (CLAUDE.md §8d, *The Play screen*), and tells [analytics] what the player did
  * there (§8g): each question shown, answered after how long, skipped, and reacted to, and every
  * failure shown, by the question's id and its categories', never its text. [timeSource] measures how
- * long a question was on screen.
+ * long a question was on screen, only while the Play screen is shown ([screenShown], [screenHidden]).
  */
 class PlayViewModel(
     private val getNextQuestion: GetNextQuestion,
@@ -55,7 +54,7 @@ class PlayViewModel(
     private val questions: QuestionRepository,
     categoryList: CategoryRepository,
     private val analytics: Analytics,
-    private val timeSource: TimeSource.WithComparableMarks,
+    timeSource: TimeSource.WithComparableMarks,
 ) : ViewModel() {
     private val _state = MutableStateFlow<PlayUiState>(PlayUiState.Loading)
     val state: StateFlow<PlayUiState> = _state.asStateFlow()
@@ -89,8 +88,8 @@ class PlayViewModel(
     /** Active for [REVEAL_HOLD_MILLIS] from the moment a reveal lands, while [next] waits. */
     private var revealHold: Job? = null
 
-    /** When the question asked was shown, for how long the player took over it. */
-    private var shownAt: ComparableTimeMark? = null
+    /** How long the question asked has been on screen, for how long the player took over it. */
+    private val onQuestion = ScreenStopwatch(timeSource)
 
     init {
         load()
@@ -250,6 +249,18 @@ class PlayViewModel(
     }
 
     /**
+     * The Play screen is shown again, from another screen or from the background: the time on the
+     * question asked goes on from now.
+     */
+    fun screenShown() = onQuestion.shown()
+
+    /**
+     * The Play screen is hidden, for another screen or the background: the time on the question asked
+     * stops, so a detour is not counted as time the player took over it.
+     */
+    fun screenHidden() = onQuestion.hidden()
+
+    /**
      * Reads the player's points, each time the Play screen is shown: they move meanwhile on other
      * screens, a login or a logout, a submission, and with other players' reactions to the player's
      * questions. A read that fails keeps the points shown and says nothing: the next vote's answer
@@ -308,12 +319,15 @@ class PlayViewModel(
 
     /** [question] is asked: the analytics hear of it, and the time the player takes over it starts. */
     private fun questionShown(question: Question) {
-        shownAt = timeSource.markNow()
+        onQuestion.start()
         analytics.track(AnalyticsEvent.QUESTION_SHOWN, about(question))
     }
 
-    /** How long the question asked has been on screen, in whole milliseconds, or null if none is. */
-    private fun millisOnQuestion(): Long? = shownAt?.elapsedNow()?.inWholeMilliseconds
+    /**
+     * How long the question asked has been on screen, while the Play screen was, in whole
+     * milliseconds, or null if none is.
+     */
+    private fun millisOnQuestion(): Long? = onQuestion.elapsed()?.inWholeMilliseconds
 
     /** A failure the screen shows, [error], of [action], for the analytics. */
     private fun reportShown(

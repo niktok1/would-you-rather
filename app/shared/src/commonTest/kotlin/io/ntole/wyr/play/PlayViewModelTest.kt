@@ -894,6 +894,43 @@ class PlayViewModelTest {
             )
         }
 
+    /** Time on Account, on the categories or in the background is none the player took over the question. */
+    @Test
+    fun `an answer counts only the time the Play screen was shown`() =
+        runTest(dispatcher) {
+            val viewModel = viewModel()
+            testScheduler.advanceUntilIdle()
+            testScheduler.advanceTimeBy(1_000)
+            viewModel.screenHidden()
+            testScheduler.advanceTimeBy(600_000)
+            viewModel.screenShown()
+            testScheduler.advanceTimeBy(500)
+
+            viewModel.choose(Side.A)
+            testScheduler.advanceUntilIdle()
+
+            val answered = analytics.named(AnalyticsEvent.QUESTION_ANSWERED).single()
+            assertEquals(1_500L, answered.properties[AnalyticsProperty.ANSWER_MS])
+        }
+
+    /** A question loaded while the screen is hidden, as one from the categories played is, counts from its showing. */
+    @Test
+    fun `a skip counts from when the Play screen showed its question`() =
+        runTest(dispatcher) {
+            val viewModel = viewModel()
+            viewModel.screenHidden()
+            testScheduler.advanceUntilIdle()
+            testScheduler.advanceTimeBy(5_000)
+            viewModel.screenShown()
+            testScheduler.advanceTimeBy(300)
+
+            viewModel.skip()
+            testScheduler.advanceUntilIdle()
+
+            val skipped = analytics.named(AnalyticsEvent.QUESTION_SKIPPED).single()
+            assertEquals(300L, skipped.properties[AnalyticsProperty.DURATION_MS])
+        }
+
     @Test
     fun `a vote that failed is reported as shown and no answer`() =
         runTest(dispatcher) {
