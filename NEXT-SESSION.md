@@ -454,9 +454,45 @@ beyond them: the code Skia builds in itself (FreeType, HarfBuzz, ICU and the res
 packages (`@js-joda/core`, BSD 3-Clause, and `ws`, MIT, in `kotlin-js-store/wasm/yarn.lock`) are not
 listed, to settle before a desktop, iOS or web release; Android's has none of them.
 
+**A review's fixes**, one commit each: the About screen's licences, each library under its own
+licence (SLF4J's API MIT and Skia BSD 3-Clause, each with its copyright line; Stately and six more
+Apache 2.0 ones added; `LicencesTest`), and a release step comparing the list with the dependency
+report; the deletion's dialog on `WyrColors.surface` in `primaryText`, not Material's
+`surfaceContainerHigh` (#ECE6F0) with the OR pill's text colour (`AccountScreenDrawTest` reads its
+pixels in both themes); a link nothing on the device opens, on a phone with no browser, does nothing
+instead of crashing the game (`openFirst`, `openIfAble`: About's links and licences, Register's terms
+line, and the update screen's store button after its https fallback; `LinksTest` and the two draw
+tests through a handler that opens nothing); a terms line placeholder with no link shows as it stands,
+and `parts()`'s KDoc no longer claims that of itself; and three ordering rules in *Releasing to
+production* (a new `versionCode` for every Play upload, internal testing included; a minimum build
+raised only once the store serves the new one to everyone; production's CORS moved on before a web
+build from this branch points at it). Each new test failed without its fix. Verified again after
+them on this Mac: `ktlintCheck`; the verify job's tests, each run afresh, `:server:test` 486 (2
+skipped), `:core:domain` 78, `:core:data` 153, `:core:network` 119 and 125 as Android host tests,
+`:app:shared` 431 (424 before), `:app:adminApp` 106; its client compiles and
+`:app:androidApp:assembleDebug`; the web and desktop apps' compiles; the ios job's Kotlin compiles.
+Not verified: a phone with no browser (the fix is tested through a handler that throws as Android's
+does, and `openFirst` on its own). Left for
+`feat/play-client`, which owns the theme: the language menu's `DropdownMenu` still paints Material's
+`surfaceContainer`; mirroring the `surfaceContainer*` slots from `colors.surface` in `WyrTheme` fixes
+it and every dialog to come.
+
+**Merging with `feat/android-services`** (whichever merges second): `git merge-tree` finds conflicts
+in `AccountScreen.kt`, `SubmitViewModel.kt`, `PlayerMapper.kt`, `PlayerStats.kt`, `DataModule.kt`,
+`App.kt`, `AppModule.kt`, `Strings.kt`, `AuthScreen.kt`, `AuthApi.kt`, `WyrApplication.kt`, the
+moderation app's `Failure.kt`, their tests and both docs. Two lines decide who is registered, and both
+take `stats.registered` (a username or a Play Games link), never `stats.username != null`, or a player
+registered through Play Games alone loses Log out and is refused Submit, against the user's decision
+that such a player may submit: `LogOutAndDelete(state, actions, registered = stats.registered)` in
+`AccountScreen`, and in `SubmitViewModel.load` `it.copy(points = stats.totalPoints, cost =
+stats.submissionCost, registered = stats.registered)`. `PlayerStats` and `PlayerMapper` keep both
+new fields, `playGamesLinked` and `submissionCost`.
+
 **For the user** (CLAUDE.md §8b, each *provisional — user decision*): *Delete account beside Log out*
 (a row of its own under Log out took the failure states past 599; it is not offered while a read of
-the player failed). The rest is as the scope said.
+the player failed); *Licence notices* (each MIT or BSD library's copyright line on the screen and its
+licence's text a tap away in the browser, or every licence's full text in the app). The rest is as
+the scope said.
 
 **What the user must do**, none of it in the repository:
 1. Buy `stabiradije.rs` and put the `docs/site` pages there, so the About screen's and the Register
@@ -466,7 +502,12 @@ the player failed). The rest is as the scope said.
    stays at 1. Every installed build shows the new cost from its next read of the stats.
 3. To refuse an old build later: set `MIN_CLIENT_VERSION_ANDROID` (or `_IOS`, `_WEB`, `_DESKTOP`) on
    the service to the oldest build number to serve, 10000 for 1.0.0, then restart: an older build
-   shows the update screen. Builds before this branch send no headers and are never refused.
+   shows the update screen. Builds before this branch send no headers and are never refused. Only
+   once that platform's store serves the newer build to all its users.
+4. Before a web build from this branch talks to production: deploy a `main` commit to `wyr-server`
+   whose CORS allows `X-Client-Platform` and `X-Client-Version` (`d4a9dbf`, which it runs, does not).
+5. Bump the version (`wyr.app.version`, and the two iOS numbers with it) before every Play upload,
+   internal testing included: Play refuses a `versionCode` it has seen.
 
 ### Verified working
 
