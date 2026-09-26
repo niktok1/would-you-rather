@@ -5,6 +5,7 @@ import io.ntole.wyr.analytics.AnalyticsSettings
 import io.ntole.wyr.categories.CategoriesViewModel
 import io.ntole.wyr.core.auth.SessionDto
 import io.ntole.wyr.core.domain.analytics.Analytics
+import io.ntole.wyr.core.domain.playgames.LinkPlayGames
 import io.ntole.wyr.core.network.InMemoryTokenStorage
 import io.ntole.wyr.core.network.SessionStore
 import io.ntole.wyr.core.network.TokenStorage
@@ -12,6 +13,7 @@ import io.ntole.wyr.core.network.environment.WyrEnvironment
 import io.ntole.wyr.language.Language
 import io.ntole.wyr.language.LanguageViewModel
 import io.ntole.wyr.play.PlayViewModel
+import io.ntole.wyr.services.AppServices
 import io.ntole.wyr.submit.SubmitViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -29,6 +31,7 @@ import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -61,6 +64,15 @@ class AppModuleTest {
         koin.get<SubmitViewModel>()
         koin.get<LanguageViewModel>()
         koin.get<CategoriesViewModel>()
+    }
+
+    /** What runs by itself, and a build with no Play Games has it all the same, doing nothing. */
+    @Test
+    fun `what the app does by itself resolves from the real modules`() {
+        val koin = koinFor(WyrEnvironment.LOCAL)
+
+        koin.get<AppServices>()
+        assertFalse(koin.get<LinkPlayGames>().available, "no platform services: no Play Games")
     }
 
     @Test

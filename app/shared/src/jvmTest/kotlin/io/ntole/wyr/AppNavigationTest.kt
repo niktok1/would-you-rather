@@ -31,6 +31,9 @@ import io.ntole.wyr.core.domain.error.WyrException
 import io.ntole.wyr.core.domain.player.GetPlayerStats
 import io.ntole.wyr.core.domain.player.PlayerRepository
 import io.ntole.wyr.core.domain.player.PlayerStats
+import io.ntole.wyr.core.domain.playgames.LinkPlayGames
+import io.ntole.wyr.core.domain.playgames.PlayGames
+import io.ntole.wyr.core.domain.playgames.PlayGamesRepository
 import io.ntole.wyr.core.domain.question.GetNextQuestion
 import io.ntole.wyr.core.domain.question.Question
 import io.ntole.wyr.core.domain.question.QuestionRepository
@@ -39,6 +42,7 @@ import io.ntole.wyr.core.domain.reaction.QuestionReactions
 import io.ntole.wyr.core.domain.reaction.Reaction
 import io.ntole.wyr.core.domain.reaction.ReactionRepository
 import io.ntole.wyr.core.domain.reaction.SetReaction
+import io.ntole.wyr.core.domain.session.CurrentSession
 import io.ntole.wyr.core.domain.session.SessionRepository
 import io.ntole.wyr.core.domain.submission.GetMySubmissions
 import io.ntole.wyr.core.domain.submission.Submission
@@ -64,7 +68,9 @@ import io.ntole.wyr.submit.sendText
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
@@ -556,6 +562,8 @@ class AppNavigationTest {
             factory { SubmitQuestion(submissions = get(), session = get()) }
             factory { GetMySubmissions(submissions = get(), session = get()) }
             factory { GetCategories(categories = get()) }
+            single<CurrentSession> { game }
+            single { LinkPlayGames(PlayGames.None, NoPlayGamesLink, get(), get(), get()) }
         }
 
     /** Whether the line showing [text] is ticked. */
@@ -588,6 +596,13 @@ class AppNavigationTest {
         override val viewModelStore: ViewModelStore = ViewModelStore()
     }
 
+    /** Play Games is never there in these builds, so nothing asks this. */
+    private object NoPlayGamesLink : PlayGamesRepository {
+        override fun isSettled(): Boolean = error("no Play Games here")
+
+        override suspend fun signIn(serverAuthCode: String): String = error("no Play Games here")
+    }
+
     /**
      * The game, counting what the screens ask of it. Out of questions unless it is [serving] one, so
      * the Play screen shows a failure; nothing here votes or reacts, and a registration and a
@@ -600,7 +615,8 @@ class AppNavigationTest {
         ReactionRepository,
         PlayerRepository,
         AccountRepository,
-        SubmissionRepository {
+        SubmissionRepository,
+        CurrentSession {
         var questionsAsked = 0
         var statsRead = 0
         var submissionsRead = 0
@@ -646,6 +662,10 @@ class AppNavigationTest {
         override suspend fun reset() = Unit
 
         override suspend fun ensure(): String = "player"
+
+        override fun current(): String = "player"
+
+        override val sessions: Flow<String> = flowOf("player")
 
         override suspend fun cast(
             questionId: String,

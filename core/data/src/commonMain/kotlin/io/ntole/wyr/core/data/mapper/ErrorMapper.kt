@@ -146,11 +146,11 @@ internal fun ErrorCode.toDomain(): DomainError =
 
         ErrorCode.INVALID_LOGIN -> DomainError.INVALID_LOGIN
 
-        // Answered only to a Play Games sign-in, which no client sends yet. Never UNAUTHORIZED, which would
-        // throw the session away: a refused code comes with a 422, and Google not answering with a 502.
-        ErrorCode.PLAY_GAMES_CODE_REFUSED -> DomainError.UNKNOWN
+        // Answered only to a Play Games sign-in. Never UNAUTHORIZED, which would throw the session away: a
+        // refused code comes with a 422, and Google not answering with a 502.
+        ErrorCode.PLAY_GAMES_CODE_REFUSED -> DomainError.PLAY_GAMES_CODE_REFUSED
 
-        ErrorCode.PLAY_GAMES_UNAVAILABLE -> DomainError.SERVER
+        ErrorCode.PLAY_GAMES_UNAVAILABLE -> DomainError.PLAY_GAMES_UNAVAILABLE
 
         ErrorCode.UNKNOWN -> DomainError.UNKNOWN
     }

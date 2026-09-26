@@ -82,6 +82,18 @@ public enum class DomainError {
      */
     INVALID_LOGIN,
 
+    /**
+     * Google refused the server auth code a Play Games sign-in sent: spent, expired, or another app's.
+     * Nothing changed; a new code from Play Games may work. Never [UNAUTHORIZED]: the session is fine.
+     */
+    PLAY_GAMES_CODE_REFUSED,
+
+    /**
+     * A Play Games sign-in could not be made: the server could not ask Google who the code names, or
+     * Play Games on this device gave no code. Nothing changed.
+     */
+    PLAY_GAMES_UNAVAILABLE,
+
     /** Request never reached the server, or its answer did not arrive whole. */
     NETWORK,
 

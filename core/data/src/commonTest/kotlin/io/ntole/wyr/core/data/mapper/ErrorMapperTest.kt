@@ -49,8 +49,9 @@ class ErrorMapperTest {
                     // A 401, and still never UNAUTHORIZED, which would drop the session.
                     ApiException(ErrorCode.INVALID_LOGIN, status = 401) to DomainError.INVALID_LOGIN,
                     // A Play Games sign-in's, never UNAUTHORIZED, which would drop the session.
-                    ApiException(ErrorCode.PLAY_GAMES_CODE_REFUSED, status = 422) to DomainError.UNKNOWN,
-                    ApiException(ErrorCode.PLAY_GAMES_UNAVAILABLE, status = 502) to DomainError.SERVER,
+                    ApiException(ErrorCode.PLAY_GAMES_CODE_REFUSED, status = 422) to
+                        DomainError.PLAY_GAMES_CODE_REFUSED,
+                    ApiException(ErrorCode.PLAY_GAMES_UNAVAILABLE, status = 502) to DomainError.PLAY_GAMES_UNAVAILABLE,
                     ApiException(ErrorCode.INTERNAL, status = 500) to DomainError.SERVER,
                     // The code wins over the status whenever there is one.
                     ApiException(ErrorCode.ALREADY_VOTED, status = 503) to DomainError.ALREADY_VOTED,

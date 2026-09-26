@@ -48,6 +48,13 @@ public object AnalyticsEvent {
     /** A login worked. */
     public const val LOGIN_COMPLETED: String = "login_completed"
 
+    /**
+     * The player signed in with Google Play Games Services (CLAUDE.md §8a, *Play Games sign-in*):
+     * [AnalyticsProperty.AUTOMATIC] whether at launch with no tap, and [AnalyticsProperty.SWITCHED]
+     * whether it made this device another player's.
+     */
+    public const val PLAY_GAMES_SIGNED_IN: String = "play_games_signed_in"
+
     /** The player logged out, and plays on as a fresh guest. */
     public const val LOGOUT: String = "logout"
 

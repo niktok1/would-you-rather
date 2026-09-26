@@ -655,6 +655,26 @@ decided in §8b).
     launch: every sign-in answers a new session, and the one before is abandoned, as a login's guest
     is. Never logged: the code, the client secret, an access token (`GooglePlayGamesTest`).
     `PlayGamesFlowTest` takes every path with Google answered by a MockEngine.
+  - *The client* (common code; the platform's Play Games behind the `PlayGames` port in
+    `:core:domain`, `PlayGames.None` but on an Android build that has it): `LinkPlayGames`, bound once
+    for the app. **At launch** (`automatically`, which `AppServices` starts on the app's first coming
+    to the foreground), once a session exists (`CurrentSession.sessions`, which never mints: the first
+    launch mints its guest only as the player starts to play), while who plays on the device is
+    **unsettled**, and when Play Games says the player is signed in to it (v2 signs a player with a
+    profile in by itself), it asks Play Games for a server auth code and sends it
+    (`AuthApi.playGames`, with the session's bearer, through `withSessionRecovery`, so a dead
+    session's 401, which comes before the code is spent, is retried as the fresh guest). The session
+    answered is stored in place of the device's, as a login's is (`DefaultSessionRepository.replace`);
+    when it is another player's, the question queue is dropped; the analytics identify the player
+    either way (§8g). A refusal (`PLAY_GAMES_CODE_REFUSED`, `PLAY_GAMES_UNAVAILABLE`, each a
+    `DomainError` of its own now, offline, no code) leaves the player as they are, shows nothing, and
+    is tried again at the next launch. **Settled** (`PlayGamesSettled`, `wyr.playgames.settled.local`,
+    `.dev` or `.prod` in the session's storage, one per environment as the session is, §8e) is set by a
+    Play Games sign-in, a login and a logout, each the player's own doing, and forgotten when a dead
+    session is replaced by a fresh guest (`resetIfStill`), so that device signs in with Play Games at
+    its next launch, which may bring back the player the dead session was; a fresh install has none
+    (*provisional — user decision*, §8b *When a launch signs in with Play Games*). `LinkPlayGamesTest`,
+    `DefaultPlayGamesRepositoryTest`, `CurrentSessionTest`, `AppServicesTest`.
 
 **Known limitation, by design for now:** a guest account is bound to one device's storage. Lose
 the device, reinstall the app or clear its storage, and the account — and its points — are gone,
@@ -962,6 +982,16 @@ EncryptedSharedPreferences: enough for a game that stores no sensitive personal 
   Games counts as registered, so may submit (the user: "yes"). Rejected: asking more than the access
   token of a player who already has a username, and signing such a Play Games player in as a new
   player. A moderator's route to unlink one comes if a player ever needs it.
+- **When a launch signs in with Play Games** — *provisional — user decision.* The scope asked for a
+  flag forgotten "when the session dies or is replaced"; built instead, the flag is forgotten only
+  when the session dies (a dead session replaced by a fresh guest), and a login, a logout and a Play
+  Games sign-in settle it (§8a, *Play Games sign-in*, *The client*). Forgotten on every replacement,
+  a login to another account, or a logout, would be undone at the next launch: the Play Games player
+  linked already signs the device back in as its player, whoever the bearer names. The options: keep
+  it; forget it on every replacement, as asked; or sign in at every launch until the player is linked.
+  One edge, accepted: a device from before this build holds a session and no flag, so its next launch
+  signs in with Play Games, and when the Play Games player is linked to another player already, the
+  device becomes theirs (only testers' devices).
 - **Push notifications** — *built on the server 2026-09-26 (§8a, *Push tokens*); off until the user
   sets it up.* The server sends through Firebase Cloud Messaging as a Google service account, whose
   JSON key file `FCM_SERVICE_ACCOUNT_JSON` holds whole (`sync: false` in `render.yaml`, set by hand in
@@ -2369,6 +2399,9 @@ the same events. The moderation app sends none.
     decided from the action's own answer and that read, never from `AccountState.signedIn`, which the
     Auth page takes down as it leaves, while the read may still run, and fail; `logout`, sent before
     the logout so it is the account's.
+  - *Play Games* (`LinkPlayGames`, §8a *Play Games sign-in*): `play_games_signed_in` once the server
+    took a Play Games sign-in, `automatic` whether it was the launch's, with no tap, and `switched`
+    whether it made the device another player's; the player id is identified either way.
   - *Submit* (`SubmitViewModel`): `submit_opened` for each visit of the form, as Account's;
     `submit_sent` once stored (`categories`, `count`); `submit_refused` (`code`) for any refusal.
   - *Categories* (`CategoriesViewModel`): `categories_changed` when Play sends a new selection

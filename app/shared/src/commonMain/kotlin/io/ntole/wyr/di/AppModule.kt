@@ -9,6 +9,7 @@ import io.ntole.wyr.core.network.analytics.PostHogConfig
 import io.ntole.wyr.core.network.environment.WyrEnvironment
 import io.ntole.wyr.language.LanguageViewModel
 import io.ntole.wyr.play.PlayViewModel
+import io.ntole.wyr.services.AppServices
 import io.ntole.wyr.submit.SubmitViewModel
 import org.koin.core.context.startKoin
 import org.koin.core.module.Module
@@ -29,6 +30,8 @@ internal val uiModule =
         single<TimeSource.WithComparableMarks> { TimeSource.Monotonic }
         // One for the app's life, as the analytics are: a rotation's new activity finds it.
         single { UsageTracker(analytics = get(), timeSource = get()) }
+        // What the app does by itself, as long as it runs: one for its life too.
+        single { AppServices(linkPlayGames = get()) }
     }
 
 /**
@@ -44,6 +47,9 @@ internal val uiModule =
  * `null` is for a build that set none. They are plain strings so that `:core:network` stays off the
  * entry points' classpaths.
  *
+ * [device] is what only the platform's own services can do (§8a, *Play Games sign-in*): an Android
+ * build's, and [DeviceServices.None] everywhere else.
+ *
  * [appDeclaration] is how Android hands in its `Context`, which the shared code otherwise has no
  * way to obtain — which is also why Koin is an `api` dependency of this module rather than an
  * implementation detail.
@@ -54,6 +60,7 @@ internal val uiModule =
 fun initKoin(
     environmentName: String?,
     analytics: AnalyticsSettings,
+    device: DeviceServices = DeviceServices.None,
     appDeclaration: KoinAppDeclaration = {},
 ) {
     val environment = WyrEnvironment.parse(environmentName)
@@ -61,7 +68,7 @@ fun initKoin(
     startKoin {
         appDeclaration()
         modules(platformModule())
-        modules(appModules(environment, posthog))
+        modules(appModules(environment, posthog, device))
     }
 }
 
@@ -69,15 +76,16 @@ fun initKoin(
  * Every module but the platform's, for [environment]: the data module sends every request to its
  * URL, and the environment is bound for the screens that show it. Nothing can put another URL in its
  * place, so the server the Account screen names is where requests go. [analytics] is where the
- * analytics go, none sending nothing (§8g). Internal, not private, so a test can load them as
- * [initKoin] does.
+ * analytics go, none sending nothing (§8g), and [device] the platform's own services, none by default.
+ * Internal, not private, so a test can load them as [initKoin] does.
  */
 internal fun appModules(
     environment: WyrEnvironment,
     analytics: PostHogConfig?,
+    device: DeviceServices = DeviceServices.None,
 ): List<Module> =
     listOf(
         module { single { environment } },
-        dataModule(environment, analytics),
+        dataModule(environment, analytics, playGames = device.playGames),
         uiModule,
     )

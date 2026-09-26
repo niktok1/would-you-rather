@@ -18,6 +18,9 @@ import io.ntole.wyr.core.domain.moderation.RejectSubmission
 import io.ntole.wyr.core.domain.moderation.RenameCategory
 import io.ntole.wyr.core.domain.moderation.RestoreQuestion
 import io.ntole.wyr.core.domain.moderation.RetireQuestion
+import io.ntole.wyr.core.domain.playgames.LinkPlayGames
+import io.ntole.wyr.core.domain.playgames.PlayGamesRepository
+import io.ntole.wyr.core.domain.session.CurrentSession
 import io.ntole.wyr.core.domain.session.SessionRepository
 import io.ntole.wyr.core.network.InMemoryTokenStorage
 import io.ntole.wyr.core.network.TokenStorage
@@ -31,8 +34,10 @@ import org.koin.dsl.module
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
+import kotlin.test.assertSame
 
 /**
  * Where the data module's requests go, read off a request as it leaves, after every plugin has had
@@ -99,6 +104,28 @@ class DataModuleTest {
         assertNotNull(koin.get<RegisterAccount>())
         assertNotNull(koin.get<LogIn>())
         assertNotNull(koin.get<LogOut>())
+        koin.close()
+    }
+
+    /**
+     * The Play Games sign-in the platform hands in, [PlayGames.None] unless one does, and the session
+     * watched without minting: nothing is stored, and nothing sent (CLAUDE.md §8a).
+     */
+    @Test
+    fun `the game's data module binds the Play Games sign-in and the session watched`() {
+        val storage = InMemoryTokenStorage()
+        val koin =
+            koinApplication {
+                modules(
+                    module { single<TokenStorage> { storage } },
+                    dataModule(WyrEnvironment.DEV, analytics = null),
+                )
+            }.koin
+
+        assertFalse(koin.get<LinkPlayGames>().available)
+        assertFalse(koin.get<PlayGamesRepository>().isSettled())
+        assertNull(koin.get<CurrentSession>().current())
+        assertSame<Any>(koin.get<SessionRepository>(), koin.get<CurrentSession>(), "one session for both")
         koin.close()
     }
 

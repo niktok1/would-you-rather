@@ -15,6 +15,7 @@ import io.ktor.http.headersOf
 import io.ntole.wyr.core.api.WyrApi
 import io.ntole.wyr.core.auth.AccountDto
 import io.ntole.wyr.core.auth.LoginRequest
+import io.ntole.wyr.core.auth.PlayGamesSignInRequest
 import io.ntole.wyr.core.auth.RefreshRequest
 import io.ntole.wyr.core.auth.RegisterRequest
 import io.ntole.wyr.core.auth.SessionDto
@@ -125,6 +126,21 @@ internal class FakeServer {
 
     /** When set, every logout is refused with this status and code, whoever sends it. */
     var refuseLogoutsWith: Pair<HttpStatusCode, ErrorCode>? = null
+
+    /**
+     * The Play Games player each server auth code names, as Google would answer: a code not here is one
+     * Google refuses. Each works once, as Google's do.
+     */
+    val playGamesCodes = mutableMapOf<String, String>()
+
+    /** The player each Play Games player is linked to, by the Play Games player's id. */
+    val playGamesLinks = mutableMapOf<String, String>()
+
+    /** The `Authorization` header and code of every Play Games sign-in, in arrival order. */
+    val playGamesSentAs = mutableListOf<Pair<String?, String>>()
+
+    /** When set, every Play Games sign-in is refused with this status and code, whoever sends it. */
+    var refusePlayGamesWith: Pair<HttpStatusCode, ErrorCode>? = null
 
     /** What a read of the categories answers, whoever sends it: [CATEGORIES] unless a test says otherwise. */
     var categories: CategoryListDto = CATEGORIES
@@ -238,6 +254,10 @@ internal class FakeServer {
                 }
             }
 
+            WyrApi.Paths.AUTH_PLAY_GAMES -> {
+                playGames(request)
+            }
+
             WyrApi.Paths.AUTH_LOGOUT -> {
                 val authorization = request.headers[HttpHeaders.Authorization]
                 logoutsSentAs += authorization
@@ -256,7 +276,12 @@ internal class FakeServer {
                 val player = authorization?.removePrefix("Bearer access-")
                 if (player != null && player in players) {
                     val username = accounts.entries.firstOrNull { it.value.second == player }?.key
-                    respondJson(WyrJson.encodeToString(STATS.copy(playerId = player, username = username)))
+                    val linked = player in playGamesLinks.values
+                    respondJson(
+                        WyrJson.encodeToString(
+                            STATS.copy(playerId = player, username = username, playGamesLinked = linked),
+                        ),
+                    )
                 } else {
                     respondErrorDto(HttpStatusCode.Unauthorized, ErrorCode.UNAUTHORIZED)
                 }
@@ -323,6 +348,32 @@ internal class FakeServer {
                 respondJson(WyrJson.encodeToString(AccountDto(username)))
             }
         }
+    }
+
+    /**
+     * A Play Games sign-in, as the server's: a bearer it does not know is 401 before the code is spent;
+     * a code Google refuses is 422; a Play Games player linked already signs in as its player, and one
+     * linked to nobody is linked to the bearer's player, or to one minted for it. A new session either
+     * way.
+     */
+    private suspend fun MockRequestHandleScope.playGames(request: HttpRequestData): HttpResponseData {
+        val authorization = request.headers[HttpHeaders.Authorization]
+        val code = WyrJson.decodeFromString<PlayGamesSignInRequest>(request.body.toByteArray().decodeToString())
+        playGamesSentAs += authorization to code.serverAuthCode
+        val caller = authorization?.removePrefix("Bearer access-")
+        val refusal = refusePlayGamesWith
+        if (refusal != null) return respondErrorDto(refusal.first, refusal.second)
+        if (caller != null && caller !in players) {
+            return respondErrorDto(HttpStatusCode.Unauthorized, ErrorCode.UNAUTHORIZED)
+        }
+        val gamesPlayer =
+            playGamesCodes.remove(code.serverAuthCode)
+                ?: return respondErrorDto(HttpStatusCode.UnprocessableEntity, ErrorCode.PLAY_GAMES_CODE_REFUSED)
+        val player =
+            playGamesLinks.getOrPut(gamesPlayer) {
+                caller?.takeUnless { it in playGamesLinks.values } ?: "games-$gamesPlayer"
+            }
+        return issueSession(player)
     }
 
     /** Stores nothing: answers a known player's submission as pending, exactly as it was sent. */

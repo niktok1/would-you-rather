@@ -45,6 +45,7 @@ import io.ntole.wyr.play.PlayScreen
 import io.ntole.wyr.play.PlayViewModel
 import io.ntole.wyr.play.canChangeCategories
 import io.ntole.wyr.play.categoriesPlayed
+import io.ntole.wyr.services.AppServices
 import io.ntole.wyr.submit.SubmitScreen
 import io.ntole.wyr.submit.SubmitViewModel
 import io.ntole.wyr.theme.WyrTheme
@@ -68,7 +69,7 @@ import org.koin.compose.viewmodel.koinViewModel
 fun App() {
     val languages = koinViewModel<LanguageViewModel>()
     val language by languages.language.collectAsStateWithLifecycle()
-    ReportForegroundAndBackground(koinInject(), language)
+    ReportForegroundAndBackground(koinInject(), language, services = koinInject())
 
     // Every tap on every screen is counted there (CLAUDE.md §8g, [io.ntole.wyr.analytics.tapped]).
     CompositionLocalProvider(LocalAnalytics provides koinInject()) {
@@ -151,23 +152,34 @@ private fun Screens(
 /**
  * The app coming to the foreground and going to the background, as the platform's lifecycle tells it,
  * to [usage]: Android's activity, the iOS view controller, the desktop window (minimized or not) and
- * the browser page (hidden or not). The app shown in [language].
+ * the browser page (hidden or not). The app shown in [language]. [services] hear of each coming to the
+ * foreground too, the launch's first, and start what runs by itself.
  */
 @Composable
 private fun ReportForegroundAndBackground(
     usage: UsageTracker,
     language: Language,
+    services: AppServices,
 ) {
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     val shownIn by rememberUpdatedState(language)
     val configurationChanging = rememberConfigurationChanging()
-    DisposableEffect(lifecycle, usage) {
+    DisposableEffect(lifecycle, usage, services) {
         val observer =
             LifecycleEventObserver { _, event ->
                 when (event) {
-                    Lifecycle.Event.ON_START -> usage.foreground(shownIn.tag)
-                    Lifecycle.Event.ON_STOP -> usage.background(configurationChanging())
-                    else -> Unit
+                    Lifecycle.Event.ON_START -> {
+                        usage.foreground(shownIn.tag)
+                        services.foreground()
+                    }
+
+                    Lifecycle.Event.ON_STOP -> {
+                        usage.background(configurationChanging())
+                    }
+
+                    else -> {
+                        Unit
+                    }
                 }
             }
         lifecycle.addObserver(observer)

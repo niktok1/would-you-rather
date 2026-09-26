@@ -6,9 +6,11 @@ import io.ntole.wyr.core.data.cache.InMemoryQuestionCache
 import io.ntole.wyr.core.data.category.DefaultCategoryRepository
 import io.ntole.wyr.core.data.moderation.DefaultModerationRepository
 import io.ntole.wyr.core.data.player.DefaultPlayerRepository
+import io.ntole.wyr.core.data.playgames.DefaultPlayGamesRepository
 import io.ntole.wyr.core.data.question.DefaultQuestionRepository
 import io.ntole.wyr.core.data.reaction.DefaultReactionRepository
 import io.ntole.wyr.core.data.session.DefaultSessionRepository
+import io.ntole.wyr.core.data.session.PlayGamesSettled
 import io.ntole.wyr.core.data.submission.DefaultSubmissionRepository
 import io.ntole.wyr.core.data.vote.DefaultVoteRepository
 import io.ntole.wyr.core.domain.account.AccountRepository
@@ -29,12 +31,16 @@ import io.ntole.wyr.core.domain.moderation.RestoreQuestion
 import io.ntole.wyr.core.domain.moderation.RetireQuestion
 import io.ntole.wyr.core.domain.player.GetPlayerStats
 import io.ntole.wyr.core.domain.player.PlayerRepository
+import io.ntole.wyr.core.domain.playgames.LinkPlayGames
+import io.ntole.wyr.core.domain.playgames.PlayGames
+import io.ntole.wyr.core.domain.playgames.PlayGamesRepository
 import io.ntole.wyr.core.domain.question.GetNextQuestion
 import io.ntole.wyr.core.domain.question.QuestionCache
 import io.ntole.wyr.core.domain.question.QuestionRepository
 import io.ntole.wyr.core.domain.question.SkipQuestion
 import io.ntole.wyr.core.domain.reaction.ReactionRepository
 import io.ntole.wyr.core.domain.reaction.SetReaction
+import io.ntole.wyr.core.domain.session.CurrentSession
 import io.ntole.wyr.core.domain.session.SessionRepository
 import io.ntole.wyr.core.domain.submission.GetMySubmissions
 import io.ntole.wyr.core.domain.submission.SubmissionRepository
@@ -71,10 +77,13 @@ import org.koin.dsl.module
  *   that storage ([SessionStore]), as its analytics id is.
  * @param analytics the PostHog project the build sends its analytics to (CLAUDE.md §8g), or none,
  *   when nothing is sent: the [Analytics] bound keeps only the player's switch then.
+ * @param playGames Google Play Games Services on this device (CLAUDE.md §8a, *Play Games sign-in*):
+ *   an Android build's that has it set up, and [PlayGames.None] everywhere else.
  */
 public fun dataModule(
     environment: WyrEnvironment,
     analytics: PostHogConfig?,
+    playGames: PlayGames = PlayGames.None,
 ): Module =
     module {
         single { SessionStore(get<TokenStorage>(), environment) }
@@ -94,8 +103,15 @@ public fun dataModule(
         // Bound as the concrete type as well: repositories recover a dead session through
         // withSessionRecovery, which is recovery machinery and deliberately not on the domain
         // interface.
-        single { DefaultSessionRepository(authApi = get(), sessionStore = get()) }
+        single {
+            DefaultSessionRepository(
+                authApi = get(),
+                sessionStore = get(),
+                playGamesSettled = PlayGamesSettled(get<TokenStorage>(), environment),
+            )
+        }
         single<SessionRepository> { get<DefaultSessionRepository>() }
+        single<CurrentSession> { get<DefaultSessionRepository>() }
 
         single<QuestionRepository> { DefaultQuestionRepository(api = get(), session = get(), cache = get()) }
         single<VoteRepository> { DefaultVoteRepository(api = get(), session = get()) }
@@ -104,6 +120,7 @@ public fun dataModule(
         single<ReactionRepository> { DefaultReactionRepository(api = get(), session = get()) }
         single<AccountRepository> { DefaultAccountRepository(api = get(), session = get()) }
         single<CategoryRepository> { DefaultCategoryRepository(api = get()) }
+        single<PlayGamesRepository> { DefaultPlayGamesRepository(api = get(), session = get()) }
 
         factory { GetNextQuestion(questions = get(), session = get()) }
         factory { SkipQuestion(questions = get(), session = get()) }
@@ -116,6 +133,10 @@ public fun dataModule(
         factory { LogIn(accounts = get(), questions = get(), session = get(), analytics = get()) }
         factory { LogOut(accounts = get(), questions = get(), analytics = get()) }
         factory { GetCategories(categories = get()) }
+        // Once for the app: the launch's sign-in and a tap on the Auth page's button take turns.
+        single {
+            LinkPlayGames(playGames = playGames, link = get(), session = get(), questions = get(), analytics = get())
+        }
     }
 
 /**

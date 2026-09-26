@@ -46,12 +46,18 @@ public object AnalyticsProperty {
 
     /**
      * What failed: `question`, `vote`, `reaction`, `account`, `my_questions`, `register`, `log_in`,
-     * `log_out`, `submit`, `points` or `categories`.
+     * `play_games`, `log_out`, `submit`, `points` or `categories`.
      */
     public const val ACTION: String = "action"
 
     /** Whether the app came from the background rather than being launched. */
     public const val FROM_BACKGROUND: String = "from_background"
+
+    /** Whether something happened by itself, with no tap: a Play Games sign-in at launch. */
+    public const val AUTOMATIC: String = "automatic"
+
+    /** Whether a sign-in made this device another player's, the one before left behind. */
+    public const val SWITCHED: String = "switched"
 
     /** A language's tag: `sr-Cyrl`, `sr-Latn` or `en`. */
     public const val LANGUAGE: String = "language"
