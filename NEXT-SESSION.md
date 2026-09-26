@@ -454,6 +454,16 @@ test elsewhere that finds the Play screen by `listOf(home, account)` on its bar 
 between them (`AppNavigationTest.PLAY_BAR`), and one that taps Play on Home by its text finds two
 buttons (`tapPlay()`). `HomeScreen` takes `picks` and `onPlay(Side)`; `VoteRepository.cast` takes
 `answerMillis` (a fake must add the parameter); `PlayViewModel` takes the three report use cases.
+`git merge-tree` against this branch (2026-09-27) finds textual conflicts with two siblings besides
+CLAUDE.md and NEXT-SESSION.md. `feat/android-services`: `TopBars.kt`, `HomeScreen.kt`, `App.kt`,
+`DataModule.kt`'s imports, `AnalyticsProperty`'s KDoc and `AppNavigationTest`; `PlayTopBar` must
+take both `menu` and `news` (the ⋮, then the account icon with its dot), `HomeScreen` `picks`,
+`onPlay(Side)` and `news`, and the account icon's badge must stay inside its 48, so run
+`TopBarsDrawTest` again after that merge (the categories' 223 of 375 hang on it).
+`feat/account-client`: `PlayScreen.kt`'s imports (`optionText` beside `LoadingSpinner`),
+`WyrIconsDrawTest` (`More` beside `Info`) and `AppNavigationTest`'s imports and tests, each keeping
+both sides; its `AccountTopBar` merges cleanly. `main` (with `feat/moderation-reports`) conflicts in
+CLAUDE.md alone.
 
 ### Verified working
 
