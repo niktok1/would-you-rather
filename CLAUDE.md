@@ -614,7 +614,8 @@ EncryptedSharedPreferences: enough for a game that stores nothing personal.
   request and refills whole when its period ends, so up to twice a budget can pass in moments where
   one window ends and the next begins, while over any longer span the average holds:
   - *Per client address* (on Render, Cloudflare's `CF-Connecting-IP`: `CLIENT_IP_HEADER`, §8), for a
-    caller with no session to name: guest minting 10 an hour, refreshes 30 a minute, logins 20 a
+    caller with no session to name: guest minting 60 an hour (one address can stand for many players, a
+    mobile carrier's shared address or a school's Wi-Fi), refreshes 30 a minute, logins 20 a
     minute (what bounds guessing a password, as each costs a hash), the categories list 120 a minute
     (it needs no session), the admin routes 60 a minute together, and on top of that, admin requests with a wrong or missing token 10 a minute. A
     request with the right token spends none of that last budget, but once an address has spent it,
@@ -651,8 +652,8 @@ EncryptedSharedPreferences: enough for a game that stores nothing personal.
 
   What remains: farming is bounded, not gone. A player can still earn 120 points a minute by
   re-answering, on average, and up to 240 where two windows meet (*decided 2026-09-23:* a re-answer
-  keeps paying every time, inside its cycle or not), and a script gets 10 fresh guests an hour per
-  address, 20 where two windows meet, each with budgets of its own, so liking one author's questions
+  keeps paying every time, inside its cycle or not), and a script gets 60 fresh guests an hour per
+  address, 120 where two windows meet, each with budgets of its own, so liking one author's questions
   is bounded per address and per hour, not per author (*Likes from fresh guests*, below:
   accepted). Counts are in memory and per instance: right for the one Render instance, but a second
   would grant every budget again, so running two needs a shared store first (Render Key Value, say).

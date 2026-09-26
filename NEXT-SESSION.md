@@ -314,6 +314,9 @@ nothing pushed or merged): the server side of Google Play readiness (the user's 
 smallest client compile fixes.
 - **Request bodies** are capped at 64 KiB (CLAUDE.md §8b, *Request bodies*): 413 on a
   `Content-Length` over it, before the route runs, and a chunked body stopped one byte past it.
+- **Guest minting** defaults to 60 an hour per address, was 10 (§8b, *Rate limiting*): a carrier's
+  shared address or a school's Wi-Fi stands for many players. `RATE_LIMIT_GUESTS_PER_HOUR` still
+  overrides it.
 
 ### Verified working
 
@@ -938,7 +941,7 @@ smallest client compile fixes.
   address). The server's log names no address, so the check is by status alone. Until it passes,
   the per-address budgets are not to be relied on.
 - **The limits against real traffic.** The budgets are starting points nobody has watched: a
-  household or a mobile carrier's shared address (CGNAT) shares 10 new guests an hour, and an IPv6
+  household or a mobile carrier's shared address (CGNAT) shares 60 new guests an hour, and an IPv6
   client can rotate through its prefix for fresh per-address budgets. Every count is overridable
   without a build (`RATE_LIMIT_*`). CORS exposes `Retry-After` to a page on an allowed origin, so the
   moderation app's page can say how long to wait (`CorsTest` pins the header), but no browser has
@@ -1167,7 +1170,7 @@ run the app to read its own key.
 ### Rate limits
 
 The server limits locally too, with the same budgets as on Render (CLAUDE.md §8b), each keyed by the
-socket peer or the player. The one a developer meets first is 10 guests an hour: an eleventh fresh
+socket peer or the player. The one a developer meets first is 60 guests an hour: a sixty-first fresh
 guest in the hour (every fresh install, clear of storage and logout makes one) answers 429, which the
 **Account** tab shows as *Too many tries. Wait N s, then try again.*
 Raise any budget for a session with its variable, and a refused request says which one in the log:

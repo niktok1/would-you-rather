@@ -102,7 +102,7 @@ class ServerConfigTest {
         val limits = ServerConfig.fromEnvironment { null }.rateLimits
 
         assertEquals(RateLimits.DEFAULT, limits)
-        assertEquals(RequestBudget(10, 1.hours), limits.guests)
+        assertEquals(RequestBudget(60, 1.hours), limits.guests)
         assertEquals(RequestBudget(30, 1.minutes), limits.refreshes)
         assertEquals(RequestBudget(20, 1.minutes), limits.logins)
         assertEquals(RequestBudget(20, 1.hours), limits.registrations)

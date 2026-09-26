@@ -26,7 +26,11 @@ data class RequestBudget(
  * name ends in. The periods are fixed.
  */
 data class RateLimits(
-    /** `POST /v1/auth/guest`, per address: what a script minting guests to farm with can get. */
+    /**
+     * `POST /v1/auth/guest`, per address: what a script minting guests to farm with can get. Room for
+     * the many players one address can stand for, a mobile carrier's shared address or a school's
+     * Wi-Fi, each new install minting one.
+     */
     val guests: RequestBudget,
     /** `POST /v1/auth/refresh`, per address. A player refreshes about once per access token. */
     val refreshes: RequestBudget,
@@ -78,7 +82,7 @@ data class RateLimits(
          */
         val DEFAULT: RateLimits =
             RateLimits(
-                guests = RequestBudget(requests = 10, per = 1.hours),
+                guests = RequestBudget(requests = 60, per = 1.hours),
                 refreshes = RequestBudget(requests = 30, per = 1.minutes),
                 logins = RequestBudget(requests = 20, per = 1.minutes),
                 registrations = RequestBudget(requests = 20, per = 1.hours),
