@@ -686,7 +686,8 @@ EncryptedSharedPreferences: enough for a game that stores no sensitive personal 
     come later (*Local questions*, below).
   - *Age*: **16 and over**, for the store listing's target audience and in the terms.
   - *Languages*: Serbian in both scripts. **English is hidden** at launch: its strings stay in the
-    code (§8f), and the language menu shows Ћирилица and Latinica only (not built).
+    code (§8f), and the language menu shows Ћирилица and Latinica only (`Language.OFFERED`, *built
+    2026-09-26*).
   - *Submitting* costs **50 points** from the release, 1 until then (§8c): the server's
     `SUBMISSION_COST`, which `GET /v1/me` names and the Submit form shows (*built 2026-09-26*); the
     release sets it on `wyr-server` (NEXT-SESSION.md).
@@ -2270,12 +2271,14 @@ hand, so the two cannot say different things; and **English** stands beside them
 - **The language menu** *(built; a menu since 2026-09-26, the user: "there will be more languages
   segmented buttons wont fit everything")*: on the Account screen, under My questions (§8d), a row of
   a globe, the language shown named in itself and a chevron (`LanguageMenu`); a tap opens a menu of
-  every language, **Ћирилица**, **Latinica** and **English**, each named in itself whatever the
-  language shown, the one shown marked, so a player who picked one they cannot read finds the menu by
+  every language offered, **Ћирилица** and **Latinica** (`Language.OFFERED`, the one list that
+  decides it: **English is hidden** for the launch, §8b *The launch*, its words and tests kept, and a
+  device that kept `en` shows English still, none of the menu's marked), each named in itself whatever
+  the language shown, the one shown marked, so a player who picked one they cannot read finds the menu by
   its globe and their own by its name (`Language.ownName`, which is why the names are not `Strings`).
   A screen reader hears the row as *Језик: Ћирилица*, in the language shown (`Strings.language`). A
   tap on a language changes every screen at once and is then kept (`LanguageViewModel`, bound in
-  `uiModule` and asked for once by `App`). `LanguageMenuTest` opens it and picks each.
+  `uiModule` and asked for once by `App`). `LanguageMenuTest` opens it and picks each offered.
 - **The Statistics switch** *(built)*: beside the language menu, *Статистика*, *Statistika*,
   *Statistics* (`AccountStrings.statistics`), the word and the switch one control, which a screen
   reader hears as the word, a switch, and on or off (§8g).

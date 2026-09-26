@@ -62,6 +62,7 @@ import io.ntole.wyr.language.EnglishStrings
 import io.ntole.wyr.language.Language
 import io.ntole.wyr.language.LanguageViewModel
 import io.ntole.wyr.language.SerbianCyrillicStrings
+import io.ntole.wyr.language.SerbianLatinStrings
 import io.ntole.wyr.language.categoryName
 import io.ntole.wyr.language.fill
 import io.ntole.wyr.submit.sendText
@@ -546,13 +547,13 @@ class AppNavigationTest {
             scene.tap(CYRILLIC.account)
 
             scene.tap("${CYRILLIC.language}: ${Language.SERBIAN_CYRILLIC.ownName}")
-            scene.tap(Language.ENGLISH.ownName)
+            scene.tap(Language.SERBIAN_LATIN.ownName)
 
-            assertTrue(ENGLISH.accountScreens.newQuestion in scene.texts(), "${scene.texts()}")
-            assertEquals(listOf(ENGLISH.back), scene.descriptions().take(1))
-            scene.tap(ENGLISH.back)
-            assertEquals(listOf(ENGLISH.gameName, ENGLISH.play), scene.texts())
-            assertEquals("en", storage.read(LanguageViewModel.KEY))
+            assertTrue(LATIN.accountScreens.newQuestion in scene.texts(), "${scene.texts()}")
+            assertEquals(listOf(LATIN.back), scene.descriptions().take(1))
+            scene.tap(LATIN.back)
+            assertEquals(listOf(LATIN.gameName, LATIN.play), scene.texts())
+            assertEquals("sr-Latn", storage.read(LanguageViewModel.KEY))
         }
 
     @Test
@@ -787,6 +788,7 @@ class AppNavigationTest {
     private companion object {
         val CYRILLIC = SerbianCyrillicStrings
         val ENGLISH = EnglishStrings
+        val LATIN = SerbianLatinStrings
 
         val FOOD = Category(id = "FOOD", nameSr = "Храна", nameEn = "Food")
 

@@ -176,7 +176,7 @@ class TapsTest {
                 .named(AnalyticsEvent.TAP)
                 .filter { it.properties[AnalyticsProperty.ELEMENT] == "language.option" }
                 .map { it.properties[AnalyticsProperty.LANGUAGE] }
-        assertEquals(Language.entries.map { it.tag }.toSet(), picked.toSet())
+        assertEquals(Language.OFFERED.map { it.tag }.toSet(), picked.toSet())
     }
 
     @Test
