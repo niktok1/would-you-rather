@@ -119,7 +119,7 @@ mechanism; this table is the rationale.
 | Server             | Ktor (server)          | Kotlin-native server                             |
 | Rate limiting      | Ktor RateLimit plugin  | Official Ktor plugin; in memory, per instance    |
 | HTTP client        | Ktor (client)          | Same family as the server                        |
-| Server to Google   | Ktor client, CIO       | `ktor-client-cio`, server-only (approved 2026-09-26): FCM pushes, Play Games sign-in (§8a); tests answer with `ktor-client-mock` |
+| Server to Google   | Ktor client, CIO       | `ktor-client-cio`, the desktop client's engine, and since 2026-09-26 the server's for its calls to Google: FCM pushes, Play Games sign-in (§8a); tests answer with `ktor-client-mock` |
 | Serialization      | kotlinx.serialization  | Backbone of :core                                |
 | Async              | Coroutines + Flow      | Official                                         |
 | Local cache        | SQLDelight             | **Declared, not yet wired — see below**          |
@@ -539,13 +539,13 @@ decided in §8b).
   - *Removing* one, a device turning notifications off, is `POST /v1/me/push-token-removals` with a
     `RemovePushTokenRequest`, 204, the caller's own token alone. A **logout needs no call**: the
     session's row going takes its device's tokens with it, and deleting a player takes theirs, by
-    `ON DELETE CASCADE` on both of the table's foreign keys, the only cascading keys in the schema, so no
-    store has to know the table is there.
-  - *A decision's push*: once a moderator's approval or rejection has committed and been answered,
-    `DecisionNotifier` pushes the author's every device, off the request, in a background scope the
-    server cancels at stop. Best effort: a failure is logged and dropped, never failing or holding up
-    the decision, and nothing is retried; a token FCM calls `UNREGISTERED` is deleted, and only that
-    code, since a wrong project answers 404 for every token. The title is *Твоје питање је одобрено*
+    `ON DELETE CASCADE` on both of the table's foreign keys (`push_tokens`' and `identities`' keys
+    cascade, the schema's only cascading keys), so no store has to know the table is there.
+  - *A decision's push*: launched once a moderator's approval or rejection has committed, and not
+    waited for, `DecisionNotifier` pushes the author's every device, off the request, in a background
+    scope the server cancels at stop. Best effort: a failure is logged and dropped, never failing or
+    holding up the decision, and nothing is retried; a token FCM calls `UNREGISTERED` is deleted, and
+    only that code, since a wrong project answers 404 for every token. The title is *Твоје питање је одобрено*
     or *Твоје питање није одобрено*, the body the question as My questions names it, *Пица или
     Бурек*, a rejection's followed by *. Разлог:* and the moderator's reason, in Serbian Cyrillic, the
     game's first language (§8f; the client may put it into the language shown later), and the data
@@ -588,8 +588,9 @@ decided in §8b).
     `PLAY_GAMES_CODE_REFUSED`, answered by asking Play Games for a new one; Google not answering,
     refusing the server itself (`invalid_client`), or Play Games answering 403, the server's setup and
     never the code's (its API not enabled in the Cloud project, say), is 502 `PLAY_GAMES_UNAVAILABLE`,
-    logged as a warning with Google's status and reason codes alone; neither changes anything. An expired or forged bearer is 401 before the code goes anywhere (the route's
-    authentication is optional, which still refuses a bad token), so the refreshed retry can spend it.
+    logged as a warning with Google's status and reason codes alone; neither changes anything. An
+    expired or forged bearer is 401 before the code goes anywhere (the route's authentication is
+    optional, which still refuses a bad token), so the refreshed retry can spend it.
     A code is 1 to `WyrApi.Limits.MAX_SERVER_AUTH_CODE_LENGTH` (2048) of visible ASCII, or 400. Off
     (the variables unset), the route is not served: 404. Limited per address, 20 a minute (§8b). On
     the client both codes are mapped, never to `UNAUTHORIZED` (`ErrorMapper`).
@@ -897,11 +898,10 @@ seed (`Migrations`, `DatabaseFactory.init`). Nothing builds a table any other wa
   (a player's username and password hash, *Accounts*, above), which every player already there takes
   as a guest, and every later script: V6 (the categories table, §8d *Categories*), V7 (what a
   question cost, §8c), V8 (the seeds' made-up votes), V9 (the seeds in Serbian, §8d *Seeds*),
-  V10 (likes become reactions, §8d *Reactions*) and `feat/server-engagement`'s V15 (the Home
-  screen's two counts, §8d *Home picks*), V16 (an answer's time, *Personalization*, above) and V17
-  (push tokens, §8a) and V18 (Play Games links, §8a). V11 to V14 are `feat/server-safety`'s, which merges first;
-  Flyway runs whatever versions are there in order, a gap included, and `MigrationsTest` steps
-  through the scripts by their own versions.
+  V10 (likes become reactions, §8d *Reactions*), V15 (the Home screen's two counts, §8d *Home
+  picks*), V16 (an answer's time, *Personalization*, above), V17 (push tokens, §8a) and V18 (Play
+  Games links, §8a). Flyway runs whatever versions are there in order, a gap included, and
+  `MigrationsTest` steps through the scripts by their own versions.
   `Migrations.migrate` takes the baseline itself (`baselineVersion` 1), and only for a database
   holding every table V1 builds (`TABLES_BEFORE_MIGRATIONS`) and no history table; Flyway's
   `baselineOnMigrate` is off. Any other database with tables and no history fails the boot, rather

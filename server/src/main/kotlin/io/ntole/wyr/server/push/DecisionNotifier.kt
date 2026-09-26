@@ -13,8 +13,8 @@ import org.slf4j.LoggerFactory
  * Tells an author, on every device they registered, that a moderator decided their question (CLAUDE.md
  * §8a, *Push tokens*).
  *
- * Called once the decision has committed and been answered, and runs in [scope], off the request: a
- * push is best effort, so nothing it does can hold up, fail or undo the decision. Every failure is
+ * Launched once the decision has committed, and not waited for: it runs in [scope], off the request,
+ * as a push is best effort, so nothing it does can hold up, fail or undo the decision. Every failure is
  * logged and dropped, a token Firebase calls unregistered is forgotten, and nothing is retried.
  */
 class DecisionNotifier(

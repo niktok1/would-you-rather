@@ -16,7 +16,10 @@ import kotlinx.serialization.json.Json
  *
  * A status is never an exception here (`expectSuccess` off): each caller reads Google's answer, a
  * refusal included, for what it means. Every call is bounded, so a Google that does not answer holds
- * nothing up for long: a push is sent after its decision has answered, and a sign-in waits on it.
+ * nothing up for long: a push goes off its decision's request, not waited for, and a sign-in waits on it.
+ *
+ * The client does not own [engine], so closing it leaves the engine running: whoever made the engine
+ * closes it after the client, as the server does when it stops.
  */
 fun googleHttpClient(engine: HttpClientEngine): HttpClient =
     HttpClient(engine) {

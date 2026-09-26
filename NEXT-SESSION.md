@@ -333,7 +333,10 @@ client for `PLAY_GAMES_CLIENT_ID` and `PLAY_GAMES_CLIENT_SECRET`, all set by han
 (`render.yaml` declares them `sync: false`). Unset, each says so once at boot. **At the merge**:
 `MigrationsTest.BASELINED_HISTORY` gains `feat/server-safety`'s 11 to 14 between 10 and 15, and
 `ErrorCode`, `ErrorMapper`, `RateLimits`, `RouteLimit`, `TestRateLimits`, `ServerConfigTest` and
-`RateLimitTest` will each conflict where both branches added a member: keep both. If
+`RateLimitTest` will each conflict where both branches added a member: keep both. So will CLAUDE.md
+§4 (the lists of stores under each transaction rule) and §8b (the migrations paragraph's list of
+scripts, which then names V11 to V14 by what each does, as it names V15 to V18, and loses its "a gap
+included"; the rate limits' groups): keep both there too. If
 `feat/server-safety` deletes a player row, the push tokens and Play Games links go with it by their
 cascades, as long as it deletes the player's sessions first (their key restricts). Tests: `:server`
 427 (365 before), `:core:data` 143 (`ErrorMapperTest`'s two new rows); the rest unchanged.

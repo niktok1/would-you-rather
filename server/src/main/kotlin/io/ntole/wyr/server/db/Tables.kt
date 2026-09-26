@@ -402,9 +402,9 @@ object HomePicks : Table("home_picks") {
  * registered again, by its player or another, moves to whoever sent it last (`PushTokenStore.register`),
  * the primary key deciding two registrations racing.
  *
- * Both foreign keys cascade, unlike every other table's: the logout that deletes a session
- * (`SessionStore.close`) deletes its device's tokens with it, and deleting a player deletes theirs, with
- * no store having to know this table is there.
+ * Both foreign keys cascade, as `identities`' does, the schema's only cascading keys: the logout that
+ * deletes a session (`SessionStore.close`) deletes its device's tokens with it, and deleting a player
+ * deletes theirs, with no store having to know this table is there.
  */
 object PushTokens : Table("push_tokens") {
     /** The registration token Firebase gave the device, visible ASCII. */

@@ -290,7 +290,7 @@ class PushFlowTest {
                 fcm()
             }
 
-        /** The next push FCM receives: sent after the decision answered, so it is waited for. */
+        /** The next push FCM receives: sent off the decision's request, not waited for by it, so waited for here. */
         suspend fun nextPush(): Push = withTimeout(10.seconds) { pushes.receive() }
 
         private fun JsonObject.text(name: String) = getValue(name).jsonPrimitive.content
