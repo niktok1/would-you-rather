@@ -716,8 +716,11 @@ decided in §8b).
     profile in by itself), it asks Play Games for a server auth code and sends it
     (`AuthApi.playGames`, with the session's bearer, through `withSessionRecovery`, so a dead
     session's 401, which comes before the code is spent, is retried as the fresh guest). The session
-    answered is stored in place of the device's, as a login's is (`DefaultSessionRepository.replace`);
-    when it is another player's, the question queue is dropped; the analytics identify the player
+    answered is stored in place of the device's, as a login's is, but only while the device still plays
+    as the player the sign-in went out as (`DefaultSessionRepository.replaceIfStill`, under the lock
+    minting takes): a login or a logout landing during the exchange, which takes seconds, stands, and
+    the answer is dropped, though the server may have linked the Play Games player to the one it went
+    out as all the same (rare, and accepted). When it is another player's, the question queue is dropped; the analytics identify the player
     either way (§8g). A refusal (`PLAY_GAMES_CODE_REFUSED`, `PLAY_GAMES_UNAVAILABLE`, each a
     `DomainError` of its own now, offline, no code) leaves the player as they are, shows nothing, and
     is tried again at the next launch. **Settled** (`PlayGamesSettled`, `wyr.playgames.settled.local`,

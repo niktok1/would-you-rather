@@ -39,7 +39,8 @@ public class LinkPlayGames(
      * At launch: waits for a session, then, while who plays here is unsettled and Play Games says the
      * player is signed in to it, signs in to the server with it. Returns whether it did. Never throws but
      * the caller's cancellation: a refusal, Google not answering or being offline leaves the player as
-     * they are and nothing is shown, and the next launch tries again.
+     * they are and nothing is shown, and the next launch tries again; a login or a logout landing while
+     * it is in flight stands, and settles the device.
      */
     public suspend fun automatically(): Boolean {
         if (!playGames.available) return false
@@ -49,7 +50,6 @@ public class LinkPlayGames(
             if (link.isSettled() || !playGames.isAuthenticated()) return@withLock false
             try {
                 signIn(automatic = true)
-                true
             } catch (failed: WyrException) {
                 false
             }
@@ -58,7 +58,8 @@ public class LinkPlayGames(
 
     /**
      * The Auth page's button: asks the player to sign in to Play Games unless they are, then signs in to
-     * the server with it. Returns false, with nothing sent, when they did not sign in to Play Games.
+     * the server with it. Returns false, with nothing sent, when they did not sign in to Play Games, and
+     * with nothing stored, when the device became another player while it was in flight.
      *
      * @throws WyrException when the server could not sign them in, the stored session left as it was.
      */
@@ -67,16 +68,16 @@ public class LinkPlayGames(
         return mutex.withLock {
             if (!playGames.isAuthenticated() && !playGames.signIn()) return@withLock false
             signIn(automatic = false)
-            true
         }
     }
 
-    private suspend fun signIn(automatic: Boolean) {
+    /** Whether the device plays as the Play Games player now: false when it became another meanwhile. */
+    private suspend fun signIn(automatic: Boolean): Boolean {
         val before = session.current()
         val code =
             playGames.serverAuthCode()
                 ?: throw WyrException(DomainError.PLAY_GAMES_UNAVAILABLE, "Play Games gave no server auth code")
-        val player = link.signIn(code)
+        val player = link.signIn(code) ?: return false
         val switched = player != before
         // The queue was filled from the feed of the player before.
         if (switched) questions.reset()
@@ -85,5 +86,6 @@ public class LinkPlayGames(
             AnalyticsEvent.PLAY_GAMES_SIGNED_IN,
             mapOf(AnalyticsProperty.AUTOMATIC to automatic, AnalyticsProperty.SWITCHED to switched),
         )
+        return true
     }
 }

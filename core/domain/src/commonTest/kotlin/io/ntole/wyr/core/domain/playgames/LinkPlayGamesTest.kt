@@ -119,6 +119,20 @@ class LinkPlayGamesTest {
             assertEquals(emptyList(), analytics.events)
         }
 
+    /** The exchange with Google takes seconds: a login landing meanwhile is the player's later choice. */
+    @Test
+    fun `a launch whose answer comes after a login leaves the login standing`() =
+        runTest {
+            session.player.value = "guest1"
+            link.loggedInMeanwhile = "bob-player"
+
+            assertFalse(linking.automatically())
+
+            assertEquals(listOf("isAuthenticated", "serverAuthCode", "signIn code-1"), calls, "nobody reset")
+            assertEquals(emptyList(), analytics.events)
+            assertEquals("bob-player", session.current())
+        }
+
     @Test
     fun `a launch Play Games gives no code for signs in to nothing`() =
         runTest {
@@ -203,11 +217,19 @@ class LinkPlayGamesTest {
         /** The player the server signs in as: the one playing, unless the Play Games player was another's. */
         var answer: String? = null
 
+        /** When set, a login made the device this player while the sign-in was in flight. */
+        var loggedInMeanwhile: String? = null
+
         override fun isSettled(): Boolean = settled
 
-        override suspend fun signIn(serverAuthCode: String): String {
+        override suspend fun signIn(serverAuthCode: String): String? {
             calls += "signIn $serverAuthCode"
             refuseWith?.let { throw WyrException(it) }
+            loggedInMeanwhile?.let {
+                session.player.value = it
+                settled = true
+                return null
+            }
             val player = answer ?: session.player.value ?: "minted"
             session.player.value = player
             settled = true

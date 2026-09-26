@@ -675,7 +675,7 @@ class AppNavigationTest {
     private object NoPlayGamesLink : PlayGamesRepository {
         override fun isSettled(): Boolean = error("no Play Games here")
 
-        override suspend fun signIn(serverAuthCode: String): String = error("no Play Games here")
+        override suspend fun signIn(serverAuthCode: String): String? = error("no Play Games here")
     }
 
     /** The game's questions for the notice, read without counting a read of them, which the screens' are. */

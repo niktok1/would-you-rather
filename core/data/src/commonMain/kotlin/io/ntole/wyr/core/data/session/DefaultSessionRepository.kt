@@ -78,6 +78,26 @@ public class DefaultSessionRepository(
         }
 
     /**
+     * Stores [session] as [replace] does, but only while the device still plays as [sentAs], the player
+     * the request that answered it went out as: a login or a logout that landed while it was in flight
+     * is the player's later choice, which the answer must not undo. Compared by player, since a refresh
+     * meanwhile keeps the player and rotates the session. Returns whether it stored it.
+     */
+    internal suspend fun replaceIfStill(
+        sentAs: String?,
+        session: SessionDto,
+    ): Boolean =
+        mutex.withLock {
+            if (sessionStore.read()?.playerId != sentAs) return@withLock false
+            persist {
+                sessionStore.write(session)
+                playGamesSettled.settle()
+            }
+            changes.update { it + 1 }
+            true
+        }
+
+    /**
      * Throw away a session the server no longer accepts and mint a fresh one — unless that has
      * already happened.
      *

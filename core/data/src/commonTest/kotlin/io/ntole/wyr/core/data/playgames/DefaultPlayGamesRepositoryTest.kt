@@ -22,6 +22,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /** Signing in with Play Games through the real client, against [FakeServer] (CLAUDE.md §8a). */
@@ -101,6 +102,28 @@ class DefaultPlayGamesRepositoryTest {
             assertEquals("guest1", playGames.signIn("code-1"))
             assertEquals(listOf("Bearer access-dead", "Bearer access-guest1"), server.playGamesSentAs.map { it.first })
             assertTrue(playGames.isSettled())
+        }
+
+    /**
+     * The exchange with Google takes seconds, more after a cold start: a login or a logout landing
+     * meanwhile is the player's later choice, which the answer does not undo. Each lands as its own
+     * repository stores it, a login's session in place of the device's and a logout's none.
+     */
+    @Test
+    fun `a sign-in answered after a login or a logout stores nothing`() =
+        runTest {
+            sessions.ensure()
+            server.playGamesCodes["code-1"] = "gp-1"
+            server.whilePlayGamesExchanges = { sessions.replace(session("bob-player")) }
+
+            assertNull(playGames.signIn("code-1"))
+            assertEquals(session("bob-player"), store.read())
+
+            server.playGamesCodes["code-2"] = "gp-2"
+            server.whilePlayGamesExchanges = { sessions.clear() }
+
+            assertNull(playGames.signIn("code-2"))
+            assertNull(store.read(), "logged out, the fresh guest minted by the next call")
         }
 
     /** A login and a logout are the player's doing, as a sign-in is; a dead session replaced is nobody's. */

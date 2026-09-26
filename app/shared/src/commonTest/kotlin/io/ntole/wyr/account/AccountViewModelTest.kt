@@ -1146,7 +1146,7 @@ class AccountViewModelTest {
 
         override fun isSettled(): Boolean = false
 
-        override suspend fun signIn(serverAuthCode: String): String {
+        override suspend fun signIn(serverAuthCode: String): String? {
             calls += "playGames $serverAuthCode"
             playGamesRefusedWith?.let { throw WyrException(it) }
             playGamesPlayer?.let { player = it }

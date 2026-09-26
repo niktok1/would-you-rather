@@ -15,7 +15,9 @@ import io.ntole.wyr.core.network.api.AuthApi
  * player playing, who keeps everything they have. It goes through [withSessionRecovery], as a
  * registration does: a dead session is a 401 before the code goes anywhere, so the retry sends it,
  * still unspent, as the fresh guest minted for it. Only a sign-in the server took changes the stored
- * session.
+ * session, and only while the device still plays as the player it went out as
+ * ([DefaultSessionRepository.replaceIfStill]): the exchange with Google takes seconds, and a login or a
+ * logout landing meanwhile stands.
  */
 public class DefaultPlayGamesRepository(
     private val api: AuthApi,
@@ -23,9 +25,14 @@ public class DefaultPlayGamesRepository(
 ) : PlayGamesRepository {
     override fun isSettled(): Boolean = session.isPlayGamesSettled()
 
-    override suspend fun signIn(serverAuthCode: String): String {
-        val signedIn = session.withSessionRecovery { api.playGames(PlayGamesSignInRequest(serverAuthCode)) }
-        session.replace(signedIn)
-        return signedIn.playerId
+    override suspend fun signIn(serverAuthCode: String): String? {
+        var sentAs: String? = null
+        val signedIn =
+            session.withSessionRecovery {
+                // Each attempt's own: a dead session's retry goes out as the fresh guest.
+                sentAs = session.current()
+                api.playGames(PlayGamesSignInRequest(serverAuthCode))
+            }
+        return signedIn.playerId.takeIf { session.replaceIfStill(sentAs, signedIn) }
     }
 }

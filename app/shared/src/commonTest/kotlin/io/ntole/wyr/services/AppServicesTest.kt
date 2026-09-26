@@ -202,7 +202,7 @@ class AppServicesTest {
 
         override fun isSettled() = settled
 
-        override suspend fun signIn(serverAuthCode: String): String {
+        override suspend fun signIn(serverAuthCode: String): String? {
             signIns += serverAuthCode
             settled = true
             return session.player.value ?: "minted"

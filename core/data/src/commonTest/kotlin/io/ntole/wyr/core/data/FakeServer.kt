@@ -143,6 +143,9 @@ internal class FakeServer {
     /** When set, every Play Games sign-in is refused with this status and code, whoever sends it. */
     var refusePlayGamesWith: Pair<HttpStatusCode, ErrorCode>? = null
 
+    /** Run as a Play Games sign-in has asked Google and before it answers: a login meanwhile, say. */
+    var whilePlayGamesExchanges: suspend () -> Unit = {}
+
     /** The `Authorization` header and body of every push token registration, in arrival order. */
     val pushTokensSentAs = mutableListOf<Pair<String?, PushTokenRequest>>()
 
@@ -385,6 +388,7 @@ internal class FakeServer {
         val gamesPlayer =
             playGamesCodes.remove(code.serverAuthCode)
                 ?: return respondErrorDto(HttpStatusCode.UnprocessableEntity, ErrorCode.PLAY_GAMES_CODE_REFUSED)
+        whilePlayGamesExchanges()
         val player =
             playGamesLinks.getOrPut(gamesPlayer) {
                 caller?.takeUnless { it in playGamesLinks.values } ?: "games-$gamesPlayer"

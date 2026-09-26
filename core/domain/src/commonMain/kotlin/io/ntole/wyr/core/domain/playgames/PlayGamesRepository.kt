@@ -17,12 +17,13 @@ public interface PlayGamesRepository {
      * Signs in with [serverAuthCode], a Play Games server auth code: the server answers with a session
      * of the player Play Games names, which is stored in place of this device's, as a login's is, and
      * settles it. Returns the player id of that session: the player playing before, now linked, or
-     * another the Play Games player was linked to already.
+     * another the Play Games player was linked to already. Returns null, with nothing stored, when the
+     * device became another player while the sign-in was in flight, by a login or a logout, which stands.
      *
      * @throws io.ntole.wyr.core.domain.error.WyrException on any failure, the stored session left as it
      *   was: [io.ntole.wyr.core.domain.error.DomainError.PLAY_GAMES_CODE_REFUSED] for a code Google
      *   refused, [io.ntole.wyr.core.domain.error.DomainError.PLAY_GAMES_UNAVAILABLE] for a server that
      *   could not ask Google.
      */
-    public suspend fun signIn(serverAuthCode: String): String
+    public suspend fun signIn(serverAuthCode: String): String?
 }
