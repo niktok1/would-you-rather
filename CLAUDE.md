@@ -1251,7 +1251,7 @@ game's, or a place on one, theme tokens only (§5b), and its words in `Strings` 
   with how many picked it (*Home picks*), and the account icon top right, and nothing else, the user
   asking for less text. Either Play opens the **Play** screen under a top bar of
   the home icon, left, back to Home, the categories played in its middle, which open the
-  **Categories** screen, and the account icon, right. The account icon, from Home or
+  **Categories** screen, and the question's menu and the account icon, right. The account icon, from Home or
   Play, opens the **Account** screen under a top bar of a back arrow. On it, a guest's one button
   opens the **Auth** page, to register or log in, and My questions' *Ново питање* the **Submit**
   screen's form. On Play, the categories played open the **Categories** screen (*Categories*, *The
@@ -2238,7 +2238,8 @@ hand, so the two cannot say different things; and **English** stands beside them
   no Latin or English one has a Cyrillic letter. Translated so far: the Home screen, the game's name
   (*Шта би радије?*, *Would You Rather?*) and *Играј*; the top bars and the icons' names (*Почетна*,
   *Налог*, *Назад*); the language menu's name, *Језик*; the Play screen's words (`PlayStrings`,
-  `Strings.playScreen`); the Categories screen (`CategoryStrings`, `Strings.categoriesScreen`:
+  `Strings.playScreen`), its repeat notice and its question's menu (`QuestionMenuStrings`,
+  `PlayStrings.menu`) among them; the Categories screen (`CategoryStrings`, `Strings.categoriesScreen`:
   *Претражи категорије*, *Изабрано: 3* and *Нема резултата*); the Account screen, whole, with My
   questions and the server line; the Auth page, whole; and the Submit screen's form, whole
   (`Strings.accountScreens`, an `AccountStrings` of the Account screen's words and those of the

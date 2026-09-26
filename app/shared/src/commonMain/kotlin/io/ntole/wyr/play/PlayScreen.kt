@@ -482,7 +482,7 @@ private fun OptionCard(
             ) {
                 // As large as the card leaves it room for, the percentage's room taken first, and in steps no
                 // smaller than the floor, so a long option shrinks rather than being cut (§8d, *The Play
-                // screen*). The largest size is also what the card's intrinsic height is measured at.
+                // screen*).
                 Text(
                     text = text,
                     fontSize = WyrTypeScale.optionText,

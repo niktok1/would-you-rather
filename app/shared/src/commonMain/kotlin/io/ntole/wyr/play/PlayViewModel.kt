@@ -266,7 +266,7 @@ class PlayViewModel(
                     MenuChoice.HideQuestion -> hideQuestion(question.id)
                     MenuChoice.HideAuthor -> hideAuthor(question.id)
                 }
-                analytics.track(eventOf(choice), about(question) + propertiesOf(choice, answered = shown))
+                analytics.track(eventOf(choice), about(question) + propertiesOf(choice, shown))
                 // Nothing else could go meanwhile, so it is still the question on screen.
                 if (_state.value == hiding) load()
             } catch (failure: WyrException) {
@@ -407,13 +407,16 @@ private fun eventOf(choice: MenuChoice): String =
         MenuChoice.HideAuthor -> AnalyticsEvent.AUTHOR_HIDDEN
     }
 
-/** What a menu choice's event says of its own: a report's reason, and whether the question was [answered]. */
+/**
+ * What a menu choice's event says of its own: a report's reason, and whether the question was answered,
+ * [shown] revealed when the choice was made.
+ */
 private fun propertiesOf(
     choice: MenuChoice,
-    answered: PlayUiState.OnQuestion,
+    shown: PlayUiState.OnQuestion,
 ): Map<String, Any?> {
     val reason = (choice as? MenuChoice.Report)?.let { mapOf(AnalyticsProperty.REASON to it.reason.name.lowercase()) }
-    return reason.orEmpty() + mapOf(AnalyticsProperty.ANSWERED to (answered is PlayUiState.Revealed))
+    return reason.orEmpty() + mapOf(AnalyticsProperty.ANSWERED to (shown is PlayUiState.Revealed))
 }
 
 /** What a menu choice that failed is reported as having failed at (CLAUDE.md §8g). */
