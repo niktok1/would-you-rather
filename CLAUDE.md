@@ -991,7 +991,10 @@ EncryptedSharedPreferences: enough for a game that stores no sensitive personal 
   ask for their copyright and permission notice to ship with the app; the About screen shows each one's
   copyright line and opens its licence's full text in the browser, as it does Apache 2.0's (§8d,
   *About*). The options: keep it; or every licence's full text inside the app, a screen of its own
-  per licence, which needs no network.
+  per licence, which needs no network. Google Play services (Play Games, and what firebase-messaging
+  brings on Android) are under Google's own terms, not open source, and the list leaves them out: the
+  options are that, or a line for them under their terms, or Google's `oss-licenses` plugin, a new
+  dependency (§2), which lists what Play services bundle.
 - **Log out under the language row** — *provisional — user decision.* The user's Account redesign put
   Log out beside the language menu, one row of the two; the Statistics switch (§8g) now shares that
   row, since a row of all three does not fit a phone's width, and a row of its own would take a
@@ -1752,8 +1755,12 @@ with its licence, a tap opening the licence's text (`OPEN_SOURCE_LIBRARIES`, wri
 library for it, from the Android and desktop dependency reports, NEXT-SESSION's *Releasing to
 production*: Apache 2.0 but for SLF4J's API, MIT, which Ktor brings, and Skia, BSD 3-Clause, which
 Skiko builds into the desktop, iOS and web apps, each of those two with the copyright line its licence
-asks to ship with the app, *provisional*, §8b *Licence notices*; a library added to the game's client
-is added there in the same change, under its own licence). Words: `Strings.aboutScreen`.
+asks to ship with the app, *provisional*, §8b *Licence notices*; the Firebase Android SDK, Error Prone's
+annotations and javax.inject, which Android's pushes bring, are Apache 2.0 too; a library added to the
+game's client is added there in the same change, under its own licence). Google Play services, which
+Play Games and Firebase bring on Android (`play-services-games-v2`, `-base`, `-basement`, `-tasks`,
+`-stats`, `-cloud-messaging`), are under Google's own terms, not an open-source licence, so the list
+does not name them (*provisional — user decision*, §8b *Licence notices*). Words: `Strings.aboutScreen`.
 `AboutScreenDrawTest` (every text in both themes and every language, each link's URL through a handler
 of the test's own, one that opens nothing, the links above 599 before any scrolling), `LicencesTest`,
 `LinksTest`, `SiteTest`, `TapsTest`,

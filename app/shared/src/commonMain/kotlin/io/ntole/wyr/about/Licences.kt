@@ -45,6 +45,11 @@ val OPEN_SOURCE_LIBRARIES: List<Licensed> =
         "JetBrains Java Annotations",
         "JSpecify",
         "Guava ListenableFuture",
+        // Pushes on Android (CLAUDE.md §8a, *Push tokens*): firebase-messaging and what it brings, all of
+        // the Firebase Android SDK, its data transport included, and the annotations those use.
+        "Firebase Android SDK",
+        "Error Prone annotations",
+        "javax.inject",
     ).map { name -> Licensed(name, APACHE_2, APACHE_2_URL) } +
         listOf(
             Licensed(

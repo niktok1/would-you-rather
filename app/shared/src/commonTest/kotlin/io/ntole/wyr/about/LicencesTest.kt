@@ -20,6 +20,9 @@ class LicencesTest {
         assertEquals("BSD 3-Clause License", skia.licence)
         assertEquals("Copyright (c) 2011 Google Inc.", skia.notice)
         assertEquals("Apache License 2.0", assertNotNull(byName["Stately"], "Stately, which Ktor brings").licence)
+        listOf("Firebase Android SDK", "Error Prone annotations", "javax.inject").forEach { name ->
+            assertEquals("Apache License 2.0", assertNotNull(byName[name], "$name, which pushes bring").licence)
+        }
 
         OPEN_SOURCE_LIBRARIES.filter { it.licence.startsWith("MIT") || it.licence.startsWith("BSD") }.forEach {
             assertNotNull(it.notice, "${it.name}: its licence asks for its notice")
