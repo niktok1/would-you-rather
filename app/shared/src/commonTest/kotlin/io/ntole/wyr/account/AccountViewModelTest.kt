@@ -359,6 +359,31 @@ class AccountViewModelTest {
             assertTrue("reset" in game.calls, "the queue was the guest's")
         }
 
+    /**
+     * Another player's from the sign-in on: nothing of the guest's is shown while theirs is read, so
+     * the rows the notice marks are never the guest's (CLAUDE.md §8d, *The notice of a decision*).
+     */
+    @Test
+    fun `a Play Games sign-in shows nothing of the guest's while the player's own is read`() =
+        runTest(dispatcher) {
+            playGames.available = true
+            game.questionsOf["guest1"] = listOf(QUESTION)
+            game.accounts["bob_1"] = "correct horse" to "bob-player"
+            game.playGamesPlayer = "bob-player"
+            val viewModel = open()
+            assertEquals(listOf(QUESTION), viewModel.state.value.submissions)
+            val listRead = CompletableDeferred<Unit>()
+            game.mineWaitsFor = listRead
+
+            viewModel.signInWithPlayGames()
+            testScheduler.advanceUntilIdle()
+            assertEquals(null, viewModel.state.value.submissions, "the guest's list is gone")
+
+            listRead.complete(Unit)
+            testScheduler.advanceUntilIdle()
+            assertEquals(emptyList(), viewModel.state.value.submissions, "bob's own")
+        }
+
     @Test
     fun `a player who does not sign in to Play Games stays on the page with nothing sent`() =
         runTest(dispatcher) {

@@ -170,7 +170,10 @@ class AccountViewModel(
     override fun signInWithPlayGames() {
         if (!_state.value.offersPlayGames) return
         perform(AccountAction.PLAY_GAMES) {
-            if (linkPlayGames.manually()) _state.update { it.copy(signedIn = true) }
+            if (linkPlayGames.manually()) {
+                // Maybe another player from here on, as after a login: what was read may be the guest's.
+                _state.update { it.copy(stats = null, submissions = null, signedIn = true) }
+            }
         }
     }
 
