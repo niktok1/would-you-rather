@@ -5,6 +5,9 @@ import androidx.lifecycle.viewModelScope
 import io.ntole.wyr.core.domain.account.LogIn
 import io.ntole.wyr.core.domain.account.LogOut
 import io.ntole.wyr.core.domain.account.RegisterAccount
+import io.ntole.wyr.core.domain.analytics.Analytics
+import io.ntole.wyr.core.domain.analytics.AnalyticsEvent
+import io.ntole.wyr.core.domain.analytics.AnalyticsProperty
 import io.ntole.wyr.core.domain.error.WyrException
 import io.ntole.wyr.core.domain.player.GetPlayerStats
 import io.ntole.wyr.core.domain.submission.GetMySubmissions
@@ -56,6 +59,9 @@ interface AccountActions {
  *
  * One action at a time, and after each the player is read again, whatever became of it: a
  * registration whose answer was lost may have landed, and the read then names the account.
+ *
+ * [analytics] hear of it all (CLAUDE.md §8g): the screen opened, a registration sent and one that
+ * worked, a login that worked, a logout, and every failure shown, by its code; never what was typed.
  */
 class AccountViewModel(
     private val getPlayerStats: GetPlayerStats,
@@ -63,6 +69,7 @@ class AccountViewModel(
     private val registerAccount: RegisterAccount,
     private val logInToAccount: LogIn,
     private val logOutOfAccount: LogOut,
+    private val analytics: Analytics,
 ) : ViewModel(),
     AccountActions {
     private val _state = MutableStateFlow(AccountState())
@@ -73,6 +80,12 @@ class AccountViewModel(
      * screen meanwhile, and a guest's points are what a login would leave behind.
      */
     override fun refresh() = perform(AccountAction.LOAD) {}
+
+    /** The Account screen is shown: the analytics hear of it, and the player is read again. */
+    fun shown() {
+        analytics.track(AnalyticsEvent.ACCOUNT_OPENED)
+        refresh()
+    }
 
     /** Only when nothing is read: a guest's points are what the one warning before a login is about. */
     override fun authShown() {
@@ -110,6 +123,7 @@ class AccountViewModel(
         val draft = _state.value
         if (!draft.canRegister) return
         perform(AccountAction.REGISTER) {
+            analytics.track(AnalyticsEvent.REGISTER_STARTED)
             registerAccount(draft.registerUsername, draft.registerPassword)
             _state.update { it.copy(signedIn = true) }
         }
@@ -143,6 +157,8 @@ class AccountViewModel(
     /** Logs this device out, best effort; it plays on as a fresh guest, whom the read after mints. */
     override fun logOut() =
         perform(AccountAction.LOG_OUT) {
+            // Before the logout, which has the analytics forget who the player was: the event is theirs.
+            analytics.track(AnalyticsEvent.LOGOUT)
             logOutOfAccount()
             _state.update { it.copy(stats = null, submissions = null) }
         }
@@ -166,10 +182,38 @@ class AccountViewModel(
                     _state.update { it.copy(failure = AccountFailure(action, failure.error, failure.retryAfter)) }
                 }
                 load()
+                report(action)
             } finally {
                 _state.update { it.copy(running = null) }
             }
         }
+    }
+
+    /**
+     * What [action] ended in, once the player was read after it, for the analytics: a register or a
+     * login that worked, its answer lost or not, and every failure the screens show.
+     */
+    private fun report(action: AccountAction) {
+        val settled = _state.value
+        if (settled.signedIn) {
+            when (action) {
+                AccountAction.REGISTER -> analytics.track(AnalyticsEvent.REGISTER_COMPLETED)
+                AccountAction.LOG_IN -> analytics.track(AnalyticsEvent.LOGIN_COMPLETED)
+                else -> Unit
+            }
+        }
+        settled.failure?.let { reportShown(it, actionName(it.action)) }
+        settled.listFailure?.let { reportShown(it, ACTION_MY_QUESTIONS) }
+    }
+
+    private fun reportShown(
+        failure: AccountFailure,
+        action: String,
+    ) {
+        analytics.track(
+            AnalyticsEvent.ERROR_SHOWN,
+            mapOf(AnalyticsProperty.CODE to failure.error.name, AnalyticsProperty.ACTION to action),
+        )
     }
 
     /**
@@ -223,3 +267,14 @@ class AccountViewModel(
 
 /** The actions the Auth page's forms send, whose failures show under them. */
 private val AUTH_ACTIONS = setOf(AccountAction.REGISTER, AccountAction.LOG_IN)
+
+/** What failed, as the analytics name it (CLAUDE.md §8g). */
+private fun actionName(action: AccountAction): String =
+    when (action) {
+        AccountAction.LOAD -> "account"
+        AccountAction.REGISTER -> "register"
+        AccountAction.LOG_IN -> "log_in"
+        AccountAction.LOG_OUT -> "log_out"
+    }
+
+private const val ACTION_MY_QUESTIONS = "my_questions"

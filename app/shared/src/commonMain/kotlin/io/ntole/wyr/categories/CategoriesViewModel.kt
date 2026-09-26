@@ -2,6 +2,9 @@ package io.ntole.wyr.categories
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import io.ntole.wyr.core.domain.analytics.Analytics
+import io.ntole.wyr.core.domain.analytics.AnalyticsEvent
+import io.ntole.wyr.core.domain.analytics.AnalyticsProperty
 import io.ntole.wyr.core.domain.category.Category
 import io.ntole.wyr.core.domain.category.CategoryRepository
 import io.ntole.wyr.core.domain.category.GetCategories
@@ -41,11 +44,15 @@ interface CategoriesActions {
  *
  * It lives as long as the app, as every screen's ViewModel does (§8d, *Navigation*), so [open]
  * starts each visit afresh: leaving without Play keeps nothing of what was ticked or searched.
+ *
+ * [analytics] hear of the categories played, by id, and of a read that failed (CLAUDE.md §8g); never
+ * what was searched.
  */
 class CategoriesViewModel(
     private val getCategories: GetCategories,
     private val questions: QuestionRepository,
     categoryList: CategoryRepository,
+    private val analytics: Analytics,
 ) : ViewModel(),
     CategoriesActions {
     /** The categories as last read, each with what a search compares a query with. */
@@ -105,6 +112,13 @@ class CategoriesViewModel(
                         null
                     } catch (unread: WyrException) {
                         // Only a WyrException: a cancellation must go on up.
+                        analytics.track(
+                            AnalyticsEvent.ERROR_SHOWN,
+                            mapOf(
+                                AnalyticsProperty.CODE to unread.error.name,
+                                AnalyticsProperty.ACTION to "categories",
+                            ),
+                        )
                         unread.error
                     }
                 _state.update { it.copy(isLoading = false, failure = failure) }
@@ -131,6 +145,10 @@ class CategoriesViewModel(
             return
         }
         _state.update { it.copy(isPlaying = true) }
+        analytics.track(
+            AnalyticsEvent.CATEGORIES_CHANGED,
+            mapOf(AnalyticsProperty.CATEGORIES to draft.ticked.sorted(), AnalyticsProperty.COUNT to draft.ticked.size),
+        )
 
         viewModelScope.launch {
             questions.setCategories(draft.ticked)

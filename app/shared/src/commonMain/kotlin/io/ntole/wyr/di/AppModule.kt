@@ -15,6 +15,7 @@ import org.koin.core.module.Module
 import org.koin.core.module.dsl.viewModelOf
 import org.koin.dsl.KoinAppDeclaration
 import org.koin.dsl.module
+import kotlin.time.TimeSource
 
 // Internal, not private, so a test can resolve every ViewModel from the real graph.
 internal val uiModule =
@@ -24,8 +25,10 @@ internal val uiModule =
         viewModelOf(::SubmitViewModel)
         viewModelOf(::LanguageViewModel)
         viewModelOf(::CategoriesViewModel)
-        // One for the app's life, as the analytics are (CLAUDE.md §8g): a rotation's new activity finds it.
-        single { UsageTracker(analytics = get()) }
+        // What the analytics time with (CLAUDE.md §8g): how long a question, a screen or the app was shown.
+        single<TimeSource.WithComparableMarks> { TimeSource.Monotonic }
+        // One for the app's life, as the analytics are: a rotation's new activity finds it.
+        single { UsageTracker(analytics = get(), timeSource = get()) }
     }
 
 /**

@@ -1,5 +1,9 @@
 package io.ntole.wyr.language
 
+import io.ntole.wyr.analytics.RecordingAnalytics
+import io.ntole.wyr.analytics.RecordingAnalytics.Recorded
+import io.ntole.wyr.core.domain.analytics.AnalyticsEvent
+import io.ntole.wyr.core.domain.analytics.AnalyticsProperty
 import io.ntole.wyr.core.network.InMemoryTokenStorage
 import io.ntole.wyr.core.network.TokenStorage
 import kotlinx.coroutines.CompletableDeferred
@@ -19,6 +23,7 @@ import kotlin.test.assertNull
 @OptIn(ExperimentalCoroutinesApi::class)
 class LanguageViewModelTest {
     private val dispatcher = StandardTestDispatcher()
+    private val analytics = RecordingAnalytics()
 
     @BeforeTest
     fun setUp() {
@@ -33,14 +38,14 @@ class LanguageViewModelTest {
 
     @Test
     fun `a device that never picked a language shows Serbian Cyrillic`() {
-        assertEquals(Language.SERBIAN_CYRILLIC, LanguageViewModel(InMemoryTokenStorage()).language.value)
+        assertEquals(Language.SERBIAN_CYRILLIC, LanguageViewModel(InMemoryTokenStorage(), analytics).language.value)
     }
 
     @Test
     fun `a language picked is kept on the device under its own key`() =
         runTest(dispatcher) {
             val storage = InMemoryTokenStorage()
-            val viewModel = LanguageViewModel(storage)
+            val viewModel = LanguageViewModel(storage, analytics)
 
             viewModel.select(Language.SERBIAN_LATIN)
             testScheduler.advanceUntilIdle()
@@ -54,13 +59,13 @@ class LanguageViewModelTest {
             Language.entries.forEach { language ->
                 val storage = InMemoryTokenStorage()
                 // English first, so each language is a change, Serbian Cyrillic included.
-                LanguageViewModel(storage).apply {
+                LanguageViewModel(storage, analytics).apply {
                     select(Language.ENGLISH)
                     select(language)
                 }
                 testScheduler.advanceUntilIdle()
 
-                assertEquals(language, LanguageViewModel(storage).language.value)
+                assertEquals(language, LanguageViewModel(storage, analytics).language.value)
             }
         }
 
@@ -69,7 +74,7 @@ class LanguageViewModelTest {
     fun `a language picked shows at once before it is kept`() =
         runTest(dispatcher) {
             val storage = StuckStorage()
-            val viewModel = LanguageViewModel(storage)
+            val viewModel = LanguageViewModel(storage, analytics)
 
             viewModel.select(Language.ENGLISH)
 
@@ -82,7 +87,7 @@ class LanguageViewModelTest {
     @Test
     fun `a language that cannot be kept is still this run's`() =
         runTest(dispatcher) {
-            val viewModel = LanguageViewModel(FailingStorage())
+            val viewModel = LanguageViewModel(FailingStorage(), analytics)
 
             viewModel.select(Language.ENGLISH)
             testScheduler.advanceUntilIdle()
@@ -94,7 +99,7 @@ class LanguageViewModelTest {
     fun `picking the language shown writes nothing`() =
         runTest(dispatcher) {
             val storage = InMemoryTokenStorage()
-            LanguageViewModel(storage).select(Language.SERBIAN_CYRILLIC)
+            LanguageViewModel(storage, analytics).select(Language.SERBIAN_CYRILLIC)
             testScheduler.advanceUntilIdle()
 
             assertNull(storage.read("wyr.language"))
@@ -106,7 +111,22 @@ class LanguageViewModelTest {
             val storage = InMemoryTokenStorage()
             storage.write("wyr.language", "de")
 
-            assertEquals(Language.SERBIAN_CYRILLIC, LanguageViewModel(storage).language.value)
+            assertEquals(Language.SERBIAN_CYRILLIC, LanguageViewModel(storage, analytics).language.value)
+        }
+
+    /** A language picked, by its tag, for the analytics (CLAUDE.md §8g); the one shown already is none. */
+    @Test
+    fun `a language picked is reported by its tag`() =
+        runTest(dispatcher) {
+            val viewModel = LanguageViewModel(InMemoryTokenStorage(), analytics)
+
+            viewModel.select(Language.SERBIAN_CYRILLIC)
+            viewModel.select(Language.ENGLISH)
+
+            assertEquals(
+                listOf(Recorded(AnalyticsEvent.LANGUAGE_CHANGED, mapOf(AnalyticsProperty.LANGUAGE to "en"))),
+                analytics.events,
+            )
         }
 
     /** A storage whose every write waits for good, as one stuck on a slow disk would. */

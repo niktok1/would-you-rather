@@ -77,9 +77,13 @@ val PlayUiState.canChangeCategories: Boolean
             is PlayUiState.OnQuestion -> !isBusy
         }
 
-/** One tap on a side, with the attempt made for it (CLAUDE.md §8d). */
+/**
+ * One tap on a side, with the attempt made for it (CLAUDE.md §8d), and how long the question had been
+ * on screen by then, [answerMillis], for the analytics (§8g): a retry answered no slower.
+ */
 data class PendingVote(
     val question: Question,
     val side: Side,
     val attempt: AttemptId,
+    val answerMillis: Long? = null,
 )

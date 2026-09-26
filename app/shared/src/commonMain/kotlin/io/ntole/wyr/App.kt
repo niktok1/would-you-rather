@@ -193,7 +193,7 @@ private fun Account(
 
     // Every time the screen is shown: the points move on the Play screen meanwhile, a guest's are what
     // a login would leave behind, and a moderator decides the player's questions.
-    LaunchedEffect(viewModel) { viewModel.refresh() }
+    LaunchedEffect(viewModel) { viewModel.shown() }
     // A question sent from the form whose answer came once the player had come back here: My questions
     // was read before it was stored, so it is read again, once no read is in flight.
     LaunchedEffect(submitState.sent, state.isBusy) {
@@ -247,7 +247,7 @@ private fun Submit(onSent: () -> Unit) {
 
     // Every time the form is shown: the points move meanwhile. Declared first, so it takes down a
     // `sent` left from a showing before, of a question whose answer came after the player went back.
-    LaunchedEffect(viewModel) { viewModel.refresh() }
+    LaunchedEffect(viewModel) { viewModel.shown() }
     LaunchedEffect(state.sent) {
         if (state.sent) {
             viewModel.leftForm()

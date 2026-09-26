@@ -1516,8 +1516,9 @@ sends nothing. The key is never committed.
    ```
 
    A US project needs `wyr.posthog.host=us.i.posthog.com` beside it; none is the EU cloud.
-3. Play a little, wait 30 s (a batch goes every 20 events or 30 s), and open PostHog's *Activity*:
-   the events arrive, each with `environment: dev`.
+3. Play a little, then put the app in the background (which sends at once; otherwise a batch goes
+   every 20 events or 30 s), and open PostHog's *Activity*: `app_opened`, `$screen` for each screen,
+   `tap` with its `element`, `question_shown`, `question_answered`, each with `environment: dev`.
 
 The other platforms read the same key where they read their environment (CLAUDE.md §8e):
 

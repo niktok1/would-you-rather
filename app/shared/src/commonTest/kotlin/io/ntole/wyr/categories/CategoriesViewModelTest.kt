@@ -1,5 +1,9 @@
 package io.ntole.wyr.categories
 
+import io.ntole.wyr.analytics.RecordingAnalytics
+import io.ntole.wyr.analytics.RecordingAnalytics.Recorded
+import io.ntole.wyr.core.domain.analytics.AnalyticsEvent
+import io.ntole.wyr.core.domain.analytics.AnalyticsProperty
 import io.ntole.wyr.core.domain.category.Category
 import io.ntole.wyr.core.domain.category.CategoryRepository
 import io.ntole.wyr.core.domain.category.GetCategories
@@ -28,6 +32,7 @@ import kotlin.test.assertTrue
 @OptIn(ExperimentalCoroutinesApi::class)
 class CategoriesViewModelTest {
     private val dispatcher = StandardTestDispatcher()
+    private val analytics = RecordingAnalytics()
     private val questions = FakeQuestionRepository()
     private val categories = FakeCategoryRepository()
 
@@ -555,6 +560,59 @@ class CategoriesViewModelTest {
             assertTrue(viewModel.state.value.played)
         }
 
+    /** The categories played, by id, and how many; none is every category (CLAUDE.md §8g). */
+    @Test
+    fun `categories played are reported by id`() =
+        runTest(dispatcher) {
+            val viewModel = listed()
+            viewModel.open()
+            viewModel.toggle("LOVE")
+            viewModel.toggle("FOOD")
+
+            viewModel.play()
+            testScheduler.advanceUntilIdle()
+            viewModel.open()
+            viewModel.selectAll()
+            viewModel.play()
+            testScheduler.advanceUntilIdle()
+
+            assertEquals(
+                listOf(
+                    mapOf(AnalyticsProperty.CATEGORIES to listOf("FOOD", "LOVE"), AnalyticsProperty.COUNT to 2),
+                    mapOf(AnalyticsProperty.CATEGORIES to emptyList<String>(), AnalyticsProperty.COUNT to 0),
+                ),
+                analytics.named(AnalyticsEvent.CATEGORIES_CHANGED).map { it.properties },
+            )
+        }
+
+    @Test
+    fun `a read that failed is reported as shown`() =
+        runTest(dispatcher) {
+            categories.read = { throw WyrException(DomainError.NETWORK) }
+            val viewModel = viewModel()
+
+            viewModel.refresh()
+            testScheduler.advanceUntilIdle()
+
+            assertEquals(
+                listOf(mapOf(AnalyticsProperty.CODE to "NETWORK", AnalyticsProperty.ACTION to "categories")),
+                analytics.named(AnalyticsEvent.ERROR_SHOWN).map { it.properties },
+            )
+        }
+
+    /** What is played already is not sent again, so nothing changed. */
+    @Test
+    fun `playing what is played already is no change`() =
+        runTest(dispatcher) {
+            val viewModel = listed()
+            viewModel.open()
+
+            viewModel.play()
+            testScheduler.advanceUntilIdle()
+
+            assertEquals(emptyList(), analytics.named(AnalyticsEvent.CATEGORIES_CHANGED))
+        }
+
     /** What a ViewModel with every category of [LISTED] read lists once [query] is typed. */
     private fun TestScope.finds(query: String): List<Category> {
         val viewModel = listed()
@@ -567,6 +625,7 @@ class CategoriesViewModelTest {
             getCategories = GetCategories(categories),
             questions = questions,
             categoryList = categories,
+            analytics = analytics,
         )
 
     /** A ViewModel whose categories are [LISTED], read. */

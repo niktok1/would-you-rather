@@ -1923,6 +1923,27 @@ the same events. The moderation app sends none.
   tap. `TapsTest` draws every screen in the states that show all it can be tapped on, taps everything a
   screen reader could, and fails on anything that reports no tap, or a name not in its lists: a new
   button gets its name by being written with `tapped`, and a name once sent never changes.
+- **The game's events** *(built)*, from the ViewModels, so each says what happened, not what was
+  tapped:
+  - *Play* (`PlayViewModel`): `question_shown` (`question_id`, `categories`); `question_answered`
+    once the vote is counted (`side`, `answer_ms` from the question shown to the tap, a retry's the
+    first tap's, and `agreed_with_majority`); `question_skipped` (`duration_ms` on it, and
+    `recorded`, whether the server heard); `reaction_set` (`reaction`, `like`, `dislike` or `none`,
+    and `answered`). The time is the app's `TimeSource.WithComparableMarks` (`uiModule`).
+  - *Account* (`AccountViewModel`): `account_opened` each time the screen is shown (`shown()`);
+    `register_started` as a registration is sent, and `register_completed` once it worked, its answer
+    lost included, the read after it naming the account; `login_completed`; `logout`, sent before the
+    logout so it is the account's.
+  - *Submit* (`SubmitViewModel`): `submit_opened` each time the form is shown; `submit_sent` once
+    stored (`categories`, `count`); `submit_refused` (`code`) for any refusal.
+  - *Categories* (`CategoriesViewModel`): `categories_changed` when Play sends a new selection
+    (`categories`, `count`, none being every category); what is played already sends nothing.
+  - *Language* (`LanguageViewModel`): `language_changed` (`language`, its tag).
+  - `error_shown` for every failure a screen shows (`code`, the `DomainError`'s name, and `action`:
+    `question`, `vote`, `reaction`, `account`, `my_questions`, `register`, `log_in`, `log_out`,
+    `submit`, `points`, `categories`), but a vote already counted, which moves on and shows nothing,
+    and a skip, which says nothing.
+  - The ViewModel tests hold each, and that nothing typed is ever in one.
 - **The switch** *(built in the sender)*: on by default, and off is kept for the device, under
   `wyr.analytics.enabled` (`on` or `off`), whatever the environment, as the language is (§8f): the
   choice is the person's. Off sends nothing more and drops what waited. A build with no key keeps the
