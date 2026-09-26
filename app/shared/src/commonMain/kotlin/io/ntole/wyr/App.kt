@@ -186,21 +186,16 @@ private fun ReportForegroundAndBackground(
     val shownIn by rememberUpdatedState(language)
     val configurationChanging = rememberConfigurationChanging()
     DisposableEffect(lifecycle, usage, services) {
+        fun cameToForeground() {
+            usage.foreground(shownIn.tag)
+            services.foreground()
+        }
         val observer =
             LifecycleEventObserver { _, event ->
                 when (event) {
-                    Lifecycle.Event.ON_START -> {
-                        usage.foreground(shownIn.tag)
-                        services.foreground()
-                    }
-
-                    Lifecycle.Event.ON_STOP -> {
-                        usage.background(configurationChanging())
-                    }
-
-                    else -> {
-                        Unit
-                    }
+                    Lifecycle.Event.ON_START -> cameToForeground()
+                    Lifecycle.Event.ON_STOP -> usage.background(configurationChanging())
+                    else -> Unit
                 }
             }
         lifecycle.addObserver(observer)
