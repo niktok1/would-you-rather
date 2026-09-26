@@ -403,8 +403,8 @@ sensitive personal data", the privacy policy to name FCM and Play Games (§8b *P
 
 **On `feat/android-release`** (from 2a4f96e; nothing pushed): the Android build Google Play takes
 (CLAUDE.md §8, *Release builds*). A release build is signed with the **Play upload key** once
-`local.properties` names it, and otherwise with the debug key, one warning line saying so, while every
-`bundle*Release` refuses; **R8** shrinks the code and the resources; a placeholder **adaptive icon**
+`local.properties` names it, and otherwise with the debug key, one warning line saying so, while
+whatever signs a release bundle (every `bundle*Release`, and `signProdReleaseBundle` alone) refuses; **R8** shrinks the code and the resources; a placeholder **adaptive icon**
 (pink over amber, a white question mark, a themed icon's layer too) and the prod label **Шта би
 радије?** replace the wizard's; and the **window and Android 12's splash screen** are the page
 background, light and dark, so a dark phone never flashes white. CI's verify job builds

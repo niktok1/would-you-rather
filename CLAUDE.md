@@ -431,8 +431,11 @@ This project must never be attributed to any employer identity.
     (`WYR_UPLOAD_STORE_FILE`, `WYR_UPLOAD_STORE_PASSWORD`, `WYR_UPLOAD_KEY_ALIAS`,
     `WYR_UPLOAD_KEY_PASSWORD`); the store file's path is absolute or from the repository's root. Short
     of all four, a release APK is signed with the debug key, so it still installs on a phone for
-    testing, and its packaging says so in one warning line; every `bundle*Release` task, which makes
-    what Play takes, fails before anything runs, naming what is missing. The keystore is the user's,
+    testing, and its packaging says so in one warning line; anything that signs a release bundle,
+    what Play takes, fails before anything runs, naming what is missing: the guard looks for the
+    `sign*ReleaseBundle` task that writes the `.aab`, which every `bundle*Release` runs, so
+    `signProdReleaseBundle` asked for alone is refused too. CI's verify job holds both to it
+    (*Release signing*, a dry run of each). The keystore is the user's,
     never committed (`.gitignore` refuses `*.jks` and `*.keystore`), made and uploaded as
     NEXT-SESSION.md says (*Release builds and Google Play*). **Play App Signing**: Play keeps the app
     signing key, which signs what phones install; the upload key only proves an upload is the

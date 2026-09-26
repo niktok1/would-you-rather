@@ -20,7 +20,7 @@ val posthogHost = extra["wyrPosthogHost"] as String
 // The Play upload key (CLAUDE.md §8, *Release builds*): each of the four settings from local.properties,
 // which git ignores, or else from the environment, and never committed. With all four a release build
 // is signed with it; with fewer, with the debug key, so a release build still installs on a phone for
-// testing, and every bundle*Release task, which makes what Play takes, fails before anything runs.
+// testing, and anything that signs a release bundle, which is what Play takes, fails before anything runs.
 val localProperties =
     Properties().apply {
         providers
@@ -52,17 +52,19 @@ val uploadKeyMissing =
 if (uploadKeyMissing.isNotEmpty()) {
     val missing = uploadKeyMissing.joinToString()
     val modulePath = path
-    // Asked once the task graph is known, so a bundle fails before any task runs.
+    // Asked once the task graph is known, so a bundle fails before any task runs. A sign*ReleaseBundle task
+    // writes the .aab, and every bundle*Release runs one, so those are what is looked for: one run by
+    // itself, signProdReleaseBundle say, writes the same file.
     gradle.taskGraph.whenReady {
-        val bundles =
+        val signing =
             allTasks
-                .filter { it.project.path == modulePath && Regex("""bundle\w*Release""").matches(it.name) }
+                .filter { it.project.path == modulePath && Regex("""sign\w*ReleaseBundle""").matches(it.name) }
                 .map { it.name }
-        if (bundles.isNotEmpty()) {
+        if (signing.isNotEmpty()) {
             throw GradleException(
-                "${bundles.joinToString()} makes what Google Play takes, which must be signed with the Play " +
-                    "upload key, and it is not configured: set $missing in local.properties, or the " +
-                    "WYR_UPLOAD_* variables (NEXT-SESSION.md, Release builds and Google Play).",
+                "A release bundle is what Google Play takes, which must be signed with the Play upload key, " +
+                    "and it is not configured (${signing.joinToString()}): set $missing in local.properties, " +
+                    "or the WYR_UPLOAD_* variables (NEXT-SESSION.md, Release builds and Google Play).",
             )
         }
     }

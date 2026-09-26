@@ -53,6 +53,19 @@ jobs:
             :app:androidApp:assembleDebug \
             :app:androidApp:assembleProdRelease
 
+      # The release signing rules (CLAUDE.md §8, Release builds), which no compile checks. Without the
+      # upload key, which CI never has, what signs a release bundle, the file Play takes, must refuse
+      # before it runs, whether asked for by the bundle's task or by its signing task alone.
+      - name: Release signing
+        run: |
+          log="$RUNNER_TEMP/release-signing.log"
+          for task in bundleProdRelease signProdReleaseBundle; do
+            if ./gradlew --no-daemon --dry-run ":app:androidApp:$task" > "$log" 2>&1; then
+              cat "$log"; echo "$task ran without the Play upload key"; exit 1
+            fi
+            grep -q 'must be signed with the Play upload key' "$log" || { cat "$log"; exit 1; }
+          done
+
       - name: Upload test reports
         if: failure()
         uses: actions/upload-artifact@v4
