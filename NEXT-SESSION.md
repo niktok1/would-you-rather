@@ -429,9 +429,13 @@ sensitive personal data", the privacy policy to name FCM and Play Games (§8b *P
   themes; the light theme's `muted` is `#6F6E68` (was 3.4 to 1) and failures have an `error` token
   of their own (card A's pink read at 3.7 on the light page).
 - A tidy-up (de4dc8b4).
+- A review's fixes, docs only (9d303b5f, dc5aba86, 25cfbee0): a home pick resent after a 401 counts
+  once; Play's bar has three icon buttons; 64 is what a Home button asks for, not a floor; two §8b
+  entries for the user; the merge notes below.
 
-Verified on this machine: `ktlintCheck`; the verify job's tests, `:server:test` (480, run again with
-`--rerun`, the server untouched), `:core:domain` 83, `:core:data` 156, `:core:network` 112 and its
+Verified on this machine at 7b10f0f1, and again at 25cfbee0 after the review's fixes, each test task
+then with `--rerun`: `ktlintCheck`; the verify job's tests, `:server:test` 480 (2 skipped, the
+PostgreSQL-only boots), `:core:domain` 83, `:core:data` 156, `:core:network` 112 and its 118
 Android host tests, `:app:shared` 424, `:app:adminApp` 106, none failing; its client compiles,
 `:app:androidApp:assembleDebug` among them; and the iOS Kotlin compiles (`:app:shared:compileKotlinIosSimulatorArm64` and
 `compileTestKotlinIosSimulatorArm64`, each `:core` module's `compileTestKotlinIosSimulatorArm64`).
