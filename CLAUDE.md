@@ -1417,6 +1417,13 @@ Categories screen from its top bar (*Skipping*, *Reactions* and *Categories*, be
   font size, does to a 200-character option. `PlayScreenDrawTest` holds two options of 200 characters
   whole, their type no smaller than the floor, on an iPhone SE and on one on its side, asked and
   revealed, in every language, and a short option at 22.
+- *The repeat notice* (*built 2026-09-26*): a question the feed serves as answered before
+  (`Question.answeredBefore`) shows a small muted *Већ одговорено* (`PlayStrings.answeredBefore`)
+  above the cards, asked and revealed, in a slot of its own (`RepeatNotice`): every question has it,
+  in the screen's top padding, which it grows only past the padding's height at a large font size, the
+  notice laid out unseen and unheard when not shown, so nothing on the screen moves for it. The pick
+  made before is not shown. `PlayScreenDrawTest` finds it above card A, and every part of the screen
+  where it is for a question not answered before, at font scales 1, 1.3 and 2.
 - *The count up is drawn, not composed* (`CountedUpText`, `RevealBar`): the count is read only as it
   is drawn, the number over the final percentage's own text, laid out once, which sizes it and is
   what a screen reader reads, and the bar in a layer of its own. So a frame of it draws two numbers
@@ -1488,8 +1495,9 @@ listed on the Account screen.
     too, so a skip does not hold through a category filter: *provisional — user decision* (§8b). The
     client selects any number (`QuestionRepository.setCategories`, from the Categories screen), none
     for every category; a change drops the queue, and a login or a logout keeps the selection.
-  - `answeredBefore` (`QuestionDto`) means the player has a vote on the question, from any cycle. No
-    client reads it: the domain's `Question` has no such field since the dev console went.
+  - `answeredBefore` (`QuestionDto`) means the player has a vote on the question, from any cycle.
+    The domain's `Question` has it again (`QuestionMapper`), and the Play screen says so, quietly
+    (*The Play screen*, the repeat notice).
 - **Categories** *(decided 2026-09-24; server data since 2026-09-25; built)*: a
   question is filed under **any number of categories, at least one**. A player may pick **several**
   categories to play, and a question matches when it is filed under **any** of them; none picked

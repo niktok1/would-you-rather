@@ -18,6 +18,7 @@ internal fun QuestionDto.toDomain(): Question =
         likeCount = likeCount,
         dislikeCount = dislikeCount,
         myReaction = myReaction.toDomain(),
+        answeredBefore = answeredBefore,
     )
 
 /**

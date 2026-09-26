@@ -5,6 +5,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -36,12 +37,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.takeOrElse
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.semantics
@@ -97,19 +100,23 @@ fun PlayScreen(
                 Modifier
                     .fillMaxSize()
                     .safeContentPadding()
-                    .padding(dimens.screenPadding),
+                    // The top's padding is the repeat notice's slot on a question, and a spacer otherwise.
+                    .padding(start = dimens.screenPadding, end = dimens.screenPadding, bottom = dimens.screenPadding),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             when (state) {
                 PlayUiState.Loading -> {
+                    Spacer(Modifier.height(dimens.screenPadding))
                     LoadingBody()
                 }
 
                 is PlayUiState.Failed -> {
+                    Spacer(Modifier.height(dimens.screenPadding))
                     FailureBody(state.error, onRetry = onRetry)
                 }
 
                 is PlayUiState.OnQuestion -> {
+                    RepeatNotice(shown = state.question.answeredBefore)
                     QuestionBody(
                         state = state,
                         points = points,
@@ -125,13 +132,41 @@ fun PlayScreen(
 }
 
 /**
+ * *Answered before*, small and muted, above the cards while the player has answered the question on
+ * screen before (CLAUDE.md §8d, *The Play screen*). Its slot is there for every question, in the
+ * screen's top padding, which it grows only past the padding's height, at a large font size: so a
+ * question answered before moves nothing on the screen, and one not answered shows and says nothing.
+ */
+@Composable
+private fun RepeatNotice(shown: Boolean) {
+    val dimens = WyrThemeAccessors.dimens
+
+    Box(
+        contentAlignment = Alignment.Center,
+        modifier = Modifier.fillMaxWidth().heightIn(min = dimens.screenPadding),
+    ) {
+        Text(
+            text = LocalStrings.current.playScreen.answeredBefore,
+            color = WyrThemeAccessors.colors.muted,
+            fontSize = WyrTypeScale.statLabel,
+            lineHeight = WyrTypeScale.statLabelLineHeight,
+            fontWeight = FontWeight.Medium,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            // Laid out whatever it shows, so its slot is as high either way.
+            modifier = if (shown) Modifier else Modifier.alpha(0f).clearAndSetSemantics {},
+        )
+    }
+}
+
+/**
  * The two cards and the row between them, or under them side by side on a wide screen
  * ([QuestionLayout]). Before the answer a card answers for its side, and Skip goes past it; once it
  * is revealed, either card is the way on, and Skip is gone. Off while anything is in flight, one
  * action at a time.
  */
 @Composable
-private fun QuestionBody(
+private fun ColumnScope.QuestionBody(
     state: PlayUiState.OnQuestion,
     points: Int?,
     onChoose: (Side) -> Unit,
@@ -156,7 +191,7 @@ private fun QuestionBody(
         wideMinWidth = dimens.wideLayoutMinWidth,
         gap = dimens.spaceMd,
         modifier =
-            Modifier.fillMaxSize().onSizeChanged { size ->
+            Modifier.fillMaxWidth().weight(1f).onSizeChanged { size ->
                 sideBySide = with(density) { standsSideBySide(size.width, size.height, dimens.wideLayoutMinWidth) }
             },
     ) {

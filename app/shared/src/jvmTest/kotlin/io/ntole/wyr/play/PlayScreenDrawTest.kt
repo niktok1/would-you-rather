@@ -43,6 +43,7 @@ import io.ntole.wyr.core.domain.vote.Tally
 import io.ntole.wyr.core.domain.vote.VoteOutcome
 import io.ntole.wyr.descriptions
 import io.ntole.wyr.everyNode
+import io.ntole.wyr.everyText
 import io.ntole.wyr.language.Language
 import io.ntole.wyr.language.Strings
 import io.ntole.wyr.language.WyrStrings
@@ -421,6 +422,40 @@ class PlayScreenDrawTest {
                 assertEquals(asked, parts.map { scene.node(it).boundsInRoot }, "at $width by $height")
             }
         }
+    }
+
+    /**
+     * A question the player answered before says so above the cards, in a slot of its own that every
+     * question has, so nothing on the screen moves for it, asked or revealed, at any font size; and one
+     * not answered before shows and says nothing there.
+     */
+    @Test
+    fun `a question answered before says so in a slot of its own and moves nothing`() {
+        val strings = stringsOf(Language.DEFAULT).playScreen
+        val parts = listOf(REACTED_TO.optionA, POINTS_SHOWN, strings.like, "$DISLIKES", REACTED_TO.optionB)
+        listOf<(Question) -> PlayUiState>({ PlayUiState.Asking(it) }, { PlayUiState.Revealed(it, OUTCOME) })
+            .forEach { stateOf ->
+                val fresh = stateOf(REACTED_TO)
+                val again = stateOf(REACTED_TO.copy(answeredBefore = true))
+                val before = mutableListOf<Rect>()
+                withScreen(fresh) { scene, _ ->
+                    assertFalse(strings.answeredBefore in scene.everyText(), "$fresh")
+                    parts.mapTo(before) { scene.node(it).boundsInRoot }
+                }
+                withScreen(again) { scene, _ ->
+                    val notice = scene.node(strings.answeredBefore).boundsInRoot
+                    val cardA = scene.node(REACTED_TO.optionA).boundsInRoot
+                    assertTrue(notice.bottom <= cardA.top, "the notice at $notice is not above card A at $cardA")
+                    assertEquals(before, parts.map { scene.node(it).boundsInRoot }, "$again")
+                }
+                FONT_SCALES.forEach { fontScale ->
+                    assertEquals(
+                        heightNeeded(fresh, WIDTH, fontScale = fontScale),
+                        heightNeeded(again, WIDTH, fontScale = fontScale),
+                        "$again at font scale $fontScale",
+                    )
+                }
+            }
     }
 
     /**
@@ -1212,6 +1247,8 @@ class PlayScreenDrawTest {
                 ),
                 PlayUiState.Revealed(question, OUTCOME, reactionError = DomainError.NETWORK),
                 PlayUiState.Revealed(question, OUTCOME, reactionError = DomainError.QUESTION_NOT_FOUND),
+                PlayUiState.Asking(question.copy(answeredBefore = true)),
+                PlayUiState.Revealed(question.copy(answeredBefore = true), OUTCOME),
             )
 
         /**
@@ -1243,6 +1280,10 @@ class PlayScreenDrawTest {
                     (listOf(a, strings.cannotReach, "12", "0", b) to thumbsAndSkip),
                 PlayUiState.Revealed(QUESTION, OUTCOME) to
                     (listOf(a, revealedA, "0", "0", b, revealedB) to thumbs + points),
+                PlayUiState.Asking(QUESTION.copy(answeredBefore = true)) to
+                    (listOf(strings.answeredBefore, a, "0", "0", b) to thumbsAndSkip + points),
+                PlayUiState.Revealed(QUESTION.copy(answeredBefore = true), OUTCOME) to
+                    (listOf(strings.answeredBefore, a, revealedA, "0", "0", b, revealedB) to thumbs + points),
                 PlayUiState.Revealed(QUESTION, OUTCOME.copy(pointsAwarded = 0, replayed = true)) to
                     (listOf(a, revealedA, "0", "0", b, revealedB) to thumbs + points),
                 PlayUiState.Revealed(

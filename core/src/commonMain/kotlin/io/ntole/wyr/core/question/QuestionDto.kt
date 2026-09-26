@@ -18,8 +18,8 @@ import kotlinx.serialization.Serializable
  * a client reads as a question filed under nothing it can name.
  *
  * [answeredBefore] is true when the requesting player has answered this question already and the
- * feed has looped back to it (CLAUDE.md §8d). No client reads it since the dev console, which
- * labelled a looped question, went; the player-facing reveal does not show a previous pick.
+ * feed has looped back to it (CLAUDE.md §8d). The Play screen says so, quietly, without the pick
+ * made before.
  *
  * [likeCount] is how many players like the question and [dislikeCount] how many dislike it, the
  * requesting one among them as [myReaction] says (CLAUDE.md §8d, *Reactions*). All three are sent
