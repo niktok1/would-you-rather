@@ -3,15 +3,19 @@ package io.ntole.wyr
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
 import io.ntole.wyr.di.initKoin
+import kotlin.system.exitProcess
 
 /**
  * The `WYR_ENV` environment variable names the server environment ([desktopEnvironmentName]), and
  * `WYR_POSTHOG_KEY` the analytics project ([desktopAnalyticsSettings]).
+ *
+ * Once the window is closed, and before the process exits, the app's last analytics are sent
+ * ([endDesktopApp]): the JVM would otherwise end with them waiting, or cut short (CLAUDE.md §8g).
  */
 fun main() {
     initKoin(environmentName = desktopEnvironmentName(), analytics = desktopAnalyticsSettings())
 
-    application {
+    application(exitProcessOnExit = false) {
         Window(
             onCloseRequest = ::exitApplication,
             title = "WYR",
@@ -19,4 +23,6 @@ fun main() {
             App()
         }
     }
+    endDesktopApp()
+    exitProcess(0)
 }

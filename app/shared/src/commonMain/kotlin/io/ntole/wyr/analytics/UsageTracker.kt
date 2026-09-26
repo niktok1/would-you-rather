@@ -68,6 +68,17 @@ class UsageTracker(
     }
 
     /**
+     * The app ends, its process with it, as a desktop app does once its window is closed: it goes to the
+     * background, unless the platform's lifecycle said so already, which a window closing may not do
+     * before it goes, and what waits is sent, returning once it is sent or could not be. The caller
+     * bounds the wait (CLAUDE.md §8g).
+     */
+    suspend fun end() {
+        background(configurationChanging = false)
+        analytics.flushAndWait()
+    }
+
+    /**
      * The screen [name] is shown (a `Screen`'s key): the one before is left, after the time spent on
      * it. The screen shown already, as a composition made anew shows it, is nothing new; one shown
      * again from the background is [foreground]'s.

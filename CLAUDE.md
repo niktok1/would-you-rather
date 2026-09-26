@@ -1932,7 +1932,16 @@ the same events. The moderation app sends none.
   life, which `App` tells of the platform lifecycle's start and stop: Android's activity, the iOS view
   controller, the desktop window minimized and back, the browser page hidden and shown. `app_opened`
   at launch and from the background (`from_background`, and the `language` shown), then
-  `app_backgrounded` with `duration_ms` in the foreground, and a `flush()`. Every screen the navigator
+  `app_backgrounded` with `duration_ms` in the foreground, and a `flush()`. A desktop app whose window
+  is closed goes to the background there and then, if its lifecycle has not said so, and waits up to
+  2 s for what waits to be sent before the process exits (`endDesktopApp`, `UsageTracker.end`,
+  `Analytics.flushAndWait`), since the JVM would end with the send under way cut short. *A known
+  limit, accepted:* a browser tab closed loses what waited, `app_backgrounded` and the last
+  `screen_left` among it, so the web's visits and its times on a last screen read short. The page
+  hidden does call `flush()`, but the sender's steps run a task later, which a closing page never
+  runs, and a `fetch` it did start would be cut short. The fix would be `navigator.sendBeacon` from
+  the `visibilitychange` handler itself, with events the sender only queues a step later, and PostHog
+  taking a beacon's `text/plain` body, unchecked; a tab only hidden sends as any platform does. Every screen the navigator
   shows is PostHog's `$screen`, named by its key (`home`, `play`, `account`, `auth`, `submit`,
   `categories`), and the one left is `screen_left`, with `screen` and `duration_ms`, for another screen
   or for the background, back from which it is shown again. An Android rotation, whose activity stops
@@ -2019,7 +2028,8 @@ the same events. The moderation app sends none.
   PostHog's free tier takes a million events a month. Nothing here uses its session replay, feature
   flags or surveys, which need its SDKs.
 - **Not verified**: no build with a key has sent to PostHog yet, from any platform; nothing checks
-  the payload against the live `/batch/` endpoint but PostHog's documented shape. The iOS Info.plist
+  the payload against the live `/batch/` endpoint but PostHog's documented shape. The desktop app's
+  last send as its window closes has run only in tests. The iOS Info.plist
   keys and `Local.xcconfig` are read only by building the app, which only CI's `ios` job does
   (§9). Whether PostHog's `/batch/` answers a browser's CORS preflight from the game's page, as its
   own web SDK's requests need it to, is unchecked until a web build with a key runs.

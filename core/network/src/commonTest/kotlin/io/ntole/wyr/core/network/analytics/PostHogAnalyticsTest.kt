@@ -10,6 +10,8 @@ import io.ntole.wyr.core.network.InMemoryTokenStorage
 import io.ntole.wyr.core.network.environment.WyrEnvironment
 import io.ntole.wyr.core.network.jsonHeaders
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runTest
@@ -105,6 +107,58 @@ class PostHogAnalyticsTest {
 
             assertEquals(1, posthog.requests)
             assertEquals(3, posthog.events.size)
+        }
+
+    /** A desktop window closed: the JVM ends next, and waits for no send under way. */
+    @Test
+    fun `flush and wait returns once what waited is sent`() =
+        runTest {
+            val posthog = FakePostHog(this)
+            posthog.answerAfter = 5.seconds
+            val analytics = analytics(posthog)
+            repeat(3) { analytics.track("tap") }
+
+            val waiting = launch { analytics.flushAndWait() }
+            testScheduler.advanceTimeBy(4.seconds)
+            testScheduler.runCurrent()
+            assertTrue(waiting.isActive, "the send has not been answered")
+
+            testScheduler.advanceTimeBy(1.seconds)
+            testScheduler.runCurrent()
+
+            assertTrue(waiting.isCompleted)
+            assertEquals(3, posthog.acceptedEvents.size)
+        }
+
+    /** The events that came while a batch was being sent go too, before the wait ends. */
+    @Test
+    fun `flush and wait waits for the send under way and sends what came meanwhile`() =
+        runTest {
+            val posthog = FakePostHog(this)
+            posthog.answerAfter = 5.seconds
+            val analytics = analytics(posthog)
+            analytics.track("first")
+            analytics.flush()
+            testScheduler.runCurrent()
+            assertEquals(1, posthog.requests, "a send under way")
+
+            analytics.track("app_backgrounded")
+            val waiting = launch { analytics.flushAndWait() }
+            testScheduler.advanceUntilIdle()
+
+            assertTrue(waiting.isCompleted)
+            assertEquals(listOf("first", "app_backgrounded"), posthog.acceptedEvents.map { it.string("event") })
+        }
+
+    @Test
+    fun `flush and wait returns at once with no key or nothing waiting`() =
+        runTest {
+            val posthog = FakePostHog(this)
+
+            analytics(posthog, config = null).flushAndWait()
+            analytics(posthog).flushAndWait()
+
+            assertEquals(0, posthog.requests)
         }
 
     @Test
@@ -529,6 +583,9 @@ class PostHogAnalyticsTest {
     ) {
         var status = HttpStatusCode.OK
         var offline = false
+
+        /** How long the service takes to answer, on the test's virtual clock. */
+        var answerAfter = Duration.ZERO
         var requests = 0
         val batches = mutableListOf<JsonObject>()
         val accepted = mutableListOf<JsonObject>()
@@ -541,6 +598,7 @@ class PostHogAnalyticsTest {
                     dispatcher = StandardTestDispatcher(scope.testScheduler)
                     addHandler { request ->
                         requests++
+                        delay(answerAfter)
                         if (offline) throw IllegalStateException("offline")
                         val batch = Json.parseToJsonElement((request.body as TextContent).text).jsonObject
                         batches += batch

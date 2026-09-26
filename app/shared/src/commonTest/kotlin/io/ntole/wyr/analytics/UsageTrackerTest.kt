@@ -3,6 +3,7 @@ package io.ntole.wyr.analytics
 import io.ntole.wyr.analytics.RecordingAnalytics.Recorded
 import io.ntole.wyr.core.domain.analytics.AnalyticsEvent
 import io.ntole.wyr.core.domain.analytics.AnalyticsProperty
+import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.time.Duration.Companion.seconds
@@ -99,6 +100,40 @@ class UsageTrackerTest {
 
         assertEquals(before, analytics.recorded)
     }
+
+    /** A desktop window closed: the app goes to the background, and its last events are sent before it ends. */
+    @Test
+    fun `the end leaves the screen and waits for what waits to be sent`() =
+        runTest {
+            usage.foreground("sr-Cyrl")
+            usage.show("play")
+            clock += 4.seconds
+
+            usage.end()
+
+            assertEquals(
+                listOf(
+                    left("play", 4_000),
+                    backgrounded(4_000),
+                    Recorded(RecordingAnalytics.FLUSH),
+                    Recorded(RecordingAnalytics.FLUSH_AND_WAIT),
+                ),
+                analytics.recorded.drop(2),
+            )
+        }
+
+    /** The window's lifecycle may have said the app went to the background first: that is not said twice. */
+    @Test
+    fun `the end after the background only waits for the send`() =
+        runTest {
+            usage.foreground("sr-Cyrl")
+            usage.background(configurationChanging = false)
+            val before = analytics.recorded.size
+
+            usage.end()
+
+            assertEquals(listOf(Recorded(RecordingAnalytics.FLUSH_AND_WAIT)), analytics.recorded.drop(before))
+        }
 
     /** A screen the navigator shows before the lifecycle says the app is in the foreground waits for it. */
     @Test

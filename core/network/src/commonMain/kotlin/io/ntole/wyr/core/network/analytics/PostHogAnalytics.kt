@@ -49,12 +49,13 @@ import kotlin.uuid.Uuid
  *   ([idKeyFor]), so a DEV build's player is never a PROD one's. [identify] makes it the account's
  *   player, and [reset] a fresh random one.
  * - *When*: every [BATCH_SIZE] events, [FLUSH_INTERVAL] after the first event waiting, and on
- *   [flush], which the app calls as it goes to the background. At most [MAX_QUEUED] wait, in memory
- *   only, the oldest dropped first; a batch the network or the service failed goes back to wait, and
- *   one the service refused is dropped, since it would be refused again.
- * - *Never in the game's way*: every call returns at once, on the caller's thread, and the rest runs
- *   one step at a time on [dispatcher], so no two steps race and nothing a send does can fail the
- *   caller. A step that throws anything is swallowed there.
+ *   [flush], which the app calls as it goes to the background, or [flushAndWait], which a desktop app
+ *   whose window closed waits on. At most [MAX_QUEUED] wait, in memory only, the oldest dropped first;
+ *   a batch the network or the service failed goes back to wait, and one the service refused is
+ *   dropped, since it would be refused again.
+ * - *Never in the game's way*: every call but [flushAndWait] returns at once, on the caller's thread,
+ *   and the rest runs one step at a time on [dispatcher], so no two steps race and nothing a send does
+ *   can fail the caller. A step that throws anything is swallowed there.
  * - *Off* ([setEnabled]): nothing more is sent, and what waited is dropped. The choice is the
  *   device's, under [ENABLED_KEY], whatever the environment, as the language is (§8f).
  *
@@ -90,7 +91,9 @@ public class PostHogAnalytics(
     private var session: Session? = null
     private var screenName: String? = null
     private var timer: Job? = null
-    private var sending = false
+
+    /** The send under way, if any: one at a time, which takes what arrives meanwhile. */
+    private var sender: Job? = null
     private var backingOff = false
 
     override fun setEnabled(enabled: Boolean) {
@@ -154,6 +157,16 @@ public class PostHogAnalytics(
     override fun flush() {
         if (client == null) return
         scope.launch { sendAll() }
+    }
+
+    override suspend fun flushAndWait() {
+        if (client == null) return
+        scope
+            .launch {
+                // The send under way first, whose batch may be all there is; then whatever it left.
+                sender?.join()
+                sendAll().join()
+            }.join()
     }
 
     private fun now(): Moment = Moment(clock.now(), timeSource.markNow())
@@ -238,26 +251,28 @@ public class PostHogAnalytics(
             }
     }
 
-    /** Sends every event waiting, a batch at a time; one send at a time, which takes what arrives meanwhile. */
-    private suspend fun sendAll() {
+    /**
+     * Sends every event waiting, a batch at a time, unless a send is under way, which takes them as it
+     * goes: one send at a time. The send's job, the one under way or a new one.
+     */
+    private fun sendAll(): Job {
+        sender?.takeIf { it.isActive }?.let { return it }
+        return scope.launch { sendWaiting() }.also { sender = it }
+    }
+
+    private suspend fun sendWaiting() {
         val client = client ?: return
-        if (sending) return
-        sending = true
-        try {
-            while (queue.isNotEmpty() && switch.value) {
-                val batch = List(minOf(queue.size, MAX_BATCH)) { queue.removeFirst() }
-                if (post(client, batch) == Delivery.FAILED) {
-                    // Back to wait, in front of what came meanwhile, unless the player turned it off.
-                    if (switch.value) batch.asReversed().forEach(queue::addFirst)
-                    while (queue.size > MAX_QUEUED) queue.removeFirst()
-                    backingOff = true
-                    armTimer()
-                    return
-                }
-                backingOff = false
+        while (queue.isNotEmpty() && switch.value) {
+            val batch = List(minOf(queue.size, MAX_BATCH)) { queue.removeFirst() }
+            if (post(client, batch) == Delivery.FAILED) {
+                // Back to wait, in front of what came meanwhile, unless the player turned it off.
+                if (switch.value) batch.asReversed().forEach(queue::addFirst)
+                while (queue.size > MAX_QUEUED) queue.removeFirst()
+                backingOff = true
+                armTimer()
+                return
             }
-        } finally {
-            sending = false
+            backingOff = false
         }
     }
 

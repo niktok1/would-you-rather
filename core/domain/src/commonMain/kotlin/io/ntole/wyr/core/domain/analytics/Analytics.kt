@@ -10,8 +10,9 @@ import kotlinx.coroutines.flow.asStateFlow
  * it goes; `:core:network` implements it over PostHog's HTTP API.
  *
  * Nothing here may block or fail the game: every call returns at once and none throws, a send that
- * fails being the implementation's to retry or drop. Events are named by [AnalyticsEvent] and their
- * properties by [AnalyticsProperty].
+ * fails being the implementation's to retry or drop; only [flushAndWait], for an app about to end,
+ * waits, as long as its caller lets it. Events are named by [AnalyticsEvent] and their properties by
+ * [AnalyticsProperty].
  *
  * A property holds a string, a number, a boolean, a list of those, or null. Never anything that names
  * the player or says where they are: no username, no email, no password, no place, and no question's
@@ -54,6 +55,13 @@ public interface Analytics {
     /** Sends what is waiting now, rather than on the next batch or timer: as the app goes to the background. */
     public fun flush()
 
+    /**
+     * Sends what is waiting now, after any send under way, and returns once it is sent or could not be:
+     * for an app about to end, whose process would not outlive a [flush] (a desktop window closed). The
+     * caller bounds how long it waits; nothing throws but the caller's own cancellation.
+     */
+    public suspend fun flushAndWait()
+
     public companion object {
         /** Sends nothing and keeps nothing: for a client with no analytics, and for tests. */
         public val None: Analytics = NoAnalytics
@@ -77,4 +85,6 @@ private object NoAnalytics : Analytics {
     override fun reset() = Unit
 
     override fun flush() = Unit
+
+    override suspend fun flushAndWait() = Unit
 }

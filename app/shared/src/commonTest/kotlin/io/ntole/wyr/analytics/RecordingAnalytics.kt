@@ -1,12 +1,14 @@
 package io.ntole.wyr.analytics
 
 import io.ntole.wyr.core.domain.analytics.Analytics
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 
 /**
  * [Analytics] that keeps what it is told, in order, for a test to read: each event with its own
- * properties, a screen as `$screen` naming it, and `$identify`, `reset` and `flush` as they come.
+ * properties, a screen as `$screen` naming it, and `$identify`, `reset`, `flush` and `flush_and_wait` as
+ * they come.
  */
 class RecordingAnalytics(
     enabled: Boolean = true,
@@ -54,6 +56,14 @@ class RecordingAnalytics(
         recorded += Recorded(FLUSH)
     }
 
+    /** Returns once [sendsFinish] is complete, which it is unless a test holds it. */
+    var sendsFinish: CompletableDeferred<Unit> = CompletableDeferred(Unit)
+
+    override suspend fun flushAndWait() {
+        recorded += Recorded(FLUSH_AND_WAIT)
+        sendsFinish.await()
+    }
+
     companion object {
         const val SCREEN = "\$screen"
         const val SCREEN_NAME = "\$screen_name"
@@ -61,6 +71,7 @@ class RecordingAnalytics(
         const val PLAYER = "player"
         const val RESET = "reset"
         const val FLUSH = "flush"
-        private val NOT_EVENTS = setOf(SCREEN, IDENTIFY, RESET, FLUSH)
+        const val FLUSH_AND_WAIT = "flush_and_wait"
+        private val NOT_EVENTS = setOf(SCREEN, IDENTIFY, RESET, FLUSH, FLUSH_AND_WAIT)
     }
 }
