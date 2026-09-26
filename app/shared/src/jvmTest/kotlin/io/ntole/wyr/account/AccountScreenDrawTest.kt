@@ -309,20 +309,22 @@ class AccountScreenDrawTest {
     }
 
     /**
-     * Anyone read, a guest or a registered player, has a quiet Delete account at the start of Log out's
-     * row, which asks in one line first: Cancel deletes nothing, and Delete deletes (CLAUDE.md §8a).
+     * Anyone read, a guest or a registered player, by a username or by Play Games, has a quiet Delete
+     * account at the start of Log out's row, which asks in one line first: Cancel deletes nothing, and
+     * Delete deletes (CLAUDE.md §8a).
      */
     @Test
     fun `Delete account asks first and then deletes for a guest and a registered player alike`() {
         Language.entries.forEach { language ->
             val strings = stringsOf(language)
             val delete = strings.accountScreens.deleteAccount
-            listOf(GUEST, REGISTERED).forEach { stats ->
+            // A player registered by Play Games alone has Log out too (CLAUDE.md §8a, *Play Games sign-in*).
+            listOf(GUEST, REGISTERED, PLAY_GAMES).forEach { stats ->
                 val actions = Recorder()
                 val scene = scene(AccountState(stats = stats, submissions = emptyList()), language, actions = actions)
                 try {
                     assertFalse(delete.warning in scene.texts(), "$language: asked before it is tapped")
-                    if (stats.username != null) {
+                    if (stats.registered) {
                         val button = scene.nodes().single { delete.button in it.texts }
                         val logOut = scene.nodes().single { strings.accountScreens.logOut in it.texts }
                         assertEquals(logOut.boundsInRoot.center.y, button.boundsInRoot.center.y, 0.5f, "one row")
