@@ -727,6 +727,12 @@ EncryptedSharedPreferences: enough for a game that stores no sensitive personal 
   U+2029 (`checkedRejection`). Chosen as the stricter reading, since a reason is shown to its author
   as a line of text; allowing line breaks later breaks no client. The options: keep it, or allow
   line breaks in a reason.
+- **Ready-made rejection reasons** — *provisional — user decision.* The moderation app offers six
+  reasons a tap puts in the reason field, to reject a question or to block its author with (§8d,
+  *Moderation*, `READY_REASONS`): the wording is this build's, in Serbian Cyrillic, one per question
+  rule the moderator holds a question to, the topics rule naming the four topics the user banned.
+  The options: keep them; reword or add to them, which is the one list; or none, the reason always
+  typed.
 - **Retiring a question** — *provisional — user decision.* The user asked for a way to take an
   approved question out of play and put it back (§8d, *Moderation*); the details are this build's.
   Built: a moderator retires an approved question, a seed included, and restores a retired one.
@@ -2014,7 +2020,13 @@ listed on the Account screen.
     before, and Lock keeps them, being the same for everybody. *Pending* lists the queue, oldest
     first, each submission with its options,
     categories and age: Approve files it under the categories picked for it, none keeping the
-    author's, and Reject sends the reason typed once it is a `RejectionReason`. The queue is
+    author's, and Reject sends the reason typed once it is a `RejectionReason`. Beside the reason
+    field, a chip for each ready reason (`READY_REASONS`, provisional, §8b) puts it in the field, to
+    send as it is or edit first, in Serbian Cyrillic, since the author reads it in the game while the
+    app's own words stay English: *Није избор између две ствари*, *Увредљиво*, *Помиње стварну особу*,
+    *Дупликат*, *Тема није дозвољена (вера, политика, здравље, сексуалност)*, the question rules (§8b,
+    *Personalization*), and *Неразумљиво*; `ReadyReasonsTest` holds each to `RejectionReason`'s rules
+    as it reads, and to Serbian Cyrillic. The queue is
     read again after every decision, whatever became of it. A read lists at most
     `ModerationRepository.PAGE_SIZE`, and a queue that long says more may be waiting,
     its tab `Pending (100+)`, rather than naming itself the whole. *Reports* lists the reported
