@@ -465,6 +465,50 @@ the scope asked, which would undo a login at the next launch); *Where the Auth p
 (whenever the player is not linked, signed in to Play Games or not); *A Play Games player's name on the
 card* (*Google Play Игре*); *The notice's look* (a pink dot, no text). And the setup below.
 
+**The review's fixes on `feat/android-services`** (after 46c4c0d; all seven findings held up on
+checking, none rejected), one commit each:
+- **The activity on screen** (2227c84; CLAUDE.md §8a *Play Games sign-in*, *On Android*): Play Games'
+  explicit sign-in runs in `GamesResolutionActivity`, a translucent activity of its own (checked in the
+  22.1.0 AAR's manifest, theme and bytecode), so the app's is only paused; `ActivityTracker` forgot
+  every activity once that one stopped, and a sign-in that worked then got no code. It keeps every
+  activity started and not stopped now, the most recent one not finishing first. `ActivityTrackerTest`
+  is the game's first Android host test, and the verify job runs `:app:shared:testAndroidHostTest`
+  as a step of its own (ci.yml, added to).
+- **The notice and a list of another player's** (6b1ac03; §8d *The notice of a decision*): the
+  Account screen passed the notice the list it held, whoever it was read for, so after the launch's
+  Play Games sign-in a guest's empty list could wipe the returning player's seen set and mark all
+  their old decisions new. Each list is named for its player now (`AccountState.readFor`), the notice
+  ignores one of anyone but the player playing, and the seen set is only ever added to.
+- **The Account screen follows a switch it did not make** (5ea3e72; §8d *The Account screen*): the
+  ViewModel hears every session stored (`CurrentSession.sessions`) and reads the player again, nothing
+  of the guest's shown meanwhile.
+- **A login or a logout during a Play Games sign-in stands** (2bd09b5; §8a *The client*): the answer is
+  stored only while the device still plays as the player it went out as
+  (`DefaultSessionRepository.replaceIfStill`); `PlayGamesRepository.signIn` answers null otherwise.
+- **The guest-points warning is a guest's** (ad85b87): a player registered by Play Games alone is not
+  warned before a login, their points staying on that account.
+- **A notification's tap is not replayed from Recents** (99573af; §8a *Push tokens*, *On Android*):
+  `FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY` is no tap (Android 7 to 11); `NotificationsTest`, a host test.
+- **Docs**: the notice's read recovers a dead session with a fresh guest, as every call does, and
+  never mints a first one (11aa6b0; the docs said it never minted, the code is kept); both setup lists
+  give `io.ntole.wyr` a debug-key credential, so the PROD-flavor fallback can be tried from this Mac
+  (87a6d55). And a test line wrapped for ktlint (1e87657).
+
+**Verified on this machine after them**: `ktlintCheck`; `:server:test` (480, up to date: nothing
+the server builds from changed), `:core:domain:jvmTest` (105), `:core:data:jvmTest` (162), `:core:network:jvmTest`
+with `:core:network:testAndroidHostTest` (230), `:app:shared:jvmTest` (423), the new
+`:app:shared:testAndroidHostTest` (284, the common tests again and the two host tests),
+`:app:adminApp:jvmTest` (106), all passing; the verify job's client compiles,
+`:app:androidApp:assembleDebug` and `:app:androidApp:assembleProdRelease`; the iOS Kotlin compiles
+(`:app:shared` main and test, each `:core` module's test). One Gradle run, its exit code 0 read from
+a file.
+**Not verified**: none of it on a phone or an emulator, so the translucent activity's lifecycle and
+the Recents relaunch are Android's documented behaviour read from the SDK, not seen; the iOS link and
+simulator tests (CI's `ios` job). **At the merges**: `feat/android-release` owns ci.yml's release
+build, and this branch added one step after *Test*, the host tests; `AccountViewModel` takes a
+`CurrentSession` now (Koin resolves it), so `feat/account-client`'s deletion needs nothing more for
+the screen to follow its fresh guest; `PlayGamesRepository.signIn` answers `String?`.
+
 ### Verified working
 
 - **`feat/server-engagement`**, on this machine, at 8660e01 and again at a371b0e after the review's
