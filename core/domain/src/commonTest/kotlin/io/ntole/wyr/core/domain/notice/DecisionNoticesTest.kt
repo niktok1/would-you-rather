@@ -157,7 +157,8 @@ class DecisionNoticesTest {
             session.player.value = "guest1"
             notices.shown(emptyList(), readFor = "guest1")
             session.player.value = "p1"
-            questions.listed = listOf(question("a", SubmissionStatus.APPROVED), question("b", SubmissionStatus.REJECTED))
+            questions.listed =
+                listOf(question("a", SubmissionStatus.APPROVED), question("b", SubmissionStatus.REJECTED))
             notices.check()
 
             assertEquals(emptySet(), notices.shown(emptyList(), readFor = "guest1"))
