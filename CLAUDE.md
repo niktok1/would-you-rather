@@ -730,7 +730,10 @@ decided in §8b).
   - *On Android* (`AndroidPlayGames` in `:app:shared`'s androidMain, over `play-services-games-v2`,
     §4): each call asks the activity on screen (`ActivityTracker`) for its `GamesSignInClient`, on the
     main thread, and answers a failure as nothing done; the code is `requestServerSideAccess(serverClientId,
-    false)`. Its ids are the build's (`GoogleServiceSettings`, gradle/wyr-android-services.gradle.kts):
+    false)`. The activity on screen is the most recent one started and not stopped, one not finishing
+    first, since Play Games shows an explicit sign-in through a translucent activity of its own
+    (`GamesResolutionActivity`) over the app's, which is only paused and never starts again
+    (`ActivityTrackerTest`, an Android host test, which the verify job runs). Its ids are the build's (`GoogleServiceSettings`, gradle/wyr-android-services.gradle.kts):
     `wyr.playgames.appId`, the Play Games project id, which the manifest's
     `com.google.android.gms.games.APP_ID` names through the `game_services_project_id` string, and
     `wyr.playgames.serverClientId`, the game server credential's OAuth client id, the server's
@@ -2579,7 +2582,8 @@ the same events. The moderation app sends none.
   surface the decision rather than assuming.
 - When a decision is made, encode it here and in config — not just in conversation.
 - Verify with `./gradlew ktlintCheck` plus the test and compile tasks listed in
-  `.github/workflows/ci.yml`. That workflow is the definition of "green". Besides `verify` it runs
+  `.github/workflows/ci.yml`. That workflow is the definition of "green"; its `verify` job runs the
+  game's Android host tests too (`:app:shared:testAndroidHostTest`). Besides `verify` it runs
   `server-postgres` (the server suite against a Postgres service container), `docker-smoke` (builds
   the image and polls `/health`), and `ios` (framework link, simulator tests, the three `:core`
   modules' test compiles, and an `xcodebuild` simulator build on macOS). All four passed on

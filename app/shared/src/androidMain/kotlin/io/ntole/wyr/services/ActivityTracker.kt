@@ -7,28 +7,30 @@ import java.lang.ref.WeakReference
 
 /**
  * The activity on screen, for what only an activity can ask: a Play Games sign-in, and the
- * notifications permission. Held weakly, so a destroyed activity is never kept, and forgotten as it
- * stops, so nothing asks one in the background.
+ * notifications permission. Registered with the application by [androidDeviceServices].
+ *
+ * Every activity started and not stopped yet is kept, weakly, so a destroyed one is never held, and
+ * the one on screen is the most recent of them, one not finishing first. Play Games shows its sign-in
+ * through a translucent activity of its own (`GamesResolutionActivity`) over the app's, which is only
+ * paused and so never starts again: once that one stops, the app's is on screen again, still started.
+ * None started is the app in the background, where nothing asks.
  */
-internal class ActivityTracker(
-    application: Application,
-) : Application.ActivityLifecycleCallbacks {
-    @Volatile
-    private var started: WeakReference<Activity>? = null
+internal class ActivityTracker : Application.ActivityLifecycleCallbacks {
+    private val started = mutableListOf<WeakReference<Activity>>()
 
-    init {
-        application.registerActivityLifecycleCallbacks(this)
-    }
-
-    /** The activity started now, or null when none is: the app is in the background. */
-    fun current(): Activity? = started?.get()
+    /** The activity on screen now, or null when none is started: the app is in the background. */
+    fun current(): Activity? =
+        synchronized(started) {
+            val held = started.mapNotNull { it.get() }
+            held.lastOrNull { !it.isFinishing } ?: held.lastOrNull()
+        }
 
     override fun onActivityStarted(activity: Activity) {
-        started = WeakReference(activity)
+        synchronized(started) { started += WeakReference(activity) }
     }
 
     override fun onActivityStopped(activity: Activity) {
-        if (started?.get() === activity) started = null
+        synchronized(started) { started.removeAll { it.get().let { held -> held == null || held === activity } } }
     }
 
     override fun onActivityCreated(

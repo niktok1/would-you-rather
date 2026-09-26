@@ -21,7 +21,7 @@ fun androidDeviceServices(
     settings: GoogleServiceSettings,
 ): DeviceServices {
     settings.offLines().forEach { line -> Log.i(LOG_TAG, line) }
-    val activities = ActivityTracker(application)
+    val activities = ActivityTracker().also(application::registerActivityLifecycleCallbacks)
     return DeviceServices(
         playGames = playGamesOf(application, activities, settings),
         push = pushOf(application, activities, settings),
