@@ -4,6 +4,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.saveable.LocalSaveableStateRegistry
 import androidx.compose.runtime.saveable.SaveableStateRegistry
 import androidx.compose.ui.ImageComposeScene
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.state.ToggleableState
@@ -99,6 +100,7 @@ class AppNavigationTest {
     private val game = FakeGame()
     private val categories = FakeCategories()
     private val update = FakeUpdate()
+    private val uris = RecordingUris()
     private val analytics = RecordingAnalytics()
     private val storage = InMemoryTokenStorage()
     private val owner = TestOwner()
@@ -573,6 +575,8 @@ class AppNavigationTest {
                     LocalLifecycleOwner provides owner,
                     LocalViewModelStoreOwner provides owner,
                     LocalSaveableStateRegistry provides registry,
+                    // A link opens through the test's own handler, never the machine's browser.
+                    LocalUriHandler provides uris,
                 ) { App() }
             }
         try {

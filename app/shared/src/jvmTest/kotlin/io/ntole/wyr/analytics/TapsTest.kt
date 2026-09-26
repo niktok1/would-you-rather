@@ -211,10 +211,12 @@ class TapsTest {
                 )
             }
 
-        assertEquals(setOf("auth.show_password", "auth.register", "auth.to_log_in"), register)
+        // The Register form's line links the terms and the privacy policy (CLAUDE.md §8d).
+        val terms = setOf("auth.terms", "auth.privacy")
+        assertEquals(setOf("auth.show_password", "auth.register", "auth.to_log_in") + terms, register)
         assertEquals(setOf("auth.log_in", "auth.to_register"), logIn)
         assertEquals(setOf("auth.log_in_anyway", "auth.cancel", "auth.to_register"), warned)
-        assertEquals(setOf("auth.try_again", "auth.show_password", "auth.to_log_in"), unread)
+        assertEquals(setOf("auth.try_again", "auth.show_password", "auth.to_log_in") + terms, unread)
     }
 
     @Test

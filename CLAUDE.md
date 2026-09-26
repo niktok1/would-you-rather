@@ -1357,7 +1357,11 @@ orientation, in common code alone:
   with a link back, *Немаш налог? Региструј се* (`AccountState.authMode`, Register on a first
   showing; not while an action runs). No heading and no notes, the user asking for less text. Under
   each register field its rule, *3–20 знакова: a–z, 0–9, _* and *6–128 знакова*, in the error colour
-  while what is typed breaks it, and Register sends nothing until both pass. A register or a login
+  while what is typed breaks it, and Register sends nothing until both pass. Under Register one
+  short line (*built 2026-09-26*), *Регистрацијом прихваташ услове и политику приватности.*, its two
+  nouns links that open the site's terms and privacy policy in the browser, in the language shown
+  (`AccountStrings.termsLine`, a template whose `{0}` and `{1}` are the links, `parts`; the About
+  screen's `Site`); taps `auth.terms` and `auth.privacy` (§8g). A register or a login
   that worked goes back to the Account screen, which reads the player again (`AccountState.signedIn`,
   which the page takes down as it goes and the next action takes down too, so a page left before its
   answer came is not sent back later). Shown with no player read yet (an Android process brought
@@ -2430,7 +2434,7 @@ the same events. The moderation app sends none.
   whether the tap went on from the reveal), `.like`, `.dislike`, `.skip`, `.try_again`;
   `account.open_auth`, `.log_out`, `.try_again`; `my_questions.new_question`, `.first_question`,
   `.try_again`; `language.menu` and `language.option` (with its `language` tag); `auth.register`,
-  `.show_password`, `.to_log_in`, `.log_in`, `.log_in_anyway`, `.cancel`, `.to_register`,
+  `.show_password`, `.to_log_in`, `.terms`, `.privacy`, `.log_in`, `.log_in_anyway`, `.cancel`, `.to_register`,
   `.try_again`; `submit.category` (with its `category` id), `.send`, `.categories_try_again`,
   `.try_again`; `categories.all`, `.category` (with its id), `.play`, `.try_again`; `update.store` and
   `.reload`; `account.delete`, `.delete_confirm` and `.delete_cancel`. A text field is no
