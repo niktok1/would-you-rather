@@ -2,6 +2,7 @@ package io.ntole.wyr.theme
 
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 
 /**
@@ -61,7 +62,22 @@ val WyrDefaultDimens: WyrDimens = WyrDimens()
 
 /** Type sizes that Material's scale does not cover well for this layout. */
 object WyrTypeScale {
+    /** An option on its card, as large as it fits, and never smaller than [optionTextMin]. */
     val optionText = 22.sp
+
+    /**
+     * The least an option too long for its card shrinks to, [optionTextStep] at a time from [optionText]
+     * (CLAUDE.md §8d, *The Play screen*): a question's longest option, 200 characters, fits an iPhone SE's
+     * card whole at it, revealed too.
+     */
+    val optionTextMin = 14.sp
+    val optionTextStep = 2.sp
+
+    /**
+     * An option's line, in its own size, so it shrinks with it: at [optionText] it is the 24 the text
+     * style's line was before the option shrank.
+     */
+    val optionLineHeight = 1.1.em
     val heading = 28.sp
     val sectionTitle = 16.sp
     val statLabel = 13.sp

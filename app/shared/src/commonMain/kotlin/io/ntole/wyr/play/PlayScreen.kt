@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.safeContentPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -444,11 +445,17 @@ private fun OptionCard(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 modifier = Modifier.align(Alignment.Center).padding(dimens.spaceMd),
             ) {
+                // As large as the card leaves it room for, the percentage's room taken first, and in steps no
+                // smaller than the floor, so a long option shrinks rather than being cut (§8d, *The Play
+                // screen*). The largest size is also what the card's intrinsic height is measured at.
                 Text(
                     text = text,
                     fontSize = WyrTypeScale.optionText,
+                    lineHeight = WyrTypeScale.optionLineHeight,
                     fontWeight = FontWeight.Bold,
                     textAlign = TextAlign.Center,
+                    autoSize = OptionTextAutoSize,
+                    modifier = Modifier.weight(1f, fill = false),
                 )
 
                 if (percent != null && counted != null) {
@@ -474,6 +481,18 @@ private fun OptionCard(
         }
     }
 }
+
+/**
+ * How an option fits its card: from [WyrTypeScale.optionText] down to [WyrTypeScale.optionTextMin],
+ * [WyrTypeScale.optionTextStep] at a time, the largest that fits whole. One instance, as a text's
+ * auto-size is compared by equality on every layout.
+ */
+private val OptionTextAutoSize: TextAutoSize =
+    TextAutoSize.StepBased(
+        minFontSize = WyrTypeScale.optionTextMin,
+        maxFontSize = WyrTypeScale.optionText,
+        stepSize = WyrTypeScale.optionTextStep,
+    )
 
 /**
  * The style of the reveal's percentages, as a `Text` of their size and weight takes it on the card: the

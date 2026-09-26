@@ -29,12 +29,15 @@ import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.toSize
 import io.ntole.wyr.CountedBy
 import io.ntole.wyr.Recompositions
 import io.ntole.wyr.core.domain.error.DomainError
 import io.ntole.wyr.core.domain.question.Question
 import io.ntole.wyr.core.domain.reaction.Reaction
+import io.ntole.wyr.core.domain.submission.SubmissionRules
 import io.ntole.wyr.core.domain.vote.Side
 import io.ntole.wyr.core.domain.vote.Tally
 import io.ntole.wyr.core.domain.vote.VoteOutcome
@@ -44,6 +47,7 @@ import io.ntole.wyr.language.Language
 import io.ntole.wyr.language.Strings
 import io.ntole.wyr.language.WyrStrings
 import io.ntole.wyr.language.fill
+import io.ntole.wyr.language.optionText
 import io.ntole.wyr.language.stringsOf
 import io.ntole.wyr.nodes
 import io.ntole.wyr.renderAt
@@ -120,6 +124,55 @@ class PlayScreenDrawTest {
                     val needed = heightNeeded(state, width * WIDTH / SHORT_PHONE_WIDTH, language = language)
                     assertTrue(needed <= height, "$state in $language needs $needed of $height at $width wide")
                 }
+            }
+        }
+    }
+
+    /**
+     * An option as long as a question may have, 200 characters, on both cards, fits its card whole on
+     * an iPhone SE, asked and revealed with its percentage under it, stacked, and on one on its side,
+     * side by side: its type shrunk in steps, never below the floor, and nothing of it cut short or cut
+     * off, in every language. Measured wider than drawn, as the fit tests above are, for CI's fonts.
+     */
+    @Test
+    fun `an option of 200 characters fits its card whole on a short phone`() {
+        listOf(LONG_QUESTION.optionA, LONG_QUESTION.optionB).forEach { option ->
+            assertEquals(SubmissionRules.MAX_OPTION_LENGTH, option.length, option)
+        }
+        val states = listOf(PlayUiState.Asking(LONG_QUESTION), PlayUiState.Revealed(LONG_QUESTION, OUTCOME))
+        listOf(
+            WIDTH to SHORT_PHONE_HEIGHT,
+            SE_ON_ITS_SIDE_WIDTH * WIDTH / SHORT_PHONE_WIDTH to SE_ON_ITS_SIDE_HEIGHT,
+        ).forEach { (width, height) ->
+            Language.entries.forEach { language ->
+                states.forEach { state ->
+                    withScreen(state, language = language, width = width, height = height) { scene, _ ->
+                        scene.renderAt(COUNTED_UP)
+                        scene.assertLongOptionsWhole(state, language, "$state in $language at $width by $height")
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * An option that fits at the largest size stays at it, and a long one shrinks where it must, on
+     * the reveal, where its percentage takes room: told by its lines, as tall as its type is large.
+     */
+    @Test
+    fun `only an option that needs it shrinks`() {
+        withScreen(PlayUiState.Revealed(QUESTION, OUTCOME)) { scene, _ ->
+            scene.renderAt(COUNTED_UP)
+            listOf(QUESTION.optionA, QUESTION.optionB).forEach { option ->
+                val layout = textLayoutOf(scene.everyNode().single { option in it.texts })
+                assertEquals(lineAt(WyrTypeScale.optionText), lineOf(layout), 1f, option)
+            }
+        }
+        withScreen(PlayUiState.Revealed(LONG_QUESTION, OUTCOME)) { scene, _ ->
+            scene.renderAt(COUNTED_UP)
+            listOf(LONG_QUESTION.optionA, LONG_QUESTION.optionB).forEach { option ->
+                val layout = textLayoutOf(scene.everyNode().single { option in it.texts })
+                assertTrue(lineOf(layout) < lineAt(WyrTypeScale.optionText) - 1f, "${lineOf(layout)}: $option")
             }
         }
     }
@@ -803,6 +856,60 @@ class PlayScreenDrawTest {
         return colours
     }
 
+    /**
+     * That both of [LONG_QUESTION]'s options, as [state] shows them in [language], are laid out whole in
+     * their cards, at a size no smaller than the floor, and on the reveal each card's percentage too.
+     */
+    private fun ImageComposeScene.assertLongOptionsWhole(
+        state: PlayUiState,
+        language: Language,
+        at: String,
+    ) {
+        val strings = stringsOf(language).playScreen
+        listOf(
+            LONG_QUESTION.optionA to strings.percent(70),
+            LONG_QUESTION.optionB to strings.percent(30),
+        ).forEach { (option, percent) ->
+            val shown = optionText(option, language)
+            val card = node(shown).boundsInRoot
+            val text = everyNode().single { shown in it.texts }
+            val layout = textLayoutOf(text)
+            assertFalse(layout.hasVisualOverflow, "$at: the option overflows")
+            assertFalse(layout.multiParagraph.didExceedMaxLines, "$at: the option is cut short")
+            // Told by its lines, as tall as its type is large: its style names the largest size.
+            assertTrue(lineOf(layout) >= lineAt(WyrTypeScale.optionTextMin) - 1f, "$at: ${lineOf(layout)}")
+            assertTrue(card.containsWhole(text.laidOut()), "$at: ${text.laidOut()} is not in $card")
+            if (state is PlayUiState.Revealed) {
+                val counted = everyNode().single { percent in it.texts }.laidOut()
+                assertTrue(card.containsWhole(counted), "$at: $percent at $counted is not in $card")
+            }
+        }
+    }
+
+    /** The layout of [node]'s text, as the text it shows last laid it out. */
+    private fun textLayoutOf(node: SemanticsNode): TextLayoutResult {
+        val layouts = mutableListOf<TextLayoutResult>()
+        val layout = assertNotNull(node.config.getOrNull(SemanticsActions.GetTextLayoutResult)?.action, "$node")
+        layout(layouts)
+        return layouts.single()
+    }
+
+    /** The height of [layout]'s first line, at one pixel a dp and the font's own size. */
+    private fun lineOf(layout: TextLayoutResult): Float = layout.getLineBottom(0) - layout.getLineTop(0)
+
+    /** An option's line at [size], as `WyrTypeScale.optionLineHeight` sets it, at one pixel a dp. */
+    private fun lineAt(size: TextUnit): Float = size.value * WyrTypeScale.optionLineHeight.value
+
+    /** Where [this] is laid out in the scene, clipped or not. */
+    private fun SemanticsNode.laidOut(): Rect = Rect(positionInRoot, size.toSize())
+
+    /** Whether [other] lies inside this whole, to the half pixel a layout rounds to. */
+    private fun Rect.containsWhole(other: Rect): Boolean =
+        other.left >= left - HALF_PIXEL &&
+            other.top >= top - HALF_PIXEL &&
+            other.right <= right + HALF_PIXEL &&
+            other.bottom <= bottom + HALF_PIXEL
+
     /** Whether the one node showing [text] cuts it short: it needs more lines than it may take. */
     private fun ImageComposeScene.isCutShort(text: String): Boolean {
         val layouts = mutableListOf<TextLayoutResult>()
@@ -1020,6 +1127,9 @@ class PlayScreenDrawTest {
         /** How far a bar's fill may end from its share of the card's width: a pixel and its rounding. */
         const val BAR_TOLERANCE = 0.01f
 
+        /** How far a layout's rounding may put one edge past another. */
+        const val HALF_PIXEL = 0.5f
+
         /** The scene's clock, in nanoseconds, once the reveal has counted up. */
         const val COUNTED_UP = COUNT_UP_MILLIS * 1_000_000L
 
@@ -1047,6 +1157,19 @@ class PlayScreenDrawTest {
                 categories = setOf("SUPERPOWERS"),
             )
         val ONE_LINE_QUESTION = QUESTION.copy(optionA = "Fly", optionB = "Swim")
+
+        /** Both options as long as a question's may be, 200 characters, in Serbian, as a player would write. */
+        val LONG_QUESTION =
+            QUESTION.copy(
+                optionA =
+                    "Да ти до краја живота сваки пут кад кинеш неко из публике аплаудира, а кад се насмејеш да сви " +
+                        "у близини почну да играју коло, чак и на сахрани, у болници, на испиту или усред важног " +
+                        "састанка на послу.",
+                optionB =
+                    "Да сваки пут кад отвориш фрижидер у њему нађеш тачно оно што ти се тог тренутка једе, али " +
+                        "само ако пре тога наглас отпеваш целу химну уназад, на ногама, пред свима који су у кући и " +
+                        "пред свим комшијама",
+            )
 
         /** [QUESTION] with [LIKES] likes and [DISLIKES] dislikes, neither the player's. */
         val REACTED_TO = QUESTION.copy(likeCount = LIKES, dislikeCount = DISLIKES)

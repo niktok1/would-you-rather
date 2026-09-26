@@ -1407,6 +1407,16 @@ Categories screen from its top bar (*Skipping*, *Reactions* and *Categories*, be
   no vote counts (the domain still has `VoteOutcome.agreedWithMajority`). A screen reader hears what
   a tap does where no text says it: *Следеће питање* on a revealed card, *Промени категорије* on the
   categories played.
+- *An option that fits* (*built 2026-09-26*): an option too long for its card shrinks its type in steps
+  rather than being cut, from `WyrTypeScale.optionText`, 22, down 2 at a time to a floor,
+  `optionTextMin`, 14, the largest that fits whole (Compose's `TextAutoSize.StepBased`, in
+  multiplatform foundation since 1.8; one `OptionTextAutoSize`), stacked or side by side, the
+  percentage's room taken first on the reveal (the option is the card column's weighted child), its
+  line in `em` (`optionLineHeight`) so it shrinks with it. An option that fits keeps 22. At the floor
+  what still does not fit is cut, which only a phone smaller than an iPhone SE on its side, or a large
+  font size, does to a 200-character option. `PlayScreenDrawTest` holds two options of 200 characters
+  whole, their type no smaller than the floor, on an iPhone SE and on one on its side, asked and
+  revealed, in every language, and a short option at 22.
 - *The count up is drawn, not composed* (`CountedUpText`, `RevealBar`): the count is read only as it
   is drawn, the number over the final percentage's own text, laid out once, which sizes it and is
   what a screen reader reads, and the bar in a layer of its own. So a frame of it draws two numbers
