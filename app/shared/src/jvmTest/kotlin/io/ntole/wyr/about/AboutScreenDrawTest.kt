@@ -38,7 +38,7 @@ class AboutScreenDrawTest {
                     val expected =
                         listOf(strings.gameName, about.version.fill("1.0.0 (10000)"), AGE_RATING) +
                             listOf(about.privacy, about.terms, about.deleteAccount, about.contact, about.licences) +
-                            OPEN_SOURCE_LIBRARIES.flatMap { listOf(it.name, it.licence) }
+                            OPEN_SOURCE_LIBRARIES.flatMap { listOfNotNull(it.name, it.licence, it.notice) }
                     expected.forEach { text -> assertTrue(text in shown, "$language: \"$text\" is not in $shown") }
                 } finally {
                     scene.close()

@@ -447,8 +447,12 @@ request naming android 10000 was 426 `UPGRADE_REQUIRED` and one naming 10001 200
 nothing ran on a phone, a browser or iOS: the Play Store button (`market://`, then the https page),
 the web's reload, iOS's `CFBundleVersion` read (its test only compiles here) and the headers sent from
 a real build to a deployed server; a browser's CORS preflight for the two headers is the server's
-`CorsTest`'s alone; the site's links go nowhere until the domain is bought and the pages are up; the
-licences list is written by hand and checked against no dependency report.
+`CorsTest`'s alone; the site's links go nowhere until the domain is bought and the pages are up. The
+licences list is checked against the Android release's and the desktop app's dependency reports (a
+review found SLF4J's API, MIT, and Stately missing, and Skia, BSD 3-Clause, inside Skiko), and not
+beyond them: the code Skia builds in itself (FreeType, HarfBuzz, ICU and the rest) and the web's npm
+packages (`@js-joda/core`, BSD 3-Clause, and `ws`, MIT, in `kotlin-js-store/wasm/yarn.lock`) are not
+listed, to settle before a desktop, iOS or web release; Android's has none of them.
 
 **For the user** (CLAUDE.md §8b, each *provisional — user decision*): *Delete account beside Log out*
 (a row of its own under Log out took the failure states past 599; it is not offered while a read of
@@ -1350,6 +1354,10 @@ Deploy → Deploy a specific commit* on `wyr-server`. For the Google Play releas
    the number to set: MAJOR * 10000 + MINOR * 100 + PATCH). Android's `versionCode` follows by itself.
 3. **An old build to refuse**: `MIN_CLIENT_VERSION_ANDROID` (or `_IOS`, `_WEB`, `_DESKTOP`) = the
    oldest build number to serve, and restart; an older build shows *Нова верзија је доступна*.
+4. **The licences**: compare the About screen's list (`OPEN_SOURCE_LIBRARIES`, `Licences.kt`) with
+   `./gradlew :app:androidApp:dependencies --configuration prodReleaseRuntimeClasspath` (and, for a
+   desktop release, `:app:desktopApp:dependencies --configuration runtimeClasspath`): every library
+   there is in the list under its own licence, with the copyright line an MIT or BSD licence asks for.
 
 ### Rate limits
 

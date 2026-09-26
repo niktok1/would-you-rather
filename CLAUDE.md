@@ -788,6 +788,11 @@ EncryptedSharedPreferences: enough for a game that stores no sensitive personal 
   row to itself), and not offered while a read of the player shows its failure, where a guest's screen
   would reach 622: the deletion would fail then too. The options: keep it; a row of its own under Log
   out, the failure states then scrolling to reach it; or Delete account on the About screen alone.
+- **Licence notices** — *provisional — user decision.* SLF4J's MIT licence and Skia's BSD 3-Clause
+  ask for their copyright and permission notice to ship with the app; the About screen shows each one's
+  copyright line and opens its licence's full text in the browser, as it does Apache 2.0's (§8d,
+  *About*). The options: keep it; or every licence's full text inside the app, a screen of its own
+  per licence, which needs no network.
 - **Log out under the language row** — *provisional — user decision.* The user's Account redesign put
   Log out beside the language menu, one row of the two; the Statistics switch (§8g) now shares that
   row, since a row of all three does not fit a phone's width, and a row of its own would take a
@@ -1431,10 +1436,14 @@ open in the browser (`LocalUriHandler`), *Политика приватност�
 `BASE_URL` is `https://stabiradije.rs`, not live yet, the domain being the user's to buy, §8b *The
 launch*); and **Лиценце отвореног кода**, the libraries the game ships with on any platform, each
 with its licence, a tap opening the licence's text (`OPEN_SOURCE_LIBRARIES`, written by hand, no
-library for it: every one Apache 2.0 today; a library added to the game's client is added there in the
-same change). Words: `Strings.aboutScreen`. `AboutScreenDrawTest` (every text in both themes and every
-language, each link's URL through a handler of the test's own, the links above 599 before any
-scrolling), `SiteTest`, `TapsTest`, `AppNavigationTest`, `TopBarsDrawTest`, `NavigatorTest`.
+library for it, from the Android and desktop dependency reports, NEXT-SESSION's *Releasing to
+production*: Apache 2.0 but for SLF4J's API, MIT, which Ktor brings, and Skia, BSD 3-Clause, which
+Skiko builds into the desktop, iOS and web apps, each of those two with the copyright line its licence
+asks to ship with the app, *provisional*, §8b *Licence notices*; a library added to the game's client
+is added there in the same change, under its own licence). Words: `Strings.aboutScreen`.
+`AboutScreenDrawTest` (every text in both themes and every language, each link's URL through a handler
+of the test's own, the links above 599 before any scrolling), `LicencesTest`, `SiteTest`, `TapsTest`,
+`AppNavigationTest`, `TopBarsDrawTest`, `NavigatorTest`.
 
 **The Play screen** (`io.ntole.wyr.play`; the user's layout, *decided 2026-09-25*, rearranged
 2026-09-26) asks a question and reveals its tally, holds Skip and the reactions, and opens the

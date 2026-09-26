@@ -135,7 +135,10 @@ private fun Link(
     }
 }
 
-/** A library the game ships with, and its licence, whose text a tap opens in the browser. */
+/**
+ * A library the game ships with, its licence, whose text a tap opens in the browser, and the copyright
+ * notice its licence asks to ship with the app, where it asks for one.
+ */
 @Composable
 private fun Library(library: Licensed) {
     val colors = WyrThemeAccessors.colors
@@ -152,5 +155,6 @@ private fun Library(library: Licensed) {
     ) {
         Text(text = library.name, color = colors.primaryText)
         Text(text = library.licence, color = colors.muted, fontSize = WyrTypeScale.statLabel)
+        library.notice?.let { notice -> Text(text = notice, color = colors.muted, fontSize = WyrTypeScale.statLabel) }
     }
 }
