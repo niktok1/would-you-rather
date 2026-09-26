@@ -203,12 +203,18 @@ private fun Account(
         }
     }
 
+    // The player's choice, kept on the device, which the analytics hold (CLAUDE.md §8g).
+    val analytics = LocalAnalytics.current
+    val statisticsOn by analytics.enabled.collectAsStateWithLifecycle()
+
     AccountScreen(
         state = state,
         actions = viewModel,
         environment = koinInject(),
         language = language,
         onSelectLanguage = onSelectLanguage,
+        statisticsOn = statisticsOn,
+        onStatisticsChange = analytics::setEnabled,
         onOpenAuth = onOpenAuth,
         onNewQuestion = onNewQuestion,
     )

@@ -119,16 +119,16 @@ class TapsTest {
                 )
             }
 
-        val language = setOf("language.menu", "language.option")
-        assertEquals(setOf("account.open_auth") + language, guest)
+        val settings = setOf("language.menu", "language.option", "account.statistics")
+        assertEquals(setOf("account.open_auth") + settings, guest)
         assertEquals(
-            setOf("my_questions.new_question", "my_questions.first_question", "account.log_out") + language,
+            setOf("my_questions.new_question", "my_questions.first_question", "account.log_out") + settings,
             registered,
         )
-        assertEquals(setOf("my_questions.new_question", "account.log_out") + language, listed)
-        assertEquals(setOf("account.try_again") + language, unread)
+        assertEquals(setOf("my_questions.new_question", "account.log_out") + settings, listed)
+        assertEquals(setOf("account.try_again") + settings, unread)
         assertEquals(
-            setOf("my_questions.new_question", "my_questions.try_again", "account.log_out") + language,
+            setOf("my_questions.new_question", "my_questions.try_again", "account.log_out") + settings,
             listUnread,
         )
     }
@@ -294,6 +294,8 @@ class TapsTest {
             environment = WyrEnvironment.PROD,
             language = Language.DEFAULT,
             onSelectLanguage = {},
+            statisticsOn = true,
+            onStatisticsChange = {},
             onOpenAuth = {},
             onNewQuestion = {},
         )

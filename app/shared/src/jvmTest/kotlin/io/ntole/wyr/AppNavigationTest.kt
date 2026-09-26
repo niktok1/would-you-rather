@@ -130,6 +130,23 @@ class AppNavigationTest {
             assertEquals(Language.SERBIAN_CYRILLIC.tag, opened.properties[AnalyticsProperty.LANGUAGE])
         }
 
+    /** The player's choice is the analytics' own, which keep it for the device (CLAUDE.md §8g). */
+    @Test
+    fun `the Statistics switch on Account turns the analytics off and on again`() =
+        withApp { scene ->
+            val statistics = CYRILLIC.accountScreens.statistics
+            scene.tap(CYRILLIC.account)
+            assertEquals(ToggleableState.On, scene.toggleOf(statistics))
+
+            scene.tap(statistics)
+            assertFalse(analytics.enabled.value)
+            assertEquals(ToggleableState.Off, scene.toggleOf(statistics))
+
+            scene.tap(statistics)
+            assertTrue(analytics.enabled.value)
+            assertEquals(ToggleableState.On, scene.toggleOf(statistics))
+        }
+
     @Test
     fun `Play opens under a bar with home and the account icon`() =
         withApp { scene ->

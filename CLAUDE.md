@@ -601,6 +601,13 @@ EncryptedSharedPreferences: enough for a game that stores nothing personal.
   (§8d, *The Play screen*).
 - **The Play row's arrangement** — *resolved 2026-09-26*: the user's, the points on the left, the
   thumbs in the middle and Skip on the right (§8d, *The Play screen*).
+- **Log out under the language row** — *provisional — user decision.* The user's Account redesign put
+  Log out beside the language menu, one row of the two; the Statistics switch (§8g) now shares that
+  row, since a row of all three does not fit a phone's width, and a row of its own would take a
+  guest's screen past the 599 of an iPhone SE (566 with the switch beside the menu, 630 under it).
+  So Log out stands under the row, at its end, for a registered player (574 at the tallest). The
+  options: keep it; Log out on the card, where a guest's button to the Auth page is; or the switch
+  elsewhere, off the Account screen's first view.
 - **One Try again** — *provisional — user decision.* The Play and Account redesigns said Try again
   two ways in Serbian, *Пробај опет* and *Покушај поново*, and so did the Categories screen, with
   *Пробај опет*; it is one text now (§8f, *The strings*), *Покушај поново*, which four of the five
@@ -985,8 +992,9 @@ orientation, in common code alone:
 **The Account screen** (`io.ntole.wyr.account`; §8a *Accounts*, *Stats* below):
 - *Its order* (*decided 2026-09-25*, the user's redesign, with less text overall): the player on a
   card, with a guest's one button to the Auth page; **My questions**, a table; the **language menu**
-  (§8f, `LanguageMenu`) and beside it **Log out**, for a registered player, one row of the two; and
-  the server line, outside PROD.
+  (§8f, `LanguageMenu`) and beside it the **Statistics** switch (§8g), one row of the two, and under
+  them **Log out**, for a registered player (*provisional — user decision*, §8b: Log out was beside
+  the menu until the switch took its place); and the server line, outside PROD.
 - *The card* (*redesigned 2026-09-26*, the user: "a bit nicer... later more things will be added to
   it"): the player's initial in a circle, the first letter of the username in capitals, or a guest's
   figure (`Avatar`); the username, or *Гост*; and on the right the points, the coin and the number
@@ -997,14 +1005,15 @@ orientation, in common code alone:
   need for two fields saying the same", "Likes can go to questions table"); not what the player's
   questions cost either (`pointsSpent`, *Stats*, provisional). A screen reader reads each number with
   its word. A guest gets **one button** on the card, *Региструј се или се пријави*, to the Auth page
-  (below), instead of the forms; a registered player gets **Log out** beside the language menu, after
+  (below), instead of the forms; a registered player gets **Log out** under the language menu, after
   which the device plays on as a fresh guest. A read that fails says so under the card, beside its
   *Покушај поново*, or in the card's place before any read worked; a read that failed whole, the
   list's too, says so once.
 - `AccountScreenDrawTest` holds every state with no question listed to 599 high in every language,
   measured 400 wide as `PlayScreenDrawTest` measures and for DEV, whose server line is the longest
-  (566 on this Mac at the tallest, a guest whose read again failed), and New question above 599
-  however long the list; a list scrolls with the screen.
+  (574 on this Mac at the tallest, a registered player whose read again failed), and New question
+  above 599 however long the list; a list scrolls with the screen. It finds the language menu and the
+  switch on one row, neither cut short, and Log out under them, in every state and language.
 - **The Auth page** (`AuthScreen`, *decided 2026-09-25*), on the Account screen's ViewModel, shows
   **Register** only (username, and password with a show/hide toggle), which keeps the points, and a
   link, *Већ имаш налог? Пријави се*, that switches the same page to **Log in** (username, password),
@@ -1798,6 +1807,9 @@ hand, so the two cannot say different things; and **English** stands beside them
   A screen reader hears the row as *Језик: Ћирилица*, in the language shown (`Strings.language`). A
   tap on a language changes every screen at once and is then kept (`LanguageViewModel`, bound in
   `uiModule` and asked for once by `App`). `LanguageMenuTest` opens it and picks each.
+- **The Statistics switch** *(built)*: beside the language menu, *Статистика*, *Statistika*,
+  *Statistics* (`AccountStrings.statistics`), the word and the switch one control, which a screen
+  reader hears as the word, a switch, and on or off (§8g).
 - **Kept on the device** *(built)*: under `wyr.language` in the storage the session is kept in (the
   platform's `TokenStorage`: SharedPreferences, `NSUserDefaults`, JVM Preferences, `localStorage`), as
   the language's BCP 47 tag (`sr-Cyrl`, `sr-Latn`, `en`). One key for the device, not one per
@@ -1944,10 +1956,13 @@ the same events. The moderation app sends none.
     `submit`, `points`, `categories`), but a vote already counted, which moves on and shows nothing,
     and a skip, which says nothing.
   - The ViewModel tests hold each, and that nothing typed is ever in one.
-- **The switch** *(built in the sender)*: on by default, and off is kept for the device, under
-  `wyr.analytics.enabled` (`on` or `off`), whatever the environment, as the language is (§8f): the
-  choice is the person's. Off sends nothing more and drops what waited. A build with no key keeps the
-  choice all the same, since a player cannot tell one build from another.
+- **The switch** *(built)*: **Статистика** on the Account screen, beside the language menu (§8d,
+  *The Account screen*; §8f), `analytics.enabled` and `setEnabled` through `LocalAnalytics`. On by
+  default, and off is kept for the device, under `wyr.analytics.enabled` (`on` or `off`), whatever the
+  environment, as the language is (§8f): the choice is the person's. Off sends nothing more and drops
+  what waited, the tap on the switch included; on sends from the next event. A build with no key keeps
+  the choice all the same, since a player cannot tell one build from another. `AccountScreenDrawTest`
+  draws it on and off and taps it, and `AppNavigationTest` turns the app's analytics off and on.
 ---
 
 ## 9. How to work in this repo
