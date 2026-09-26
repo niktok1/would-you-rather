@@ -632,10 +632,10 @@ decided in §8b).
     device whose Play Games profile is someone else's (a family tablet), gives that Google account
     sign-in as the player on every device. For a registered player it is the one way an access token
     alone becomes a lasting credential: registering again is `ALREADY_REGISTERED`, and a password
-    cannot be changed. Accepted for now, as the refresh token's copy is (*Refresh tokens*, above), for a casual
-    game that stores no sensitive personal data: *provisional — user decision* (§8b, *Linking Play
-    Games to an account*).
-  - *A linked player is registered*, as one with a username is: they may submit (§8d, *Submitting*),
+    cannot be changed. Accepted, as the refresh token's copy is (*Refresh tokens*, above), for a casual
+    game that stores no sensitive personal data (*decided 2026-09-26*, §8b *Linking Play Games to an
+    account*).
+  - *A linked player is registered* (*decided 2026-09-26*), as one with a username is: they may submit (§8d, *Submitting*),
     and `GET /v1/me` says so (`PlayerStatsDto.playGamesLinked`). They may still register a username and
     password, to log in where there is no Play Games: on iOS and the web.
   - *Refusals*: a code Google refuses (`invalid_grant`: spent, expired, another app's) is 422
@@ -953,13 +953,12 @@ EncryptedSharedPreferences: enough for a game that stores no sensitive personal 
      restart each. A sign-in the server's log warns of as `403 PERMISSION_DENIED SERVICE_DISABLED`
      means the *Google Play Game Services* API is off in that Cloud project: enable it under *APIs &
      Services*.
-- **Linking Play Games to an account** — *provisional — user decision.* Built as the no-click sign-in
-  asks (§8a, *Play Games sign-in*, *The cost*): the bearer's access token alone links a Play Games
-  player linked to nobody to the bearer's player, a registered one included, and nothing unlinks it.
-  The options: keep it; for a player who already has a username, link only when the request also
-  carries something only their device holds, the refresh token say, or never link one and sign the
-  Play Games player in as a new player instead; and, whichever is chosen, a moderator's route to
-  unlink a player, which there is none of yet.
+- **Linking Play Games to an account** — *decided 2026-09-26: keep it* (the user: "OK"). The bearer's
+  access token alone links a Play Games player linked to nobody to the bearer's player, a registered
+  one included, and nothing unlinks it (§8a, *Play Games sign-in*, *The cost*). A player linked to Play
+  Games counts as registered, so may submit (the user: "yes"). Rejected: asking more than the access
+  token of a player who already has a username, and signing such a Play Games player in as a new
+  player. A moderator's route to unlink one comes if a player ever needs it.
 - **Push notifications** — *built on the server 2026-09-26 (§8a, *Push tokens*); off until the user
   sets it up.* The server sends through Firebase Cloud Messaging as a Google service account, whose
   JSON key file `FCM_SERVICE_ACCOUNT_JSON` holds whole (`sync: false` in `render.yaml`, set by hand in
@@ -995,7 +994,10 @@ EncryptedSharedPreferences: enough for a game that stores no sensitive personal 
     feed*) and a player still meets what the model would not have picked.
   - *Never*: questions on **religion, politics, health or sexuality** are never used to profile a
     player: those are the special categories of personal data (GDPR art. 9, ZZPL art. 17), so such a
-    question carries a trait that keeps its answers out of every affinity. The privacy policy says so,
+    question carries a trait that keeps its answers out of every affinity. And for now none is asked
+    at all (*decided 2026-09-26*, the user: "yes for now"): the question rules ban questions on those
+    four topics, the terms say so, and the moderator rejects one, so the trait is only the fallback for
+    any that gets through. The privacy policy says so,
     and says what is kept and why. The data is **never sold** and never given to an advertiser; it
     stays on the server and serves only which question comes next.
   - *Personal, if not sensitive*: a Play Games player id, a device's push token and the signals are
@@ -1783,7 +1785,7 @@ listed on the Account screen.
   a guest registers first, keeping everything it has. It **costs a point** (§8c) and earns no points directly, because authors
   earn through likes. The author writes both
   options (in Serbian, as §8f, *How an option is phrased*, asks, which the moderator holds them
-  to) and **picks one or more categories** (each a category's id; *Categories*). A player may
+  to, and on none of religion, politics, health or sexuality, §8b *Personalization*) and **picks one or more categories** (each a category's id; *Categories*). A player may
   have at most **20 submissions pending** moderation at once. A submitted question is served only
   after a moderator approves it; once approved it is due for every player in their current cycle.
   Built as `POST /v1/questions`, in `SubmissionStore.submit` after `checkedSubmission`. A guest's
