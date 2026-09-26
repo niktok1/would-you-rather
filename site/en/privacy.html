@@ -117,7 +117,7 @@
 
       <h3>Analytics (PostHog, EU)</h3>
       <p>To see what works in the game and what confuses people, the app sends events about how it is used to PostHog, on its servers in the European Union: when you open and leave the app and how long a visit lasted, screens opened and left and how long you spent on them, taps on buttons, questions shown, answered and skipped (the question's id, its categories, the side you picked, how long the answer took and whether your pick matched the majority), reactions, changes of language and categories, registering, logging in and out, questions sent in, and errors. With them go the app version, the platform, the operating system and its version, the device type and the game's language.</p>
-      <p>Events are tied to a random id made on the device. Once you register or log in, they are also tied to your player's id in the game, which is random too, and never to your username. They hold no name, email, password, question text or anything you type. Requests reach PostHog from your device's IP address: PostHog discards it and derives no location from it.</p>
+      <p>Events are tied to a random id made on the device. Once you register or log in, they are also tied to your player's id in the game, which is random too, and never to your username. They hold no name, email, password, question text or anything you type. Requests reach PostHog from your device's IP address: PostHog keeps it with the events and derives an approximate location from it (country and city), so we can see where players come from.</p>
       <p>Analytics is on by default. You turn it off with the <strong>Statistics</strong> switch (<span lang="sr-Cyrl">Статистика</span>) on the <strong>Account</strong> screen: while it is off, the app sends no events at all, and your choice is kept on the device.</p>
       <p><strong>Why:</strong> to fix bugs and make the game better.</p>
 
@@ -138,7 +138,7 @@
       <p>This website uses no cookies and no analytics, and loads nothing from other services. Render hosts it, and may record visitors' IP addresses in its technical logs.</p>
 
       <h3>What we do not collect</h3>
-      <p>We do not ask for your full name, email, phone number, contacts or photos. We do not work out where you are, precisely or roughly: neither by GPS nor from your IP address. The game has no ads and no advertising ids.</p>
+      <p>We do not ask for your full name, email, phone number, contacts or photos. We never work out where you are precisely and do not use GPS; only the analytics (PostHog) derives an approximate location from your IP address, as described above. The game has no ads and no advertising ids.</p>
     </section>
 
     <section id="legal-basis">
