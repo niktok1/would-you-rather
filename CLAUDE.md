@@ -437,10 +437,10 @@ This project must never be attributed to any employer identity.
     debug key, as their debug builds do (a signing config per flavor, since a build type's would win
     over the flavors'), so each installs over the other and back, keeping its data: Android refuses an
     update signed with another key. CI's verify job holds all three rules (*Release signing*). The
-    keystore is the user's, never committed (`.gitignore` refuses `*.jks` and `*.keystore`), made and uploaded as
-    NEXT-SESSION.md says (*Release builds and Google Play*). **Play App Signing**: Play keeps the app
-    signing key, which signs what phones install; the upload key only proves an upload is the
-    developer's, and a lost one is reset in the Play Console without touching the app.
+    keystore is the user's, never committed (`.gitignore` refuses `*.jks` and `*.keystore`), made
+    and uploaded as NEXT-SESSION.md says (*Release builds and Google Play*). **Play App Signing**:
+    Play keeps the app signing key, which signs what phones install; the upload key only proves an
+    upload is the developer's, and a lost one is reset in the Play Console without touching the app.
   - *R8*: `isMinifyEnabled` and `isShrinkResources` on. The libraries ship their own keep rules
     (kotlinx.serialization, Ktor, OkHttp, coroutines, Koin, Compose); `proguard-rules.pro` adds only
     the line numbers a stack trace keeps. The mapping lands in

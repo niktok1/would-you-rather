@@ -424,17 +424,24 @@ metadata*.
   `:app:androidApp:testDevDebugUnitTest`, `WindowThemeTest` 5, which fails with a colour changed) and
   client compiles, `assembleDebug` and `assembleProdRelease` among them; `assembleDevRelease` and
   `assembleLocalRelease`; the ios job's Kotlin compiles. `bundleProdRelease` fails at once, naming
-  the four settings, and `signingReport` names the upload config for every release variant once the
-  four are given (placeholders, and a keystore that does not exist). The prod APK: label *Шта би
-  радије?*, the adaptive icon with its monochrome layer, `Theme.Wyr` with the splash items on v31,
-  and its one native library 16 KB aligned (`zipalign -c -P 16` and its ELF LOAD segments); an
-  unsigned bundle (`packageLocalReleaseBundle`) carries R8's mapping, as
-  `BUNDLE-METADATA/com.android.tools.build.obfuscation/proguard.map`. **On an
-  emulator** (the `Emu` AVD, API 35, booted read-only, the app uninstalled after) against a local
+  the four settings. The prod APK: label *Шта би радије?*, the adaptive icon with its monochrome
+  layer, `Theme.Wyr` with the splash items on v31, and its one native library 16 KB aligned
+  (`zipalign -c -P 16` and its ELF LOAD segments); an unsigned bundle (`packageLocalReleaseBundle`)
+  carries R8's mapping, as `BUNDLE-METADATA/com.android.tools.build.obfuscation/proguard.map`. **On
+  an emulator** (the `Emu` AVD, API 35, booted read-only, the app uninstalled after) against a local
   server: the shrunk `localRelease` APK opened Home, Play, a like, an answer, the next question, a
   skip, Account and the Categories screen, every request 200 or 204, and logcat showed no crash and
   no serialization error; the launcher showed the icon as *WYR Local*; a cold start in dark mode
   showed the splash in #161417 with the icon and then Home, no white frame.
+  **After the review's fixes** (b10b27b to 5a96c46), the verify job again (the same counts, the
+  untouched modules' from the build cache), `assembleDevRelease`, `assembleLocalRelease` and the
+  ios job's Kotlin compiles, and CI's new *Release signing* step run as GitHub runs it (`bash -eo
+  pipefail`), which failed without each fix: `signProdReleaseBundle` alone had exited 0 in a dry
+  run, and with the four settings given (placeholders, a keystore that does not exist)
+  `signingReport` had named the upload config for every release variant, where it now names it for
+  `prodRelease` alone. Without the key `bundleRelease` and `signProdReleaseBundle` run for real are
+  refused before any task runs, no `.aab` written, `bundleDevRelease` is not, and of the three
+  release APKs, each signed by *CN=Android Debug* (`apksigner`), only `packageProdRelease` warns.
 - **`feat/server-engagement`**, on this machine, at 8660e01 and again at a371b0e after the review's
   fixes: `ktlintCheck`; `:server:test` (431 at a371b0e, 2 skipped: the PostgreSQL-only boots),
   `:core:domain:jvmTest`, `:core:data:jvmTest`, `:core:network:jvmTest`, `:core:network:testAndroidHostTest`, `:app:shared:jvmTest` and
@@ -1062,7 +1069,8 @@ metadata*.
 - **`feat/android-release`**: a build signed with a real upload key, and any upload to Play (the
   key is the user's to make); the themed icon on a launcher that themes icons (the emulator's does
   not); the icon on Android 7; a shrunk build on a physical phone, and on Play's pre-launch report;
-  Play reading the mapping from the bundle.
+  Play reading the mapping from the bundle; the *Release signing* step on GitHub's runner; a password
+  with a backslash written as two in `local.properties`.
 - **`feat/server-engagement` against real Google.** No push has reached a phone and no Play Games
   code has been exchanged: the requests are built from Google's documentation (FCM HTTP v1's
   `messages:send`, the JWT bearer grant with the `firebase.messaging` scope, the authorization code
