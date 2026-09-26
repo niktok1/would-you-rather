@@ -134,9 +134,9 @@ interface ModerationActions {
  * reports [DismissReports] clears and which are retired and restored as in the list. [BlockAuthor]
  * blocks a question's author, once the moderator confirms it, and [UnblockAuthor] lets them submit
  * again, from any of the three. A pending question in the list is decided as in the queue. The
- * categories, read through [GetCategories] before the queue or the list each Load reads, are what the
- * chips offer and what names a question's categories; [AddCategory] adds one and [RenameCategory]
- * puts its names right.
+ * categories, read through [GetCategories] before the queue, the reports or the list each Load reads,
+ * are what the chips offer and what names a question's categories; [AddCategory] adds one and
+ * [RenameCategory] puts its names right.
  *
  * Nothing here has a player session, or could make one: the moderator is whoever holds the token,
  * and the app's wiring binds no session at all (`moderationDataModule`). Every request carries the

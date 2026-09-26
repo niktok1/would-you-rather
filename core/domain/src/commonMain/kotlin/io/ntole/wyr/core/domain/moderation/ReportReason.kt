@@ -20,7 +20,7 @@ public enum class ReportReason {
     /** Not a choice between two options. */
     NOT_A_CHOICE,
 
-    /** Anything else, the player's own words. */
+    /** Anything else. */
     OTHER,
 
     UNKNOWN,
