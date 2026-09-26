@@ -39,8 +39,8 @@ import kotlin.test.assertFalse
 
 /**
  * The operator's trail (CLAUDE.md §8b, *Logging*): one INFO line for each stored submission and each
- * admin action that changed something, naming ids only, never what a player or the moderator typed,
- * nor a token or a password.
+ * admin action that went through, naming ids only, never what a player or the moderator typed, nor a
+ * token or a password.
  */
 class ActionLogTest {
     @Test

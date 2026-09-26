@@ -200,9 +200,9 @@ fun Route.moderationRoutes(
 }
 
 /**
- * One INFO line for an admin action that changed something, naming [what] it did and to [id]: the
- * operator's trail of what the moderator did. Never a token, nor a reason or a name the moderator
- * typed: the log is no place for either.
+ * One INFO line for an admin action that went through, one that changed nothing included, naming
+ * [what] it did and to [id]: the operator's trail of what the moderator did. Never a token, nor a
+ * reason or a name the moderator typed: the log is no place for either.
  */
 private fun ApplicationCall.logAdmin(
     what: String,

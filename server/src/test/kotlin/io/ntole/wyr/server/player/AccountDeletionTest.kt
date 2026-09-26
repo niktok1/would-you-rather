@@ -212,6 +212,23 @@ class AccountDeletionTest {
     }
 
     /**
+     * What a hide of the author racing the deletion ends in: on PostgreSQL its insert waits on the
+     * deletion's lock through the foreign key, fails once it commits, and is rerun as this is. H2's
+     * foreign key check waits on no lock, so the race itself is not staged.
+     */
+    @Test
+    fun `a hide of the author after the deletion hides only that question`() {
+        val (deleted, hider) = newPlayer() to newPlayer()
+        val (hidden, other) = question(deleted) to question(deleted)
+        transaction(database) { AccountDeletion.delete(deleted) }
+
+        transaction(database) { ReportStore.hideAuthorOf(hider, hidden) }
+
+        assertEquals(setOf(hidden), hiddenFrom(hider), "not $other, which no author names any more")
+        assertEquals(0, rowsOf(HiddenAuthors.playerId, hider))
+    }
+
+    /**
      * What [request] by [deleted] is refused with when it waits on the deletion of [deleted]'s account
      * for a lock and then finds what it waited on gone, as PostgreSQL's READ COMMITTED leaves it.
      */

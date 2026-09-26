@@ -53,9 +53,9 @@ object ReactionStore {
      * Any question the player may be served can be reacted to, answered or not, and no other: one a
      * moderator has not approved, or has retired, is not found, as for a vote
      * ([QuestionStore.isServable]), and so is taking a reaction back. A retired question's reactions
-     * stay held, and its likes paid, until it is restored (CLAUDE.md §8d, *Moderation*). A reaction
-     * does nothing else. It is no answer and no skip, so it pays the player nothing and leaves the
-     * tally, the cycle and what is due alone.
+     * stay held, and its likes paid, until it is restored (CLAUDE.md §8d, *Moderation*) or the player's
+     * account goes (`AccountDeletion`). A reaction does nothing else. It is no answer and no skip, so
+     * it pays the player nothing and leaves the tally, the cycle and what is due alone.
      *
      * The reaction held is read under its row lock ([heldBy]), since what is written, and what is paid,
      * depends on which of the three it is (CLAUDE.md §4). A second request of the same player's for the

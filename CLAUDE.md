@@ -412,9 +412,10 @@ decided in §8b).
   does not change when auth evolves.
 - **Sessions** (*decided 2026-09-25*): a player's refresh tokens live in `sessions`, **one
   refresh-token family per device**, each rotating on its own row, so a refresh on one device never
-  touches another's tokens. Nothing caps how many a player has, and only a logout deletes one: an
-  expired session is dead where it lies. A mint opens a player's first session (`SessionStore.open`);
-  V4 opened one for every player who held a refresh token then. A refresh reads and writes its session
+  touches another's tokens. Nothing caps how many a player has, and only a logout, or the account's
+  deletion (below), deletes one: an expired session is dead where it lies. A mint opens a player's
+  first session (`SessionStore.open`); V4 opened one for every player who held a refresh token then.
+  A refresh reads and writes its session
   alone. Every access token names its session beside its player (the `sessionId` claim), and a
   refresh keeps it. The players row's old refresh columns, V4's mirror for a rollback to a build from
   before sessions, are unused since `feat/simple-accounts` (§8b, *Rollbacks*).
@@ -540,9 +541,10 @@ decided in §8b).
   theirs from another device that finds the player gone mid-request is 401 too, a vote, a skip, a
   feed read or a registration (§4). One INFO line names the player. Edge cases, accepted: a deleted
   author's approved question reads as a seed to the moderator (`seed`, and no `authorId`), since
-  nothing tells the two apart; a like, a refund or a hide of an author racing the deletion pays or
-  hides nobody (`PlayerStore.payAuthor`, `AccountDeletionTest`); and a login to the account racing
-  its deletion can fail as a 500.
+  nothing tells the two apart; a like or a refund racing the deletion pays nobody, and a hide of the
+  author hides only the question it was asked from (`PlayerStore.payAuthor`,
+  `ReportStore.hideAuthorOf`, `AccountDeletionTest`); and a login to the account racing its deletion
+  can fail as a 500.
   `AccountDeletionTest`, `AccountDeletionFlowTest`.
 
 **Known limitation, by design for now:** a guest account is bound to one device's storage. Lose
@@ -603,9 +605,11 @@ EncryptedSharedPreferences: enough for a game that stores nothing personal.
   Built: a moderator retires an approved question, a seed included, and restores a retired one.
   Retired, it is served to nobody and due for nobody, and a vote, skip or reaction to it is 404, taking
   one back included; nothing it earned is taken back, so its answers' points stay and its reactions
-  stay held, its likes paid, and nobody can take one back until it is restored. Restored, it is due for every player who has not
-  answered or skipped it in their current cycle. It is stored as `questions.retired_at` beside an
-  `APPROVED` status, and sent as `QuestionStatus.RETIRED`, so a rollback to the build before (§8b,
+  stay held, its likes paid, and nobody can take one back until it is restored, unless their account
+  goes (§8a, *Deleting an account*), which takes each like they held back with its point. Restored,
+  it is due for every player who has not answered or skipped it in their current cycle. It is
+  stored as `questions.retired_at` beside an `APPROVED` status, and sent as `QuestionStatus.RETIRED`,
+  so a rollback to the build before (§8b,
   *Rollbacks*) reads every row and only serves retired questions again. A vote, skip or reaction reads
   servability plainly (`QuestionStore.isServable`, no lock on the question; *decided 2026-09-25*),
   so one in flight as a retirement commits may still land, uncounted in the retirement's answer.
@@ -721,9 +725,11 @@ EncryptedSharedPreferences: enough for a game that stores nothing personal.
   one of its own. `ClientVersionTest`, `CorsTest`, `ServerConfigTest`.
 - **Logging** *(built 2026-09-26)* — beside Ktor's line per call and the rate limiter's per refusal,
   one INFO line for each stored submission, naming the question and its author by id
-  (`submission <id> stored, by player <id>`), and one for each admin action that changed something,
-  naming the action and the id it was done to (`admin approved question <id>`, `logAdmin`): approvals,
-  rejections, retirements and restorations, categories added and renamed, reports dismissed, and
+  (`submission <id> stored, by player <id>`), and one for each admin action that went through, a
+  repeat that changed nothing included (a dismissal of no reports, a block or an unblock of an author
+  standing so already), naming the action and the id it was done to (`admin approved question
+  <id>`, `logAdmin`): approvals, rejections, retirements and restorations, categories added and
+  renamed, reports dismissed, and
   authors blocked and unblocked. A read, the moderator's lists included, logs nothing of its own.
   Never a token, a password or its hash, an email, a question's text, a rejection's reason or a
   name the moderator typed. `ActionLogTest`.
@@ -1471,7 +1477,8 @@ listed on the Account screen.
     `ReactionResultDto`: the question, its `likeCount` and `dislikeCount`, and `myReaction`. A
     question that is not servable is 404 and an unknown player 401, as for votes and skips, and the
     id is checked as a vote's is. That holds for taking a reaction back too: a retired question's
-    reactions stay held, and its likes paid, until it is restored (*Moderation*).
+    reactions stay held, and its likes paid, until it is restored (*Moderation*) or the player's
+    account goes (§8a, *Deleting an account*).
   - The reaction held is read under its row lock (`SELECT ... FOR UPDATE`, §4), since what is written
     and what is paid depend on which of the three it is: a second request of the same player's for
     the same question waits, then reads what the first left. Only a like actually added pays the

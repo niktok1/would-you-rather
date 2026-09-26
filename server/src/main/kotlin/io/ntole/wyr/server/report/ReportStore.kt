@@ -90,7 +90,8 @@ object ReportStore {
      *
      * The author is a plain read, as a like's is (`ReactionStore`). Only the author's account going
      * changes it, to nobody, in a transaction that holds the author's row lock (`AccountDeletion`): an
-     * insert here waits for it on the foreign key, fails once it commits, and the rerun finds no author.
+     * insert here waits for it on the foreign key, fails once it commits, and the rerun finds no author,
+     * so it hides only this question.
      */
     fun hideAuthorOf(
         playerId: String,
