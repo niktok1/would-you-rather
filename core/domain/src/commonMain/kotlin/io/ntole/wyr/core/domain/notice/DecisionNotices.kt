@@ -52,11 +52,17 @@ public class DecisionNotices(
     }
 
     /**
-     * The Account screen shows [listed], the player's questions: every decision in it is seen from now
-     * on, and [unseen] empties. Returns the ids decided since the player last saw them, for their rows.
+     * The Account screen shows [listed], the questions of [readFor], the player they were read for:
+     * while [readFor] plays here, every decision in it is seen from now on, and [unseen] empties. A list
+     * read for another player, or for none, changes nothing: a guest's still on the screen once a
+     * launch's Play Games sign-in has made the device another player, say. Returns the ids decided since
+     * the player last saw them, for their rows.
      */
-    public suspend fun shown(listed: List<Submission>): Set<String> {
-        val player = session.current() ?: return emptySet()
+    public suspend fun shown(
+        listed: List<Submission>,
+        readFor: String?,
+    ): Set<String> {
+        val player = readFor ?: return emptySet()
         return compare(player, listed, markSeen = true)
     }
 
@@ -66,7 +72,7 @@ public class DecisionNotices(
         markSeen: Boolean,
     ): Set<String> =
         mutex.withLock {
-            // Read for a player who plays here no more: a login or a logout came meanwhile.
+            // Read for a player who plays here no more: a login, a logout or a Play Games sign-in came meanwhile.
             if (session.current() != player) return@withLock emptySet()
             val decided = listed.filter { it.status in DECIDED }.map { it.id }.toSet()
             val before = seen.read()?.takeIf { it.playerId == player }
@@ -78,7 +84,10 @@ public class DecisionNotices(
             }
             val fresh = decided - before.questionIds
             if (markSeen) {
-                if (decided != before.questionIds) seen.write(SeenDecisions(player, decided))
+                // Added to, never replaced: a decision stays one, so a list read before it cannot unsee it.
+                if (!before.questionIds.containsAll(decided)) {
+                    seen.write(SeenDecisions(player, before.questionIds + decided))
+                }
                 _unseen.value = emptySet()
             } else {
                 _unseen.value = fresh

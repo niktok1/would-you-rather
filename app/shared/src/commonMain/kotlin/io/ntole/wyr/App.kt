@@ -222,10 +222,11 @@ private fun Account(
 
     // The decisions the player had not seen, marked on their rows for this visit, a rotation's included,
     // and seen from the list's first read on, which takes the account icon's dot down (CLAUDE.md §8d,
-    // *Submitting*). A visit's own, so the next starts with none.
+    // *Submitting*). A visit's own, so the next starts with none. Only a list of the player playing counts.
     var newDecisions by rememberSaveable(stateSaver = DECISIONS_SAVER) { mutableStateOf(emptySet<String>()) }
-    LaunchedEffect(state.submissions) {
-        state.submissions?.let { listed -> newDecisions = newDecisions + notices.shown(listed) }
+    LaunchedEffect(state.submissions, state.readFor) {
+        val read = state
+        read.submissions?.let { listed -> newDecisions = newDecisions + notices.shown(listed, read.readFor) }
     }
     val submit = koinViewModel<SubmitViewModel>()
     val submitState by submit.state.collectAsStateWithLifecycle()

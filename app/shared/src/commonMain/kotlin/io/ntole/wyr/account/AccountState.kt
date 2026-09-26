@@ -25,6 +25,12 @@ data class AccountState(
      * works, and again once another player plays here, whose list is theirs.
      */
     val submissions: List<Submission>? = null,
+    /**
+     * The player [submissions] were read for, as the session named them when the read began, for the
+     * notice of a decision, which marks seen only a list of the player playing (CLAUDE.md §8d, *The
+     * notice of a decision*). Null until a list is read.
+     */
+    val readFor: String? = null,
     val registerUsername: String = "",
     val registerPassword: String = "",
     val showRegisterPassword: Boolean = false,

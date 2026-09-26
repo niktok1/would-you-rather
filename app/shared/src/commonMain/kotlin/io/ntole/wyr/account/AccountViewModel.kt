@@ -11,6 +11,7 @@ import io.ntole.wyr.core.domain.analytics.AnalyticsProperty
 import io.ntole.wyr.core.domain.error.WyrException
 import io.ntole.wyr.core.domain.player.GetPlayerStats
 import io.ntole.wyr.core.domain.playgames.LinkPlayGames
+import io.ntole.wyr.core.domain.session.CurrentSession
 import io.ntole.wyr.core.domain.submission.GetMySubmissions
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -75,6 +76,7 @@ class AccountViewModel(
     private val logOutOfAccount: LogOut,
     private val analytics: Analytics,
     private val linkPlayGames: LinkPlayGames,
+    private val session: CurrentSession,
 ) : ViewModel(),
     AccountActions {
     private val _state = MutableStateFlow(AccountState(playGamesAvailable = linkPlayGames.available))
@@ -258,10 +260,14 @@ class AccountViewModel(
      * flight to have worked.
      */
     private suspend fun load(): Boolean {
+        val before = session.current()
         val confirmed = loadStats()
+        // Named before the list is read, so one read as a player the device became meanwhile is not
+        // this one's (AccountState.readFor). A first launch's is the guest the read of the stats minted.
+        val readFor = before ?: session.current()
         try {
             val submissions = getMySubmissions()
-            _state.update { it.copy(submissions = submissions) }
+            _state.update { it.copy(submissions = submissions, readFor = readFor) }
         } catch (failure: WyrException) {
             _state.update {
                 it.copy(
@@ -296,6 +302,7 @@ class AccountViewModel(
                     AccountState(
                         stats = stats,
                         submissions = it.submissions,
+                        readFor = it.readFor,
                         failure = it.failure.takeUnless { confirmed },
                         running = it.running,
                         signedIn = it.signedIn || confirmed,

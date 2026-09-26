@@ -91,6 +91,24 @@ class AccountViewModelTest {
             assertNull(state.listFailure)
         }
 
+    /**
+     * The notice of a decision marks seen only a list of the player playing (CLAUDE.md §8d, *The notice
+     * of a decision*), so each list is named for the player it was read for: a first launch's guest, and
+     * the player a launch's Play Games sign-in made the device.
+     */
+    @Test
+    fun `a list is named for the player it was read for`() =
+        runTest(dispatcher) {
+            val viewModel = open()
+            assertEquals("guest1", viewModel.state.value.readFor, "the guest the read minted")
+
+            game.player = "p2"
+            viewModel.refresh()
+            testScheduler.advanceUntilIdle()
+
+            assertEquals("p2", viewModel.state.value.readFor)
+        }
+
     /** My questions are the player's: another player's after a login, and a fresh guest's none. */
     @Test
     fun `a login shows the account's questions and a logout none`() =
@@ -224,7 +242,10 @@ class AccountViewModelTest {
             assertEquals(12, state.stats?.totalPoints)
             assertEquals("guest1", game.player, "the same player")
             // A registered player sees no form, so nothing typed is kept; only the Auth page's cue to go back.
-            assertEquals(AccountState(stats = state.stats, submissions = emptyList(), signedIn = true), state)
+            assertEquals(
+                AccountState(stats = state.stats, submissions = emptyList(), readFor = "guest1", signedIn = true),
+                state,
+            )
             assertTrue("register Bob_1" in game.calls)
         }
 
@@ -1012,6 +1033,7 @@ class AccountViewModelTest {
             logOutOfAccount = LogOut(game, game, Analytics.None),
             analytics = analytics,
             linkPlayGames = LinkPlayGames(playGames, game, game, game, Analytics.None),
+            session = game,
         )
 
     /**
@@ -1063,7 +1085,6 @@ class AccountViewModelTest {
 
         /** Who is playing on this device, as the stored session names them, or none. */
         var player: String? = null
-            private set
         private var guestsMinted = 0
 
         override suspend fun ensure(): String = player ?: "guest${++guestsMinted}".also { player = it }

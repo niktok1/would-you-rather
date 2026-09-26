@@ -48,12 +48,12 @@ class DecisionNoticesTest {
             notices.check()
             assertEquals(setOf("a", "b"), notices.unseen.value, "a read alone sees nothing")
 
-            val marked = notices.shown(questions.listed)
+            val marked = notices.shown(questions.listed, readFor = "p1")
 
             assertEquals(setOf("a", "b"), marked, "the rows the screen marks")
             assertEquals(emptySet(), notices.unseen.value)
             assertEquals(SeenDecisions("p1", setOf("a", "b")), store.kept)
-            assertEquals(emptySet(), notices.shown(questions.listed), "seen once is seen")
+            assertEquals(emptySet(), notices.shown(questions.listed, readFor = "p1"), "seen once is seen")
         }
 
     /** A retired question was approved first, and a restored one is approved again: neither is news. */
@@ -67,7 +67,7 @@ class DecisionNoticesTest {
             questions.listed = listOf(question("a", SubmissionStatus.RETIRED))
             notices.check()
             assertEquals(emptySet(), notices.unseen.value)
-            notices.shown(questions.listed)
+            notices.shown(questions.listed, readFor = "p1")
 
             questions.listed = listOf(question("a", SubmissionStatus.APPROVED))
             notices.check()
@@ -113,7 +113,7 @@ class DecisionNoticesTest {
 
             assertEquals(0, questions.reads)
             assertEquals(emptySet(), notices.unseen.value)
-            assertEquals(emptySet(), notices.shown(listOf(question("a", SubmissionStatus.APPROVED))))
+            assertEquals(emptySet(), notices.shown(listOf(question("a", SubmissionStatus.APPROVED)), readFor = "p1"))
             assertEquals(null, store.kept)
         }
 
@@ -144,6 +144,43 @@ class DecisionNoticesTest {
             notices.check()
 
             assertEquals(SeenDecisions("p1", emptySet()), store.kept, "bob's seen set is not written as p1's")
+        }
+
+    /**
+     * A returning player on a new phone: the guest minted first is shown their empty list, then the
+     * launch's Play Games sign-in makes the device the player, whose first read seeds what they had
+     * decided, and the guest's list, still on the Account screen, is shown again as the player plays.
+     */
+    @Test
+    fun `a list read for another player marks nothing seen`() =
+        runTest {
+            session.player.value = "guest1"
+            notices.shown(emptyList(), readFor = "guest1")
+            session.player.value = "p1"
+            questions.listed = listOf(question("a", SubmissionStatus.APPROVED), question("b", SubmissionStatus.REJECTED))
+            notices.check()
+
+            assertEquals(emptySet(), notices.shown(emptyList(), readFor = "guest1"))
+
+            assertEquals(SeenDecisions("p1", setOf("a", "b")), store.kept)
+            assertEquals(emptySet(), notices.shown(questions.listed, readFor = "p1"), "nothing decided before is news")
+        }
+
+    /** A decision stays one, so a list read before the one last seen cannot make it news again. */
+    @Test
+    fun `a list read before a decision was seen does not unsee it`() =
+        runTest {
+            session.player.value = "p1"
+            questions.listed = listOf(question("a", SubmissionStatus.PENDING), question("b", SubmissionStatus.PENDING))
+            notices.check()
+            val older = listOf(question("a", SubmissionStatus.APPROVED), question("b", SubmissionStatus.PENDING))
+            val newer = listOf(question("a", SubmissionStatus.APPROVED), question("b", SubmissionStatus.APPROVED))
+            notices.shown(newer, readFor = "p1")
+
+            notices.shown(older, readFor = "p1")
+
+            assertEquals(SeenDecisions("p1", setOf("a", "b")), store.kept)
+            assertEquals(emptySet(), notices.shown(newer, readFor = "p1"))
         }
 
     private fun question(

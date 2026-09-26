@@ -1511,7 +1511,12 @@ orientation, in common code alone:
   environment (`StoredSeenDecisions`, `wyr.decisions.seen.local`, `.dev` or `.prod`), one player's at a
   time: a player's first read on a device seeds it, so nothing decided before badges, and another
   player's first read seeds theirs. A read that fails changes nothing; one read for a player who plays
-  here no more, a login or a logout having come meanwhile, is dropped. `DecisionNoticesTest`,
+  here no more, a login, a logout or a Play Games sign-in having come meanwhile, is dropped, and so is
+  a list the Account screen still shows of the player before (`AccountState.readFor`, the player each
+  list was read for: a first launch's guest, once the launch's Play Games sign-in has made the device a
+  returning player, would otherwise mark that player's old decisions as news). What is seen is only
+  ever added to, since a decision stays one, so no list read before another can make one news again.
+  `DecisionNoticesTest`,
   `StoredSeenDecisionsTest`, `AppServicesTest`, `TopBarsDrawTest` (both bars with the dot, still 48
   high at 375 wide with nothing cut short, in both themes and every language), `AccountScreenDrawTest`,
   and `AppNavigationTest`, which dots the icon on Home and Play and takes the dot down on Account.
