@@ -12,6 +12,7 @@ import io.ntole.wyr.core.data.session.DefaultSessionRepository
 import io.ntole.wyr.core.data.submission.DefaultSubmissionRepository
 import io.ntole.wyr.core.data.vote.DefaultVoteRepository
 import io.ntole.wyr.core.domain.account.AccountRepository
+import io.ntole.wyr.core.domain.account.DeleteAccount
 import io.ntole.wyr.core.domain.account.LogIn
 import io.ntole.wyr.core.domain.account.LogOut
 import io.ntole.wyr.core.domain.account.RegisterAccount
@@ -131,6 +132,7 @@ public fun dataModule(
         factory { RegisterAccount(accounts = get(), session = get(), analytics = get()) }
         factory { LogIn(accounts = get(), questions = get(), session = get(), analytics = get()) }
         factory { LogOut(accounts = get(), questions = get(), analytics = get()) }
+        factory { DeleteAccount(accounts = get(), questions = get(), analytics = get()) }
         factory { GetCategories(categories = get()) }
     }
 

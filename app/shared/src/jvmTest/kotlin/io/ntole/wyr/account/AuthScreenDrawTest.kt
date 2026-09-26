@@ -316,6 +316,10 @@ class AuthScreenDrawTest {
         override fun logOut() {
             calls += "log out"
         }
+
+        override fun deleteAccount() {
+            calls += "delete account"
+        }
     }
 
     private companion object {

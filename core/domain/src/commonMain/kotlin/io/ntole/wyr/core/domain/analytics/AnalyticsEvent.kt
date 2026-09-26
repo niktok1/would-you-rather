@@ -51,6 +51,9 @@ public object AnalyticsEvent {
     /** The player logged out, and plays on as a fresh guest. */
     public const val LOGOUT: String = "logout"
 
+    /** The player deleted their account, and plays on as a fresh guest. */
+    public const val ACCOUNT_DELETED: String = "account_deleted"
+
     /** The Submit screen's form was shown. */
     public const val SUBMIT_OPENED: String = "submit_opened"
 

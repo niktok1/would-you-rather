@@ -126,6 +126,12 @@ internal class FakeServer {
     /** When set, every logout is refused with this status and code, whoever sends it. */
     var refuseLogoutsWith: Pair<HttpStatusCode, ErrorCode>? = null
 
+    /** The `Authorization` header of every account deletion, in arrival order. */
+    val deletionsSentAs = mutableListOf<String?>()
+
+    /** When set, every account deletion is refused with this status and code, and deletes nothing. */
+    var refuseDeletionsWith: Pair<HttpStatusCode, ErrorCode>? = null
+
     /** What a read of the categories answers, whoever sends it: [CATEGORIES] unless a test says otherwise. */
     var categories: CategoryListDto = CATEGORIES
 
@@ -247,6 +253,30 @@ internal class FakeServer {
                     refusal != null -> respondErrorDto(refusal.first, refusal.second)
                     player !in players -> respondErrorDto(HttpStatusCode.Unauthorized, ErrorCode.UNAUTHORIZED)
                     else -> respond("", HttpStatusCode.NoContent)
+                }
+            }
+
+            WyrApi.Paths.ME_DELETION -> {
+                val authorization = request.headers[HttpHeaders.Authorization]
+                deletionsSentAs += authorization
+                val player = authorization?.removePrefix("Bearer access-")
+                val refusal = refuseDeletionsWith
+                when {
+                    refusal != null -> {
+                        respondErrorDto(refusal.first, refusal.second)
+                    }
+
+                    player == null || player !in players -> {
+                        respondErrorDto(HttpStatusCode.Unauthorized, ErrorCode.UNAUTHORIZED)
+                    }
+
+                    else -> {
+                        // Gone for good, every session with it: a refresh of theirs is refused from now on.
+                        players -= player
+                        liveRefreshTokens.values.removeAll { it == player }
+                        accounts.values.removeAll { it.second == player }
+                        respond("", HttpStatusCode.NoContent)
+                    }
                 }
             }
 

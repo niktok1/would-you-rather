@@ -129,15 +129,17 @@ class TapsTest {
             }
 
         val settings = setOf("language.menu", "language.option", "account.statistics")
-        assertEquals(setOf("account.open_auth") + settings, guest)
+        // Delete account, then its dialog's two buttons, for anyone read (CLAUDE.md §8a).
+        val delete = setOf("account.delete", "account.delete_confirm", "account.delete_cancel")
+        assertEquals(setOf("account.open_auth") + settings + delete, guest)
         assertEquals(
-            setOf("my_questions.new_question", "my_questions.first_question", "account.log_out") + settings,
+            setOf("my_questions.new_question", "my_questions.first_question", "account.log_out") + settings + delete,
             registered,
         )
-        assertEquals(setOf("my_questions.new_question", "account.log_out") + settings, listed)
+        assertEquals(setOf("my_questions.new_question", "account.log_out") + settings + delete, listed)
         assertEquals(setOf("account.try_again") + settings, unread)
         assertEquals(
-            setOf("my_questions.new_question", "my_questions.try_again", "account.log_out") + settings,
+            setOf("my_questions.new_question", "my_questions.try_again", "account.log_out") + settings + delete,
             listUnread,
         )
     }
@@ -336,6 +338,8 @@ class TapsTest {
         override fun cancelLogIn() = Unit
 
         override fun logOut() = Unit
+
+        override fun deleteAccount() = Unit
     }
 
     private object NoSubmitActions : SubmitActions {

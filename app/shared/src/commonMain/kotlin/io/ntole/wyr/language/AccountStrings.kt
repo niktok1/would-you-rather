@@ -106,6 +106,8 @@ data class AccountStrings(
     val submissionLimit: String,
     /** A moderator has blocked the player from submitting (CLAUDE.md §8d, *Authors*). */
     val submissionsBlocked: String,
+    /** Deleting the account, at the bottom of the Account screen. */
+    val deleteAccount: DeleteAccountStrings,
 ) {
     /** These strings with [transform] applied to every one of them, as [Strings.map] asks. */
     internal fun map(transform: (String) -> String): AccountStrings =
@@ -168,6 +170,7 @@ data class AccountStrings(
             invalidSubmission = transform(invalidSubmission),
             submissionLimit = transform(submissionLimit),
             submissionsBlocked = transform(submissionsBlocked),
+            deleteAccount = deleteAccount.map(transform),
         )
 }
 
@@ -232,6 +235,7 @@ internal val SerbianCyrillicAccountStrings: AccountStrings =
         invalidSubmission = "Питање није прихваћено. Провери опције.",
         submissionLimit = "Већ имаш {0} питања на чекању.",
         submissionsBlocked = "Не можеш да шаљеш питања.",
+        deleteAccount = SerbianCyrillicDeleteAccountStrings,
     )
 
 internal val EnglishAccountStrings: AccountStrings =
@@ -294,4 +298,5 @@ internal val EnglishAccountStrings: AccountStrings =
         invalidSubmission = "Not accepted. Check both options.",
         submissionLimit = "You have {0} waiting already.",
         submissionsBlocked = "You can't send questions.",
+        deleteAccount = EnglishDeleteAccountStrings,
     )

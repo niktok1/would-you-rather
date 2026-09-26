@@ -95,6 +95,9 @@ enum class AccountAction {
     REGISTER,
     LOG_IN,
     LOG_OUT,
+
+    /** Deleting the account, for good (CLAUDE.md §8a, *Deleting an account*). */
+    DELETE,
 }
 
 /**

@@ -17,6 +17,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
 import io.ntole.wyr.analytics.RecordingAnalytics
 import io.ntole.wyr.core.domain.account.AccountRepository
+import io.ntole.wyr.core.domain.account.DeleteAccount
 import io.ntole.wyr.core.domain.account.LogIn
 import io.ntole.wyr.core.domain.account.LogOut
 import io.ntole.wyr.core.domain.account.RegisterAccount
@@ -203,6 +204,32 @@ class AppNavigationTest {
             assertEquals(listOf(CYRILLIC.updateScreen.newVersion), scene.texts())
             assertEquals(emptyList(), scene.descriptions())
         }
+
+    /**
+     * Delete account asks first, then deletes, and the Account screen shows the fresh guest the device
+     * plays on as (CLAUDE.md §8a, *Deleting an account*); Cancel deletes nothing.
+     */
+    @Test
+    fun `an account deleted from the Account screen plays on as a guest there`() {
+        game.username = "bob"
+        withApp { scene ->
+            val strings = CYRILLIC.accountScreens
+            scene.tap(CYRILLIC.account)
+
+            scene.tap(strings.deleteAccount.button)
+            assertTrue(strings.deleteAccount.warning in scene.texts(), "${scene.texts()}")
+            scene.tap(CYRILLIC.cancel)
+            assertEquals(emptyList(), game.deleted)
+
+            scene.tap(strings.deleteAccount.button)
+            scene.tap(strings.deleteAccount.confirm)
+
+            assertEquals(listOf<String?>("bob"), game.deleted)
+            assertTrue(strings.guest in scene.texts(), "${scene.texts()}")
+            assertTrue(strings.openAuth in scene.texts(), "a guest's one button")
+            assertEquals(1, analytics.named(AnalyticsEvent.ACCOUNT_DELETED).size)
+        }
+    }
 
     @Test
     fun `Play opens under a bar with home and the account icon`() =
@@ -573,6 +600,7 @@ class AppNavigationTest {
             factory { RegisterAccount(accounts = get(), session = get(), analytics = get()) }
             factory { LogIn(accounts = get(), questions = get(), session = get(), analytics = get()) }
             factory { LogOut(accounts = get(), questions = get(), analytics = get()) }
+            factory { DeleteAccount(accounts = get(), questions = get(), analytics = get()) }
             factory { SubmitQuestion(submissions = get(), session = get()) }
             factory { GetMySubmissions(submissions = get(), session = get()) }
             factory { GetCategories(categories = get()) }
@@ -703,6 +731,14 @@ class AppNavigationTest {
         ) = error("nothing logs in here")
 
         override suspend fun logOut() = error("nothing logs out here")
+
+        /** Every account deleted, in order: the player playing, by the username they had. */
+        val deleted = mutableListOf<String?>()
+
+        override suspend fun deleteAccount() {
+            deleted += username
+            username = null
+        }
 
         override suspend fun submit(
             optionA: String,

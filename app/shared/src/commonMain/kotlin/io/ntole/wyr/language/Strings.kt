@@ -34,8 +34,9 @@ data class Strings(
      */
     val tryAgain: String,
     /**
-     * The button that closes without doing anything, on the Auth page's guest-points warning. One
-     * text, for every screen that needs it, so the game says it one way.
+     * The button that closes without doing anything, on the Auth page's guest-points warning and the
+     * Account screen's dialog before a deletion. One text, for every screen that needs it, so the game
+     * says it one way.
      */
     val cancel: String,
     /**

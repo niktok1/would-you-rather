@@ -233,6 +233,68 @@ class AccountScreenDrawTest {
         }
     }
 
+    /**
+     * Anyone read, a guest or a registered player, has a quiet Delete account at the start of Log out's
+     * row, which asks in one line first: Cancel deletes nothing, and Delete deletes (CLAUDE.md §8a).
+     */
+    @Test
+    fun `Delete account asks first and then deletes for a guest and a registered player alike`() {
+        Language.entries.forEach { language ->
+            val strings = stringsOf(language)
+            val delete = strings.accountScreens.deleteAccount
+            listOf(GUEST, REGISTERED).forEach { stats ->
+                val actions = Recorder()
+                val scene = scene(AccountState(stats = stats, submissions = emptyList()), language, actions = actions)
+                try {
+                    assertFalse(delete.warning in scene.texts(), "$language: asked before it is tapped")
+                    if (stats.username != null) {
+                        val button = scene.nodes().single { delete.button in it.texts }
+                        val logOut = scene.nodes().single { strings.accountScreens.logOut in it.texts }
+                        assertEquals(logOut.boundsInRoot.center.y, button.boundsInRoot.center.y, 0.5f, "one row")
+                        assertTrue(button.boundsInRoot.right <= logOut.boundsInRoot.left, "$language: Delete first")
+                    }
+
+                    scene.tap(delete.button)
+                    assertTrue(delete.warning in scene.texts(), "$language: ${scene.texts()}")
+                    scene.tap(strings.cancel)
+                    assertFalse(delete.warning in scene.texts(), "$language: the dialog is gone")
+                    assertEquals(emptyList(), actions.calls, "$language: Cancel deletes nothing")
+
+                    scene.tap(delete.button)
+                    scene.tap(delete.confirm)
+                } finally {
+                    scene.close()
+                }
+                assertEquals(listOf("delete account"), actions.calls, "$language")
+            }
+        }
+    }
+
+    /** A deletion that failed says so, over the row, in the screen's words; offline as offline. */
+    @Test
+    fun `a deletion that failed says so`() {
+        Language.entries.forEach { language ->
+            val strings = stringsOf(language).accountScreens
+            val failed = AccountFailure(AccountAction.DELETE, DomainError.NETWORK)
+            val shown = textsOf(AccountState(stats = GUEST, submissions = emptyList(), failure = failed), language)
+
+            assertInOrder(shown, listOf(strings.offline, strings.deleteAccount.button), "$language")
+        }
+    }
+
+    /** A player who could not be read again is not offered a deletion, which would only fail too. */
+    @Test
+    fun `no deletion is offered while the player could not be read again or at all`() {
+        val delete = stringsOf(Language.DEFAULT).accountScreens.deleteAccount.button
+        val failed = AccountFailure(AccountAction.LOAD, DomainError.NETWORK)
+        listOf(
+            AccountState(),
+            AccountState(failure = failed),
+            AccountState(stats = GUEST, submissions = emptyList(), failure = failed),
+            AccountState(stats = REGISTERED, submissions = emptyList(), failure = failed),
+        ).forEach { state -> assertFalse(delete in textsOf(state, Language.DEFAULT), "$state") }
+    }
+
     @Test
     fun `a read that fails offers to try again`() {
         Language.entries.forEach { language ->
@@ -602,6 +664,10 @@ class AccountScreenDrawTest {
         override fun logOut() {
             calls += "log out"
         }
+
+        override fun deleteAccount() {
+            calls += "delete account"
+        }
     }
 
     private companion object {
@@ -706,6 +772,12 @@ class AccountScreenDrawTest {
                     submissions = emptyList(),
                     failure = AccountFailure(AccountAction.LOAD, DomainError.NETWORK),
                 ),
+                AccountState(
+                    stats = GUEST,
+                    submissions = emptyList(),
+                    failure = AccountFailure(AccountAction.DELETE, DomainError.NETWORK),
+                ),
+                AccountState(stats = GUEST, submissions = emptyList(), running = AccountAction.DELETE),
             )
 
         /** Every state with no button to the Auth page: no player read yet, and a registered player. */
@@ -733,6 +805,11 @@ class AccountScreenDrawTest {
                     stats = REGISTERED,
                     failure = AccountFailure(AccountAction.LOAD, DomainError.NETWORK),
                     listFailure = AccountFailure(AccountAction.LOAD, DomainError.NETWORK),
+                ),
+                AccountState(
+                    stats = REGISTERED,
+                    submissions = emptyList(),
+                    failure = AccountFailure(AccountAction.DELETE, DomainError.SERVER),
                 ),
             )
     }
