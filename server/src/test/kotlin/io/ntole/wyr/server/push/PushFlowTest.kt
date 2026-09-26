@@ -47,6 +47,7 @@ import io.ntole.wyr.server.testServerConfig
 import io.ntole.wyr.server.wyrModule
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
@@ -56,6 +57,8 @@ import org.jetbrains.exposed.v1.jdbc.selectAll
 import java.util.UUID
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 import kotlin.test.fail
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
@@ -226,6 +229,22 @@ class PushFlowTest {
 
             assertEquals(HttpStatusCode.OK, approved.status)
         }
+    }
+
+    /** A client built over an engine it was handed leaves that engine running when it closes, so the server closes both. */
+    @Test
+    fun `stopping the server closes the engine it calls Google through`() {
+        val google = FakeGoogle(fcm = { json("""{"name":"projects/$TEST_PROJECT/messages/1"}""") })
+        val config =
+            testServerConfig(testDatabaseFor("push-stop")).copy(fcmServiceAccount = TEST_SERVICE_ACCOUNT)
+
+        testApplication {
+            application { wyrModule(config, TEST_SEEDS) { google.engine } }
+            startApplication()
+            assertTrue(google.engine.isActive, "running while the server is")
+        }
+
+        assertFalse(google.engine.isActive, "closed once the server stopped")
     }
 
     /** One push FCM received. */

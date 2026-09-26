@@ -57,8 +57,8 @@ fun main() {
  * Takes its [config] as a parameter rather than reading the environment itself so tests can
  * stand the whole server up against an isolated in-memory database, the [seeds] a boot writes
  * so they can stand it up on the first seeds alone (`TEST_SEEDS`), and the engine the server calls
- * Google through, [googleEngine], asked for only when a feature that calls Google is on, so they can
- * answer for Google with Ktor's MockEngine and never reach it.
+ * Google through, [googleEngine], asked for only when a feature that calls Google is on and closed
+ * when the server stops, so they can answer for Google with Ktor's MockEngine and never reach it.
  */
 fun Application.wyrModule(
     config: ServerConfig,
@@ -80,11 +80,13 @@ fun Application.wyrModule(
     // Work a request starts and does not wait for, a decision's pushes: it outlives the request, never
     // the server.
     val background = CoroutineScope(SupervisorJob() + Dispatchers.IO + CoroutineName("wyr-background"))
-    val google =
-        if (config.fcmServiceAccount != null || config.playGames != null) googleHttpClient(googleEngine()) else null
+    val engine = if (config.fcmServiceAccount != null || config.playGames != null) googleEngine() else null
+    val google = engine?.let(::googleHttpClient)
     monitor.subscribe(ApplicationStopped) {
         background.cancel()
+        // A client built over an engine it was handed leaves that engine running when it closes.
         google?.close()
+        engine?.close()
     }
     val notifier =
         config.fcmServiceAccount?.let { account ->
