@@ -308,6 +308,20 @@ the change, in `devRelease`, and not the count up's doing: the first frames afte
 take up to 750 ms on the UI thread (code not yet compiled, with no baseline profile), and the
 RenderThread sometimes waits 50 to 300 ms on the display's buffers.
 
+**`feat/analytics`** (a branch, from e603694, not merged): product analytics on PostHog, from
+shared code on all four platforms (CLAUDE.md §8g): a port in the domain, a PostHog sender over its
+HTTP API with the Ktor client (no SDK, no new library), the key per platform (none is off, as in
+every test and CI build), the app's openings and every screen with its time, every tap by a stable
+element name, the game's events from the ViewModels, identify on register and login and reset on
+logout, and a **Статистика** switch on Account. The switch took Log out's place beside the language
+menu, and Log out stands under that row now: *provisional*, CLAUDE.md §8b. Verified on this Mac: lint,
+the verify job's client tests (`:core:domain` 76, `:core:data` 145, `:core:network` 106 and 112 as
+Android host tests, `:app:shared` 383, `:app:adminApp` 106) and compiles, `assembleDebug`, the web
+and desktop apps' compiles, and the ios job's Kotlin compiles. **Not verified:** nothing has been sent
+to PostHog (no key here), nothing has run on a device, and the iOS Info.plist keys wait for CI's
+`xcodebuild`. To see events: *Analytics*, under *Running it locally*. The dashboards to build are
+listed in CLAUDE.md §8g, *Setting up PostHog*.
+
 ### Verified working
 
 - **`merge/redesign` after the review of the `feat/category-picker` merge** (6b44dc4, 5a8adf7 and

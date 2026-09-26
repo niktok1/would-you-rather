@@ -1963,6 +1963,35 @@ the same events. The moderation app sends none.
   what waited, the tap on the switch included; on sends from the next event. A build with no key keeps
   the choice all the same, since a player cannot tell one build from another. `AccountScreenDrawTest`
   draws it on and off and taps it, and `AppNavigationTest` turns the app's analytics off and on.
+- **Consent** (*the user's, 2026-09-26*): on by default, under legitimate interest, for a game for
+  16 and over; the privacy policy says what is sent, that it is on, and how to turn it off (the
+  Statistics switch). *To check before an EU launch*: whether the install id kept on the device (the
+  browser's in `localStorage`) is itself a storing the ePrivacy rules want consent for, whatever the
+  basis for the rest.
+- **Setting up PostHog** (*the user's, not in the repository*): make a project on the **EU** cloud
+  (https://eu.posthog.com), put its *Project API key* in each build's settings (above; for a phone,
+  `wyr.posthog.key` in `local.properties`), and build a dashboard, filtered to `environment = prod`
+  (a DEV or LOCAL build's events are tests), of these insights:
+  - *Live players*: Trends, unique users of any event, the last hour by 5 minutes (and PostHog's own
+    *Activity* for the events as they come).
+  - *Active players and retention*: unique users of `app_opened` by day and week, and a Retention
+    insight from `app_opened` to `question_answered`, by day and by week.
+  - *Funnels*: `app_opened` → `question_shown` → `question_answered` (who plays at all);
+    `account_opened` → `$screen` `auth` → `register_started` → `register_completed` (how many find the
+    account, and register); `account_opened` → `submit_opened` → `submit_sent`.
+  - *Time per screen*: `screen_left`'s `duration_ms`, its median and 90th percentile, by `screen`; and
+    `app_backgrounded`'s for how long a visit lasts.
+  - *Answers*: `question_answered` per session (a SQL insight counting it by `$session_id`) and per
+    player per day, and its `answer_ms` by `categories`.
+  - *Where they tap*: `tap` by `element`, and by `$screen_name`.
+  - *Failures*: `error_shown` by `code` and `action`; `submit_refused` by `code`.
+  - Broken down by `platform` and `$app_version` where it helps.
+  PostHog's free tier takes a million events a month. Nothing here uses its session replay, feature
+  flags or surveys, which need its SDKs.
+- **Not verified**: no build with a key has sent to PostHog yet, from any platform; nothing checks
+  the payload against the live `/batch/` endpoint but PostHog's documented shape. The iOS Info.plist
+  keys and `Local.xcconfig` are read only by building the app, which only CI's `ios` job does
+  (§9); the browser's CORS preflight to PostHog is as its own web SDK's.
 ---
 
 ## 9. How to work in this repo
