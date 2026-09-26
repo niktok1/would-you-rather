@@ -335,18 +335,23 @@ smallest client compile fixes.
   (provisional; a threshold was the other option).
 - **An operator's trail** (§8b, *Logging*): one INFO line per stored submission and per admin action,
   ids only, never what anyone typed, nor a token or password.
-- **Deleting an account** (§8a, *Deleting an account*; V13): `POST /v1/me/deletion`, 204, deletes the
-  player and all that is theirs, keeps their approved questions with nobody as author, and takes each
-  like they held back from its author. The client then plays on as a fresh guest.
+- **Deleting an account** (§8a, *Deleting an account*; V13, V14): `POST /v1/me/deletion`, 204,
+  deletes the player and all that is theirs, keeps their approved questions with nobody as author, and
+  takes each like they held back from its author. The client then plays on as a fresh guest. A
+  request of theirs racing it from another device is 401, never a 500 (§4).
 
-Verified on this machine: `ktlintCheck`, `:server:test` (401 tests, H2 only), every `:core` module's
+Verified on this machine: `ktlintCheck`, `:server:test` (407 tests, H2 only), every `:core` module's
 `jvmTest`, `:core:network:testAndroidHostTest`, `:app:shared:jvmTest`, `:app:adminApp:jvmTest`, the
 verify job's client compiles, every `:core` module's and `:app:shared`'s iOS compiles, and the fat
 jar booted on port 18110 on H2 (health, a 426 for an old build, a report, a hide, the reports list,
-a 413, a deletion). **Not verified**: V11 to V13 and the new SQL on PostgreSQL (the `server-postgres`
-CI job runs them: the feed's two `NOT EXISTS`, the reports list ordered by subqueries, the deletion's
-`INSERT ... SELECT`), and no race test runs on PostgreSQL (they are H2's, as all are). Migrations
-V11 to V13 are this branch's; `feat/server-engagement` starts at V15, so V14 is free.
+a 413, a deletion, and the feed, a vote, a skip and a registration after it, each 401). **Not
+verified**: V11 to V14 and the new SQL on PostgreSQL (the `server-postgres` CI job runs them: the
+feed's two `NOT EXISTS`, the reports list ordered by subqueries, the deletion's `INSERT ... SELECT`),
+and no race test runs on PostgreSQL (they are H2's, as all are): a re-answer, re-skip or registration
+waiting on the deletion is staged on H2, which leaves a lock read on a deleted row as PostgreSQL
+does, but a hide of the author racing it is not, since H2's foreign key check waits on no lock, so
+only its rerun is pinned. Migrations V11 to V14 are this branch's; `feat/server-engagement` starts at
+V15.
 
 ### Verified working
 
