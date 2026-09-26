@@ -85,6 +85,15 @@ dependencies {
 
     implementation(libs.compose.uiToolingPreview)
     debugImplementation(libs.compose.uiTooling)
+
+    testImplementation(libs.kotlin.testJunit)
+}
+
+// WindowThemeTest reads the manifest and the resources from disk, so they are inputs of every unit test
+// run, which would otherwise be up to date after a resource changed.
+tasks.withType<Test>().configureEach {
+    inputs.file("src/main/AndroidManifest.xml").withPathSensitivity(PathSensitivity.RELATIVE)
+    inputs.dir("src/main/res").withPathSensitivity(PathSensitivity.RELATIVE)
 }
 
 android {

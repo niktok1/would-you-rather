@@ -31,11 +31,12 @@ jobs:
         run: ./gradlew ktlintCheck --no-daemon
 
       # JVM-hosted tests: the whole server suite plus the shared client tests, the moderation app's
-      # (its screens drawn off screen among them), and :core:network's Android host tests
-      # (AndroidTokenStorage against a recording SharedPreferences). iOS and Android instrumented
-      # tests need a mac runner and an emulator respectively, so they are not here.
+      # (its screens drawn off screen among them), :core:network's Android host tests
+      # (AndroidTokenStorage against a recording SharedPreferences), and the Android app's own (its
+      # window theme against the theme's colours). iOS and Android instrumented tests need a mac
+      # runner and an emulator respectively, so they are not here.
       - name: Test
-        run: ./gradlew :server:test :core:domain:jvmTest :core:data:jvmTest :core:network:jvmTest :core:network:testAndroidHostTest :app:shared:jvmTest :app:adminApp:jvmTest --no-daemon
+        run: ./gradlew :server:test :core:domain:jvmTest :core:data:jvmTest :core:network:jvmTest :core:network:testAndroidHostTest :app:shared:jvmTest :app:adminApp:jvmTest :app:androidApp:testDevDebugUnitTest --no-daemon
 
       # Proves every in-scope client target still compiles, including both web targets, and that R8
       # still shrinks the release build (CLAUDE.md §8, Release builds): without the upload key, which

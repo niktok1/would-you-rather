@@ -293,6 +293,13 @@ coin is two icons drawn one on the other, the face in `WyrColors.coin` and the m
 each filled thumb covering its outline and the hand's inside, the thumb down the thumb up turned
 over, and the coin's ring on its face.
 
+**Platform copies.** Android draws its window and splash screen before Compose starts, from
+resources, which cannot read `WyrColors`: so `:app:androidApp`'s `res/values/colors.xml` and
+`res/values-night/colors.xml` copy `pageBackground`, light and dark, as `wyr_page_background` (§8,
+*Release builds*), and `WindowThemeTest` holds the copy equal, so a palette change fails it until the
+copy changes too. The launcher icon's two drawables copy `optionA` and `optionB`, unpinned, being a
+placeholder.
+
 The moderation app has a theme of its own, `AdminTheme` in `:app:adminApp` (`io.ntole.wyr.admin.theme`),
 since it may not depend on `:app:shared` (§3): Material 3's default light and dark schemes and type
 scale, with `AdminDimens` and `AdminType` beside them. The same rule holds in its screens: no hex, dp
@@ -445,6 +452,11 @@ This project must never be attributed to any employer identity.
     (`mipmap/ic_launcher.xml`). A placeholder (§8b, *The launcher icon and name*): the final icon
     replaces the two drawables. The Play listing's own 512 by 512 icon is uploaded in the Play Console.
   - *The label*: *Шта би радије?* for `prod`, *WYR Dev* and *WYR Local* for the others (§8e).
+  - *The window and the splash*: `Theme.Wyr` (`values/themes.xml`, dark in `values-night`) gives the
+    window and the status bar the page background before Compose's first frame, so a dark phone never
+    flashes white; on Android 12 and later (`values-v31`) the system's own splash screen is the page
+    background and the launcher icon, with no library. The colour is a platform copy (§5b), held equal
+    by `WindowThemeTest`, the app module's unit test, in CI's verify job.
 
 ## 8a. Authentication — resolved
 

@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+        Android 12 and later draw a splash screen of their own as the app starts: the page background,
+        light or dark as values-night picks it, and the launcher icon. No splash library is needed.
+    -->
+    <style name="Theme.Wyr" parent="Base.Theme.Wyr">
+        <item name="android:windowSplashScreenBackground">@color/wyr_page_background</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@mipmap/ic_launcher</item>
+    </style>
+</resources>
