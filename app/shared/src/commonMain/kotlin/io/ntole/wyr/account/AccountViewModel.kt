@@ -81,9 +81,12 @@ class AccountViewModel(
      */
     override fun refresh() = perform(AccountAction.LOAD) {}
 
-    /** The Account screen is shown: the analytics hear of it, and the player is read again. */
-    fun shown() {
-        analytics.track(AnalyticsEvent.ACCOUNT_OPENED)
+    /**
+     * The Account screen is shown: the player is read again, and the analytics hear of it when that
+     * begins a [newVisit], not when a rotation's composition shows the same one (CLAUDE.md §8g).
+     */
+    fun shown(newVisit: Boolean = true) {
+        if (newVisit) analytics.track(AnalyticsEvent.ACCOUNT_OPENED)
         refresh()
     }
 

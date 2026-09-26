@@ -664,6 +664,19 @@ class AccountViewModelTest {
             assertEquals(2, game.calls.count { it == "stats" })
         }
 
+    /** A rotation's composition shows the visit it showed: read again, and not reported again. */
+    @Test
+    fun `a showing that begins no visit reads the player and reports nothing`() =
+        runTest(dispatcher) {
+            val viewModel = viewModel()
+
+            viewModel.shown(newVisit = false)
+            testScheduler.advanceUntilIdle()
+
+            assertEquals(emptyList(), analytics.named(AnalyticsEvent.ACCOUNT_OPENED))
+            assertEquals(1, game.calls.count { it == "stats" })
+        }
+
     @Test
     fun `a registration is reported as sent and as completed`() =
         runTest(dispatcher) {

@@ -589,6 +589,19 @@ class SubmitViewModelTest {
             assertEquals(5, viewModel.state.value.points)
         }
 
+    /** A rotation's composition shows the visit it showed: read again, and not reported again. */
+    @Test
+    fun `a showing that begins no visit reads the points and reports nothing`() =
+        runTest(dispatcher) {
+            val viewModel = viewModel()
+
+            viewModel.shown(newVisit = false)
+            testScheduler.advanceUntilIdle()
+
+            assertEquals(emptyList(), analytics.events)
+            assertEquals(5, viewModel.state.value.points)
+        }
+
     /** The categories, by id, and how many; never what was typed. */
     @Test
     fun `a question stored is reported with its categories and nothing typed`() =

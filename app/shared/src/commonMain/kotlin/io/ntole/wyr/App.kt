@@ -23,6 +23,7 @@ import io.ntole.wyr.account.AccountScreen
 import io.ntole.wyr.account.AccountViewModel
 import io.ntole.wyr.account.AuthScreen
 import io.ntole.wyr.analytics.LocalAnalytics
+import io.ntole.wyr.analytics.ShownEffect
 import io.ntole.wyr.analytics.UsageTracker
 import io.ntole.wyr.analytics.rememberConfigurationChanging
 import io.ntole.wyr.categories.CategoriesScreen
@@ -192,8 +193,9 @@ private fun Account(
     val submitState by submit.state.collectAsStateWithLifecycle()
 
     // Every time the screen is shown: the points move on the Play screen meanwhile, a guest's are what
-    // a login would leave behind, and a moderator decides the player's questions.
-    LaunchedEffect(viewModel) { viewModel.shown() }
+    // a login would leave behind, and a moderator decides the player's questions. A rotation's shows the
+    // same visit, which the analytics count once (CLAUDE.md §8g).
+    ShownEffect(viewModel, viewModel::shown)
     // A question sent from the form whose answer came once the player had come back here: My questions
     // was read before it was stored, so it is read again, once no read is in flight.
     LaunchedEffect(submitState.sent, state.isBusy) {
@@ -253,7 +255,8 @@ private fun Submit(onSent: () -> Unit) {
 
     // Every time the form is shown: the points move meanwhile. Declared first, so it takes down a
     // `sent` left from a showing before, of a question whose answer came after the player went back.
-    LaunchedEffect(viewModel) { viewModel.shown() }
+    // A rotation's shows the same visit, which the analytics count once (CLAUDE.md §8g).
+    ShownEffect(viewModel, viewModel::shown)
     LaunchedEffect(state.sent) {
         if (state.sent) {
             viewModel.leftForm()

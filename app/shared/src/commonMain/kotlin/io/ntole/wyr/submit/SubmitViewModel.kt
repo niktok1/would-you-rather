@@ -72,9 +72,12 @@ class SubmitViewModel(
      */
     override fun refresh() = perform(SubmitAction.LOAD) { readCategories() }
 
-    /** The form is shown: the analytics hear of it, and the categories and the points are read again. */
-    fun shown() {
-        analytics.track(AnalyticsEvent.SUBMIT_OPENED)
+    /**
+     * The form is shown: the categories and the points are read again, and the analytics hear of it
+     * when that begins a [newVisit], not when a rotation's composition shows the same one (CLAUDE.md §8g).
+     */
+    fun shown(newVisit: Boolean = true) {
+        if (newVisit) analytics.track(AnalyticsEvent.SUBMIT_OPENED)
         refresh()
     }
 

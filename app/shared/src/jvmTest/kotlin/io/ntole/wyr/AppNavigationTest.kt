@@ -1,6 +1,8 @@
 package io.ntole.wyr
 
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.saveable.LocalSaveableStateRegistry
+import androidx.compose.runtime.saveable.SaveableStateRegistry
 import androidx.compose.ui.ImageComposeScene
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
@@ -90,6 +92,8 @@ class AppNavigationTest {
     private val analytics = RecordingAnalytics()
     private val storage = InMemoryTokenStorage()
     private val owner = TestOwner()
+    private var restored: Map<String, List<Any?>>? = null
+    private var saved: Map<String, List<Any?>>? = null
 
     @BeforeTest
     fun setUp() {
@@ -146,6 +150,32 @@ class AppNavigationTest {
             assertTrue(analytics.enabled.value)
             assertEquals(ToggleableState.On, scene.toggleOf(statistics))
         }
+
+    /**
+     * An Android rotation makes the composition anew, its saved state restored, while the ViewModels
+     * and the analytics live on: the screen it shows is the visit it showed, not opened again, and
+     * leaving it and coming back is a visit of its own (CLAUDE.md §8g).
+     */
+    @Test
+    fun `a rotation on Account or Submit reports neither opened again`() {
+        game.username = "bob"
+        withApp { scene -> scene.tap(CYRILLIC.account) }
+        afterRotation { scene ->
+            assertTrue(CYRILLIC.accountScreens.newQuestion in scene.texts(), "the Account screen is not shown")
+            scene.tap(CYRILLIC.accountScreens.newQuestion)
+        }
+        assertEquals(1, analytics.named(AnalyticsEvent.ACCOUNT_OPENED).size)
+
+        afterRotation { scene ->
+            assertTrue(sendText(CYRILLIC) in scene.descriptions(), "the form is not shown")
+            scene.tap(CYRILLIC.back)
+        }
+
+        assertEquals(1, analytics.named(AnalyticsEvent.SUBMIT_OPENED).size)
+        assertEquals(2, analytics.named(AnalyticsEvent.ACCOUNT_OPENED).size, "back on Account is a visit of its own")
+        // Account, Account rotated, the form, the form rotated, and Account again: each reads the points.
+        assertEquals(5, game.statsRead)
+    }
 
     @Test
     fun `Play opens under a bar with home and the account icon`() =
@@ -434,21 +464,38 @@ class AppNavigationTest {
         withApp { scene -> assertEquals(listOf(ENGLISH.gameName, ENGLISH.play), scene.texts()) }
     }
 
-    /** Draws [App] as a 375 by 599 phone, a lifecycle and a ViewModel owner of the test's around it. */
+    /**
+     * Draws [App] as a 375 by 599 phone, a lifecycle and a ViewModel owner of the test's around it, and
+     * its saved state restored from [restored], none unless a test sets it. What it saved as the test
+     * ended is in [saved].
+     */
     private fun withApp(test: (ImageComposeScene) -> Unit) {
+        val registry = SaveableStateRegistry(restored) { true }
         val scene =
             ImageComposeScene(width = 375, height = 599, density = Density(1f)) {
                 CompositionLocalProvider(
                     LocalLifecycleOwner provides owner,
                     LocalViewModelStoreOwner provides owner,
+                    LocalSaveableStateRegistry provides registry,
                 ) { App() }
             }
         try {
             scene.settle()
             test(scene)
+            // Before the composition goes, as an activity saves its state before it is destroyed.
+            saved = registry.performSave()
         } finally {
             scene.close()
         }
+    }
+
+    /**
+     * An Android rotation, then [test]: [App] drawn anew with the saved state the one before saved, over
+     * the same ViewModels, lifecycle and singletons, the analytics among them.
+     */
+    private fun afterRotation(test: (ImageComposeScene) -> Unit) {
+        restored = saved
+        withApp(test)
     }
 
     private fun fakes() =

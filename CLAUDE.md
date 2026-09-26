@@ -1937,8 +1937,9 @@ the same events. The moderation app sends none.
   `categories`), and the one left is `screen_left`, with `screen` and `duration_ms`, for another screen
   or for the background, back from which it is shown again. An Android rotation, whose activity stops
   only to start again, reports neither (`rememberConfigurationChanging`, over the activity's
-  `isChangingConfigurations`: the one piece of it per platform). `UsageTrackerTest`, and
-  `AppNavigationTest` through the whole app.
+  `isChangingConfigurations`: the one piece of it per platform), nor a second `account_opened` or
+  `submit_opened` (below). `UsageTrackerTest`, and `AppNavigationTest` through the whole app, a
+  rotation's saved state restored included.
 - **Taps** *(built)*: every button, card, chip, line and menu item of the game's screens hands its
   `onClick` through `tapped(element, properties)` (`io.ntole.wyr.analytics`), which reports a `tap`
   with `element` to `LocalAnalytics` (the app's, which `App` provides; none for a screen drawn alone)
@@ -1961,14 +1962,16 @@ the same events. The moderation app sends none.
     first tap's, and `agreed_with_majority`); `question_skipped` (`duration_ms` on it, and
     `recorded`, whether the server heard); `reaction_set` (`reaction`, `like`, `dislike` or `none`,
     and `answered`). The time is the app's `TimeSource.WithComparableMarks` (`uiModule`).
-  - *Account* (`AccountViewModel`): `account_opened` each time the screen is shown (`shown()`);
+  - *Account* (`AccountViewModel`): `account_opened` for each visit of the screen (`shown`, from
+    `ShownEffect`, whose saved state tells a visit begun from the one an Android rotation's new
+    composition shows again, which reads the player again and reports nothing);
     `register_started` as a registration is sent, and `register_completed` once it worked, its answer
     lost included, the read after it naming the account; `login_completed` the same way. Each is
     decided from the action's own answer and that read, never from `AccountState.signedIn`, which the
     Auth page takes down as it leaves, while the read may still run, and fail; `logout`, sent before
     the logout so it is the account's.
-  - *Submit* (`SubmitViewModel`): `submit_opened` each time the form is shown; `submit_sent` once
-    stored (`categories`, `count`); `submit_refused` (`code`) for any refusal.
+  - *Submit* (`SubmitViewModel`): `submit_opened` for each visit of the form, as Account's;
+    `submit_sent` once stored (`categories`, `count`); `submit_refused` (`code`) for any refusal.
   - *Categories* (`CategoriesViewModel`): `categories_changed` when Play sends a new selection
     (`categories`, `count`, none being every category); what is played already sends nothing.
   - *Language* (`LanguageViewModel`): `language_changed` (`language`, its tag).
