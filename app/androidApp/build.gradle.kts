@@ -18,9 +18,10 @@ val posthogKey = extra["wyrPosthogKey"] as String
 val posthogHost = extra["wyrPosthogHost"] as String
 
 // The Play upload key (CLAUDE.md §8, *Release builds*): each of the four settings from local.properties,
-// which git ignores, or else from the environment, and never committed. With all four a release build
-// is signed with it; with fewer, with the debug key, so a release build still installs on a phone for
-// testing, and anything that signs a release bundle, which is what Play takes, fails before anything runs.
+// which git ignores, or else from the environment, and never committed. Only prod goes to Google Play, so
+// only prod's release build is signed with it, once all four are set; with fewer, with the debug key, so it
+// still installs on a phone for testing, and signing prod's bundle, which is what Play takes, fails before
+// anything runs. Dev's and local's release builds always take the debug key (the flavors, below).
 val localProperties =
     Properties().apply {
         providers
@@ -48,29 +49,27 @@ val uploadKeyMissing =
         "wyr.upload.keyAlias" to uploadKeyAlias,
         "wyr.upload.keyPassword" to uploadKeyPassword,
     ).filterValues { it == null }.keys
+val prodReleaseSigning = if (uploadKeyMissing.isEmpty()) "upload" else "debug"
 
 if (uploadKeyMissing.isNotEmpty()) {
     val missing = uploadKeyMissing.joinToString()
-    val modulePath = path
-    // Asked once the task graph is known, so a bundle fails before any task runs. A sign*ReleaseBundle task
-    // writes the .aab, and every bundle*Release runs one, so those are what is looked for: one run by
-    // itself, signProdReleaseBundle say, writes the same file.
+    val signsPlayBundle = "$path:signProdReleaseBundle"
+    // Asked once the task graph is known, so the bundle fails before any task runs. signProdReleaseBundle
+    // writes prod's .aab, and bundleProdRelease and bundleRelease run it, so it is what is looked for: run
+    // by itself, it writes the same file. Dev's and local's bundles are the debug key's whatever is set,
+    // and never go to Play.
     gradle.taskGraph.whenReady {
-        val signing =
-            allTasks
-                .filter { it.project.path == modulePath && Regex("""sign\w*ReleaseBundle""").matches(it.name) }
-                .map { it.name }
-        if (signing.isNotEmpty()) {
+        if (hasTask(signsPlayBundle)) {
             throw GradleException(
-                "A release bundle is what Google Play takes, which must be signed with the Play upload key, " +
-                    "and it is not configured (${signing.joinToString()}): set $missing in local.properties, " +
-                    "or the WYR_UPLOAD_* variables (NEXT-SESSION.md, Release builds and Google Play).",
+                "The prod bundle is what Google Play takes, which must be signed with the Play upload key, and " +
+                    "it is not configured: set $missing in local.properties, or the WYR_UPLOAD_* variables " +
+                    "(NEXT-SESSION.md, Release builds and Google Play).",
             )
         }
     }
-    // Said by each release APK's packaging as it signs one: an APK up to date signs nothing.
+    // Said by prod's release APK's packaging as it signs one: an APK up to date signs nothing.
     val warning = "Signed with the debug key: the Play upload key is not configured ($missing)."
-    tasks.named { Regex("""package\w*Release""").matches(it) }.configureEach {
+    tasks.named { it == "packageProdRelease" }.configureEach {
         doFirst { logger.warn("$name: $warning") }
     }
 }
@@ -139,10 +138,8 @@ android {
     }
     buildTypes {
         release {
-            // The upload key when it is configured (above); otherwise the debug key, so a release build
-            // (not debuggable, so Compose runs at full speed) still installs on a phone for testing,
-            // which Google Play would refuse.
-            signingConfig = signingConfigs.getByName(if (uploadKeyMissing.isEmpty()) "upload" else "debug")
+            // Signed per flavor (productFlavors, below), since a build type's signing config would win over
+            // every flavor's.
             // R8 shrinks, optimizes and renames the code, and drops the resources nothing uses. Its
             // mapping, which turns a crash's renamed stack trace back into these names, lands in
             // build/outputs/mapping/<variant>/mapping.txt, and a bundle carries it to Play itself.
@@ -194,6 +191,11 @@ android {
             dimension = "environment"
             // The flavor's name is its environment's, as WyrEnvironment.parse reads it.
             buildConfigField("String", "WYR_ENV", "\"$name\"")
+            // Only prod's release build takes the upload key (above). Dev's and local's keep the debug key, as
+            // their debug builds do (the debug build type's own, which wins over this), so a release build
+            // installs over a debug one and back, keeping its data: Android refuses an update signed with
+            // another key.
+            signingConfig = signingConfigs.getByName(if (name == "prod") prodReleaseSigning else "debug")
         }
     }
 }

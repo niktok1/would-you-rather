@@ -425,18 +425,19 @@ This project must never be attributed to any employer identity.
   dev has not run.
 - **Release builds** (*decided 2026-09-26*, for the Google Play launch, §8b *The launch*), in
   `:app:androidApp`:
-  - *Signing*: a release build is signed with the **Play upload key** when `local.properties` (which
-    git ignores) names all four of `wyr.upload.storeFile`, `wyr.upload.storePassword`,
-    `wyr.upload.keyAlias` and `wyr.upload.keyPassword`, each else read from the environment
-    (`WYR_UPLOAD_STORE_FILE`, `WYR_UPLOAD_STORE_PASSWORD`, `WYR_UPLOAD_KEY_ALIAS`,
-    `WYR_UPLOAD_KEY_PASSWORD`); the store file's path is absolute or from the repository's root. Short
-    of all four, a release APK is signed with the debug key, so it still installs on a phone for
-    testing, and its packaging says so in one warning line; anything that signs a release bundle,
-    what Play takes, fails before anything runs, naming what is missing: the guard looks for the
-    `sign*ReleaseBundle` task that writes the `.aab`, which every `bundle*Release` runs, so
-    `signProdReleaseBundle` asked for alone is refused too. CI's verify job holds both to it
-    (*Release signing*, a dry run of each). The keystore is the user's,
-    never committed (`.gitignore` refuses `*.jks` and `*.keystore`), made and uploaded as
+  - *Signing*: only `prod` goes to Play, so only its release build is signed with the **Play upload
+    key**, when `local.properties` (which git ignores) names all four of `wyr.upload.storeFile`,
+    `wyr.upload.storePassword`, `wyr.upload.keyAlias` and `wyr.upload.keyPassword`, each else read
+    from the environment (`WYR_UPLOAD_STORE_FILE`, `WYR_UPLOAD_STORE_PASSWORD`,
+    `WYR_UPLOAD_KEY_ALIAS`, `WYR_UPLOAD_KEY_PASSWORD`); the store file's path is absolute or from the
+    repository's root. Short of all four, it is signed with the debug key, so it still installs on a
+    phone for testing, and its packaging says so in one warning line; `signProdReleaseBundle`, which
+    writes the `.aab` Play takes and which `bundleProdRelease` and `bundleRelease` run, is refused
+    before anything runs, naming what is missing. `dev`'s and `local`'s release builds always take the
+    debug key, as their debug builds do (a signing config per flavor, since a build type's would win
+    over the flavors'), so each installs over the other and back, keeping its data: Android refuses an
+    update signed with another key. CI's verify job holds all three rules (*Release signing*). The
+    keystore is the user's, never committed (`.gitignore` refuses `*.jks` and `*.keystore`), made and uploaded as
     NEXT-SESSION.md says (*Release builds and Google Play*). **Play App Signing**: Play keeps the app
     signing key, which signs what phones install; the upload key only proves an upload is the
     developer's, and a lost one is reset in the Play Console without touching the app.

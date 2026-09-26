@@ -54,8 +54,10 @@ jobs:
             :app:androidApp:assembleProdRelease
 
       # The release signing rules (CLAUDE.md §8, Release builds), which no compile checks. Without the
-      # upload key, which CI never has, what signs a release bundle, the file Play takes, must refuse
-      # before it runs, whether asked for by the bundle's task or by its signing task alone.
+      # upload key, which CI never has, what signs prod's bundle, the file Play takes, must refuse before
+      # it runs, whether asked for by the bundle's task or by its signing task alone. With one, only prod's
+      # release build takes it, so dev's and local's still install over their debug builds: the four
+      # values below are placeholders, no key, since signingReport only names each variant's config.
       - name: Release signing
         run: |
           log="$RUNNER_TEMP/release-signing.log"
@@ -64,6 +66,13 @@ jobs:
               cat "$log"; echo "$task ran without the Play upload key"; exit 1
             fi
             grep -q 'must be signed with the Play upload key' "$log" || { cat "$log"; exit 1; }
+          done
+          WYR_UPLOAD_STORE_FILE=/nonexistent.jks WYR_UPLOAD_STORE_PASSWORD=placeholder \
+            WYR_UPLOAD_KEY_ALIAS=placeholder WYR_UPLOAD_KEY_PASSWORD=placeholder \
+            ./gradlew --no-daemon :app:androidApp:signingReport > "$log" 2>&1 || { cat "$log"; exit 1; }
+          for expected in localRelease:debug devRelease:debug prodRelease:upload; do
+            grep -A1 -x "Variant: ${expected%:*}" "$log" | grep -qx "Config: ${expected#*:}" ||
+              { cat "$log"; echo "${expected%:*} is not signed with the ${expected#*:} config"; exit 1; }
           done
 
       - name: Upload test reports

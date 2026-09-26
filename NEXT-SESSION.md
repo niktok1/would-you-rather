@@ -402,13 +402,16 @@ registered player, for good, with no unlink: provisional); and "stores nothing p
 sensitive personal data", the privacy policy to name FCM and Play Games (§8b *Personalization*).
 
 **On `feat/android-release`** (from 2a4f96e; nothing pushed): the Android build Google Play takes
-(CLAUDE.md §8, *Release builds*). A release build is signed with the **Play upload key** once
+(CLAUDE.md §8, *Release builds*). Prod's release build is signed with the **Play upload key** once
 `local.properties` names it, and otherwise with the debug key, one warning line saying so, while
-whatever signs a release bundle (every `bundle*Release`, and `signProdReleaseBundle` alone) refuses; **R8** shrinks the code and the resources; a placeholder **adaptive icon**
+whatever signs prod's bundle (`bundleProdRelease`, and `signProdReleaseBundle` alone) refuses; dev's
+and local's release builds always take the debug key, so they install over their debug builds and
+back; **R8** shrinks the code and the resources; a placeholder **adaptive icon**
 (pink over amber, a white question mark, a themed icon's layer too) and the prod label **Шта би
 радије?** replace the wizard's; and the **window and Android 12's splash screen** are the page
 background, light and dark, so a dark phone never flashes white. CI's verify job builds
-`assembleProdRelease` and runs the app module's first unit test, `WindowThemeTest`. **What you do**:
+`assembleProdRelease`, checks the signing rules (*Release signing*) and runs the app module's first
+unit test, `WindowThemeTest`. **What you do**:
 *Release builds and Google Play*, under *Running it locally*, the upload key and the Data safety form
 among it. **For you to decide**: CLAUDE.md §8b, *The launcher icon and name* and *R8 and Kotlin 2.4's
 metadata*.
@@ -1687,10 +1690,11 @@ with it, or Gradle refuses to build.
 
 ### Release builds and Google Play
 
-A release build is signed with the Play upload key once it is set up (CLAUDE.md §8, *Release
-builds*). Until then `./gradlew :app:androidApp:installDevRelease` still puts a release build on a
-phone, signed with the debug key and saying so in one warning line, and `bundleProdRelease`, the file
-Play takes, refuses at once, naming what is missing.
+Prod's release build is signed with the Play upload key once it is set up (CLAUDE.md §8, *Release
+builds*); until then with the debug key, saying so in one warning line, and `bundleProdRelease`, the
+file Play takes, refuses at once, naming what is missing. Dev's and local's release builds are always
+signed with the debug key, so `./gradlew :app:androidApp:installDevRelease` installs over `devDebug`
+and back, keeping the phone's guest, before the key and after it.
 
 **Play App Signing, in short.** Play keeps the *app signing key* and signs what phones install with
 it; the *upload key*, yours, only proves an upload came from you. A lost or leaked upload key is reset
@@ -1722,7 +1726,8 @@ are untouched. So the keystore below deserves a backup, but it is not the app.
 
    A build machine can set `WYR_UPLOAD_STORE_FILE`, `WYR_UPLOAD_STORE_PASSWORD`,
    `WYR_UPLOAD_KEY_ALIAS` and `WYR_UPLOAD_KEY_PASSWORD` instead. `./gradlew
-   :app:androidApp:signingReport` then says *Config: upload* for every release variant.
+   :app:androidApp:signingReport` then says *Config: upload* for `prodRelease`, and *Config: debug*
+   for every other variant.
 3. Build the bundle: `./gradlew :app:androidApp:bundleProdRelease`, which writes
    `app/androidApp/build/outputs/bundle/prodRelease/androidApp-prod-release.aab`.
 4. In the Play Console (the developer account is CLAUDE.md §8b *Play Games sign-in*'s step 1):
