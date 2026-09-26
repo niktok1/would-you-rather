@@ -59,12 +59,14 @@ dependency.
                      domain logic. explicitApi() enforced.
                      Depended on by BOTH :server and :core:network.
 
-:core:domain         Domain models, repository/cache ports, use cases. PURE Kotlin.
+:core:domain         Domain models, repository/cache ports, use cases, the analytics port
+                     (Analytics, §8g). PURE Kotlin.
                      Depends on NOTHING else in the project — not even :core.
                      The innermost layer. explicitApi() enforced.
 
 :core:network        Ktor client, the Json config, platform token storage, API classes,
-                     the server environments (WyrEnvironment, §8e).
+                     the server environments (WyrEnvironment, §8e), and the analytics
+                     sender, PostHog over its HTTP API (PostHogAnalytics, §8g).
                      Depends on :core and :core:domain.
 
 :core:data           Repository implementations, local cache, DTO<->domain mapping.
@@ -130,8 +132,13 @@ mechanism; this table is the rationale.
 | Server DB driver   | PostgreSQL JDBC        | Server-only Java exception (§2)                  |
 | Local dev DB       | H2 (in-memory)         | Dev/test only. Never production                  |
 | Lint               | ktlint (Gradle plugin) | Style pinned in `.editorconfig`                  |
+| Product analytics  | PostHog (service, HTTP API, no SDK) | EU cloud; over the Ktor client (§8g) |
 
 Server database engine: **PostgreSQL** (via Exposed). Hosting: **Render** — see §8.
+
+**PostHog is a service, not a library** (*decided 2026-09-26*): the clients call its public HTTP
+`/batch/` endpoint with the Ktor client already in the tree (`PostHogAnalytics`, §8g), so nothing is
+added to the catalog, and no PostHog SDK, none of which is Kotlin Multiplatform, is ever added.
 
 **SQLDelight status.** It is in the catalog and remains the intended local cache for Android,
 iOS, and desktop, but it is **not wired up**. It has no wasmJs driver, and web is an in-scope
@@ -1818,6 +1825,52 @@ hand, so the two cannot say different things; and **English** stands beside them
   change may put Serbian ones through `SerbianScript.toLatin`; a local question is never
   translated, §8b *Local questions*), and the moderation app
   (`:app:adminApp`) stays English, naming categories in Serbian (`nameOf`).
+
+## 8g. Analytics — decided 2026-09-26
+
+The user: "I would like to have detailed overview, for all platforms ... like live player count,
+where do they click, where do they stay the most, average question answered, how many find the account
+etc. everything that helps make it better." So the game reports what players do to **PostHog**,
+**EU cloud** unless a build names another host (§4), from **shared code**, so all four platforms send
+the same events. The moderation app sends none.
+
+- **The port** *(built)*: `Analytics` in `:core:domain` (`io.ntole.wyr.core.domain.analytics`):
+  `track(event, properties)`, `screen(name)`, `identify(playerId)`, `reset()`, `flush()`, and the
+  player's switch, `enabled` and `setEnabled`. Every call returns at once and none throws: analytics
+  never blocks or fails the game. `Analytics.None` sends and keeps nothing. Every event's name is an
+  `AnalyticsEvent` constant and every property's an `AnalyticsProperty` one, so what is sent is listed
+  there, and a name, once sent, never changes, or the dashboards built on it lose it.
+- **The sender** *(built)*: `PostHogAnalytics` in `:core:network`, over PostHog's public
+  `POST <host>/batch/` with the project key in the body, and its own Ktor client (no auth, a 30 s
+  bound). A batch goes every 20 events (`BATCH_SIZE`), 30 s after the first event waiting
+  (`FLUSH_INTERVAL`), and on `flush()`, which the app calls as it goes to the background. At most
+  1,000 events wait (`MAX_QUEUED`), in memory only, the oldest dropped first; a request carries at
+  most 100. A batch the network failed, or the service answered 408, 429 or 5xx, waits again, in
+  front, and nothing more goes on size alone until the next timer; one it refused otherwise (a bad
+  key) is dropped. Every step runs one at a time on its own dispatcher, so no two race, and a step
+  that throws anything is swallowed there. `PostHogAnalyticsTest` drives it over a `MockEngine` on
+  virtual time; no test ever calls PostHog or any server.
+- **Who** *(built)*: a random id per install, the event's `distinct_id`, kept in the platform's
+  `TokenStorage` under a key of each environment's own, `wyr.analytics.id.local`, `.dev` and `.prod`
+  (`PostHogAnalytics.idKeyFor`), beside the sessions and the language and none of them, so a DEV
+  build's player is never a PROD one's (§8e). `identify(playerId)`, on a registration or a login,
+  sends PostHog's `$identify` with the install's id as `$anon_distinct_id`, which joins what the
+  install sent before to the player, and makes the player id the install's from then on; `reset()`,
+  on a logout, makes a fresh random one, in a fresh session. The player id is the server's random id,
+  as a question's is; never the username.
+- **What every event carries** *(built)*: `distinct_id`; `$session_id`, a version 7 UUID, a new one
+  after 30 minutes without an event or 24 hours on (as PostHog's own SDKs count sessions, which its
+  session views need); `$screen_name`, the screen last shown; `$lib` (`wyr-kotlin`),
+  `$app_version`, `$os`, `$os_version` and `$device_type` as PostHog's SDKs name them (a browser's
+  from its user agent, `osOfUserAgent`), `platform` (`android`, `ios`, `desktop` or `web`) and
+  `environment` (`local`, `dev` or `prod`); and a `uuid` and a `timestamp` of its own.
+- **What is never sent**: the username, an email, a password, any question's or option's text, the
+  moderator's reason, anything typed, a token or the admin token. A question is its id, a category
+  its id, a failure the domain's name for it (`DomainError`).
+- **The switch** *(built in the sender)*: on by default, and off is kept for the device, under
+  `wyr.analytics.enabled` (`on` or `off`), whatever the environment, as the language is (§8f): the
+  choice is the person's. Off sends nothing more and drops what waited. A build with no key keeps the
+  choice all the same, since a player cannot tell one build from another.
 ---
 
 ## 9. How to work in this repo
