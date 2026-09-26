@@ -438,6 +438,13 @@ This project must never be attributed to any employer identity.
     so a shrink that fails the build fails CI; one that fails only at run time shows on a device
     alone (NEXT-SESSION.md, *Release builds and Google Play*, has the emulator check). R8 warns that
     it cannot read Kotlin 2.4's metadata (§8b, *R8 and Kotlin 2.4's metadata*).
+  - *The launcher icon*: adaptive (`mipmap-anydpi-v26/ic_launcher.xml`, and `_round`), of
+    `drawable/launcher_background.xml`, option A's pink over option B's amber (§5b), and
+    `drawable/launcher_foreground.xml`, a white question mark inside the 66dp circle every launcher's
+    mask keeps, which is the themed icon's monochrome layer too; Android 7 gets the two layers square
+    (`mipmap/ic_launcher.xml`). A placeholder (§8b, *The launcher icon and name*): the final icon
+    replaces the two drawables. The Play listing's own 512 by 512 icon is uploaded in the Play Console.
+  - *The label*: *Шта би радије?* for `prod`, *WYR Dev* and *WYR Local* for the others (§8e).
 
 ## 8a. Authentication — resolved
 
@@ -777,6 +784,11 @@ EncryptedSharedPreferences: enough for a game that stores no sensitive personal 
   batch, which the client reads as out of questions. The Categories screen sends the categories
   selected (§8d, *The Categories screen*), so a player reaches this in every build, PROD's included.
   `SkipStoreTest` pins what is built.
+- **The launcher icon and name** — *provisional — user decision* (§8, *Release builds*). Built: a
+  placeholder icon, option A's pink over option B's amber and a white question mark, and the `prod`
+  label *Шта би радије?* in Cyrillic whatever the phone's language, as the game opens in Cyrillic
+  (§8f). The options: the user's own icon, in the placeholder's two drawables; and the label in Latin,
+  *Šta bi radije?*, on a phone set to Serbian Latin (one more string, in `values-b+sr+Latn`).
 - **R8 and Kotlin 2.4's metadata** — *provisional — user decision.* AGP 9.0.1's R8 warns, a dozen
   times a release build, that it cannot parse the metadata of Kotlin 2.4.10's classes. Only
   kotlin-reflect reads that metadata at run time, and the app has none; the shrunk build played on an
@@ -2101,7 +2113,7 @@ game UI (the moderation app, `:app:adminApp`, §3) can name one too.
 - *Android*: product flavors `local`, `dev` and `prod` in one `environment` dimension;
   `BuildConfig.WYR_ENV` is the flavor's name, which `WyrApplication` passes on. Each installs beside
   the others: application id suffix `.local`, `.dev` or none, launcher label *WYR Local*, *WYR Dev* or
-  *WYR*. Cleartext HTTP (the `usesCleartextTraffic` manifest placeholder) is on for `local` alone;
+  *Шта би радије?* (§8, *Release builds*). Cleartext HTTP (the `usesCleartextTraffic` manifest placeholder) is on for `local` alone;
   `dev` and `prod` are https only. `dev` is Android Studio's default variant, since a physical phone
   cannot reach LOCAL. `assembleDebug` builds all three.
 - *Desktop*: the `WYR_ENV` environment variable, read in `:app:shared`'s jvmMain

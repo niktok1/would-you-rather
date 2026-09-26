@@ -174,7 +174,9 @@ android {
             manifestPlaceholders["usesCleartextTraffic"] = false
         }
         create("prod") {
-            resValue("string", "app_name", "WYR")
+            // The game's name as Home shows it, in Serbian Cyrillic (CLAUDE.md §8f), whatever the
+            // device's language; the Play listing's name is set apart, in the Play Console.
+            resValue("string", "app_name", "Шта би радије?")
             manifestPlaceholders["usesCleartextTraffic"] = false
         }
         configureEach {

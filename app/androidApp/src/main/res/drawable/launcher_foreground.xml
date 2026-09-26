@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    The launcher icon's foreground: a white question mark inside the 66dp circle in the middle of the
+    108dp canvas that every launcher's mask keeps. One colour on transparency, so it is the themed
+    icon's monochrome layer too (mipmap-anydpi-v26/ic_launcher.xml). A placeholder, as the background.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- The hook: three quarters round a circle of radius 13 about (54,43), then down into the stem. -->
+    <path
+        android:pathData="M41,43a13,13 0,1 1,22.19 9.19C59.5,55.9 54,57.5 54,61L54,63"
+        android:strokeWidth="9"
+        android:strokeColor="#FFFFFF"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+    <!-- The dot. -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M54,78m-5.5,0a5.5,5.5 0,1 1,11 0a5.5,5.5 0,1 1,-11 0" />
+</vector>
