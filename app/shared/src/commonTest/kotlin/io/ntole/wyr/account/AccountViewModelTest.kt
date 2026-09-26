@@ -723,6 +723,50 @@ class AccountViewModelTest {
             assertTrue(analytics.recorded.none { "bob_1" in it.toString() || "horse" in it.toString() })
         }
 
+    /**
+     * The Auth page takes signed in down as it leaves, which it does as soon as a frame shows the
+     * registration worked, while the read after it may still run, and fail.
+     */
+    @Test
+    fun `a registration is reported as completed although the Auth page left and the read after failed`() =
+        runTest(dispatcher) {
+            val viewModel = open()
+            viewModel.setRegisterUsername("bob_1")
+            viewModel.setRegisterPassword("correct horse")
+            val read = CompletableDeferred<Unit>()
+            game.statsWaitsFor = read
+
+            viewModel.register()
+            testScheduler.advanceUntilIdle()
+            viewModel.leftAuth()
+            game.statsFailWith = DomainError.NETWORK
+            read.complete(Unit)
+            testScheduler.advanceUntilIdle()
+
+            assertEquals(1, analytics.named(AnalyticsEvent.REGISTER_COMPLETED).size)
+        }
+
+    /** A read quick enough that the Auth page leaves only while My questions is read. */
+    @Test
+    fun `a login is reported as completed although the Auth page left while the list was read`() =
+        runTest(dispatcher) {
+            game.accounts["bob_1"] = "correct horse" to "bob-player"
+            val viewModel = open()
+            viewModel.setAuthMode(AuthMode.LOG_IN)
+            viewModel.setLoginUsername("bob_1")
+            viewModel.setLoginPassword("correct horse")
+            val list = CompletableDeferred<Unit>()
+            game.mineWaitsFor = list
+
+            viewModel.logIn()
+            testScheduler.advanceUntilIdle()
+            viewModel.leftAuth()
+            list.complete(Unit)
+            testScheduler.advanceUntilIdle()
+
+            assertEquals(1, analytics.named(AnalyticsEvent.LOGIN_COMPLETED).size)
+        }
+
     @Test
     fun `a login is reported once it worked`() =
         runTest(dispatcher) {
@@ -822,6 +866,9 @@ class AccountViewModelTest {
         var questionsAnswered = 0
         var statsFailWith: DomainError? = null
 
+        /** When set, a read of the stats waits for it before it answers, or fails with [statsFailWith]. */
+        var statsWaitsFor: CompletableDeferred<Unit>? = null
+
         /** When set, a registration waits for it before it answers. */
         var registerWaitsFor: CompletableDeferred<Unit>? = null
 
@@ -832,6 +879,9 @@ class AccountViewModelTest {
         val questionsOf = mutableMapOf<String, List<Submission>>()
         var mineFailsWith: DomainError? = null
 
+        /** When set, a read of the player's questions waits for it before it answers. */
+        var mineWaitsFor: CompletableDeferred<Unit>? = null
+
         /** Who is playing on this device, as the stored session names them, or none. */
         var player: String? = null
             private set
@@ -841,6 +891,7 @@ class AccountViewModelTest {
 
         override suspend fun stats(): PlayerStats {
             calls += "stats"
+            statsWaitsFor?.await()
             statsFailWith?.let { throw WyrException(it) }
             val playing = ensure()
             return PlayerStats(
@@ -880,6 +931,7 @@ class AccountViewModelTest {
 
         override suspend fun mine(): List<Submission> {
             calls += "mine"
+            mineWaitsFor?.await()
             mineFailsWith?.let { throw WyrException(it) }
             return questionsOf[ensure()].orEmpty()
         }

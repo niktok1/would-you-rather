@@ -176,13 +176,17 @@ class AccountViewModel(
 
         viewModelScope.launch {
             try {
-                try {
-                    block()
-                } catch (failure: WyrException) {
-                    _state.update { it.copy(failure = AccountFailure(action, failure.error, failure.retryAfter)) }
-                }
-                load()
-                report(action)
+                val worked =
+                    try {
+                        block()
+                        true
+                    } catch (failure: WyrException) {
+                        _state.update { it.copy(failure = AccountFailure(action, failure.error, failure.retryAfter)) }
+                        false
+                    }
+                val account = load()
+                // Not from signedIn, which the Auth page takes down as it leaves, while the read runs.
+                report(action, completed = worked || (action in AUTH_ACTIONS && account))
             } finally {
                 _state.update { it.copy(running = null) }
             }
@@ -191,11 +195,14 @@ class AccountViewModel(
 
     /**
      * What [action] ended in, once the player was read after it, for the analytics: a register or a
-     * login that worked, its answer lost or not, and every failure the screens show.
+     * login that [completed], its answer lost or not, and every failure the screens show.
      */
-    private fun report(action: AccountAction) {
+    private fun report(
+        action: AccountAction,
+        completed: Boolean,
+    ) {
         val settled = _state.value
-        if (settled.signedIn) {
+        if (completed) {
             when (action) {
                 AccountAction.REGISTER -> analytics.track(AnalyticsEvent.REGISTER_COMPLETED)
                 AccountAction.LOG_IN -> analytics.track(AnalyticsEvent.LOGIN_COMPLETED)
@@ -224,10 +231,10 @@ class AccountViewModel(
      * or a login whose answer was lost worked all the same when the read after it names an account:
      * it raises [AccountState.signedIn] too, and its failure goes. A failed read keeps what was
      * shown, and says so: the stats' unless the action before it already failed, which says more,
-     * and the list's under the list.
+     * and the list's under the list. It answers whether the player read is an account's.
      */
-    private suspend fun load() {
-        loadStats()
+    private suspend fun load(): Boolean {
+        val account = loadStats()
         try {
             val submissions = getMySubmissions()
             _state.update { it.copy(submissions = submissions) }
@@ -238,9 +245,11 @@ class AccountViewModel(
                 )
             }
         }
+        return account
     }
 
-    private suspend fun loadStats() {
+    /** Reads who is playing, and whether that is an account. */
+    private suspend fun loadStats(): Boolean =
         try {
             val stats = getPlayerStats()
             _state.update {
@@ -257,12 +266,13 @@ class AccountViewModel(
                     )
                 }
             }
+            stats.username != null
         } catch (failure: WyrException) {
             _state.update {
                 it.copy(failure = it.failure ?: AccountFailure(AccountAction.LOAD, failure.error, failure.retryAfter))
             }
+            false
         }
-    }
 }
 
 /** The actions the Auth page's forms send, whose failures show under them. */

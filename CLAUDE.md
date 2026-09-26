@@ -1963,8 +1963,10 @@ the same events. The moderation app sends none.
     and `answered`). The time is the app's `TimeSource.WithComparableMarks` (`uiModule`).
   - *Account* (`AccountViewModel`): `account_opened` each time the screen is shown (`shown()`);
     `register_started` as a registration is sent, and `register_completed` once it worked, its answer
-    lost included, the read after it naming the account; `login_completed`; `logout`, sent before the
-    logout so it is the account's.
+    lost included, the read after it naming the account; `login_completed` the same way. Each is
+    decided from the action's own answer and that read, never from `AccountState.signedIn`, which the
+    Auth page takes down as it leaves, while the read may still run, and fail; `logout`, sent before
+    the logout so it is the account's.
   - *Submit* (`SubmitViewModel`): `submit_opened` each time the form is shown; `submit_sent` once
     stored (`categories`, `count`); `submit_refused` (`code`) for any refusal.
   - *Categories* (`CategoriesViewModel`): `categories_changed` when Play sends a new selection
