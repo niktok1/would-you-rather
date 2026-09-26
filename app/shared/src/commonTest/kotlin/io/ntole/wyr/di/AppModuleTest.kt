@@ -129,7 +129,7 @@ class AppModuleTest {
         ).forEach { (name, environment) ->
             // Only the environment is resolved: the platform's own storage is never built, so nothing
             // of this machine's is read or written.
-            initKoin(environmentName = name, analytics = NO_ANALYTICS)
+            initKoin(environmentName = name, analytics = NO_ANALYTICS, build = 10000)
 
             assertEquals(environment, KoinPlatform.getKoin().get<WyrEnvironment>(), "\"$name\"")
             stopKoin()
@@ -143,6 +143,7 @@ class AppModuleTest {
                 initKoin(
                     environmentName = "staging",
                     analytics = NO_ANALYTICS,
+                    build = 10000,
                 )
             }
 
@@ -154,7 +155,8 @@ class AppModuleTest {
     fun `a PostHog host that is none stops the app before Koin starts`() {
         val analytics = AnalyticsSettings(key = "phc_key", host = "eu posthog com", appVersion = "1.0")
 
-        val failure = assertFailsWith<IllegalArgumentException> { initKoin(environmentName = "dev", analytics) }
+        val failure =
+            assertFailsWith<IllegalArgumentException> { initKoin(environmentName = "dev", analytics, build = 10000) }
 
         assertTrue("eu posthog com" in failure.message.orEmpty(), failure.message)
         assertNull(KoinPlatform.getKoinOrNull())
@@ -178,7 +180,11 @@ class AppModuleTest {
         storage: TokenStorage = InMemoryTokenStorage(),
     ): Koin {
         val platform = module { single<TokenStorage> { storage } }
-        return koinApplication { modules(listOf(platform) + appModules(environment, analytics = null)) }.koin
+        return koinApplication {
+            modules(
+                listOf(platform) + appModules(environment, analytics = null, build = null),
+            )
+        }.koin
     }
 
     private companion object {

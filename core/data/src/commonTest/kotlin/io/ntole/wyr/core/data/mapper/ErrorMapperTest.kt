@@ -41,7 +41,7 @@ class ErrorMapperTest {
                     ApiException(ErrorCode.INVALID_RECOVERY_SECRET, status = 401) to DomainError.UNKNOWN,
                     ApiException(ErrorCode.RATE_LIMITED, status = 429) to DomainError.RATE_LIMITED,
                     // Until a build names itself and says to update; never SERVER, which would say retry.
-                    ApiException(ErrorCode.UPGRADE_REQUIRED, status = 426) to DomainError.UNKNOWN,
+                    ApiException(ErrorCode.UPGRADE_REQUIRED, status = 426) to DomainError.UPGRADE_REQUIRED,
                     ApiException(ErrorCode.INVALID_USERNAME, status = 422) to DomainError.INVALID_USERNAME,
                     ApiException(ErrorCode.INVALID_PASSWORD, status = 422) to DomainError.INVALID_PASSWORD,
                     ApiException(ErrorCode.USERNAME_TAKEN, status = 409) to DomainError.USERNAME_TAKEN,
@@ -72,6 +72,12 @@ class ErrorMapperTest {
     fun `without a code a 429 still reads as RATE_LIMITED`() =
         runTest {
             assertMapsTo(DomainError.RATE_LIMITED, ApiException(ErrorCode.UNKNOWN, status = 429))
+        }
+
+    @Test
+    fun `without a code a 426 still reads as UPGRADE_REQUIRED`() =
+        runTest {
+            assertMapsTo(DomainError.UPGRADE_REQUIRED, ApiException(ErrorCode.UNKNOWN, status = 426))
         }
 
     @Test

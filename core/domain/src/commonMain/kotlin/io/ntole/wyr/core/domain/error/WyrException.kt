@@ -82,6 +82,13 @@ public enum class DomainError {
      */
     INVALID_LOGIN,
 
+    /**
+     * The server serves this build nothing more: it is older than the platform's minimum (CLAUDE.md
+     * §8b, *Minimum client version*). Only an update puts it right, which the game says on a screen of
+     * its own (`AppUpdate`). Never [UNAUTHORIZED]: the session is fine.
+     */
+    UPGRADE_REQUIRED,
+
     /** Request never reached the server, or its answer did not arrive whole. */
     NETWORK,
 

@@ -39,11 +39,14 @@ import io.ntole.wyr.core.domain.session.SessionRepository
 import io.ntole.wyr.core.domain.submission.GetMySubmissions
 import io.ntole.wyr.core.domain.submission.SubmissionRepository
 import io.ntole.wyr.core.domain.submission.SubmitQuestion
+import io.ntole.wyr.core.domain.update.AppUpdate
 import io.ntole.wyr.core.domain.vote.CastVote
 import io.ntole.wyr.core.domain.vote.VoteRepository
+import io.ntole.wyr.core.network.ClientBuild
 import io.ntole.wyr.core.network.InMemoryTokenStorage
 import io.ntole.wyr.core.network.SessionStore
 import io.ntole.wyr.core.network.TokenStorage
+import io.ntole.wyr.core.network.UpgradeSignal
 import io.ntole.wyr.core.network.WyrHttpClient
 import io.ntole.wyr.core.network.analytics.PostHogAnalytics
 import io.ntole.wyr.core.network.analytics.PostHogConfig
@@ -71,15 +74,28 @@ import org.koin.dsl.module
  *   that storage ([SessionStore]), as its analytics id is.
  * @param analytics the PostHog project the build sends its analytics to (CLAUDE.md §8g), or none,
  *   when nothing is sent: the [Analytics] bound keeps only the player's switch then.
+ * @param build the build every request names (CLAUDE.md §8b, *Minimum client version*), or none, for
+ *   a build that could not read its own number, whose requests name nothing. An answer that the build
+ *   is too old raises the [AppUpdate] bound, whichever call it was.
  */
 public fun dataModule(
     environment: WyrEnvironment,
     analytics: PostHogConfig?,
+    build: ClientBuild?,
 ): Module =
     module {
         single { SessionStore(get<TokenStorage>(), environment) }
         single<Analytics> { PostHogAnalytics(config = analytics, storage = get(), environment = environment) }
-        single<HttpClient> { WyrHttpClient.create(baseUrl = environment.apiBaseUrl, sessionStore = get()) }
+        single { UpgradeSignal() }
+        single<AppUpdate> { get<UpgradeSignal>() }
+        single<HttpClient> {
+            WyrHttpClient.create(
+                baseUrl = environment.apiBaseUrl,
+                sessionStore = get(),
+                build = build,
+                upgrade = get(),
+            )
+        }
 
         single { AuthApi(get()) }
         single { QuestionApi(get()) }
@@ -128,7 +144,8 @@ public fun dataModule(
  * to a platform's storage. No session repository is bound either, so nothing can mint a guest. The
  * admin token goes on each call as it is handed to the use case.
  *
- * The only moderation wiring there is: the game's [dataModule] binds none of it.
+ * The only moderation wiring there is: the game's [dataModule] binds none of it. Its requests name no
+ * build (CLAUDE.md §8b, *Minimum client version*), so no minimum ever refuses the moderator.
  */
 public fun moderationDataModule(environment: WyrEnvironment): Module =
     module {

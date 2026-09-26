@@ -854,8 +854,9 @@ EncryptedSharedPreferences: enough for a game that stores no sensitive personal 
   body, is counted as it is read and stopped one byte past the cap (`BodyOverCap`), which
   `receiveOrReject` answers 413. The code is `VALIDATION_FAILED`, since no correct client sends one.
   `RequestBodyCapTest` pins both, and the cap's edge.
-- **Minimum client version** *(built 2026-09-26; no client sends the headers yet)* — every request of
-  the game's will name its build: `X-Client-Platform` (`android`, `ios`, `web` or `desktop`,
+- **Minimum client version** *(built 2026-09-26; the game sends the headers since
+  `feat/account-client`, §8e *The build on every request*)* — every request of
+  the game's names its build: `X-Client-Platform` (`android`, `ios`, `web` or `desktop`,
   `WyrApi.ClientPlatform`) and `X-Client-Version`, a whole build number (`WyrApi.Headers`). Each
   platform's oldest build served comes from `MIN_CLIENT_VERSION_ANDROID`, `_IOS`, `_WEB` or
   `_DESKTOP` (unset, the default, no minimum; one that is not a whole number of at least 1 fails at
@@ -865,8 +866,8 @@ EncryptedSharedPreferences: enough for a game that stores no sensitive personal 
   426). A request that names no build passes, the moderation app's and every build's from before the
   headers, and so do a platform with no minimum and a version that is no whole number: *provisional*,
   since refusing it would lock a broken build out whatever its number. On the client
-  `UPGRADE_REQUIRED` reads as `DomainError.UNKNOWN` until the branch that sends the headers gives it
-  one of its own. `ClientVersionTest`, `CorsTest`, `ServerConfigTest`.
+  `UPGRADE_REQUIRED`, or a bare 426, is `DomainError.UPGRADE_REQUIRED`, and the first one raises the
+  game's `AppUpdate` (§8e). `ClientVersionTest`, `CorsTest`, `ServerConfigTest`.
 - **Logging** *(built 2026-09-26)* — beside Ktor's line per call and the rate limiter's per refusal,
   one INFO line for each stored submission, naming the question and its author by id
   (`submission <id> stored, by player <id>`), and one for each admin action that went through, a
@@ -2109,6 +2110,17 @@ game UI (the moderation app, `:app:adminApp`, §3) can name one too.
   Preferences node, one bundle id's `NSUserDefaults`, one origin's `localStorage`. With one key, a
   build for one server sent the other's tokens to it and, once they were refused, replaced that
   guest, and its points, with a new one (§8a). Android's flavors have storage of their own anyway.
+- *The build on every request* (*built 2026-09-26*, §8b *Minimum client version*). Each entry point
+  reads the build number (§8g, *The build number*) where it reads the environment's name, Android's
+  `BuildConfig.VERSION_CODE`, the web build's `BUILD_NUMBER`, desktop's `wyr.app.build` property and
+  iOS's `CFBundleVersion`, and hands it to `initKoin`, which makes it a `ClientBuild` (`:core:network`)
+  with the platform's name. The game's HTTP client (`WyrHttpClient.create`'s `build`, bound by
+  `dataModule`) sends `X-Client-Platform` and `X-Client-Version` on every request, a refresh's
+  included; the moderation app's sends neither, and neither does a build that read no number (a
+  desktop app started without the property), which the server serves as a build from before the
+  headers. The first answer `UPGRADE_REQUIRED`, or a bare 426, raises the `UpgradeSignal` the client is
+  given, bound as the domain's `AppUpdate`, whichever call it was. `WyrHttpClientTest`,
+  `ClientBuildTest`, `DataModuleTest`, `DesktopBuildNumberTest`, `BundledBuildNumberTest`.
 - *Analytics* (§8g). Each entry point reads the PostHog project the build sends to where it reads the
   environment's name, and hands both to `initKoin`. Every event names its environment, and an
   install's analytics id is one per environment, as its session is.
