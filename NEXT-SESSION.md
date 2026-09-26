@@ -401,6 +401,60 @@ engine at stop. Docs only: the cascades, CIO, push timing and the §8b list of s
 registered player, for good, with no unlink: provisional); and "stores nothing personal" is now "no
 sensitive personal data", the privacy policy to name FCM and Play Games (§8b *Personalization*).
 
+**`feat/play-client`** (from 2a4f96e; not merged, not pushed): the game's side of the server work of
+2026-09-26 on the Play and Home screens, and the theme's contrast. One commit each:
+- **Answer time** (0959d91; CLAUDE.md §8b *Personalization*): every vote carries `answerMillis`, the
+  time the Play screen measures from the question shown to the tap (`ScreenStopwatch`), through
+  `CastVote` and `VoteRepository.cast`; a resend of the same attempt sends the same value.
+- **Questions in Latin** (516be8a; §8f *Questions in Latin*): in Serbian Latin a question's options
+  show through `SerbianScript.toLatin` (`optionText`), on the cards and in My questions.
+- **Options that fit** (80dd9de1; §8d *The Play screen*): a long option shrinks from 22 to a floor of
+  14, 2 at a time (Compose's `TextAutoSize.StepBased`, already in the catalog's Compose 1.11), so two
+  200-character options fit an iPhone SE's cards whole, asked and revealed, and on one on its side.
+- **Repeat notice** (67b3a4d5): `Question.answeredBefore` is back in the domain, and a question
+  answered before shows a small muted *Већ одговорено* above the cards, in the screen's top padding,
+  so nothing moves.
+- **The question's menu** (02d45ff1; §8d *The Play screen*, *Reports*): a ⋮ before the account icon on
+  Play's top bar: *Пријави питање* (then five reasons), *Не приказуј ми ово питање*, *Не приказуј
+  питања овог аутора*. Each goes on to the next question once the server has it; a failure shows in
+  the row's failure slot (`reactionError` is now `rowError`, shared). `ReportRepository` and three
+  use cases in `:core:domain`, `DefaultReportRepository` over `ReportApi`; hiding an author drops the
+  question queue. New events `question_reported`, `question_hidden`, `author_hidden`, and the taps
+  `question_menu.*` (§8g).
+- **Home's two Play buttons** (637d41b9; §8d *Home picks*): under the name, two buttons in the cards'
+  colours, stacked or side by side as the Play screen's cards stand, each with its share of all taps
+  counted up as the reveal counts; read each time Home is shown; a tap opens Play at once and is
+  counted in the background. `HomePickRepository`, `GetHomePicks`, `PickOnHome`, `HomeViewModel`.
+- **Contrast** (2b406099; §5b *Contrast*): `WyrContrastTest` holds every pair to WCAG AA in both
+  themes; the light theme's `muted` is `#6F6E68` (was 3.4 to 1) and failures have an `error` token
+  of their own (card A's pink read at 3.7 on the light page).
+- A tidy-up (de4dc8b4).
+
+Verified on this machine: `ktlintCheck`; the verify job's tests, `:server:test` (480, run again with
+`--rerun`, the server untouched), `:core:domain` 83, `:core:data` 156, `:core:network` 112 and its
+Android host tests, `:app:shared` 424, `:app:adminApp` 106, none failing; its client compiles,
+`:app:androidApp:assembleDebug` among them; and the iOS Kotlin compiles (`:app:shared:compileKotlinIosSimulatorArm64` and
+`compileTestKotlinIosSimulatorArm64`, each `:core` module's `compileTestKotlinIosSimulatorArm64`).
+**Not verified**: the `ios` CI job (framework link, simulator tests, `xcodebuild`); any device or
+emulator: the menu's popup, the shrinking type and the Home buttons on a real phone, a phone on its side
+smaller than an iPhone SE's (a 200-character option is cut there at the floor, as it is at a large font
+size); nothing called a deployed server.
+
+**For the user**, each provisional in CLAUDE.md §8b: *After a report or a hide* (nothing said, the next
+question is the acknowledgement; or a brief line); *The question's menu on the top bar* (the ⋮ before
+the account icon; or last, or the categories kept in the middle); *Card A's contrast* (white on
+`#D4537E` is 3.9 to 1, AA only for large text, and a long option shrinks below it; `#C4466F` would be
+4.7, the brand colour left as it is until you decide). Also worth a look: the five reasons' wording
+(`QuestionMenuStrings`) and Home's two buttons both saying *Играј*.
+
+**Merging it beside the other Wave 2 branches**: `feat/moderation-reports` adds
+`core.domain.moderation.ReportReason` (with `UNKNOWN`, for reading reports) and this branch
+`core.domain.report.ReportReason` (without, for sending one): fold them into one after both land. A
+test elsewhere that finds the Play screen by `listOf(home, account)` on its bar needs the menu's name
+between them (`AppNavigationTest.PLAY_BAR`), and one that taps Play on Home by its text finds two
+buttons (`tapPlay()`). `HomeScreen` takes `picks` and `onPlay(Side)`; `VoteRepository.cast` takes
+`answerMillis` (a fake must add the parameter); `PlayViewModel` takes the three report use cases.
+
 ### Verified working
 
 - **`feat/server-engagement`**, on this machine, at 8660e01 and again at a371b0e after the review's

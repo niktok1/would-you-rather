@@ -1476,9 +1476,9 @@ Categories screen and the question's menu from its top bar (*Skipping*, *Reactio
   and two bars and nothing else, where a text changed every frame recomposed both cards, laid them
   out again and told any accessibility service, too much for a debug build, several times slower, to
   do 60 times a second.
-- One action at a time (`isBusy`, `canChangeCategories`): while a vote, a skip or a reaction is in
-  flight, the cards, the thumbs, Skip and the categories are off, and Skip is drawn muted
-  (`WyrColors.muted`). A reaction that failed says why in the points' place, in two short lines at
+- One action at a time (`isBusy`, `canChangeCategories`): while a vote, a skip, a reaction or a menu
+  choice is in flight, the cards, the thumbs, Skip, the categories and the menu are off, and Skip and
+  the menu are drawn muted (`WyrColors.muted`). A reaction that failed says why in the points' place, in two short lines at
   most, in a slot as high as a thumb's touch target at any font size, so it moves nothing; a skip that
   failed moves on all the same.
 - Loading is a spinner; a failure is one short sentence and *Покушај поново* (`Strings.tryAgain`,
