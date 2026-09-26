@@ -181,6 +181,17 @@ public object WyrApi {
         public const val MY_QUESTIONS: String = "/$VERSION/me/questions"
 
         /**
+         * POST, with no body: deletes the account of the player the bearer token names, answered 204
+         * (CLAUDE.md §8a, *Deleting an account*). Requires a session. Everything that is theirs goes:
+         * their username and password, their sessions on every device, their votes, skips, reactions,
+         * reports and hides, and their questions no player is served; their approved questions stay,
+         * with nobody as their author, and each like they held is taken back from its author. The client
+         * then plays on as a fresh guest ([AUTH_GUEST]). A token of a player deleted already is 401
+         * [io.ntole.wyr.core.error.ErrorCode.UNAUTHORIZED], as it is on every route. Limited per player.
+         */
+        public const val ME_DELETION: String = "/$VERSION/me/deletion"
+
+        /**
          * The moderator's queue (CLAUDE.md §8d, *Moderation*): the submissions waiting for a decision,
          * oldest first, as a [io.ntole.wyr.core.question.SubmissionListDto], so its head is the next
          * to decide and asking again after deciding it gets the rest. [Query.STATUS] lists those of

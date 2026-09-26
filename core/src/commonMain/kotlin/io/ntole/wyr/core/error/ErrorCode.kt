@@ -92,7 +92,7 @@ public enum class ErrorCode {
 
     /**
      * A moderator named an author, to block or unblock, whom no player is: an id the admin routes never
-     * sent. Sent with 404.
+     * sent, or an author whose account is deleted since. Sent with 404.
      */
     AUTHOR_NOT_FOUND,
 

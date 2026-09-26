@@ -19,7 +19,7 @@ data class RequestBudget(
 /**
  * What one client may send (CLAUDE.md §8b, *Rate limiting*): a budget for each group of routes, spent
  * apart from every other group's. Registrations, logouts, the feed, votes, skips, reactions, submissions,
- * reports, hides and the two reads of the player's own are per player, so players behind one address do
+ * reports, hides, deletions and the two reads of the player's own are per player, so players behind one address do
  * not share them; the rest, whose caller has no session to name, or needs none, per client address.
  *
  * Each is overridable by the environment variable [fromEnvironment] names, a count per the period the
@@ -60,6 +60,8 @@ data class RateLimits(
     val reports: RequestBudget,
     /** `POST /v1/hidden-questions` and `POST /v1/hidden-authors` together. */
     val hides: RequestBudget,
+    /** `POST /v1/me/deletion`. A player deletes their account once; a retry after a lost answer is 401. */
+    val deletions: RequestBudget,
     /** `GET /v1/me`. */
     val stats: RequestBudget,
     /** `GET /v1/me/questions`. */
@@ -98,6 +100,7 @@ data class RateLimits(
                 submissions = RequestBudget(requests = 30, per = 1.hours),
                 reports = RequestBudget(requests = 30, per = 1.hours),
                 hides = RequestBudget(requests = 60, per = 1.hours),
+                deletions = RequestBudget(requests = 10, per = 1.hours),
                 stats = RequestBudget(requests = 120, per = 1.minutes),
                 mySubmissions = RequestBudget(requests = 120, per = 1.minutes),
                 categories = RequestBudget(requests = 120, per = 1.minutes),
@@ -137,6 +140,7 @@ data class RateLimits(
                     submissions = budget("RATE_LIMIT_SUBMISSIONS_PER_HOUR", submissions),
                     reports = budget("RATE_LIMIT_REPORTS_PER_HOUR", reports),
                     hides = budget("RATE_LIMIT_HIDES_PER_HOUR", hides),
+                    deletions = budget("RATE_LIMIT_DELETIONS_PER_HOUR", deletions),
                     stats = budget("RATE_LIMIT_STATS_PER_MINUTE", stats),
                     mySubmissions = budget("RATE_LIMIT_MY_SUBMISSIONS_PER_MINUTE", mySubmissions),
                     categories = budget("RATE_LIMIT_CATEGORIES_PER_MINUTE", categories),

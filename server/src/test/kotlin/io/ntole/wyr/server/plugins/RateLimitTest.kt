@@ -500,6 +500,18 @@ class RateLimitTest {
                     caller.client.post(WyrApi.Paths.HIDDEN_AUTHORS) { json(caller.player, HideAuthorRequest(SEED)) }
                 }
             },
+            // A signed token of a player who is not there, so every one is answered alike, 401, and spends
+            // that player's budget: a real one's first deletion would leave nothing for the next.
+            Group(
+                "deletions",
+                { copy(deletions = it) },
+                allowed = HttpStatusCode.Unauthorized,
+                needsSession = false,
+            ) { caller ->
+                caller.client.post(WyrApi.Paths.ME_DELETION) {
+                    bearerAuth(accessTokenIssued("a-player-deleted-already", ago = Duration.ZERO))
+                }
+            },
             Group("stats", { copy(stats = it) }) { caller ->
                 caller.client.get(WyrApi.Paths.ME) { bearerAuth(caller.player.accessToken) }
             },

@@ -335,6 +335,9 @@ smallest client compile fixes.
   (provisional; a threshold was the other option).
 - **An operator's trail** (§8b, *Logging*): one INFO line per stored submission and per admin action,
   ids only, never what anyone typed, nor a token or password.
+- **Deleting an account** (§8a, *Deleting an account*; V13): `POST /v1/me/deletion`, 204, deletes the
+  player and all that is theirs, keeps their approved questions with nobody as author, and takes each
+  like they held back from its author. The client then plays on as a fresh guest.
 
 ### Verified working
 

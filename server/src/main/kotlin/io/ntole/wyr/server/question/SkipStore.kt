@@ -109,7 +109,7 @@ object SkipStore {
             Skips.update({ (Skips.playerId eq playerId) and (Skips.questionId eq questionId) }) { row ->
                 row[skippedInCycle] = cycle
             }
-        // Nothing deletes a skip, and this transaction holds its lock.
+        // Only its player's account going deletes a skip, and this transaction holds its lock.
         check(moved == 1) { "skip by $playerId of $questionId vanished mid-transaction" }
     }
 }

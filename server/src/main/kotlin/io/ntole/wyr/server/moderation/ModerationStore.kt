@@ -119,7 +119,7 @@ object ModerationStore {
      * transaction. It is served to nobody, ever: nothing moves a question on from rejected.
      *
      * The author gets back what the question cost them ([Questions.submissionCost], CLAUDE.md §8c), in
-     * this transaction, as an SQL increment ([PlayerStore.addPoints]). [decide]'s update holds the
+     * this transaction, as an SQL increment ([PlayerStore.payAuthor]). [decide]'s update holds the
      * question's row lock until the transaction ends, so the cost read here is the one decided on, and
      * only the one rejection that wins pays it back.
      */
@@ -137,7 +137,7 @@ object ModerationStore {
                 .single()
         val author = paid[Questions.authorPlayerId]
         if (author != null && paid[Questions.submissionCost] > 0) {
-            PlayerStore.addPoints(author, points = paid[Questions.submissionCost])
+            PlayerStore.payAuthor(author, points = paid[Questions.submissionCost])
         }
 
         return decided(questionId)
@@ -154,8 +154,9 @@ object ModerationStore {
      * matches nothing and is refused. By id alone it would match, and overwrite the first decision:
      * with it, exactly one of two moderators deciding one submission wins.
      *
-     * A refusal reads once more to tell the two apart. Nothing deletes a question and none goes back
-     * to pending, so one found now was already decided when the update ran.
+     * A refusal reads once more to tell the two apart. None goes back to pending, and the only
+     * deletion of a question, its author's account going (`AccountDeletion`), leaves it not found as it
+     * should be, so one found now was already decided when the update ran.
      */
     private fun decide(
         questionId: String,
@@ -234,8 +235,8 @@ object ModerationStore {
     /**
      * Applies [change] to the question [questionId] if it stands at [from], or refuses: 409 for one
      * that does not, and 404 for an id no question has. A compare-and-set, as [decide] is: 0 rows
-     * updated means the question was not at [from], and as nothing deletes a question, one found
-     * afterwards was already elsewhere when the update ran.
+     * updated means the question was not at [from], and as nothing deletes an approved question, retired
+     * or not, one found afterwards was already elsewhere when the update ran.
      */
     private fun move(
         questionId: String,

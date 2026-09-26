@@ -88,7 +88,9 @@ object ReportStore {
      * only be a failure they could do nothing about (provisional, CLAUDE.md §8b). An author may hide
      * their own questions from themselves, as they may answer them.
      *
-     * The author is a plain read, as a like's is (`ReactionStore`): nothing changes who wrote a question.
+     * The author is a plain read, as a like's is (`ReactionStore`). Only the author's account going
+     * changes it, to nobody, in a transaction that holds the author's row lock (`AccountDeletion`): an
+     * insert here waits for it on the foreign key, fails once it commits, and the rerun finds no author.
      */
     fun hideAuthorOf(
         playerId: String,

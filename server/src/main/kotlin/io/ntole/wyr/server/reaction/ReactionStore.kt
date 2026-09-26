@@ -139,8 +139,9 @@ object ReactionStore {
      * Pays the question's author [points], or takes them back when negative. A seed has no author,
      * and pays nobody.
      *
-     * The author is a plain read, safe because nothing ever changes who wrote a question. The points
-     * are an SQL increment ([PlayerStore.addPoints]), so a burst of likes for one author all count.
+     * The author is a plain read, safe because only the author's account going changes who wrote a
+     * question, to nobody, and a payment to an author who is gone pays nobody ([PlayerStore.payAuthor]).
+     * The points are an SQL increment, so a burst of likes for one author all count.
      */
     private fun payAuthorOf(
         questionId: String,
@@ -152,7 +153,7 @@ object ReactionStore {
                 .where { Questions.id eq questionId }
                 .single()[Questions.authorPlayerId]
                 ?: return
-        PlayerStore.addPoints(playerId = author, points = points)
+        PlayerStore.payAuthor(authorId = author, points = points)
     }
 
     /**

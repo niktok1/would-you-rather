@@ -11,11 +11,14 @@ import kotlinx.serialization.Serializable
  * [id], [optionA], [optionB] and [categories] are as in a [SubmissionDto], and [categories] is sent
  * and decoded as [QuestionDto.categories] is. [status] is where the question stands with the
  * moderator. [seed] is true for one of the server's starter questions, which nobody wrote and which is
- * approved from the start, and false for a player's submission.
+ * approved from the start, and false for a player's submission, but for an approved one whose author
+ * deleted their account, which is nobody's from then on and so is sent as a seed (CLAUDE.md §8a,
+ * *Deleting an account*).
  *
  * [authorId] names who wrote it, opaquely (CLAUDE.md §8d, *Moderation*): the author's player id, which
  * says nothing about them but which questions are theirs, and which
- * [io.ntole.wyr.core.api.WyrApi.Paths.ADMIN_AUTHOR_BLOCKS] takes; never a username. Null for a seed.
+ * [io.ntole.wyr.core.api.WyrApi.Paths.ADMIN_AUTHOR_BLOCKS] takes; never a username. Null for a seed,
+ * and for a question whose author deleted their account.
  * Sent only to the moderator: no player's DTO carries it.
  *
  * [submittedAt] is when the server stored the question, submitted or seeded, and [reviewedAt] when a

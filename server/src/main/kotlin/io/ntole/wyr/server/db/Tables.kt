@@ -103,8 +103,9 @@ object Players : Table("players") {
  * Every session a player has (CLAUDE.md §8a, *Sessions*): one refresh-token family per device, each
  * rotating on its own, so a refresh on one device never touches another's tokens. A guest's mint
  * opens the first (`SessionStore.open`), and V4 opened one for every player who held a refresh token
- * then. Only a logout deletes a row (`SessionStore.close`): a session whose tokens have expired is dead
- * where it lies, and nothing caps how many a player has.
+ * then. Only a logout deletes a row (`SessionStore.close`), and an account's deletion every one of the
+ * player's (`AccountDeletion`): a session whose tokens have expired is dead where it lies, and nothing
+ * caps how many a player has.
  */
 object Sessions : Table("sessions") {
     val id = varchar("id", 36)
@@ -133,9 +134,14 @@ object Sessions : Table("sessions") {
     init {
         // A refresh looks its token up by either hash, so without an index every refresh, a stranger's
         // guess included, would read the whole table. Unique: a hash names one token, and that token
-        // one session. Nothing looks a player's sessions up, so player_id has no index of its own.
+        // one session.
         index(isUnique = true, refreshTokenHash)
         index(isUnique = true, previousRefreshTokenHash)
+        // For an account's deletion, which deletes the player's sessions, and the foreign key's check as
+        // their row goes, which PostgreSQL does not index by itself (V13): without it each would read the
+        // whole table, which never shrinks but by a logout. With id in it, as the reactions' is, so it is
+        // no copy of the index H2 makes for the key.
+        index(isUnique = false, playerId, id)
     }
 }
 
@@ -145,7 +151,9 @@ object Questions : Table("questions") {
     val optionB = varchar("option_b", WyrApi.Limits.MAX_OPTION_LENGTH)
 
     /**
-     * The player who submitted the question (CLAUDE.md §8d), or null for a seed, which nobody wrote.
+     * The player who submitted the question (CLAUDE.md §8d), or null for a seed, which nobody wrote, and
+     * for an approved question whose author deleted their account (`AccountDeletion`), which the rest of
+     * the server then takes for a seed.
      * The author is served it like any other player (`QuestionStore.servable`).
      */
     val authorPlayerId = varchar("author_player_id", 36).references(Players.id).nullable()

@@ -175,7 +175,7 @@ object VoteStore {
                 row[answeredInCycle] = cycle
                 row[Votes.attemptId] = attemptId
             }
-        // Nothing deletes a vote, and this transaction holds its lock.
+        // Only its player's account going deletes a vote, and this transaction holds its lock.
         check(moved == 1) { "vote by $playerId on $questionId vanished mid-transaction" }
     }
 

@@ -114,6 +114,7 @@ class ServerConfigTest {
         assertEquals(RequestBudget(30, 1.hours), limits.submissions)
         assertEquals(RequestBudget(30, 1.hours), limits.reports)
         assertEquals(RequestBudget(60, 1.hours), limits.hides)
+        assertEquals(RequestBudget(10, 1.hours), limits.deletions)
         assertEquals(RequestBudget(60, 1.minutes), limits.admin)
         assertEquals(RequestBudget(10, 1.minutes), limits.adminTokenFailures)
     }
@@ -134,6 +135,7 @@ class ServerConfigTest {
                 Triple("RATE_LIMIT_SUBMISSIONS_PER_HOUR", RateLimits::submissions, 1.hours),
                 Triple("RATE_LIMIT_REPORTS_PER_HOUR", RateLimits::reports, 1.hours),
                 Triple("RATE_LIMIT_HIDES_PER_HOUR", RateLimits::hides, 1.hours),
+                Triple("RATE_LIMIT_DELETIONS_PER_HOUR", RateLimits::deletions, 1.hours),
                 Triple("RATE_LIMIT_STATS_PER_MINUTE", RateLimits::stats, 1.minutes),
                 Triple("RATE_LIMIT_MY_SUBMISSIONS_PER_MINUTE", RateLimits::mySubmissions, 1.minutes),
                 Triple("RATE_LIMIT_CATEGORIES_PER_MINUTE", RateLimits::categories, 1.minutes),

@@ -161,7 +161,10 @@ failing:
   racer re-checks it against the first's commit).
   Or the read takes the row lock (`SELECT ... FOR UPDATE`), so a concurrent writer waits and then
   reads the row as committed (`VoteStore.cast` and `ReactionStore.set`, which branch on more than
-  one outcome, and `SkipStore.skip` and `ReportStore.report`).
+  one outcome, and `SkipStore.skip` and `ReportStore.report`). `AccountDeletion.delete` locks the
+  player's row before anything of theirs is read, so each row of theirs a racing writer would add
+  waits on it through its foreign key and fails once the deletion commits, and its rerun finds them
+  gone; it locks their reactions before it counts their likes.
   A read of rows a racing writer is about to add has no row to lock, so it locks a parent row that
   every such writer locks first (`SubmissionStore.submit` counts an author's pending questions
   under the author's `players` row, and `ModerationStore.blockAuthor` reads them under it too, so a
@@ -518,6 +521,24 @@ decided in §8b).
     refresh token's 30 days; one idle longer plays on as a fresh guest, and logs in again. No
     password is stored, anywhere: the phone's password manager may keep it, offered as the Auth page,
     where the game's client registers and logs in, leaves the screen (§8d, *The Account screen*).
+- **Deleting an account** (*decided 2026-09-26*: Google Play asks a game with accounts to let a
+  player delete theirs; built on the server, no client yet) is `POST /v1/me/deletion`
+  (`WyrApi.Paths.ME_DELETION`), bearer required, no body, answered 204, for a guest and a registered
+  player alike. It deletes, in one transaction (`AccountDeletion.delete`), the player's row with its
+  username and password hash, their sessions on every device, their votes, skips, reactions, reports
+  and hides, and their questions no player was ever served, pending and rejected; their **approved
+  questions stay**, retired ones included, with nobody as their author, as a seed has: served as
+  before, their votes and reactions kept, their likes from then on paying nobody. Each like the
+  player held is taken back as taking it back would, a point from its question's author (§8c), so
+  every other author's total still adds up. A player who hid the deleted author keeps each of their
+  approved questions hidden, one by one. The username is free for another from then on. The client
+  then plays on as a fresh guest. A token of a player deleted already is 401 `UNAUTHORIZED`, as on
+  every route, and so is a second deletion; limited per player, 10 an hour (§8b). One INFO line
+  names the player. Edge cases, accepted: a deleted author's approved question reads as a seed to
+  the moderator (`seed`, and no `authorId`), since nothing tells the two apart; a like, a refund or a
+  hide of an author racing the deletion pays or hides nobody (`PlayerStore.payAuthor`,
+  `AccountDeletionTest`); and a login to the account racing its deletion can fail as a 500.
+  `AccountDeletionTest`, `AccountDeletionFlowTest`.
 
 **Known limitation, by design for now:** a guest account is bound to one device's storage. Lose
 the device, reinstall the app or clear its storage, and the account — and its points — are gone,
@@ -638,7 +659,8 @@ EncryptedSharedPreferences: enough for a game that stores nothing personal.
   - *Per player*, so players behind one address do not share a budget: registrations 20 an hour
     (every one the rules take costs a password hash), logouts 30 a minute, the feed, votes and skips
     120 a minute each, reactions 60 a minute, submissions 30 an hour (the 20-pending cap still applies),
-    reports 30 an hour, hiding a question or an author 60 an hour together,
+    reports 30 an hour, hiding a question or an author 60 an hour together, account deletions 10 an
+    hour,
     `GET /v1/me` and `GET /v1/me/questions` 120 a minute each. The key is the player id in the
     bearer token, which the limiter verifies itself (`verifiedPlayerId`): it runs before
     authentication, so no principal is there yet. A request without a token this server signed
@@ -788,7 +810,8 @@ seed (`Migrations`, `DatabaseFactory.init`). Nothing builds a table any other wa
   as a guest, and every later script: V6 (the categories table, §8d *Categories*), V7 (what a
   question cost, §8c), V8 (the seeds' made-up votes), V9 (the seeds in Serbian, §8d *Seeds*),
   V10 (likes become reactions, §8d *Reactions*), V11 (reports and hidden questions, §8d
-  *Reports*) and V12 (an author's block, §8d *Moderation*).
+  *Reports*), V12 (an author's block, §8d *Moderation*) and V13 (sessions indexed by player, for an
+  account's deletion, §8a).
   `Migrations.migrate` takes the baseline itself (`baselineVersion` 1), and only for a database
   holding every table V1 builds (`TABLES_BEFORE_MIGRATIONS`) and no history table; Flyway's
   `baselineOnMigrate` is off. Any other database with tables and no history fails the boot, rather
@@ -868,7 +891,8 @@ seed (`Migrations`, `DatabaseFactory.init`). Nothing builds a table any other wa
   every build before it reads, so none of them runs on what it leaves: accepted, since nothing is live
   yet and so no build before it is a rollback target (the user, 2026-09-26). V11 only adds tables,
   which a build before never names, so it serves hidden questions again and takes no report until
-  the roll forward; V12 only adds a nullable column, so a blocked author submits again there. `MigrationsTest` reads a
+  the roll forward; V12 only adds a nullable column, so a blocked author submits again there; V13
+  only adds an index. `MigrationsTest` reads a
   table a later script dropped by name (`DROPPED_TABLES`), since `Tables.kt` no longer names it.
 - *Several instances booting at once* (Render starts a deploy's new instance before it stops the old
   one): on PostgreSQL each script runs under Flyway's advisory lock, so one boot migrates while the
@@ -921,6 +945,10 @@ returns and never recomputes points, so the two cannot disagree.
   an author is paid for their own like (§8d, *Reactions*), so liking their approved question gives its
   cost back. *Decided 2026-09-25: keep it.* The cost is 1 point only until release and will rise,
   and with thousands of questions an author rarely meets their own.
+- An account's deletion (§8a, *Deleting an account*) takes each like the player held back from its
+  author, a point per like, in its own transaction (`PlayerStore.payAuthor`), so the sum above holds
+  for every author who is left. Their approved questions are nobody's from then on, so a like of one
+  pays nobody, as a seed's.
 - `PlayerStore.addPoints` adds in SQL (`total_points = total_points + n`), never as a read then a
   write, so two votes by one player landing together cannot lose a point, nor a burst of likes for
   one author. `PlayerStore.spend` takes a cost the same way, as a compare-and-set on having it
@@ -1491,7 +1519,8 @@ listed on the Account screen.
     that author wrote, those approved later included, is never served to the player again
     (`hidden_authors`, V11). The author stays anonymous: the player names them only by a question,
     and learns nothing of who they are. A **seed** has no author, so hiding its author hides only that
-    seed: *provisional — user decision*, since a player cannot tell a seed from any other question and
+    seed, as it does a question whose author deleted their account: *provisional — user decision*,
+    since a player cannot tell a seed from any other question and
     a refusal would be a failure they could do nothing about; the options were 409 or doing nothing.
     An author may hide their own questions from themselves. Hiding again writes nothing. Each is 204,
     and **nothing unhides** a question or an author, for now.
@@ -1660,7 +1689,8 @@ listed on the Account screen.
     `ReportModerationFlowTest`.
   - *Authors* (*built on the server 2026-09-26; the moderation app does not use them yet*): every
     admin DTO names a question's author by an opaque id, `authorId`, the author's player id, which says
-    nothing about them but which questions are theirs; never a username, and null for a seed.
+    nothing about them but which questions are theirs; never a username, and null for a seed and for
+    a question whose author deleted their account (§8a).
     `AdminQuestionDto.authorId` and `SubmissionDto.authorId`, the latter filled on the admin routes
     alone (`toSubmission`'s `forModerator`): the author's own list and a submission's answer never
     carry it, nor does anything a player is sent. `POST /v1/admin/author-blocks` with a

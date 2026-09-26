@@ -44,6 +44,7 @@ enum class RouteLimit(
     SUBMISSIONS(RateLimits::submissions, KeyedBy.PLAYER),
     REPORTS(RateLimits::reports, KeyedBy.PLAYER),
     HIDES(RateLimits::hides, KeyedBy.PLAYER),
+    DELETIONS(RateLimits::deletions, KeyedBy.PLAYER),
     STATS(RateLimits::stats, KeyedBy.PLAYER),
     MY_SUBMISSIONS(RateLimits::mySubmissions, KeyedBy.PLAYER),
     CATEGORIES(RateLimits::categories, KeyedBy.ADDRESS),

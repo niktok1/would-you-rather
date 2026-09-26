@@ -587,6 +587,7 @@ internal class MigrationsTest(
                 "10 SQL",
                 "11 SQL",
                 "12 SQL",
+                "13 SQL",
             )
 
         /** V1's table of likes, which V10 replaced with reactions, so Tables.kt no longer names it. */
