@@ -339,6 +339,15 @@ smallest client compile fixes.
   player and all that is theirs, keeps their approved questions with nobody as author, and takes each
   like they held back from its author. The client then plays on as a fresh guest.
 
+Verified on this machine: `ktlintCheck`, `:server:test` (401 tests, H2 only), every `:core` module's
+`jvmTest`, `:core:network:testAndroidHostTest`, `:app:shared:jvmTest`, `:app:adminApp:jvmTest`, the
+verify job's client compiles, every `:core` module's and `:app:shared`'s iOS compiles, and the fat
+jar booted on port 18110 on H2 (health, a 426 for an old build, a report, a hide, the reports list,
+a 413, a deletion). **Not verified**: V11 to V13 and the new SQL on PostgreSQL (the `server-postgres`
+CI job runs them: the feed's two `NOT EXISTS`, the reports list ordered by subqueries, the deletion's
+`INSERT ... SELECT`), and no race test runs on PostgreSQL (they are H2's, as all are). Migrations
+V11 to V13 are this branch's; `feat/server-engagement` starts at V15, so V14 is free.
+
 ### Verified working
 
 - **`merge/redesign` after the review of the `feat/category-picker` merge** (6b44dc4, 5a8adf7 and
