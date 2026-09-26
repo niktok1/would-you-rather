@@ -6,6 +6,8 @@
   Placeholders are in [BRACKETS] (class "ph"); CHECK comments mark what depends on a feature not
   built yet, or on a fact to confirm. NEXT-SESSION.md has the list. The CHECK comments are on the
   Serbian page.
+  What the game does not do yet carries a "coming" pill (class "soon") and is written as coming;
+  when the feature ships, drop the pill and put the text in the present tense, in both languages.
   Google Play's "Delete account URL": it must name the app and its developer as on the listing, say
   how to ask for deletion without the app, and what is deleted and kept, and for how long.
 -->
@@ -15,7 +17,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex">
   <meta name="color-scheme" content="light dark">
-  <meta name="description" content="How to delete your Would You Rather? (Шта би радије?) account, in the app or by email, and what is deleted.">
+  <meta name="description" content="How to delete your Would You Rather? (Шта би радије?) account, by email or in the app, and what is deleted.">
   <title>Account deletion — Would You Rather?</title>
   <link rel="stylesheet" href="../style.css">
 </head>
@@ -38,43 +40,43 @@
 
   <main id="main" class="wrap">
     <h1>Account deletion</h1>
-    <p class="lead">You can delete your account in Would You Rather? (<span lang="sr-Cyrl">Шта би радије?</span>; developer: <span class="ph">[ИМЕ И ПРЕЗИМЕ / NAME]</span>) in the app or by email. Deletion is permanent and cannot be undone.</p>
+    <p class="lead">You can delete your account in Would You Rather? (<span lang="sr-Cyrl">Шта би радије?</span>; developer: <span class="ph">[ИМЕ И ПРЕЗИМЕ / NAME]</span>) by email, and soon in the app. Deletion is permanent and cannot be undone.</p>
+
+    <section aria-labelledby="by-email">
+      <h2 id="by-email">By email, without the app</h2>
+      <p>Email <span class="ph">[EMAIL]</span> with the subject "Account deletion" and the account's username. We will delete it within 30 days at the latest and let you know when we have. We may ask you to confirm the account is yours, for example by naming one of your questions. We will never ask for your password.</p>
+      <p>A guest has no username, so we cannot find a guest account by email: delete it in the app. If the app is already gone, no device leads to the guest any more, and it stays on the server for <span class="ph">[РОК / PERIOD]</span>.</p>
+    </section>
 
     <section aria-labelledby="in-app">
-      <h2 id="in-app">In the app</h2>
+      <h2 id="in-app">In the app <span class="soon">coming</span></h2>
+      <p>Deleting in the app is being built. Once it arrives, it will go like this:</p>
       <ol class="steps">
         <li>Open the game and tap the account icon at the top right.</li>
         <li>On the <strong>Account</strong> screen (<span lang="sr-Cyrl">Налог</span>), tap <strong>Delete account</strong> (<span lang="sr-Cyrl">Обриши налог</span>).</li>
         <li>Confirm.</li>
       </ol>
-      <p>The account is deleted at once, and on that device the game carries on as a new guest. This works for a guest and for an account with a username alike.</p>
-    </section>
-
-    <section aria-labelledby="by-email">
-      <h2 id="by-email">By email, without the app</h2>
-      <p>Email <span class="ph">[EMAIL]</span> with the subject "Account deletion" and the account's username. We will delete it within 30 days at the latest and let you know when we have. We may ask you to confirm the account is yours, for example by naming one of your questions. We will never ask for your password.</p>
-      <p>A guest has no username, so we cannot find a guest account by email: delete it in the app. If the app is already gone, the guest is deleted automatically after 90 days unused.</p>
+      <p>The account is deleted at once, on every device, and on the device you delete it from the game carries on as a new guest. This deletes a guest and an account alike, whether it has a username or is linked to Google Play Games.</p>
+      <p>A guest you log in to another account from, on some device, stays a player of its own and is not deleted with that account. If you do not want it to stay, delete it in the app before you log in.</p>
     </section>
 
     <section aria-labelledby="deleted">
       <h2 id="deleted">What is deleted</h2>
       <ul>
-        <li>the player and its id, the username and the password hash;</li>
+        <li>the player and its id, the username and the password hash, points and stats;</li>
         <li>every session, so you are logged out on every device;</li>
-        <li>points and stats;</li>
-        <li>answers, answer times, skipped questions and reactions, so the counts on questions no longer include them;</li>
+        <li>answers, with their times, skipped questions and reactions, so the counts on questions no longer include them; every like you gave is taken back, along with the point it earned the question's author;</li>
         <li>questions waiting for review and rejected questions, with their reasons;</li>
-        <li>your reports of questions;</li>
-        <li>the notification token, the link to Google Play Games and the personalization data.</li>
+        <li><span class="soon">coming</span> reports of questions, hidden questions and authors, notification tokens, and the link to Google Play Games.</li>
       </ul>
     </section>
 
     <section aria-labelledby="kept">
       <h2 id="kept">What stays</h2>
       <ul>
-        <li><strong>Approved questions</strong>, including those taken out of the game, stay in the game without an author: nothing in the database links them to you any more. Other players' answers and reactions to them stay.</li>
-        <li><strong>Analytics:</strong> events are tied to a random id, not to the account, and are deleted after <span class="ph">[РОК / PERIOD]</span>.</li>
-        <li><strong>Server logs</strong> and database backups, if any, until they expire, <span class="ph">[РОК / PERIOD]</span>.</li>
+        <li><strong>Approved questions</strong>, including those taken out of the game, stay in the game without an author: nothing in the database links them to you any more. Other players' answers and reactions to them stay, and players who hid you as an author still do not see them, without learning who you are.</li>
+        <li><strong>Analytics:</strong> events already sent to PostHog stay tied to the device's random id and, if you registered or logged in, to your player id, which after the deletion names nobody in our database. They are deleted after <span class="ph">[РОК / PERIOD]</span>.</li>
+        <li><strong>Server logs</strong>, which may hold your player id, and database backups, if any, until they expire, <span class="ph">[РОК / PERIOD]</span>.</li>
         <li>Data the law requires us to keep, only for as long as it requires.</li>
       </ul>
       <p>Removing the app from a device does not by itself delete the account.</p>

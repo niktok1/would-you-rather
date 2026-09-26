@@ -5,8 +5,11 @@
   Before publishing, remove from every page: this comment, the robots meta tag and the .draft banner.
   Placeholders are in [BRACKETS] (class "ph"); CHECK comments mark what depends on a feature not
   built yet, or on a fact to confirm. NEXT-SESSION.md has the list.
+  What the game does not do yet carries a "у изради" pill (class "soon") and is written as coming;
+  when the feature ships, drop the pill and put the text in the present tense, in both languages.
   Google Play's "Delete account URL": it must name the app and its developer as on the listing, say
-  how to ask for deletion without the app, and what is deleted and kept, and for how long.
+  how to ask for deletion without the app, and what is deleted and kept, and for how long. The lists
+  below follow the server's deletion (AccountDeletion, CLAUDE.md §8a, Deleting an account).
 -->
 <html lang="sr-Cyrl">
 <head>
@@ -14,7 +17,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex">
   <meta name="color-scheme" content="light dark">
-  <meta name="description" content="Како да обришеш налог у игри Шта би радије?, у апликацији или имејлом, и шта се брише.">
+  <meta name="description" content="Како да обришеш налог у игри Шта би радије?, имејлом или у апликацији, и шта се брише.">
   <title>Брисање налога — Шта би радије?</title>
   <link rel="stylesheet" href="style.css">
 </head>
@@ -37,48 +40,48 @@
 
   <main id="main" class="wrap">
     <h1>Брисање налога</h1>
-    <p class="lead">Налог у игри „Шта би радије?“ (програмер: <span class="ph">[ИМЕ И ПРЕЗИМЕ / NAME]</span>) можеш да обришеш у апликацији или имејлом. Брисање је трајно и не може да се поништи.</p>
+    <p class="lead">Налог у игри „Шта би радије?“ (програмер: <span class="ph">[ИМЕ И ПРЕЗИМЕ / NAME]</span>) можеш да обришеш имејлом, а ускоро и у апликацији. Брисање је трајно и не може да се поништи.</p>
+
+    <section aria-labelledby="by-email">
+      <h2 id="by-email">Имејлом, без апликације</h2>
+      <p>Пошаљи имејл на <span class="ph">[EMAIL]</span> са насловом „Брисање налога“ и корисничким именом налога. Обрисаћемо га најкасније у року од 30 дана и јавити ти кад то урадимо. Можда ћемо те замолити да потврдиш да је налог твој, на пример тако што наведеш једно од својих питања. Лозинку никад нећемо тражити.</p>
+      <p>Гост нема корисничко име, па његов налог имејлом не можемо да пронађемо: обриши га у апликацији. Ако је апликација већ обрисана, до госта више не води ниједан уређај, а на серверу остаје <span class="ph">[РОК / PERIOD]</span>.</p>
+      <!-- CHECK: no admin tool deletes an account by username yet (the server's deletion is the player's own call, POST /v1/me/deletion): the email route needs one, or a documented manual step on the database, before launch. A player signed in with Play Games alone has no username: decide how they name their account in an email. Nothing deletes an unreachable guest yet, and no period is decided (privacy.html, section 6). -->
+    </section>
 
     <section aria-labelledby="in-app">
-      <h2 id="in-app">У апликацији</h2>
+      <h2 id="in-app">У апликацији <span class="soon">у изради</span></h2>
+      <p>Брисање у апликацији се прави. Кад стигне, ићи ће овако:</p>
       <ol class="steps">
         <li>Отвори игру и додирни икону налога горе десно.</li>
         <li>На екрану <strong>Налог</strong> додирни <strong>Обриши налог</strong>.</li>
         <li>Потврди брисање.</li>
       </ol>
-      <p>Налог се брише одмах, а на том уређају игра се наставља као нови гост. Ово важи и за госта и за налог са корисничким именом.</p>
-      <!-- CHECK: deleting an account is not built yet. Match the steps to the screen that ships: the button's place, whether a registered player confirms with the password, and whether "одмах" holds. -->
-    </section>
-
-    <section aria-labelledby="by-email">
-      <h2 id="by-email">Имејлом, без апликације</h2>
-      <p>Пошаљи имејл на <span class="ph">[EMAIL]</span> са насловом „Брисање налога“ и корисничким именом налога. Обрисаћемо га најкасније у року од 30 дана и јавити ти кад то урадимо. Можда ћемо те замолити да потврдиш да је налог твој, на пример тако што наведеш једно од својих питања. Лозинку никад нећемо тражити.</p>
-      <p>Гост нема корисничко име, па његов налог имејлом не можемо да пронађемо: обриши га у апликацији. Ако је апликација већ обрисана, гост се брише сам, после 90 дана без коришћења.</p>
-      <!-- CHECK: the 90-day clean-up of guests is planned, not built. -->
+      <p>Налог се брише одмах, на свим уређајима, а на уређају са ког га обришеш игра се наставља као нови гост. Тако се брише и гост и налог, са корисничким именом или повезан са Google Play играма.</p>
+      <p>Гост са ког се на неком уређају пријавиш на други налог остаје засебан играч и не брише се са тим налогом. Ако не желиш да остане, обриши га у апликацији пре пријаве.</p>
+      <!-- CHECK: the server's deletion is built (CLAUDE.md §8a, Deleting an account: at once, for a guest and a registered player alike, then the device plays on as a fresh guest); the Account screen's button is being built. Match the steps to the screen that ships: the button's place and whether it asks for the password. -->
     </section>
 
     <section aria-labelledby="deleted">
       <h2 id="deleted">Шта се брише</h2>
       <ul>
-        <li>играч и његов идентификатор, корисничко име и хеш лозинке;</li>
+        <li>играч, његов идентификатор, корисничко име и хеш лозинке, поени и статистика;</li>
         <li>све сесије, па се одјављујеш на свим уређајима;</li>
-        <li>поени и статистика;</li>
-        <li>одговори, време одговора, прескочена питања и реакције, па их бројеви на питањима више не рачунају;</li>
+        <li>одговори, са временима, прескочена питања и реакције, па их бројеви на питањима више не рачунају; сваки лајк који си дао повлачи се, заједно са поеном који је донео аутору питања;</li>
         <li>питања која чекају одобрење и одбијена питања, са разлозима;</li>
-        <li>твоје пријаве питања;</li>
-        <li>токен за обавештења, веза са Google Play играма и подаци за персонализацију.</li>
+        <li><span class="soon">у изради</span> пријаве питања, сакривена питања и аутори, токени за обавештења и веза са Google Play играма.</li>
       </ul>
-      <!-- CHECK: match this list to what the server's deletion removes (does it take the votes out of the tallies, and the likes' points from their authors?). Add the email if the optional email ships. -->
     </section>
 
     <section aria-labelledby="kept">
       <h2 id="kept">Шта остаје</h2>
       <ul>
-        <li><strong>Одобрена питања</strong>, и она повучена из игре, остају у игри без аутора: у бази их више ништа не повезује са тобом. Одговори и реакције других играча на њих остају.</li>
-        <li><strong>Аналитика:</strong> догађаји су везани за насумичан идентификатор, не за налог, и бришу се после <span class="ph">[РОК / PERIOD]</span>.</li>
-        <li><strong>Евиденције сервера</strong> и резервне копије базе, ако постоје, до истека свог рока, <span class="ph">[РОК / PERIOD]</span>.</li>
+        <li><strong>Одобрена питања</strong>, и она повучена из игре, остају у игри без аутора: у бази их више ништа не повезује са тобом. Одговори и реакције других играча на њих остају, а играчи који су сакрили тебе као аутора и даље их не виде, не сазнајући ко си.</li>
+        <li><strong>Аналитика:</strong> догађаји већ послати PostHog-у остају везани за насумичан идентификатор уређаја и, ако си се регистровао или пријавио, за идентификатор играча, који после брисања у нашој бази више не означава никога. Бришу се после <span class="ph">[РОК / PERIOD]</span>.</li>
+        <li><strong>Евиденције сервера</strong>, у којима може бити идентификатор твог играча, и резервне копије базе, ако постоје, до истека свог рока, <span class="ph">[РОК / PERIOD]</span>.</li>
         <li>Подаци које закон налаже да сачувамо, само онолико колико налаже.</li>
       </ul>
+      <!-- CHECK: whether a deleted player's analytics should be deleted in PostHog too (a person can be deleted there by id; nothing does it yet) is for the user and the lawyer. -->
       <p>Брисање апликације са уређаја само по себи не брише налог.</p>
       <p>Више о подацима пише у <a href="privacy.html">политици приватности</a>.</p>
     </section>

@@ -424,10 +424,11 @@ This project must never be attributed to any employer identity.
   §5b's colours, light and dark. It deploys for a commit on `main` that changes `site/` and passes
   CI. **Every page is a draft, not legal advice**, until the owner completes it and a lawyer checks
   it: each carries a comment, a `noindex` and a visible banner, the owner's details are placeholders
-  in brackets, and `CHECK` comments mark what describes a feature not built yet (NEXT-SESSION.md
+  in brackets, a feature the game's clients do not have yet is written as coming under a
+  `у изради` / `coming` pill (`.soon`), and `CHECK` comments mark what to confirm (NEXT-SESSION.md
   lists what to do before publishing). The privacy policy and the deletion page describe what the
   game processes, so a change that makes either untrue changes them, both languages, in the same
-  commit.
+  commit, and a feature that ships drops its pill there.
 
 ## 8a. Authentication — resolved
 

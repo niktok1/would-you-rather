@@ -135,6 +135,21 @@ code {
   border: 1px dashed var(--pill-text);
 }
 
+/* "Coming": marks what a page describes before the game has it. A solid pill, so it never reads as
+   one of the owner's dashed placeholders above. Removed, one by one, as each feature ships. */
+.soon {
+  display: inline-block;
+  background: var(--pill-bg);
+  color: var(--pill-text);
+  font-size: 0.78em;
+  font-weight: 700;
+  line-height: 1.5;
+  padding: 0 0.55em;
+  border-radius: 999px;
+  vertical-align: 0.1em;
+  white-space: nowrap;
+}
+
 /* Header. */
 header.site {
   border-bottom: 1px solid var(--line);

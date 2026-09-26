@@ -19,17 +19,25 @@ listing and Data safety form link to, `site/`, served by a new Render static sit
 (CLAUDE.md §8). Five pages, `index`, `privacy`, `terms`, `delete` and `contact`, in Serbian Cyrillic
 (`site/*.html`) and English (`site/en/*.html`), plain HTML and `site/style.css`, no script, nothing
 loaded from another host. Preview: `python3 -m http.server 8123 -d site`, then
-http://localhost:8123. **All drafts, not legal advice.** The privacy policy describes what the game
-is to process at release, which is more than `main` builds: analytics (PostHog EU, with an off
-switch), answer time, reports, push tokens (FCM) for an approved question, Play Games sign-in,
-deleting an account in the app (Налог → Обриши налог), the 90-day clean-up of guests, and
-personalization (planned; never from questions on religion, politics, health or sexuality). Each has
-a `CHECK` comment on the Serbian page. Before Google Play links to it:
+http://localhost:8123. **All drafts, not legal advice.** Brought up to `main` at 2a4f96e: the
+launch's decisions (16 and over; RS, BA, ME and MK; Serbian in both scripts; the four banned topics;
+PostHog EU with the IP discarded and no location, off by the Статистика switch; FCM and Play Games
+named as the Google services they are), and every claim checked against the server's tables and
+`AccountDeletion`. What `main`'s clients do not do yet is written as coming and carries a
+`у изради` / `coming` pill (`.soon`): deleting an account in the app (Налог → Обриши налог; the
+server's route is built), reports and hides, push tokens, Play Games sign-in, the answer time on the
+vote, and personalization (planned). Each also has a `CHECK` comment on the Serbian page. When one
+ships, drop its pill and put its text in the present tense, both languages. The earlier draft's
+90-day clean-up of guests was never decided and is gone: the period is a placeholder. Before Google
+Play links to it:
 1. Fill the placeholders, `grep -rn 'class="ph"' site/`: name, address, email, date, year, the
-   retention periods, the court's town and the store link.
-2. Settle every `grep -rn 'CHECK' site/` against what ships, in both languages; add the optional
-   email if it ships.
-3. Have a lawyer who knows the ZZPL and the GDPR read both languages.
+   retention periods (an unreachable guest's among them, which needs a clean-up built), the court's
+   town and the store link.
+2. Settle every `grep -rn 'CHECK' site/` against what ships, in both languages. Two need building
+   before the email route on `delete.html` is true: a way for the owner to delete an account by
+   username (no admin route does), and a way for a Play-Games-only player to name their account.
+3. Have a lawyer who knows the ZZPL, and the laws of BA, ME and MK, read both languages, and say
+   whether the GDPR applies.
 4. From every page remove the draft comment, `<meta name="robots" content="noindex">` and the
    `.draft` banner.
 5. Merge to `main`, and the Blueprint creates `wyr-site` (sync it in the dashboard if not). Its URL
