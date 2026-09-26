@@ -1036,14 +1036,16 @@ EncryptedSharedPreferences: enough for a game that stores no sensitive personal 
   2. In the Play Console, *Play Games Services → Setup and management → Configuration*: create a
      Play Games Services project, which makes or links a Google Cloud project, and fill in the OAuth
      consent screen it asks for.
-  3. Add the credentials there. An **Android** one per package and signing key that should sign in:
-     `io.ntole.wyr` with the SHA-1 of the Play app signing key (and of the upload key, for a release
-     build installed by hand), and the DEV flavor, `io.ntole.wyr.dev`, with the debug key's SHA-1, for
-     builds made on a laptop (LOCAL's `io.ntole.wyr.local` likewise, for the emulator). Google's
-     documentation asks for a credential whose package name is the app's and says nothing against
-     several packages in one game project, which is what this relies on; if the Play Console refuses a
-     package that is not its app's, Play Games works on the PROD flavor alone, and a DEV build finds
-     nobody signed in to it, which shows nothing (§8a, *The client*). And a **game server** one, an
+  3. Add the credentials there. An **Android** one per package and signing key that should sign in,
+     one credential each: `io.ntole.wyr` with the SHA-1 of the Play app signing key, of the upload key
+     (a release build installed by hand) and of the debug key (a PROD build made on a laptop,
+     `prodDebug`), and the DEV flavor, `io.ntole.wyr.dev`, with the debug key's SHA-1, for builds made
+     on a laptop (LOCAL's `io.ntole.wyr.local` likewise, for the emulator). Google's documentation asks
+     for a credential whose package name is the app's and says nothing against several packages in one
+     game project, which is what this relies on; if the Play Console refuses a package that is not its
+     app's, Play Games works on the PROD flavor alone, a laptop's `prodDebug` build through the debug
+     key's credential, and a DEV build finds nobody signed in to it, which shows nothing (§8a, *The
+     client*). And a **game server** one, an
      OAuth client of type *Web application*: its client ID and secret are `PLAY_GAMES_CLIENT_ID` and
      `PLAY_GAMES_CLIENT_SECRET`, and the same client ID is the app's `wyr.playgames.serverClientId`,
      which it passes to `requestServerSideAccess`. The project id the Play Console shows is the app's

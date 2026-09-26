@@ -1314,10 +1314,13 @@ Render only, as CLAUDE.md §8b says. Once:
 2. Same page, **Credentials → Add credential → Android**: *Create OAuth client* opens Google Cloud;
    there pick *Android*, package `io.ntole.wyr`, and the SHA-1 of the Play app signing key (*Test and
    release → App integrity → App signing*); *Create*, then back in the Play Console pick it and *Save
-   changes*. For builds made on this Mac, add one more for `io.ntole.wyr.dev` with the debug key's SHA-1,
-   `keytool -list -v -keystore ~/.android/debug.keystore -alias androiddebugkey -storepass android`
-   (and `io.ntole.wyr.local` for the emulator). If the Play Console will not take a package that is not
-   its app's, Play Games works on the PROD flavor only; a DEV build then just finds nobody signed in.
+   changes*. For builds made on this Mac, add more, one credential each: `io.ntole.wyr` with the debug
+   key's SHA-1, `keytool -list -v -keystore ~/.android/debug.keystore -alias androiddebugkey -storepass
+   android` (a `prodDebug` build), `io.ntole.wyr` with the upload key's SHA-1 once the release build is
+   signed with it, and `io.ntole.wyr.dev` with the debug key's (and `io.ntole.wyr.local` for the
+   emulator). If the Play Console will not take a package that is not its app's, Play Games works on
+   the PROD flavor only, a `prodDebug` build from this Mac included (`./gradlew
+   :app:androidApp:installProdDebug`); a DEV build then just finds nobody signed in.
 3. **Add credential → Game server**: *Create OAuth client*, type *Web application*; its **client ID**
    is `wyr.playgames.serverClientId` here and `PLAY_GAMES_CLIENT_ID` on Render, its **client secret**
    `PLAY_GAMES_CLIENT_SECRET` on Render only (§8b, *Play Games sign-in*, step 5).
