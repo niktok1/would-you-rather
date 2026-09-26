@@ -439,8 +439,8 @@ decided in §8b).
     built first was dropped (§8b, *Refresh answers lost past the grace*).
   - *The cost* is a copy's: a refresh token copied to a second device, or stolen, keeps working
     beside the original for as long as the two take turns refreshing, each leaving the other's token
-    in the previous slot. Accepted for a game that stores nothing personal (the user's decision,
-    2026-09-24).
+    in the previous slot. Accepted for a game that stores no sensitive personal data (the user's
+    decision, 2026-09-24).
   - *The rotation* is one `UPDATE` of the session whose `WHERE` is the whole check, nothing read
     before it (`SessionStore.rotate`, §4). Of two refreshes racing with the current token, both go
     through, the first's new token becoming the previous one; of two racing with the previous token,
@@ -611,12 +611,12 @@ decided in §8b).
 the device, reinstall the app or clear its storage, and the account — and its points — are gone,
 unless the guest registered (*Accounts*, above), and then only until it logs in again. Session storage is ordinary preference storage
 (SharedPreferences / NSUserDefaults / JVM Preferences / localStorage), not Keychain or
-EncryptedSharedPreferences: enough for a game that stores nothing personal.
+EncryptedSharedPreferences: enough for a game that stores no sensitive personal data.
 
 ## 8b. Open decisions (resolve before relevant work)
 
 - **Accounts** — *decided 2026-09-25; built (§8a, *Accounts*; the Account screen, §8d).* This
-  is a simple game that stores nothing personal, and most players stay a day or a few, so the
+  is a simple game that stores no sensitive personal data, and most players stay a day or a few, so the
   simplest design that is correct enough wins over maximum security. A new player plays at once as a
   guest (§8a). **Register** is optional and keeps the guest's points; **log in** is how a registered
   player gets their account on another device. What the app saves by itself is the session, so a
@@ -879,6 +879,11 @@ EncryptedSharedPreferences: enough for a game that stores nothing personal.
     question carries a trait that keeps its answers out of every affinity. The privacy policy says so,
     and says what is kept and why. The data is **never sold** and never given to an advertiser; it
     stays on the server and serves only which question comes next.
+  - *Personal, if not sensitive*: a Play Games player id, a device's push token and the signals are
+    personal data under GDPR and ZZPL, so the privacy policy also names the Google services they go
+    through: Firebase Cloud Messaging, which gets each device's token and every decision's push, the
+    question's text and a rejection's reason with it (§8a, *Push tokens*), and Google Play Games
+    Services, which names the player (§8a, *Play Games sign-in*).
 
 `RANDOM` was an open item, resolved twice. First as a content category (the absurd questions), not a
 "surprise me" filter. Then, *decided 2026-09-25*: "RANDOM is actually all", so RANDOM is no category
