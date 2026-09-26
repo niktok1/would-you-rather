@@ -1,8 +1,10 @@
 package io.ntole.wyr.server.db
 
 import io.ntole.wyr.core.api.WyrApi
+import io.ntole.wyr.core.push.PushPlatform
 import io.ntole.wyr.core.question.QuestionStatus
 import io.ntole.wyr.core.reaction.Reaction
+import org.jetbrains.exposed.v1.core.ReferenceOption
 import org.jetbrains.exposed.v1.core.Table
 
 /**
@@ -394,10 +396,58 @@ object HomePicks : Table("home_picks") {
 }
 
 /**
+ * The devices a player's pushes reach (CLAUDE.md §8a, *Push tokens*): one row per Firebase registration
+ * token, since a token is one device's, kept under the session that registered it (V17). A token
+ * registered again, by its player or another, moves to whoever sent it last (`PushTokenStore.register`),
+ * the primary key deciding two registrations racing.
+ *
+ * Both foreign keys cascade, unlike every other table's: the logout that deletes a session
+ * (`SessionStore.close`) deletes its device's tokens with it, and deleting a player deletes theirs, with
+ * no store having to know this table is there.
+ */
+object PushTokens : Table("push_tokens") {
+    /** The registration token Firebase gave the device, visible ASCII. */
+    val token = varchar("token", WyrApi.Limits.MAX_PUSH_TOKEN_LENGTH)
+
+    val playerId = varchar("player_id", 36).references(Players.id, onDelete = ReferenceOption.CASCADE)
+
+    /** The session that registered it, the device's own: its logout removes the token. */
+    val sessionId = varchar("session_id", 36).references(Sessions.id, onDelete = ReferenceOption.CASCADE)
+
+    /** Never [PushPlatform.UNKNOWN], which the route refuses. */
+    val platform = enumerationByName<PushPlatform>("platform", 16)
+
+    /** When it was last registered, which keeps a player's newest ones (`PushTokenStore.register`). */
+    val updatedAt = long("updated_at")
+
+    override val primaryKey = PrimaryKey(token)
+
+    init {
+        // For a decision's push and a registration's pruning, which read a player's tokens newest first,
+        // and the cascade from a player. PostgreSQL does not index a foreign key by itself. Two columns,
+        // not player_id alone, which on H2 would duplicate the index H2 makes for the foreign key.
+        // session_id has none: the cascade from a logout reads the table, one row per device with pushes
+        // on, which is quick until there are very many.
+        index(isUnique = false, playerId, updatedAt)
+    }
+}
+
+/**
  * Every table the server owns. The migrations build the schema (`Migrations`), and SchemaDriftTest
  * holds them to this list: a new table belongs here and in a migration, or the build fails. The store
  * tests build their tables straight from it with `SchemaUtils.create`, which that same test shows
  * builds what the migrations do.
  */
 val appTables: Array<Table> =
-    arrayOf(Players, Sessions, Questions, Categories, QuestionCategories, Votes, Skips, Reactions, HomePicks)
+    arrayOf(
+        Players,
+        Sessions,
+        Questions,
+        Categories,
+        QuestionCategories,
+        Votes,
+        Skips,
+        Reactions,
+        HomePicks,
+        PushTokens,
+    )

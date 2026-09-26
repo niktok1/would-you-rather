@@ -170,6 +170,29 @@ public object WyrApi {
         public const val HOME_PICKS: String = "/$VERSION/home-picks"
 
         /**
+         * POST: registers this device's push token for the player the bearer token names, with a
+         * [io.ntole.wyr.core.push.PushTokenRequest], answered 204 (CLAUDE.md §8a, *Push tokens*).
+         * Requires a session, and the token is kept under it: the logout that ends the session
+         * ([AUTH_LOGOUT]) removes it. A token is one device's, so registering one another player
+         * registered moves it to this one, the latest owner winning. The player's pushes, a
+         * moderator's decision on one of their questions for now, reach every device they have
+         * registered, the latest ten. A token or platform the rules refuse, or a malformed body, is 400
+         * [io.ntole.wyr.core.error.ErrorCode.VALIDATION_FAILED]; a session already ended is 401
+         * [io.ntole.wyr.core.error.ErrorCode.UNAUTHORIZED]. Limited per player, with
+         * [MY_PUSH_TOKEN_REMOVALS].
+         */
+        public const val MY_PUSH_TOKENS: String = "/$VERSION/me/push-tokens"
+
+        /**
+         * POST: removes a push token the player the bearer token names registered, with a
+         * [io.ntole.wyr.core.push.RemovePushTokenRequest], answered 204 (CLAUDE.md §8a, *Push tokens*),
+         * so their pushes no longer reach that device. A token that is not theirs, another player's or
+         * none, is left as it is and answered 204 too. Requires a session. Refused as
+         * [MY_PUSH_TOKENS] refuses. Limited per player, with [MY_PUSH_TOKENS].
+         */
+        public const val MY_PUSH_TOKEN_REMOVALS: String = "/$VERSION/me/push-token-removals"
+
+        /**
          * The moderator's queue (CLAUDE.md §8d, *Moderation*): the submissions waiting for a decision,
          * oldest first, as a [io.ntole.wyr.core.question.SubmissionListDto], so its head is the next
          * to decide and asking again after deciding it gets the rest. [Query.STATUS] lists those of
@@ -391,5 +414,11 @@ public object WyrApi {
 
         /** Longest password an account can have, counted as [MAX_OPTION_LENGTH] counts. */
         public const val MAX_PASSWORD_LENGTH: Int = 128
+
+        /**
+         * Longest push token the server keeps ([io.ntole.wyr.core.push.PushTokenRequest]), in
+         * characters, each visible ASCII. A Firebase token is about 160.
+         */
+        public const val MAX_PUSH_TOKEN_LENGTH: Int = 1024
     }
 }

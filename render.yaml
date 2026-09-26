@@ -62,6 +62,11 @@ services:
       # dashboard changes that budget's count at the next restart.
       - key: CLIENT_IP_HEADER
         value: CF-Connecting-IP
+      # The Firebase service account's JSON key file, whole, which pushes a moderator's decision to its
+      # author (CLAUDE.md §8b, Push notifications). Set by hand in the dashboard and never committed.
+      # Unset means pushes are off: devices still register their tokens, and nothing is sent.
+      - key: FCM_SERVICE_ACCOUNT_JSON
+        sync: false
 
   - type: web
     name: wyr-server-dev
@@ -91,6 +96,9 @@ services:
         sync: false
       - key: CLIENT_IP_HEADER
         value: CF-Connecting-IP
+      # A key of its own, so production's can be revoked alone.
+      - key: FCM_SERVICE_ACCOUNT_JSON
+        sync: false
 
 databases:
   - name: wyr-postgres

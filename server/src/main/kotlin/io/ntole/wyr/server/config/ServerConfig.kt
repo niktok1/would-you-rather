@@ -1,5 +1,7 @@
 package io.ntole.wyr.server.config
 
+import io.ntole.wyr.server.push.FcmServiceAccount
+
 /**
  * Everything the server reads from the environment.
  *
@@ -58,6 +60,13 @@ data class ServerConfig(
     val clientIpHeader: String?,
     /** True on Render, which sets `RENDER` to `true` for every service. Only a boot warning reads it. */
     val onRender: Boolean,
+    /**
+     * The Google service account the server sends pushes as (CLAUDE.md §8b, *Push notifications*), from
+     * `FCM_SERVICE_ACCOUNT_JSON`, the Firebase project's JSON key file whole, or null when that is unset
+     * or blank, which turns pushes off: devices still register their tokens, and nothing is sent. A value
+     * that is no service account's key fails at boot, naming the variable and none of its value.
+     */
+    val fcmServiceAccount: FcmServiceAccount? = null,
 ) {
     /** True when running against the throwaway in-memory database. */
     val isEphemeralDatabase: Boolean get() = jdbcUrl.startsWith("jdbc:h2:")
@@ -116,6 +125,8 @@ data class ServerConfig(
                 rateLimits = RateLimits.fromEnvironment(env),
                 clientIpHeader = env("CLIENT_IP_HEADER")?.let(::parseClientIpHeader),
                 onRender = env("RENDER") == "true",
+                fcmServiceAccount =
+                    env("FCM_SERVICE_ACCOUNT_JSON")?.takeIf { it.isNotBlank() }?.let(FcmServiceAccount::parse),
             )
         }
 

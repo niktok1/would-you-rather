@@ -19,8 +19,9 @@ data class RequestBudget(
 /**
  * What one client may send (CLAUDE.md §8b, *Rate limiting*): a budget for each group of routes, spent
  * apart from every other group's. Registrations, logouts, the feed, votes, skips, reactions, submissions,
- * home picks and the two reads of the player's own are per player, so players behind one address do not
- * share them; the rest, whose caller has no session to name, or needs none, per client address.
+ * home picks, push tokens and the two reads of the player's own are per player, so players behind one
+ * address do not share them; the rest, whose caller has no session to name, or needs none, per client
+ * address.
  *
  * Each is overridable by the environment variable [fromEnvironment] names, a count per the period the
  * name ends in. The periods are fixed.
@@ -68,6 +69,11 @@ data class RateLimits(
     val homePickCounts: RequestBudget,
     /** `POST /v1/home-picks`. Every tap counts, so this bounds how fast one player can move a count. */
     val homePicks: RequestBudget,
+    /**
+     * `POST /v1/me/push-tokens` and `POST /v1/me/push-token-removals` together. A device registers its
+     * token when it starts, when its session changes and when Firebase gives it a new one.
+     */
+    val pushTokens: RequestBudget,
     /** Every admin route together, per address, whatever token the request carries. */
     val admin: RequestBudget,
     /**
@@ -100,6 +106,7 @@ data class RateLimits(
                 categories = RequestBudget(requests = 120, per = 1.minutes),
                 homePickCounts = RequestBudget(requests = 120, per = 1.minutes),
                 homePicks = RequestBudget(requests = 30, per = 1.minutes),
+                pushTokens = RequestBudget(requests = 60, per = 1.hours),
                 admin = RequestBudget(requests = 60, per = 1.minutes),
                 adminTokenFailures = RequestBudget(requests = 10, per = 1.minutes),
             )
@@ -139,6 +146,7 @@ data class RateLimits(
                     categories = budget("RATE_LIMIT_CATEGORIES_PER_MINUTE", categories),
                     homePickCounts = budget("RATE_LIMIT_HOME_PICK_COUNTS_PER_MINUTE", homePickCounts),
                     homePicks = budget("RATE_LIMIT_HOME_PICKS_PER_MINUTE", homePicks),
+                    pushTokens = budget("RATE_LIMIT_PUSH_TOKENS_PER_HOUR", pushTokens),
                     admin = budget("RATE_LIMIT_ADMIN_PER_MINUTE", admin),
                     adminTokenFailures = budget("RATE_LIMIT_ADMIN_TOKEN_FAILURES_PER_MINUTE", adminTokenFailures),
                 )

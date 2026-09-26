@@ -22,6 +22,7 @@ internal fun rateLimitsOf(budget: RequestBudget): RateLimits =
         categories = budget,
         homePickCounts = budget,
         homePicks = budget,
+        pushTokens = budget,
         admin = budget,
         adminTokenFailures = budget,
     )

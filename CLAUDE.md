@@ -37,7 +37,8 @@ add a new dependency without recording it in §4 and in `gradle/libs.versions.to
 
 Four Java libraries are in the tree by deliberate exception, all server-only where no Kotlin
 equivalent exists: HikariCP (connection pooling), the PostgreSQL JDBC driver, `java-jwt`
-(pulled in by Ktor's own `ktor-server-auth-jwt`), and Flyway (schema migrations, §8b; approved
+(pulled in by Ktor's own `ktor-server-auth-jwt`, which also signs the server's sign-in to Google as
+a service account, §8a *Push tokens*), and Flyway (schema migrations, §8b; approved
 2026-09-24), with the `flyway-database-postgresql` module Flyway needs to run on PostgreSQL. H2 is
 a fifth, used only as the local development database.
 
@@ -118,6 +119,7 @@ mechanism; this table is the rationale.
 | Server             | Ktor (server)          | Kotlin-native server                             |
 | Rate limiting      | Ktor RateLimit plugin  | Official Ktor plugin; in memory, per instance    |
 | HTTP client        | Ktor (client)          | Same family as the server                        |
+| Server to Google   | Ktor client, CIO       | `ktor-client-cio`, server-only (approved 2026-09-26): FCM pushes, Play Games sign-in (§8a); tests answer with `ktor-client-mock` |
 | Serialization      | kotlinx.serialization  | Backbone of :core                                |
 | Async              | Coroutines + Flow      | Official                                         |
 | Local cache        | SQLDelight             | **Declared, not yet wired — see below**          |
@@ -374,6 +376,9 @@ This project must never be attributed to any employer identity.
   Render is the proxy, one budget for everyone: the server warns at boot when `RENDER` is `true` and
   no header is set. To be checked once deployed (NEXT-SESSION.md). No forwarded-header plugin:
   `ktor-server-forwarded-header` would be a new dependency for the one line this needs.
+- `FCM_SERVICE_ACCOUNT_JSON` is the Firebase service account's key file, whole, which pushes a
+  moderator's decision to its author (§8a, *Push tokens*), `sync: false` in `render.yaml`, one key per
+  service. It has no default: unset turns pushes off. Setting it up is §8b, *Push notifications*.
 - The Docker build sets `WYR_SERVER_ONLY=1`, which makes `settings.gradle.kts` skip the app
   modules. Without it the Android Gradle plugin fails at configuration time for want of an SDK.
 - Free tier caveats to design around: free web services spin down after ~15 min idle (cold
@@ -512,6 +517,40 @@ decided in §8b).
     refresh token's 30 days; one idle longer plays on as a fresh guest, and logs in again. No
     password is stored, anywhere: the phone's password manager may keep it, offered as the Auth page,
     where the game's client registers and logs in, leaves the screen (§8d, *The Account screen*).
+- **Push tokens** (*decided 2026-09-26; built on the server, Android first; the client adopts
+  later*): a device's Firebase Cloud Messaging token, so a player hears when a moderator decides one
+  of their questions.
+  - *Registering* is `POST /v1/me/push-tokens` with a `PushTokenRequest` (the `token` and its
+    `platform`, a `PushPlatform`: `ANDROID`, `IOS` or `WEB`, and `UNKNOWN`, its default, refused), bearer
+    required, answered 204. The token is kept in `push_tokens` (V17) under the player and the session
+    the bearer names, one row per token, since a token is one device's: registered again, by its
+    player or another, it moves to whoever sent it last, the primary key deciding two first
+    registrations racing (§4; `PushTokenStoreTest`). A player's pushes reach their 10 newest devices
+    (`PushTokenStore.MAX_TOKENS_PER_PLAYER`), so a decision sends a bounded few. A token is 1 to
+    `WyrApi.Limits.MAX_PUSH_TOKEN_LENGTH` (1024) of visible ASCII, or 400 `VALIDATION_FAILED`; a session
+    already ended, whose access token has not expired, is 401. Registered whether or not pushes are on,
+    so the devices are there once they are.
+  - *Removing* one, a device turning notifications off, is `POST /v1/me/push-token-removals` with a
+    `RemovePushTokenRequest`, 204, the caller's own token alone. A **logout needs no call**: the
+    session's row going takes its device's tokens with it, and deleting a player takes theirs, by
+    `ON DELETE CASCADE` on both of the table's foreign keys, the only cascading keys in the schema, so no
+    store has to know the table is there.
+  - *A decision's push*: once a moderator's approval or rejection has committed and been answered,
+    `DecisionNotifier` pushes the author's every device, off the request, in a background scope the
+    server cancels at stop. Best effort: a failure is logged and dropped, never failing or holding up
+    the decision, and nothing is retried; a token FCM calls `UNREGISTERED` is deleted, and only that
+    code, since a wrong project answers 404 for every token. The title is *Твоје питање је одобрено*
+    or *Твоје питање није одобрено*, the body the question as My questions names it, *Пица или
+    Бурек*, a rejection's followed by *. Разлог:* and the moderator's reason, in Serbian Cyrillic, the
+    game's first language (§8f; the client may put it into the language shown later), and the data
+    `type` `submission_decided`, `questionId` and `status`.
+  - *FCM* is its HTTP v1 API (`FcmSender`), as the service account in `FCM_SERVICE_ACCOUNT_JSON`
+    (§8b, *Push notifications*): a JWT assertion signed RS256 with `java-jwt`, exchanged at the key
+    file's `token_uri` for an access token kept until a minute before it expires, so one exchange
+    serves an hour of pushes; a 401 from FCM gets a new one and one more try. Through
+    `googleHttpClient` over CIO (§4), 5 s to connect and 10 s a request. Every test answers for Google
+    with a MockEngine (`FcmSenderTest`, `PushFlowTest`). Never logged: the key, the assertion, the
+    access token, or a device's token. Unset, pushes are off: nothing is sent, and the boot says so.
 
 **Known limitation, by design for now:** a guest account is bound to one device's storage. Lose
 the device, reinstall the app or clear its storage, and the account — and its points — are gone,
@@ -629,7 +668,7 @@ EncryptedSharedPreferences: enough for a game that stores nothing personal.
     (every one the rules take costs a password hash), logouts 30 a minute, the feed, votes and skips
     120 a minute each, reactions 60 a minute, submissions 30 an hour (the 20-pending cap still applies),
     `GET /v1/me` and `GET /v1/me/questions` 120 a minute each, a tap on a Home button
-    (`POST /v1/home-picks`) 30 a minute. The key is the player id in the
+    (`POST /v1/home-picks`) 30 a minute, push token registrations and removals 60 an hour together. The key is the player id in the
     bearer token, which the limiter verifies itself (`verifiedPlayerId`): it runs before
     authentication, so no principal is there yet. A request without a token this server signed
     spends its address's budget of the group instead, and then gets its 401, so a forged token
@@ -714,6 +753,21 @@ EncryptedSharedPreferences: enough for a game that stores nothing personal.
     from §8f's *nothing reads the device's locale*.
   - *Rollbacks*: a build before the migration ignores audiences and serves local questions to
     everyone. Accepted (the user: the game is not released yet).
+- **Push notifications** — *built on the server 2026-09-26 (§8a, *Push tokens*); off until the user
+  sets it up.* The server sends through Firebase Cloud Messaging as a Google service account, whose
+  JSON key file `FCM_SERVICE_ACCOUNT_JSON` holds whole (`sync: false` in `render.yaml`, set by hand in
+  the dashboard, never committed). Unset or blank, pushes are off and the boot says so; a value that is
+  no service account's key fails the boot, naming the variable and none of the value. It is read at
+  boot, so a new key applies once the service restarts. **What the user sets up**, once:
+  1. In the Firebase console, create a project (or add Firebase to a Google Cloud project), and add
+     the Android app three times, once per flavor (§8e): `io.ntole.wyr`, `io.ntole.wyr.dev` and
+     `io.ntole.wyr.local`. The client branch that adopts pushes takes the `google-services.json`
+     Firebase then offers. The *Firebase Cloud Messaging API (V1)* must be enabled in Google Cloud,
+     which a new Firebase project is.
+  2. In *Project settings → Service accounts*, *Generate new private key*: a JSON file downloads. It
+     is a secret: never commit it, never paste it in a chat.
+  3. On Render, paste the whole file as `FCM_SERVICE_ACCOUNT_JSON` on `wyr-server`, and a second key
+     of the same account on `wyr-server-dev` (so one can be revoked alone), then restart each.
 - **Personalization** — *design decided 2026-09-26; only the answer time is built.* In the end each
   player is served the questions that suit them best, and the game's own questions are how the server
   finds out: no survey, no profile form, nothing asked of the player but to play.
@@ -769,7 +823,8 @@ seed (`Migrations`, `DatabaseFactory.init`). Nothing builds a table any other wa
   as a guest, and every later script: V6 (the categories table, §8d *Categories*), V7 (what a
   question cost, §8c), V8 (the seeds' made-up votes), V9 (the seeds in Serbian, §8d *Seeds*),
   V10 (likes become reactions, §8d *Reactions*) and `feat/server-engagement`'s V15 (the Home
-  screen's two counts, §8d *Home picks*) and V16 (an answer's time, *Personalization*, above). V11 to V14 are `feat/server-safety`'s, which merges first;
+  screen's two counts, §8d *Home picks*), V16 (an answer's time, *Personalization*, above) and V17
+  (push tokens, §8a). V11 to V14 are `feat/server-safety`'s, which merges first;
   Flyway runs whatever versions are there in order, a gap included, and `MigrationsTest` steps
   through the scripts by their own versions.
   `Migrations.migrate` takes the baseline itself (`baselineVersion` 1), and only for a database
@@ -852,7 +907,8 @@ seed (`Migrations`, `DatabaseFactory.init`). Nothing builds a table any other wa
   yet and so no build before it is a rollback target (the user, 2026-09-26). `MigrationsTest` reads a
   table a later script dropped by name (`DROPPED_TABLES`), since `Tables.kt` no longer names it. V15
   only adds a table no build before names, and V16 a nullable column: a build before it moves a vote
-  and leaves the answer time the answer before it left.
+  and leaves the answer time the answer before it left. V17 adds a table no build before names; a
+  logout there still deletes its session, and the cascade still takes its tokens.
 - *Several instances booting at once* (Render starts a deploy's new instance before it stops the old
   one): on PostgreSQL each script runs under Flyway's advisory lock, so one boot migrates while the
   rest wait, up to 50 tries a second apart, and then find nothing to do. Every boot that finds a

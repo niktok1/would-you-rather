@@ -47,6 +47,7 @@ enum class RouteLimit(
     CATEGORIES(RateLimits::categories, KeyedBy.ADDRESS),
     HOME_PICK_COUNTS(RateLimits::homePickCounts, KeyedBy.ADDRESS),
     HOME_PICKS(RateLimits::homePicks, KeyedBy.PLAYER),
+    PUSH_TOKENS(RateLimits::pushTokens, KeyedBy.PLAYER),
     ADMIN(RateLimits::admin, KeyedBy.ADDRESS),
 
     /**

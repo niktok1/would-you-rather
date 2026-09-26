@@ -114,6 +114,7 @@ class ServerConfigTest {
         assertEquals(RequestBudget(30, 1.hours), limits.submissions)
         assertEquals(RequestBudget(120, 1.minutes), limits.homePickCounts)
         assertEquals(RequestBudget(30, 1.minutes), limits.homePicks)
+        assertEquals(RequestBudget(60, 1.hours), limits.pushTokens)
         assertEquals(RequestBudget(60, 1.minutes), limits.admin)
         assertEquals(RequestBudget(10, 1.minutes), limits.adminTokenFailures)
     }
@@ -137,6 +138,7 @@ class ServerConfigTest {
                 Triple("RATE_LIMIT_CATEGORIES_PER_MINUTE", RateLimits::categories, 1.minutes),
                 Triple("RATE_LIMIT_HOME_PICK_COUNTS_PER_MINUTE", RateLimits::homePickCounts, 1.minutes),
                 Triple("RATE_LIMIT_HOME_PICKS_PER_MINUTE", RateLimits::homePicks, 1.minutes),
+                Triple("RATE_LIMIT_PUSH_TOKENS_PER_HOUR", RateLimits::pushTokens, 1.hours),
                 Triple("RATE_LIMIT_ADMIN_PER_MINUTE", RateLimits::admin, 1.minutes),
                 Triple("RATE_LIMIT_ADMIN_TOKEN_FAILURES_PER_MINUTE", RateLimits::adminTokenFailures, 1.minutes),
             )

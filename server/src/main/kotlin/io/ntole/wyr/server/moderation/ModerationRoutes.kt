@@ -25,6 +25,7 @@ import io.ntole.wyr.server.plugins.pageLimit
 import io.ntole.wyr.server.plugins.rateLimit
 import io.ntole.wyr.server.plugins.receiveOrReject
 import io.ntole.wyr.server.plugins.requireValidId
+import io.ntole.wyr.server.push.DecisionNotifier
 import io.ntole.wyr.server.question.categoryFilter
 
 /**
@@ -34,10 +35,14 @@ import io.ntole.wyr.server.question.categoryFilter
  *
  * With no [adminToken] configured none is registered at all, so each path is 404 exactly as a path
  * the server never had, and nothing about the request is looked at.
+ *
+ * A decision is pushed to its author through [notifier] once it has committed (CLAUDE.md §8a, *Push
+ * tokens*), or to nobody when pushes are off, the notifier null.
  */
 fun Route.moderationRoutes(
     db: Db,
     adminToken: AdminToken?,
+    notifier: DecisionNotifier?,
 ) {
     if (adminToken == null) return
 
@@ -62,12 +67,15 @@ fun Route.moderationRoutes(
                 // Checked before the transaction, as a submission is: a refusal needs no database.
                 val approval = checkedApproval(call.receiveOrReject<ApproveSubmissionRequest>("approval"))
 
-                call.respond(
+                val decided =
                     db.query {
                         // Before the decision, so an id no category has is refused whatever the question.
                         ModerationStore.approve(approval.questionId, CategoryStore.checked(approval.categories))
-                    },
-                )
+                    }
+
+                // After the commit, and not waited for: a push never holds up or fails a decision.
+                notifier?.submissionDecided(decided)
+                call.respond(decided)
             }
 
             post(WyrApi.Paths.ADMIN_REJECTIONS) {
@@ -75,7 +83,10 @@ fun Route.moderationRoutes(
 
                 val rejection = checkedRejection(call.receiveOrReject<RejectSubmissionRequest>("rejection"))
 
-                call.respond(db.query { ModerationStore.reject(rejection.questionId, rejection.reason) })
+                val decided = db.query { ModerationStore.reject(rejection.questionId, rejection.reason) }
+
+                notifier?.submissionDecided(decided)
+                call.respond(decided)
             }
 
             get(WyrApi.Paths.ADMIN_QUESTIONS) {

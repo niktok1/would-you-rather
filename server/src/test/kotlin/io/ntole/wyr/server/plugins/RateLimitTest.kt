@@ -27,6 +27,9 @@ import io.ntole.wyr.core.error.ErrorCode
 import io.ntole.wyr.core.error.ErrorDto
 import io.ntole.wyr.core.home.HomePickRequest
 import io.ntole.wyr.core.player.PlayerStatsDto
+import io.ntole.wyr.core.push.PushPlatform
+import io.ntole.wyr.core.push.PushTokenRequest
+import io.ntole.wyr.core.push.RemovePushTokenRequest
 import io.ntole.wyr.core.question.ApproveSubmissionRequest
 import io.ntole.wyr.core.question.QuestionPageDto
 import io.ntole.wyr.core.question.RejectSubmissionRequest
@@ -494,6 +497,18 @@ class RateLimitTest {
             },
             Group("home picks", { copy(homePicks = it) }) { caller ->
                 caller.client.post(WyrApi.Paths.HOME_PICKS) { json(caller.player, HomePickRequest(OptionSide.A)) }
+            },
+            // Registrations and removals share the one budget.
+            Group("push tokens", { copy(pushTokens = it) }, allowed = HttpStatusCode.NoContent) { caller ->
+                if (caller.sent++ % 2 == 0) {
+                    caller.client.post(WyrApi.Paths.MY_PUSH_TOKENS) {
+                        json(caller.player, PushTokenRequest("token", PushPlatform.ANDROID))
+                    }
+                } else {
+                    caller.client.post(
+                        WyrApi.Paths.MY_PUSH_TOKEN_REMOVALS,
+                    ) { json(caller.player, RemovePushTokenRequest("token")) }
+                }
             },
             Group("admin", { copy(admin = it) }, needsSession = false) { caller ->
                 caller.client.queue(ADMIN_TOKEN)
