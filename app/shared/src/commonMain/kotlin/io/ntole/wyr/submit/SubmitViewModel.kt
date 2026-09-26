@@ -10,6 +10,7 @@ import io.ntole.wyr.core.domain.category.GetCategories
 import io.ntole.wyr.core.domain.error.DomainError
 import io.ntole.wyr.core.domain.error.WyrException
 import io.ntole.wyr.core.domain.player.GetPlayerStats
+import io.ntole.wyr.core.domain.push.DevicePush
 import io.ntole.wyr.core.domain.submission.SubmitQuestion
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -53,6 +54,7 @@ class SubmitViewModel(
     private val getCategories: GetCategories,
     categoryList: CategoryRepository,
     private val analytics: Analytics,
+    private val devicePush: DevicePush,
 ) : ViewModel(),
     SubmitActions {
     private val _state = MutableStateFlow(SubmitState(categoryOptions = categoryList.categories.value))
@@ -110,6 +112,9 @@ class SubmitViewModel(
                     ),
                 )
                 _state.update { it.copy(optionA = "", optionB = "", categories = emptySet(), sent = true) }
+                // The least obstructive moment to ask for notifications, which tell of its decision: the
+                // platform asks once, ever, after the first (CLAUDE.md §8a, *Push tokens*).
+                devicePush.askPermissionOnce()
             } catch (failure: WyrException) {
                 analytics.track(AnalyticsEvent.SUBMIT_REFUSED, mapOf(AnalyticsProperty.CODE to failure.error.name))
                 reportShown(failure.error, ACTION_SUBMIT)

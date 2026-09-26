@@ -20,6 +20,8 @@ import io.ntole.wyr.core.domain.moderation.RestoreQuestion
 import io.ntole.wyr.core.domain.moderation.RetireQuestion
 import io.ntole.wyr.core.domain.playgames.LinkPlayGames
 import io.ntole.wyr.core.domain.playgames.PlayGamesRepository
+import io.ntole.wyr.core.domain.push.DevicePush
+import io.ntole.wyr.core.domain.push.KeepPushTokenRegistered
 import io.ntole.wyr.core.domain.session.CurrentSession
 import io.ntole.wyr.core.domain.session.SessionRepository
 import io.ntole.wyr.core.network.InMemoryTokenStorage
@@ -108,11 +110,12 @@ class DataModuleTest {
     }
 
     /**
-     * The Play Games sign-in the platform hands in, [PlayGames.None] unless one does, and the session
-     * watched without minting: nothing is stored, and nothing sent (CLAUDE.md §8a).
+     * The Play Games sign-in and the pushes the platform hands in, [PlayGames.None] and
+     * [DevicePush.None] unless one does, and the session watched without minting: nothing is stored,
+     * and nothing sent (CLAUDE.md §8a).
      */
     @Test
-    fun `the game's data module binds the Play Games sign-in and the session watched`() {
+    fun `the game's data module binds the Play Games sign-in and the pushes and the session watched`() {
         val storage = InMemoryTokenStorage()
         val koin =
             koinApplication {
@@ -123,6 +126,8 @@ class DataModuleTest {
             }.koin
 
         assertFalse(koin.get<LinkPlayGames>().available)
+        assertFalse(koin.get<DevicePush>().available)
+        assertNotNull(koin.get<KeepPushTokenRegistered>())
         assertFalse(koin.get<PlayGamesRepository>().isSettled())
         assertNull(koin.get<CurrentSession>().current())
         assertSame<Any>(koin.get<SessionRepository>(), koin.get<CurrentSession>(), "one session for both")

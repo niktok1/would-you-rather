@@ -12,6 +12,7 @@ import io.ntole.wyr.core.domain.error.WyrException
 import io.ntole.wyr.core.domain.player.GetPlayerStats
 import io.ntole.wyr.core.domain.player.PlayerRepository
 import io.ntole.wyr.core.domain.player.PlayerStats
+import io.ntole.wyr.core.domain.push.DevicePush
 import io.ntole.wyr.core.domain.session.SessionRepository
 import io.ntole.wyr.core.domain.submission.OptionProblem
 import io.ntole.wyr.core.domain.submission.Submission
@@ -47,6 +48,7 @@ class SubmitViewModelTest {
     private val analytics = RecordingAnalytics()
     private val server = FakeServer()
     private val categories = FakeCategoryRepository()
+    private val push = AskingPush()
 
     @BeforeTest
     fun setUp() {
@@ -298,6 +300,29 @@ class SubmitViewModelTest {
             assertFalse(state.isBusy)
             assertEquals(4, state.points, "the server took the cost")
             assertEquals("Fly", server.stored.single().optionA)
+        }
+
+    /**
+     * The least obstructive moment to ask for notifications, which tell of a decision: right after a
+     * question is stored, the platform asking once, ever (CLAUDE.md §8a, *Push tokens*). Not before,
+     * nor after a refusal.
+     */
+    @Test
+    fun `a stored question asks for notifications and a refused one does not`() =
+        runTest(dispatcher) {
+            val viewModel = open()
+            assertEquals(0, push.asked)
+
+            server.submitFailsWith = WyrException(DomainError.SUBMISSION_LIMIT, "twenty pending")
+            viewModel.write("Fly", "Swim", "FOOD")
+            viewModel.submit()
+            testScheduler.advanceUntilIdle()
+            assertEquals(0, push.asked, "a refusal asks nothing")
+
+            server.submitFailsWith = null
+            viewModel.submit()
+            testScheduler.advanceUntilIdle()
+            assertEquals(1, push.asked)
         }
 
     @Test
@@ -689,6 +714,7 @@ class SubmitViewModelTest {
             getCategories = GetCategories(categories),
             categoryList = categories,
             analytics = analytics,
+            devicePush = push,
         )
 
     /** Types both options and picks exactly [categories]. */
@@ -764,6 +790,15 @@ class SubmitViewModelTest {
                 username = username,
                 playGamesLinked = playGamesLinked,
             )
+        }
+    }
+
+    /** Pushes that count how often the form asked for notifications. */
+    private class AskingPush : DevicePush by DevicePush.None {
+        var asked = 0
+
+        override fun askPermissionOnce() {
+            asked++
         }
     }
 

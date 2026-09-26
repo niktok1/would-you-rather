@@ -25,6 +25,7 @@ import io.ntole.wyr.core.error.ErrorCode
 import io.ntole.wyr.core.error.ErrorDto
 import io.ntole.wyr.core.network.WyrJson
 import io.ntole.wyr.core.player.PlayerStatsDto
+import io.ntole.wyr.core.push.PushTokenRequest
 import io.ntole.wyr.core.question.QuestionDto
 import io.ntole.wyr.core.question.QuestionPageDto
 import io.ntole.wyr.core.question.QuestionStatus
@@ -142,6 +143,9 @@ internal class FakeServer {
     /** When set, every Play Games sign-in is refused with this status and code, whoever sends it. */
     var refusePlayGamesWith: Pair<HttpStatusCode, ErrorCode>? = null
 
+    /** The `Authorization` header and body of every push token registration, in arrival order. */
+    val pushTokensSentAs = mutableListOf<Pair<String?, PushTokenRequest>>()
+
     /** What a read of the categories answers, whoever sends it: [CATEGORIES] unless a test says otherwise. */
     var categories: CategoryListDto = CATEGORIES
 
@@ -256,6 +260,18 @@ internal class FakeServer {
 
             WyrApi.Paths.AUTH_PLAY_GAMES -> {
                 playGames(request)
+            }
+
+            WyrApi.Paths.MY_PUSH_TOKENS -> {
+                val authorization = request.headers[HttpHeaders.Authorization]
+                pushTokensSentAs +=
+                    authorization to
+                    WyrJson.decodeFromString<PushTokenRequest>(request.body.toByteArray().decodeToString())
+                if (authorization?.removePrefix("Bearer access-") in players) {
+                    respond("", HttpStatusCode.NoContent)
+                } else {
+                    respondErrorDto(HttpStatusCode.Unauthorized, ErrorCode.UNAUTHORIZED)
+                }
             }
 
             WyrApi.Paths.AUTH_LOGOUT -> {

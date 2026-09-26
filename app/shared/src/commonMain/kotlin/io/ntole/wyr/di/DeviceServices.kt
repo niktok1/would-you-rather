@@ -1,6 +1,7 @@
 package io.ntole.wyr.di
 
 import io.ntole.wyr.core.domain.playgames.PlayGames
+import io.ntole.wyr.core.domain.push.DevicePush
 
 /**
  * What only a platform's own services can do, handed to [initKoin] by its entry point, since each is
@@ -10,6 +11,7 @@ import io.ntole.wyr.core.domain.playgames.PlayGames
  */
 data class DeviceServices(
     val playGames: PlayGames = PlayGames.None,
+    val push: DevicePush = DevicePush.None,
 ) {
     companion object {
         /** No platform services: desktop, iOS and the web for now, and the tests. */

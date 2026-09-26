@@ -612,6 +612,22 @@ decided in §8b).
     `googleHttpClient` over CIO (§4), 5 s to connect and 10 s a request. Every test answers for Google
     with a MockEngine (`FcmSenderTest`, `PushFlowTest`). Never logged: the key, the assertion, the
     access token, or a device's token. Unset, pushes are off: nothing is sent, and the boot says so.
+  - *The client* (common code; the platform's pushes behind the `DevicePush` port in `:core:domain`,
+    `DevicePush.None` but on an Android build that has Firebase set up): `KeepPushTokenRegistered`,
+    which `AppServices` starts at launch, registers the device's token (`PushApi`, `PushPlatform`
+    `ANDROID`) for the session stored then and for **every session the device stores after it**
+    (`CurrentSession.sessions`): a mint's, a login's, a logout's fresh guest's, a Play Games sign-in's,
+    and a deletion's fresh guest's, since a token is kept under its session and a logout's cascade
+    drops it; and again for every new token the platform gives (`DevicePush.newTokens`). Through
+    `runApi` alone, never `withSessionRecovery`: a registration follows the session and never mints or
+    replaces one, so a dead session's 401 is dropped, and the fresh guest the next call mints registers.
+    Best effort: a failure is dropped, and the next session or token registers again; one request a
+    launch mends one that failed. The Submit form asks for the notifications permission right after a
+    question is stored (`DevicePush.askPermissionOnce`), which the platform asks once, ever: the least
+    obstructive moment, when a decision is what the player waits for. No token is removed yet: a player
+    who turns notifications off in the phone's settings sees none, whatever FCM sends.
+    `KeepPushTokenRegisteredTest`, `DefaultPushTokenRepositoryTest`, `AppServicesTest`,
+    `SubmitViewModelTest`.
 
 - **Play Games sign-in** (*decided 2026-09-26: the user's "no-click register", with the register
   screen kept as the fallback; built on the server, the client adopts later*): a player on Android

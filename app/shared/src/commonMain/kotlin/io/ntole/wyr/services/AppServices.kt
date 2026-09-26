@@ -1,6 +1,7 @@
 package io.ntole.wyr.services
 
 import io.ntole.wyr.core.domain.playgames.LinkPlayGames
+import io.ntole.wyr.core.domain.push.KeepPushTokenRegistered
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -9,13 +10,15 @@ import kotlinx.coroutines.launch
 /**
  * What the app does by itself, with no screen asking, for as long as it runs: one for the app's life,
  * as the analytics are, so a rotation's new activity finds it started. The launch signs the player in
- * with Play Games (CLAUDE.md §8a, *Play Games sign-in*).
+ * with Play Games (CLAUDE.md §8a, *Play Games sign-in*), and from then on the device's push token is
+ * registered for every session it stores (§8a, *Push tokens*).
  *
  * [foreground] is the platform lifecycle's start, which `App` tells it of; the first is the launch.
  * Everything runs in [scope], off every screen, and nothing it does shows.
  */
 class AppServices(
     private val linkPlayGames: LinkPlayGames,
+    private val keepPushTokenRegistered: KeepPushTokenRegistered,
     private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Default),
 ) {
     private var started = false
@@ -25,5 +28,6 @@ class AppServices(
         if (started) return
         started = true
         scope.launch { linkPlayGames.automatically() }
+        scope.launch { keepPushTokenRegistered.run() }
     }
 }

@@ -7,6 +7,7 @@ import io.ntole.wyr.core.data.category.DefaultCategoryRepository
 import io.ntole.wyr.core.data.moderation.DefaultModerationRepository
 import io.ntole.wyr.core.data.player.DefaultPlayerRepository
 import io.ntole.wyr.core.data.playgames.DefaultPlayGamesRepository
+import io.ntole.wyr.core.data.push.DefaultPushTokenRepository
 import io.ntole.wyr.core.data.question.DefaultQuestionRepository
 import io.ntole.wyr.core.data.reaction.DefaultReactionRepository
 import io.ntole.wyr.core.data.session.DefaultSessionRepository
@@ -34,6 +35,9 @@ import io.ntole.wyr.core.domain.player.PlayerRepository
 import io.ntole.wyr.core.domain.playgames.LinkPlayGames
 import io.ntole.wyr.core.domain.playgames.PlayGames
 import io.ntole.wyr.core.domain.playgames.PlayGamesRepository
+import io.ntole.wyr.core.domain.push.DevicePush
+import io.ntole.wyr.core.domain.push.KeepPushTokenRegistered
+import io.ntole.wyr.core.domain.push.PushTokenRepository
 import io.ntole.wyr.core.domain.question.GetNextQuestion
 import io.ntole.wyr.core.domain.question.QuestionCache
 import io.ntole.wyr.core.domain.question.QuestionRepository
@@ -57,6 +61,7 @@ import io.ntole.wyr.core.network.api.AuthApi
 import io.ntole.wyr.core.network.api.CategoryApi
 import io.ntole.wyr.core.network.api.ModerationApi
 import io.ntole.wyr.core.network.api.PlayerApi
+import io.ntole.wyr.core.network.api.PushApi
 import io.ntole.wyr.core.network.api.QuestionApi
 import io.ntole.wyr.core.network.api.ReactionApi
 import io.ntole.wyr.core.network.api.SubmissionApi
@@ -79,11 +84,14 @@ import org.koin.dsl.module
  *   when nothing is sent: the [Analytics] bound keeps only the player's switch then.
  * @param playGames Google Play Games Services on this device (CLAUDE.md §8a, *Play Games sign-in*):
  *   an Android build's that has it set up, and [PlayGames.None] everywhere else.
+ * @param push this device's pushes (CLAUDE.md §8a, *Push tokens*): an Android build's that has Firebase
+ *   set up, and [DevicePush.None] everywhere else.
  */
 public fun dataModule(
     environment: WyrEnvironment,
     analytics: PostHogConfig?,
     playGames: PlayGames = PlayGames.None,
+    push: DevicePush = DevicePush.None,
 ): Module =
     module {
         single { SessionStore(get<TokenStorage>(), environment) }
@@ -97,6 +105,7 @@ public fun dataModule(
         single { SubmissionApi(get()) }
         single { ReactionApi(get()) }
         single { CategoryApi(get()) }
+        single { PushApi(get()) }
 
         single<QuestionCache> { InMemoryQuestionCache() }
 
@@ -121,6 +130,8 @@ public fun dataModule(
         single<AccountRepository> { DefaultAccountRepository(api = get(), session = get()) }
         single<CategoryRepository> { DefaultCategoryRepository(api = get()) }
         single<PlayGamesRepository> { DefaultPlayGamesRepository(api = get(), session = get()) }
+        single<DevicePush> { push }
+        single<PushTokenRepository> { DefaultPushTokenRepository(api = get()) }
 
         factory { GetNextQuestion(questions = get(), session = get()) }
         factory { SkipQuestion(questions = get(), session = get()) }
@@ -133,6 +144,7 @@ public fun dataModule(
         factory { LogIn(accounts = get(), questions = get(), session = get(), analytics = get()) }
         factory { LogOut(accounts = get(), questions = get(), analytics = get()) }
         factory { GetCategories(categories = get()) }
+        factory { KeepPushTokenRegistered(push = get(), tokens = get(), session = get()) }
         // Once for the app: the launch's sign-in and a tap on the Auth page's button take turns.
         single {
             LinkPlayGames(playGames = playGames, link = get(), session = get(), questions = get(), analytics = get())

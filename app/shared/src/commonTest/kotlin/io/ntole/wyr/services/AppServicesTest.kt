@@ -4,6 +4,10 @@ import io.ntole.wyr.core.domain.analytics.Analytics
 import io.ntole.wyr.core.domain.playgames.LinkPlayGames
 import io.ntole.wyr.core.domain.playgames.PlayGames
 import io.ntole.wyr.core.domain.playgames.PlayGamesRepository
+import io.ntole.wyr.core.domain.push.DevicePush
+import io.ntole.wyr.core.domain.push.KeepPushTokenRegistered
+import io.ntole.wyr.core.domain.push.PushPlatform
+import io.ntole.wyr.core.domain.push.PushTokenRepository
 import io.ntole.wyr.core.domain.question.Question
 import io.ntole.wyr.core.domain.question.QuestionRepository
 import io.ntole.wyr.core.domain.session.CurrentSession
@@ -19,6 +23,7 @@ import kotlin.test.assertEquals
 /** What the app does by itself as it comes to the foreground (CLAUDE.md §8a, *Play Games sign-in*). */
 class AppServicesTest {
     private val signIns = mutableListOf<String>()
+    private val tokensRegistered = mutableListOf<String>()
     private val session = FakeSession()
 
     @Test
@@ -51,11 +56,45 @@ class AppServicesTest {
             assertEquals(listOf("code"), signIns)
         }
 
+    /** The push token is registered from the launch on, for the session stored then and every one after. */
+    @Test
+    fun `the launch keeps the push token registered for every session`() =
+        runTest {
+            session.player.value = "p1"
+            val services = services()
+
+            services.foreground()
+            testScheduler.runCurrent()
+            session.player.value = "p2"
+            testScheduler.runCurrent()
+            services.foreground()
+            testScheduler.runCurrent()
+
+            assertEquals(listOf("p1 token", "p2 token"), tokensRegistered)
+        }
+
     private fun TestScope.services(): AppServices =
         AppServices(
             linkPlayGames = LinkPlayGames(SignedInPlayGames, Link(), session, NoQuestions, Analytics.None),
+            keepPushTokenRegistered = KeepPushTokenRegistered(TokenPush, Tokens(), session),
             scope = backgroundScope,
         )
+
+    /** Pushes with a token, as Firebase gives one. */
+    private object TokenPush : DevicePush by DevicePush.None {
+        override val available = true
+
+        override suspend fun token() = "token"
+    }
+
+    private inner class Tokens : PushTokenRepository {
+        override suspend fun register(
+            token: String,
+            platform: PushPlatform,
+        ) {
+            tokensRegistered += "${session.current()} $token"
+        }
+    }
 
     /** Play Games that signed the player in by itself, as it does at launch. */
     private object SignedInPlayGames : PlayGames {

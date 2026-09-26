@@ -34,6 +34,10 @@ import io.ntole.wyr.core.domain.player.PlayerStats
 import io.ntole.wyr.core.domain.playgames.LinkPlayGames
 import io.ntole.wyr.core.domain.playgames.PlayGames
 import io.ntole.wyr.core.domain.playgames.PlayGamesRepository
+import io.ntole.wyr.core.domain.push.DevicePush
+import io.ntole.wyr.core.domain.push.KeepPushTokenRegistered
+import io.ntole.wyr.core.domain.push.PushPlatform
+import io.ntole.wyr.core.domain.push.PushTokenRepository
 import io.ntole.wyr.core.domain.question.GetNextQuestion
 import io.ntole.wyr.core.domain.question.Question
 import io.ntole.wyr.core.domain.question.QuestionRepository
@@ -564,6 +568,8 @@ class AppNavigationTest {
             factory { GetCategories(categories = get()) }
             single<CurrentSession> { game }
             single { LinkPlayGames(PlayGames.None, NoPlayGamesLink, get(), get(), get()) }
+            single<DevicePush> { DevicePush.None }
+            factory { KeepPushTokenRegistered(get(), NoPushTokens, get()) }
         }
 
     /** Whether the line showing [text] is ticked. */
@@ -601,6 +607,14 @@ class AppNavigationTest {
         override fun isSettled(): Boolean = error("no Play Games here")
 
         override suspend fun signIn(serverAuthCode: String): String = error("no Play Games here")
+    }
+
+    /** Pushes are never there in these builds, so nothing registers a token. */
+    private object NoPushTokens : PushTokenRepository {
+        override suspend fun register(
+            token: String,
+            platform: PushPlatform,
+        ): Unit = error("no pushes here")
     }
 
     /**
