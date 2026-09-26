@@ -1438,7 +1438,8 @@ open in the browser (`LocalUriHandler`), *Политика приватност�
 *Брисање налога* and *Контакт*, the site's `/privacy.html`, `/terms.html`, `/delete.html` and
 `/contact.html`, under `/en/` in English, the Serbian pages for either script (`Site`, whose one
 `BASE_URL` is `https://stabiradije.rs`, not live yet, the domain being the user's to buy, §8b *The
-launch*); and **Лиценце отвореног кода**, the libraries the game ships with on any platform, each
+launch*); a link nothing on the device opens, on a phone with no browser, does nothing
+(`openIfAble`, here, on a licence and in Register's terms line alike); and **Лиценце отвореног кода**, the libraries the game ships with on any platform, each
 with its licence, a tap opening the licence's text (`OPEN_SOURCE_LIBRARIES`, written by hand, no
 library for it, from the Android and desktop dependency reports, NEXT-SESSION's *Releasing to
 production*: Apache 2.0 but for SLF4J's API, MIT, which Ktor brings, and Skia, BSD 3-Clause, which
@@ -1446,7 +1447,8 @@ Skiko builds into the desktop, iOS and web apps, each of those two with the copy
 asks to ship with the app, *provisional*, §8b *Licence notices*; a library added to the game's client
 is added there in the same change, under its own licence). Words: `Strings.aboutScreen`.
 `AboutScreenDrawTest` (every text in both themes and every language, each link's URL through a handler
-of the test's own, the links above 599 before any scrolling), `LicencesTest`, `SiteTest`, `TapsTest`,
+of the test's own, one that opens nothing, the links above 599 before any scrolling), `LicencesTest`,
+`LinksTest`, `SiteTest`, `TapsTest`,
 `AppNavigationTest`, `TopBarsDrawTest`, `NavigatorTest`.
 
 **The Play screen** (`io.ntole.wyr.play`; the user's layout, *decided 2026-09-25*, rearranged
@@ -2213,7 +2215,8 @@ game UI (the moderation app, `:app:adminApp`, §3) can name one too.
     screen in place of every other, for the app's life, *Нова верзија је доступна*
     (`Strings.updateScreen`), and one button, the platform's (`rememberUpdateButton`): on Android
     **Ажурирај**, the game's Play Store page (`market://details?id=` the build's own application id,
-    or the `https://play.google.com` page where no app takes that), on the web **Освежи**, which
+    or the `https://play.google.com` page where no app takes that, and nothing where no app takes
+    either, `openFirst`), on the web **Освежи**, which
     loads the page again, and on the desktop and iOS none, no store having the build yet. No top bar
     and no way back: every call would be refused again. `UpdateScreenDrawTest`, `AppNavigationTest`,
     `TapsTest`. A DEV or LOCAL flavor's id has no store page, so its button finds none: accepted.

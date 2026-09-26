@@ -64,6 +64,26 @@ class AboutScreenDrawTest {
         }
     }
 
+    /**
+     * A link nothing on the device opens, on a phone with no browser, does nothing: the screen stays,
+     * a licence's too (CLAUDE.md §8d, *About*).
+     */
+    @Test
+    fun `a link nothing on the device opens does nothing`() {
+        val about = stringsOf(Language.DEFAULT).aboutScreen
+        val uris = RecordingUris(opens = false)
+        val scene = scene(Language.DEFAULT, uris = uris)
+        try {
+            listOf(about.privacy, about.terms, about.deleteAccount, about.contact).forEach(scene::tap)
+            scene.tap(OPEN_SOURCE_LIBRARIES.first().name)
+
+            assertTrue(about.contact in scene.texts(), "${scene.texts()}")
+        } finally {
+            scene.close()
+        }
+        assertEquals(5, uris.opened.size, "${uris.opened}")
+    }
+
     /** The links show before any scrolling, at an iPhone SE's height less the top bar; the licences scroll. */
     @Test
     fun `the links show before any scrolling`() {

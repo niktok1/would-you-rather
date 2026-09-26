@@ -119,6 +119,19 @@ class AuthScreenDrawTest {
         }
     }
 
+    /** A terms link nothing on the device opens, on a phone with no browser, does nothing. */
+    @Test
+    fun `a terms link nothing on the device opens does nothing`() {
+        val uris = RecordingUris(opens = false)
+        val scene = scene(AccountState(stats = GUEST), Language.DEFAULT, uris = uris)
+        try {
+            scene.links().forEach { tap -> tap() }
+        } finally {
+            scene.close()
+        }
+        assertEquals(2, uris.opened.size, "${uris.opened}")
+    }
+
     /** Log in: the two fields, no rules, the button and the link back. */
     @Test
     fun `the login form has no rules and a link back`() {

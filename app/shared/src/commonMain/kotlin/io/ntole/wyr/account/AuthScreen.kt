@@ -35,6 +35,7 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.withLink
 import io.ntole.wyr.about.Site
 import io.ntole.wyr.about.SitePage
+import io.ntole.wyr.about.openIfAble
 import io.ntole.wyr.analytics.tapped
 import io.ntole.wyr.core.domain.account.AccountRules
 import io.ntole.wyr.core.domain.error.DomainError
@@ -214,7 +215,7 @@ private fun LogInForm(
 /**
  * The one short line under Register (CLAUDE.md §8d, *The Account screen*): registering accepts the
  * terms and the privacy policy, each noun a link that opens its page on the site in the browser, in the
- * language shown ([Site]).
+ * language shown ([Site]), or does nothing when nothing on the device opens it ([openIfAble]).
  */
 @Composable
 private fun TermsLine() {
@@ -238,7 +239,7 @@ private fun TermsLine() {
 
                     is TemplatePart.Value -> {
                         val (label, page, element) = links[part.index]
-                        val open = tapped(element) { uriHandler.openUri(Site.url(page, language)) }
+                        val open = tapped(element) { uriHandler.openIfAble(Site.url(page, language)) }
                         withLink(LinkAnnotation.Clickable(element, linkStyle) { open() }) { append(label) }
                     }
                 }

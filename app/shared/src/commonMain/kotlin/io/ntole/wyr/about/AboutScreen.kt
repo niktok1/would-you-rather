@@ -110,7 +110,10 @@ private fun AgeRating() {
     }
 }
 
-/** A line that opens [url] in the browser, reported as [element]'s tap (CLAUDE.md §8g). */
+/**
+ * A line that opens [url] in the browser, reported as [element]'s tap (CLAUDE.md §8g), or does nothing
+ * when nothing on the device opens it ([openIfAble]).
+ */
 @Composable
 private fun Link(
     label: String,
@@ -124,7 +127,7 @@ private fun Link(
         modifier =
             Modifier
                 .fillMaxWidth()
-                .clickable(role = Role.Button, onClick = tapped(element) { uriHandler.openUri(url) })
+                .clickable(role = Role.Button, onClick = tapped(element) { uriHandler.openIfAble(url) })
                 .minimumInteractiveComponentSize(),
     ) {
         Text(
@@ -150,7 +153,7 @@ private fun Library(library: Licensed) {
                 .fillMaxWidth()
                 .clickable(
                     role = Role.Button,
-                    onClick = tapped("about.licence") { uriHandler.openUri(library.licenceUrl) },
+                    onClick = tapped("about.licence") { uriHandler.openIfAble(library.licenceUrl) },
                 ).minimumInteractiveComponentSize(),
     ) {
         Text(text = library.name, color = colors.primaryText)
