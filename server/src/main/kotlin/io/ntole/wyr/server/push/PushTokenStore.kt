@@ -43,6 +43,9 @@ object PushTokenStore {
      *
      * The pruning reads and deletes with no lock, so two registrations of one player's racing can leave
      * one token over the bound until the next: harmless, as the bound only keeps a decision's sends few.
+     * Its delete names the player beside the tokens it read, so a token another player moves to their
+     * device between the read and the delete is left theirs: at READ COMMITTED the delete checks its
+     * WHERE against the row once it holds its lock, and the row names the other player by then.
      */
     fun register(
         token: String,
@@ -83,7 +86,11 @@ object PushTokenStore {
                 .orderBy(PushTokens.updatedAt to SortOrder.DESC, PushTokens.token to SortOrder.ASC)
                 .map { row -> row[PushTokens.token] }
                 .drop(MAX_TOKENS_PER_PLAYER)
-        if (stale.isNotEmpty()) PushTokens.deleteWhere { PushTokens.token inList stale }
+        if (stale.isNotEmpty()) {
+            // The player again, not the tokens alone: the delete checks its WHERE against the row as it
+            // stands once locked, so a token another player moved meanwhile stays theirs.
+            PushTokens.deleteWhere { (PushTokens.token inList stale) and (PushTokens.playerId eq playerId) }
+        }
     }
 
     /**

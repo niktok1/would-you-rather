@@ -173,6 +173,31 @@ class PushTokenStoreTest {
         assertEquals(listOf(Row("token-1", second, PushPlatform.IOS)), rows())
     }
 
+    /**
+     * A registration pruning its player's oldest token while another player moves that very token to
+     * their device: the prune reads it as its player's, then waits on the move's row lock, and once the
+     * move commits the token is the other player's, so the prune leaves it where it went.
+     */
+    @Test
+    fun `pruning leaves a token another player moved to their device meanwhile`() {
+        val pruning = newDevice()
+        val devices = List(PushTokenStore.MAX_TOKENS_PER_PLAYER) { newDevice(playerId = pruning.playerId) }
+        devices.forEachIndexed { index, device -> register("token-$index", device, at = index.toLong()) }
+        val mover = newDevice()
+
+        val move = { PushTokenStore.register("token-0", mover.playerId, mover.sessionId, PushPlatform.IOS, now = 100) }
+        val prune = {
+            PushTokenStore.register("token-new", pruning.playerId, pruning.sessionId, PushPlatform.ANDROID, now = 50)
+        }
+        raceBehindFirst(url, database, move, prune)
+
+        assertEquals(Row("token-0", mover, PushPlatform.IOS), rows().single { it.token == "token-0" })
+        assertEquals(
+            ((1 until devices.size).map { "token-$it" } + "token-new").toSet(),
+            rows().filter { it.device.playerId == pruning.playerId }.map { it.token }.toSet(),
+        )
+    }
+
     /** One device's session of a player. */
     private data class Device(
         val playerId: String,
