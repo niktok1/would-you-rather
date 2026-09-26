@@ -156,14 +156,15 @@ class SubmitViewModel(
     }
 
     /**
-     * Reads the player's points, and whether they are registered, minting a guest where there is none.
+     * Reads the player's points, and whether they are registered, by a username or by Play Games,
+     * minting a guest where there is none.
      * A failed read keeps what was shown and says so under Send, whatever the action before it ended in,
      * so points never read are never left waiting on nothing.
      */
     private suspend fun load() {
         try {
             val stats = getPlayerStats()
-            _state.update { it.copy(points = stats.totalPoints, registered = stats.username != null) }
+            _state.update { it.copy(points = stats.totalPoints, registered = stats.registered) }
         } catch (failure: WyrException) {
             reportShown(failure.error, ACTION_POINTS)
             _state.update { it.copy(pointsFailure = failure.toSubmitFailure()) }

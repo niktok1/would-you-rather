@@ -19,6 +19,7 @@ import io.ntole.wyr.core.network.environment.WyrEnvironment
 import io.ntole.wyr.descriptions
 import io.ntole.wyr.everyNode
 import io.ntole.wyr.everyText
+import io.ntole.wyr.language.GOOGLE_PLAY
 import io.ntole.wyr.language.Language
 import io.ntole.wyr.language.WyrStrings
 import io.ntole.wyr.language.fill
@@ -71,11 +72,12 @@ class AccountScreenDrawTest {
     fun `the screen shows who is playing and their points and every stat`() {
         Language.entries.forEach { language ->
             val strings = stringsOf(language).accountScreens
-            listOf(GUEST, REGISTERED).forEach { stats ->
+            listOf(GUEST, REGISTERED, PLAY_GAMES).forEach { stats ->
                 val state = AccountState(stats = stats, submissions = emptyList())
                 val shown = textsOf(state, language)
                 val expected =
-                    listOf(nameOf(stats, strings)) + statCells(stats, strings).flatMap { listOf(it.value, it.label) }
+                    listOf(nameOf(stats, stringsOf(language))) +
+                        statCells(stats, strings).flatMap { listOf(it.value, it.label) }
                 expected.forEach { text -> assertTrue(text in shown, "$language: \"$text\" is not in $shown") }
                 val said = descriptionsOf(state, language)
                 val points = stringsOf(language).points.fill(stats.totalPoints)
@@ -121,7 +123,12 @@ class AccountScreenDrawTest {
             val registered = textsOf(AccountState(stats = REGISTERED, submissions = listOf(QUESTION)), language)
             assertInOrder(
                 registered,
-                listOf(nameOf(REGISTERED, strings), strings.questionsAnswered, strings.myQuestions, question) +
+                listOf(
+                    nameOf(REGISTERED, stringsOf(language)),
+                    strings.questionsAnswered,
+                    strings.myQuestions,
+                    question,
+                ) +
                     listOf(menu, strings.logOut, serverLine(DEV, strings)),
                 "$language, a registered player",
             )
@@ -230,6 +237,40 @@ class AccountScreenDrawTest {
             }
             assertEquals(listOf("log out"), actions.calls, "$language")
             GUEST_STATES.forEach { state -> assertFalse(logOut in textsOf(state, language), "$language: $state") }
+        }
+    }
+
+    /**
+     * A player registered by Play Games alone is named for it where a guest is Гост, has no button to
+     * register or log in but a quiet link to add a username, which opens the Auth page, and may log out
+     * and ask a question (CLAUDE.md §8a, *Play Games sign-in*; §8d, *The Account screen*).
+     */
+    @Test
+    fun `a player registered by Play Games alone is named for it with a link to add a username`() {
+        Language.entries.forEach { language ->
+            val all = stringsOf(language)
+            val strings = all.accountScreens
+            var opened = 0
+            val state = AccountState(stats = PLAY_GAMES, submissions = emptyList())
+            val scene = scene(state, language, onOpenAuth = { opened++ })
+            try {
+                val shown = scene.everyText()
+                assertTrue(all.playGames.name.fill(GOOGLE_PLAY) in shown, "$language: $shown")
+                assertFalse(strings.guest in shown, "$language: not a guest")
+                assertFalse(strings.openAuth in shown, "$language: no button to register or log in")
+                assertTrue(strings.logOut in shown, "$language: Log out")
+                assertTrue(strings.firstQuestion in shown, "$language: a question to ask")
+                assertFalse(strings.registerToSubmit in shown, "$language: registered already")
+                scene.tap(all.playGames.addUsername)
+            } finally {
+                scene.close()
+            }
+            assertEquals(1, opened, "$language")
+            // Once there is a username, the card names it, and the link has gone.
+            val named =
+                textsOf(AccountState(stats = PLAY_GAMES.copy(username = "bob_1"), submissions = emptyList()), language)
+            assertTrue("bob_1" in named, "$language: $named")
+            assertFalse(all.playGames.addUsername in named, "$language: $named")
         }
     }
 
@@ -493,7 +534,7 @@ class AccountScreenDrawTest {
                         assertFalse(scene.isCutShort(text), "$language: $state cuts \"$text\" short")
                     }
                     val logOut = scene.nodes().singleOrNull { strings.accountScreens.logOut in it.texts }
-                    if (state.stats?.username != null) {
+                    if (state.stats?.registered == true) {
                         assertTrue(
                             assertNotNull(logOut).boundsInRoot.top >= switch.boundsInRoot.bottom,
                             "$language: $state",
@@ -623,6 +664,9 @@ class AccountScreenDrawTest {
 
         val GUEST = PlayerStats(totalPoints = 12, questionsAnswered = 10)
 
+        /** Registered by Play Games alone: no username, and numbers long enough to widen every stat. */
+        val PLAY_GAMES = PlayerStats(totalPoints = 123_456, questionsAnswered = 12_345, playGamesLinked = true)
+
         /** The longest name there can be, and numbers long enough to widen every stat. */
         val REGISTERED =
             PlayerStats(totalPoints = 123_456, questionsAnswered = 12_345, username = "abcdefghijklmnopqrst")
@@ -716,6 +760,8 @@ class AccountScreenDrawTest {
                 AccountState(failure = AccountFailure(AccountAction.LOAD, DomainError.NETWORK)),
                 AccountState(stats = REGISTERED),
                 AccountState(stats = REGISTERED, submissions = emptyList()),
+                AccountState(stats = PLAY_GAMES, submissions = emptyList()),
+                AccountState(stats = PLAY_GAMES, submissions = EVERY_STATUS),
                 AccountState(stats = REGISTERED, submissions = EVERY_STATUS),
                 AccountState(stats = REGISTERED, submissions = emptyList(), running = AccountAction.LOAD),
                 AccountState(stats = REGISTERED, submissions = emptyList(), running = AccountAction.LOG_OUT),

@@ -187,9 +187,9 @@ class AccountViewModel(
                         _state.update { it.copy(failure = AccountFailure(action, failure.error, failure.retryAfter)) }
                         false
                     }
-                val account = load()
+                val confirmed = load()
                 // Not from signedIn, which the Auth page takes down as it leaves, while the read runs.
-                report(action, completed = worked || (action in AUTH_ACTIONS && account))
+                report(action, completed = worked || confirmed)
             } finally {
                 _state.update { it.copy(running = null) }
             }
@@ -234,10 +234,11 @@ class AccountViewModel(
      * or a login whose answer was lost worked all the same when the read after it names an account:
      * it raises [AccountState.signedIn] too, and its failure goes. A failed read keeps what was
      * shown, and says so: the stats' unless the action before it already failed, which says more,
-     * and the list's under the list. It answers whether the player read is an account's.
+     * and the list's under the list. It answers whether the read shows the register or the login in
+     * flight to have worked.
      */
     private suspend fun load(): Boolean {
-        val account = loadStats()
+        val confirmed = loadStats()
         try {
             val submissions = getMySubmissions()
             _state.update { it.copy(submissions = submissions) }
@@ -248,28 +249,33 @@ class AccountViewModel(
                 )
             }
         }
-        return account
+        return confirmed
     }
 
-    /** Reads who is playing, and whether that is an account. */
+    /**
+     * Reads who is playing, and answers whether that shows the register or the login in flight to have
+     * worked: the player has a username now. Only a player with none reaches the Auth page, a guest or
+     * one registered by Play Games alone (CLAUDE.md §8a), so a failed one leaves none.
+     */
     private suspend fun loadStats(): Boolean =
         try {
             val stats = getPlayerStats()
+            var confirmed = false
             _state.update {
+                confirmed = it.running in AUTH_ACTIONS && stats.username != null
                 if (stats.username == null) {
                     it.copy(stats = stats)
                 } else {
-                    val afterAuth = it.running in AUTH_ACTIONS
                     AccountState(
                         stats = stats,
                         submissions = it.submissions,
-                        failure = it.failure.takeUnless { afterAuth },
+                        failure = it.failure.takeUnless { confirmed },
                         running = it.running,
-                        signedIn = it.signedIn || afterAuth,
+                        signedIn = it.signedIn || confirmed,
                     )
                 }
             }
-            stats.username != null
+            confirmed
         } catch (failure: WyrException) {
             _state.update {
                 it.copy(failure = it.failure ?: AccountFailure(AccountAction.LOAD, failure.error, failure.retryAfter))

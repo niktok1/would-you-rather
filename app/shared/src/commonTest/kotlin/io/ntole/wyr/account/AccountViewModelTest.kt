@@ -147,8 +147,8 @@ class AccountViewModelTest {
 
             val state = open().state.value
 
-            assertEquals("Guest", nameOf(state.shown(), ENGLISH))
-            assertEquals("Гост", nameOf(state.shown(), CYRILLIC))
+            assertEquals("Guest", nameOf(state.shown(), EnglishStrings))
+            assertEquals("Гост", nameOf(state.shown(), SerbianCyrillicStrings))
             assertEquals(12, state.shown().totalPoints)
             assertNull(state.failure)
         }
@@ -161,7 +161,7 @@ class AccountViewModelTest {
 
             val state = open().state.value
 
-            assertEquals("Guest", nameOf(state.shown(), ENGLISH))
+            assertEquals("Guest", nameOf(state.shown(), EnglishStrings))
             assertEquals(12, state.shown().totalPoints)
             assertEquals(listOf(StatCell("10", "Questions answered")), statCells(state.shown(), ENGLISH))
             assertEquals(listOf(StatCell("10", "Одговорена питања")), statCells(state.shown(), CYRILLIC))
@@ -176,7 +176,7 @@ class AccountViewModelTest {
 
             val state = open().state.value
 
-            assertEquals("bob_1", nameOf(state.shown(), ENGLISH))
+            assertEquals("bob_1", nameOf(state.shown(), EnglishStrings))
             assertEquals(1, state.shown().totalPoints)
             assertEquals(listOf(StatCell("1", "Questions answered")), statCells(state.shown(), ENGLISH))
         }
@@ -213,7 +213,7 @@ class AccountViewModelTest {
             testScheduler.advanceUntilIdle()
 
             val state = viewModel.state.value
-            assertEquals("bob_1", nameOf(state.shown(), ENGLISH))
+            assertEquals("bob_1", nameOf(state.shown(), EnglishStrings))
             assertEquals(12, state.stats?.totalPoints)
             assertEquals("guest1", game.player, "the same player")
             // A registered player sees no form, so nothing typed is kept; only the Auth page's cue to go back.
@@ -264,7 +264,42 @@ class AccountViewModelTest {
             assertEquals("That name is taken.", failureMessage(assertNotNull(state.failure), ENGLISH))
             assertEquals("Bob_1", state.registerUsername)
             assertEquals("correct horse", state.registerPassword)
-            assertEquals("Guest", nameOf(state.shown(), ENGLISH))
+            assertEquals("Guest", nameOf(state.shown(), EnglishStrings))
+        }
+
+    /**
+     * A player registered by Play Games alone adds a username on the Auth page's Register form: one
+     * refused stays there, with its failure and what was typed, and one that works goes back, named
+     * (CLAUDE.md §8a, *Play Games sign-in*).
+     */
+    @Test
+    fun `a player registered by Play Games alone adds a username and a refused one stays on the form`() =
+        runTest(dispatcher) {
+            game.playGamesLinked = true
+            game.accounts["bob_1"] = "their password" to "someone"
+            val viewModel = open()
+            val linked = viewModel.state.value.shown()
+            assertTrue(linked.registered)
+            assertEquals("Google Play Games", nameOf(linked, EnglishStrings))
+
+            viewModel.setRegisterUsername("Bob_1")
+            viewModel.setRegisterPassword("correct horse")
+            viewModel.register()
+            testScheduler.advanceUntilIdle()
+
+            val refused = viewModel.state.value
+            assertEquals(AccountFailure(AccountAction.REGISTER, DomainError.USERNAME_TAKEN), refused.failure)
+            assertFalse(refused.signedIn, "a refusal stays on the form")
+            assertEquals("Bob_1", refused.registerUsername)
+
+            viewModel.setRegisterUsername("bob_2")
+            viewModel.register()
+            testScheduler.advanceUntilIdle()
+
+            val added = viewModel.state.value
+            assertTrue(added.signedIn)
+            assertNull(added.failure)
+            assertEquals("bob_2", nameOf(added.shown(), EnglishStrings))
         }
 
     @Test
@@ -289,7 +324,7 @@ class AccountViewModelTest {
             val state = viewModel.state.value
             assertTrue("logIn bob_1" in game.calls)
             assertEquals("bob-player", game.player)
-            assertEquals("bob_1", nameOf(state.shown(), ENGLISH))
+            assertEquals("bob_1", nameOf(state.shown(), EnglishStrings))
             assertNull(state.guestPointsWarning)
             assertEquals("", state.loginPassword)
         }
@@ -307,7 +342,7 @@ class AccountViewModelTest {
 
             val state = viewModel.state.value
             assertEquals("bob-player", game.player)
-            assertEquals("bob_1", nameOf(state.shown(), ENGLISH))
+            assertEquals("bob_1", nameOf(state.shown(), EnglishStrings))
             assertNull(state.guestPointsWarning)
         }
 
@@ -342,7 +377,7 @@ class AccountViewModelTest {
             val state = viewModel.state.value
             assertEquals(AccountFailure(AccountAction.LOG_IN, DomainError.INVALID_LOGIN), state.failure)
             assertEquals("guest1", game.player)
-            assertEquals("Guest", nameOf(state.shown(), ENGLISH))
+            assertEquals("Guest", nameOf(state.shown(), EnglishStrings))
             assertEquals("wrong horse", state.loginPassword, "kept, to put right")
         }
 
@@ -351,13 +386,13 @@ class AccountViewModelTest {
         runTest(dispatcher) {
             game.accounts["bob_1"] = "correct horse" to "guest1"
             val viewModel = open()
-            assertEquals("bob_1", nameOf(viewModel.state.value.shown(), ENGLISH))
+            assertEquals("bob_1", nameOf(viewModel.state.value.shown(), EnglishStrings))
 
             viewModel.logOut()
             testScheduler.advanceUntilIdle()
 
             val stats = viewModel.state.value.shown()
-            assertEquals("Guest", nameOf(stats, ENGLISH))
+            assertEquals("Guest", nameOf(stats, EnglishStrings))
             assertEquals("guest2", game.player)
         }
 
@@ -375,7 +410,7 @@ class AccountViewModelTest {
             testScheduler.advanceUntilIdle()
 
             val state = viewModel.state.value
-            assertEquals("Guest", nameOf(state.shown(), ENGLISH))
+            assertEquals("Guest", nameOf(state.shown(), EnglishStrings))
             assertNull(state.failure)
         }
 
@@ -532,7 +567,7 @@ class AccountViewModelTest {
 
             // Up through the read after it, which empties the forms of a registered player.
             assertTrue(viewModel.state.value.signedIn)
-            assertEquals("bob_1", nameOf(viewModel.state.value.shown(), ENGLISH))
+            assertEquals("bob_1", nameOf(viewModel.state.value.shown(), EnglishStrings))
 
             viewModel.leftAuth()
             assertFalse(viewModel.state.value.signedIn)
@@ -552,7 +587,7 @@ class AccountViewModelTest {
 
             val state = viewModel.state.value
             assertTrue(state.signedIn)
-            assertEquals("bob_1", nameOf(state.shown(), ENGLISH))
+            assertEquals("bob_1", nameOf(state.shown(), EnglishStrings))
             assertNull(state.failure)
         }
 
@@ -614,7 +649,7 @@ class AccountViewModelTest {
             viewModel.authShown()
             testScheduler.advanceUntilIdle()
             assertEquals(listOf("stats", "mine"), game.calls)
-            assertEquals("Guest", nameOf(viewModel.state.value.shown(), ENGLISH))
+            assertEquals("Guest", nameOf(viewModel.state.value.shown(), EnglishStrings))
 
             viewModel.authShown()
             testScheduler.advanceUntilIdle()
@@ -877,6 +912,9 @@ class AccountViewModelTest {
         /** The stats of whoever is playing, as the server counts them. */
         var points = 0
         var questionsAnswered = 0
+
+        /** Whether whoever is playing signed in with Play Games (CLAUDE.md §8a). */
+        var playGamesLinked = false
         var statsFailWith: DomainError? = null
 
         /** When set, a read of the stats waits for it before it answers, or fails with [statsFailWith]. */
@@ -911,6 +949,7 @@ class AccountViewModelTest {
                 totalPoints = points,
                 questionsAnswered = questionsAnswered,
                 username = accounts.entries.firstOrNull { it.value.second == playing }?.key,
+                playGamesLinked = playGamesLinked,
             )
         }
 

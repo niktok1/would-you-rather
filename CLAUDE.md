@@ -637,7 +637,10 @@ decided in §8b).
     account*).
   - *A linked player is registered* (*decided 2026-09-26*), as one with a username is: they may submit (§8d, *Submitting*),
     and `GET /v1/me` says so (`PlayerStatsDto.playGamesLinked`). They may still register a username and
-    password, to log in where there is no Play Games: on iOS and the web.
+    password, to log in where there is no Play Games: on iOS and the web. The game's client reads it
+    with the username (`PlayerStats.playGamesLinked`, and `registered`, either of the two): such a
+    player may submit and log out, and their card on the Account screen names them for Play Games when
+    they have no username (§8d, *The Account screen*).
   - *Refusals*: a code Google refuses (`invalid_grant`: spent, expired, another app's) is 422
     `PLAY_GAMES_CODE_REFUSED`, answered by asking Play Games for a new one; Google not answering,
     refusing the server itself (`invalid_client`), or Play Games answering 403, the server's setup and
@@ -1301,8 +1304,13 @@ orientation, in common code alone:
   need for two fields saying the same", "Likes can go to questions table"); not what the player's
   questions cost either (`pointsSpent`, *Stats*, provisional). A screen reader reads each number with
   its word. A guest gets **one button** on the card, *Региструј се или се пријави*, to the Auth page
-  (below), instead of the forms; a registered player gets **Log out** under the language menu, after
-  which the device plays on as a fresh guest. A read that fails says so under the card, beside its
+  (below), instead of the forms; a registered player, by a username or by Play Games (§8a), gets
+  **Log out** under the language menu, after which the device plays on as a fresh guest. A player
+  registered by Play Games alone, with no username, is named *Google Play Игре* on the card, where a
+  guest is *Гост* (`nameOf`; the brand is `GOOGLE_PLAY`, the same in every language, as
+  `USERNAME_CHARACTERS` is, since a Serbian text holds no Latin letter), and has in place of the button
+  a quiet link, *Додај корисничко име*, to the Auth page's Register form: a username and a password
+  are for logging in where there is no Play Games, on iOS and the web (`PlayGamesStrings`). A read that fails says so under the card, beside its
   *Покушај поново*, or in the card's place before any read worked; a read that failed whole, the
   list's too, says so once.
 - `AccountScreenDrawTest` holds every state with no question listed to 599 high in every language,
@@ -2335,7 +2343,7 @@ the same events. The moderation app sends none.
   `$screen_name` says where. An element is `screen.what`, lower case and underscores: `home.play`;
   `top_bar.home`, `.account`, `.back`, `.categories`; `play.card_a` and `.card_b` (with `answered`,
   whether the tap went on from the reveal), `.like`, `.dislike`, `.skip`, `.try_again`;
-  `account.open_auth`, `.log_out`, `.try_again`; `my_questions.new_question`, `.first_question`,
+  `account.open_auth`, `.add_username`, `.log_out`, `.try_again`; `my_questions.new_question`, `.first_question`,
   `.try_again`; `language.menu` and `language.option` (with its `language` tag); `auth.register`,
   `.show_password`, `.to_log_in`, `.log_in`, `.log_in_anyway`, `.cancel`, `.to_register`,
   `.try_again`; `submit.category` (with its `category` id), `.send`, `.categories_try_again`,

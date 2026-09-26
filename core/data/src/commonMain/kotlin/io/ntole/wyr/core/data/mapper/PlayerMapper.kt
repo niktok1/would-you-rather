@@ -8,4 +8,5 @@ internal fun PlayerStatsDto.toDomain(): PlayerStats =
         totalPoints = totalPoints,
         questionsAnswered = questionsAnswered,
         username = username,
+        playGamesLinked = playGamesLinked,
     )

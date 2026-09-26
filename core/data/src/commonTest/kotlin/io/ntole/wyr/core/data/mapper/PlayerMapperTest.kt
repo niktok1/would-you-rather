@@ -4,7 +4,9 @@ import io.ntole.wyr.core.domain.player.PlayerStats
 import io.ntole.wyr.core.player.PlayerStatsDto
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 class PlayerMapperTest {
     @Test
@@ -21,13 +23,30 @@ class PlayerMapperTest {
                 dueThisCycle = 11,
                 likesReceived = 3,
                 username = "bob_1",
+                playGamesLinked = true,
             )
 
-        assertEquals(PlayerStats(totalPoints = 7, questionsAnswered = 5, username = "bob_1"), dto.toDomain())
+        assertEquals(
+            PlayerStats(totalPoints = 7, questionsAnswered = 5, username = "bob_1", playGamesLinked = true),
+            dto.toDomain(),
+        )
     }
 
     @Test
-    fun `a guest has no username`() {
-        assertNull(PlayerStatsDto(playerId = "p1").toDomain().username)
+    fun `a guest has no username and is not registered`() {
+        val guest = PlayerStatsDto(playerId = "p1").toDomain()
+
+        assertNull(guest.username)
+        assertFalse(guest.registered)
+    }
+
+    /** Play Games registers a player as a username does, with or without one (CLAUDE.md §8a). */
+    @Test
+    fun `a player linked to Play Games is registered with no username`() {
+        val linked = PlayerStatsDto(playerId = "p1", playGamesLinked = true).toDomain()
+
+        assertNull(linked.username)
+        assertTrue(linked.registered)
+        assertTrue(PlayerStatsDto(playerId = "p1", username = "bob_1").toDomain().registered)
     }
 }

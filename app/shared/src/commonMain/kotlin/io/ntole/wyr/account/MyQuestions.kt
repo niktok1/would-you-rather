@@ -58,8 +58,9 @@ internal fun MyQuestions(
     val colors = WyrThemeAccessors.colors
     val dimens = WyrThemeAccessors.dimens
     val strings = LocalStrings.current.accountScreens
-    // Only a registered player submits (CLAUDE.md §8d, *Submitting*); the server refuses a guest too.
-    val canAsk = state.stats?.username != null
+    // Only a registered player submits, by a username or by Play Games (CLAUDE.md §8d, *Submitting*);
+    // the server refuses a guest too.
+    val canAsk = state.stats?.registered == true
 
     Column(verticalArrangement = Arrangement.spacedBy(dimens.spaceSm)) {
         Row(verticalAlignment = Alignment.CenterVertically) {

@@ -24,6 +24,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -37,9 +38,12 @@ import io.ntole.wyr.analytics.tapped
 import io.ntole.wyr.core.domain.player.PlayerStats
 import io.ntole.wyr.core.network.environment.WyrEnvironment
 import io.ntole.wyr.language.AccountStrings
+import io.ntole.wyr.language.GOOGLE_PLAY
 import io.ntole.wyr.language.Language
 import io.ntole.wyr.language.LanguageMenu
 import io.ntole.wyr.language.LocalStrings
+import io.ntole.wyr.language.PlayGamesStrings
+import io.ntole.wyr.language.Strings
 import io.ntole.wyr.language.fill
 import io.ntole.wyr.points.PointsAmount
 import io.ntole.wyr.theme.WyrIcons
@@ -104,7 +108,7 @@ fun AccountScreen(
                     LanguageMenu(selected = language, onSelect = onSelectLanguage, modifier = Modifier.weight(1f))
                     StatisticsSwitch(on = statisticsOn, onChange = onStatisticsChange)
                 }
-                if (stats?.username != null) {
+                if (stats?.registered == true) {
                     FailureOf(state, AccountAction.LOG_OUT)
                     OutlinedButton(
                         onClick = tapped("account.log_out", onClick = actions::logOut),
@@ -152,8 +156,9 @@ private fun StatisticsSwitch(
 }
 
 /**
- * Who is playing, their points and their stats, on a card, and a guest's one button to the Auth page;
- * before the first read works, a spinner, or why it failed with Try again.
+ * Who is playing, their points and their stats, on a card, and a guest's one button to the Auth page,
+ * or for a player registered by Play Games alone a quiet link there, to add a username; before the
+ * first read works, a spinner, or why it failed with Try again.
  */
 @Composable
 private fun Player(
@@ -202,7 +207,8 @@ private fun Player(
 /**
  * The card (CLAUDE.md §8d, *The Account screen*): the player's initial in a circle, a guest's figure
  * for a guest, their name and their points, a coin and the number; under a line, their stats, two to a
- * row, so more fit as they come; and for a guest the one button to the Auth page.
+ * row, so more fit as they come; and for a guest the one button to the Auth page, or for a player
+ * registered by Play Games alone, named for it, the quiet link there to add a username.
  */
 @Composable
 private fun PlayerCard(
@@ -213,6 +219,7 @@ private fun PlayerCard(
     val colors = WyrThemeAccessors.colors
     val dimens = WyrThemeAccessors.dimens
     val strings = LocalStrings.current.accountScreens
+    val playGames = LocalStrings.current.playGames
 
     Surface(
         color = colors.surface,
@@ -229,7 +236,7 @@ private fun PlayerCard(
             ) {
                 Avatar(stats.username)
                 Text(
-                    text = nameOf(stats, strings),
+                    text = nameOf(stats, LocalStrings.current),
                     color = colors.primaryText,
                     fontSize = WyrTypeScale.sectionTitle,
                     fontWeight = FontWeight.Bold,
@@ -251,13 +258,19 @@ private fun PlayerCard(
                     repeat(STATS_PER_ROW - row.size) { Spacer(Modifier.weight(1f)) }
                 }
             }
-            if (stats.username == null) {
+            if (!stats.registered) {
                 Button(
                     onClick = tapped("account.open_auth", onClick = onOpenAuth),
                     enabled = !busy,
                     modifier = Modifier.fillMaxWidth(),
                 ) {
                     Text(strings.openAuth)
+                }
+            } else if (stats.username == null) {
+                // Registered by Play Games alone, as the name above says: a username is only for where
+                // there is no Play Games, so the way to one is quiet (CLAUDE.md §8d, *The Account screen*).
+                TextButton(onClick = tapped("account.add_username", onClick = onOpenAuth), enabled = !busy) {
+                    Text(playGames.addUsername)
                 }
             }
         }
@@ -320,11 +333,20 @@ internal data class StatCell(
     val label: String,
 )
 
-/** Who is playing on this device: their username, or [AccountStrings.guest] for a guest. */
+/**
+ * Who is playing on this device: their username, or for a player registered by Play Games alone the
+ * service's name ([PlayGamesStrings.name]), or [AccountStrings.guest] for a guest.
+ */
 internal fun nameOf(
     stats: PlayerStats,
-    strings: AccountStrings,
-): String = stats.username ?: strings.guest
+    strings: Strings,
+): String =
+    stats.username
+        ?: if (stats.playGamesLinked) {
+            strings.playGames.name.fill(GOOGLE_PLAY)
+        } else {
+            strings.accountScreens.guest
+        }
 
 /**
  * The player's stats on the card, a number each, as the server counted them (CLAUDE.md §8d,

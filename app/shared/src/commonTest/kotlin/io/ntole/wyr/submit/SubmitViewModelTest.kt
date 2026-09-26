@@ -385,6 +385,21 @@ class SubmitViewModelTest {
             assertEquals(emptyList(), server.calls, "nothing sent")
         }
 
+    /** Play Games registers a player as a username does (CLAUDE.md §8a, *Play Games sign-in*). */
+    @Test
+    fun `a player registered by Play Games alone may send`() =
+        runTest(dispatcher) {
+            server.username = null
+            server.playGamesLinked = true
+            val viewModel = open()
+            viewModel.write("Fly", "Swim", "FOOD")
+
+            val state = viewModel.state.value
+            assertEquals(true, state.registered)
+            assertFalse(state.isGuest)
+            assertTrue(state.canSubmit)
+        }
+
     @Test
     fun `nothing says register before the player is read`() =
         runTest(dispatcher) {
@@ -703,6 +718,7 @@ class SubmitViewModelTest {
 
         /** The player's username, a registered player's unless a test makes them a guest. */
         var username: String? = "bob"
+        var playGamesLinked = false
         var statsFailWith: DomainError? = null
         var submitFailsWith: WyrException? = null
 
@@ -742,7 +758,12 @@ class SubmitViewModelTest {
         override suspend fun stats(): PlayerStats {
             calls += "stats"
             statsFailWith?.let { throw WyrException(it) }
-            return PlayerStats(totalPoints = points, questionsAnswered = 0, username = username)
+            return PlayerStats(
+                totalPoints = points,
+                questionsAnswered = 0,
+                username = username,
+                playGamesLinked = playGamesLinked,
+            )
         }
     }
 

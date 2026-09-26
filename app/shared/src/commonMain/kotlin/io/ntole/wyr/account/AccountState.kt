@@ -77,7 +77,10 @@ data class AccountState(
     val canLogIn: Boolean
         get() = !isBusy && stats != null && loginUsername.isNotEmpty() && loginPassword.isNotEmpty()
 
-    /** The points a login would leave behind, for a guest who has any, or null. */
+    /**
+     * The points a login would leave behind, for a player with any who has no username: a guest, or
+     * one registered by Play Games alone, whose account stays, but not on this device. Null otherwise.
+     */
     val pointsLeftBehindByLogIn: Int?
         get() = stats?.takeIf { it.username == null && it.totalPoints > 0 }?.totalPoints
 }

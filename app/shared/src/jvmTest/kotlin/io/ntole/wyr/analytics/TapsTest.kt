@@ -106,6 +106,7 @@ class TapsTest {
     fun `every tap on Account is reported`() {
         val guest = elementsTapped { Account(AccountState(stats = GUEST, submissions = emptyList())) }
         val registered = elementsTapped { Account(AccountState(stats = REGISTERED, submissions = emptyList())) }
+        val playGames = elementsTapped { Account(AccountState(stats = PLAY_GAMES, submissions = emptyList())) }
         val listed = elementsTapped { Account(AccountState(stats = REGISTERED, submissions = listOf(SUBMISSION))) }
         val unread =
             elementsTapped { Account(AccountState(failure = AccountFailure(AccountAction.LOAD, DomainError.NETWORK))) }
@@ -124,6 +125,11 @@ class TapsTest {
         assertEquals(
             setOf("my_questions.new_question", "my_questions.first_question", "account.log_out") + settings,
             registered,
+        )
+        assertEquals(
+            setOf("account.add_username", "my_questions.new_question", "my_questions.first_question") +
+                setOf("account.log_out") + settings,
+            playGames,
         )
         assertEquals(setOf("my_questions.new_question", "account.log_out") + settings, listed)
         assertEquals(setOf("account.try_again") + settings, unread)
@@ -367,6 +373,7 @@ class TapsTest {
             VoteOutcome(yourSide = Side.A, tally = Tally(votesA = 7, votesB = 3), pointsAwarded = 1, totalPoints = 6)
         val GUEST = PlayerStats(totalPoints = 5, questionsAnswered = 5)
         val REGISTERED = PlayerStats(totalPoints = 5, questionsAnswered = 5, username = "bob_1")
+        val PLAY_GAMES = PlayerStats(totalPoints = 5, questionsAnswered = 5, playGamesLinked = true)
         val CATEGORIES =
             listOf(
                 Category(id = "FOOD", nameSr = "Храна", nameEn = "Food"),

@@ -14,10 +14,19 @@ package io.ntole.wyr.core.domain.player
  * player's questions hold are counted by question in their list (`Submission`).
  *
  * [username] is the player's account name, lower-cased as the server keeps it, or null for a guest,
- * who has none (CLAUDE.md §8a, *Accounts*). Read with the points, so the two are one moment's.
+ * who has none (CLAUDE.md §8a, *Accounts*). [playGamesLinked] is whether the player signed in with
+ * Google Play Games (§8a, *Play Games sign-in*), which registers them as a username does, with or
+ * without one. Both are read with the points, so the three are one moment's.
  */
 public data class PlayerStats(
     public val totalPoints: Int,
     public val questionsAnswered: Int,
     public val username: String? = null,
-)
+    public val playGamesLinked: Boolean = false,
+) {
+    /**
+     * Whether the player is registered, by a username or by Play Games: they may submit (CLAUDE.md §8d,
+     * *Submitting*) and log out. A guest has neither.
+     */
+    public val registered: Boolean get() = username != null || playGamesLinked
+}
