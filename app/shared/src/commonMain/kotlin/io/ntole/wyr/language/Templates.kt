@@ -19,8 +19,7 @@ fun String.fill(vararg values: Any): String =
 
 /**
  * This template cut at its placeholders: the text between them, and for each placeholder its index,
- * in order, so a screen can put something other than a string where one is (a link, a coin). A
- * `{n}` with no value is text as it stands.
+ * in order, so a screen can put something other than a string where one is (a link, a coin).
  */
 internal fun String.parts(): List<TemplatePart> {
     val parts = mutableListOf<TemplatePart>()

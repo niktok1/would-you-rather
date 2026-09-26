@@ -16,6 +16,7 @@ import io.ntole.wyr.descriptions
 import io.ntole.wyr.everyNode
 import io.ntole.wyr.everyText
 import io.ntole.wyr.language.Language
+import io.ntole.wyr.language.LocalStrings
 import io.ntole.wyr.language.WyrStrings
 import io.ntole.wyr.language.fill
 import io.ntole.wyr.language.stringsOf
@@ -130,6 +131,35 @@ class AuthScreenDrawTest {
             scene.close()
         }
         assertEquals(2, uris.opened.size, "${uris.opened}")
+    }
+
+    /**
+     * A placeholder the terms line has no link for, which `StringsTest` keeps out of every language,
+     * shows as it stands rather than failing the page.
+     */
+    @Test
+    fun `a placeholder the terms line has no link for shows as it stands`() {
+        val strings = stringsOf(Language.DEFAULT)
+        val terms = strings.accountScreens.termsLine
+        val screens = strings.accountScreens.copy(termsLine = terms.copy(line = "{0} {1} {2}"))
+        val odd = strings.copy(accountScreens = screens)
+        val scene =
+            ImageComposeScene(width = WIDTH, height = HEIGHT, density = Density(1f)) {
+                CompositionLocalProvider(LocalUriHandler provides RecordingUris()) {
+                    WyrTheme {
+                        CompositionLocalProvider(LocalStrings provides odd) {
+                            AuthScreen(state = AccountState(stats = GUEST), actions = Recorder())
+                        }
+                    }
+                }
+            }
+        try {
+            scene.render()
+            val shown = scene.everyText()
+            assertTrue("${terms.terms} ${terms.privacyPolicy} {2}" in shown, "$shown")
+        } finally {
+            scene.close()
+        }
     }
 
     /** Log in: the two fields, no rules, the button and the link back. */

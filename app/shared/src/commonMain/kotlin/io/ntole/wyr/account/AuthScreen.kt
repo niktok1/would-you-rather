@@ -238,9 +238,15 @@ private fun TermsLine() {
                     }
 
                     is TemplatePart.Value -> {
-                        val (label, page, element) = links[part.index]
-                        val open = tapped(element) { uriHandler.openIfAble(Site.url(page, language)) }
-                        withLink(LinkAnnotation.Clickable(element, linkStyle) { open() }) { append(label) }
+                        // A placeholder with no link, which StringsTest keeps out of every language, as it stands.
+                        val link = links.getOrNull(part.index)
+                        if (link == null) {
+                            append("{${part.index}}")
+                        } else {
+                            val (label, page, element) = link
+                            val open = tapped(element) { uriHandler.openIfAble(Site.url(page, language)) }
+                            withLink(LinkAnnotation.Clickable(element, linkStyle) { open() }) { append(label) }
+                        }
                     }
                 }
             }
