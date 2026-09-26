@@ -132,7 +132,11 @@ android {
             // (not debuggable, so Compose runs at full speed) still installs on a phone for testing,
             // which Google Play would refuse.
             signingConfig = signingConfigs.getByName(if (uploadKeyMissing.isEmpty()) "upload" else "debug")
-            isMinifyEnabled = false
+            // R8 shrinks, optimizes and renames the code, and drops the resources nothing uses. Its
+            // mapping, which turns a crash's renamed stack trace back into these names, lands in
+            // build/outputs/mapping/<variant>/mapping.txt, and a bundle carries it to Play itself.
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",

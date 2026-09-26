@@ -1700,6 +1700,16 @@ and its players are untouched. So the keystore below deserves a backup, but it i
 5. From *Test and release → Setup → App signing*, copy the **app signing key's SHA-1**: Play Games'
    Android credential needs it (CLAUDE.md §8b, *Play Games sign-in*, step 3), beside the upload key's
    and the debug key's for builds made on a laptop, which `signingReport` prints.
+6. R8's mapping travels inside the bundle, so Android vitals shows crashes in this code's names
+   (*App bundle explorer → Downloads* lists it as the ReTrace mapping file). For a build made on the
+   laptop it is `app/androidApp/build/outputs/mapping/prodRelease/mapping.txt`, which the SDK's
+   `retrace` reads; keep it beside any APK you hand out, as the next build's differs.
+
+**R8 breaks mostly at run time**, so after a library changes, play a shrunk build on an emulator
+against a local server: `WYR_SERVER_ONLY=1 ./gradlew :server:buildFatJar`, then
+`PORT=8080 java -jar server/build/libs/server-all.jar` (JDK 21), `./gradlew
+:app:androidApp:installLocalRelease`, and in the app Home, Play, a like, an answer, a skip, Account
+and the categories, with `adb logcat` open for `FATAL` and `Serializ`.
 
 ### Trying a change
 

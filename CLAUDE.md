@@ -430,6 +430,14 @@ This project must never be attributed to any employer identity.
     NEXT-SESSION.md says (*Release builds and Google Play*). **Play App Signing**: Play keeps the app
     signing key, which signs what phones install; the upload key only proves an upload is the
     developer's, and a lost one is reset in the Play Console without touching the app.
+  - *R8*: `isMinifyEnabled` and `isShrinkResources` on. The libraries ship their own keep rules
+    (kotlinx.serialization, Ktor, OkHttp, coroutines, Koin, Compose); `proguard-rules.pro` adds only
+    the line numbers a stack trace keeps. The mapping lands in
+    `app/androidApp/build/outputs/mapping/<variant>/mapping.txt`, and a bundle carries it inside, so
+    Play deobfuscates Android vitals' crashes by itself. CI's verify job builds `assembleProdRelease`,
+    so a shrink that fails the build fails CI; one that fails only at run time shows on a device
+    alone (NEXT-SESSION.md, *Release builds and Google Play*, has the emulator check). R8 warns that
+    it cannot read Kotlin 2.4's metadata (§8b, *R8 and Kotlin 2.4's metadata*).
 
 ## 8a. Authentication — resolved
 
@@ -769,6 +777,12 @@ EncryptedSharedPreferences: enough for a game that stores no sensitive personal 
   batch, which the client reads as out of questions. The Categories screen sends the categories
   selected (§8d, *The Categories screen*), so a player reaches this in every build, PROD's included.
   `SkipStoreTest` pins what is built.
+- **R8 and Kotlin 2.4's metadata** — *provisional — user decision.* AGP 9.0.1's R8 warns, a dozen
+  times a release build, that it cannot parse the metadata of Kotlin 2.4.10's classes. Only
+  kotlin-reflect reads that metadata at run time, and the app has none; the shrunk build played on an
+  emulator without an error (§8, *Release builds*). The options: keep it until an AGP whose R8 reads
+  Kotlin 2.4; or pin a newer R8 (`com.android.tools:r8` on the build's classpath), a build dependency
+  of its own (§4).
 - **The categories on the Play screen** — *resolved 2026-09-26*: the user moved them from the row
   between the cards, where the redesign of 2026-09-25 had put them, to the middle of the top bar
   (§8d, *The Play screen*).
