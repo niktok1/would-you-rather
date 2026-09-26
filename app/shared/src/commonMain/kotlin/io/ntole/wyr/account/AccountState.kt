@@ -26,9 +26,10 @@ data class AccountState(
      */
     val submissions: List<Submission>? = null,
     /**
-     * The player [submissions] were read for, as the session named them when the read began, for the
-     * notice of a decision, which marks seen only a list of the player playing (CLAUDE.md §8d, *The
-     * notice of a decision*). Null until a list is read.
+     * The player [stats] and [submissions] were read for, as the session named them when the read
+     * began: for the notice of a decision, which marks seen only a list of the player playing (CLAUDE.md
+     * §8d, *The notice of a decision*), and so that nothing of theirs stays shown once another player
+     * plays here. Null until a read.
      */
     val readFor: String? = null,
     val registerUsername: String = "",

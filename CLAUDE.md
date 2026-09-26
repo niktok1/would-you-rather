@@ -1470,7 +1470,11 @@ orientation, in common code alone:
   commits autofill when no autofillable field is left, so nothing typed is cleared before then).
   What is typed lives in `AccountViewModel`'s memory only, never in saved state.
 - One action at a time, and the player read again after every one, a failed one too: a registration
-  whose answer was lost shows as the account it made. A register or a login whose read after it
+  whose answer was lost shows as the account it made. The device can also become another player with
+  nothing asked of the screen, by the launch's Play Games sign-in or a dead session replaced: the
+  ViewModel hears it (`CurrentSession.sessions`), and what it read of the player before is dropped and
+  read again as the player now (`AccountState.readFor`), so neither the card nor the Auth page shows
+  the guest's name, points or buttons meanwhile. A register or a login whose read after it
   names an account goes back to the Account screen as one that answered does, its failure dropped;
   what was typed is gone by then, so the password manager has nothing to save. `AccountViewModelTest`
   drives it over fakes, `AccountScreenDrawTest` and `AuthScreenDrawTest` draw every state in both

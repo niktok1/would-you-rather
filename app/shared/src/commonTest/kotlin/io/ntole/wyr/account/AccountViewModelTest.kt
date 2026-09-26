@@ -35,7 +35,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.resetMain
@@ -107,6 +107,47 @@ class AccountViewModelTest {
             testScheduler.advanceUntilIdle()
 
             assertEquals("p2", viewModel.state.value.readFor)
+        }
+
+    /** A launch's Play Games sign-in, or a dead session replaced, makes the device another player. */
+    @Test
+    fun `another player playing here is read again with nothing of the one before shown meanwhile`() =
+        runTest(dispatcher) {
+            game.points = 5
+            game.questionsOf["guest1"] = listOf(QUESTION)
+            val viewModel = open()
+            game.calls.clear()
+            game.statsWaitsFor = CompletableDeferred()
+
+            game.player = "p2"
+            testScheduler.advanceUntilIdle()
+
+            assertNull(viewModel.state.value.stats, "nothing of the guest's while the player is read")
+            assertNull(viewModel.state.value.submissions)
+            game.statsWaitsFor?.complete(Unit)
+            testScheduler.advanceUntilIdle()
+            val state = viewModel.state.value
+            assertEquals(listOf("stats", "mine"), game.calls)
+            assertEquals(emptyList(), state.submissions, "p2's own")
+            assertEquals("p2", state.readFor)
+            assertEquals(5, state.stats?.totalPoints)
+        }
+
+    /** The screen's own login, logout and sign-in read the player after themselves, and only then. */
+    @Test
+    fun `the screen's own login reads the player once`() =
+        runTest(dispatcher) {
+            game.accounts["bob_1"] = "correct horse" to "bob-player"
+            val viewModel = open()
+            game.calls.clear()
+
+            viewModel.setLoginUsername("bob_1")
+            viewModel.setLoginPassword("correct horse")
+            viewModel.logIn()
+            testScheduler.advanceUntilIdle()
+
+            assertEquals(listOf("logIn bob_1", "reset", "stats", "mine"), game.calls)
+            assertEquals("bob-player", viewModel.state.value.readFor)
         }
 
     /** My questions are the player's: another player's after a login, and a fresh guest's none. */
@@ -1083,15 +1124,25 @@ class AccountViewModelTest {
         /** When set, a read of the player's questions waits for it before it answers. */
         var mineWaitsFor: CompletableDeferred<Unit>? = null
 
-        /** Who is playing on this device, as the stored session names them, or none. */
-        var player: String? = null
+        private val stored = MutableStateFlow<String?>(null)
+
+        /**
+         * Who is playing on this device, as the stored session names them, or none. A test sets it for
+         * what makes the device another player with nothing asked of the screen: a launch's Play Games
+         * sign-in, or a dead session replaced.
+         */
+        var player: String?
+            get() = stored.value
+            set(value) {
+                stored.value = value
+            }
         private var guestsMinted = 0
 
         override suspend fun ensure(): String = player ?: "guest${++guestsMinted}".also { player = it }
 
         override fun current(): String? = player
 
-        override val sessions: Flow<String> = flow { emit(ensure()) }
+        override val sessions: Flow<String> = stored.filterNotNull()
 
         override fun isSettled(): Boolean = false
 

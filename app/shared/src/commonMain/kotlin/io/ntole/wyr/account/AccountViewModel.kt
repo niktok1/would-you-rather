@@ -16,6 +16,8 @@ import io.ntole.wyr.core.domain.submission.GetMySubmissions
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
@@ -63,7 +65,9 @@ interface AccountActions {
  * register or a login that worked raises [AccountState.signedIn], for the Auth page to go back on.
  *
  * One action at a time, and after each the player is read again, whatever became of it: a
- * registration whose answer was lost may have landed, and the read then names the account.
+ * registration whose answer was lost may have landed, and the read then names the account. The device
+ * can become another player with nothing asked here, by the launch's Play Games sign-in or a dead
+ * session replaced ([session]): what was read is then dropped and read again, as the player now.
  *
  * [analytics] hear of it all (CLAUDE.md §8g): the screen opened, a registration sent and one that
  * worked, a login that worked, a logout, and every failure shown, by its code; never what was typed.
@@ -81,6 +85,16 @@ class AccountViewModel(
     AccountActions {
     private val _state = MutableStateFlow(AccountState(playGamesAvailable = linkPlayGames.available))
     val state: StateFlow<AccountState> = _state.asStateFlow()
+
+    init {
+        viewModelScope.launch {
+            session.sessions.collectLatest { player ->
+                // An action in flight reads the player itself once done, its own login or logout included.
+                _state.first { !it.isBusy }
+                if (_state.value.readFor.let { it != null && it != player }) refresh()
+            }
+        }
+    }
 
     /**
      * Not read on creation: the screen asks every time it is shown, since the stats move on the Play
@@ -260,14 +274,21 @@ class AccountViewModel(
      * flight to have worked.
      */
     private suspend fun load(): Boolean {
+        // Named before anything is read, so a list read as a player the device became meanwhile is not
+        // this one's (AccountState.readFor), and nothing of another player's stays, the read failing or
+        // not.
         val before = session.current()
+        if (before != null) {
+            _state.update {
+                if (it.readFor == before) it else it.copy(stats = null, submissions = null, readFor = before)
+            }
+        }
         val confirmed = loadStats()
-        // Named before the list is read, so one read as a player the device became meanwhile is not
-        // this one's (AccountState.readFor). A first launch's is the guest the read of the stats minted.
-        val readFor = before ?: session.current()
+        // None was stored: a first launch's, or a logout's, whose guest the read of the stats minted.
+        if (before == null) _state.update { it.copy(submissions = null, readFor = session.current()) }
         try {
             val submissions = getMySubmissions()
-            _state.update { it.copy(submissions = submissions, readFor = readFor) }
+            _state.update { it.copy(submissions = submissions) }
         } catch (failure: WyrException) {
             _state.update {
                 it.copy(
