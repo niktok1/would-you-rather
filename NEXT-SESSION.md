@@ -326,6 +326,13 @@ smallest client compile fixes.
   question, and `POST /v1/hidden-questions` and `/v1/hidden-authors`, each hiding from the player for
   good; the feed and the due count leave hidden questions out. To ask the user: hiding a seed's author
   hides that seed (provisional, the options were 409 or nothing), and nothing unhides yet.
+- **The moderator's side** (§8d, *Moderation*, *Reports* and *Authors*; V12): `GET /v1/admin/reports`,
+  most reported first with the reasons counted, and `POST /v1/admin/report-dismissals`; an opaque
+  `authorId` on `AdminQuestionDto` and on the admin routes' `SubmissionDto`s (never a player's); and
+  `POST /v1/admin/author-blocks` and `/author-unblocks`, a block rejecting whatever the author has
+  pending, paid back, and refusing their submissions with 403 `SUBMISSIONS_BLOCKED`. The moderation
+  app shows none of it yet. To ask the user: nothing retires a reported question by itself
+  (provisional; a threshold was the other option).
 
 ### Verified working
 

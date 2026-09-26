@@ -1,6 +1,7 @@
 package io.ntole.wyr.server.moderation
 
 import io.ntole.wyr.core.api.WyrApi
+import io.ntole.wyr.core.author.BlockAuthorRequest
 import io.ntole.wyr.core.question.ApproveSubmissionRequest
 import io.ntole.wyr.core.question.RejectSubmissionRequest
 import io.ntole.wyr.server.plugins.ApiFailure
@@ -34,13 +35,28 @@ internal fun checkedApproval(request: ApproveSubmissionRequest): ApproveSubmissi
 internal fun checkedRejection(request: RejectSubmissionRequest): RejectSubmissionRequest {
     requireValidId("questionId", request.questionId)
 
-    val reason = request.reason.trim()
+    return request.copy(reason = checkedReason(request.reason))
+}
+
+/**
+ * [request] with its reason trimmed, as each submission it rejects stores it, or an
+ * [ApiFailure.validation]: an author id as a question's id is checked, and a reason as a rejection's
+ * ([checkedRejection]), since each rejected author sees it.
+ */
+internal fun checkedBlock(request: BlockAuthorRequest): BlockAuthorRequest {
+    requireValidId("authorId", request.authorId)
+
+    return request.copy(reason = checkedReason(request.reason))
+}
+
+/** [raw] trimmed, if it is a reason a rejection may give ([checkedRejection]). */
+private fun checkedReason(raw: String): String {
+    val reason = raw.trim()
     if (reason.isEmpty()) throw ApiFailure.validation("reason is blank")
     if (reason.length > WyrApi.Limits.MAX_REJECTION_REASON_LENGTH) {
         throw ApiFailure.validation("reason is over ${WyrApi.Limits.MAX_REJECTION_REASON_LENGTH} characters")
     }
     if (reason.any(Char::isISOControl)) throw ApiFailure.validation("reason has a control character")
     if (reason.any { it.category in LINE_SEPARATORS }) throw ApiFailure.validation("reason has a line separator")
-
-    return request.copy(reason = reason)
+    return reason
 }

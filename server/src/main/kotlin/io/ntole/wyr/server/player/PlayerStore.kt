@@ -23,6 +23,8 @@ object PlayerStore {
          * set it never changes or goes: nothing unregisters a player or renames one.
          */
         val username: String? = null,
+        /** Whether a moderator has blocked the player from submitting questions (CLAUDE.md §8d, *Moderation*). */
+        val submissionsBlocked: Boolean = false,
     )
 
     /**
@@ -49,8 +51,13 @@ object PlayerStore {
      */
     fun find(id: String): Player? =
         Players
-            .select(Players.id, Players.totalPoints, Players.currentCycle, Players.username)
-            .where { Players.id eq id }
+            .select(
+                Players.id,
+                Players.totalPoints,
+                Players.currentCycle,
+                Players.username,
+                Players.submissionsBlockedAt,
+            ).where { Players.id eq id }
             .limit(1)
             .firstOrNull()
             ?.toPlayer()
@@ -61,6 +68,7 @@ object PlayerStore {
             totalPoints = this[Players.totalPoints],
             cycle = this[Players.currentCycle],
             username = this[Players.username],
+            submissionsBlocked = this[Players.submissionsBlockedAt] != null,
         )
 
     /**

@@ -7,6 +7,8 @@ import io.ktor.server.routing.Route
 import io.ktor.server.routing.get
 import io.ktor.server.routing.post
 import io.ntole.wyr.core.api.WyrApi
+import io.ntole.wyr.core.author.BlockAuthorRequest
+import io.ntole.wyr.core.author.UnblockAuthorRequest
 import io.ntole.wyr.core.category.CreateCategoryRequest
 import io.ntole.wyr.core.category.RenameCategoryRequest
 import io.ntole.wyr.core.question.ApproveSubmissionRequest
@@ -15,6 +17,7 @@ import io.ntole.wyr.core.question.RejectSubmissionRequest
 import io.ntole.wyr.core.question.RestoreQuestionRequest
 import io.ntole.wyr.core.question.RetireQuestionRequest
 import io.ntole.wyr.core.question.SubmissionListDto
+import io.ntole.wyr.core.report.DismissReportsRequest
 import io.ntole.wyr.server.category.CategoryStore
 import io.ntole.wyr.server.category.checkedCreation
 import io.ntole.wyr.server.category.checkedRenaming
@@ -128,6 +131,43 @@ fun Route.moderationRoutes(
                 val category = checkedRenaming(call.receiveOrReject<RenameCategoryRequest>("category rename"))
 
                 call.respond(db.query { CategoryStore.rename(category) })
+            }
+
+            get(WyrApi.Paths.ADMIN_REPORTS) {
+                call.requireAdmin(adminToken)
+
+                val limit = call.request.queryParameters.pageLimit()
+
+                call.respond(db.query { ModerationStore.reports(limit) })
+            }
+
+            post(WyrApi.Paths.ADMIN_REPORT_DISMISSALS) {
+                call.requireAdmin(adminToken)
+
+                val dismissal = call.receiveOrReject<DismissReportsRequest>("report dismissal")
+                requireValidId("questionId", dismissal.questionId)
+
+                db.query { ModerationStore.dismissReports(dismissal.questionId) }
+
+                call.respond(HttpStatusCode.NoContent)
+            }
+
+            post(WyrApi.Paths.ADMIN_AUTHOR_BLOCKS) {
+                call.requireAdmin(adminToken)
+
+                // Checked before the transaction, as a rejection is: a refusal needs no database.
+                val block = checkedBlock(call.receiveOrReject<BlockAuthorRequest>("author block"))
+
+                call.respond(db.query { ModerationStore.blockAuthor(block.authorId, block.reason) })
+            }
+
+            post(WyrApi.Paths.ADMIN_AUTHOR_UNBLOCKS) {
+                call.requireAdmin(adminToken)
+
+                val unblock = call.receiveOrReject<UnblockAuthorRequest>("author unblock")
+                requireValidId("authorId", unblock.authorId)
+
+                call.respond(db.query { ModerationStore.unblockAuthor(unblock.authorId) })
             }
         }
     }

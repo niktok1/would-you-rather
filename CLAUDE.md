@@ -164,7 +164,8 @@ failing:
   one outcome, and `SkipStore.skip` and `ReportStore.report`).
   A read of rows a racing writer is about to add has no row to lock, so it locks a parent row that
   every such writer locks first (`SubmissionStore.submit` counts an author's pending questions
-  under the author's `players` row).
+  under the author's `players` row, and `ModerationStore.blockAuthor` reads them under it too, so a
+  submission either lands before a block and is rejected by it or waits and is refused).
   The one exception is a value copied from another row, which may be a plain read where a stale
   copy is provably harmless, with the proof at the read (`VoteStore.currentCycle`: the feed moves
   the cycle on only once the answer's question is already answered or skipped in the one read).
@@ -182,7 +183,8 @@ failing:
   state; two statements can straddle another transaction's commit (the tally in `VoteStore`,
   `StatsStore.of`, a question's like and dislike counts beside the player's own reaction in
   `ReactionStore.reactionsOf`, a question's tally and reaction counts in the moderator's list,
-  `ModerationStore.questions`, and a submission's counts in its author's list,
+  `ModerationStore.questions`, a reported question's report counts beside its numbers,
+  `ModerationStore.reports`, and a submission's counts in its author's list,
   `SubmissionStore.byAuthor`).
 
 REPEATABLE_READ was dropped because it refuses the second of two concurrent writes to a row
@@ -560,7 +562,11 @@ EncryptedSharedPreferences: enough for a game that stores nothing personal.
   `RenameCategoryRequest`, the `X-Admin-Token` header (`WyrApi.Headers`), `QuestionStatus.RETIRED`
   and the error codes `FORBIDDEN`, `ALREADY_DECIDED`, `WRONG_STATUS`, `CATEGORY_EXISTS` and
   `CATEGORY_NOT_FOUND`. The moderator's client (`ModerationApi` calls every admin route) and the
-  moderation app are built on it (§8d, *Moderation*).
+  moderation app are built on it (§8d, *Moderation*). Since 2026-09-26 the server has more that no
+  client calls yet: the reported questions and their dismissal (`AdminReportListDto`,
+  `DismissReportsRequest`), an author's opaque id on the admin DTOs (`authorId`), blocking and
+  unblocking an author (`BlockAuthorRequest`, `UnblockAuthorRequest`, `AuthorBlockDto`), and the error
+  codes `SUBMISSIONS_BLOCKED` and `AUTHOR_NOT_FOUND` (§8d, *Moderation*, *Reports* and *Authors*).
 - **A rejection reason is one line** — *provisional — user decision.* §8d asks for a short reason;
   the server also holds it to one line, as it does an option: no control character, nor U+2028 or
   U+2029 (`checkedRejection`). Chosen as the stricter reading, since a reason is shown to its author
@@ -773,8 +779,8 @@ seed (`Migrations`, `DatabaseFactory.init`). Nothing builds a table any other wa
   (a player's username and password hash, *Accounts*, above), which every player already there takes
   as a guest, and every later script: V6 (the categories table, §8d *Categories*), V7 (what a
   question cost, §8c), V8 (the seeds' made-up votes), V9 (the seeds in Serbian, §8d *Seeds*),
-  V10 (likes become reactions, §8d *Reactions*) and V11 (reports and hidden questions, §8d
-  *Reports*).
+  V10 (likes become reactions, §8d *Reactions*), V11 (reports and hidden questions, §8d
+  *Reports*) and V12 (an author's block, §8d *Moderation*).
   `Migrations.migrate` takes the baseline itself (`baselineVersion` 1), and only for a database
   holding every table V1 builds (`TABLES_BEFORE_MIGRATIONS`) and no history table; Flyway's
   `baselineOnMigrate` is off. Any other database with tables and no history fails the boot, rather
@@ -854,7 +860,7 @@ seed (`Migrations`, `DatabaseFactory.init`). Nothing builds a table any other wa
   every build before it reads, so none of them runs on what it leaves: accepted, since nothing is live
   yet and so no build before it is a rollback target (the user, 2026-09-26). V11 only adds tables,
   which a build before never names, so it serves hidden questions again and takes no report until
-  the roll forward. `MigrationsTest` reads a
+  the roll forward; V12 only adds a nullable column, so a blocked author submits again there. `MigrationsTest` reads a
   table a later script dropped by name (`DROPPED_TABLES`), since `Tables.kt` no longer names it.
 - *Several instances booting at once* (Render starts a deploy's new instance before it stops the old
   one): on PostgreSQL each script runs under Flyway's advisory lock, so one boot migrates while the
@@ -1581,11 +1587,12 @@ listed on the Account screen.
     one's with `MessageDigest.isEqual`, so a refusal takes as long whatever was guessed.
   - `GET /v1/admin/submissions` is the queue: the players' submissions at `?status=` (`PENDING` when
     absent; `UNKNOWN`, an unknown name or a second value is 400), oldest first, bounded by `?limit=`
-    as the feed is, in a `SubmissionListDto` of `SubmissionDto`s. Never a seed, and no author.
+    as the feed is, in a `SubmissionListDto` of `SubmissionDto`s. Never a seed. Each names its author
+    by an opaque id alone (`authorId`, *Authors*, below).
   - `GET /v1/admin/questions` is the list of every question, seeds included, newest first, in an
     `AdminQuestionPageDto` of `AdminQuestionDto`s: options, categories, status, whether it is a seed,
     when it was stored, reviewed and retired, a rejected one's reason, its tally, its like count and
-    its dislike count, and no author. `?status=` and `?category=` narrow it, each repeated for several and matching any
+    its dislike count, and its author by id alone, null for a seed. `?status=` and `?category=` narrow it, each repeated for several and matching any
     of its values, none for all; `UNKNOWN` or a name that is no status, and an id no category has,
     is 400, as for the feed's category (`categoryFilter`, `CategoryStore.checked`). `?limit=` bounds a page as the feed's is. A page is asked for by
     cursor, not offset (`QuestionCursor`, `?cursor=`): `nextCursor` is the last question's place,
@@ -1629,6 +1636,37 @@ listed on the Account screen.
     as a status: `statusOf` and `standsAt` read the two columns as one status, so a rollback to the
     build before reads every row. The seed writes only what a database lacks and changes nothing
     there, so a retired seed stays retired through every boot. `RetirementTest` pins it, the races included.
+  - *Reports* (*built on the server 2026-09-26; the moderation app does not show them yet*):
+    `GET /v1/admin/reports` lists the reported questions (§8d, *Reports*), most reported first, then
+    the most lately reported, then by id, bounded by `?limit=` and with no cursor, since a moderator
+    works from the head as in the queue: an `AdminReportListDto` of `AdminReportDto`s, each the
+    question as the list of every question shows it, how many players report it now, and how many give
+    each reason (`ReportReasonCountDto`, a reason nobody gave left out), read with the question in one
+    statement so they add up (`ModerationStore.reports`, §4), and when it was last reported. No
+    reporter travels. `POST /v1/admin/report-dismissals` with a `DismissReportsRequest` clears every
+    report of a question, answered 204 (none to clear is 204 too, an unknown id 404): it leaves the list
+    until a player reports it again. The question stays as it stands, retired or not, and hidden from
+    each player who reported it. Whether to retire a reported question is the moderator's own call,
+    through *Retiring*; nothing retires one by itself, however many report it: *provisional — user
+    decision*, the other option being a threshold that retires it until a moderator looks.
+    `ReportModerationFlowTest`.
+  - *Authors* (*built on the server 2026-09-26; the moderation app does not use them yet*): every
+    admin DTO names a question's author by an opaque id, `authorId`, the author's player id, which says
+    nothing about them but which questions are theirs; never a username, and null for a seed.
+    `AdminQuestionDto.authorId` and `SubmissionDto.authorId`, the latter filled on the admin routes
+    alone (`toSubmission`'s `forModerator`): the author's own list and a submission's answer never
+    carry it, nor does anything a player is sent. `POST /v1/admin/author-blocks` with a
+    `BlockAuthorRequest`, an author id and a reason held to a rejection's rules, blocks the author from
+    submitting (`players.submissions_blocked_at`, V12) and rejects each of their pending submissions
+    for that one reason, paying each one's cost back as a rejection does (§8c), answered with an
+    `AuthorBlockDto` (blocked, how many it rejected). Their approved questions stay served; a block of
+    a blocked author keeps the first block's time and rejects whatever is pending. From then on each
+    submission of theirs is 403 `SUBMISSIONS_BLOCKED`, checked before what they typed (a plain read)
+    and again under their row lock, which the block takes too, so a submission racing a block is either
+    rejected by it or refused (`AuthorBlockTest`). `POST /v1/admin/author-unblocks` with an
+    `UnblockAuthorRequest` lets them submit again; what the block rejected stays rejected. An id no
+    player has is 404 `AUTHOR_NOT_FOUND`. On the client, `SUBMISSIONS_BLOCKED` and `AUTHOR_NOT_FOUND`
+    read as `DomainError.UNKNOWN` until the branches that show them give each one of its own.
   - *The client* is `ModerationRepository` in `:core:domain`, behind `GetPendingSubmissions`,
     `ApproveSubmission` and `RejectSubmission`, none of which ensures a session: the moderator is
     not a player. `DefaultModerationRepository` calls `ModerationApi` through `runApi` alone, never

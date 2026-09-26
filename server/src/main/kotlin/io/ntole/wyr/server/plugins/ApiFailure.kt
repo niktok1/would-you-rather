@@ -50,6 +50,14 @@ class ApiFailure(
         fun accountRequired() =
             ApiFailure(HttpStatusCode.Forbidden, ErrorCode.ACCOUNT_REQUIRED, "only a registered player may submit")
 
+        /** A submission by an author a moderator has blocked (CLAUDE.md §8d, *Moderation*). */
+        fun submissionsBlocked() =
+            ApiFailure(HttpStatusCode.Forbidden, ErrorCode.SUBMISSIONS_BLOCKED, "this author may not submit")
+
+        /** A block or an unblock of an author no player is. */
+        fun authorNotFound(id: String) =
+            ApiFailure(HttpStatusCode.NotFound, ErrorCode.AUTHOR_NOT_FOUND, "no author $id")
+
         /** A moderator's decision on a question that is no longer, or never was, pending. */
         fun alreadyDecided(id: String) =
             ApiFailure(HttpStatusCode.Conflict, ErrorCode.ALREADY_DECIDED, "question $id is not pending")

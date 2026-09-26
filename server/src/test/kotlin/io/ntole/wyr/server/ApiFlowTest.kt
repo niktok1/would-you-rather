@@ -22,6 +22,8 @@ import io.ntole.wyr.core.api.WyrApi
 import io.ntole.wyr.core.auth.RefreshRequest
 import io.ntole.wyr.core.auth.RegisterRequest
 import io.ntole.wyr.core.auth.SessionDto
+import io.ntole.wyr.core.author.BlockAuthorRequest
+import io.ntole.wyr.core.author.UnblockAuthorRequest
 import io.ntole.wyr.core.category.CreateCategoryRequest
 import io.ntole.wyr.core.category.RenameCategoryRequest
 import io.ntole.wyr.core.error.ErrorCode
@@ -43,6 +45,7 @@ import io.ntole.wyr.core.question.SubmitQuestionRequest
 import io.ntole.wyr.core.reaction.Reaction
 import io.ntole.wyr.core.reaction.ReactionRequest
 import io.ntole.wyr.core.reaction.ReactionResultDto
+import io.ntole.wyr.core.report.DismissReportsRequest
 import io.ntole.wyr.core.vote.OptionSide
 import io.ntole.wyr.core.vote.VoteRequest
 import io.ntole.wyr.core.vote.VoteResultDto
@@ -1267,15 +1270,16 @@ class ApiFlowTest {
         }
 
     @Test
-    fun `the moderator's queue lists every player's pending submissions oldest first and names no author`() =
+    fun `the moderator's queue lists every player's pending submissions oldest first naming each author by id`() =
         runServer("admin-queue") { client ->
             val (author, other) = client.guest() to client.guest()
             val submitted =
                 listOf(author, other, author).mapIndexed { index, session ->
-                    client.submitted(
-                        session,
-                        SubmitQuestionRequest("A $index", "B $index", listOf("FOOD")),
-                    )
+                    client
+                        .submitted(
+                            session,
+                            SubmitQuestionRequest("A $index", "B $index", listOf("FOOD")),
+                        ).copy(authorId = session.playerId)
                 }
 
             val response = client.moderatorQueue()
@@ -1296,6 +1300,7 @@ class ApiFlowTest {
                     "likeCount",
                     "dislikeCount",
                     "answerCount",
+                    "authorId",
                 ),
                 response
                     .body<JsonObject>()
@@ -1303,7 +1308,7 @@ class ApiFlowTest {
                     .jsonArray
                     .first()
                     .jsonObject.keys,
-                "as its author sees it, and nothing about who that is",
+                "as its author sees it, and who that is by an opaque id alone",
             )
             listOf("APPROVED", "REJECTED").forEach { status ->
                 assertEquals(emptyList(), client.queue("?${WyrApi.Query.STATUS}=$status"), "no seed is a submission")
@@ -1407,8 +1412,12 @@ class ApiFlowTest {
 
             assertEquals(HttpStatusCode.OK, response.status)
             val approved = response.body<SubmissionDto>()
-            assertEquals(pending.copy(status = QuestionStatus.APPROVED), approved)
-            assertEquals(listOf(approved), client.mySubmissions(author), "and its author sees it so")
+            assertEquals(pending.copy(status = QuestionStatus.APPROVED, authorId = author.playerId), approved)
+            assertEquals(
+                listOf(approved.copy(authorId = null)),
+                client.mySubmissions(author),
+                "and its author sees it so, named nowhere",
+            )
             assertEquals(seeds.size + 1, client.stats(author).dueThisCycle, "due for its author")
             assertEquals(seeds.size, client.stats(midway).dueThisCycle, "for a player midway through the cycle")
             assertEquals(1, client.stats(finished).dueThisCycle, "and for one with nothing else left in it")
@@ -1439,11 +1448,15 @@ class ApiFlowTest {
             assertEquals(HttpStatusCode.OK, response.status)
             val rejected = response.body<SubmissionDto>()
             assertEquals(
-                pending.copy(status = QuestionStatus.REJECTED, rejectionReason = "Not really a dilemma"),
+                pending.copy(
+                    status = QuestionStatus.REJECTED,
+                    rejectionReason = "Not really a dilemma",
+                    authorId = author.playerId,
+                ),
                 rejected,
                 "its reason stored trimmed",
             )
-            assertEquals(listOf(rejected), client.mySubmissions(author))
+            assertEquals(listOf(rejected.copy(authorId = null)), client.mySubmissions(author))
             listOf("the author" to author, "another player" to player).forEach { (who, session) ->
                 val pool = client.wholePool(session)
                 assertFalse(pending.id in pool.ids(), "$who is not served it")
@@ -1467,7 +1480,11 @@ class ApiFlowTest {
 
             val chosen = listOf("ETHICS", "SUPERPOWERS")
             assertEquals(chosen, approved.categories, "each once, in the order of categories")
-            assertEquals(listOf(approved), client.mySubmissions(author), "and its author sees them")
+            assertEquals(
+                listOf(approved.copy(authorId = null)),
+                client.mySubmissions(author),
+                "and its author sees them",
+            )
             assertEquals(chosen, client.wholePool(player).single { it.id == pending.id }.categories)
             assertFalse(pending.id in client.wholePool(player, "&category=FOOD").ids(), "no longer filed under food")
             listOf("ETHICS", "SUPERPOWERS").forEach { category ->
@@ -1496,7 +1513,11 @@ class ApiFlowTest {
                 }
             }
 
-            assertEquals(setOf(approved, rejected), client.mySubmissions(author).toSet(), "as first decided")
+            assertEquals(
+                setOf(approved, rejected).map { it.copy(authorId = null) }.toSet(),
+                client.mySubmissions(author).toSet(),
+                "as first decided",
+            )
             val seed = client.wholePool(author).single { it.id == "seed-1" }
             assertFalse("ETHICS" in seed.categories, "a seed's categories kept too")
         }
@@ -1520,7 +1541,8 @@ class ApiFlowTest {
     @Test
     fun `a decision the server cannot use is a validation error and decides nothing`() =
         runServer("admin-malformed") { client ->
-            val pending = client.submitted(client.guest(), question("Pending"))
+            val author = client.guest()
+            val pending = client.submitted(author, question("Pending")).copy(authorId = author.playerId)
             val id = pending.id
             val tooLong = "x".repeat(WyrApi.Limits.MAX_REJECTION_REASON_LENGTH + 1)
             val approvals = WyrApi.Paths.ADMIN_APPROVALS
@@ -1574,7 +1596,8 @@ class ApiFlowTest {
     @Test
     fun `without the admin token a decision is refused before its body is read`() =
         runServer("admin-forbidden-body") { client ->
-            val pending = client.submitted(client.guest(), question("Pending"))
+            val author = client.guest()
+            val pending = client.submitted(author, question("Pending")).copy(authorId = author.playerId)
 
             // Nothing about the request answers a caller without the token: not whether it parses, nor
             // whether the question exists.
@@ -1596,7 +1619,7 @@ class ApiFlowTest {
         }
 
     @Test
-    fun `the moderator's list holds every question with its numbers, pages through them, and names no author`() =
+    fun `the moderator's list holds every question with its numbers, pages through them, naming authors by id`() =
         runServer("admin-questions") { client ->
             val (author, player) = client.guest() to client.guest()
             val pending = client.submitted(author, question("Pending"))
@@ -1626,6 +1649,11 @@ class ApiFlowTest {
                 "newest first; the order of a tie is the database's",
             )
             assertEquals(QuestionStatus.PENDING, byId.getValue(pending.id).status)
+            assertEquals(
+                listOf(author.playerId),
+                listOf(pending, approved).map { byId.getValue(it.id).authorId }.distinct(),
+            )
+            assertEquals(setOf(null), seeds.map { byId.getValue(it).authorId }.toSet(), "a seed has no author")
             val numbers =
                 byId
                     .getValue(
@@ -1640,7 +1668,7 @@ class ApiFlowTest {
                     .jsonArray
                     .first()
                     .jsonObject.keys,
-                "nothing about who wrote it",
+                "who wrote it by an opaque id alone",
             )
 
             val paged = mutableListOf(client.adminQuestionPage("?${WyrApi.Query.LIMIT}=5"))
@@ -2253,6 +2281,25 @@ class ApiFlowTest {
                     contentType(ContentType.Application.Json)
                     setBody(RenameCategoryRequest("FOOD", nameSr = "Јело", nameEn = "Meals"))
                 },
+            "the reports" to get(WyrApi.Paths.ADMIN_REPORTS) { credentials() },
+            "a dismissal" to
+                post(WyrApi.Paths.ADMIN_REPORT_DISMISSALS) {
+                    credentials()
+                    contentType(ContentType.Application.Json)
+                    setBody(DismissReportsRequest("no-such-question"))
+                },
+            "an author's block" to
+                post(WyrApi.Paths.ADMIN_AUTHOR_BLOCKS) {
+                    credentials()
+                    contentType(ContentType.Application.Json)
+                    setBody(BlockAuthorRequest("no-such-author", reason = "Spam"))
+                },
+            "an author's unblock" to
+                post(WyrApi.Paths.ADMIN_AUTHOR_UNBLOCKS) {
+                    credentials()
+                    contentType(ContentType.Application.Json)
+                    setBody(UnblockAuthorRequest("no-such-author"))
+                },
         )
 
     /** Approves [questionId] with the test server's admin token, filing it under [categories] if any. */
@@ -2405,6 +2452,7 @@ class ApiFlowTest {
                 "tally",
                 "likeCount",
                 "dislikeCount",
+                "authorId",
             )
     }
 }

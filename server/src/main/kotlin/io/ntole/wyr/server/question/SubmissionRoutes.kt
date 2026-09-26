@@ -56,6 +56,9 @@ fun Route.submissionRoutes(db: Db) {
                         // validly signed token can outlive its player.
                         val author = PlayerStore.find(authorId) ?: throw ApiFailure.unauthorized("unknown player")
                         if (author.username == null) throw ApiFailure.accountRequired()
+                        // Told before what they typed is checked, as a guest is: nothing they could type
+                        // would pass. A plain read, so the submission checks again under the author's lock.
+                        if (author.submissionsBlocked) throw ApiFailure.submissionsBlocked()
 
                         // An id no category has is a malformed request, which comes before any rule the
                         // player can break by typing (checkedSubmission).

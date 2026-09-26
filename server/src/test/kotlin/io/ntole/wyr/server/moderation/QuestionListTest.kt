@@ -79,16 +79,18 @@ class QuestionListTest {
             "newest first, and the seeds, stored in one millisecond, in id order",
         )
         assertEquals(seeds.toSet(), listed.filter { it.seed }.map { it.id }.toSet(), "only the seeds are seeds")
+        assertEquals(setOf(null), listed.filter { it.seed }.map { it.authorId }.toSet(), "and nobody wrote them")
         assertEquals(
             listOf(
-                listed(rejected, QuestionStatus.REJECTED, reviewedAt = 8_000L, reason = "Not a dilemma"),
+                listed(rejected, author, QuestionStatus.REJECTED, reviewedAt = 8_000L, reason = "Not a dilemma"),
                 listed(
                     approved,
+                    author,
                     QuestionStatus.APPROVED,
                     reviewedAt = 7_000L,
                     categories = listOf("FOOD", "ABSURD"),
                 ),
-                listed(pending, QuestionStatus.PENDING),
+                listed(pending, author, QuestionStatus.PENDING),
             ),
             listed.take(3),
         )
@@ -303,9 +305,13 @@ class QuestionListTest {
         categories: Set<String> = emptySet(),
     ): List<String> = page(limit = 100, statuses = statuses, categories = categories).questions.map { it.id }
 
-    /** [submission] as the list shows it once a moderator left it at [status], with no votes or reactions. */
+    /**
+     * [submission] by [author] as the list shows it once a moderator left it at [status], with no votes
+     * or reactions.
+     */
     private fun listed(
         submission: SubmissionDto,
+        author: String,
         status: QuestionStatus,
         reviewedAt: Long? = null,
         reason: String? = null,
@@ -323,6 +329,7 @@ class QuestionListTest {
         tally = VoteTallyDto(votesA = 0, votesB = 0),
         likeCount = 0,
         dislikeCount = 0,
+        authorId = author,
     )
 
     private fun AdminQuestionDto.numbers(): Triple<VoteTallyDto, Int, Int> = Triple(tally, likeCount, dislikeCount)

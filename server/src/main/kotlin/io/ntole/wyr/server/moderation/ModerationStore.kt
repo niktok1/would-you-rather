@@ -1,12 +1,19 @@
 package io.ntole.wyr.server.moderation
 
+import io.ntole.wyr.core.author.AuthorBlockDto
 import io.ntole.wyr.core.question.AdminQuestionDto
 import io.ntole.wyr.core.question.AdminQuestionPageDto
 import io.ntole.wyr.core.question.QuestionStatus
 import io.ntole.wyr.core.question.SubmissionDto
 import io.ntole.wyr.core.reaction.Reaction
+import io.ntole.wyr.core.report.AdminReportDto
+import io.ntole.wyr.core.report.AdminReportListDto
+import io.ntole.wyr.core.report.ReportReason
+import io.ntole.wyr.core.report.ReportReasonCountDto
+import io.ntole.wyr.server.db.Players
 import io.ntole.wyr.server.db.QuestionCategories
 import io.ntole.wyr.server.db.Questions
+import io.ntole.wyr.server.db.Reports
 import io.ntole.wyr.server.player.PlayerStore
 import io.ntole.wyr.server.plugins.ApiFailure
 import io.ntole.wyr.server.question.QuestionStore
@@ -21,13 +28,18 @@ import org.jetbrains.exposed.v1.core.ResultRow
 import org.jetbrains.exposed.v1.core.SortOrder
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.compoundOr
+import org.jetbrains.exposed.v1.core.count
 import org.jetbrains.exposed.v1.core.eq
+import org.jetbrains.exposed.v1.core.exists
 import org.jetbrains.exposed.v1.core.greater
 import org.jetbrains.exposed.v1.core.inList
 import org.jetbrains.exposed.v1.core.isNotNull
+import org.jetbrains.exposed.v1.core.isNull
 import org.jetbrains.exposed.v1.core.less
+import org.jetbrains.exposed.v1.core.max
 import org.jetbrains.exposed.v1.core.or
 import org.jetbrains.exposed.v1.core.statements.UpdateStatement
+import org.jetbrains.exposed.v1.core.wrapAsExpression
 import org.jetbrains.exposed.v1.jdbc.Query
 import org.jetbrains.exposed.v1.jdbc.batchInsert
 import org.jetbrains.exposed.v1.jdbc.deleteWhere
@@ -65,7 +77,9 @@ object ModerationStore {
         if (rows.isEmpty()) return emptyList()
 
         val categories = QuestionStore.categoriesOf(Questions.id inList rows.map { row -> row[Questions.id] })
-        return rows.map { row -> SubmissionStore.toSubmission(row, categories[row[Questions.id]].orEmpty()) }
+        return rows.map { row ->
+            SubmissionStore.toSubmission(row, categories[row[Questions.id]].orEmpty(), forModerator = true)
+        }
     }
 
     /**
@@ -177,7 +191,7 @@ object ModerationStore {
                 .where { Questions.id eq questionId }
                 .single()
         val categories = QuestionStore.categoriesOf(Questions.id eq questionId)[questionId].orEmpty()
-        return SubmissionStore.toSubmission(row, categories)
+        return SubmissionStore.toSubmission(row, categories, forModerator = true)
     }
 
     /**
@@ -286,6 +300,97 @@ object ModerationStore {
     }
 
     /**
+     * The reported questions, most reported first, then the most lately reported, then by id, at most
+     * [limit] (CLAUDE.md §8d, *Reports*). Must run inside a transaction. Each is the question as
+     * [questions] lists it, whatever it stands at, with its reports counted, in all and per reason, in
+     * the same one statement as its own numbers, so they add up (CLAUDE.md §4). Its categories take one
+     * more statement, as a page's do. A question stays listed until [dismissReports] clears it.
+     */
+    fun reports(limit: Int): AdminReportListDto {
+        val counts = ReportCounts()
+        val listing = Listing(counts.reported, extra = counts.columns)
+        val rows =
+            listing.query
+                .orderBy(counts.total to SortOrder.DESC, counts.last to SortOrder.DESC, Questions.id to SortOrder.ASC)
+                .limit(limit)
+                .toList()
+
+        val questions = listing.toAdminQuestions(rows)
+        return AdminReportListDto(rows.zip(questions) { row, question -> counts.of(row, question) })
+    }
+
+    /**
+     * Clears every report of [questionId] and returns how many there were (CLAUDE.md §8d, *Reports*).
+     * Must run inside a transaction. The question stays as it stands, and hidden from each player who
+     * reported it, since hiding is theirs. 404 for an id no question has; none to clear is no failure,
+     * so a dismissal sent again, or two racing, clear it once. A report made after it is a new one.
+     */
+    fun dismissReports(questionId: String): Int {
+        val exists =
+            Questions
+                .select(Questions.id)
+                .where { Questions.id eq questionId }
+                .limit(1)
+                .any()
+        if (!exists) throw ApiFailure.questionNotFound(questionId)
+
+        return Reports.deleteWhere { Reports.questionId eq questionId }
+    }
+
+    /**
+     * Blocks the author [authorId] from submitting, and rejects each of their submissions still pending
+     * for [reason], already checked (`checkedReason`), paying each one's cost back as [reject] does
+     * (CLAUDE.md §8c). Must run inside a transaction. 404 for an id no player has. A block of an author
+     * blocked already keeps the first block's time, and rejects whatever is pending all the same. Their
+     * approved questions, retired ones included, stay as they are.
+     *
+     * The author's row is locked first, as every submission of theirs locks it before it counts or
+     * stores anything (`SubmissionStore.submit`), so none can come between (CLAUDE.md §4): one that
+     * locked it first commits, and the pending questions read after the lock include it; one that
+     * comes after waits, then finds the author blocked. The pending questions are locked in turn, so a
+     * moderator deciding one meanwhile waits and then finds it decided, and each rejection here is the
+     * one decision made.
+     */
+    fun blockAuthor(
+        authorId: String,
+        reason: String,
+        now: Long = System.currentTimeMillis(),
+    ): AuthorBlockDto {
+        Players
+            .select(Players.id)
+            .where { Players.id eq authorId }
+            .forUpdate()
+            .singleOrNull()
+            ?: throw ApiFailure.authorNotFound(authorId)
+        Players.update({ (Players.id eq authorId) and Players.submissionsBlockedAt.isNull() }) { row ->
+            row[submissionsBlockedAt] = now
+        }
+
+        val pending =
+            Questions
+                .select(Questions.id)
+                .where { (Questions.authorPlayerId eq authorId) and (Questions.status eq QuestionStatus.PENDING) }
+                .orderBy(Questions.submittedAt to SortOrder.ASC, Questions.id to SortOrder.ASC)
+                .forUpdate()
+                .map { row -> row[Questions.id] }
+        // At most the pending cap of them (WyrApi.Limits.MAX_PENDING_SUBMISSIONS), so one at a time.
+        pending.forEach { questionId -> reject(questionId, reason, now) }
+
+        return AuthorBlockDto(authorId = authorId, blocked = true, rejectedSubmissions = pending.size)
+    }
+
+    /**
+     * Lets the author [authorId] submit again. Must run inside a transaction. 404 for an id no player
+     * has; an author who is not blocked is left as they are. What the block rejected stays rejected.
+     */
+    fun unblockAuthor(authorId: String): AuthorBlockDto {
+        val found = Players.update({ Players.id eq authorId }) { row -> row[submissionsBlockedAt] = null }
+        if (found == 0) throw ApiFailure.authorNotFound(authorId)
+
+        return AuthorBlockDto(authorId = authorId, blocked = false)
+    }
+
+    /**
      * After [cursor] in the list's order: stored before it, or in the same millisecond with a later
      * id. Everything for none.
      */
@@ -310,12 +415,14 @@ object ModerationStore {
      */
     private class Listing(
         where: Op<Boolean>,
+        extra: List<Expression<*>> = emptyList(),
     ) {
         private val tally = QuestionTally()
         private val likes = ReactionStore.countOn(Reaction.LIKE)
         private val dislikes = ReactionStore.countOn(Reaction.DISLIKE)
 
-        val query: Query = Questions.select(ADMIN_COLUMNS + tally.columns + likes + dislikes).where(where)
+        /** The rows [where] picks, with [extra] beside each question's own numbers, in the one statement. */
+        val query: Query = Questions.select(ADMIN_COLUMNS + tally.columns + likes + dislikes + extra).where(where)
 
         /** [rows], read by [query], with their categories. */
         fun toAdminQuestions(rows: List<ResultRow>): List<AdminQuestionDto> {
@@ -339,6 +446,7 @@ object ModerationStore {
                     tally = tally.of(row),
                     likeCount = checkNotNull(row[likes]) { "a COUNT subquery came back null" }.toInt(),
                     dislikeCount = checkNotNull(row[dislikes]) { "a COUNT subquery came back null" }.toInt(),
+                    authorId = row[Questions.authorPlayerId],
                 )
             }
         }
@@ -358,5 +466,52 @@ object ModerationStore {
                     Questions.rejectionReason,
                 )
         }
+    }
+
+    /**
+     * A question's reports, as subqueries on the row's own id to embed beside its other numbers
+     * ([reports]), each found through `reports (question_id, reason)`: how many in all, how many give
+     * each reason, and when the last came.
+     */
+    private class ReportCounts {
+        val total: Expression<Long?> =
+            wrapAsExpression(Reports.select(Reports.playerId.count()).where { Reports.questionId eq Questions.id })
+        val last: Expression<Long?> =
+            wrapAsExpression(Reports.select(Reports.reportedAt.max()).where { Reports.questionId eq Questions.id })
+        private val byReason: Map<ReportReason, Expression<Long?>> =
+            ReportReason.entries.filter { it != ReportReason.UNKNOWN }.associateWith { reason ->
+                wrapAsExpression(
+                    Reports
+                        .select(Reports.playerId.count())
+                        .where { (Reports.questionId eq Questions.id) and (Reports.reason eq reason) },
+                )
+            }
+
+        val columns: List<Expression<*>> = listOf(total, last) + byReason.values
+
+        /** Whether the row's question has a report at all. */
+        val reported: Op<Boolean> =
+            exists(Reports.select(Reports.questionId).where { Reports.questionId eq Questions.id })
+
+        /** [question], read with these counts in [row]. */
+        fun of(
+            row: ResultRow,
+            question: AdminQuestionDto,
+        ): AdminReportDto {
+            val reasons =
+                byReason
+                    .map { (reason, count) -> ReportReasonCountDto(reason, row.countOf(count)) }
+                    .filter { it.count > 0 }
+                    .sortedByDescending { it.count }
+            return AdminReportDto(
+                question = question,
+                reportCount = row.countOf(total),
+                reasons = reasons,
+                lastReportedAt = checkNotNull(row[last]) { "a reported question has no last report" },
+            )
+        }
+
+        private fun ResultRow.countOf(count: Expression<Long?>): Int =
+            checkNotNull(this[count]) { "a COUNT subquery came back null" }.toInt()
     }
 }

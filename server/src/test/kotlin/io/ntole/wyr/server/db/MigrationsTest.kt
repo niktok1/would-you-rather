@@ -586,6 +586,7 @@ internal class MigrationsTest(
                 "9 SQL",
                 "10 SQL",
                 "11 SQL",
+                "12 SQL",
             )
 
         /** V1's table of likes, which V10 replaced with reactions, so Tables.kt no longer names it. */
@@ -597,7 +598,7 @@ internal class MigrationsTest(
         /**
          * The columns the scripts after V1 add, by table, empty in every row already there but for
          * the players' mark, which V4 then sets ([afterLaterScripts]): V2's previous refresh token,
-         * V4's mark and recovery secret and V5's username and password hash on players, and V3's
+         * V4's mark and recovery secret, V5's username and password hash and V12's block on players, and V3's
          * retirement on questions.
          */
         private val ADDED_COLUMNS =
@@ -611,6 +612,7 @@ internal class MigrationsTest(
                         "recovery_secret_hash",
                         "username",
                         "password_hash",
+                        "submissions_blocked_at",
                     ),
                 Questions.tableName to listOf("retired_at"),
             )

@@ -74,6 +74,14 @@ object Players : Table("players") {
      */
     val passwordHash = varchar("password_hash", PASSWORD_HASH_LENGTH).nullable()
 
+    /**
+     * When a moderator blocked the player from submitting questions (CLAUDE.md §8d, *Moderation*), or
+     * null while they may submit (V12). Only `ModerationStore.blockAuthor` sets it, keeping the first
+     * block's time, and only `ModerationStore.unblockAuthor` clears it; a submission reads it under the
+     * author's row lock (`SubmissionStore.submit`).
+     */
+    val submissionsBlockedAt = long("submissions_blocked_at").nullable()
+
     override val primaryKey = PrimaryKey(id)
 
     init {

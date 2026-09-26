@@ -114,6 +114,10 @@ internal fun ErrorCode.toDomain(): DomainError =
         // the session away: it comes with a 403.
         ErrorCode.ACCOUNT_REQUIRED -> DomainError.ACCOUNT_REQUIRED
 
+        // A blocked author's submission, with a 403: never UNAUTHORIZED, which would throw the session
+        // away. UNKNOWN until the Submit form's branch gives it a DomainError and words of its own.
+        ErrorCode.SUBMISSIONS_BLOCKED -> DomainError.UNKNOWN
+
         ErrorCode.ALREADY_DECIDED -> DomainError.ALREADY_DECIDED
 
         ErrorCode.WRONG_STATUS -> DomainError.WRONG_STATUS
@@ -123,6 +127,9 @@ internal fun ErrorCode.toDomain(): DomainError =
         ErrorCode.CATEGORY_EXISTS -> DomainError.CATEGORY_EXISTS
 
         ErrorCode.CATEGORY_NOT_FOUND -> DomainError.CATEGORY_NOT_FOUND
+
+        // A moderator's block of an author no player is, which the moderation app never sends yet.
+        ErrorCode.AUTHOR_NOT_FOUND -> DomainError.UNKNOWN
 
         // Never UNAUTHORIZED: that would throw the player's session away over a moderator's token.
         ErrorCode.FORBIDDEN -> DomainError.FORBIDDEN

@@ -21,6 +21,8 @@ import io.ntole.wyr.core.auth.LoginRequest
 import io.ntole.wyr.core.auth.RefreshRequest
 import io.ntole.wyr.core.auth.RegisterRequest
 import io.ntole.wyr.core.auth.SessionDto
+import io.ntole.wyr.core.author.BlockAuthorRequest
+import io.ntole.wyr.core.author.UnblockAuthorRequest
 import io.ntole.wyr.core.category.CreateCategoryRequest
 import io.ntole.wyr.core.category.RenameCategoryRequest
 import io.ntole.wyr.core.error.ErrorCode
@@ -36,6 +38,7 @@ import io.ntole.wyr.core.question.SubmissionListDto
 import io.ntole.wyr.core.question.SubmitQuestionRequest
 import io.ntole.wyr.core.reaction.Reaction
 import io.ntole.wyr.core.reaction.ReactionRequest
+import io.ntole.wyr.core.report.DismissReportsRequest
 import io.ntole.wyr.core.report.HideAuthorRequest
 import io.ntole.wyr.core.report.HideQuestionRequest
 import io.ntole.wyr.core.report.ReportReason
@@ -611,10 +614,27 @@ class RateLimitTest {
                         admin(token, CreateCategoryRequest(id = "FOOD", nameSr = "Храна", nameEn = "Food"))
                     }
                 },
+                AdminRoute("the reports", HttpStatusCode.OK) { client, token ->
+                    client.get(WyrApi.Paths.ADMIN_REPORTS) { token?.let { header(WyrApi.Headers.ADMIN_TOKEN, it) } }
+                },
+                AdminRoute("a dismissal", HttpStatusCode.NotFound) { client, token ->
+                    client.post(
+                        WyrApi.Paths.ADMIN_REPORT_DISMISSALS,
+                    ) { admin(token, DismissReportsRequest(NO_SUBMISSION)) }
+                },
+                AdminRoute("an author's block", HttpStatusCode.NotFound) { client, token ->
+                    client.post(
+                        WyrApi.Paths.ADMIN_AUTHOR_BLOCKS,
+                    ) { admin(token, BlockAuthorRequest(NO_AUTHOR, "Spam")) }
+                },
+                AdminRoute("an author's unblock", HttpStatusCode.NotFound) { client, token ->
+                    client.post(WyrApi.Paths.ADMIN_AUTHOR_UNBLOCKS) { admin(token, UnblockAuthorRequest(NO_AUTHOR)) }
+                },
             )
         val ADMIN_ROUTE_BUDGET = RequestBudget(requests = ADMIN_ROUTES.size, per = 1.minutes)
         const val NO_SUBMISSION = "no-such-submission"
         const val NO_CATEGORY = "NO_SUCH_CATEGORY"
+        const val NO_AUTHOR = "no-such-author"
 
         /** The header Render's proxy, Cloudflare, sets to the client's address, and two clients' addresses. */
         const val CLIENT_IP_HEADER = "CF-Connecting-IP"
