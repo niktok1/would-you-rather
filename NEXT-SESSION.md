@@ -1283,8 +1283,9 @@ guest of its own, so switching between them loses neither.
 - **Android**: Android Studio's *Build Variants* panel, where `devDebug` is the default, since a
   phone can reach dev and not the developer's machine. `localDebug` is for the emulator against
   `./gradlew :server:run`, `prodDebug` for production. They install side by side as *WYR Local*,
-  *WYR Dev* and *WYR*. From the command line: `./gradlew :app:androidApp:installDevDebug`. To judge
-  speed, use `devRelease` (`installDevRelease`): a debug build's Compose runs several times slower.
+  *WYR Dev* and *Шта би радије?*. From the command line: `./gradlew :app:androidApp:installDevDebug`.
+  To judge speed, use `devRelease` (`installDevRelease`): a debug build's Compose runs several times
+  slower.
 - **Desktop**: the `WYR_ENV` variable, which `./gradlew` passes on to the app:
 
   ```bash
