@@ -652,6 +652,10 @@ decided in §8b).
     13 and later) is asked from the activity on screen, once, ever, and kept as asked in the device's
     own preferences (`wyr.device`, not the session's `wyr.auth.xml`), only once it was asked. A push the
     server one day sends as data alone would show nothing with the app in the background: none does.
+    *To revisit*: firebase-messaging 25.1 deprecates `getToken` and `onNewToken` for registering by
+    Firebase installation id (`register`, `onRegistered`); the server's HTTP v1 sends name a
+    registration token, and Google says tokens keep working meanwhile, so the client stays on them
+    (the deprecation suppressed where it is used) until sending to an installation id is documented.
 
 - **Play Games sign-in** (*decided 2026-09-26: the user's "no-click register", with the register
   screen kept as the fallback; built on the server, and on the Android client since

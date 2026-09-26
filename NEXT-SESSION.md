@@ -427,7 +427,14 @@ phone*, below). One commit each:
   no google-services plugin, its `FirebaseInitProvider` taken out; the *Твоја питања* channel, the
   coin as the small icon, a tap opening the Account screen (`notification_opened`), a push with the app
   open posting nothing and dotting the icon instead.
-- **A fix** (2b2dab3): the moderation app names the two new `DomainError`s.
+- **Two fixes**: the moderation app names the two new `DomainError`s (2b2dab3); a Play Games sign-in
+  drops the guest's stats and questions as a login does, so the notice never marks the guest's rows
+  as the new player's (9f00342). And a tidying of the lifecycle observer, and the FCM deprecation
+  named (below).
+- **To revisit**: firebase-messaging 25.1 deprecates `getToken` and `onNewToken` for registering by
+  Firebase installation id (`register`, `onRegistered`); the server's HTTP v1 sends name a token,
+  which Google says keeps working meanwhile, so the client stays on tokens, the deprecation suppressed
+  and explained where it is used (CLAUDE.md §8a, *Push tokens*, *On Android*).
 
 **Verified on this machine**: `ktlintCheck`; `:server:test` (480), `:core:domain:jvmTest` (102),
 `:core:data:jvmTest` (161), `:core:network:jvmTest` with `:core:network:testAndroidHostTest` (230),

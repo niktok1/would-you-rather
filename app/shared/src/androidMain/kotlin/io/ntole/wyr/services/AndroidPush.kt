@@ -32,6 +32,10 @@ internal class AndroidPush(
     override val newTokens: Flow<String> = tokens.asSharedFlow()
     override val received: Flow<Unit> = pushes.asSharedFlow()
 
+    // Deprecated since firebase-messaging 25.1 for registering by installation id (`register`,
+    // `onRegistered`), which the server's FCM HTTP v1 sends do not address yet: they name a registration
+    // token, which Google says keeps working meanwhile (CLAUDE.md §8a, Push tokens).
+    @Suppress("DEPRECATION")
     override suspend fun token(): String? =
         FirebaseMessaging
             .getInstance()

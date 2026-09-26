@@ -16,6 +16,8 @@ import org.koin.core.component.get
 class WyrMessagingService :
     FirebaseMessagingService(),
     KoinComponent {
+    // Deprecated with getToken since firebase-messaging 25.1, and kept for the reason AndroidPush.token is.
+    @Deprecated("Firebase's own, kept while the server's sends address a registration token")
     override fun onNewToken(token: String) {
         (get<DevicePush>() as? AndroidPush)?.tokenChanged(token)
     }
