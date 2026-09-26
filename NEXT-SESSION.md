@@ -308,6 +308,55 @@ the change, in `devRelease`, and not the count up's doing: the first frames afte
 take up to 750 ms on the UI thread (code not yet compiled, with no baseline profile), and the
 RenderThread sometimes waits 50 to 300 ms on the display's buffers.
 
+**`feat/moderation-reports`** (from 2a4f96e; merged to main 2026-09-26): the moderator's side of reports
+and author blocks, whose server routes were on main (CLAUDE.md §8d, *Moderation*, *Reports*,
+*Authors*). One commit each:
+- **The client layers** (d508855): `ModerationApi` calls `GET /v1/admin/reports`, the dismissals and the
+  author blocks and unblocks; `ModerationRepository` has them behind `GetReportedQuestions`,
+  `DismissReports`, `BlockAuthor` and `UnblockAuthor`, through `runApi` alone with the admin token. A
+  domain `ReportedQuestion` and `ReportReason` (with `UNKNOWN`, several unknown reasons' counts added
+  into it), `AuthorBlock`, `authorId` on `ModeratedQuestion` and on the moderator's `Submission` (a
+  player's never carries it), and `DomainError.AUTHOR_NOT_FOUND`.
+- **A Reports tab** (d304ff0): most reported first, the count in the tab's title, Dismiss reports,
+  Retire (the same confirm dialog) and Restore.
+- **Ready-made rejection reasons** (04dc332, and 80199b6, ktlint's wrapping of its two test files,
+  which 04dc332 committed unformatted): six chips beside every reason field, in Serbian Cyrillic,
+  `READY_REASONS`.
+- **Author actions** (485af93): Block author (a confirm dialog with the reason and the ready
+  reasons) and Unblock author on Pending, Reports and All questions.
+- **The review's fixes**: a `ModerationMapperTest` case whose unknown reasons, added together, must
+  move ahead of a known one, so the sort most given first is pinned (bcdce03); two KDocs put right,
+  `ReportReason.OTHER`, which carries no words of the player's, and `ModerationViewModel`'s, which
+  left Load reports out of the Loads that read the categories first (d4ffdcb); and the third
+  decision below recorded in CLAUDE.md §8b, where the handoff said it was and it was not.
+
+**To ask the user** (CLAUDE.md §8b, each *provisional — user decision*): the ready reasons' wording
+(*Ready-made rejection reasons*); where an author stands, which the server says only in answer to
+a block or an unblock, so the app shows it only for authors acted on this session and offers both
+buttons otherwise (*Where an author stands, in the moderation app*): the other option is an
+`authorBlocked` field on the admin DTOs, a server change; and a retirement or restoration from the
+Reports tab, which puts the server's answer in the row on both tabs and reads nothing again (*A move
+from the Reports tab*): the other option is reading the reports again after every move, one more
+request of the admin budget. **At the merge**: 04dc332 alone fails `ktlintCheck` (80199b6 is
+ktlintFormat's fix to its two test files), and this repo merges with merge commits, so a plain merge
+puts a commit red in CI into main's history; fold 80199b6 into 04dc332 first, merge with
+`--squash`, or accept it knowingly. For the merge: `feat/play-client` may add a
+player's `ReportReason` in `:core:domain`; this branch's is in `io.ntole.wyr.core.domain.moderation`,
+with `UNKNOWN`, so the two clash only if they share a package, and could become one then.
+`feat/account-client` adds `DomainError`s: the moderation app's `describe` names every one, so each
+needs a line there (its `when` fails to compile until then).
+
+Verified on this Mac, again after the review's fixes: `ktlintCheck`, the verify job's tests
+(`:server` 480, `:core:domain` 79, `:core:data` 155, `:core:network` 115 and 121 as Android host
+tests, `:app:shared` 395,
+`:app:adminApp` 148, 42 of them new: `ReportsViewModelTest`, `AuthorsViewModelTest`, the label tests,
+`ReadyReasonsTest`, `ModerationTapsTest`, which taps a ready reason and the block's dialog through the
+app's semantics, and `ScreensDrawTest` reading the Reports tab's and the author actions' texts) and
+its client compiles with `assembleDebug`, and the three `:core` modules' and `:app:shared`'s iOS
+compiles. **Not verified**: the moderation app against a running server (local or dev) and in a
+browser, since that needs an admin token typed; `ModerationOverHttpTest` drives the new calls over
+the real client configuration instead, 204 dismissal included.
+
 **`feat/analytics`** (from e603694; merged to main 2026-09-26, after `feat/server-engagement`): product analytics on PostHog, from
 shared code on all four platforms (CLAUDE.md §8g): a port in the domain, a PostHog sender over its
 HTTP API with the Ktor client (no SDK, no new library), the key per platform (none is off, as in
@@ -401,7 +450,199 @@ engine at stop. Docs only: the cascades, CIO, push timing and the §8b list of s
 registered player, for good, with no unlink: provisional); and "stores nothing personal" is now "no
 sensitive personal data", the privacy policy to name FCM and Play Games (§8b *Personalization*).
 
-**`feat/android-services`** (from 2a4f96e, Wave 2; nothing pushed or merged): the Android client
+**`feat/account-client`** (from 2a4f96e; merged to main 2026-09-27): the client side of the user's
+Google Play readiness decisions (2026-09-26), and the server's submission cost. One commit each:
+- **One build number** (CLAUDE.md §8g, *The build number*): MAJOR * 10000 + MINOR * 100 + PATCH, made
+  in `gradle/wyr-version.gradle.kts`, 10000 for 1.0.0: Android's `versionCode`, desktop's
+  `wyr.app.build` property, the web build's `BUILD_NUMBER`, iOS's `CURRENT_PROJECT_VERSION` (checked
+  by the build as `MARKETING_VERSION` is). A release bumps `wyr.app.version`, `MARKETING_VERSION` and
+  `CURRENT_PROJECT_VERSION` together, or Gradle refuses to build, naming the number to set.
+- **The build on every request** (§8e): `X-Client-Platform` and `X-Client-Version` on every request
+  of the game's, a refresh's included; none from the moderation app. `UPGRADE_REQUIRED` (or a bare
+  426) is `DomainError.UPGRADE_REQUIRED`, and the first one shows **one full screen**, *Нова верзија
+  је доступна*, with Android's Play Store button (`market://`, then the https page), the web's reload,
+  and no button on the desktop and iOS. `SUBMISSIONS_BLOCKED` is `DomainError.SUBMISSIONS_BLOCKED`,
+  *Не можеш да шаљеш питања.* on the Submit form. The moderation app's failures name both.
+- **The cost is the server's** (§8, §8c): `SUBMISSION_COST`, 0 or more, 1 when unset, anything else
+  fails the boot naming it; `GET /v1/me` names it (`PlayerStatsDto.submissionCost`, 1 by default on
+  the wire), and the Submit form shows and checks it, the domain's copy only until it is read.
+- **Delete account** (§8a, §8d): a quiet **Обриши налог** at the start of Log out's row, for a guest
+  and a registered player alike, a one-line dialog, then `POST /v1/me/deletion`; 204 or 401 forgets the
+  session, drops the queue, reports `account_deleted` and resets the analytics, and the screen shows
+  the fresh guest. Offline or anything else: said, nothing forgotten.
+- **About** (§8d): the Account screen's top bar has an info icon to it: the name, *Верзија 1.0.0
+  (10000)*, **16+**, the site's four pages (`Site.BASE_URL`, https://stabiradije.rs, `/en/` for
+  English) opening in the browser, and the open-source licences, a list written by hand.
+- **Register's terms line** (§8d): *Регистрацијом прихваташ услове и политику приватности.* under
+  Register, the two nouns links to the site's pages. Every Auth state still fits 599.
+- **English hidden** (§8f): the menu offers Ћирилица and Latinica (`Language.OFFERED`); English's
+  words stay, and a device that kept `en` shows English still.
+- **A slow first load** (§8d): *Још мало…* under the Play, Categories and Account spinners after 5
+  seconds.
+
+Two fix-ups are commits of their own, since no commit was rewritten: the moderation app's failures
+naming `UPGRADE_REQUIRED` (1e48a1c9), and `ApiFlowTest` naming `submissionCost` among the stats sent
+(the commit after the server's cost). The deletion's docs are a commit of their own too (ef7ee764).
+
+Verified on this Mac: `ktlintCheck`; the verify job's tests, `:server:test` 486 (2 skipped, H2 only),
+`:core:domain` 78, `:core:data` 153, `:core:network` 119 and 125 as Android host tests, `:app:shared`
+424, `:app:adminApp` 106; its client compiles and `:app:androidApp:assembleDebug`, whose three APKs
+read back `versionCode='10000'` with `aapt2`; the web and desktop apps' compiles; the ios job's Kotlin
+compiles (`:app:shared`'s main and test, and each `:core` module's test). The fat jar
+(`WYR_SERVER_ONLY=1 ./gradlew :server:buildFatJar`, JDK 21 from Gradle's toolchain) booted on port
+18112 on H2: `GET /v1/me` named `submissionCost` 1 with `SUBMISSION_COST` unset and 50 with it set,
+`SUBMISSION_COST=fifty` stopped the boot naming it, and with `MIN_CLIENT_VERSION_ANDROID=10001` a
+request naming android 10000 was 426 `UPGRADE_REQUIRED` and one naming 10001 200. **Not verified**:
+nothing ran on a phone, a browser or iOS: the Play Store button (`market://`, then the https page),
+the web's reload, iOS's `CFBundleVersion` read (its test only compiles here) and the headers sent from
+a real build to a deployed server; a browser's CORS preflight for the two headers is the server's
+`CorsTest`'s alone; the site's links go nowhere until the domain is bought and the pages are up. The
+licences list is checked against the Android release's and the desktop app's dependency reports (a
+review found SLF4J's API, MIT, and Stately missing, and Skia, BSD 3-Clause, inside Skiko), and not
+beyond them: the code Skia builds in itself (FreeType, HarfBuzz, ICU and the rest) and the web's npm
+packages (`@js-joda/core`, BSD 3-Clause, and `ws`, MIT, in `kotlin-js-store/wasm/yarn.lock`) are not
+listed, to settle before a desktop, iOS or web release; Android's has none of them.
+
+**A review's fixes**, one commit each: the About screen's licences, each library under its own
+licence (SLF4J's API MIT and Skia BSD 3-Clause, each with its copyright line; Stately and six more
+Apache 2.0 ones added; `LicencesTest`), and a release step comparing the list with the dependency
+report; the deletion's dialog on `WyrColors.surface` in `primaryText`, not Material's
+`surfaceContainerHigh` (#ECE6F0) with the OR pill's text colour (`AccountScreenDrawTest` reads its
+pixels in both themes); a link nothing on the device opens, on a phone with no browser, does nothing
+instead of crashing the game (`openFirst`, `openIfAble`: About's links and licences, Register's terms
+line, and the update screen's store button after its https fallback; `LinksTest` and the two draw
+tests through a handler that opens nothing); a terms line placeholder with no link shows as it stands,
+and `parts()`'s KDoc no longer claims that of itself; and three ordering rules in *Releasing to
+production* (a new `versionCode` for every Play upload, internal testing included; a minimum build
+raised only once the store serves the new one to everyone; production's CORS moved on before a web
+build from this branch points at it). Each new test failed without its fix. Verified again after
+them on this Mac: `ktlintCheck`; the verify job's tests, each run afresh, `:server:test` 486 (2
+skipped), `:core:domain` 78, `:core:data` 153, `:core:network` 119 and 125 as Android host tests,
+`:app:shared` 431 (424 before), `:app:adminApp` 106; its client compiles and
+`:app:androidApp:assembleDebug`; the web and desktop apps' compiles; the ios job's Kotlin compiles.
+Not verified: a phone with no browser (the fix is tested through a handler that throws as Android's
+does, and `openFirst` on its own). Left for
+`feat/play-client`, which owns the theme: the language menu's `DropdownMenu` still paints Material's
+`surfaceContainer`; mirroring the `surfaceContainer*` slots from `colors.surface` in `WyrTheme` fixes
+it and every dialog to come.
+
+**Merging with `feat/android-services`** (whichever merges second): `git merge-tree` finds conflicts
+in `AccountScreen.kt`, `SubmitViewModel.kt`, `PlayerMapper.kt`, `PlayerStats.kt`, `DataModule.kt`,
+`App.kt`, `AppModule.kt`, `Strings.kt`, `AuthScreen.kt`, `AuthApi.kt`, `WyrApplication.kt`, the
+moderation app's `Failure.kt`, their tests and both docs. Two lines decide who is registered, and both
+take `stats.registered` (a username or a Play Games link), never `stats.username != null`, or a player
+registered through Play Games alone loses Log out and is refused Submit, against the user's decision
+that such a player may submit: `LogOutAndDelete(state, actions, registered = stats.registered)` in
+`AccountScreen`, and in `SubmitViewModel.load` `it.copy(points = stats.totalPoints, cost =
+stats.submissionCost, registered = stats.registered)`. `PlayerStats` and `PlayerMapper` keep both
+new fields, `playGamesLinked` and `submissionCost`.
+
+**For the user** (CLAUDE.md §8b, each *provisional — user decision*): *Delete account beside Log out*
+(a row of its own under Log out took the failure states past 599; it is not offered while a read of
+the player failed); *Licence notices* (each MIT or BSD library's copyright line on the screen and its
+licence's text a tap away in the browser, or every licence's full text in the app). The rest is as
+the scope said.
+
+**What the user must do**, none of it in the repository:
+1. Buy `stabiradije.rs` and put the `docs/site` pages there, so the About screen's and the Register
+   line's links open something: until then they open a domain that does not answer.
+2. At the release, on Render's `wyr-server` only: *Environment* → add `SUBMISSION_COST` = `50`, then
+   restart (`render.yaml` declares it as a comment until then, so no deploy sets it by itself). Dev
+   stays at 1. Every installed build shows the new cost from its next read of the stats.
+3. To refuse an old build later: set `MIN_CLIENT_VERSION_ANDROID` (or `_IOS`, `_WEB`, `_DESKTOP`) on
+   the service to the oldest build number to serve, 10000 for 1.0.0, then restart: an older build
+   shows the update screen. Builds before this branch send no headers and are never refused. Only
+   once that platform's store serves the newer build to all its users.
+4. Before a web build from this branch talks to production: deploy a `main` commit to `wyr-server`
+   whose CORS allows `X-Client-Platform` and `X-Client-Version` (`d4a9dbf`, which it runs, does not).
+5. Bump the version (`wyr.app.version`, and the two iOS numbers with it) before every Play upload,
+   internal testing included: Play refuses a `versionCode` it has seen.
+
+**`feat/play-client`** (from 2a4f96e; merged to main 2026-09-27): the game's side of the server work of
+2026-09-26 on the Play and Home screens, and the theme's contrast. One commit each:
+- **Answer time** (0959d91; CLAUDE.md §8b *Personalization*): every vote carries `answerMillis`, the
+  time the Play screen measures from the question shown to the tap (`ScreenStopwatch`), through
+  `CastVote` and `VoteRepository.cast`; a resend of the same attempt sends the same value.
+- **Questions in Latin** (516be8a; §8f *Questions in Latin*): in Serbian Latin a question's options
+  show through `SerbianScript.toLatin` (`optionText`), on the cards and in My questions.
+- **Options that fit** (80dd9de1; §8d *The Play screen*): a long option shrinks from 22 to a floor of
+  14, 2 at a time (Compose's `TextAutoSize.StepBased`, already in the catalog's Compose 1.11), so two
+  200-character options fit an iPhone SE's cards whole, asked and revealed, and on one on its side.
+- **Repeat notice** (67b3a4d5): `Question.answeredBefore` is back in the domain, and a question
+  answered before shows a small muted *Већ одговорено* above the cards, in the screen's top padding,
+  so nothing moves.
+- **The question's menu** (02d45ff1; §8d *The Play screen*, *Reports*): a ⋮ before the account icon on
+  Play's top bar: *Пријави питање* (then five reasons), *Не приказуј ми ово питање*, *Не приказуј
+  питања овог аутора*. Each goes on to the next question once the server has it; a failure shows in
+  the row's failure slot (`reactionError` is now `rowError`, shared). `ReportRepository` and three
+  use cases in `:core:domain`, `DefaultReportRepository` over `ReportApi`; hiding an author drops the
+  question queue. New events `question_reported`, `question_hidden`, `author_hidden`, and the taps
+  `question_menu.*` (§8g).
+- **Home's two Play buttons** (637d41b9; §8d *Home picks*): under the name, two buttons in the cards'
+  colours, stacked or side by side as the Play screen's cards stand, each with its share of all taps
+  counted up as the reveal counts; read each time Home is shown; a tap opens Play at once and is
+  counted in the background. `HomePickRepository`, `GetHomePicks`, `PickOnHome`, `HomeViewModel`.
+- **Contrast** (2b406099; §5b *Contrast*): `WyrContrastTest` holds every pair to WCAG AA in both
+  themes; the light theme's `muted` is `#6F6E68` (was 3.4 to 1) and failures have an `error` token
+  of their own (card A's pink read at 3.7 on the light page).
+- A tidy-up (de4dc8b4).
+- A review's fixes, docs only (9d303b5f, dc5aba86, 25cfbee0): a home pick resent after a 401 counts
+  once; Play's bar has three icon buttons; 64 is what a Home button asks for, not a floor; two §8b
+  entries for the user; the merge notes below.
+
+Verified on this machine at 7b10f0f1, and again at 25cfbee0 after the review's fixes, each test task
+then with `--rerun`: `ktlintCheck`; the verify job's tests, `:server:test` 480 (2 skipped, the
+PostgreSQL-only boots), `:core:domain` 83, `:core:data` 156, `:core:network` 112 and its 118
+Android host tests, `:app:shared` 424, `:app:adminApp` 106, none failing; its client compiles,
+`:app:androidApp:assembleDebug` among them; and the iOS Kotlin compiles (`:app:shared:compileKotlinIosSimulatorArm64` and
+`compileTestKotlinIosSimulatorArm64`, each `:core` module's `compileTestKotlinIosSimulatorArm64`).
+**Not verified**: the `ios` CI job (framework link, simulator tests, `xcodebuild`); any device or
+emulator: the menu's popup, the shrinking type and the Home buttons on a real phone, a phone on its side
+smaller than an iPhone SE's (a 200-character option is cut there at the floor, as it is at a large font
+size); nothing called a deployed server.
+
+**For the user**, each provisional in CLAUDE.md §8b: *After a report or a hide* (nothing said, the next
+question is the acknowledgement; or a brief line); *The question's menu on the top bar* (the ⋮ before
+the account icon; or last, or the categories kept in the middle); *Card A's contrast* (white on
+`#D4537E` is 3.9 to 1, AA only for large text, and a long option shrinks below it; `#C4466F` would be
+4.7, the brand colour left as it is until you decide); *The report reasons' wording* (keep the five
+phrases, or reword them); *Home's two labels* (*Играј* on both, or a different word on each card).
+
+**Merging it beside the other Wave 2 branches**: `feat/moderation-reports` adds
+`core.domain.moderation.ReportReason` (with `UNKNOWN`, for reading reports) and this branch
+`core.domain.report.ReportReason` (without, for sending one): fold them into one after both land. A
+test elsewhere that finds the Play screen by `listOf(home, account)` on its bar needs the menu's name
+between them (`AppNavigationTest.PLAY_BAR`), and one that taps Play on Home by its text finds two
+buttons (`tapPlay()`). `HomeScreen` takes `picks` and `onPlay(Side)`; `VoteRepository.cast` takes
+`answerMillis` (a fake must add the parameter); `PlayViewModel` takes the three report use cases.
+`git merge-tree` against this branch (2026-09-27) finds textual conflicts with two siblings besides
+CLAUDE.md and NEXT-SESSION.md. `feat/android-services`: `TopBars.kt`, `HomeScreen.kt`, `App.kt`,
+`DataModule.kt`'s imports, `AnalyticsProperty`'s KDoc and `AppNavigationTest`; `PlayTopBar` must
+take both `menu` and `news` (the ⋮, then the account icon with its dot), `HomeScreen` `picks`,
+`onPlay(Side)` and `news`, and the account icon's badge must stay inside its 48, so run
+`TopBarsDrawTest` again after that merge (the categories' 223 of 375 hang on it).
+`feat/account-client`: `PlayScreen.kt`'s imports (`optionText` beside `LoadingSpinner`),
+`WyrIconsDrawTest` (`More` beside `Info`) and `AppNavigationTest`'s imports and tests, each keeping
+both sides; its `AccountTopBar` merges cleanly. `main` (with `feat/moderation-reports`) conflicts in
+CLAUDE.md alone.
+
+**On `feat/android-release`** (from 2a4f96e; merged to main 2026-09-27): the Android build Google Play takes
+(CLAUDE.md §8, *Release builds*). Prod's release build is signed with the **Play upload key** once
+`local.properties` names it, and otherwise with the debug key, one warning line saying so, while
+whatever signs prod's bundle (`bundleProdRelease`, and `signProdReleaseBundle` alone) refuses; dev's
+and local's release builds always take the debug key, so they install over their debug builds and
+back; **R8** shrinks the code and the resources; a placeholder **adaptive icon**
+(pink over amber, a white question mark, a themed icon's layer too) and the prod label **Шта би
+радије?** replace the wizard's; and the **window and Android 12's splash screen** are the page
+background, light and dark, so a dark phone never flashes white. CI's verify job builds
+`assembleProdRelease`, checks the signing rules (*Release signing*) and runs the app module's first
+unit test, `WindowThemeTest`. **What you do**:
+*Release builds and Google Play*, under *Running it locally*, the upload key and the Data safety form
+among it. **For you to decide**: CLAUDE.md §8b, *The launcher icon and name* and *R8 and Kotlin 2.4's
+metadata*.
+
+**`feat/android-services`** (from 2a4f96e, Wave 2; main merged into it 2026-09-27, with the four other
+Wave 2 branches, *Merging main into `feat/android-services`* below; nothing pushed, not merged to main): the Android client
 side of **Play Games sign-in** and **FCM pushes**, and the **in-app notice** of a moderator's
 decision on every platform, all off until the user gives a build its ids (*Play Games and pushes on a
 phone*, below). One commit each:
@@ -511,6 +752,30 @@ the screen to follow its fresh guest; `PlayGamesRepository.signIn` answers `Stri
 
 ### Verified working
 
+- **`feat/android-release`**, on this machine: `ktlintCheck`; the verify job's tests (server 480,
+  2 skipped; `:core:domain` 76, `:core:data` 145, `:core:network` 112 and 118 as Android host tests,
+  `:app:shared` 395, `:app:adminApp` 106, all from the build cache, their modules untouched; and
+  `:app:androidApp:testDevDebugUnitTest`, `WindowThemeTest` 5, which fails with a colour changed) and
+  client compiles, `assembleDebug` and `assembleProdRelease` among them; `assembleDevRelease` and
+  `assembleLocalRelease`; the ios job's Kotlin compiles. `bundleProdRelease` fails at once, naming
+  the four settings. The prod APK: label *Шта би радије?*, the adaptive icon with its monochrome
+  layer, `Theme.Wyr` with the splash items on v31, and its one native library 16 KB aligned
+  (`zipalign -c -P 16` and its ELF LOAD segments); an unsigned bundle (`packageLocalReleaseBundle`)
+  carries R8's mapping, as `BUNDLE-METADATA/com.android.tools.build.obfuscation/proguard.map`. **On
+  an emulator** (the `Emu` AVD, API 35, booted read-only, the app uninstalled after) against a local
+  server: the shrunk `localRelease` APK opened Home, Play, a like, an answer, the next question, a
+  skip, Account and the Categories screen, every request 200 or 204, and logcat showed no crash and
+  no serialization error; the launcher showed the icon as *WYR Local*; a cold start in dark mode
+  showed the splash in #161417 with the icon and then Home, no white frame.
+  **After the review's fixes** (b10b27b to 5a96c46), the verify job again (the same counts, the
+  untouched modules' from the build cache), `assembleDevRelease`, `assembleLocalRelease` and the
+  ios job's Kotlin compiles, and CI's new *Release signing* step run as GitHub runs it (`bash -eo
+  pipefail`), which failed without each fix: `signProdReleaseBundle` alone had exited 0 in a dry
+  run, and with the four settings given (placeholders, a keystore that does not exist)
+  `signingReport` had named the upload config for every release variant, where it now names it for
+  `prodRelease` alone. Without the key `bundleRelease` and `signProdReleaseBundle` run for real are
+  refused before any task runs, no `.aab` written, `bundleDevRelease` is not, and of the three
+  release APKs, each signed by *CN=Android Debug* (`apksigner`), only `packageProdRelease` warns.
 - **`feat/server-engagement`**, on this machine, at 8660e01 and again at a371b0e after the review's
   fixes: `ktlintCheck`; `:server:test` (431 at a371b0e, 2 skipped: the PostgreSQL-only boots),
   `:core:domain:jvmTest`, `:core:data:jvmTest`, `:core:network:jvmTest`, `:core:network:testAndroidHostTest`, `:app:shared:jvmTest` and
@@ -1135,6 +1400,11 @@ the screen to follow its fresh guest; `PlayGamesRepository.signIn` answers `Stri
 
 ### NOT verified
 
+- **`feat/android-release`**: a build signed with a real upload key, and any upload to Play (the
+  key is the user's to make); the themed icon on a launcher that themes icons (the emulator's does
+  not); the icon on Android 7; a shrunk build on a physical phone, and on Play's pre-launch report;
+  Play reading the mapping from the bundle; the *Release signing* step on GitHub's runner; a password
+  with a backslash written as two in `local.properties`.
 - **`feat/server-engagement` against real Google.** No push has reached a phone and no Play Games
   code has been exchanged: the requests are built from Google's documentation (FCM HTTP v1's
   `messages:send`, the JWT bearer grant with the `firebase.messaging` scope, the authorization code
@@ -1414,8 +1684,9 @@ guest of its own, so switching between them loses neither.
 - **Android**: Android Studio's *Build Variants* panel, where `devDebug` is the default, since a
   phone can reach dev and not the developer's machine. `localDebug` is for the emulator against
   `./gradlew :server:run`, `prodDebug` for production. They install side by side as *WYR Local*,
-  *WYR Dev* and *WYR*. From the command line: `./gradlew :app:androidApp:installDevDebug`. To judge
-  speed, use `devRelease` (`installDevRelease`): a debug build's Compose runs several times slower.
+  *WYR Dev* and *Шта би радије?*. From the command line: `./gradlew :app:androidApp:installDevDebug`.
+  To judge speed, use `devRelease` (`installDevRelease`): a debug build's Compose runs several times
+  slower.
 - **Desktop**: the `WYR_ENV` variable, which `./gradlew` passes on to the app:
 
   ```bash
@@ -1440,6 +1711,33 @@ generated for `dev` and refused for a bad name, but no page has been served. On 
 compiles here. The `ios` CI job's `xcodebuild` is the first to process the Info.plist and its
 simulator tests the first to run the bundle read, on a test bundle without the key; nothing has yet
 run the app to read its own key.
+
+### Releasing to production
+
+A person promotes a commit (CLAUDE.md §8): green in CI and already live on dev, with Render's *Manual
+Deploy → Deploy a specific commit* on `wyr-server`. For the Google Play release itself, besides:
+
+1. **The cost**: on `wyr-server`'s *Environment*, `SUBMISSION_COST` = `50`, and restart (the user's
+   decision: 50 from the release, 1 until then; dev stays at 1). `GET /v1/me` names it, and the game's
+   Submit form shows it from its next read.
+2. **The version**: bump `wyr.app.version` in `gradle.properties`, and `MARKETING_VERSION` and
+   `CURRENT_PROJECT_VERSION` in `app/iosApp/Configuration/Config.xcconfig` with it (the build names
+   the number to set: MAJOR * 10000 + MINOR * 100 + PATCH). Android's `versionCode` follows by itself,
+   and from nothing else, and Play refuses a `versionCode` it has seen: bump PATCH (or MINOR) for
+   **every** upload to any Play track, internal testing included.
+3. **An old build to refuse**: `MIN_CLIENT_VERSION_ANDROID` (or `_IOS`, `_WEB`, `_DESKTOP`) = the
+   oldest build number to serve, and restart; an older build shows *Нова верзија је доступна*. Set it
+   only once every store serves the new build to all its users (review passed, a staged rollout at
+   100%): before that, the update screen sends players to a store page with no update on it.
+4. **The licences**: compare the About screen's list (`OPEN_SOURCE_LIBRARIES`, `Licences.kt`) with
+   `./gradlew :app:androidApp:dependencies --configuration prodReleaseRuntimeClasspath` (and, for a
+   desktop release, `:app:desktopApp:dependencies --configuration runtimeClasspath`): every library
+   there is in the list under its own licence, with the copyright line an MIT or BSD licence asks for.
+5. **The web's headers**: production runs `d4a9dbf`, whose CORS allows only `Authorization`,
+   `Content-Type` and `X-Admin-Token`, so a browser's preflight for this branch's `X-Client-Platform`
+   and `X-Client-Version` fails and so does every web request. Move `wyr-server` to a `main` commit
+   whose CORS allows the two (any from `baa71b1f` on) before a web build from this branch points at
+   it. Android, iOS and the desktop send no preflight and are not affected.
 
 ### Rate limits
 
@@ -1745,14 +2043,28 @@ closes or *Lock* is pressed, which also forgets everything read with it.
 that long says more may be waiting, and its tab reads `Pending (100+)`): each submission's options,
 categories, age and id. The chips pick the categories *Approve* files it under in place of the
 author's, none keeping the author's; *Reject* stays off until the reason typed is one line of at
-most 200 characters once trimmed. After every decision the queue is read again, so a decided
-submission leaves it, and a line above it says what the decision did; not after a 403 or a 429,
+most 200 characters once trimmed; a chip under the reason field puts a ready reason in it, in
+Serbian Cyrillic, to send as it is or edit first (`feat/moderation-reports`). After every decision
+the queue is read again, so a decided submission leaves it, and a line above it says what the decision did; not after a 403 or a 429,
 which decided nothing and would refuse the read too. A failure shows where it
 happened: under the submission, or above the queue, named by its options, once the read after it no
 longer lists it. `Wrong admin token (403)`; `An answer this build cannot name`, with its status in
 the `server:` line under it, where a bare 404 is a server without `ADMIN_TOKEN` (or a build without
 that route); `Already decided (409)`; and `Too many requests (429): try again in N s`, where ten wrong
 tokens in a minute lock the address out, the right token too, until the wait is over.
+
+**Reports** (`feat/moderation-reports`) is the questions players reported, most reported first, read
+on *Load reports*, 100 at most (`Reports (100+)` past that): each with how many players report it and
+why (*Offensive 3 · Real person 1*), when it was last reported, and the question as the list shows it.
+*Dismiss reports* clears them, which takes it off the list until someone reports it again, and reads
+the reports again; *Retire...* and *Restore* work as in the list, and the answer shows in the
+question's row on both tabs. Every question on Pending, Reports and All questions names its author by
+the first 8 characters of their id (`Author 3f2a9c1e`), or says *Seed*. *Block author...* asks in a
+dialog for the reason each of their pending questions is rejected with (the ready reasons are there
+too), blocks them from submitting, and reads again whatever tabs were read; *Unblock author* goes at
+once. The server says whether an author is blocked only in answer to a block or an unblock, so an
+author shows `· blocked` or `· not blocked` only once you did one of them since typing the token, and
+shows both buttons until then.
 
 **All questions** is every question, seeds included, newest first, read on *Load*, a page of 100 at
 a time with *Load more*. The chips narrow it by status (*Retired* among them) and by category, any
@@ -1787,9 +2099,9 @@ sends nothing. The key is never committed.
 
 **To see events from a phone** (`devDebug`, against the dev server):
 
-1. Make a project on PostHog's **EU** cloud (https://eu.posthog.com), turn on *Settings → Project →
-   IP data capture configuration → Discard client IP data* (CLAUDE.md §8g, *Where the player is*),
-   and copy its *Project API key* (`phc_...`) from *Settings → Project → General*.
+1. Make a project on PostHog's **EU** cloud (https://eu.posthog.com), leave *IP data capture* as it
+   is (CLAUDE.md §8g, *Where the player is*: the address and a location are kept), and copy its
+   *Project API key* (`phc_...`) from *Settings → Project → General*.
 2. Put it in `local.properties`, at the repository's root (git ignores it), and install:
 
    ```properties
@@ -1816,8 +2128,119 @@ A key someone else can read is no harm: a project's key can only send events, ne
 key rotated in PostHog needs a build again.
 
 Every event names the app's version, `wyr.app.version` in `gradle.properties` (1.0.0), which every
-platform's build reads; a release bumps `MARKETING_VERSION` in `app/iosApp/Configuration/Config.xcconfig`
-with it, or Gradle refuses to build.
+platform's build reads; a release bumps `MARKETING_VERSION` and `CURRENT_PROJECT_VERSION` (the build
+number, MAJOR * 10000 + MINOR * 100 + PATCH) in `app/iosApp/Configuration/Config.xcconfig` with it, or
+Gradle refuses to build.
+
+### Release builds and Google Play
+
+Prod's release build is signed with the Play upload key once it is set up (CLAUDE.md §8, *Release
+builds*); until then with the debug key, saying so in one warning line, and `bundleProdRelease`, the
+file Play takes, refuses at once, naming what is missing. Dev's and local's release builds are always
+signed with the debug key, so `./gradlew :app:androidApp:installDevRelease` installs over `devDebug`
+and back, keeping the phone's guest, before the key and after it.
+
+**Play App Signing, in short.** Play keeps the *app signing key* and signs what phones install with
+it; the *upload key*, yours, only proves an upload came from you. A lost or leaked upload key is reset
+from the Play Console's *App signing* page (*Request upload key reset*), and the app and its players
+are untouched. So the keystore below deserves a backup, but it is not the app.
+
+**What you do, once:**
+
+1. Make the upload key, outside the repository. keytool asks for a password, then a name and a place
+   for the certificate (anything; Play shows none of it):
+
+   ```bash
+   keytool -genkeypair -v -keystore ~/wyr-upload.jks -alias upload \
+     -keyalg RSA -keysize 4096 -validity 10000
+   ```
+
+   keytool's own kind of keystore (PKCS12) has one password for the store and the key, so the same
+   value goes in both password lines below. Back up `wyr-upload.jks` and the password, in a password
+   manager say.
+2. Name it in `local.properties` at the repository's root (git ignores it), by its absolute path, as
+   `~` is not expanded there:
+
+   ```properties
+   wyr.upload.storeFile=/Users/<you>/wyr-upload.jks
+   wyr.upload.storePassword=<the password>
+   wyr.upload.keyAlias=upload
+   wyr.upload.keyPassword=<the same password>
+   ```
+
+   The file reads a backslash as the start of an escape, so write each `\` in a value as `\\`, and
+   leave nothing after a value, not even a space: else signing fails with keytool's *Keystore was
+   tampered with, or password was incorrect*.
+
+   A build machine can set `WYR_UPLOAD_STORE_FILE`, `WYR_UPLOAD_STORE_PASSWORD`,
+   `WYR_UPLOAD_KEY_ALIAS` and `WYR_UPLOAD_KEY_PASSWORD` instead. `./gradlew
+   :app:androidApp:signingReport` then says *Config: upload* for `prodRelease`, and *Config: debug*
+   for every other variant.
+3. Build the bundle: `./gradlew :app:androidApp:bundleProdRelease`, which writes
+   `app/androidApp/build/outputs/bundle/prodRelease/androidApp-prod-release.aab`.
+4. In the Play Console (the developer account is CLAUDE.md §8b *Play Games sign-in*'s step 1):
+   *Create app*, then *Test and release → Testing → Internal testing → Create new release*. On the
+   first release keep Play App Signing with a key Google makes (the default), upload the `.aab`, which
+   registers your upload key, and roll it out to a list of testers' Google accounts, who install it
+   from the opt-in link the page gives. Every later upload needs a higher `versionCode`.
+5. From the Play Console's *App signing* page, copy the **app signing key's SHA-1**: Play Games'
+   Android credential needs it (CLAUDE.md §8b, *Play Games sign-in*, step 3), beside the upload key's
+   and the debug key's for builds made on a laptop, which `signingReport` prints.
+6. R8's mapping travels inside the bundle, so Android vitals shows crashes in this code's names
+   (*App bundle explorer → Downloads* lists it as the ReTrace mapping file). For a build made on the
+   laptop it is `app/androidApp/build/outputs/mapping/prodRelease/mapping.txt`, which the SDK's
+   `retrace` reads; keep it beside any APK you hand out, as the next build's differs.
+
+**R8 breaks mostly at run time**, so after a library changes, play a shrunk build on an emulator
+against a local server: `WYR_SERVER_ONLY=1 ./gradlew :server:buildFatJar`, then
+`PORT=8080 java -jar server/build/libs/server-all.jar` (JDK 21), `./gradlew
+:app:androidApp:installLocalRelease`, and in the app Home, Play, a like, an answer, a skip, Account
+and the categories, with `adb logcat` open for `FATAL` and `Serializ`.
+
+**What Google Play asks of this build** (checked 2026-09-26):
+
+- *Target API* 36 (`android-targetSdk` in the catalog), Play's level for new apps and updates in
+  2026. Play raises it every year: check its policy page before a release.
+- *16 KB pages*: the APK's one native library, Compose's `libandroidx.graphics.path.so`, is 16 KB
+  aligned for all four ABIs. After adding a library, check a release APK again:
+  `$ANDROID_HOME/build-tools/36.1.0/zipalign -c -P 16 -v 4 <apk>` must end in *Verification
+  successful*, and Android Studio's *Build → Analyze APK* flags a `.so` whose segments are not.
+- *The Data safety form*, which is yours to fill in, from the list below.
+
+**Data safety: what the app collects and sends.** No ads, no advertising id, nothing sold. Everything
+travels over HTTPS (only the LOCAL flavor, which never ships, allows plain http), and a player can
+delete their account in the app (`feat/account-client`) and through a web page Play asks you to link
+(`docs/site`).
+
+- *To the game's server* (Render), for the game to work, not optional:
+  - **User IDs**: the player id, random and made by the server, for every player, a guest's
+    included; the username, once a player registers; the Play Games player id, once Play Games
+    sign-in lands (`feat/android-services`). The password is sent to register and to log in, and kept
+    only as a salted hash.
+  - **App activity**: answers, with the side picked and how long each took; skips; likes and
+    dislikes; reports and hidden questions and authors (*App interactions*, *Other actions*); and the
+    questions a player writes (*Other user-generated content*).
+  - **Device or other IDs**: the device's push token (FCM, `feat/android-services`), to tell an
+    author a moderator decided their question.
+  - The address each request comes from, which the rate limits count by, in memory; the server logs
+    no address (Render's and Cloudflare's own logs may) and derives no location from it.
+- *To PostHog* (analytics, CLAUDE.md §8g), only while **Statistics** is on: on by default, and the
+  player can turn it off, so it is optional:
+  - **Device or other IDs**: a random id per install. **User IDs**: the player id, once the player
+    registers or logs in.
+  - **App activity → App interactions**: screens shown and for how long, taps by the button's name,
+    questions shown, answered (the side and the time) and skipped, reactions, registrations, logins,
+    logouts and the language picked.
+  - **App info and performance → Diagnostics**: the error codes a screen shows.
+  - With every event, the OS and its version, the device type, the app version and the platform. And an
+    **approximate location**: PostHog keeps the address and derives a country and city from it
+    (CLAUDE.md §8g, *Where the player is*), so declare *Location → Approximate location* too.
+- *To Google*, by its own libraries once `feat/android-services` lands: Firebase Cloud Messaging (the
+  push token, and Firebase's own installation id) and Play Games Services (sign-in). Google and PostHog
+  process it for the game, as service providers, which Play's form does not count as sharing.
+- *Not collected*: an email, a name, a phone number, contacts, photos or files, location, financial or
+  health data, messages, audio, the calendar, browsing history, or crash logs (the app has no crash
+  reporter; Android vitals is Play's own).
 
 ### Trying a change
 

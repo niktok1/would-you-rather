@@ -39,31 +39,52 @@ fun HomeTopBar(
 
 /**
  * Play's: home on the left, back to Home, the account icon on the right, with Home's dot while [news]
- * waits, and between them, in the middle, [categories]: the categories played, which open the
- * Categories screen (CLAUDE.md §8d, *The Play screen*).
+ * waits, and [menu] before it, the menu about the question on screen, and between them, in what they
+ * leave, [categories]: the categories played, which open the Categories screen (CLAUDE.md §8d, *The
+ * Play screen*).
  */
 @Composable
 fun PlayTopBar(
     onHome: () -> Unit,
     onAccount: () -> Unit,
     news: Boolean = false,
+    menu: @Composable () -> Unit = {},
     categories: @Composable () -> Unit,
 ) {
     TopBar(
         start = { IconAction(WyrIcons.Home, LocalStrings.current.home, "top_bar.home", onHome) },
         middle = categories,
-        end = { AccountButton(onAccount, news) },
+        end = {
+            menu()
+            AccountButton(onAccount, news)
+        },
     )
 }
 
 /**
- * Account's, the Auth page's, Submit's and the Categories screen's: the back arrow, to the screen each
- * was opened from. The way to the Submit screen is on the Account screen itself, in My questions (§8d,
- * *The Account screen*).
+ * The Auth page's, Submit's, the Categories screen's and the About screen's: the back arrow, to the
+ * screen each was opened from. The Account screen's has the About screen's icon besides
+ * ([AccountTopBar]); the way to the Submit screen is on the Account screen itself, in My questions
+ * (§8d, *The Account screen*).
  */
 @Composable
 fun BackTopBar(onBack: () -> Unit) {
     TopBar(start = { BackButton(onBack) })
+}
+
+/**
+ * The Account screen's: the back arrow, and on the right the info icon, to the About screen (CLAUDE.md
+ * §8d, *About*), so the way there adds no text to the screen.
+ */
+@Composable
+fun AccountTopBar(
+    onBack: () -> Unit,
+    onAbout: () -> Unit,
+) {
+    TopBar(
+        start = { BackButton(onBack) },
+        end = { IconAction(WyrIcons.Info, LocalStrings.current.aboutScreen.title, "top_bar.about", onAbout) },
+    )
 }
 
 /**

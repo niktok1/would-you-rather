@@ -9,4 +9,5 @@ internal fun PlayerStatsDto.toDomain(): PlayerStats =
         questionsAnswered = questionsAnswered,
         username = username,
         playGamesLinked = playGamesLinked,
+        submissionCost = submissionCost,
     )

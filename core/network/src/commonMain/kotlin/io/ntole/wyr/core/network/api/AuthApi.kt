@@ -17,7 +17,7 @@ import io.ntole.wyr.core.network.refreshTimeout
 /**
  * Session and account endpoints (CLAUDE.md §8a). [guest], [refresh] and [logIn] need no session:
  * [guest] has no credential yet, and [refresh] and [logIn] carry theirs in the body. [register],
- * [playGames] and [logOut] go with the session's bearer, as any other call does.
+ * [playGames], [logOut] and [deleteAccount] go with the session's bearer, as any other call does.
  */
 public class AuthApi(
     private val client: HttpClient,
@@ -77,5 +77,14 @@ public class AuthApi(
      */
     public suspend fun logOut() {
         client.post(WyrApi.Paths.AUTH_LOGOUT)
+    }
+
+    /**
+     * Deletes the account of the player the bearer names, for good (CLAUDE.md §8a, *Deleting an
+     * account*), answered 204. An expired access token is refreshed first, as for any call, and a player
+     * deleted already is 401, their refresh refused.
+     */
+    public suspend fun deleteAccount() {
+        client.post(WyrApi.Paths.ME_DELETION)
     }
 }

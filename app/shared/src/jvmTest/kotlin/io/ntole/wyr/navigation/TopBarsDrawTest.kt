@@ -11,6 +11,7 @@ import io.ntole.wyr.language.WyrStrings
 import io.ntole.wyr.language.fill
 import io.ntole.wyr.language.stringsOf
 import io.ntole.wyr.play.CategoriesPlayed
+import io.ntole.wyr.play.QuestionMenu
 import io.ntole.wyr.sizeNeeded
 import io.ntole.wyr.tap
 import io.ntole.wyr.texts
@@ -21,7 +22,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 /**
- * The top bars above the Play, Account, Auth, Submit and Categories screens (CLAUDE.md §8d,
+ * The top bars above the Play, Account, Auth, Submit, Categories and About screens (CLAUDE.md §8d,
  * *Navigation*), drawn off screen at a short phone's width, in each theme and each language, and read
  * through their semantics. Home's is drawn with the Home screen (`HomeScreenDrawTest`), and here with
  * the dot of a decision not seen yet, as Play's is.
@@ -145,13 +146,18 @@ class TopBarsDrawTest {
 
         val BARS =
             listOf(
+                // Home, the categories, the question's menu, whose tap only opens it, and the account icon.
                 Bar(
                     name = "Play's",
-                    icons = { listOf(it.home, it.account) },
+                    icons = { listOf(it.home, it.playScreen.menu.name, it.account) },
                     texts = { listOf(it.allCategories) },
                     taps = listOf("home", "account", "categories"),
                     draw = { actions ->
-                        PlayTopBar(onHome = actions.record("home"), onAccount = actions.record("account")) {
+                        PlayTopBar(
+                            onHome = actions.record("home"),
+                            onAccount = actions.record("account"),
+                            menu = { QuestionMenu(enabled = true, onPick = { actions.tapped += "pick $it" }) },
+                        ) {
                             CategoriesPlayed(
                                 text = LocalStrings.current.allCategories,
                                 enabled = true,
@@ -164,12 +170,16 @@ class TopBarsDrawTest {
                 // never the icons, and never a second line.
                 Bar(
                     name = "Play's, with a long selection",
-                    icons = { listOf(it.home, it.account) },
+                    icons = { listOf(it.home, it.playScreen.menu.name, it.account) },
                     texts = { listOf(LONG_SELECTION) },
                     taps = listOf("home", "account", "categories"),
                     cutShort = true,
                     draw = { actions ->
-                        PlayTopBar(onHome = actions.record("home"), onAccount = actions.record("account")) {
+                        PlayTopBar(
+                            onHome = actions.record("home"),
+                            onAccount = actions.record("account"),
+                            menu = { QuestionMenu(enabled = true, onPick = { actions.tapped += "pick $it" }) },
+                        ) {
                             CategoriesPlayed(
                                 text = LONG_SELECTION,
                                 enabled = true,
@@ -207,7 +217,14 @@ class TopBarsDrawTest {
                     draw = { HomeTopBar(onAccount = it.record("account"), news = true) },
                 ),
                 Bar(
-                    name = "Account's, the Auth page's, Submit's and the Categories screen's",
+                    name = "Account's",
+                    icons = { listOf(it.back, it.aboutScreen.title) },
+                    texts = { emptyList() },
+                    taps = listOf("back", "about"),
+                    draw = { AccountTopBar(onBack = it.record("back"), onAbout = it.record("about")) },
+                ),
+                Bar(
+                    name = "the Auth page's, Submit's, the Categories screen's and the About screen's",
                     icons = { listOf(it.back) },
                     texts = { emptyList() },
                     taps = listOf("back"),

@@ -20,22 +20,36 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.autofill.ContentType
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.semantics.contentType
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.LinkAnnotation
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextLinkStyles
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.withLink
+import io.ntole.wyr.about.Site
+import io.ntole.wyr.about.SitePage
+import io.ntole.wyr.about.openIfAble
 import io.ntole.wyr.analytics.tapped
 import io.ntole.wyr.core.domain.account.AccountRules
 import io.ntole.wyr.core.domain.error.DomainError
 import io.ntole.wyr.language.AccountStrings
 import io.ntole.wyr.language.GOOGLE_PLAY
+import io.ntole.wyr.language.LocalLanguage
 import io.ntole.wyr.language.LocalStrings
+import io.ntole.wyr.language.TemplatePart
 import io.ntole.wyr.language.USERNAME_CHARACTERS
 import io.ntole.wyr.language.fill
+import io.ntole.wyr.language.parts
 import io.ntole.wyr.points.PointsText
 import io.ntole.wyr.theme.WyrThemeAccessors
+import io.ntole.wyr.theme.WyrTypeScale
 import io.ntole.wyr.theme.contentWidth
 
 /**
@@ -151,6 +165,7 @@ private fun RegisterForm(
     ) {
         Text(strings.register)
     }
+    TermsLine()
     TextButton(onClick = tapped("auth.to_log_in") { actions.setAuthMode(AuthMode.LOG_IN) }, enabled = !state.isBusy) {
         Text(strings.toLogIn)
     }
@@ -220,6 +235,49 @@ private fun LogInForm(
     ) {
         Text(strings.toRegister)
     }
+}
+
+/**
+ * The one short line under Register (CLAUDE.md §8d, *The Account screen*): registering accepts the
+ * terms and the privacy policy, each noun a link that opens its page on the site in the browser, in the
+ * language shown ([Site]), or does nothing when nothing on the device opens it ([openIfAble]).
+ */
+@Composable
+private fun TermsLine() {
+    val colors = WyrThemeAccessors.colors
+    val strings = LocalStrings.current.accountScreens.termsLine
+    val language = LocalLanguage.current
+    val uriHandler = LocalUriHandler.current
+    val linkStyle = TextLinkStyles(SpanStyle(color = colors.headingAccent, textDecoration = TextDecoration.Underline))
+    val links =
+        listOf(
+            Triple(strings.terms, SitePage.TERMS, "auth.terms"),
+            Triple(strings.privacyPolicy, SitePage.PRIVACY, "auth.privacy"),
+        )
+    val text =
+        buildAnnotatedString {
+            strings.line.parts().forEach { part ->
+                when (part) {
+                    is TemplatePart.Text -> {
+                        append(part.text)
+                    }
+
+                    is TemplatePart.Value -> {
+                        // A placeholder with no link, which StringsTest keeps out of every language, as it stands.
+                        val link = links.getOrNull(part.index)
+                        if (link == null) {
+                            append("{${part.index}}")
+                        } else {
+                            val (label, page, element) = link
+                            val open = tapped(element) { uriHandler.openIfAble(Site.url(page, language)) }
+                            withLink(LinkAnnotation.Clickable(element, linkStyle) { open() }) { append(label) }
+                        }
+                    }
+                }
+            }
+        }
+
+    Text(text = text, color = colors.muted, fontSize = WyrTypeScale.statLabel)
 }
 
 /**

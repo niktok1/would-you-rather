@@ -19,6 +19,11 @@ import io.ntole.wyr.core.domain.reaction.QuestionReactions
 import io.ntole.wyr.core.domain.reaction.Reaction
 import io.ntole.wyr.core.domain.reaction.ReactionRepository
 import io.ntole.wyr.core.domain.reaction.SetReaction
+import io.ntole.wyr.core.domain.report.HideAuthor
+import io.ntole.wyr.core.domain.report.HideQuestion
+import io.ntole.wyr.core.domain.report.ReportQuestion
+import io.ntole.wyr.core.domain.report.ReportReason
+import io.ntole.wyr.core.domain.report.ReportRepository
 import io.ntole.wyr.core.domain.session.SessionRepository
 import io.ntole.wyr.core.domain.vote.AttemptId
 import io.ntole.wyr.core.domain.vote.CastVote
@@ -135,6 +140,25 @@ class PlayViewModelTest {
             assertIs<PlayUiState.Revealed>(viewModel.state.value)
             assertEquals(listOf(Side.B, Side.B), votes.sides)
             assertEquals(1, votes.attempts.toSet().size)
+        }
+
+    /** How long the tap took goes with the vote, and a retry of it sends the first tap's time again. */
+    @Test
+    fun `a vote carries the time its tap took and its retry the same`() =
+        runTest(dispatcher) {
+            val votes = RecordingVoteRepository(DomainError.NETWORK)
+            val viewModel = viewModel(votes = votes)
+            testScheduler.advanceUntilIdle()
+            testScheduler.advanceTimeBy(2_500)
+            viewModel.choose(Side.A)
+            testScheduler.advanceUntilIdle()
+            testScheduler.advanceTimeBy(7_000)
+
+            viewModel.retry()
+            testScheduler.advanceUntilIdle()
+
+            assertIs<PlayUiState.Revealed>(viewModel.state.value)
+            assertEquals(listOf<Long?>(2_500, 2_500), votes.answerMillis)
         }
 
     @Test
@@ -368,7 +392,7 @@ class PlayViewModelTest {
 
             viewModel.react(Reaction.DISLIKE)
             testScheduler.advanceUntilIdle()
-            assertEquals(PlayUiState.Asking(QUESTION, reactionError = DomainError.NETWORK), viewModel.state.value)
+            assertEquals(PlayUiState.Asking(QUESTION, rowError = DomainError.NETWORK), viewModel.state.value)
 
             viewModel.react(Reaction.DISLIKE)
             testScheduler.advanceUntilIdle()
@@ -1029,6 +1053,127 @@ class PlayViewModelTest {
             )
         }
 
+    /** A report hides the question for good (CLAUDE.md §8d, *Reports*): once the server has it, the next shows. */
+    @Test
+    fun `a report sends the question and its reason and then shows the next question`() =
+        runTest(dispatcher) {
+            val reports = FakeReportRepository()
+            val viewModel = viewModel(FakeQuestionRepository(QUESTION, NEXT_QUESTION), reports = reports)
+            testScheduler.advanceUntilIdle()
+
+            viewModel.pickFromMenu(MenuChoice.Report(ReportReason.REAL_PERSON))
+            testScheduler.advanceUntilIdle()
+
+            assertEquals(listOf("report ${QUESTION.id} REAL_PERSON"), reports.sent)
+            assertEquals(NEXT_QUESTION, assertIs<PlayUiState.Asking>(viewModel.state.value).question)
+            assertEquals(
+                listOf(
+                    Recorded(
+                        AnalyticsEvent.QUESTION_REPORTED,
+                        about(QUESTION) +
+                            mapOf(AnalyticsProperty.REASON to "real_person", AnalyticsProperty.ANSWERED to false),
+                    ),
+                ),
+                analytics.named(AnalyticsEvent.QUESTION_REPORTED),
+            )
+        }
+
+    @Test
+    fun `hiding the question or its author from the reveal shows the next question`() =
+        runTest(dispatcher) {
+            listOf(
+                MenuChoice.HideQuestion to AnalyticsEvent.QUESTION_HIDDEN,
+                MenuChoice.HideAuthor to AnalyticsEvent.AUTHOR_HIDDEN,
+            ).forEach { (choice, event) ->
+                val reports = FakeReportRepository()
+                val viewModel = viewModel(FakeQuestionRepository(QUESTION, NEXT_QUESTION), reports = reports)
+                testScheduler.advanceUntilIdle()
+                viewModel.choose(Side.A)
+                testScheduler.advanceUntilIdle()
+
+                viewModel.pickFromMenu(choice)
+                testScheduler.advanceUntilIdle()
+
+                val sent = if (choice == MenuChoice.HideQuestion) "hide question" else "hide author"
+                assertEquals(listOf("$sent ${QUESTION.id}"), reports.sent)
+                assertEquals(NEXT_QUESTION, assertIs<PlayUiState.Asking>(viewModel.state.value).question, "$choice")
+                val reported = analytics.named(event).single()
+                assertEquals(about(QUESTION) + mapOf(AnalyticsProperty.ANSWERED to true), reported.properties)
+            }
+        }
+
+    /** A failure says why in the row's slot, as a reaction's does, and the question stays. */
+    @Test
+    fun `a report that failed leaves the question and says why`() =
+        runTest(dispatcher) {
+            val reports = FakeReportRepository(failure = DomainError.RATE_LIMITED)
+            val viewModel = viewModel(FakeQuestionRepository(QUESTION, NEXT_QUESTION), reports = reports)
+            testScheduler.advanceUntilIdle()
+
+            viewModel.pickFromMenu(MenuChoice.HideAuthor)
+            testScheduler.advanceUntilIdle()
+
+            val state = assertIs<PlayUiState.Asking>(viewModel.state.value)
+            assertEquals(QUESTION, state.question)
+            assertEquals(DomainError.RATE_LIMITED, state.rowError)
+            assertTrue(state.canUseMenu, "the menu is on again")
+            assertEquals(emptyList(), analytics.named(AnalyticsEvent.AUTHOR_HIDDEN))
+            assertEquals(
+                listOf(shown(DomainError.RATE_LIMITED, "hide_author")),
+                analytics.named(AnalyticsEvent.ERROR_SHOWN),
+            )
+        }
+
+    /** One action at a time: while a report is in flight, nothing else goes, and the menu is off. */
+    @Test
+    fun `nothing else goes while a report is in flight`() =
+        runTest(dispatcher) {
+            val gate = CompletableDeferred<Unit>()
+            val reports = FakeReportRepository(gate = gate)
+            val questions = FakeQuestionRepository(QUESTION, NEXT_QUESTION)
+            val votes = RecordingVoteRepository()
+            val reactions = FakeReactionRepository()
+            val viewModel = viewModel(questions, votes, reactions, reports = reports)
+            testScheduler.advanceUntilIdle()
+
+            viewModel.pickFromMenu(MenuChoice.HideQuestion)
+            testScheduler.advanceUntilIdle()
+            val hiding = viewModel.state.value
+            assertTrue(hiding is PlayUiState.OnQuestion && hiding.isBusy && !hiding.canUseMenu, "$hiding")
+            viewModel.choose(Side.A)
+            viewModel.skip()
+            viewModel.react(Reaction.LIKE)
+            viewModel.pickFromMenu(MenuChoice.HideAuthor)
+            testScheduler.advanceUntilIdle()
+            gate.complete(Unit)
+            testScheduler.advanceUntilIdle()
+
+            assertEquals(listOf("hide question ${QUESTION.id}"), reports.sent)
+            assertEquals(0, votes.callCount)
+            assertEquals(emptyList(), questions.skipped)
+            assertEquals(emptyList(), reactions.sent)
+            assertEquals(NEXT_QUESTION, assertIs<PlayUiState.Asking>(viewModel.state.value).question)
+        }
+
+    @Test
+    fun `the menu is off with no question on screen and while a vote is in flight`() =
+        runTest(dispatcher) {
+            val gate = CompletableDeferred<Unit>()
+            val viewModel = viewModel(votes = GatedVoteRepository(gate))
+            assertEquals(false, viewModel.state.value.canUseMenu, "while the question loads")
+            testScheduler.advanceUntilIdle()
+            assertTrue(viewModel.state.value.canUseMenu, "on the question")
+
+            viewModel.choose(Side.A)
+            testScheduler.advanceUntilIdle()
+
+            assertEquals(false, viewModel.state.value.canUseMenu, "while the vote is in flight")
+            gate.complete(Unit)
+            testScheduler.advanceUntilIdle()
+            assertTrue(viewModel.state.value.canUseMenu, "on the reveal")
+            assertEquals(false, PlayUiState.Failed(DomainError.NETWORK).canUseMenu, "on a failure")
+        }
+
     private fun about(question: Question): Map<String, Any?> =
         mapOf(
             AnalyticsProperty.QUESTION_ID to question.id,
@@ -1052,11 +1197,15 @@ class PlayViewModelTest {
         reactions: ReactionRepository = FakeReactionRepository(),
         players: PlayerRepository = FakePlayerRepository(),
         categories: CategoryRepository = FakeCategoryRepository(),
+        reports: ReportRepository = FakeReportRepository(),
     ) = PlayViewModel(
         getNextQuestion = GetNextQuestion(questions, NoOpSessionRepository),
         castVote = CastVote(votes, NoOpSessionRepository),
         skipQuestion = SkipQuestion(questions, NoOpSessionRepository),
         setReaction = SetReaction(reactions, NoOpSessionRepository),
+        reportQuestion = ReportQuestion(reports, NoOpSessionRepository),
+        hideQuestion = HideQuestion(reports, NoOpSessionRepository),
+        hideAuthor = HideAuthor(reports, questions, NoOpSessionRepository),
         getPlayerStats = GetPlayerStats(players, NoOpSessionRepository),
         questions = questions,
         categoryList = categories,
@@ -1198,6 +1347,7 @@ class PlayViewModelTest {
             questionId: String,
             side: Side,
             attempt: AttemptId,
+            answerMillis: Long?,
         ): VoteOutcome = OUTCOME.copy(yourSide = side)
     }
 
@@ -1209,6 +1359,7 @@ class PlayViewModelTest {
             questionId: String,
             side: Side,
             attempt: AttemptId,
+            answerMillis: Long?,
         ): VoteOutcome {
             gate.await()
             return OUTCOME.copy(yourSide = side)
@@ -1225,15 +1376,20 @@ class PlayViewModelTest {
 
         val sides = mutableListOf<Side>()
 
+        /** How long each vote's answer took, as sent. */
+        val answerMillis = mutableListOf<Long?>()
+
         val callCount: Int get() = attempts.size
 
         override suspend fun cast(
             questionId: String,
             side: Side,
             attempt: AttemptId,
+            answerMillis: Long?,
         ): VoteOutcome {
             attempts += attempt
             sides += side
+            this.answerMillis += answerMillis
             failures.removeFirstOrNull()?.let { throw WyrException(it) }
             return OUTCOME.copy(yourSide = side)
         }
@@ -1246,6 +1402,7 @@ class PlayViewModelTest {
             questionId: String,
             side: Side,
             attempt: AttemptId,
+            answerMillis: Long?,
         ): VoteOutcome = throw WyrException(error)
     }
 
@@ -1268,6 +1425,32 @@ class PlayViewModelTest {
         ): QuestionReactions {
             sent += questionId to reaction
             return answer(questionId, reaction)
+        }
+    }
+
+    /**
+     * Records every report and hide, and refuses each with [failure] when there is one, once [gate], if
+     * set, completes.
+     */
+    private class FakeReportRepository(
+        private val failure: DomainError? = null,
+        private val gate: CompletableDeferred<Unit>? = null,
+    ) : ReportRepository {
+        val sent = mutableListOf<String>()
+
+        override suspend fun report(
+            questionId: String,
+            reason: ReportReason,
+        ) = record("report $questionId $reason")
+
+        override suspend fun hideQuestion(questionId: String) = record("hide question $questionId")
+
+        override suspend fun hideAuthor(questionId: String) = record("hide author $questionId")
+
+        private suspend fun record(call: String) {
+            sent += call
+            gate?.await()
+            failure?.let { throw WyrException(it) }
         }
     }
 

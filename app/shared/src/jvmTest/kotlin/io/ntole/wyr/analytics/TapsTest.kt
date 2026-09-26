@@ -3,11 +3,15 @@ package io.ntole.wyr.analytics
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.ImageComposeScene
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsNode
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.unit.Density
+import io.ntole.wyr.RecordingUris
+import io.ntole.wyr.about.AboutScreen
+import io.ntole.wyr.about.AppVersion
 import io.ntole.wyr.account.AccountAction
 import io.ntole.wyr.account.AccountActions
 import io.ntole.wyr.account.AccountFailure
@@ -24,6 +28,7 @@ import io.ntole.wyr.core.domain.category.Category
 import io.ntole.wyr.core.domain.error.DomainError
 import io.ntole.wyr.core.domain.player.PlayerStats
 import io.ntole.wyr.core.domain.question.Question
+import io.ntole.wyr.core.domain.report.ReportReason
 import io.ntole.wyr.core.domain.submission.Submission
 import io.ntole.wyr.core.domain.submission.SubmissionStatus
 import io.ntole.wyr.core.domain.vote.Side
@@ -33,20 +38,27 @@ import io.ntole.wyr.core.network.environment.WyrEnvironment
 import io.ntole.wyr.descriptions
 import io.ntole.wyr.home.HomeScreen
 import io.ntole.wyr.language.Language
+import io.ntole.wyr.language.SerbianCyrillicStrings
 import io.ntole.wyr.language.WyrStrings
+import io.ntole.wyr.navigation.AccountTopBar
 import io.ntole.wyr.navigation.BackTopBar
 import io.ntole.wyr.navigation.PlayTopBar
 import io.ntole.wyr.nodes
 import io.ntole.wyr.play.CategoriesPlayed
 import io.ntole.wyr.play.PlayScreen
 import io.ntole.wyr.play.PlayUiState
+import io.ntole.wyr.play.QuestionMenu
 import io.ntole.wyr.settle
 import io.ntole.wyr.submit.SubmitActions
 import io.ntole.wyr.submit.SubmitFailure
 import io.ntole.wyr.submit.SubmitScreen
 import io.ntole.wyr.submit.SubmitState
+import io.ntole.wyr.tap
 import io.ntole.wyr.texts
 import io.ntole.wyr.theme.WyrTheme
+import io.ntole.wyr.update.UpdateButton
+import io.ntole.wyr.update.UpdateScreen
+import io.ntole.wyr.update.UpdateWay
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
@@ -65,16 +77,54 @@ import kotlin.time.Instant
 class TapsTest {
     private val analytics = RecordingAnalytics()
 
+    /** Every URL a tap asked to open: nothing here reaches a browser. */
+    private val uris = RecordingUris()
+
     @Test
     fun `every tap on Home and the top bars is reported`() {
-        assertEquals(setOf("home.play", "top_bar.account"), elementsTapped { HomeScreen(onPlay = {}, onAccount = {}) })
         assertEquals(
-            setOf("top_bar.home", "top_bar.categories", "top_bar.account"),
+            setOf("home.play", "top_bar.account"),
+            elementsTapped { HomeScreen(picks = Tally(votesA = 3, votesB = 1), onPlay = {}, onAccount = {}) },
+        )
+        // Home's two Play buttons are one element, told apart by their side (CLAUDE.md §8d, *Home picks*).
+        val sides =
+            analytics
+                .named(AnalyticsEvent.TAP)
+                .filter { it.properties[AnalyticsProperty.ELEMENT] == "home.play" }
+                .map { it.properties[AnalyticsProperty.SIDE] }
+        assertEquals(listOf("A", "B"), sides)
+        // The question's menu too, and what it lists once open (CLAUDE.md §8d, *Reports*).
+        assertEquals(
+            setOf("top_bar.home", "top_bar.categories", "top_bar.account") +
+                setOf("question_menu.open", "question_menu.report", "question_menu.hide_question") +
+                "question_menu.hide_author",
             elementsTapped {
-                PlayTopBar(onHome = {}, onAccount = {}) { CategoriesPlayed(text = "Све", enabled = true, onClick = {}) }
+                PlayTopBar(onHome = {}, onAccount = {}, menu = { QuestionMenu(enabled = true, onPick = {}) }) {
+                    CategoriesPlayed(text = "Све", enabled = true, onClick = {})
+                }
             },
         )
         assertEquals(setOf("top_bar.back"), elementsTapped { BackTopBar(onBack = {}) })
+        assertEquals(
+            setOf("top_bar.back", "top_bar.about"),
+            elementsTapped { AccountTopBar(onBack = {}, onAbout = {}) },
+        )
+    }
+
+    /** Each of the site's pages, and a licence's text: opened by the test's own handler, never a browser. */
+    @Test
+    fun `every tap on the About screen is reported`() {
+        assertEquals(
+            setOf("about.privacy", "about.terms", "about.delete_account", "about.contact", "about.licence"),
+            elementsTapped { AboutScreen(AppVersion("1.0.0", 10000)) },
+        )
+        assertTrue(uris.opened.isNotEmpty())
+    }
+
+    @Test
+    fun `every tap on the update screen is reported`() {
+        assertEquals(setOf("update.store"), elementsTapped { UpdateScreen(UpdateButton(UpdateWay.STORE) {}) })
+        assertEquals(setOf("update.reload"), elementsTapped { UpdateScreen(UpdateButton(UpdateWay.RELOAD) {}) })
     }
 
     @Test
@@ -86,6 +136,35 @@ class TapsTest {
         assertEquals(setOf("play.card_a", "play.card_b", "play.like", "play.dislike", "play.skip"), asked)
         assertEquals(setOf("play.card_a", "play.card_b", "play.like", "play.dislike"), revealed)
         assertEquals(setOf("play.try_again"), failed)
+    }
+
+    /** Each reason a report may give is its own tap, named by the reason (CLAUDE.md §8d, *Reports*). */
+    @Test
+    fun `the question menu's every reason is reported by its name`() {
+        val scene =
+            ImageComposeScene(width = WIDTH, height = HEIGHT, density = Density(1f)) {
+                CompositionLocalProvider(LocalAnalytics provides analytics) {
+                    WyrTheme { WyrStrings(Language.DEFAULT) { QuestionMenu(enabled = true, onPick = {}) } }
+                }
+            }
+        val menu = SerbianCyrillicStrings.playScreen.menu
+        try {
+            scene.settle()
+            ReportReason.entries.forEach { reason ->
+                scene.tap(menu.name)
+                scene.tap(menu.report)
+                scene.tap(menu.reason(reason))
+            }
+        } finally {
+            scene.close()
+        }
+
+        val reasons =
+            analytics
+                .named(AnalyticsEvent.TAP)
+                .filter { it.properties[AnalyticsProperty.ELEMENT] == "question_menu.reason" }
+                .map { it.properties[AnalyticsProperty.REASON] }
+        assertEquals(ReportReason.entries.map { it.name.lowercase() }, reasons)
     }
 
     /** A card answers before the reveal and goes on after it: the tap says which. */
@@ -121,20 +200,22 @@ class TapsTest {
             }
 
         val settings = setOf("language.menu", "language.option", "account.statistics")
-        assertEquals(setOf("account.open_auth") + settings, guest)
+        // Delete account, then its dialog's two buttons, for anyone read (CLAUDE.md §8a).
+        val delete = setOf("account.delete", "account.delete_confirm", "account.delete_cancel")
+        assertEquals(setOf("account.open_auth") + settings + delete, guest)
         assertEquals(
-            setOf("my_questions.new_question", "my_questions.first_question", "account.log_out") + settings,
+            setOf("my_questions.new_question", "my_questions.first_question", "account.log_out") + settings + delete,
             registered,
         )
         assertEquals(
             setOf("account.add_username", "my_questions.new_question", "my_questions.first_question") +
-                setOf("account.log_out") + settings,
+                setOf("account.log_out") + settings + delete,
             playGames,
         )
-        assertEquals(setOf("my_questions.new_question", "account.log_out") + settings, listed)
+        assertEquals(setOf("my_questions.new_question", "account.log_out") + settings + delete, listed)
         assertEquals(setOf("account.try_again") + settings, unread)
         assertEquals(
-            setOf("my_questions.new_question", "my_questions.try_again", "account.log_out") + settings,
+            setOf("my_questions.new_question", "my_questions.try_again", "account.log_out") + settings + delete,
             listUnread,
         )
     }
@@ -149,7 +230,7 @@ class TapsTest {
                 .named(AnalyticsEvent.TAP)
                 .filter { it.properties[AnalyticsProperty.ELEMENT] == "language.option" }
                 .map { it.properties[AnalyticsProperty.LANGUAGE] }
-        assertEquals(Language.entries.map { it.tag }.toSet(), picked.toSet())
+        assertEquals(Language.OFFERED.map { it.tag }.toSet(), picked.toSet())
     }
 
     @Test
@@ -187,11 +268,16 @@ class TapsTest {
         val playGames =
             elementsTapped { AuthScreen(state = typed.copy(playGamesAvailable = true), actions = NoAccountActions) }
 
-        assertEquals(setOf("auth.show_password", "auth.register", "auth.to_log_in"), register)
-        assertEquals(setOf("auth.play_games", "auth.show_password", "auth.register", "auth.to_log_in"), playGames)
+        // The Register form's line links the terms and the privacy policy (CLAUDE.md §8d).
+        val terms = setOf("auth.terms", "auth.privacy")
+        assertEquals(setOf("auth.show_password", "auth.register", "auth.to_log_in") + terms, register)
+        assertEquals(
+            setOf("auth.play_games", "auth.show_password", "auth.register", "auth.to_log_in") + terms,
+            playGames,
+        )
         assertEquals(setOf("auth.log_in", "auth.to_register"), logIn)
         assertEquals(setOf("auth.log_in_anyway", "auth.cancel", "auth.to_register"), warned)
-        assertEquals(setOf("auth.try_again", "auth.show_password", "auth.to_log_in"), unread)
+        assertEquals(setOf("auth.try_again", "auth.show_password", "auth.to_log_in") + terms, unread)
     }
 
     @Test
@@ -252,7 +338,7 @@ class TapsTest {
     private fun elementsTapped(content: @Composable () -> Unit): Set<String> {
         val scene =
             ImageComposeScene(width = WIDTH, height = HEIGHT, density = Density(1f)) {
-                CompositionLocalProvider(LocalAnalytics provides analytics) {
+                CompositionLocalProvider(LocalAnalytics provides analytics, LocalUriHandler provides uris) {
                     WyrTheme { WyrStrings(Language.DEFAULT) { content() } }
                 }
             }
@@ -337,6 +423,8 @@ class TapsTest {
         override fun cancelLogIn() = Unit
 
         override fun logOut() = Unit
+
+        override fun deleteAccount() = Unit
     }
 
     private object NoSubmitActions : SubmitActions {

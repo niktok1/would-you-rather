@@ -9,7 +9,8 @@ import io.ntole.wyr.core.domain.session.SessionRepository
  * on a cold first launch there is no session yet. Ensuring it here means neither the UI nor the
  * vote repository has to know that auth is a precondition.
  *
- * [attempt] belongs to the caller: a new one per tap, and the same one again to retry that tap.
+ * [attempt] belongs to the caller: a new one per tap, and the same one again to retry that tap, with
+ * the same [answerMillis], how long that tap took (CLAUDE.md §8b, *Personalization*).
  */
 public class CastVote(
     private val votes: VoteRepository,
@@ -19,8 +20,9 @@ public class CastVote(
         questionId: String,
         side: Side,
         attempt: AttemptId,
+        answerMillis: Long? = null,
     ): VoteOutcome {
         session.ensure()
-        return votes.cast(questionId, side, attempt)
+        return votes.cast(questionId, side, attempt, answerMillis)
     }
 }

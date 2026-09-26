@@ -71,11 +71,13 @@ internal fun ApiException.toDomainError(): DomainError =
     when {
         code != ErrorCode.UNKNOWN -> code.toDomain()
         status == HTTP_TOO_MANY_REQUESTS -> DomainError.RATE_LIMITED
+        status == HTTP_UPGRADE_REQUIRED -> DomainError.UPGRADE_REQUIRED
         status in HTTP_SERVER_ERRORS -> DomainError.SERVER
         else -> DomainError.UNKNOWN
     }
 
 private const val HTTP_TOO_MANY_REQUESTS = 429
+private const val HTTP_UPGRADE_REQUIRED = 426
 private val HTTP_SERVER_ERRORS = 500..599
 
 internal fun ErrorCode.toDomain(): DomainError =
@@ -92,9 +94,9 @@ internal fun ErrorCode.toDomain(): DomainError =
 
         ErrorCode.RATE_LIMITED -> DomainError.RATE_LIMITED
 
-        // Sent only to a build that names itself, which none does yet: the client that sends the
-        // headers gives it a DomainError of its own, asking the player to update.
-        ErrorCode.UPGRADE_REQUIRED -> DomainError.UNKNOWN
+        // This build is older than the server serves: only an update puts it right, which the game says
+        // on a screen of its own. Never UNAUTHORIZED: it comes with a 426, and the session is fine.
+        ErrorCode.UPGRADE_REQUIRED -> DomainError.UPGRADE_REQUIRED
 
         ErrorCode.INTERNAL -> DomainError.SERVER
 
@@ -115,8 +117,8 @@ internal fun ErrorCode.toDomain(): DomainError =
         ErrorCode.ACCOUNT_REQUIRED -> DomainError.ACCOUNT_REQUIRED
 
         // A blocked author's submission, with a 403: never UNAUTHORIZED, which would throw the session
-        // away. UNKNOWN until the Submit form's branch gives it a DomainError and words of its own.
-        ErrorCode.SUBMISSIONS_BLOCKED -> DomainError.UNKNOWN
+        // away. The Submit form says so in a few words.
+        ErrorCode.SUBMISSIONS_BLOCKED -> DomainError.SUBMISSIONS_BLOCKED
 
         ErrorCode.ALREADY_DECIDED -> DomainError.ALREADY_DECIDED
 
@@ -128,8 +130,9 @@ internal fun ErrorCode.toDomain(): DomainError =
 
         ErrorCode.CATEGORY_NOT_FOUND -> DomainError.CATEGORY_NOT_FOUND
 
-        // A moderator's block of an author no player is, which the moderation app never sends yet.
-        ErrorCode.AUTHOR_NOT_FOUND -> DomainError.UNKNOWN
+        // A moderator's block or unblock of an author no player is: a DomainError of its own, so the
+        // moderation app says which.
+        ErrorCode.AUTHOR_NOT_FOUND -> DomainError.AUTHOR_NOT_FOUND
 
         // Never UNAUTHORIZED: that would throw the player's session away over a moderator's token.
         ErrorCode.FORBIDDEN -> DomainError.FORBIDDEN

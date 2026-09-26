@@ -80,6 +80,9 @@ internal class FakeServer {
     /** The attempt id of every vote, in arrival order. */
     val voteAttempts = mutableListOf<String>()
 
+    /** How long each vote's answer took, as sent, in arrival order. */
+    val voteAnswerMillis = mutableListOf<Long?>()
+
     /** The `Authorization` header of every feed request, in arrival order. */
     val feedsSentAs = mutableListOf<String?>()
 
@@ -149,6 +152,12 @@ internal class FakeServer {
     /** The `Authorization` header and body of every push token registration, in arrival order. */
     val pushTokensSentAs = mutableListOf<Pair<String?, PushTokenRequest>>()
 
+    /** The `Authorization` header of every account deletion, in arrival order. */
+    val deletionsSentAs = mutableListOf<String?>()
+
+    /** When set, every account deletion is refused with this status and code, and deletes nothing. */
+    var refuseDeletionsWith: Pair<HttpStatusCode, ErrorCode>? = null
+
     /** What a read of the categories answers, whoever sends it: [CATEGORIES] unless a test says otherwise. */
     var categories: CategoryListDto = CATEGORIES
 
@@ -207,8 +216,9 @@ internal class FakeServer {
             WyrApi.Paths.VOTES -> {
                 val authorization = request.headers[HttpHeaders.Authorization]
                 votesSentAs += authorization
-                voteAttempts +=
-                    WyrJson.decodeFromString<VoteRequest>(request.body.toByteArray().decodeToString()).attemptId
+                val vote = WyrJson.decodeFromString<VoteRequest>(request.body.toByteArray().decodeToString())
+                voteAttempts += vote.attemptId
+                voteAnswerMillis += vote.answerMillis
                 val player = authorization?.removePrefix("Bearer access-")
                 val refusal = refuseVotesWith
                 when {
@@ -286,6 +296,32 @@ internal class FakeServer {
                     refusal != null -> respondErrorDto(refusal.first, refusal.second)
                     player !in players -> respondErrorDto(HttpStatusCode.Unauthorized, ErrorCode.UNAUTHORIZED)
                     else -> respond("", HttpStatusCode.NoContent)
+                }
+            }
+
+            WyrApi.Paths.ME_DELETION -> {
+                val authorization = request.headers[HttpHeaders.Authorization]
+                deletionsSentAs += authorization
+                val player = authorization?.removePrefix("Bearer access-")
+                val refusal = refuseDeletionsWith
+                when {
+                    refusal != null -> {
+                        respondErrorDto(refusal.first, refusal.second)
+                    }
+
+                    player == null || player !in players -> {
+                        respondErrorDto(HttpStatusCode.Unauthorized, ErrorCode.UNAUTHORIZED)
+                    }
+
+                    else -> {
+                        // Gone for good, every session with it: a refresh of theirs is refused from now on.
+                        // Their Play Games link goes too, as the server's foreign key cascades it.
+                        players -= player
+                        liveRefreshTokens.values.removeAll { it == player }
+                        accounts.values.removeAll { it.second == player }
+                        playGamesLinks.values.removeAll { it == player }
+                        respond("", HttpStatusCode.NoContent)
+                    }
                 }
             }
 

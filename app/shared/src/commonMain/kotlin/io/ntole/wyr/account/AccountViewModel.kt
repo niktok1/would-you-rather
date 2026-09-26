@@ -2,6 +2,7 @@ package io.ntole.wyr.account
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import io.ntole.wyr.core.domain.account.DeleteAccount
 import io.ntole.wyr.core.domain.account.LogIn
 import io.ntole.wyr.core.domain.account.LogOut
 import io.ntole.wyr.core.domain.account.RegisterAccount
@@ -56,12 +57,15 @@ interface AccountActions {
     fun signInWithPlayGames() = Unit
 
     fun logOut()
+
+    /** Deletes the account, once the player has confirmed it, and plays on as a fresh guest. */
+    fun deleteAccount()
 }
 
 /**
  * Drives the Account screen and the Auth page opened from it (CLAUDE.md §8d, *The Account screen*):
- * register the guest playing, log in to an account, log out, each through its use case, and the
- * player read after every one, their stats and then the questions they submitted (My questions). A
+ * register the guest playing, log in to an account, log out, delete the account, each through its use
+ * case, and the player read after every one, their stats and then the questions they submitted (My questions). A
  * register or a login that worked raises [AccountState.signedIn], for the Auth page to go back on.
  *
  * One action at a time, and after each the player is read again, whatever became of it: a
@@ -78,6 +82,7 @@ class AccountViewModel(
     private val registerAccount: RegisterAccount,
     private val logInToAccount: LogIn,
     private val logOutOfAccount: LogOut,
+    private val deleteTheAccount: DeleteAccount,
     private val analytics: Analytics,
     private val linkPlayGames: LinkPlayGames,
     private val session: CurrentSession,
@@ -199,6 +204,17 @@ class AccountViewModel(
             // Before the logout, which has the analytics forget who the player was: the event is theirs.
             analytics.track(AnalyticsEvent.LOGOUT)
             logOutOfAccount()
+            _state.update { it.copy(stats = null, submissions = null) }
+        }
+
+    /**
+     * Deletes the account, a guest's or a registered player's; the read after mints the fresh guest the
+     * device plays on as, on this same screen. A deletion that failed forgets nothing, and says so.
+     */
+    override fun deleteAccount() =
+        perform(AccountAction.DELETE) {
+            deleteTheAccount()
+            // Nobody's any more: what was read was the deleted player's.
             _state.update { it.copy(stats = null, submissions = null) }
         }
 
@@ -351,6 +367,7 @@ private fun actionName(action: AccountAction): String =
         AccountAction.LOG_IN -> "log_in"
         AccountAction.PLAY_GAMES -> "play_games"
         AccountAction.LOG_OUT -> "log_out"
+        AccountAction.DELETE -> "delete_account"
     }
 
 private const val ACTION_MY_QUESTIONS = "my_questions"

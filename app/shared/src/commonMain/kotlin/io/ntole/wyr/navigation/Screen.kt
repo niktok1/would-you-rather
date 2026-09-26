@@ -23,10 +23,13 @@ sealed class Screen(
     /** The categories played, picked and searched; reached from the Play screen (§8d, *Categories*). */
     data object Categories : Screen("categories")
 
+    /** The game's version, its legal pages and its libraries' licences; reached from the Account screen (§8d, *About*). */
+    data object About : Screen("about")
+
     internal companion object {
         // Listed on each call, not kept in a property: the companion's properties are set up with the
         // class, before the objects are when one of them is used first, so a kept list could hold nulls.
         fun ofKey(key: String): Screen? =
-            listOf(Home, Play, Account, Submit, Auth, Categories).firstOrNull { it.key == key }
+            listOf(Home, Play, Account, Submit, Auth, Categories, About).firstOrNull { it.key == key }
     }
 }

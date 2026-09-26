@@ -33,6 +33,13 @@ public enum class DomainError {
      */
     ACCOUNT_REQUIRED,
 
+    /**
+     * A moderator has blocked the player from submitting (CLAUDE.md §8d, *Authors*). Nothing was stored
+     * or taken, and nothing the player can do puts it right. Never [UNAUTHORIZED]: it comes with a 403,
+     * and the session is fine.
+     */
+    SUBMISSIONS_BLOCKED,
+
     /** A moderator tried to decide a submission that a moderator has already approved or rejected. */
     ALREADY_DECIDED,
 
@@ -50,6 +57,9 @@ public enum class DomainError {
 
     /** A moderator tried to rename a category no category's id names. Nothing changed. */
     CATEGORY_NOT_FOUND,
+
+    /** A moderator tried to block or unblock an author no player's id names. Nothing changed. */
+    AUTHOR_NOT_FOUND,
 
     /**
      * A moderator's request did not carry the server's admin token. Nothing to do with the player's
@@ -93,6 +103,13 @@ public enum class DomainError {
      * Play Games on this device gave no code. Nothing changed.
      */
     PLAY_GAMES_UNAVAILABLE,
+
+    /**
+     * The server serves this build nothing more: it is older than the platform's minimum (CLAUDE.md
+     * §8b, *Minimum client version*). Only an update puts it right, which the game says on a screen of
+     * its own (`AppUpdate`). Never [UNAUTHORIZED]: the session is fine.
+     */
+    UPGRADE_REQUIRED,
 
     /** Request never reached the server, or its answer did not arrive whole. */
     NETWORK,

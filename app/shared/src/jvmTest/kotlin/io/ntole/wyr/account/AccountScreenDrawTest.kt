@@ -2,6 +2,10 @@ package io.ntole.wyr.account
 
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.ImageComposeScene
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.graphics.toComposeImageBitmap
+import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
@@ -28,7 +32,10 @@ import io.ntole.wyr.nodes
 import io.ntole.wyr.sizeNeeded
 import io.ntole.wyr.tap
 import io.ntole.wyr.texts
+import io.ntole.wyr.theme.WyrDarkColors
+import io.ntole.wyr.theme.WyrLightColors
 import io.ntole.wyr.theme.WyrTheme
+import kotlin.math.abs
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -301,6 +308,109 @@ class AccountScreenDrawTest {
         }
     }
 
+    /**
+     * Anyone read, a guest or a registered player, has a quiet Delete account at the start of Log out's
+     * row, which asks in one line first: Cancel deletes nothing, and Delete deletes (CLAUDE.md §8a).
+     */
+    @Test
+    fun `Delete account asks first and then deletes for a guest and a registered player alike`() {
+        Language.entries.forEach { language ->
+            val strings = stringsOf(language)
+            val delete = strings.accountScreens.deleteAccount
+            listOf(GUEST, REGISTERED).forEach { stats ->
+                val actions = Recorder()
+                val scene = scene(AccountState(stats = stats, submissions = emptyList()), language, actions = actions)
+                try {
+                    assertFalse(delete.warning in scene.texts(), "$language: asked before it is tapped")
+                    if (stats.username != null) {
+                        val button = scene.nodes().single { delete.button in it.texts }
+                        val logOut = scene.nodes().single { strings.accountScreens.logOut in it.texts }
+                        assertEquals(logOut.boundsInRoot.center.y, button.boundsInRoot.center.y, 0.5f, "one row")
+                        assertTrue(button.boundsInRoot.right <= logOut.boundsInRoot.left, "$language: Delete first")
+                    }
+
+                    scene.tap(delete.button)
+                    assertTrue(delete.warning in scene.texts(), "$language: ${scene.texts()}")
+                    scene.tap(strings.cancel)
+                    assertFalse(delete.warning in scene.texts(), "$language: the dialog is gone")
+                    assertEquals(emptyList(), actions.calls, "$language: Cancel deletes nothing")
+
+                    scene.tap(delete.button)
+                    scene.tap(delete.confirm)
+                } finally {
+                    scene.close()
+                }
+                assertEquals(listOf("delete account"), actions.calls, "$language")
+            }
+        }
+    }
+
+    /**
+     * The dialog Delete account asks in is the theme's (CLAUDE.md §5b), never Material's own: the
+     * surface behind its line, and its line in the primary text colour, in both themes.
+     */
+    @Test
+    fun `the deletion's dialog is drawn in the theme's colours`() {
+        listOf(WyrLightColors, WyrDarkColors).forEach { colors ->
+            val delete = stringsOf(Language.DEFAULT).accountScreens.deleteAccount
+            val state = AccountState(stats = GUEST, submissions = emptyList())
+            val scene = scene(state, Language.DEFAULT, dark = colors.isDark)
+            try {
+                scene.tap(delete.button)
+                val line = scene.nodes().single { delete.warning in it.texts }.boundsInRoot
+                // The dialog fades in: draw it frame by frame until it has.
+                (1..FRAMES_TO_SHOW).forEach { frame -> scene.render(frame * FRAME) }
+                val pixels = scene.render(FRAMES_TO_SHOW * FRAME).toComposeImageBitmap().toPixelMap()
+
+                // Inside the dialog's padding, just before its line starts.
+                val behind = pixels[line.left.toInt() - DIALOG_INSET, line.center.y.toInt()]
+                assertEquals(colors.surface.toArgb(), behind.toArgb(), "dark: ${colors.isDark}")
+                // The line's most inked pixel, the one farthest from the surface, is the primary text's.
+                val ink =
+                    (line.top.toInt() until line.bottom.toInt())
+                        .flatMap { y -> (line.left.toInt() until line.right.toInt()).map { x -> pixels[x, y] } }
+                        .maxBy { distance(it, colors.surface) }
+                assertTrue(
+                    distance(ink, colors.primaryText) < distance(ink, colors.orPillText),
+                    "dark: ${colors.isDark}: the line is drawn in $ink",
+                )
+            } finally {
+                scene.close()
+            }
+        }
+    }
+
+    /** How far apart two colours are, channel by channel. */
+    private fun distance(
+        one: Color,
+        other: Color,
+    ): Float = abs(one.red - other.red) + abs(one.green - other.green) + abs(one.blue - other.blue)
+
+    /** A deletion that failed says so, over the row, in the screen's words; offline as offline. */
+    @Test
+    fun `a deletion that failed says so`() {
+        Language.entries.forEach { language ->
+            val strings = stringsOf(language).accountScreens
+            val failed = AccountFailure(AccountAction.DELETE, DomainError.NETWORK)
+            val shown = textsOf(AccountState(stats = GUEST, submissions = emptyList(), failure = failed), language)
+
+            assertInOrder(shown, listOf(strings.offline, strings.deleteAccount.button), "$language")
+        }
+    }
+
+    /** A player who could not be read again is not offered a deletion, which would only fail too. */
+    @Test
+    fun `no deletion is offered while the player could not be read again or at all`() {
+        val delete = stringsOf(Language.DEFAULT).accountScreens.deleteAccount.button
+        val failed = AccountFailure(AccountAction.LOAD, DomainError.NETWORK)
+        listOf(
+            AccountState(),
+            AccountState(failure = failed),
+            AccountState(stats = GUEST, submissions = emptyList(), failure = failed),
+            AccountState(stats = REGISTERED, submissions = emptyList(), failure = failed),
+        ).forEach { state -> assertFalse(delete in textsOf(state, Language.DEFAULT), "$state") }
+    }
+
     @Test
     fun `a read that fails offers to try again`() {
         Language.entries.forEach { language ->
@@ -326,6 +436,23 @@ class AccountScreenDrawTest {
             val shown = textsOf(AccountState(stats = REGISTERED, submissions = EVERY_STATUS), language)
             val expected = EVERY_STATUS.flatMap { listOf(optionsOf(it, language), statusText(it, strings)) }
             assertEquals(expected, shown.filter { it in expected.toSet() }, "$language")
+        }
+    }
+
+    /** A question's options as the Play screen shows them: made Latin in Serbian Latin, as written otherwise. */
+    @Test
+    fun `My questions shows a question's options in Latin in Serbian Latin`() {
+        val cyrillic = QUESTION.copy(optionA = "Јести пљескавицу", optionB = "Пити бозу")
+        Language.entries.forEach { language ->
+            val or = stringsOf(language).accountScreens.or
+            val shown = textsOf(AccountState(stats = REGISTERED, submissions = listOf(cyrillic)), language)
+            val expected =
+                if (language == Language.SERBIAN_LATIN) {
+                    "Jesti pljeskavicu $or Piti bozu"
+                } else {
+                    "${cyrillic.optionA} $or ${cyrillic.optionB}"
+                }
+            assertTrue(expected in shown, "$language: $shown")
         }
     }
 
@@ -674,6 +801,10 @@ class AccountScreenDrawTest {
         override fun logOut() {
             calls += "log out"
         }
+
+        override fun deleteAccount() {
+            calls += "delete account"
+        }
     }
 
     private companion object {
@@ -690,6 +821,13 @@ class AccountScreenDrawTest {
         /** An iPhone SE (667 high) less its status bar (20) and the top bar above the screen (48). */
         const val SHORT_PHONE_WIDTH = 375
         const val SHORT_PHONE_HEIGHT = 599
+
+        /** How far before a dialog's line its background is read, well inside its padding of 24. */
+        const val DIALOG_INSET = 8
+
+        /** A frame at 60 a second, in nanoseconds, and a second of them, which a dialog's fade takes less than. */
+        const val FRAME = 16_666_667L
+        const val FRAMES_TO_SHOW = 60
 
         val DEV = WyrEnvironment.DEV
 
@@ -781,6 +919,12 @@ class AccountScreenDrawTest {
                     submissions = emptyList(),
                     failure = AccountFailure(AccountAction.LOAD, DomainError.NETWORK),
                 ),
+                AccountState(
+                    stats = GUEST,
+                    submissions = emptyList(),
+                    failure = AccountFailure(AccountAction.DELETE, DomainError.NETWORK),
+                ),
+                AccountState(stats = GUEST, submissions = emptyList(), running = AccountAction.DELETE),
             )
 
         /** Every state with no button to the Auth page: no player read yet, and a registered player. */
@@ -810,6 +954,11 @@ class AccountScreenDrawTest {
                     stats = REGISTERED,
                     failure = AccountFailure(AccountAction.LOAD, DomainError.NETWORK),
                     listFailure = AccountFailure(AccountAction.LOAD, DomainError.NETWORK),
+                ),
+                AccountState(
+                    stats = REGISTERED,
+                    submissions = emptyList(),
+                    failure = AccountFailure(AccountAction.DELETE, DomainError.SERVER),
                 ),
             )
     }

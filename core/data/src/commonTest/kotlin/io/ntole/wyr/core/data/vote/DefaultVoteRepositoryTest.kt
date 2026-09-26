@@ -60,6 +60,16 @@ class DefaultVoteRepositoryTest {
             assertEquals(listOf(answer, answer, answer, nextAnswer).map { it.value }, server.voteAttempts)
         }
 
+    /** How long the answer took goes with it, and with its retry around a recovered session unchanged. */
+    @Test
+    fun `the answer's time is sent and resent unchanged by the session recovery`() =
+        runTest {
+            votes.cast("q1", Side.B, AttemptId.random(), answerMillis = 2_345)
+            votes.cast("q1", Side.B, AttemptId.random())
+
+            assertEquals(listOf<Long?>(2_345, 2_345, null), server.voteAnswerMillis)
+        }
+
     @Test
     fun `a random attempt fits the wire's limit`() {
         val attemptId = AttemptId.random().value

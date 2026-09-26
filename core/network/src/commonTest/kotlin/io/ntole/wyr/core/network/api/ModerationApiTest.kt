@@ -9,6 +9,9 @@ import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpMethod
 import io.ktor.http.HttpStatusCode
 import io.ntole.wyr.core.api.WyrApi
+import io.ntole.wyr.core.author.AuthorBlockDto
+import io.ntole.wyr.core.author.BlockAuthorRequest
+import io.ntole.wyr.core.author.UnblockAuthorRequest
 import io.ntole.wyr.core.category.CategoryDto
 import io.ntole.wyr.core.category.CreateCategoryRequest
 import io.ntole.wyr.core.category.RenameCategoryRequest
@@ -33,6 +36,11 @@ import io.ntole.wyr.core.question.RestoreQuestionRequest
 import io.ntole.wyr.core.question.RetireQuestionRequest
 import io.ntole.wyr.core.question.SubmissionDto
 import io.ntole.wyr.core.question.SubmissionListDto
+import io.ntole.wyr.core.report.AdminReportDto
+import io.ntole.wyr.core.report.AdminReportListDto
+import io.ntole.wyr.core.report.DismissReportsRequest
+import io.ntole.wyr.core.report.ReportReason
+import io.ntole.wyr.core.report.ReportReasonCountDto
 import io.ntole.wyr.core.vote.VoteTallyDto
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
@@ -229,6 +237,66 @@ class ModerationApiTest {
         }
 
     @Test
+    fun `the reported questions are asked for with the admin token and the limit`() =
+        runTest {
+            val engine = MockEngine { respondOk(REPORTS) }
+
+            val reports = moderationApi(engine, storeHolding(session("a"))).reports(ADMIN_TOKEN, limit = 100)
+
+            assertEquals(REPORTS, reports)
+            val sent = engine.requestHistory.single()
+            assertEquals(HttpMethod.Get, sent.method)
+            assertEquals(WyrApi.Paths.ADMIN_REPORTS, sent.url.encodedPath)
+            assertEquals(setOf(WyrApi.Query.LIMIT), sent.url.parameters.names(), "no cursor, no filter")
+            assertEquals("100", sent.url.parameters[WyrApi.Query.LIMIT])
+            assertEquals(ADMIN_TOKEN, sent.headers[WyrApi.Headers.ADMIN_TOKEN])
+        }
+
+    @Test
+    fun `a dismissal is posted with the admin token and the question's id and reads nothing back`() =
+        runTest {
+            // Answered as the server answers it: 204, with no body to decode.
+            val engine = MockEngine { respond("", HttpStatusCode.NoContent) }
+
+            moderationApi(engine, storeHolding(session("a"))).dismissReports(ADMIN_TOKEN, DismissReportsRequest("q1"))
+
+            val sent = engine.requestHistory.single()
+            assertEquals(HttpMethod.Post, sent.method)
+            assertEquals(WyrApi.Paths.ADMIN_REPORT_DISMISSALS, sent.url.encodedPath)
+            assertEquals(ADMIN_TOKEN, sent.headers[WyrApi.Headers.ADMIN_TOKEN])
+            assertEquals("""{"questionId":"q1"}""", sent.body.toByteArray().decodeToString())
+        }
+
+    @Test
+    fun `a block and an unblock are posted with the admin token and the author's id`() =
+        runTest {
+            val engine =
+                MockEngine { request ->
+                    val blocked = request.url.encodedPath == WyrApi.Paths.ADMIN_AUTHOR_BLOCKS
+                    respondOk(AuthorBlockDto("p1", blocked = blocked, rejectedSubmissions = if (blocked) 2 else 0))
+                }
+            val api = moderationApi(engine, storeHolding(session("a")))
+
+            val block = api.blockAuthor(ADMIN_TOKEN, BlockAuthorRequest("p1", "Увредљиво"))
+            val unblock = api.unblockAuthor(ADMIN_TOKEN, UnblockAuthorRequest("p1"))
+
+            assertEquals(AuthorBlockDto("p1", blocked = true, rejectedSubmissions = 2), block)
+            assertEquals(AuthorBlockDto("p1", blocked = false), unblock)
+            assertEquals(
+                listOf(WyrApi.Paths.ADMIN_AUTHOR_BLOCKS, WyrApi.Paths.ADMIN_AUTHOR_UNBLOCKS),
+                engine.requestHistory.map { it.url.encodedPath },
+            )
+            engine.requestHistory.forEach { sent ->
+                assertEquals(HttpMethod.Post, sent.method)
+                assertEquals(ADMIN_TOKEN, sent.headers[WyrApi.Headers.ADMIN_TOKEN])
+            }
+            assertEquals(
+                listOf("""{"authorId":"p1","reason":"Увредљиво"}""", """{"authorId":"p1"}"""),
+                engine.requestHistory.map { it.body.toByteArray().decodeToString() },
+            )
+        }
+
+    @Test
     fun `a refused token is FORBIDDEN and never refreshes the player's session`() =
         runTest {
             val store = storeHolding(session("a"))
@@ -251,6 +319,10 @@ class ModerationApiTest {
                     { api.questions("not-the-token") },
                     { api.retire("not-the-token", RetireQuestionRequest("q1")) },
                     { api.restore("not-the-token", RestoreQuestionRequest("q1")) },
+                    { api.reports("not-the-token") },
+                    { api.dismissReports("not-the-token", DismissReportsRequest("q1")) },
+                    { api.blockAuthor("not-the-token", BlockAuthorRequest("p1", "a duplicate")) },
+                    { api.unblockAuthor("not-the-token", UnblockAuthorRequest("p1")) },
                 )
             calls.forEach { call ->
                 val failure = assertFailsWith<ApiException> { call() }
@@ -267,6 +339,10 @@ class ModerationApiTest {
                     WyrApi.Paths.ADMIN_QUESTIONS,
                     WyrApi.Paths.ADMIN_RETIREMENTS,
                     WyrApi.Paths.ADMIN_RESTORATIONS,
+                    WyrApi.Paths.ADMIN_REPORTS,
+                    WyrApi.Paths.ADMIN_REPORT_DISMISSALS,
+                    WyrApi.Paths.ADMIN_AUTHOR_BLOCKS,
+                    WyrApi.Paths.ADMIN_AUTHOR_UNBLOCKS,
                 ),
                 engine.requestHistory.map { it.url.encodedPath },
             )
@@ -357,5 +433,21 @@ class ModerationApiTest {
         val RETIRED = LISTED.copy(status = QuestionStatus.RETIRED, retiredAt = 1_790_000_002_000L)
 
         val PAGE = AdminQuestionPageDto(listOf(RETIRED, LISTED.copy(id = "seed-1", seed = true)), nextCursor = "c")
+
+        val REPORTS =
+            AdminReportListDto(
+                listOf(
+                    AdminReportDto(
+                        question = LISTED.copy(authorId = "p1"),
+                        reportCount = 3,
+                        reasons =
+                            listOf(
+                                ReportReasonCountDto(ReportReason.OFFENSIVE, 2),
+                                ReportReasonCountDto(ReportReason.SPAM, 1),
+                            ),
+                        lastReportedAt = 1_790_000_003_000L,
+                    ),
+                ),
+            )
     }
 }

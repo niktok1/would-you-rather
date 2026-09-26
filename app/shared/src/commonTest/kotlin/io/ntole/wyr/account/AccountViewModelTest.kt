@@ -3,6 +3,7 @@ package io.ntole.wyr.account
 import io.ntole.wyr.analytics.RecordingAnalytics
 import io.ntole.wyr.analytics.RecordingAnalytics.Recorded
 import io.ntole.wyr.core.domain.account.AccountRepository
+import io.ntole.wyr.core.domain.account.DeleteAccount
 import io.ntole.wyr.core.domain.account.LogIn
 import io.ntole.wyr.core.domain.account.LogOut
 import io.ntole.wyr.core.domain.account.RegisterAccount
@@ -596,6 +597,47 @@ class AccountViewModelTest {
             assertEquals("guest2", game.player)
         }
 
+    /** Deleted, for a guest and a registered player alike: the screen then shows the fresh guest. */
+    @Test
+    fun `a deletion plays on as a fresh guest on the same screen`() =
+        runTest(dispatcher) {
+            game.accounts["bob_1"] = "correct horse" to "guest1"
+            game.questionsOf["guest1"] = listOf(QUESTION)
+            val viewModel = open()
+            game.calls.clear()
+
+            viewModel.deleteAccount()
+            testScheduler.advanceUntilIdle()
+
+            assertEquals(listOf("deleteAccount", "reset", "stats", "mine"), game.calls)
+            val state = viewModel.state.value
+            assertEquals("Guest", nameOf(state.shown(), EnglishStrings))
+            assertEquals("guest2", game.player)
+            assertEquals(emptyList(), state.submissions, "the fresh guest's none")
+            assertNull(state.failure)
+        }
+
+    /** Offline, or anything else: said so, and the player shown is the one still here. */
+    @Test
+    fun `a deletion that failed says so and forgets nothing`() =
+        runTest(dispatcher) {
+            game.accounts["bob_1"] = "correct horse" to "guest1"
+            game.deleteFailsWith = DomainError.NETWORK
+            val viewModel = open()
+
+            viewModel.deleteAccount()
+            testScheduler.advanceUntilIdle()
+
+            val state = viewModel.state.value
+            assertEquals(AccountFailure(AccountAction.DELETE, DomainError.NETWORK), state.failure)
+            assertEquals("bob_1", nameOf(state.shown(), EnglishStrings))
+            assertEquals("guest1", game.player)
+            assertEquals(
+                listOf(mapOf(AnalyticsProperty.CODE to "NETWORK", AnalyticsProperty.ACTION to "delete_account")),
+                analytics.named(AnalyticsEvent.ERROR_SHOWN).map { it.properties },
+            )
+        }
+
     @Test
     fun `a read that fails offers to try again and a second read works`() =
         runTest(dispatcher) {
@@ -1091,6 +1133,7 @@ class AccountViewModelTest {
             registerAccount = RegisterAccount(game, game, Analytics.None),
             logInToAccount = LogIn(game, game, game, Analytics.None),
             logOutOfAccount = LogOut(game, game, Analytics.None),
+            deleteTheAccount = DeleteAccount(game, game, Analytics.None),
             analytics = analytics,
             linkPlayGames = LinkPlayGames(playGames, game, game, game, Analytics.None),
             session = game,
@@ -1211,6 +1254,18 @@ class AccountViewModelTest {
 
         override suspend fun logOut() {
             calls += "logOut"
+            player = null
+        }
+
+        /** When set, a deletion fails with it and forgets nothing. */
+        var deleteFailsWith: DomainError? = null
+
+        override suspend fun deleteAccount() {
+            calls += "deleteAccount"
+            deleteFailsWith?.let { throw WyrException(it) }
+            val deleted = player
+            accounts.values.removeAll { it.second == deleted }
+            questionsOf.remove(deleted)
             player = null
         }
 

@@ -15,11 +15,13 @@ import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
@@ -27,6 +29,10 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.Role
@@ -45,6 +51,7 @@ import io.ntole.wyr.language.LocalStrings
 import io.ntole.wyr.language.PlayGamesStrings
 import io.ntole.wyr.language.Strings
 import io.ntole.wyr.language.fill
+import io.ntole.wyr.loading.LoadingSpinner
 import io.ntole.wyr.points.PointsAmount
 import io.ntole.wyr.theme.WyrIcons
 import io.ntole.wyr.theme.WyrThemeAccessors
@@ -58,7 +65,8 @@ import io.ntole.wyr.theme.contentWidth
  * [onNewQuestion] answers with the Submit screen's form, for a registered player; then the language
  * menu, [language] the one the game is shown in, which [onSelectLanguage] changes (§8f), and beside
  * it the Statistics switch, [statisticsOn] whether the player lets the game send analytics, which
- * [onStatisticsChange] changes (§8g); under them Log out for a registered player.
+ * [onStatisticsChange] changes (§8g); under them Log out for a registered player; and at the bottom a
+ * quiet Delete account, for anyone read, which asks first (§8a, *Deleting an account*).
  * A build for any server but production's names that server last ([serverLine]), [environment] being
  * the one the build talks to. The questions in [newDecisions] a moderator decided since the player last
  * saw them, and My questions marks each (CLAUDE.md §8d, *Submitting*).
@@ -101,7 +109,8 @@ fun AccountScreen(
             if (stats != null) MyQuestions(state, actions, onNewQuestion, newDecisions)
 
             // The language menu and beside it the Statistics switch, one row of the two, and under them
-            // Log out for a registered player (provisional, CLAUDE.md §8b: Log out was beside the menu).
+            // Log out for a registered player (provisional, CLAUDE.md §8b: Log out was beside the menu),
+            // with a quiet Delete account at the start of its row, for a guest too (provisional, §8b).
             Column(verticalArrangement = Arrangement.spacedBy(dimens.spaceSm)) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
@@ -110,22 +119,91 @@ fun AccountScreen(
                     LanguageMenu(selected = language, onSelect = onSelectLanguage, modifier = Modifier.weight(1f))
                     StatisticsSwitch(on = statisticsOn, onChange = onStatisticsChange)
                 }
-                if (stats?.registered == true) {
-                    FailureOf(state, AccountAction.LOG_OUT)
-                    OutlinedButton(
-                        onClick = tapped("account.log_out", onClick = actions::logOut),
-                        enabled = !state.isBusy,
-                        modifier = Modifier.align(Alignment.End),
-                    ) {
-                        Text(strings.logOut)
-                    }
-                }
+                if (stats != null) LogOutAndDelete(state, actions, registered = stats.registered)
             }
 
             serverLine(environment, strings)?.let { line ->
                 Text(text = line, color = colors.muted, fontSize = WyrTypeScale.statLabel)
             }
         }
+    }
+}
+
+/**
+ * The last row, once a player is read: a quiet Delete account at its start, for a guest and a
+ * [registered] player alike, and a registered player's Log out at its end; why either failed, above
+ * it. Delete account is not offered while the player could not be read again: the screen shows that
+ * failure then, and the deletion, which needs the server as the read did, would only fail too.
+ */
+@Composable
+private fun LogOutAndDelete(
+    state: AccountState,
+    actions: AccountActions,
+    registered: Boolean,
+) {
+    val offerDeletion = state.failure?.action != AccountAction.LOAD
+    FailureOf(state, AccountAction.LOG_OUT)
+    FailureOf(state, AccountAction.DELETE)
+    if (!registered && !offerDeletion) return
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        if (offerDeletion) DeleteAccount(state, actions)
+        Spacer(Modifier.weight(1f))
+        if (registered) {
+            OutlinedButton(
+                onClick = tapped("account.log_out", onClick = actions::logOut),
+                enabled = !state.isBusy,
+            ) {
+                Text(LocalStrings.current.accountScreens.logOut)
+            }
+        }
+    }
+}
+
+/**
+ * Deleting the account (CLAUDE.md §8d, *The Account screen*): a quiet button, which asks in a dialog of
+ * one line whether everything is to go for good, and only then deletes.
+ */
+@Composable
+private fun DeleteAccount(
+    state: AccountState,
+    actions: AccountActions,
+) {
+    val colors = WyrThemeAccessors.colors
+    val strings = LocalStrings.current.accountScreens.deleteAccount
+    var confirming by rememberSaveable { mutableStateOf(false) }
+
+    TextButton(
+        onClick = tapped("account.delete") { confirming = true },
+        enabled = !state.isBusy,
+        colors = ButtonDefaults.textButtonColors(contentColor = colors.muted),
+    ) {
+        Text(strings.button)
+    }
+    if (confirming) {
+        AlertDialog(
+            onDismissRequest = { confirming = false },
+            text = { Text(strings.warning) },
+            // The theme's, not Material's own container and text colours (CLAUDE.md §5b).
+            containerColor = colors.surface,
+            textContentColor = colors.primaryText,
+            confirmButton = {
+                TextButton(
+                    onClick =
+                        tapped("account.delete_confirm") {
+                            confirming = false
+                            actions.deleteAccount()
+                        },
+                    colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error),
+                ) {
+                    Text(strings.confirm)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = tapped("account.delete_cancel") { confirming = false }) {
+                    Text(LocalStrings.current.cancel)
+                }
+            },
+        )
     }
 }
 
@@ -177,7 +255,7 @@ private fun Player(
         if (stats != null) {
             PlayerCard(stats, busy = state.isBusy, onOpenAuth = onOpenAuth)
         } else if (failure == null) {
-            CircularProgressIndicator(color = colors.headingAccent)
+            LoadingSpinner()
         }
         if (state.isBusy && stats != null) {
             LinearProgressIndicator(color = colors.headingAccent, modifier = Modifier.fillMaxWidth())

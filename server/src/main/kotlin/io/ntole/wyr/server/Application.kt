@@ -107,11 +107,11 @@ fun Application.wyrModule(
         playGamesRoutes(db, tokens, config, playGames)
         categoryRoutes(db)
         questionRoutes(db)
-        submissionRoutes(db)
+        submissionRoutes(db, config.submissionCost)
         voteRoutes(db)
         reactionRoutes(db)
         reportRoutes(db)
-        playerRoutes(db)
+        playerRoutes(db, config.submissionCost)
         homePickRoutes(db)
         pushRoutes(db)
         // Not registered at all without an admin token, so moderation is off (CLAUDE.md §8d).

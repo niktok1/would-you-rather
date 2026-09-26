@@ -1,7 +1,14 @@
 package io.ntole.wyr.account
 
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.ImageComposeScene
+import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.unit.Density
+import io.ntole.wyr.RecordingUris
+import io.ntole.wyr.about.Site
+import io.ntole.wyr.about.SitePage
 import io.ntole.wyr.assertInCentredColumn
 import io.ntole.wyr.core.domain.error.DomainError
 import io.ntole.wyr.core.domain.player.PlayerStats
@@ -10,6 +17,7 @@ import io.ntole.wyr.everyNode
 import io.ntole.wyr.everyText
 import io.ntole.wyr.language.GOOGLE_PLAY
 import io.ntole.wyr.language.Language
+import io.ntole.wyr.language.LocalStrings
 import io.ntole.wyr.language.WyrStrings
 import io.ntole.wyr.language.fill
 import io.ntole.wyr.language.stringsOf
@@ -105,6 +113,76 @@ class AuthScreenDrawTest {
             ).forEach { text -> assertTrue(text in shown, "$language: \"$text\" is not in $shown") }
             assertFalse(strings.logIn in shown, "$language: $shown")
             assertFalse(strings.toRegister in shown, "$language: $shown")
+        }
+    }
+
+    /**
+     * Under Register, one short line: registering accepts the terms and the privacy policy, each noun a
+     * link to its page on the site in the language shown (CLAUDE.md §8d, *The Account screen*).
+     */
+    @Test
+    fun `the register form's line under its button links the terms and the privacy policy`() {
+        Language.entries.forEach { language ->
+            val strings = stringsOf(language).accountScreens
+            val line = strings.termsLine.line.fill(strings.termsLine.terms, strings.termsLine.privacyPolicy)
+            val uris = RecordingUris()
+            val scene = scene(AccountState(stats = GUEST), language, uris = uris)
+            try {
+                val shown = scene.everyText()
+                val register = shown.indexOf(strings.register)
+                assertEquals(register + 1, shown.indexOf(line), "$language: right under Register in $shown")
+
+                scene.links().forEach { tap -> tap() }
+            } finally {
+                scene.close()
+            }
+            assertEquals(
+                setOf(Site.url(SitePage.TERMS, language), Site.url(SitePage.PRIVACY, language)),
+                uris.opened.toSet(),
+                "$language",
+            )
+        }
+    }
+
+    /** A terms link nothing on the device opens, on a phone with no browser, does nothing. */
+    @Test
+    fun `a terms link nothing on the device opens does nothing`() {
+        val uris = RecordingUris(opens = false)
+        val scene = scene(AccountState(stats = GUEST), Language.DEFAULT, uris = uris)
+        try {
+            scene.links().forEach { tap -> tap() }
+        } finally {
+            scene.close()
+        }
+        assertEquals(2, uris.opened.size, "${uris.opened}")
+    }
+
+    /**
+     * A placeholder the terms line has no link for, which `StringsTest` keeps out of every language,
+     * shows as it stands rather than failing the page.
+     */
+    @Test
+    fun `a placeholder the terms line has no link for shows as it stands`() {
+        val strings = stringsOf(Language.DEFAULT)
+        val terms = strings.accountScreens.termsLine
+        val screens = strings.accountScreens.copy(termsLine = terms.copy(line = "{0} {1} {2}"))
+        val odd = strings.copy(accountScreens = screens)
+        val scene =
+            ImageComposeScene(width = WIDTH, height = HEIGHT, density = Density(1f)) {
+                CompositionLocalProvider(LocalUriHandler provides RecordingUris()) {
+                    WyrTheme {
+                        CompositionLocalProvider(LocalStrings provides odd) {
+                            AuthScreen(state = AccountState(stats = GUEST), actions = Recorder())
+                        }
+                    }
+                }
+            }
+        try {
+            scene.render()
+            val shown = scene.everyText()
+            assertTrue("${terms.terms} ${terms.privacyPolicy} {2}" in shown, "$shown")
+        } finally {
+            scene.close()
         }
     }
 
@@ -288,10 +366,24 @@ class AuthScreenDrawTest {
         dark: Boolean = false,
         width: Int = WIDTH,
         height: Int = HEIGHT,
+        uris: RecordingUris = RecordingUris(),
     ): ImageComposeScene =
         ImageComposeScene(width = width, height = height, density = Density(1f)) {
-            WyrTheme(darkTheme = dark) { WyrStrings(language) { AuthScreen(state = state, actions = actions) } }
+            // The page's links open through the test's own handler, never the machine's browser.
+            CompositionLocalProvider(LocalUriHandler provides uris) {
+                WyrTheme(darkTheme = dark) { WyrStrings(language) { AuthScreen(state = state, actions = actions) } }
+            }
         }.also { it.render() }
+
+    /**
+     * The taps of every link in a text the scene lays out, in order: a link has no text of its own in
+     * the semantics, only a click, and Compose's own marker of a link.
+     */
+    private fun ImageComposeScene.links(): List<() -> Boolean> =
+        everyNode()
+            .filter { node -> node.config.any { (key, _) -> key.name == "LinkTestMarker" } }
+            .mapNotNull { it.config.getOrNull(SemanticsActions.OnClick)?.action }
+            .also { assertEquals(2, it.size, "the terms and the privacy policy") }
 
     /** What the page asked for, in order. */
     private class Recorder : AccountActions {
@@ -343,6 +435,10 @@ class AuthScreenDrawTest {
 
         override fun signInWithPlayGames() {
             calls += "play games"
+        }
+
+        override fun deleteAccount() {
+            calls += "delete account"
         }
     }
 

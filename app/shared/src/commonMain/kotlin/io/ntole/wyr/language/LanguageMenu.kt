@@ -34,8 +34,9 @@ import io.ntole.wyr.theme.WyrThemeAccessors
 
 /**
  * The language menu (CLAUDE.md §8f): a globe, the language the game is shown in, [selected], named in
- * itself, and a chevron; a tap opens a menu of every [Language], each named in itself, and a tap on
- * one calls [onSelect] with it, and the game changes at once.
+ * itself, and a chevron; a tap opens a menu of every [Language] offered ([Language.OFFERED]: not
+ * English, for now), each named in itself, and a tap on one calls [onSelect] with it, and the game
+ * changes at once. A device that kept a language no longer offered shows it named all the same.
  *
  * A menu, not a row of every language, since there will be more of them than a phone's width takes
  * (the user). The globe is what a player who picked a language they cannot read finds it by, the menu
@@ -83,7 +84,7 @@ fun LanguageMenu(
             }
         }
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
-            Language.entries.forEach { language ->
+            Language.OFFERED.forEach { language ->
                 val picked = language == selected
                 DropdownMenuItem(
                     text = {

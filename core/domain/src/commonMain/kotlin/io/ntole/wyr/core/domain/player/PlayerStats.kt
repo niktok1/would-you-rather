@@ -1,5 +1,7 @@
 package io.ntole.wyr.core.domain.player
 
+import io.ntole.wyr.core.domain.submission.SubmissionRules
+
 /**
  * The player's stats, as the server counts them (CLAUDE.md §8d). The client never works any of
  * them out itself.
@@ -17,12 +19,16 @@ package io.ntole.wyr.core.domain.player
  * who has none (CLAUDE.md §8a, *Accounts*). [playGamesLinked] is whether the player signed in with
  * Google Play Games (§8a, *Play Games sign-in*), which registers them as a username does, with or
  * without one. Both are read with the points, so the three are one moment's.
+ *
+ * [submissionCost] is what submitting a question costs on the server, in points: its own setting
+ * (CLAUDE.md §8c), which the Submit form shows and holds the points to.
  */
 public data class PlayerStats(
     public val totalPoints: Int,
     public val questionsAnswered: Int,
     public val username: String? = null,
     public val playGamesLinked: Boolean = false,
+    public val submissionCost: Int = SubmissionRules.SUBMISSION_COST,
 ) {
     /**
      * Whether the player is registered, by a username or by Play Games: they may submit (CLAUDE.md §8d,

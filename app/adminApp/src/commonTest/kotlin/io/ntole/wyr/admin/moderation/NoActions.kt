@@ -30,6 +30,28 @@ object NoActions : ModerationActions {
         from: Screen,
     ) = Unit
 
+    override fun loadReports() = Unit
+
+    override fun dismiss(questionId: String) = Unit
+
+    override fun askToBlock(
+        authorId: String,
+        questionId: String,
+        from: Screen,
+    ) = Unit
+
+    override fun setBlockReason(text: String) = Unit
+
+    override fun cancelBlock() = Unit
+
+    override fun confirmBlock() = Unit
+
+    override fun unblock(
+        authorId: String,
+        questionId: String,
+        from: Screen,
+    ) = Unit
+
     override fun toggleStatusFilter(status: SubmissionStatus) = Unit
 
     override fun toggleCategoryFilter(categoryId: String) = Unit
@@ -40,13 +62,19 @@ object NoActions : ModerationActions {
 
     override fun loadMore() = Unit
 
-    override fun askToRetire(questionId: String) = Unit
+    override fun askToRetire(
+        questionId: String,
+        from: Screen,
+    ) = Unit
 
     override fun cancelRetire() = Unit
 
     override fun confirmRetire() = Unit
 
-    override fun restore(questionId: String) = Unit
+    override fun restore(
+        questionId: String,
+        from: Screen,
+    ) = Unit
 
     override fun loadCategories() = Unit
 

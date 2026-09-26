@@ -134,10 +134,33 @@ class SubmitViewModelTest {
             assertFalse(state.isBusy)
         }
 
+    /** Until the server has named its cost, the form holds the points to the default, 1. */
     @Test
-    fun `a question costs the points the client keeps and no more`() {
+    fun `a question costs the default until the server names its cost`() {
         assertEquals(1, SubmissionRules.SUBMISSION_COST)
+        assertEquals(SubmissionRules.SUBMISSION_COST, viewModel().state.value.submissionCost)
     }
+
+    /** The cost is the server's (CLAUDE.md §8c), read with the points each time the form is shown. */
+    @Test
+    fun `the form shows and checks the cost the server names`() =
+        runTest(dispatcher) {
+            server.cost = 50
+            server.points = 49
+            val viewModel = open()
+            viewModel.write("Fly", "Swim", "FOOD")
+
+            assertEquals(50, viewModel.state.value.submissionCost)
+            assertTrue(viewModel.state.value.tooFewPoints)
+            assertFalse(viewModel.state.value.canSubmit)
+
+            server.points = 50
+            viewModel.refresh()
+            testScheduler.advanceUntilIdle()
+
+            assertFalse(viewModel.state.value.tooFewPoints)
+            assertTrue(viewModel.state.value.canSubmit)
+        }
 
     @Test
     fun `a player with the cost can send and one with fewer points cannot`() =
@@ -732,7 +755,7 @@ class SubmitViewModelTest {
     /**
      * The server and this device's session in one. Every call that reaches it is in [calls], a
      * submission with its options quoted as sent and its categories in id order. A question stored
-     * costs [SubmissionRules.SUBMISSION_COST], as the server takes it.
+     * costs [cost], as the server takes it and names it with the stats.
      */
     private class FakeServer :
         SubmissionRepository,
@@ -741,6 +764,7 @@ class SubmitViewModelTest {
         val calls = mutableListOf<String>()
         val stored = mutableListOf<Submission>()
         var points = 5
+        var cost = SubmissionRules.SUBMISSION_COST
 
         /** The player's username, a registered player's unless a test makes them a guest. */
         var username: String? = "bob"
@@ -774,7 +798,7 @@ class SubmitViewModelTest {
                     rejectionReason = null,
                     submittedAt = Instant.fromEpochMilliseconds(1_790_000_000_010L),
                 )
-            points -= SubmissionRules.SUBMISSION_COST
+            points -= cost
             stored += submission
             return submission
         }
@@ -789,6 +813,7 @@ class SubmitViewModelTest {
                 questionsAnswered = 0,
                 username = username,
                 playGamesLinked = playGamesLinked,
+                submissionCost = cost,
             )
         }
     }

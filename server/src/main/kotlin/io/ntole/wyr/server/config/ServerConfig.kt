@@ -3,6 +3,7 @@ package io.ntole.wyr.server.config
 import io.ntole.wyr.core.api.WyrApi
 import io.ntole.wyr.server.auth.PlayGamesClient
 import io.ntole.wyr.server.push.FcmServiceAccount
+import io.ntole.wyr.server.vote.Scoring
 
 /**
  * Everything the server reads from the environment.
@@ -82,6 +83,13 @@ data class ServerConfig(
      * version*). A platform left out, the default for every one, has no minimum.
      */
     val minClientVersions: Map<String, Int> = emptyMap(),
+    /**
+     * What submitting a question costs its author, in points (CLAUDE.md §8c), from `SUBMISSION_COST`: a
+     * whole number, 0 or more, [Scoring.DEFAULT_SUBMISSION_COST] when unset. `GET /v1/me` names it, so
+     * the game says the cost this server charges. Read at boot: changing it is changing the variable and
+     * restarting the service, and a question keeps what it cost when it was submitted.
+     */
+    val submissionCost: Int = Scoring.DEFAULT_SUBMISSION_COST,
 ) {
     /** True when running against the throwaway in-memory database. */
     val isEphemeralDatabase: Boolean get() = jdbcUrl.startsWith("jdbc:h2:")
@@ -144,7 +152,25 @@ data class ServerConfig(
                     env("FCM_SERVICE_ACCOUNT_JSON")?.takeIf { it.isNotBlank() }?.let(FcmServiceAccount::parse),
                 playGames = parsePlayGames(env("PLAY_GAMES_CLIENT_ID"), env("PLAY_GAMES_CLIENT_SECRET")),
                 minClientVersions = parseMinClientVersions(env),
+                submissionCost = env("SUBMISSION_COST")?.let(::parseSubmissionCost) ?: Scoring.DEFAULT_SUBMISSION_COST,
             )
+        }
+
+        /**
+         * A whole number of points, 0 or more, trimmed, or null for a blank one, which is unset and so the
+         * default. Anything else fails at config load, naming the variable, rather than charging the
+         * default unnoticed: the release sets 50 (CLAUDE.md §8b, *The launch*), and a mistyped 50 must not
+         * leave submitting at 1.
+         */
+        internal fun parseSubmissionCost(raw: String): Int? {
+            val trimmed = raw.trim()
+            if (trimmed.isEmpty()) return null
+            val cost = trimmed.toIntOrNull()
+            require(cost != null && cost >= 0) {
+                "SUBMISSION_COST is \"$raw\"; expected a whole number of points, 0 or more, or unset for " +
+                    "${Scoring.DEFAULT_SUBMISSION_COST}."
+            }
+            return cost
         }
 
         /**

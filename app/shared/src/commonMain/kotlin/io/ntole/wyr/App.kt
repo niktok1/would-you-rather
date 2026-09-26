@@ -24,6 +24,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LifecycleStartEffect
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import io.ntole.wyr.about.AboutScreen
 import io.ntole.wyr.account.AccountScreen
 import io.ntole.wyr.account.AccountViewModel
 import io.ntole.wyr.account.AuthScreen
@@ -34,12 +35,15 @@ import io.ntole.wyr.analytics.rememberConfigurationChanging
 import io.ntole.wyr.categories.CategoriesScreen
 import io.ntole.wyr.categories.CategoriesViewModel
 import io.ntole.wyr.core.domain.notice.DecisionNotices
+import io.ntole.wyr.core.domain.update.AppUpdate
 import io.ntole.wyr.home.HomeScreen
+import io.ntole.wyr.home.HomeViewModel
 import io.ntole.wyr.language.Language
 import io.ntole.wyr.language.LanguageViewModel
 import io.ntole.wyr.language.LocalLanguage
 import io.ntole.wyr.language.LocalStrings
 import io.ntole.wyr.language.WyrStrings
+import io.ntole.wyr.navigation.AccountTopBar
 import io.ntole.wyr.navigation.BackTopBar
 import io.ntole.wyr.navigation.Navigator
 import io.ntole.wyr.navigation.PlayTopBar
@@ -48,12 +52,16 @@ import io.ntole.wyr.navigation.SystemBack
 import io.ntole.wyr.play.CategoriesPlayed
 import io.ntole.wyr.play.PlayScreen
 import io.ntole.wyr.play.PlayViewModel
+import io.ntole.wyr.play.QuestionMenu
 import io.ntole.wyr.play.canChangeCategories
+import io.ntole.wyr.play.canUseMenu
 import io.ntole.wyr.play.categoriesPlayed
 import io.ntole.wyr.services.AppServices
 import io.ntole.wyr.submit.SubmitScreen
 import io.ntole.wyr.submit.SubmitViewModel
 import io.ntole.wyr.theme.WyrTheme
+import io.ntole.wyr.update.UpdateScreen
+import io.ntole.wyr.update.rememberUpdateButton
 import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
 
@@ -68,19 +76,35 @@ import org.koin.compose.viewmodel.koinViewModel
  * *Navigation*): Home first, and the rest opened from it through a [Navigator], a back stack made by
  * hand, no tabs and no navigation library. They are shown in the language picked on the Account
  * screen, Serbian Cyrillic until one is (§8f). The app's comings and goings and every screen shown
- * are reported to the analytics (§8g, [UsageTracker]).
+ * are reported to the analytics (§8g, [UsageTracker]). Once the server serves this build nothing more,
+ * the one screen shown says a new version is available ([AppUpdate], §8e), whatever was shown before.
  */
 @Composable
 fun App() {
     val languages = koinViewModel<LanguageViewModel>()
     val language by languages.language.collectAsStateWithLifecycle()
     ReportForegroundAndBackground(koinInject(), language, services = koinInject())
+    val updateRequired by koinInject<AppUpdate>().required.collectAsStateWithLifecycle()
 
     // Every tap on every screen is counted there (CLAUDE.md §8g, [io.ntole.wyr.analytics.tapped]).
     CompositionLocalProvider(LocalAnalytics provides koinInject()) {
         WyrTheme {
-            WyrStrings(language) { Screens(language, onSelectLanguage = languages::select) }
+            WyrStrings(language) {
+                if (updateRequired) {
+                    UpdateRequired()
+                } else {
+                    Screens(language, onSelectLanguage = languages::select)
+                }
+            }
         }
+    }
+}
+
+/** The update screen, where the screens were, inside the same insets. */
+@Composable
+private fun UpdateRequired() {
+    Surface(color = MaterialTheme.colorScheme.background, modifier = Modifier.fillMaxSize()) {
+        Box(modifier = Modifier.fillMaxSize().safeContentPadding()) { UpdateScreen(button = rememberUpdateButton()) }
     }
 }
 
@@ -117,7 +141,7 @@ private fun Screens(
         Column(modifier = Modifier.fillMaxSize().safeContentPadding()) {
             when (navigator.current) {
                 Screen.Home -> {
-                    HomeScreen(
+                    Home(
                         onPlay = { navigator.open(Screen.Play) },
                         onAccount = { navigator.open(Screen.Account) },
                         news = news,
@@ -139,7 +163,7 @@ private fun Screens(
                 }
 
                 Screen.Account -> {
-                    BackTopBar(onBack = { navigator.back() })
+                    AccountTopBar(onBack = { navigator.back() }, onAbout = { navigator.open(Screen.About) })
                     Below {
                         Account(
                             language = language,
@@ -165,9 +189,41 @@ private fun Screens(
                     BackTopBar(onBack = { navigator.back() })
                     Below { Categories(onPlayed = { navigator.back() }) }
                 }
+
+                Screen.About -> {
+                    BackTopBar(onBack = { navigator.back() })
+                    Below { AboutScreen(version = koinInject()) }
+                }
             }
         }
     }
+}
+
+/**
+ * The Home screen, whose two Play buttons show how many picked each, read each time it is shown
+ * (CLAUDE.md §8d, *Home picks*). A tap on either opens Play at once, [onPlay], and is counted in the
+ * background, never holding the game up. The account icon has its dot while [news] waits there.
+ */
+@Composable
+private fun Home(
+    onPlay: () -> Unit,
+    onAccount: () -> Unit,
+    news: Boolean,
+) {
+    val viewModel = koinViewModel<HomeViewModel>()
+    val picks by viewModel.picks.collectAsStateWithLifecycle()
+
+    LaunchedEffect(viewModel) { viewModel.shown() }
+
+    HomeScreen(
+        picks = picks,
+        onPlay = { side ->
+            viewModel.pick(side)
+            onPlay()
+        },
+        onAccount = onAccount,
+        news = news,
+    )
 }
 
 /**
@@ -353,7 +409,13 @@ private fun ColumnScope.Play(
         onStopOrDispose { viewModel.screenHidden() }
     }
 
-    PlayTopBar(onHome = onHome, onAccount = onAccount, news = news) {
+    PlayTopBar(
+        onHome = onHome,
+        onAccount = onAccount,
+        news = news,
+        // The menu about the question on screen: report it, or hide it or its author (CLAUDE.md §8d).
+        menu = { QuestionMenu(enabled = state.canUseMenu, onPick = viewModel::pickFromMenu) },
+    ) {
         CategoriesPlayed(
             text =
                 categoriesPlayed(

@@ -103,8 +103,9 @@ public object WyrApi {
          * [io.ntole.wyr.core.question.SubmitQuestionRequest], answered 201 with its
          * [io.ntole.wyr.core.question.SubmissionDto]. Requires the session of a registered player: a
          * guest's submission is refused with 403 [io.ntole.wyr.core.error.ErrorCode.ACCOUNT_REQUIRED]
-         * before anything it holds is checked. It earns nothing, and costs its author
-         * [Limits.SUBMISSION_COST] (CLAUDE.md §8c), which a rejection pays back. The question is stored
+         * before anything it holds is checked. It earns nothing, and costs its author the server's
+         * submission cost ([io.ntole.wyr.core.player.PlayerStatsDto.submissionCost], CLAUDE.md §8c),
+         * which a rejection pays back. The question is stored
          * pending and served to nobody until a moderator approves it, and then to every player, its
          * author included (CLAUDE.md §8d). A player may have at most
          * [Limits.MAX_PENDING_SUBMISSIONS] pending at once, and one more is refused with 409
@@ -518,9 +519,10 @@ public object WyrApi {
         public const val MAX_PENDING_SUBMISSIONS: Int = 20
 
         /**
-         * What submitting a question costs its author, in points, and so the fewest a player needs to
-         * submit (CLAUDE.md §8c): 1 until the game is released. The server charges this number; it is
-         * here rather than on the server so a client can say what submitting costs.
+         * What submitting a question costs its author, in points, when the server's `SUBMISSION_COST`
+         * is unset (CLAUDE.md §8c): 1, until the release sets 50. Only the default: the server charges
+         * its own setting and names it in [io.ntole.wyr.core.player.PlayerStatsDto.submissionCost], which
+         * defaults to this, and a client falls back to it until it has read that.
          */
         public const val SUBMISSION_COST: Int = 1
 

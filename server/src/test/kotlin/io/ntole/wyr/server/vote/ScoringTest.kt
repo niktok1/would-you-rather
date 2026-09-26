@@ -16,4 +16,10 @@ class ScoringTest {
         // As above: the like tests check that a like pays POINTS_PER_LIKE, and this holds its value.
         assertEquals(1, Scoring.POINTS_PER_LIKE)
     }
+
+    @Test
+    fun `submitting costs one point where the server sets no cost`() {
+        // The release sets SUBMISSION_COST to 50 on production (CLAUDE.md §8b, The launch); unset, it is 1.
+        assertEquals(1, Scoring.DEFAULT_SUBMISSION_COST)
+    }
 }

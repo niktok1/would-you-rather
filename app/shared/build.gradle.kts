@@ -94,6 +94,11 @@ kotlin {
             implementation(libs.koin.compose)
             implementation(libs.koin.composeViewmodel)
         }
+        webMain.dependencies {
+            // The page's own location, which the update screen's Reload loads again (UpdateButton.web.kt):
+            // the browser API wrappers :core:network's web storage already reads through.
+            implementation(libs.wrappers.browser)
+        }
         commonTest.dependencies {
             implementation(libs.kotlin.test)
             implementation(libs.kotlinx.coroutinesTest)

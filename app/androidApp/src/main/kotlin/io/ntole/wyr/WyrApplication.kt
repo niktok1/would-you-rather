@@ -13,8 +13,9 @@ import org.koin.android.ext.koin.androidContext
  *
  * Those are what shared code cannot obtain for itself: the context is the token storage's, and
  * `BuildConfig` is generated in this module, one per flavor (CLAUDE.md §8e), with the PostHog key and
- * host from the build's `wyr.posthog.*` settings and the app's version (§8g). That is exactly the kind
- * of thing a platform entry point is for (CLAUDE.md §3).
+ * host from the build's `wyr.posthog.*` settings, the app's version (§8g), and its build number, the
+ * `versionCode`, which every request names (§8b, *Minimum client version*). That is exactly the kind of
+ * thing a platform entry point is for (CLAUDE.md §3).
  */
 class WyrApplication : Application() {
     override fun onCreate() {
@@ -27,6 +28,7 @@ class WyrApplication : Application() {
                     host = BuildConfig.POSTHOG_HOST,
                     appVersion = BuildConfig.VERSION_NAME,
                 ),
+            build = BuildConfig.VERSION_CODE,
             device =
                 androidDeviceServices(
                     application = this,

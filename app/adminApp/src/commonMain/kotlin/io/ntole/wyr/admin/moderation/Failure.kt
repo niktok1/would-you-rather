@@ -78,6 +78,10 @@ private fun describe(
             "No such category on this server (404)."
         }
 
+        DomainError.AUTHOR_NOT_FOUND -> {
+            "No such author on this server (404): their account may have been deleted."
+        }
+
         DomainError.NETWORK -> {
             "No answer from the server. A Render service asleep takes up to a minute to wake: try again."
         }
@@ -93,6 +97,7 @@ private fun describe(
         DomainError.SUBMISSION_LIMIT,
         DomainError.NOT_ENOUGH_POINTS,
         DomainError.ACCOUNT_REQUIRED,
+        DomainError.SUBMISSIONS_BLOCKED,
         DomainError.OUT_OF_QUESTIONS,
         DomainError.INVALID_USERNAME,
         DomainError.INVALID_PASSWORD,
@@ -101,6 +106,8 @@ private fun describe(
         DomainError.INVALID_LOGIN,
         DomainError.PLAY_GAMES_CODE_REFUSED,
         DomainError.PLAY_GAMES_UNAVAILABLE,
+        // The moderation app names no build, which the server never refuses as too old.
+        DomainError.UPGRADE_REQUIRED,
         -> {
             "Unexpected answer from the server: $error."
         }

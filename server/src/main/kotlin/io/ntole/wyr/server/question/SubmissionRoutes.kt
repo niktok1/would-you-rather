@@ -24,9 +24,13 @@ import io.ntole.wyr.server.plugins.receiveOrReject
 /**
  * A player's own questions (CLAUDE.md §8d). Submitting one and listing them both need a session,
  * since the author is whoever the bearer token names, and submitting needs a registered player's. A
- * guest still lists whatever it submitted before that rule.
+ * guest still lists whatever it submitted before that rule. A submission costs [submissionCost], the
+ * server's `SUBMISSION_COST` (CLAUDE.md §8c).
  */
-fun Route.submissionRoutes(db: Db) {
+fun Route.submissionRoutes(
+    db: Db,
+    submissionCost: Int,
+) {
     authenticate(JWT_AUTH) {
         rateLimit(RouteLimit.MY_SUBMISSIONS) {
             get(WyrApi.Paths.MY_QUESTIONS) {
@@ -70,7 +74,11 @@ fun Route.submissionRoutes(db: Db) {
                         // An id no category has is a malformed request, which comes before any rule the
                         // player can break by typing (checkedSubmission).
                         val categories = CategoryStore.checked(request.categories)
-                        SubmissionStore.submit(authorId, checkedSubmission(request.copy(categories = categories)))
+                        SubmissionStore.submit(
+                            authorId,
+                            checkedSubmission(request.copy(categories = categories)),
+                            cost = submissionCost,
+                        )
                     }
 
                 // For the moderator's and the operator's trail: which question, by whom. Never its text,

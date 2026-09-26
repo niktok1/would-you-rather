@@ -75,12 +75,30 @@ class SubmitScreenDrawTest {
             val actions = Recorder()
             val scene = scene(WRITTEN, language, actions)
             try {
-                assertFalse(sendButton(scene, sendText(stringsOf(language))).isOff, "$language")
+                assertFalse(sendButton(scene, sendText(stringsOf(language), 1)).isOff, "$language")
                 assertFalse(strings.notEnoughPoints in scene.texts(), "$language")
 
-                scene.tap(sendText(stringsOf(language)))
+                scene.tap(sendText(stringsOf(language), 1))
 
                 assertEquals(listOf("submit"), actions.calls, "$language")
+            } finally {
+                scene.close()
+            }
+        }
+    }
+
+    /**
+     * The cost the server names is the one on Send and the one the points are held to: 50 points
+     * cannot pay 60, where 50 paid the default.
+     */
+    @Test
+    fun `Send names and checks the cost the server names`() {
+        Language.entries.forEach { language ->
+            val strings = stringsOf(language)
+            val scene = scene(WRITTEN.copy(points = 50, cost = 60), language)
+            try {
+                assertTrue(sendButton(scene, sendText(strings, 60)).isOff, "$language")
+                assertTrue(strings.accountScreens.notEnoughPoints in scene.texts(), "$language: ${scene.texts()}")
             } finally {
                 scene.close()
             }
@@ -94,7 +112,7 @@ class SubmitScreenDrawTest {
             val strings = stringsOf(language).accountScreens
             val scene = scene(WRITTEN.copy(points = SubmissionRules.SUBMISSION_COST - 1), language)
             try {
-                assertTrue(sendButton(scene, sendText(stringsOf(language))).isOff, "$language")
+                assertTrue(sendButton(scene, sendText(stringsOf(language), 1)).isOff, "$language")
                 assertTrue(strings.notEnoughPoints in scene.texts(), "$language: ${scene.texts()}")
             } finally {
                 scene.close()
@@ -113,7 +131,7 @@ class SubmitScreenDrawTest {
             guests.forEach { state ->
                 val scene = scene(state, language)
                 try {
-                    assertTrue(sendButton(scene, sendText(stringsOf(language))).isOff, "$language")
+                    assertTrue(sendButton(scene, sendText(stringsOf(language), 1)).isOff, "$language")
                     assertEquals(
                         1,
                         scene.texts().count { it == strings.registerToSubmit },
@@ -134,7 +152,7 @@ class SubmitScreenDrawTest {
             val strings = stringsOf(language).accountScreens
             val scene = scene(WRITTEN.copy(points = null), language)
             try {
-                assertTrue(sendButton(scene, sendText(stringsOf(language))).isOff, "$language")
+                assertTrue(sendButton(scene, sendText(stringsOf(language), 1)).isOff, "$language")
                 assertFalse(strings.notEnoughPoints in scene.texts(), "$language")
             } finally {
                 scene.close()

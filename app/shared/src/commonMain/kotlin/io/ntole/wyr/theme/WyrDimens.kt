@@ -2,6 +2,7 @@ package io.ntole.wyr.theme
 
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 
 /**
@@ -41,7 +42,11 @@ data class WyrDimens(
      * SE's 667 that its draw test holds it to (667 less the status bar's 20 and this).
      */
     val topBarHeight: Dp = 48.dp,
-    val playButtonWidth: Dp = 240.dp,
+    /**
+     * The least height each of the Home screen's two Play buttons asks for: what it takes where its room
+     * is unbounded, and what the height Home needs counts for it. In bounded room `QuestionLayout` gives
+     * each its share, fixed, which may be less.
+     */
     val playButtonHeight: Dp = 64.dp,
     /**
      * The least width, inside the screen's padding, at which the Play screen stands its cards side by
@@ -61,7 +66,22 @@ val WyrDefaultDimens: WyrDimens = WyrDimens()
 
 /** Type sizes that Material's scale does not cover well for this layout. */
 object WyrTypeScale {
+    /** An option on its card, as large as it fits, and never smaller than [optionTextMin]. */
     val optionText = 22.sp
+
+    /**
+     * The least an option too long for its card shrinks to, [optionTextStep] at a time from [optionText]
+     * (CLAUDE.md §8d, *The Play screen*): a question's longest option, 200 characters, fits an iPhone SE's
+     * card whole at it, revealed too.
+     */
+    val optionTextMin = 14.sp
+    val optionTextStep = 2.sp
+
+    /**
+     * An option's line, in its own size, so it shrinks with it: at [optionText] it is the 24 the text
+     * style's line was before the option shrank.
+     */
+    val optionLineHeight = 1.1.em
     val heading = 28.sp
     val sectionTitle = 16.sp
     val statLabel = 13.sp

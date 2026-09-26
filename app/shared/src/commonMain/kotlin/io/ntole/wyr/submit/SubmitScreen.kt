@@ -43,8 +43,8 @@ import io.ntole.wyr.theme.contentWidth
  * The Submit screen (CLAUDE.md §8d, *Submitting*), opened from My questions on the Account screen: a
  * question of the player's own, its two options and the categories it is filed under, sent for a
  * moderator to review. The categories are the server's, read each time the form is shown and named
- * in the language shown. Send names what it costs, [SubmissionRules.SUBMISSION_COST], a coin and the
- * number, and stays off while the player has fewer points, or is a guest, who is told to register
+ * in the language shown. Send names what it costs, [SubmitState.submissionCost], the server's cost read
+ * with the points, a coin and the number, and stays off while the player has fewer points, or is a guest, who is told to register
  * first (CLAUDE.md §8d, *Submitting*); once a question is stored the app goes back to My questions.
  *
  * Plain on purpose while UI polish is paused, every colour, space and size from the theme (§5b) and
@@ -166,8 +166,8 @@ private fun Form(
             val shared = LocalStrings.current
             PointsText(
                 template = shared.accountScreens.send,
-                points = SubmissionRules.SUBMISSION_COST,
-                spoken = sendText(shared),
+                points = state.submissionCost,
+                spoken = sendText(shared, state.submissionCost),
             )
         }
         if (state.isBusy) {
@@ -225,11 +225,13 @@ private fun FailureText(failure: SubmitFailure) {
 }
 
 /**
- * Send, and what sending costs, as a screen reader hears it: *Пошаљи · Поени: 1*. On the button the
- * cost is the coin and the number.
+ * Send, and what sending costs, [cost], as a screen reader hears it: *Пошаљи · Поени: 1*. On the button
+ * the cost is the coin and the number.
  */
-internal fun sendText(strings: Strings): String =
-    strings.accountScreens.send.fill(strings.points.fill(SubmissionRules.SUBMISSION_COST))
+internal fun sendText(
+    strings: Strings,
+    cost: Int,
+): String = strings.accountScreens.send.fill(strings.points.fill(cost))
 
 /** The rule an option is held to, what is wrong with the one typed by it, or that the two are the same. */
 internal fun optionHint(
@@ -281,6 +283,10 @@ internal fun failureMessage(
 
         DomainError.ACCOUNT_REQUIRED -> {
             strings.registerToSubmit
+        }
+
+        DomainError.SUBMISSIONS_BLOCKED -> {
+            strings.submissionsBlocked
         }
 
         DomainError.RATE_LIMITED -> {

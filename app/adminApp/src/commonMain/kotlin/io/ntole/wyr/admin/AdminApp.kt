@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
@@ -25,19 +26,25 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import io.ntole.wyr.admin.moderation.BlockDraft
 import io.ntole.wyr.admin.moderation.CategoriesScreen
 import io.ntole.wyr.admin.moderation.ModerationActions
 import io.ntole.wyr.admin.moderation.ModerationState
 import io.ntole.wyr.admin.moderation.ModerationViewModel
 import io.ntole.wyr.admin.moderation.PendingScreen
 import io.ntole.wyr.admin.moderation.QuestionsScreen
+import io.ntole.wyr.admin.moderation.ReadyReasonChips
+import io.ntole.wyr.admin.moderation.ReportsScreen
+import io.ntole.wyr.admin.moderation.Retiring
 import io.ntole.wyr.admin.moderation.Screen
 import io.ntole.wyr.admin.moderation.TokenBar
+import io.ntole.wyr.admin.moderation.blockWarningOf
 import io.ntole.wyr.admin.moderation.isFull
 import io.ntole.wyr.admin.moderation.retireWarningOf
 import io.ntole.wyr.admin.theme.AdminDimens
 import io.ntole.wyr.admin.theme.AdminTheme
 import io.ntole.wyr.admin.theme.AdminType
+import io.ntole.wyr.core.domain.moderation.RejectionReason
 import io.ntole.wyr.core.network.environment.WyrEnvironment
 import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
@@ -93,12 +100,14 @@ fun ModerationApp(
                     }
                     when (screen) {
                         Screen.PENDING -> PendingScreen(state, actions, modifier = Modifier.weight(1f))
+                        Screen.REPORTS -> ReportsScreen(state, actions, modifier = Modifier.weight(1f))
                         Screen.QUESTIONS -> QuestionsScreen(state, actions, modifier = Modifier.weight(1f))
                         Screen.CATEGORIES -> CategoriesScreen(state, actions, modifier = Modifier.weight(1f))
                     }
                 }
             }
-            state.retiring?.let { questionId -> RetireDialog(questionId, state, actions) }
+            state.retiring?.let { retiring -> RetireDialog(retiring, state, actions) }
+            state.blocking?.let { blocking -> BlockDialog(blocking, state, actions) }
         }
     }
 }
@@ -106,11 +115,11 @@ fun ModerationApp(
 /** Retire asks first: it takes a question out of play for every player. */
 @Composable
 private fun RetireDialog(
-    questionId: String,
+    retiring: Retiring,
     state: ModerationState,
     actions: ModerationActions,
 ) {
-    val question = state.questions.questions?.firstOrNull { it.id == questionId }
+    val question = state.shownOn(retiring.from, retiring.questionId)
     AlertDialog(
         onDismissRequest = actions::cancelRetire,
         title = { Text("Retire this question?") },
@@ -121,8 +130,50 @@ private fun RetireDialog(
 }
 
 /**
- * A tab's name, with how many it lists once it has read them, and a `+` on a queue that may hold
- * more than one read lists.
+ * Block asks first, and for the reason each of the author's pending questions is rejected with, typed
+ * or one of the ready reasons picked and edited: a block refuses every submission of theirs until
+ * unblocked.
+ */
+@Composable
+private fun BlockDialog(
+    blocking: BlockDraft,
+    state: ModerationState,
+    actions: ModerationActions,
+) {
+    val refused = blocking.reason.isNotBlank() && state.blockReason == null
+    AlertDialog(
+        onDismissRequest = actions::cancelBlock,
+        title = { Text("Block this author?") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(AdminDimens.spaceSm)) {
+                Text(blockWarningOf(blocking.authorId))
+                // One line, as a rejection's reason is (provisional, CLAUDE.md §8b).
+                OutlinedTextField(
+                    value = blocking.reason,
+                    onValueChange = actions::setBlockReason,
+                    label = { Text("Reason for their pending questions") },
+                    supportingText = {
+                        Text("Shown to the author. One line, at most ${RejectionReason.MAX_LENGTH} characters.")
+                    },
+                    isError = refused,
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                ReadyReasonChips(blocking.reason, actions::setBlockReason)
+            }
+        },
+        confirmButton = {
+            Button(onClick = actions::confirmBlock, enabled = state.canSend && state.blockReason != null) {
+                Text("Block")
+            }
+        },
+        dismissButton = { TextButton(onClick = actions::cancelBlock) { Text("Cancel") } },
+    )
+}
+
+/**
+ * A tab's name, with how many it lists once it has read them, and a `+` on the queue or the reports
+ * when they may hold more than one read lists.
  */
 fun tabLabelOf(
     screen: Screen,
@@ -131,6 +182,7 @@ fun tabLabelOf(
     val count =
         when (screen) {
             Screen.PENDING -> state.pending.submissions?.let { if (isFull(it)) "${it.size}+" else "${it.size}" }
+            Screen.REPORTS -> state.reports.reports?.let { if (isFull(it)) "${it.size}+" else "${it.size}" }
             Screen.QUESTIONS -> state.questions.questions?.let { "${it.size}" }
             Screen.CATEGORIES -> state.categories.categories?.let { "${it.size}" }
         }

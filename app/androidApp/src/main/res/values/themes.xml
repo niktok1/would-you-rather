@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+        The window behind the app (CLAUDE.md §8, Release builds): the page background, so nothing shows
+        in another colour before the first frame, and a dark phone never flashes white. Light here,
+        dark in values-night; enableEdgeToEdge() takes the system bars over once the activity starts.
+    -->
+    <style name="Base.Theme.Wyr" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@color/wyr_page_background</item>
+        <item name="android:statusBarColor">@color/wyr_page_background</item>
+        <item name="android:windowLightStatusBar">true</item>
+    </style>
+
+    <!-- What the manifest names; values-v31 adds the splash screen. -->
+    <style name="Theme.Wyr" parent="Base.Theme.Wyr" />
+</resources>

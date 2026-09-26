@@ -31,4 +31,11 @@ class LanguageTest {
             assertEquals(Language.SERBIAN_CYRILLIC, Language.ofTag(tag), "\"$tag\"")
         }
     }
+
+    /** English is hidden for the launch (CLAUDE.md §8b, *The launch*): its words stay, the menu offers Serbian. */
+    @Test
+    fun `the menu offers Serbian in both scripts and not English`() {
+        assertEquals(listOf(Language.SERBIAN_CYRILLIC, Language.SERBIAN_LATIN), Language.OFFERED)
+        assertEquals(Language.ENGLISH, Language.ofTag("en"), "a device that kept English keeps it")
+    }
 }

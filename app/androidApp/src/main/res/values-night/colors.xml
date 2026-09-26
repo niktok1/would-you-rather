@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- WyrDarkColors.pageBackground (values/colors.xml). -->
+    <color name="wyr_page_background">#161417</color>
+</resources>

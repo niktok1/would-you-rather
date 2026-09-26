@@ -15,6 +15,6 @@ internal fun paidSubmission(
     request: SubmitQuestionRequest,
     now: Long = System.currentTimeMillis(),
 ): SubmissionDto {
-    PlayerStore.addPoints(authorId, points = Scoring.SUBMISSION_COST)
+    PlayerStore.addPoints(authorId, points = Scoring.DEFAULT_SUBMISSION_COST)
     return SubmissionStore.submit(authorId, request, now)
 }

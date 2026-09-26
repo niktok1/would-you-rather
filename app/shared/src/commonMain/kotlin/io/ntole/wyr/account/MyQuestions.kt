@@ -35,8 +35,10 @@ import io.ntole.wyr.analytics.tapped
 import io.ntole.wyr.core.domain.submission.Submission
 import io.ntole.wyr.core.domain.submission.SubmissionStatus
 import io.ntole.wyr.language.AccountStrings
+import io.ntole.wyr.language.LocalLanguage
 import io.ntole.wyr.language.LocalStrings
 import io.ntole.wyr.language.fill
+import io.ntole.wyr.language.optionText
 import io.ntole.wyr.theme.WyrIcons
 import io.ntole.wyr.theme.WyrThemeAccessors
 import io.ntole.wyr.theme.WyrTypeScale
@@ -183,11 +185,13 @@ private fun QuestionRow(
 ) {
     val colors = WyrThemeAccessors.colors
     val counts = countsOf(submission)
+    // As the Play screen shows them: made Latin in Serbian Latin (CLAUDE.md §8f).
+    val language = LocalLanguage.current
     val options =
         buildAnnotatedString {
-            append(submission.optionA)
+            append(optionText(submission.optionA, language))
             withStyle(SpanStyle(color = colors.muted)) { append(" ${strings.or} ") }
-            append(submission.optionB)
+            append(optionText(submission.optionB, language))
         }
 
     TableRow(modifier = Modifier.semantics(mergeDescendants = true) {}) {

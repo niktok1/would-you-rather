@@ -9,6 +9,7 @@ import io.ntole.wyr.server.db.Questions
 import io.ntole.wyr.server.db.Votes
 import io.ntole.wyr.server.question.QuestionStore
 import io.ntole.wyr.server.reaction.ReactionStore
+import io.ntole.wyr.server.vote.Scoring
 import org.jetbrains.exposed.v1.core.Coalesce
 import org.jetbrains.exposed.v1.core.Expression
 import org.jetbrains.exposed.v1.core.ResultRow
@@ -41,8 +42,14 @@ object StatsStore {
      * The cycle is read, never started. The feed starts the next one when it finds nothing due
      * ([QuestionStore.feed]), so between the answer that finishes a cycle and the next feed request
      * this reports the finished cycle with nothing due in it.
+     *
+     * [submissionCost] is what submitting costs on this server (CLAUDE.md §8c), named beside the
+     * points so the game says the cost it charges; no statement reads it.
      */
-    fun of(playerId: String): PlayerStatsDto? {
+    fun of(
+        playerId: String,
+        submissionCost: Int = Scoring.DEFAULT_SUBMISSION_COST,
+    ): PlayerStatsDto? {
         val questionsAnswered =
             wrapAsExpression<Long>(Votes.select(Votes.questionId.count()).where { Votes.playerId eq playerId })
         val dueThisCycle = QuestionStore.dueCount(playerId, categories = emptySet(), cycle = Players.currentCycle)
@@ -83,6 +90,7 @@ object StatsStore {
                     pointsSpent = checkNotNull(row[pointsSpent]) { "a COALESCE came back null" },
                     username = row[Players.username],
                     playGamesLinked = row.countOf(playGamesLinks) > 0,
+                    submissionCost = submissionCost,
                 )
             }
     }

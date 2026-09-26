@@ -33,6 +33,10 @@ data class PlayStrings(
     val questionGone: String,
     /** Anything else. */
     val somethingWrong: String,
+    /** Above the cards, quietly, when the player has answered the question on screen before. */
+    val answeredBefore: String,
+    /** The menu about the question on screen, on the top bar. */
+    val menu: QuestionMenuStrings,
 ) {
     /** A side's share of the answers, as the reveal shows it: *70%*. */
     fun percent(value: Int): String = "$value%"
@@ -50,6 +54,8 @@ data class PlayStrings(
             slowDown = transform(slowDown),
             questionGone = transform(questionGone),
             somethingWrong = transform(somethingWrong),
+            answeredBefore = transform(answeredBefore),
+            menu = menu.map(transform),
         )
 }
 
@@ -66,6 +72,8 @@ internal val SerbianCyrillicPlayStrings: PlayStrings =
         slowDown = "Сачекај мало.",
         questionGone = "Тог питања више нема.",
         somethingWrong = "Нешто није успело.",
+        answeredBefore = "Већ одговорено",
+        menu = SerbianCyrillicQuestionMenuStrings,
     )
 
 internal val EnglishPlayStrings: PlayStrings =
@@ -80,4 +88,6 @@ internal val EnglishPlayStrings: PlayStrings =
         slowDown = "Wait a moment.",
         questionGone = "That question is gone.",
         somethingWrong = "Something went wrong.",
+        answeredBefore = "Answered before",
+        menu = EnglishQuestionMenuStrings,
     )

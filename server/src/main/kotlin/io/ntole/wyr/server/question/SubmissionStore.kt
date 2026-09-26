@@ -31,8 +31,8 @@ object SubmissionStore {
      * its author sees it (CLAUDE.md §8d). Must run inside a transaction, with [submission] already
      * checked (`checkedSubmission`) and its categories by `CategoryStore.checked`, in this same
      * transaction, so they are each once, in the order of categories, and each a category's. The
-     * question and its categories are written in this one transaction, and so is its cost
-     * ([Scoring.SUBMISSION_COST], CLAUDE.md §8c), taken from the author's total ([PlayerStore.spend])
+     * question and its categories are written in this one transaction, and so is its [cost] (the
+     * server's `SUBMISSION_COST`, CLAUDE.md §8c), taken from the author's total ([PlayerStore.spend])
      * and kept on the question for a rejection to pay back. An author with fewer points is refused with
      * 409 and nothing is stored or taken. It earns nothing: authors earn through likes.
      *
@@ -55,6 +55,7 @@ object SubmissionStore {
         authorId: String,
         submission: SubmitQuestionRequest,
         now: Long = System.currentTimeMillis(),
+        cost: Int = Scoring.DEFAULT_SUBMISSION_COST,
     ): SubmissionDto {
         if (lockAuthor(authorId).blocked) throw ApiFailure.submissionsBlocked()
 
@@ -64,13 +65,7 @@ object SubmissionStore {
 
         // Under the author's row lock already, and a compare-and-set besides, so two submissions of
         // their last point cannot both pay it.
-        if (!PlayerStore.spend(
-                authorId,
-                Scoring.SUBMISSION_COST,
-            )
-        ) {
-            throw ApiFailure.notEnoughPoints(Scoring.SUBMISSION_COST)
-        }
+        if (!PlayerStore.spend(authorId, cost)) throw ApiFailure.notEnoughPoints(cost)
 
         val id = UUID.randomUUID().toString()
         Questions.insert { row ->
@@ -82,7 +77,7 @@ object SubmissionStore {
             row[submittedAt] = now
             row[reviewedAt] = null
             row[rejectionReason] = null
-            row[submissionCost] = Scoring.SUBMISSION_COST
+            row[submissionCost] = cost
         }
         QuestionCategories.batchInsert(submission.categories) { category ->
             this[QuestionCategories.questionId] = id

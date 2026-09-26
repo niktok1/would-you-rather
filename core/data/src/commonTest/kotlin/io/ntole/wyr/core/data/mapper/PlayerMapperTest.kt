@@ -24,12 +24,25 @@ class PlayerMapperTest {
                 likesReceived = 3,
                 username = "bob_1",
                 playGamesLinked = true,
+                submissionCost = 50,
             )
 
         assertEquals(
-            PlayerStats(totalPoints = 7, questionsAnswered = 5, username = "bob_1", playGamesLinked = true),
+            PlayerStats(
+                totalPoints = 7,
+                questionsAnswered = 5,
+                username = "bob_1",
+                playGamesLinked = true,
+                submissionCost = 50,
+            ),
             dto.toDomain(),
         )
+    }
+
+    /** A server from before it names the cost charged 1, which is what the wire defaults to. */
+    @Test
+    fun `a server that names no cost charges the default`() {
+        assertEquals(1, PlayerStatsDto(playerId = "p1").toDomain().submissionCost)
     }
 
     @Test

@@ -13,15 +13,25 @@ import kotlin.test.assertEquals
 /** What the Submit screen's form says, in the player's words. */
 class SubmitScreenTest {
     /**
-     * The cost is on the button, in every language, from the one constant the client keeps, in the
-     * points' one unit, the Play screen's and the Account screen's.
+     * The cost is on the button, in every language, as the server names it, in the points' one unit,
+     * the Play screen's and the Account screen's.
      */
     @Test
     fun `Send names what a question costs in every language`() {
         // A coin and the number on screen, which a screen reader hears as the points are heard everywhere.
-        assertEquals("Пошаљи · Поени: 1", sendText(SerbianCyrillicStrings))
-        assertEquals("Pošalji · Poeni: 1", sendText(SerbianLatinStrings))
-        assertEquals("Send · Points: 1", sendText(EnglishStrings))
+        assertEquals("Пошаљи · Поени: 1", sendText(SerbianCyrillicStrings, 1))
+        assertEquals("Pošalji · Poeni: 50", sendText(SerbianLatinStrings, 50))
+        assertEquals("Send · Points: 50", sendText(EnglishStrings, 50))
+    }
+
+    /** A blocked author is told in a few words, in every language: nothing they could type would pass. */
+    @Test
+    fun `a blocked author is told they cannot send questions`() {
+        val blocked = SubmitFailure(DomainError.SUBMISSIONS_BLOCKED)
+        assertEquals("Не можеш да шаљеш питања.", failureMessage(blocked, CYRILLIC))
+        Language.entries.map(::stringsOf).forEach { strings ->
+            assertEquals(strings.accountScreens.submissionsBlocked, failureMessage(blocked, strings.accountScreens))
+        }
     }
 
     @Test

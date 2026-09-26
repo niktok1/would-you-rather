@@ -6,6 +6,7 @@ import io.ntole.wyr.core.data.mapper.runApi
 import io.ntole.wyr.core.data.session.DefaultSessionRepository
 import io.ntole.wyr.core.data.session.withSessionRecovery
 import io.ntole.wyr.core.domain.account.AccountRepository
+import io.ntole.wyr.core.domain.error.DomainError
 import io.ntole.wyr.core.domain.error.WyrException
 import io.ntole.wyr.core.network.api.AuthApi
 
@@ -20,6 +21,9 @@ import io.ntole.wyr.core.network.api.AuthApi
  *   changes the stored session.
  * - A logout is best effort: whatever the server answers, or if it never answers, the session is
  *   dropped here, and the next call mints a fresh guest.
+ * - A deletion is not: the session is dropped only once the server has deleted the account, or
+ *   refuses the session as a player it no longer has. It never goes through [withSessionRecovery],
+ *   whose retry would delete the fresh guest minted for a dead session.
  */
 public class DefaultAccountRepository(
     private val api: AuthApi,
@@ -46,6 +50,20 @@ public class DefaultAccountRepository(
         } catch (unheard: WyrException) {
             // Best effort. The server keeps the session until its refresh token expires unused, and this
             // device forgets it all the same.
+        }
+        session.clear()
+    }
+
+    override suspend fun deleteAccount() {
+        // No session, no account: nothing to delete, and the request would only be refused.
+        if (session.storedSession() != null) {
+            try {
+                runApi { api.deleteAccount() }
+            } catch (failure: WyrException) {
+                // A 401, the refresh refused too, is a player the server no longer has: deleted already,
+                // from another device or by an answer that never arrived. Anything else deleted nothing.
+                if (failure.error != DomainError.UNAUTHORIZED) throw failure
+            }
         }
         session.clear()
     }

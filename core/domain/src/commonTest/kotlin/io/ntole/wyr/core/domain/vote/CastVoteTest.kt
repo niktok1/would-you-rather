@@ -17,7 +17,17 @@ class CastVoteTest {
 
             castVote("q1", Side.B, attempt)
 
-            assertEquals(listOf("ensure", "cast q1 B ${attempt.value}"), calls)
+            assertEquals(listOf("ensure", "cast q1 B ${attempt.value} null"), calls)
+        }
+
+    @Test
+    fun `the answer's time goes with the vote unchanged`() =
+        runTest {
+            val attempt = AttemptId.random()
+
+            castVote("q1", Side.A, attempt, answerMillis = 1_234)
+
+            assertEquals(listOf("ensure", "cast q1 A ${attempt.value} 1234"), calls)
         }
 
     private class RecordingVotes(
@@ -27,8 +37,9 @@ class CastVoteTest {
             questionId: String,
             side: Side,
             attempt: AttemptId,
+            answerMillis: Long?,
         ): VoteOutcome {
-            calls += "cast $questionId $side ${attempt.value}"
+            calls += "cast $questionId $side ${attempt.value} $answerMillis"
             return VoteOutcome(side, Tally(votesA = 0, votesB = 1), pointsAwarded = 1, totalPoints = 1)
         }
     }

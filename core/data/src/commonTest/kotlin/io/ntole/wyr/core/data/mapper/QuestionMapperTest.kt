@@ -63,6 +63,15 @@ class QuestionMapperTest {
     }
 
     @Test
+    fun `whether the player answered a question before survives the mapping`() {
+        listOf(false, true).forEach { answeredBefore ->
+            val dto = QuestionDto(id = "q1", optionA = "q1-a", optionB = "q1-b", answeredBefore = answeredBefore)
+
+            assertEquals(answeredBefore, dto.toDomain().answeredBefore)
+        }
+    }
+
+    @Test
     fun `a question sent without its categories is filed under none`() {
         // No server sends it: every question is filed under at least one. It still maps, not fails.
         val dto = WyrJson.decodeFromString<QuestionDto>("""{"id":"q1","optionA":"fly","optionB":"swim"}""")

@@ -3,10 +3,12 @@ TEAM_ID=
 PRODUCT_NAME=WYR
 PRODUCT_BUNDLE_IDENTIFIER=io.ntole.wyr.WYR$(TEAM_ID)
 
-CURRENT_PROJECT_VERSION=1
 // The app's version (CLAUDE.md, section 8g): wyr.app.version in the repository's gradle.properties,
-// which every other platform's build reads. Change the two together: a Gradle build fails until they agree.
+// which every other platform's build reads, and the build number made from it, MAJOR * 10000 +
+// MINOR * 100 + PATCH, the app's CFBundleVersion, which every request names. Change them together: a
+// Gradle build fails until they agree.
 MARKETING_VERSION=1.0.0
+CURRENT_PROJECT_VERSION=10000
 
 // The server environment this build targets (CLAUDE.md, section 8e): local, dev or prod.
 // Info.plist carries it as its WYR_ENV key, which the app reads at start; none is local.

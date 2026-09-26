@@ -142,6 +142,7 @@ class NavigatorTest {
             listOf(Home, Play, Account, Submit),
             listOf(Home, Play, Account, Auth),
             listOf(Home, Play, Categories),
+            listOf(Home, Account, Screen.About),
         ).forEach { screens ->
             val saved = save(Navigator(screens))
 

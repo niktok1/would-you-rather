@@ -121,6 +121,9 @@ enum class AccountAction {
     /** Signing in with Google Play Games Services, from the Auth page. */
     PLAY_GAMES,
     LOG_OUT,
+
+    /** Deleting the account, for good (CLAUDE.md §8a, *Deleting an account*). */
+    DELETE,
 }
 
 /**
