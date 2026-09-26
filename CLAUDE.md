@@ -717,8 +717,8 @@ EncryptedSharedPreferences: enough for a game that stores no sensitive personal 
   `RenameCategoryRequest`, the `X-Admin-Token` header (`WyrApi.Headers`), `QuestionStatus.RETIRED`
   and the error codes `FORBIDDEN`, `ALREADY_DECIDED`, `WRONG_STATUS`, `CATEGORY_EXISTS` and
   `CATEGORY_NOT_FOUND`. The moderator's client (`ModerationApi` calls every admin route) and the
-  moderation app are built on it (§8d, *Moderation*). Since 2026-09-26 the server has more that no
-  client calls yet: the reported questions and their dismissal (`AdminReportListDto`,
+  moderation app are built on it (§8d, *Moderation*). Since 2026-09-26 the server has more, which the
+  moderator's client calls too: the reported questions and their dismissal (`AdminReportListDto`,
   `DismissReportsRequest`), an author's opaque id on the admin DTOs (`authorId`), blocking and
   unblocking an author (`BlockAuthorRequest`, `UnblockAuthorRequest`, `AuthorBlockDto`), and the error
   codes `SUBMISSIONS_BLOCKED` and `AUTHOR_NOT_FOUND` (§8d, *Moderation*, *Reports* and *Authors*).
@@ -1952,8 +1952,9 @@ listed on the Account screen.
     and again under their row lock, which the block takes too, so a submission racing a block is either
     rejected by it or refused (`AuthorBlockTest`). `POST /v1/admin/author-unblocks` with an
     `UnblockAuthorRequest` lets them submit again; what the block rejected stays rejected. An id no
-    player has is 404 `AUTHOR_NOT_FOUND`. On the client, `SUBMISSIONS_BLOCKED` and `AUTHOR_NOT_FOUND`
-    read as `DomainError.UNKNOWN` until the branches that show them give each one of its own.
+    player has is 404 `AUTHOR_NOT_FOUND`. On the client, `SUBMISSIONS_BLOCKED` reads as
+    `DomainError.UNKNOWN` until the branch that shows it gives it one of its own, and `AUTHOR_NOT_FOUND`
+    is `DomainError.AUTHOR_NOT_FOUND` (*The client*, below).
   - *The client* is `ModerationRepository` in `:core:domain`, behind `GetPendingSubmissions`,
     `ApproveSubmission` and `RejectSubmission`, none of which ensures a session: the moderator is
     not a player. `DefaultModerationRepository` calls `ModerationApi` through `runApi` alone, never
@@ -1980,7 +1981,18 @@ listed on the Account screen.
     filter by
     `SubmissionStatus.OTHER` is refused before anything is sent; its categories are ids, in id
     order. `WRONG_STATUS`
-    is `DomainError.WRONG_STATUS`. `moderationDataModule(environment)` binds it, and only there, for a
+    is `DomainError.WRONG_STATUS`. The reported questions and the authors (*Reports*, *Authors*, above)
+    are `GetReportedQuestions`, a `ReportedQuestion` each (its `ModeratedQuestion`, how many report it,
+    its `reasons` counted most given first, and when it was last reported), read
+    `ModerationRepository.PAGE_SIZE` at a time as the queue is; `DismissReports`; and `BlockAuthor`,
+    with a `RejectionReason`, and `UnblockAuthor`, each answered with an `AuthorBlock` (blocked or not,
+    and how many it rejected), the one place the server says where an author stands; through `runApi`
+    alone, as the rest. A domain `ReportReason` names each reason, and `UNKNOWN` one this build cannot
+    name, where every such reason lands with their counts added, so they still add up to the reports.
+    `ModeratedQuestion.authorId`, and the queue's and the decisions' `Submission.authorId`
+    (`toModeratorsSubmission`), carry the author's opaque id; a player's own `Submission` never does,
+    whatever it is sent (`SubmissionMapperTest`). `AUTHOR_NOT_FOUND` is `DomainError.AUTHOR_NOT_FOUND`.
+    `moderationDataModule(environment)` binds it, and only there, for a
     client that only moderates: an HTTP client of its own over an in-memory session store nothing
     writes, no `TokenStorage` needed, no session repository, so no bearer token goes out and no guest
     can be minted. The game's `dataModule` binds none of it,

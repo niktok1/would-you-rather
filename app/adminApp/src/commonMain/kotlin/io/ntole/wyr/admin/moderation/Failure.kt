@@ -78,6 +78,10 @@ private fun describe(
             "No such category on this server (404)."
         }
 
+        DomainError.AUTHOR_NOT_FOUND -> {
+            "No such author on this server (404): their account may have been deleted."
+        }
+
         DomainError.NETWORK -> {
             "No answer from the server. A Render service asleep takes up to a minute to wake: try again."
         }
