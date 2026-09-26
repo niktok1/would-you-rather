@@ -1991,7 +1991,8 @@ the same events. The moderation app sends none.
 - **Not verified**: no build with a key has sent to PostHog yet, from any platform; nothing checks
   the payload against the live `/batch/` endpoint but PostHog's documented shape. The iOS Info.plist
   keys and `Local.xcconfig` are read only by building the app, which only CI's `ios` job does
-  (§9); the browser's CORS preflight to PostHog is as its own web SDK's.
+  (§9). Whether PostHog's `/batch/` answers a browser's CORS preflight from the game's page, as its
+  own web SDK's requests need it to, is unchecked until a web build with a key runs.
 ---
 
 ## 9. How to work in this repo
