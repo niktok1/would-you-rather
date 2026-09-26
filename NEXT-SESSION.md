@@ -308,7 +308,52 @@ the change, in `devRelease`, and not the count up's doing: the first frames afte
 take up to 750 ms on the UI thread (code not yet compiled, with no baseline profile), and the
 RenderThread sometimes waits 50 to 300 ms on the display's buffers.
 
+**On `feat/server-engagement`** (from e603694, in the worktree `~/Projects/.wyr-worktrees/server-engagement`;
+nothing pushed or merged; `feat/server-safety`, whose V11 to V14 come first, merges before it): the
+server side of four of the user's asks of 2026-09-26, the contract beside it, and the clients only
+where the contract made them (the two new error codes in `ErrorMapper`). **The clients adopt all of
+it later.** One commit each:
+- **Home picks** (601aa65, V15; CLAUDE.md §8d *Home picks*): two counts for the Home screen's two
+  Play buttons, `GET /v1/home-picks` with no session and `POST` with one, every tap counted.
+- **Answer time** (4e4f95a, V16; §8b *Personalization*): `VoteRequest.answerMillis`, kept on the
+  vote, 0 to 10 minutes or none. The personalization design is recorded there, not built.
+- **Push on decisions** (8442abc, V17; §8a *Push tokens*, §8b *Push notifications*):
+  `POST /v1/me/push-tokens` and `/push-token-removals`, and an approval or rejection pushed to the
+  author's devices through FCM HTTP v1 once it has committed. A logout drops its device's tokens by
+  itself (the foreign keys cascade). `io.ktor:ktor-client-cio` is the server's one new dependency.
+- **Play Games sign-in** (8660e01, V18; §8a *Play Games sign-in*, §8b *Play Games sign-in*):
+  `POST /v1/auth/play-games`, the no-click account; a linked player is registered, so may submit,
+  and `GET /v1/me` says `playGamesLinked`. The register screen stays as the fallback, and the only way
+  on iOS and the web for now.
+
+**Both features are off until the user sets them up**, which is listed plainly in CLAUDE.md §8b
+(*Push notifications*, *Play Games sign-in*): a Firebase project and its service account key for
+`FCM_SERVICE_ACCOUNT_JSON`, and a Play Console game with Play Games Services and a game server OAuth
+client for `PLAY_GAMES_CLIENT_ID` and `PLAY_GAMES_CLIENT_SECRET`, all set by hand on Render
+(`render.yaml` declares them `sync: false`). Unset, each says so once at boot. **At the merge**:
+`MigrationsTest.BASELINED_HISTORY` gains `feat/server-safety`'s 11 to 14 between 10 and 15, and
+`ErrorCode`, `ErrorMapper`, `RateLimits`, `RouteLimit`, `TestRateLimits`, `ServerConfigTest` and
+`RateLimitTest` will each conflict where both branches added a member: keep both. If
+`feat/server-safety` deletes a player row, the push tokens and Play Games links go with it by their
+cascades, as long as it deletes the player's sessions first (their key restricts). Tests: `:server`
+427 (365 before), `:core:data` 143 (`ErrorMapperTest`'s two new rows); the rest unchanged.
+
 ### Verified working
+
+- **`feat/server-engagement`**, on this machine, at 8660e01: `ktlintCheck`; `:server:test`
+  (427, 2 skipped: the PostgreSQL-only boots), `:core:domain:jvmTest`, `:core:data:jvmTest`,
+  `:core:network:jvmTest`, `:core:network:testAndroidHostTest`, `:app:shared:jvmTest` and
+  `:app:adminApp:jvmTest`; ci.yml's client compiles, `:app:androidApp:assembleDebug` and both web
+  targets of `:app:shared` and `:app:adminApp` included; the ios job's Kotlin compiles
+  (`:core:compileKotlinIosSimulatorArm64`, `:app:shared:compileKotlinIosSimulatorArm64` and the
+  `compileTestKotlinIosSimulatorArm64` of `:app:shared` and the three `:core` modules); gradle's own
+  exit code 0, read from its log. `WYR_SERVER_ONLY=1 ./gradlew :server:buildFatJar`, then the jar
+  booted on JDK 21 with `PORT=18111` and no `DATABASE_URL`: V1 to V18 applied (14 scripts), `/health`,
+  both home pick routes, a push token registered, a vote with `answerMillis`, `GET /v1/me` with
+  `playGamesLinked`, and `/v1/auth/play-games` 404 while off; booted again with a throwaway service
+  account key and fake Play Games credentials, the CIO engine made, both features on and neither
+  secret in the log, and the Play Games route answering a malformed code 400 without calling Google.
+  Every call to Google is tested with Ktor's MockEngine; nothing called Google or a deployed server.
 
 - **`merge/redesign` after the review of the `feat/category-picker` merge** (6b44dc4, 5a8adf7 and
   48e3e0e), on this machine, at 48e3e0e, whose tree this note changes only in NEXT-SESSION.md: the
@@ -918,6 +963,15 @@ RenderThread sometimes waits 50 to 300 ms on the display's buffers.
 - `ktlintCheck` clean across every module.
 
 ### NOT verified
+
+- **`feat/server-engagement` against real Google.** No push has reached a phone and no Play Games
+  code has been exchanged: the requests are built from Google's documentation (FCM HTTP v1's
+  `messages:send`, the JWT bearer grant with the `firebase.messaging` scope, the authorization code
+  grant with an empty redirect URI, `games/v1/players/me`), and only a MockEngine has answered them.
+  Nor has CIO's TLS to Google been seen from Render. Once the user has set up Firebase (CLAUDE.md
+  §8b), approve a question on dev whose author's phone registered a token; once Play Games is set up,
+  sign in from a tester's phone. Also unchecked: which Android credentials the DEV and LOCAL flavors
+  need to sign in with Play Games, and the `server-postgres` CI job on V15 to V18 (H2 only here).
 
 - **`CF-Connecting-IP` on a live Render service.** `CLIENT_IP_HEADER=CF-Connecting-IP` in
   `render.yaml` rests on Render's docs (every request to a web service passes through Cloudflare)

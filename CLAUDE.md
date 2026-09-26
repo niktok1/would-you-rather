@@ -1699,6 +1699,8 @@ listed on the Account screen.
     as an option is (provisional, §8b). A reason that breaks a rule is 400 `VALIDATION_FAILED`, not
     422: the moderator's client checks it against the same rules before it lets them send. Both
     answer 200 with the question's `SubmissionDto` as its author now sees it.
+  - A decision is pushed to its author's devices once it has committed (§8a, *Push tokens*), when
+    pushes are on; nothing about the push can fail or hold up the decision.
   - A decision is a compare-and-set on `PENDING` (`ModerationStore.decide`, §4): a question that is
     not pending, a seed included, is 409 `ALREADY_DECIDED` and changes nothing, an unknown id is 404,
     and of two moderators deciding one submission exactly one wins (`ModerationStoreTest` races
