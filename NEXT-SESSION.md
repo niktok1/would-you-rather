@@ -33,9 +33,14 @@ Play links to it:
 1. Fill the placeholders, `grep -rn 'class="ph"' site/`: name, address, email, date, year, the
    retention periods (an unreachable guest's among them, which needs a clean-up built), the court's
    town and the store link.
-2. Settle every `grep -rn 'CHECK' site/` against what ships, in both languages. Two need building
-   before the email route on `delete.html` is true: a way for the owner to delete an account by
-   username (no admin route does), and a way for a Play-Games-only player to name their account.
+2. Settle every `grep -rn 'CHECK' site/` against what ships, in both languages. Three need building
+   before the email routes (`delete.html`, and `privacy.html` section 8's requests) are true: a way
+   for the owner to delete an account by username or player id (no admin route does; one that runs
+   `AccountDeletion.delete` beats a manual step on the database, which would have to repeat all it
+   does); a way to find and export one player's rows for an access or portability request (a
+   documented read-only query by player id would do); and a way for a guest or a Play-Games-only
+   player, who has no username, to name their account (an account id on the Account screen, to
+   copy, was suggested: the user's decision). Then both pages ask for the username or that id.
 3. Build in the app what Google Play asks of the app itself, which the site cannot do (the terms'
    section 1 and its `CHECK`): links to `privacy.html` and `terms.html` on the Account screen (its
    User Data policy wants the privacy policy inside the app, not only in Play Console), and, under
