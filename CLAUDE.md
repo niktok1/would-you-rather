@@ -42,6 +42,12 @@ a service account, §8a *Push tokens*), and Flyway (schema migrations, §8b; app
 2026-09-24), with the `flyway-database-postgresql` module Flyway needs to run on PostgreSQL. H2 is
 a fifth, used only as the local development database.
 
+Google's own Android SDKs are the client's one exception, the platform's services with no
+multiplatform equivalent, each Android-only in `:app:shared`'s androidMain behind a port of
+`:core:domain`, so common code never sees them (§4): Google Play Games Services v2
+(`play-services-games-v2`, §8a *Play Games sign-in*; approved 2026-09-26 with the user's choice of
+Play Games).
+
 ---
 
 ## 3. Module structure
@@ -135,6 +141,7 @@ mechanism; this table is the rationale.
 | Local dev DB       | H2 (in-memory)         | Dev/test only. Never production                  |
 | Lint               | ktlint (Gradle plugin) | Style pinned in `.editorconfig`                  |
 | Product analytics  | PostHog (service, HTTP API, no SDK) | EU cloud; over the Ktor client (§8g) |
+| Play Games sign-in | Play Games Services v2 | `play-services-games-v2`; Android only, the §2 exception, behind `PlayGames` (§8a) |
 
 Server database engine: **PostgreSQL** (via Exposed). Hosting: **Render** — see §8.
 
@@ -675,6 +682,18 @@ decided in §8b).
     its next launch, which may bring back the player the dead session was; a fresh install has none
     (*provisional — user decision*, §8b *When a launch signs in with Play Games*). `LinkPlayGamesTest`,
     `DefaultPlayGamesRepositoryTest`, `CurrentSessionTest`, `AppServicesTest`.
+  - *On Android* (`AndroidPlayGames` in `:app:shared`'s androidMain, over `play-services-games-v2`,
+    §4): each call asks the activity on screen (`ActivityTracker`) for its `GamesSignInClient`, on the
+    main thread, and answers a failure as nothing done; the code is `requestServerSideAccess(serverClientId,
+    false)`. Its ids are the build's (`GoogleServiceSettings`, gradle/wyr-android-services.gradle.kts):
+    `wyr.playgames.appId`, the Play Games project id, which the manifest's
+    `com.google.android.gms.games.APP_ID` names through the `game_services_project_id` string, and
+    `wyr.playgames.serverClientId`, the game server credential's OAuth client id, the server's
+    `PLAY_GAMES_CLIENT_ID`; a Gradle property or `local.properties`, never committed, one for every
+    flavor. A build without both has Play Games off (`PlayGames.None`), says so in one log line at launch,
+    and never starts it: the SDK's own `PlayGamesInitProvider`, which would start it on every build, is
+    taken out of the merged manifest, and `androidDeviceServices` calls `PlayGamesSdk.initialize` only
+    with the ids. Every test and CI build runs without them, so nothing reaches Google from one.
 
 **Known limitation, by design for now:** a guest account is bound to one device's storage. Lose
 the device, reinstall the app or clear its storage, and the account — and its points — are gone,
@@ -964,12 +983,19 @@ EncryptedSharedPreferences: enough for a game that stores no sensitive personal 
   2. In the Play Console, *Play Games Services → Setup and management → Configuration*: create a
      Play Games Services project, which makes or links a Google Cloud project, and fill in the OAuth
      consent screen it asks for.
-  3. Add two credentials there. An **Android** one for the app, `io.ntole.wyr`, with the SHA-1 of the
-     key it is signed with (the Play app signing key, and the debug key for builds made on a laptop);
-     the DEV and LOCAL flavors, `io.ntole.wyr.dev` and `io.ntole.wyr.local`, need their own to sign in,
-     to be settled when the client adopts it. And a **game server** one, an OAuth client of type *Web
-     application*: its client ID and secret are `PLAY_GAMES_CLIENT_ID` and `PLAY_GAMES_CLIENT_SECRET`,
-     and the same client ID is what the Android app passes to `requestServerSideAccess`.
+  3. Add the credentials there. An **Android** one per package and signing key that should sign in:
+     `io.ntole.wyr` with the SHA-1 of the Play app signing key (and of the upload key, for a release
+     build installed by hand), and the DEV flavor, `io.ntole.wyr.dev`, with the debug key's SHA-1, for
+     builds made on a laptop (LOCAL's `io.ntole.wyr.local` likewise, for the emulator). Google's
+     documentation asks for a credential whose package name is the app's and says nothing against
+     several packages in one game project, which is what this relies on; if the Play Console refuses a
+     package that is not its app's, Play Games works on the PROD flavor alone, and a DEV build finds
+     nobody signed in to it, which shows nothing (§8a, *The client*). And a **game server** one, an
+     OAuth client of type *Web application*: its client ID and secret are `PLAY_GAMES_CLIENT_ID` and
+     `PLAY_GAMES_CLIENT_SECRET`, and the same client ID is the app's `wyr.playgames.serverClientId`,
+     which it passes to `requestServerSideAccess`. The project id the Play Console shows is the app's
+     `wyr.playgames.appId`. Both go in `local.properties` (NEXT-SESSION.md, *Play Games and pushes on a
+     phone*, has the exact steps).
   4. Until the game is published, add each tester's Google account under *Testers*, or Play Games
      refuses them.
   5. On Render, set both variables on `wyr-server`, and on `wyr-server-dev` too to try it there, then

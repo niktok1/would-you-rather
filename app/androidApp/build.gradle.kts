@@ -15,6 +15,12 @@ apply(from = rootProject.file("gradle/wyr-analytics.gradle.kts"))
 val posthogKey = extra["wyrPosthogKey"] as String
 val posthogHost = extra["wyrPosthogHost"] as String
 
+// The Google services' ids (CLAUDE.md §8a), from wyr.playgames.* as a Gradle property or in
+// local.properties: none is that service off on the build.
+apply(from = rootProject.file("gradle/wyr-android-services.gradle.kts"))
+val playGamesAppId = extra["wyrPlayGamesAppId"] as String
+val playGamesServerClientId = extra["wyrPlayGamesServerClientId"] as String
+
 kotlin {
     compilerOptions {
         jvmTarget = JvmTarget.JVM_11
@@ -51,6 +57,11 @@ android {
         // One project for every flavor: each event names its environment (CLAUDE.md §8g).
         buildConfigField("String", "POSTHOG_KEY", "\"$posthogKey\"")
         buildConfigField("String", "POSTHOG_HOST", "\"$posthogHost\"")
+        // One Play Games project for every flavor (CLAUDE.md §8b, Play Games sign-in): its id is the
+        // manifest's APP_ID, a string resource as Play Games reads it, empty on a build without it.
+        buildConfigField("String", "PLAY_GAMES_APP_ID", "\"$playGamesAppId\"")
+        buildConfigField("String", "PLAY_GAMES_SERVER_CLIENT_ID", "\"$playGamesServerClientId\"")
+        resValue("string", "game_services_project_id", playGamesAppId)
     }
     packaging {
         resources {

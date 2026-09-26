@@ -25,6 +25,18 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- Google Play Games Services' project (CLAUDE.md §8a, Play Games sign-in): empty on a build
+             without its id, where nothing starts Play Games. Its SDK would start itself through its
+             provider, whatever the build: the app starts it instead, and only with its ids
+             (androidDeviceServices, from WyrApplication). -->
+        <meta-data
+            android:name="com.google.android.gms.games.APP_ID"
+            android:value="@string/game_services_project_id" />
+        <provider
+            android:name="com.google.android.gms.games.provider.PlayGamesInitProvider"
+            android:authorities="${applicationId}.playgamesinitprovider"
+            tools:node="remove" />
     </application>
 
 </manifest>

@@ -66,6 +66,9 @@ kotlin {
             // api, not implementation: WyrApplication calls androidContext() when starting DI, so
             // this is part of what the Android entry point compiles against.
             api(libs.koin.android)
+            // Google Play Games Services v2, the no-click sign-in (CLAUDE.md §8a): Android's own, the §2
+            // platform exception, behind the PlayGames port of :core:domain.
+            implementation(libs.play.services.gamesV2)
         }
         commonMain.dependencies {
             // UI works in domain types only; :core:data is here purely to register DI bindings.

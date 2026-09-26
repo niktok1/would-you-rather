@@ -26,6 +26,8 @@ ktlint-plugin = "14.2.0"
 ktor = "3.5.1"
 logback = "1.5.38"
 material3 = "1.11.0-alpha07"
+# Android only, the §2 platform exception: Google's own SDK, with no multiplatform equivalent (CLAUDE.md §4).
+playServicesGamesV2 = "22.1.0"
 postgresql = "42.7.13"
 sqldelight = "2.3.2"
 
@@ -97,6 +99,9 @@ sqldelight-coroutines = { module = "app.cash.sqldelight:coroutines-extensions", 
 sqldelight-androidDriver = { module = "app.cash.sqldelight:android-driver", version.ref = "sqldelight" }
 sqldelight-nativeDriver = { module = "app.cash.sqldelight:native-driver", version.ref = "sqldelight" }
 sqldelight-sqliteDriver = { module = "app.cash.sqldelight:sqlite-driver", version.ref = "sqldelight" }
+
+# --- Android-only Google services (CLAUDE.md §2, §4, §8a) ---
+play-services-gamesV2 = { module = "com.google.android.gms:play-services-games-v2", version.ref = "playServicesGamesV2" }
 
 # --- DI ---
 koin-core = { module = "io.insert-koin:koin-core", version.ref = "koin" }

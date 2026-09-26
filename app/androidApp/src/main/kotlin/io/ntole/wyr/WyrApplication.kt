@@ -3,11 +3,13 @@ package io.ntole.wyr
 import android.app.Application
 import io.ntole.wyr.analytics.AnalyticsSettings
 import io.ntole.wyr.di.initKoin
+import io.ntole.wyr.services.GoogleServiceSettings
+import io.ntole.wyr.services.androidDeviceServices
 import org.koin.android.ext.koin.androidContext
 
 /**
  * Exists solely to start DI with an Android `Context`, the environment this build's flavor was made
- * for, and the analytics project the build names.
+ * for, the analytics project the build names, and the Google services it has ids for (CLAUDE.md §8a).
  *
  * Those are what shared code cannot obtain for itself: the context is the token storage's, and
  * `BuildConfig` is generated in this module, one per flavor (CLAUDE.md §8e), with the PostHog key and
@@ -24,6 +26,15 @@ class WyrApplication : Application() {
                     key = BuildConfig.POSTHOG_KEY,
                     host = BuildConfig.POSTHOG_HOST,
                     appVersion = BuildConfig.VERSION_NAME,
+                ),
+            device =
+                androidDeviceServices(
+                    application = this,
+                    settings =
+                        GoogleServiceSettings(
+                            playGamesAppId = BuildConfig.PLAY_GAMES_APP_ID,
+                            playGamesServerClientId = BuildConfig.PLAY_GAMES_SERVER_CLIENT_ID,
+                        ),
                 ),
         ) {
             androidContext(this@WyrApplication)
