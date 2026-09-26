@@ -851,7 +851,8 @@ class ApiFlowTest {
             )
             // Sent even where they equal the contract's defaults, which is all a fresh player has but
             // the due count, so the values above are the server's rather than the decoder's. A guest
-            // has no username, sent as null, and no Play Games link, sent as false.
+            // has no username, sent as null, and no Play Games link, sent as false; and the cost is the
+            // server's, 1 with SUBMISSION_COST unset (CLAUDE.md §8c).
             val sent = response.body<JsonObject>()
             assertEquals(
                 setOf(
@@ -865,11 +866,13 @@ class ApiFlowTest {
                     "pointsSpent",
                     "username",
                     "playGamesLinked",
+                    "submissionCost",
                 ),
                 sent.keys,
             )
             assertEquals(JsonNull, sent["username"])
             assertEquals(JsonPrimitive(false), sent["playGamesLinked"])
+            assertEquals(JsonPrimitive(1), sent["submissionCost"])
         }
 
     @Test
