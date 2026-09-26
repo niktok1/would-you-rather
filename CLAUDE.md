@@ -552,7 +552,7 @@ decided in §8b).
     Both, once they worked, tell the analytics who plays here by player id, and a logout has them
     forget (§8g, *Who*).
 - **Deleting an account** (*decided 2026-09-26*: Google Play asks a game with accounts to let a
-  player delete theirs; built on the server, no client yet) is `POST /v1/me/deletion`
+  player delete theirs; built on the server, and in the game since `feat/account-client`, below) is `POST /v1/me/deletion`
   (`WyrApi.Paths.ME_DELETION`), bearer required, no body, answered 204, for a guest and a registered
   player alike. It deletes, in one transaction (`AccountDeletion.delete`), the player's row with its
   username and password hash, their sessions on every device, their votes, skips, reactions, reports
@@ -573,6 +573,18 @@ decided in §8b).
   `ReportStore.hideAuthorOf`, `AccountDeletionTest`); and a login to the account racing its deletion
   can fail as a 500.
   `AccountDeletionTest`, `AccountDeletionFlowTest`.
+  - *The client* is `AccountRepository.deleteAccount`, behind `DeleteAccount` (`:core:domain`), from
+    the Account screen's **Обриши налог** (§8d, *The Account screen*). `AuthApi.deleteAccount` posts
+    it through `runApi` alone, never `withSessionRecovery`, whose retry would delete the fresh guest
+    minted for a dead session. A 204, or a 401 (`UNAUTHORIZED`, the refresh refused too: the player is
+    gone already, from another device or by an answer lost on the way), and the device forgets its
+    session; then `DeleteAccount` drops the question queue, reports `account_deleted` and resets the
+    analytics (§8g), and the Account screen's read after it mints the fresh guest it shows. Offline or
+    any other failure: said over the button, nothing forgotten. No session stored sends nothing.
+    *Edge, accepted:* a registered player whose session died unused past a refresh token's 30 days,
+    their account still there, is told it is deleted and forgets the session: they log in again.
+    `DefaultAccountRepositoryTest`, `AccountUseCasesTest`, `AccountViewModelTest`,
+    `AccountScreenDrawTest`, `AppNavigationTest`.
 
 - **Push tokens** (*decided 2026-09-26; built on the server, Android first; the client adopts
   later*): a device's Firebase Cloud Messaging token, so a player hears when a moderator decides one
@@ -766,6 +778,13 @@ EncryptedSharedPreferences: enough for a game that stores no sensitive personal 
   (§8d, *The Play screen*).
 - **The Play row's arrangement** — *resolved 2026-09-26*: the user's, the points on the left, the
   thumbs in the middle and Skip on the right (§8d, *The Play screen*).
+- **Delete account beside Log out** — *provisional — user decision.* The launch's scope asked for a
+  quiet **Обриши налог** at the bottom of the Account screen, under Log out's row; a row of its own
+  there takes a registered player's screen, whose read again failed, to 638, past an iPhone SE's 599.
+  Built beside Log out instead, at the start of Log out's row (a guest, who has no Log out, gets the
+  row to itself), and not offered while a read of the player shows its failure, where a guest's screen
+  would reach 622: the deletion would fail then too. The options: keep it; a row of its own under Log
+  out, the failure states then scrolling to reach it; or Delete account on the About screen alone.
 - **Log out under the language row** — *provisional — user decision.* The user's Account redesign put
   Log out beside the language menu, one row of the two; the Statistics switch (§8g) now shares that
   row, since a row of all three does not fit a phone's width, and a row of its own would take a
@@ -1300,7 +1319,17 @@ orientation, in common code alone:
   card, with a guest's one button to the Auth page; **My questions**, a table; the **language menu**
   (§8f, `LanguageMenu`) and beside it the **Statistics** switch (§8g), one row of the two, and under
   them **Log out**, for a registered player (*provisional — user decision*, §8b: Log out was beside
-  the menu until the switch took its place); and the server line, outside PROD.
+  the menu until the switch took its place), with a quiet **Обриши налог** at the start of Log out's
+  row, for a guest and a registered player alike (*Deleting*, below); and the server line, outside PROD.
+- *Deleting* (*built 2026-09-26*, §8a *Deleting an account*): **Обриши налог**, muted
+  (`WyrColors.muted`), opens a dialog of one line, *Налог и све у њему нестаће заувек.*, with
+  **Обриши** (in the error colour) and *Откажи* (`Strings.cancel`); only Обриши deletes
+  (`AccountViewModel.deleteAccount`, `AccountAction.DELETE`). Deleted, the screen reads the player
+  again and shows the fresh guest, on the same screen; a failure says so over the row, in the
+  screen's words (offline, a rate limit, or anything else), and forgets nothing. It is offered once a
+  player is read, and not while the screen shows that a read of the player failed, when a deletion
+  would only fail too (*provisional*, §8b). Words: `AccountStrings.deleteAccount`, a
+  `DeleteAccountStrings`.
 - *The card* (*redesigned 2026-09-26*, the user: "a bit nicer... later more things will be added to
   it"): the player's initial in a circle, the first letter of the username in capitals, or a guest's
   figure (`Avatar`); the username, or *Гост*; and on the right the points, the coin and the number
@@ -1317,7 +1346,7 @@ orientation, in common code alone:
   list's too, says so once.
 - `AccountScreenDrawTest` holds every state with no question listed to 599 high in every language,
   measured 400 wide as `PlayScreenDrawTest` measures and for DEV, whose server line is the longest
-  (574 on this Mac at the tallest, a registered player whose read again failed), and New question
+  (594 on this Mac at the tallest, a guest whose deletion failed offline), and New question
   above 599 however long the list; a list scrolls with the screen. It finds the language menu and the
   switch on one row, neither cut short, and Log out under them, in every state and language.
 - **The Auth page** (`AuthScreen`, *decided 2026-09-25*), on the Account screen's ViewModel, shows
@@ -2291,7 +2320,8 @@ the same events. The moderation app sends none.
   as a question's is; never the username. The account's use cases do both (`RegisterAccount` and
   `LogIn` once the server took them, by the player id of the session then stored, `LogOut` once the
   session is dropped), so a login on a second device joins its install to the same player, and the
-  guest a logout leaves is nobody's. An account's deletion, once there is one, resets too. Not
+  guest a logout leaves is nobody's. An account's deletion resets too, once the server has deleted it,
+  after its `account_deleted` (`DeleteAccount`). Not
   joined: a registration whose answer was lost (its read after names the account, but no id), which
   stays the install's until a login.
 - **What every event carries** *(built)*: `distinct_id`; `$session_id`, a version 7 UUID, a new one
@@ -2380,7 +2410,7 @@ the same events. The moderation app sends none.
   `.show_password`, `.to_log_in`, `.log_in`, `.log_in_anyway`, `.cancel`, `.to_register`,
   `.try_again`; `submit.category` (with its `category` id), `.send`, `.categories_try_again`,
   `.try_again`; `categories.all`, `.category` (with its id), `.play`, `.try_again`; `update.store` and
-  `.reload`. A text field is no
+  `.reload`; `account.delete`, `.delete_confirm` and `.delete_cancel`. A text field is no
   tap. `TapsTest` draws every screen in the states that show all it can be tapped on, taps everything a
   screen reader could, and fails on anything that reports no tap, or a name not in its lists: a new
   button gets its name by being written with `tapped`, and a name once sent never changes.
@@ -2401,7 +2431,8 @@ the same events. The moderation app sends none.
     lost included, the read after it naming the account; `login_completed` the same way. Each is
     decided from the action's own answer and that read, never from `AccountState.signedIn`, which the
     Auth page takes down as it leaves, while the read may still run, and fail; `logout`, sent before
-    the logout so it is the account's.
+    the logout so it is the account's; `account_deleted`, from `DeleteAccount` once the server has
+    deleted the account, before the analytics forget whose it was.
   - *Submit* (`SubmitViewModel`): `submit_opened` for each visit of the form, as Account's;
     `submit_sent` once stored (`categories`, `count`); `submit_refused` (`code`) for any refusal.
   - *Categories* (`CategoriesViewModel`): `categories_changed` when Play sends a new selection
@@ -2409,7 +2440,7 @@ the same events. The moderation app sends none.
   - *Language* (`LanguageViewModel`): `language_changed` (`language`, its tag).
   - `error_shown` for every failure a screen shows (`code`, the `DomainError`'s name, and `action`:
     `question`, `vote`, `reaction`, `account`, `my_questions`, `register`, `log_in`, `log_out`,
-    `submit`, `points`, `categories`), but a vote already counted, which moves on and shows nothing,
+    `delete_account`, `submit`, `points`, `categories`), but a vote already counted, which moves on and shows nothing,
     and a skip, which says nothing.
   - The ViewModel tests hold each, and that nothing typed is ever in one.
 - **The switch** *(built)*: **Статистика** on the Account screen, beside the language menu (§8d,
