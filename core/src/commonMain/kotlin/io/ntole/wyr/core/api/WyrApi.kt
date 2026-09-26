@@ -322,6 +322,13 @@ public object WyrApi {
         public const val MAX_ATTEMPT_ID_LENGTH: Int = 64
 
         /**
+         * Longest [io.ntole.wyr.core.vote.VoteRequest.answerMillis] the server keeps, 10 minutes: a
+         * longer one says the question sat on screen, not how long the player thought, and is kept as
+         * none.
+         */
+        public const val MAX_ANSWER_MILLIS: Long = 10L * 60L * 1_000L
+
+        /**
          * Longest option a question can have, counted as Kotlin's `String.length` counts, in UTF-16
          * code units: an emoji can take two. A submitted option is measured once trimmed
          * ([io.ntole.wyr.core.question.SubmitQuestionRequest]). Here rather than on the server so a

@@ -302,6 +302,15 @@ object Votes : Table("votes") {
     val attemptId = varchar("attempt_id", WyrApi.Limits.MAX_ATTEMPT_ID_LENGTH)
 
     /**
+     * How long the latest answer took, in milliseconds from the question showing to the tap, as the
+     * client measured it (`VoteRequest.answerMillis`), or null when it sent none or one outside 0 to
+     * [WyrApi.Limits.MAX_ANSWER_MILLIS] (V16). A signal kept for choosing questions to suit a player
+     * later (CLAUDE.md §8b, *Personalization*); nothing reads it yet. Follows the latest answer as
+     * [side] does, and a replay leaves it alone.
+     */
+    val answerMillis = long("answer_millis").nullable()
+
+    /**
      * One row per player per question, so the tally holds one vote per player. The key is what
      * enforces that — an application-level check would still lose a race between two concurrent
      * first answers from the same player.

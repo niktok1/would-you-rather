@@ -420,6 +420,11 @@ internal class MigrationsTest(
             PlayerStore.addPoints(author, points = 3)
             // Plain SQL: Tables.kt names no likes table since V10 replaced it with reactions.
             exec("INSERT INTO likes (player_id, question_id) VALUES ('$author', 'seed-1')")
+            // Plain SQL, as a build before V16 answered: V1's columns alone.
+            exec(
+                "INSERT INTO votes (player_id, question_id, side, created_at, answered_at, answered_in_cycle, " +
+                    "attempt_id) VALUES ('$author', 'seed-1', 'A', 1, 1, 1, 'attempt-before')",
+            )
         }
     }
 
@@ -491,7 +496,8 @@ internal class MigrationsTest(
      * was under RANDOM under ABSURD instead. V7 gives every question a cost of 0. V8 gives every
      * question no made-up votes, then each seed those `Seed` gives it, and V9 each seed the Serbian
      * options `Seed` gives it. V10 moves every like into reactions, as a like, and drops likes. V15
-     * adds the Home screen's two counts, each at 0. None changes anything else. A later script that changes the rows already there adds what it does to
+     * adds the Home screen's two counts, each at 0, and V16 gives every vote no answer time. None
+     * changes anything else. A later script that changes the rows already there adds what it does to
      * them here.
      */
     private fun afterLaterScripts(before: Contents): Contents {
@@ -587,6 +593,7 @@ internal class MigrationsTest(
                 "9 SQL",
                 "10 SQL",
                 "15 SQL",
+                "16 SQL",
             )
 
         /** The Home screen's two counts as V15 writes them, as JDBC reads them back as strings. */
@@ -603,7 +610,7 @@ internal class MigrationsTest(
          * The columns the scripts after V1 add, by table, empty in every row already there but for
          * the players' mark, which V4 then sets ([afterLaterScripts]): V2's previous refresh token,
          * V4's mark and recovery secret and V5's username and password hash on players, and V3's
-         * retirement on questions.
+         * retirement on questions, and V16's answer time on votes.
          */
         private val ADDED_COLUMNS =
             mapOf(
@@ -618,6 +625,7 @@ internal class MigrationsTest(
                         "password_hash",
                     ),
                 Questions.tableName to listOf("retired_at"),
+                Votes.tableName to listOf("answer_millis"),
             )
 
         /**

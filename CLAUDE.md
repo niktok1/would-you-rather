@@ -714,6 +714,26 @@ EncryptedSharedPreferences: enough for a game that stores nothing personal.
     from §8f's *nothing reads the device's locale*.
   - *Rollbacks*: a build before the migration ignores audiences and serves local questions to
     everyone. Accepted (the user: the game is not released yet).
+- **Personalization** — *design decided 2026-09-26; only the answer time is built.* In the end each
+  player is served the questions that suit them best, and the game's own questions are how the server
+  finds out: no survey, no profile form, nothing asked of the player but to play.
+  - *Signals kept now*: what the server already records as the player plays, their answers (each
+    question's latest side, and every re-answer), skips (per cycle), reactions (a like or a dislike),
+    and **how long each answer took** (`VoteRequest.answerMillis`, kept on the vote as
+    `votes.answer_millis`, V16: from 0 to `WyrApi.Limits.MAX_ANSWER_MILLIS`, 10 minutes, and none
+    otherwise, never a refusal; the latest answer's, as the side is; the client adopts it later).
+    Nothing reads any of them to choose a question yet.
+  - *Later, not built*: **question traits** a moderator sets beside the categories (light or deep,
+    silly or serious, and the like, the list to settle then); a **per-player affinity** for each
+    trait and category, learned from the signals (a like, a dislike, a skip, a quick or a slow
+    answer); and each cycle **ordered by predicted interest with randomness kept** (a weighted
+    shuffle, never a strict ranking), so every question still comes once per cycle (§8d, *Endless
+    feed*) and a player still meets what the model would not have picked.
+  - *Never*: questions on **religion, politics, health or sexuality** are never used to profile a
+    player: those are the special categories of personal data (GDPR art. 9, ZZPL art. 17), so such a
+    question carries a trait that keeps its answers out of every affinity. The privacy policy says so,
+    and says what is kept and why. The data is **never sold** and never given to an advertiser; it
+    stays on the server and serves only which question comes next.
 
 `RANDOM` was an open item, resolved twice. First as a content category (the absurd questions), not a
 "surprise me" filter. Then, *decided 2026-09-25*: "RANDOM is actually all", so RANDOM is no category
@@ -749,7 +769,7 @@ seed (`Migrations`, `DatabaseFactory.init`). Nothing builds a table any other wa
   as a guest, and every later script: V6 (the categories table, §8d *Categories*), V7 (what a
   question cost, §8c), V8 (the seeds' made-up votes), V9 (the seeds in Serbian, §8d *Seeds*),
   V10 (likes become reactions, §8d *Reactions*) and `feat/server-engagement`'s V15 (the Home
-  screen's two counts, §8d *Home picks*). V11 to V14 are `feat/server-safety`'s, which merges first;
+  screen's two counts, §8d *Home picks*) and V16 (an answer's time, *Personalization*, above). V11 to V14 are `feat/server-safety`'s, which merges first;
   Flyway runs whatever versions are there in order, a gap included, and `MigrationsTest` steps
   through the scripts by their own versions.
   `Migrations.migrate` takes the baseline itself (`baselineVersion` 1), and only for a database
@@ -831,7 +851,8 @@ seed (`Migrations`, `DatabaseFactory.init`). Nothing builds a table any other wa
   every build before it reads, so none of them runs on what it leaves: accepted, since nothing is live
   yet and so no build before it is a rollback target (the user, 2026-09-26). `MigrationsTest` reads a
   table a later script dropped by name (`DROPPED_TABLES`), since `Tables.kt` no longer names it. V15
-  only adds a table no build before names.
+  only adds a table no build before names, and V16 a nullable column: a build before it moves a vote
+  and leaves the answer time the answer before it left.
 - *Several instances booting at once* (Render starts a deploy's new instance before it stops the old
   one): on PostgreSQL each script runs under Flyway's advisory lock, so one boot migrates while the
   rest wait, up to 50 tries a second apart, and then find nothing to do. Every boot that finds a
@@ -1303,7 +1324,8 @@ listed on the Account screen.
   bounded by rate limiting, 120 votes a minute per player on average, §8b), and the player may
   change their pick. Every answer, first or not, counts for the player's current cycle. The tally
   always holds **one vote per player per question**, their latest, beside a seed's made-up votes
-  (*Seeds*). Built in `VoteStore.cast`, which moves the player's vote.
+  (*Seeds*). Built in `VoteStore.cast`, which moves the player's vote, and with it how long the
+  latest answer took (`answer_millis`, §8b *Personalization*; `AnswerTimeTest`).
 - **Retry safety** *(built)*: every vote carries a client-generated idempotency key. A repeat of
   the key last recorded for that question is replayed: nothing is written, it pays nothing, and it
   reports the stored side with the current tally and total, not the result first returned. Any other
