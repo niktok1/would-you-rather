@@ -401,6 +401,69 @@ engine at stop. Docs only: the cascades, CIO, push timing and the §8b list of s
 registered player, for good, with no unlink: provisional); and "stores nothing personal" is now "no
 sensitive personal data", the privacy policy to name FCM and Play Games (§8b *Personalization*).
 
+**`feat/account-client`** (from 2a4f96e; nothing pushed or merged): the client side of the user's
+Google Play readiness decisions (2026-09-26), and the server's submission cost. One commit each:
+- **One build number** (CLAUDE.md §8g, *The build number*): MAJOR * 10000 + MINOR * 100 + PATCH, made
+  in `gradle/wyr-version.gradle.kts`, 10000 for 1.0.0: Android's `versionCode`, desktop's
+  `wyr.app.build` property, the web build's `BUILD_NUMBER`, iOS's `CURRENT_PROJECT_VERSION` (checked
+  by the build as `MARKETING_VERSION` is). A release bumps `wyr.app.version`, `MARKETING_VERSION` and
+  `CURRENT_PROJECT_VERSION` together, or Gradle refuses to build, naming the number to set.
+- **The build on every request** (§8e): `X-Client-Platform` and `X-Client-Version` on every request
+  of the game's, a refresh's included; none from the moderation app. `UPGRADE_REQUIRED` (or a bare
+  426) is `DomainError.UPGRADE_REQUIRED`, and the first one shows **one full screen**, *Нова верзија
+  је доступна*, with Android's Play Store button (`market://`, then the https page), the web's reload,
+  and no button on the desktop and iOS. `SUBMISSIONS_BLOCKED` is `DomainError.SUBMISSIONS_BLOCKED`,
+  *Не можеш да шаљеш питања.* on the Submit form. The moderation app's failures name both.
+- **The cost is the server's** (§8, §8c): `SUBMISSION_COST`, 0 or more, 1 when unset, anything else
+  fails the boot naming it; `GET /v1/me` names it (`PlayerStatsDto.submissionCost`, 1 by default on
+  the wire), and the Submit form shows and checks it, the domain's copy only until it is read.
+- **Delete account** (§8a, §8d): a quiet **Обриши налог** at the start of Log out's row, for a guest
+  and a registered player alike, a one-line dialog, then `POST /v1/me/deletion`; 204 or 401 forgets the
+  session, drops the queue, reports `account_deleted` and resets the analytics, and the screen shows
+  the fresh guest. Offline or anything else: said, nothing forgotten.
+- **About** (§8d): the Account screen's top bar has an info icon to it: the name, *Верзија 1.0.0
+  (10000)*, **16+**, the site's four pages (`Site.BASE_URL`, https://stabiradije.rs, `/en/` for
+  English) opening in the browser, and the open-source licences, a list written by hand.
+- **Register's terms line** (§8d): *Регистрацијом прихваташ услове и политику приватности.* under
+  Register, the two nouns links to the site's pages. Every Auth state still fits 599.
+- **English hidden** (§8f): the menu offers Ћирилица and Latinica (`Language.OFFERED`); English's
+  words stay, and a device that kept `en` shows English still.
+- **A slow first load** (§8d): *Још мало…* under the Play, Categories and Account spinners after 5
+  seconds.
+
+Two fix-ups are commits of their own, since no commit was rewritten: the moderation app's failures
+naming `UPGRADE_REQUIRED` (1e48a1c9), and `ApiFlowTest` naming `submissionCost` among the stats sent
+(the commit after the server's cost). The deletion's docs are a commit of their own too (ef7ee764).
+
+Verified on this Mac: `ktlintCheck`; the verify job's tests, `:server:test` 486 (2 skipped, H2 only),
+`:core:domain` 78, `:core:data` 153, `:core:network` 119 and 125 as Android host tests, `:app:shared`
+424, `:app:adminApp` 106; its client compiles and `:app:androidApp:assembleDebug`, whose three APKs
+read back `versionCode='10000'` with `aapt2`; the web and desktop apps' compiles; the ios job's Kotlin
+compiles (`:app:shared`'s main and test, and each `:core` module's test). The fat jar
+(`WYR_SERVER_ONLY=1 ./gradlew :server:buildFatJar`, JDK 21 from Gradle's toolchain) booted on port
+18112 on H2: `GET /v1/me` named `submissionCost` 1 with `SUBMISSION_COST` unset and 50 with it set,
+`SUBMISSION_COST=fifty` stopped the boot naming it, and with `MIN_CLIENT_VERSION_ANDROID=10001` a
+request naming android 10000 was 426 `UPGRADE_REQUIRED` and one naming 10001 200. **Not verified**:
+nothing ran on a phone, a browser or iOS: the Play Store button (`market://`, then the https page),
+the web's reload, iOS's `CFBundleVersion` read (its test only compiles here) and the headers sent from
+a real build to a deployed server; a browser's CORS preflight for the two headers is the server's
+`CorsTest`'s alone; the site's links go nowhere until the domain is bought and the pages are up; the
+licences list is written by hand and checked against no dependency report.
+
+**For the user** (CLAUDE.md §8b, each *provisional — user decision*): *Delete account beside Log out*
+(a row of its own under Log out took the failure states past 599; it is not offered while a read of
+the player failed). The rest is as the scope said.
+
+**What the user must do**, none of it in the repository:
+1. Buy `stabiradije.rs` and put the `docs/site` pages there, so the About screen's and the Register
+   line's links open something: until then they open a domain that does not answer.
+2. At the release, on Render's `wyr-server` only: *Environment* → add `SUBMISSION_COST` = `50`, then
+   restart (`render.yaml` declares it as a comment until then, so no deploy sets it by itself). Dev
+   stays at 1. Every installed build shows the new cost from its next read of the stats.
+3. To refuse an old build later: set `MIN_CLIENT_VERSION_ANDROID` (or `_IOS`, `_WEB`, `_DESKTOP`) on
+   the service to the oldest build number to serve, 10000 for 1.0.0, then restart: an older build
+   shows the update screen. Builds before this branch send no headers and are never refused.
+
 ### Verified working
 
 - **`feat/server-engagement`**, on this machine, at 8660e01 and again at a371b0e after the review's
@@ -1274,6 +1337,20 @@ compiles here. The `ios` CI job's `xcodebuild` is the first to process the Info.
 simulator tests the first to run the bundle read, on a test bundle without the key; nothing has yet
 run the app to read its own key.
 
+### Releasing to production
+
+A person promotes a commit (CLAUDE.md §8): green in CI and already live on dev, with Render's *Manual
+Deploy → Deploy a specific commit* on `wyr-server`. For the Google Play release itself, besides:
+
+1. **The cost**: on `wyr-server`'s *Environment*, `SUBMISSION_COST` = `50`, and restart (the user's
+   decision: 50 from the release, 1 until then; dev stays at 1). `GET /v1/me` names it, and the game's
+   Submit form shows it from its next read.
+2. **The version**: bump `wyr.app.version` in `gradle.properties`, and `MARKETING_VERSION` and
+   `CURRENT_PROJECT_VERSION` in `app/iosApp/Configuration/Config.xcconfig` with it (the build names
+   the number to set: MAJOR * 10000 + MINOR * 100 + PATCH). Android's `versionCode` follows by itself.
+3. **An old build to refuse**: `MIN_CLIENT_VERSION_ANDROID` (or `_IOS`, `_WEB`, `_DESKTOP`) = the
+   oldest build number to serve, and restart; an older build shows *Нова верзија је доступна*.
+
 ### Rate limits
 
 The server limits locally too, with the same budgets as on Render (CLAUDE.md §8b), each keyed by the
@@ -1649,8 +1726,9 @@ A key someone else can read is no harm: a project's key can only send events, ne
 key rotated in PostHog needs a build again.
 
 Every event names the app's version, `wyr.app.version` in `gradle.properties` (1.0.0), which every
-platform's build reads; a release bumps `MARKETING_VERSION` in `app/iosApp/Configuration/Config.xcconfig`
-with it, or Gradle refuses to build.
+platform's build reads; a release bumps `MARKETING_VERSION` and `CURRENT_PROJECT_VERSION` (the build
+number, MAJOR * 10000 + MINOR * 100 + PATCH) in `app/iosApp/Configuration/Config.xcconfig` with it, or
+Gradle refuses to build.
 
 ### Trying a change
 

@@ -135,6 +135,7 @@ mechanism; this table is the rationale.
 | Local dev DB       | H2 (in-memory)         | Dev/test only. Never production                  |
 | Lint               | ktlint (Gradle plugin) | Style pinned in `.editorconfig`                  |
 | Product analytics  | PostHog (service, HTTP API, no SDK) | EU cloud; over the Ktor client (§8g) |
+| Browser APIs       | Kotlin Wrappers (`kotlin-browser`) | JetBrains; web source sets only: `:core:network`'s storage and user agent, `:app:shared`'s page reload (§8e) |
 
 Server database engine: **PostgreSQL** (via Exposed). Hosting: **Render** — see §8.
 
@@ -1240,8 +1241,9 @@ answer what they think is popular instead of what they actually prefer. A mode t
 rewards reading the crowd may come later as a separate, opt-in mode, never as the default.
 
 **Current focus.** UI polish is paused. The game's own screens are the app: **Home**, **Play**,
-**Account**, **Submit** and the **Auth** page opened from Account, and the **Categories** screen
-opened from Play, reached from one another by buttons (*Navigation*, below), in every build, LOCAL,
+**Account**, **Submit**, the **Auth** page and the **About** screen opened from Account, and the
+**Categories** screen opened from Play, besides the update screen that takes their place once the
+server refuses the build (§8e), reached from one another by buttons (*Navigation*, below), in every build, LOCAL,
 DEV and PROD alike, opening on Home. The engineering dev console functionality was first built
 behind is gone since `chore/remove-console` (*decided 2026-09-25*: the console is not needed), and
 nothing replaces it: a LOCAL or DEV build names its server on the Account screen (§8e), and a
@@ -2250,7 +2252,9 @@ hand, so the two cannot say different things; and **English** stands beside them
   (`categoriesUnread`), on the Categories screen and under the Submit form's categories alike, and
   the Categories screen's Play is the Home screen's *Играј* (`Strings.play`). So too are *Све*
   (`allCategories`), on the Play screen's row and first in the Categories screen's list, and
-  *Учитавање* (`loading`), the name both screens give their spinner for a screen reader.
+  *Учитавање* (`loading`), the name both screens give their spinner for a screen reader, and *Још
+  мало…* (`stillLoading`), under the Play, Categories and Account spinners after 5 seconds (§8d, *A
+  slow first load*).
 - **The categories' names** *(built)*: the server's, not `Strings`, since a moderator adds and
   renames categories without a build (§8d, *Categories*): `nameSr` in Serbian Cyrillic,
   `SerbianScript.toLatin(nameSr)` in Serbian Latin, as every Latin text is made, and `nameEn` in
