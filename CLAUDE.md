@@ -741,6 +741,13 @@ EncryptedSharedPreferences: enough for a game that stores no sensitive personal 
   unknown until unblocked or blocked again, which changes nothing but rejects what they have pending.
   The options: keep it; or the server sends `authorBlocked` beside `authorId` on the admin DTOs, a
   field with a default, so no installed client breaks, and the app shows it for every author.
+- **A move from the Reports tab** — *provisional — user decision.* A retirement or restoration from
+  the moderation app's Reports tab puts the question the server answers with in its row on both
+  tabs, its reports as they were, as a move from All questions does, and reads nothing again; one
+  that failed reads the Reports tab again (§8d, *Moderation*). Chosen since the answer is the
+  question as a read lists it, so a read would spend one more of the address's admin budget (§8b,
+  *Rate limiting*) to show the same, but for reports given meanwhile. The options: keep it; or read
+  the reports again after every move, which shows those too.
 - **Retiring a question** — *provisional — user decision.* The user asked for a way to take an
   approved question out of play and put it back (§8d, *Moderation*); the details are this build's.
   Built: a moderator retires an approved question, a seed included, and restores a retired one.
@@ -2046,7 +2053,7 @@ listed on the Account screen.
     them and reads the reports again, whatever became of it, and Retire, confirmed in the same dialog,
     or Restore, as in the list. A retirement or restoration, from either tab, puts the question it
     answers with in its row on both, its reports as they were, and one that failed reads again the tab
-    it was started from. *All questions* is the
+    it was started from (provisional, §8b, *A move from the Reports tab*). *All questions* is the
     list, seeds included, newest first, filtered by any statuses (`RETIRED` among them; never
     `OTHER`) and any categories, none being every one: Load reads its first page and Load more the
     next, at the filter the list was read at, with the cursor the page before gave, and changing the

@@ -324,19 +324,31 @@ and author blocks, whose server routes were on main (CLAUDE.md §8d, *Moderation
   `READY_REASONS`.
 - **Author actions** (485af93): Block author (a confirm dialog with the reason and the ready
   reasons) and Unblock author on Pending, Reports and All questions.
+- **The review's fixes**: a `ModerationMapperTest` case whose unknown reasons, added together, must
+  move ahead of a known one, so the sort most given first is pinned (bcdce03); two KDocs put right,
+  `ReportReason.OTHER`, which carries no words of the player's, and `ModerationViewModel`'s, which
+  left Load reports out of the Loads that read the categories first (d4ffdcb); and the third
+  decision below recorded in CLAUDE.md §8b, where the handoff said it was and it was not.
 
 **To ask the user** (CLAUDE.md §8b, each *provisional — user decision*): the ready reasons' wording
-(*Ready-made rejection reasons*); and where an author stands, which the server says only in answer to
+(*Ready-made rejection reasons*); where an author stands, which the server says only in answer to
 a block or an unblock, so the app shows it only for authors acted on this session and offers both
 buttons otherwise (*Where an author stands, in the moderation app*): the other option is an
-`authorBlocked` field on the admin DTOs, a server change. For the merge: `feat/play-client` may add a
+`authorBlocked` field on the admin DTOs, a server change; and a retirement or restoration from the
+Reports tab, which puts the server's answer in the row on both tabs and reads nothing again (*A move
+from the Reports tab*): the other option is reading the reports again after every move, one more
+request of the admin budget. **At the merge**: 04dc332 alone fails `ktlintCheck` (80199b6 is
+ktlintFormat's fix to its two test files), and this repo merges with merge commits, so a plain merge
+puts a commit red in CI into main's history; fold 80199b6 into 04dc332 first, merge with
+`--squash`, or accept it knowingly. For the merge: `feat/play-client` may add a
 player's `ReportReason` in `:core:domain`; this branch's is in `io.ntole.wyr.core.domain.moderation`,
 with `UNKNOWN`, so the two clash only if they share a package, and could become one then.
 `feat/account-client` adds `DomainError`s: the moderation app's `describe` names every one, so each
 needs a line there (its `when` fails to compile until then).
 
-Verified on this Mac: `ktlintCheck`, the verify job's tests (`:server` 480, `:core:domain` 79,
-`:core:data` 154, `:core:network` 115 and 121 as Android host tests, `:app:shared` 395,
+Verified on this Mac, again after the review's fixes: `ktlintCheck`, the verify job's tests
+(`:server` 480, `:core:domain` 79, `:core:data` 155, `:core:network` 115 and 121 as Android host
+tests, `:app:shared` 395,
 `:app:adminApp` 148, 42 of them new: `ReportsViewModelTest`, `AuthorsViewModelTest`, the label tests,
 `ReadyReasonsTest`, `ModerationTapsTest`, which taps a ready reason and the block's dialog through the
 app's semantics, and `ScreensDrawTest` reading the Reports tab's and the author actions' texts) and
