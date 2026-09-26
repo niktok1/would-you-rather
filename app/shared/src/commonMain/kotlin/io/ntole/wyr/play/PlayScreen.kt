@@ -17,7 +17,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconToggleButton
@@ -58,6 +57,7 @@ import io.ntole.wyr.language.Language
 import io.ntole.wyr.language.LocalStrings
 import io.ntole.wyr.language.PlayStrings
 import io.ntole.wyr.language.categoryName
+import io.ntole.wyr.loading.LoadingSpinner
 import io.ntole.wyr.points.PointsAmount
 import io.ntole.wyr.theme.WyrIcons
 import io.ntole.wyr.theme.WyrThemeAccessors
@@ -485,16 +485,14 @@ private fun percentStyle(): TextStyle {
     )
 }
 
-/** A spinner, named for a screen reader: no text to read while a question loads. */
+/**
+ * A spinner, named for a screen reader: no text to read while a question loads, but for the one line a
+ * slow load says under it (CLAUDE.md §8d, *A slow first load*).
+ */
 @Composable
 private fun LoadingBody() {
-    val loading = LocalStrings.current.loading
-
     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        CircularProgressIndicator(
-            color = WyrThemeAccessors.colors.headingAccent,
-            modifier = Modifier.semantics { contentDescription = loading },
-        )
+        LoadingSpinner(name = LocalStrings.current.loading)
     }
 }
 

@@ -18,7 +18,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
@@ -49,6 +48,7 @@ import io.ntole.wyr.language.Language
 import io.ntole.wyr.language.LanguageMenu
 import io.ntole.wyr.language.LocalStrings
 import io.ntole.wyr.language.fill
+import io.ntole.wyr.loading.LoadingSpinner
 import io.ntole.wyr.points.PointsAmount
 import io.ntole.wyr.theme.WyrIcons
 import io.ntole.wyr.theme.WyrThemeAccessors
@@ -246,7 +246,7 @@ private fun Player(
         if (stats != null) {
             PlayerCard(stats, busy = state.isBusy, onOpenAuth = onOpenAuth)
         } else if (failure == null) {
-            CircularProgressIndicator(color = colors.headingAccent)
+            LoadingSpinner()
         }
         if (state.isBusy && stats != null) {
             LinearProgressIndicator(color = colors.headingAccent, modifier = Modifier.fillMaxWidth())

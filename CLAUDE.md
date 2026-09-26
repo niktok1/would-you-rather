@@ -1410,6 +1410,14 @@ orientation, in common code alone:
   build shows none. `AccountScreenDrawTest` finds it under everything else in every state and
   language.
 
+**A slow first load** (*built 2026-09-26*): a free Render service sleeps after some 15 minutes idle,
+and its first request takes up to a minute (§8). So wherever the game shows its loading spinner, the
+Play screen's question, the Categories screen's first read and the Account screen's first read of the
+player, the spinner (`LoadingSpinner`, `io.ntole.wyr.loading`) says one short line under it once it has
+turned for 5 seconds (`SLOW_AFTER`), *Још мало…* (`Strings.stillLoading`), and nothing else. Counted in
+the frames the spinner draws anyway, so it asks for none more. `LoadingSpinnerDrawTest` steps the
+scene's clock a frame at a time through each of the three.
+
 **About** (`io.ntole.wyr.about`, *built 2026-09-26*, what Google Play asks: a way to the privacy
 policy and the rest from inside the app): opened by the info icon on the Account screen's top bar, so it
 adds no text to the Account screen, under a back arrow. Top down, scrolling: the game's name; *Верзија
@@ -1477,7 +1485,7 @@ Categories screen from its top bar (*Skipping*, *Reactions* and *Categories*, be
   (`WyrColors.muted`). A reaction that failed says why in the points' place, in two short lines at
   most, in a slot as high as a thumb's touch target at any font size, so it moves nothing; a skip that
   failed moves on all the same.
-- Loading is a spinner; a failure is one short sentence and *Покушај поново* (`Strings.tryAgain`,
+- Loading is a spinner, with *Још мало…* under it after 5 seconds (*A slow first load*); a failure is one short sentence and *Покушај поново* (`Strings.tryAgain`,
   §8f), the categories played on the top bar being the way out of a selection with nothing to serve.
   The words are `PlayStrings` (§8f), but for those the Categories screen says too, *Све* and the
   spinner's name (`Strings.allCategories`, `Strings.loading`).
