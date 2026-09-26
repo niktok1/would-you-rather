@@ -350,10 +350,17 @@ object Skips : Table("skips") {
 
     /**
      * One row per player per question, holding only the latest skip: a skip from an earlier cycle
-     * says nothing about what is due now. The feed's join finds the player's skip by this key, so it
-     * needs no index of its own.
+     * says nothing about what is due now. The feed's join finds the player's skip by this key.
      */
     override val primaryKey = PrimaryKey(playerId, questionId)
+
+    init {
+        // For the foreign key's check as a question goes (`AccountDeletion` deletes a deleted player's
+        // unserved questions), which PostgreSQL does not index by itself (V14): question_id is the
+        // key's second column, so without it each question deleted would read the whole table. With
+        // player_id in it, as the reactions' is, so it is no copy of the index H2 makes for the key.
+        index(isUnique = false, questionId, playerId)
+    }
 }
 
 /**
@@ -426,6 +433,11 @@ object HiddenQuestions : Table("hidden_questions") {
 
     /** A question is hidden once. The feed finds a player's row for a question by this key. */
     override val primaryKey = PrimaryKey(playerId, questionId)
+
+    init {
+        // For the foreign key's check as a question goes, as the skips' (V14).
+        index(isUnique = false, questionId, playerId)
+    }
 }
 
 /**

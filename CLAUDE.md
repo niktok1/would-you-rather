@@ -816,8 +816,8 @@ seed (`Migrations`, `DatabaseFactory.init`). Nothing builds a table any other wa
   as a guest, and every later script: V6 (the categories table, §8d *Categories*), V7 (what a
   question cost, §8c), V8 (the seeds' made-up votes), V9 (the seeds in Serbian, §8d *Seeds*),
   V10 (likes become reactions, §8d *Reactions*), V11 (reports and hidden questions, §8d
-  *Reports*), V12 (an author's block, §8d *Moderation*) and V13 (sessions indexed by player, for an
-  account's deletion, §8a).
+  *Reports*), V12 (an author's block, §8d *Moderation*), V13 (sessions indexed by player, for an
+  account's deletion, §8a) and V14 (skips and hidden questions indexed by question, for the same).
   `Migrations.migrate` takes the baseline itself (`baselineVersion` 1), and only for a database
   holding every table V1 builds (`TABLES_BEFORE_MIGRATIONS`) and no history table; Flyway's
   `baselineOnMigrate` is off. Any other database with tables and no history fails the boot, rather
@@ -852,6 +852,8 @@ seed (`Migrations`, `DatabaseFactory.init`). Nothing builds a table any other wa
   beside V1, in lower case and unquoted so it runs on both engines, one `ALTER TABLE` per column
   (H2 takes no list of `ADD` clauses, as PostgreSQL does), and make it right for the rows already
   there: a new NOT NULL column needs a default or a backfill, and a drop takes its data with it.
+  A new foreign key needs an index that leads with its column, since PostgreSQL makes none and would
+  read the whole table to check each row the key names as it goes (`ForeignKeyIndexTest`).
   `SchemaDriftTest` then holds the script to the definitions on H2 and, in CI, on PostgreSQL. In
   `MigrationsTest`, add the script's row to `BASELINED_HISTORY` and what it does to rows already
   there to `afterLaterScripts` (a column added empty goes in `ADDED_COLUMNS`). Its database built
@@ -898,7 +900,7 @@ seed (`Migrations`, `DatabaseFactory.init`). Nothing builds a table any other wa
   yet and so no build before it is a rollback target (the user, 2026-09-26). V11 only adds tables,
   which a build before never names, so it serves hidden questions again and takes no report until
   the roll forward; V12 only adds a nullable column, so a blocked author submits again there; V13
-  only adds an index. `MigrationsTest` reads a
+  and V14 only add indexes. `MigrationsTest` reads a
   table a later script dropped by name (`DROPPED_TABLES`), since `Tables.kt` no longer names it.
 - *Several instances booting at once* (Render starts a deploy's new instance before it stops the old
   one): on PostgreSQL each script runs under Flyway's advisory lock, so one boot migrates while the
