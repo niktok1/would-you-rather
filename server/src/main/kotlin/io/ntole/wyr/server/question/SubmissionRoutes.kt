@@ -1,6 +1,7 @@
 package io.ntole.wyr.server.question
 
 import io.ktor.http.HttpStatusCode
+import io.ktor.server.application.log
 import io.ktor.server.auth.authenticate
 import io.ktor.server.response.respond
 import io.ktor.server.routing.Route
@@ -62,12 +63,19 @@ fun Route.submissionRoutes(db: Db) {
                         ) {
                             throw ApiFailure.accountRequired()
                         }
+                        // Told before what they typed is checked, as a guest is: nothing they could type
+                        // would pass. A plain read, so the submission checks again under the author's lock.
+                        if (author.submissionsBlocked) throw ApiFailure.submissionsBlocked()
 
                         // An id no category has is a malformed request, which comes before any rule the
                         // player can break by typing (checkedSubmission).
                         val categories = CategoryStore.checked(request.categories)
                         SubmissionStore.submit(authorId, checkedSubmission(request.copy(categories = categories)))
                     }
+
+                // For the moderator's and the operator's trail: which question, by whom. Never its text,
+                // which is the player's own words.
+                call.application.log.info("submission ${stored.id} stored, by player $authorId")
 
                 call.respond(HttpStatusCode.Created, stored)
             }

@@ -164,19 +164,28 @@ failing:
   racer re-checks it against the first's commit).
   Or the read takes the row lock (`SELECT ... FOR UPDATE`), so a concurrent writer waits and then
   reads the row as committed (`VoteStore.cast` and `ReactionStore.set`, which branch on more than
-  one outcome, and `SkipStore.skip`).
+  one outcome, and `SkipStore.skip` and `ReportStore.report`). `AccountDeletion.delete` locks the
+  player's row before anything of theirs is read, so each row of theirs a racing writer would add
+  waits on it through its foreign key and fails once the deletion commits, and its rerun finds them
+  gone. A writer that waited instead on a row the deletion removes (a re-answer on their vote, a
+  re-skip on their skip, a registration on their `players` row) finds no row once it commits, then
+  no player, and is 401 (`VoteStore.currentCycle`, `SkipStore.currentCycle`,
+  `AccountStore.register`). It locks their reactions before it counts their likes.
   A read of rows a racing writer is about to add has no row to lock, so it locks a parent row that
   every such writer locks first (`SubmissionStore.submit` counts an author's pending questions
-  under the author's `players` row).
+  under the author's `players` row, and `ModerationStore.blockAuthor` reads them under it too, so a
+  submission either lands before a block and is rejected by it or waits and is refused).
   The one exception is a value copied from another row, which may be a plain read where a stale
   copy is provably harmless, with the proof at the read (`VoteStore.currentCycle`: the feed moves
   the cycle on only once the answer's question is already answered or skipped in the one read).
-- Uniqueness is a constraint (the `Votes`, `Skips`, `Reactions`, `Categories`, `PushTokens` and
-  `Identities` primary keys, `players.username`'s unique constraint and `identities`' on a player and
-  a provider), never a prior `SELECT`. A violation is never caught and
+- Uniqueness is a constraint (the `Votes`, `Skips`, `Reactions`, `Reports`, `HiddenQuestions`,
+  `HiddenAuthors`, `Categories`, `PushTokens` and `Identities` primary keys, `players.username`'s
+  unique constraint and `identities`' on a player and a provider), never a prior `SELECT`. A violation
+  is never caught and
   carried on from: PostgreSQL aborts a transaction at its first error. It propagates, and Exposed
   rolls back and reruns the whole transaction, which then sees the committed row (`VoteStore.cast`,
-  `SkipStore.skip`, `ReactionStore.set`, `AccountStore.register`, which `AccountStoreTest` races,
+  `SkipStore.skip`, `ReactionStore.set`, `ReportStore.report` and its hides, which `ReportStoreTest`
+  races, `AccountStore.register`, which `AccountStoreTest` races,
   `CategoryStore.create`, which `CategoryStoreTest` races, `Seed.writeMissing`, which
   `SeedTest` races, `PushTokenStore.register`, which `PushTokenStoreTest` races, and
   `IdentityStore.signIn`, which `IdentityStoreTest` races on both constraints). A plain read before such an insert only spares
@@ -185,7 +194,8 @@ failing:
   state; two statements can straddle another transaction's commit (the tally in `VoteStore`,
   `StatsStore.of`, a question's like and dislike counts beside the player's own reaction in
   `ReactionStore.reactionsOf`, a question's tally and reaction counts in the moderator's list,
-  `ModerationStore.questions`, a submission's counts in its author's list,
+  `ModerationStore.questions`, a reported question's report counts beside its numbers,
+  `ModerationStore.reports`, a submission's counts in its author's list,
   `SubmissionStore.byAuthor`, and the Home screen's two counts, `HomePickStore.counts`).
 
 REPEATABLE_READ was dropped because it refuses the second of two concurrent writes to a row
@@ -378,6 +388,9 @@ This project must never be attributed to any employer identity.
   Render is the proxy, one budget for everyone: the server warns at boot when `RENDER` is `true` and
   no header is set. To be checked once deployed (NEXT-SESSION.md). No forwarded-header plugin:
   `ktor-server-forwarded-header` would be a new dependency for the one line this needs.
+- `MIN_CLIENT_VERSION_ANDROID`, `_IOS`, `_WEB` and `_DESKTOP` each name the oldest build of the game
+  the server serves on that platform (§8b, *Minimum client version*); none is set, so no build is
+  refused. Read at boot: raising one is changing the variable and restarting the service.
 - `FCM_SERVICE_ACCOUNT_JSON` is the Firebase service account's key file, whole, which pushes a
   moderator's decision to its author (§8a, *Push tokens*), `sync: false` in `render.yaml`, one key per
   service. It has no default: unset turns pushes off. Setting it up is §8b, *Push notifications*.
@@ -411,9 +424,10 @@ decided in §8b).
   does not change when auth evolves.
 - **Sessions** (*decided 2026-09-25*): a player's refresh tokens live in `sessions`, **one
   refresh-token family per device**, each rotating on its own row, so a refresh on one device never
-  touches another's tokens. Nothing caps how many a player has, and only a logout deletes one: an
-  expired session is dead where it lies. A mint opens a player's first session (`SessionStore.open`);
-  V4 opened one for every player who held a refresh token then. A refresh reads and writes its session
+  touches another's tokens. Nothing caps how many a player has, and only a logout, or the account's
+  deletion (below), deletes one: an expired session is dead where it lies. A mint opens a player's
+  first session (`SessionStore.open`); V4 opened one for every player who held a refresh token then.
+  A refresh reads and writes its session
   alone. Every access token names its session beside its player (the `sessionId` claim), and a
   refresh keeps it. The players row's old refresh columns, V4's mirror for a rollback to a build from
   before sessions, are unused since `feat/simple-accounts` (§8b, *Rollbacks*).
@@ -523,6 +537,29 @@ decided in §8b).
     refresh token's 30 days; one idle longer plays on as a fresh guest, and logs in again. No
     password is stored, anywhere: the phone's password manager may keep it, offered as the Auth page,
     where the game's client registers and logs in, leaves the screen (§8d, *The Account screen*).
+- **Deleting an account** (*decided 2026-09-26*: Google Play asks a game with accounts to let a
+  player delete theirs; built on the server, no client yet) is `POST /v1/me/deletion`
+  (`WyrApi.Paths.ME_DELETION`), bearer required, no body, answered 204, for a guest and a registered
+  player alike. It deletes, in one transaction (`AccountDeletion.delete`), the player's row with its
+  username and password hash, their sessions on every device, their votes, skips, reactions, reports
+  and hides, their push tokens and Play Games link (their keys cascade, below), and their
+  questions no player was ever served, pending and rejected; their **approved
+  questions stay**, retired ones included, with nobody as their author, as a seed has: served as
+  before, their votes and reactions kept, their likes from then on paying nobody. Each like the
+  player held is taken back as taking it back would, a point from its question's author (§8c), so
+  every other author's total still adds up. A player who hid the deleted author keeps each of their
+  approved questions hidden, one by one. The username is free for another from then on. The client
+  then plays on as a fresh guest. A token of a player deleted already is 401 `UNAUTHORIZED`, as on
+  every route, and so is a second deletion; limited per player, 10 an hour (§8b). A request of
+  theirs from another device that finds the player gone mid-request is 401 too, a vote, a skip, a
+  feed read or a registration (§4). One INFO line names the player. Edge cases, accepted: a deleted
+  author's approved question reads as a seed to the moderator (`seed`, and no `authorId`), since
+  nothing tells the two apart; a like or a refund racing the deletion pays nobody, and a hide of the
+  author hides only the question it was asked from (`PlayerStore.payAuthor`,
+  `ReportStore.hideAuthorOf`, `AccountDeletionTest`); and a login to the account racing its deletion
+  can fail as a 500.
+  `AccountDeletionTest`, `AccountDeletionFlowTest`.
+
 - **Push tokens** (*decided 2026-09-26; built on the server, Android first; the client adopts
   later*): a device's Firebase Cloud Messaging token, so a player hears when a moderator decides one
   of their questions.
@@ -653,7 +690,11 @@ EncryptedSharedPreferences: enough for a game that stores no sensitive personal 
   `RenameCategoryRequest`, the `X-Admin-Token` header (`WyrApi.Headers`), `QuestionStatus.RETIRED`
   and the error codes `FORBIDDEN`, `ALREADY_DECIDED`, `WRONG_STATUS`, `CATEGORY_EXISTS` and
   `CATEGORY_NOT_FOUND`. The moderator's client (`ModerationApi` calls every admin route) and the
-  moderation app are built on it (§8d, *Moderation*).
+  moderation app are built on it (§8d, *Moderation*). Since 2026-09-26 the server has more that no
+  client calls yet: the reported questions and their dismissal (`AdminReportListDto`,
+  `DismissReportsRequest`), an author's opaque id on the admin DTOs (`authorId`), blocking and
+  unblocking an author (`BlockAuthorRequest`, `UnblockAuthorRequest`, `AuthorBlockDto`), and the error
+  codes `SUBMISSIONS_BLOCKED` and `AUTHOR_NOT_FOUND` (§8d, *Moderation*, *Reports* and *Authors*).
 - **A rejection reason is one line** — *provisional — user decision.* §8d asks for a short reason;
   the server also holds it to one line, as it does an option: no control character, nor U+2028 or
   U+2029 (`checkedRejection`). Chosen as the stricter reading, since a reason is shown to its author
@@ -664,9 +705,11 @@ EncryptedSharedPreferences: enough for a game that stores no sensitive personal 
   Built: a moderator retires an approved question, a seed included, and restores a retired one.
   Retired, it is served to nobody and due for nobody, and a vote, skip or reaction to it is 404, taking
   one back included; nothing it earned is taken back, so its answers' points stay and its reactions
-  stay held, its likes paid, and nobody can take one back until it is restored. Restored, it is due for every player who has not
-  answered or skipped it in their current cycle. It is stored as `questions.retired_at` beside an
-  `APPROVED` status, and sent as `QuestionStatus.RETIRED`, so a rollback to the build before (§8b,
+  stay held, its likes paid, and nobody can take one back until it is restored, unless their account
+  goes (§8a, *Deleting an account*), which takes each like they held back with its point. Restored,
+  it is due for every player who has not answered or skipped it in their current cycle. It is
+  stored as `questions.retired_at` beside an `APPROVED` status, and sent as `QuestionStatus.RETIRED`,
+  so a rollback to the build before (§8b,
   *Rollbacks*) reads every row and only serves retired questions again. A vote, skip or reaction reads
   servability plainly (`QuestionStore.isServable`, no lock on the question; *decided 2026-09-25*),
   so one in flight as a retirement commits may still land, uncounted in the retirement's answer.
@@ -712,7 +755,8 @@ EncryptedSharedPreferences: enough for a game that stores no sensitive personal 
   request and refills whole when its period ends, so up to twice a budget can pass in moments where
   one window ends and the next begins, while over any longer span the average holds:
   - *Per client address* (on Render, Cloudflare's `CF-Connecting-IP`: `CLIENT_IP_HEADER`, §8), for a
-    caller with no session to name: guest minting 10 an hour, refreshes 30 a minute, logins 20 a
+    caller with no session to name: guest minting 60 an hour (one address can stand for many players, a
+    mobile carrier's shared address or a school's Wi-Fi), refreshes 30 a minute, logins 20 a
     minute (what bounds guessing a password, as each costs a hash), Play Games sign-ins 20 a minute
     (each costs two calls to Google), the categories list 120 a minute
     (it needs no session), the Home screen's counts (`GET /v1/home-picks`) 120 a minute (nor does
@@ -726,7 +770,8 @@ EncryptedSharedPreferences: enough for a game that stores no sensitive personal 
   - *Per player*, so players behind one address do not share a budget: registrations 20 an hour
     (every one the rules take costs a password hash), logouts 30 a minute, the feed, votes and skips
     120 a minute each, reactions 60 a minute, submissions 30 an hour (the 20-pending cap still applies),
-    `GET /v1/me` and `GET /v1/me/questions` 120 a minute each, a tap on a Home button
+    reports 30 an hour, hiding a question or an author 60 an hour together, account deletions 10 an
+    hour, `GET /v1/me` and `GET /v1/me/questions` 120 a minute each, a tap on a Home button
     (`POST /v1/home-picks`) 30 a minute, push token registrations and removals 60 an hour together. The key is the player id in the
     bearer token, which the limiter verifies itself (`verifiedPlayerId`): it runs before
     authentication, so no principal is there yet. A request without a token this server signed
@@ -752,12 +797,44 @@ EncryptedSharedPreferences: enough for a game that stores no sensitive personal 
 
   What remains: farming is bounded, not gone. A player can still earn 120 points a minute by
   re-answering, on average, and up to 240 where two windows meet (*decided 2026-09-23:* a re-answer
-  keeps paying every time, inside its cycle or not), and a script gets 10 fresh guests an hour per
-  address, 20 where two windows meet, each with budgets of its own, so liking one author's questions
+  keeps paying every time, inside its cycle or not), and a script gets 60 fresh guests an hour per
+  address, 120 where two windows meet, each with budgets of its own, so liking one author's questions
   is bounded per address and per hour, not per author (*Likes from fresh guests*, below:
   accepted). Counts are in memory and per instance: right for the one Render instance, but a second
   would grant every budget again, so running two needs a shared store first (Render Key Value, say).
   A restart, which a deploy or a free instance's spin-down is, resets them.
+- **Request bodies** *(built 2026-09-26)* — no request body over 64 KiB is read
+  (`MAX_REQUEST_BODY_BYTES`, `RequestBodyCap`, no dependency of its own): Ktor reads a whole body
+  into memory to decode it, and the largest a correct client sends, a submission, is some 10 KiB
+  with 300 categories picked. A
+  request whose `Content-Length` says more is 413 before anything else of it runs, its rate limit and
+  authentication included, whether or not its route reads a body; one that says no length, a chunked
+  body, is counted as it is read and stopped one byte past the cap (`BodyOverCap`), which
+  `receiveOrReject` answers 413. The code is `VALIDATION_FAILED`, since no correct client sends one.
+  `RequestBodyCapTest` pins both, and the cap's edge.
+- **Minimum client version** *(built 2026-09-26; no client sends the headers yet)* — every request of
+  the game's will name its build: `X-Client-Platform` (`android`, `ios`, `web` or `desktop`,
+  `WyrApi.ClientPlatform`) and `X-Client-Version`, a whole build number (`WyrApi.Headers`). Each
+  platform's oldest build served comes from `MIN_CLIENT_VERSION_ANDROID`, `_IOS`, `_WEB` or
+  `_DESKTOP` (unset, the default, no minimum; one that is not a whole number of at least 1 fails at
+  boot, naming it). An older build is 426 `UPGRADE_REQUIRED` before anything else of the request,
+  its rate limit, body and authentication included, on every path but `/health`
+  (`ClientVersionCheck`, installed after CORS, which lets a browser send both headers and read the
+  426). A request that names no build passes, the moderation app's and every build's from before the
+  headers, and so do a platform with no minimum and a version that is no whole number: *provisional*,
+  since refusing it would lock a broken build out whatever its number. On the client
+  `UPGRADE_REQUIRED` reads as `DomainError.UNKNOWN` until the branch that sends the headers gives it
+  one of its own. `ClientVersionTest`, `CorsTest`, `ServerConfigTest`.
+- **Logging** *(built 2026-09-26)* — beside Ktor's line per call and the rate limiter's per refusal,
+  one INFO line for each stored submission, naming the question and its author by id
+  (`submission <id> stored, by player <id>`), and one for each admin action that went through, a
+  repeat that changed nothing included (a dismissal of no reports, a block or an unblock of an author
+  standing so already), naming the action and the id it was done to (`admin approved question
+  <id>`, `logAdmin`): approvals, rejections, retirements and restorations, categories added and
+  renamed, reports dismissed, and
+  authors blocked and unblocked. A read, the moderator's lists included, logs nothing of its own.
+  Never a token, a password or its hash, an email, a question's text, a rejection's reason or a
+  name the moderator typed. `ActionLogTest`.
 - **Likes from fresh guests** — *decided 2026-09-24: no like limitations.* A like pays its author
   once per player (§8d, *Reactions*), and guests cost nothing to mint (§8a), so a script minting
   guests could pay one author a point per guest for each of their questions. The user accepted that:
@@ -918,10 +995,11 @@ seed (`Migrations`, `DatabaseFactory.init`). Nothing builds a table any other wa
   (a player's username and password hash, *Accounts*, above), which every player already there takes
   as a guest, and every later script: V6 (the categories table, §8d *Categories*), V7 (what a
   question cost, §8c), V8 (the seeds' made-up votes), V9 (the seeds in Serbian, §8d *Seeds*),
-  V10 (likes become reactions, §8d *Reactions*), V15 (the Home screen's two counts, §8d *Home
-  picks*), V16 (an answer's time, *Personalization*, above), V17 (push tokens, §8a) and V18 (Play
-  Games links, §8a). Flyway runs whatever versions are there in order, a gap included, and
-  `MigrationsTest` steps through the scripts by their own versions.
+  V10 (likes become reactions, §8d *Reactions*), V11 (reports and hidden questions, §8d
+  *Reports*), V12 (an author's block, §8d *Moderation*), V13 (sessions indexed by player, for an
+  account's deletion, §8a), V14 (skips and hidden questions indexed by question, for the same), V15
+  (the Home screen's two counts, §8d *Home picks*), V16 (an answer's time, *Personalization*, above),
+  V17 (push tokens, §8a) and V18 (Play Games links, §8a).
   `Migrations.migrate` takes the baseline itself (`baselineVersion` 1), and only for a database
   holding every table V1 builds (`TABLES_BEFORE_MIGRATIONS`) and no history table; Flyway's
   `baselineOnMigrate` is off. Any other database with tables and no history fails the boot, rather
@@ -956,6 +1034,8 @@ seed (`Migrations`, `DatabaseFactory.init`). Nothing builds a table any other wa
   beside V1, in lower case and unquoted so it runs on both engines, one `ALTER TABLE` per column
   (H2 takes no list of `ADD` clauses, as PostgreSQL does), and make it right for the rows already
   there: a new NOT NULL column needs a default or a backfill, and a drop takes its data with it.
+  A new foreign key needs an index that leads with its column, since PostgreSQL makes none and would
+  read the whole table to check each row the key names as it goes (`ForeignKeyIndexTest`).
   `SchemaDriftTest` then holds the script to the definitions on H2 and, in CI, on PostgreSQL. In
   `MigrationsTest`, add the script's row to `BASELINED_HISTORY` and what it does to rows already
   there to `afterLaterScripts` (a column added empty goes in `ADDED_COLUMNS`). Its database built
@@ -999,13 +1079,16 @@ seed (`Migrations`, `DatabaseFactory.init`). Nothing builds a table any other wa
   and pays nothing back for a rejection, and its tallies leave out the made-up votes; V9 only
   rewrites the seeds' text. V10 moves every like into `reactions`, as a like, and drops `likes`, which
   every build before it reads, so none of them runs on what it leaves: accepted, since nothing is live
-  yet and so no build before it is a rollback target (the user, 2026-09-26). `MigrationsTest` reads a
-  table a later script dropped by name (`DROPPED_TABLES`), since `Tables.kt` no longer names it. V15
+  yet and so no build before it is a rollback target (the user, 2026-09-26). V11 only adds tables,
+  which a build before never names, so it serves hidden questions again and takes no report until
+  the roll forward; V12 only adds a nullable column, so a blocked author submits again there; V13
+  and V14 only add indexes. V15
   only adds a table no build before names, and V16 a nullable column: a build before it moves a vote
   and leaves the answer time the answer before it left. V17 adds a table no build before names; a
   logout there still deletes its session, and the cascade still takes its tokens. V18 adds a table no
   build before names: a player signed in with Play Games plays on there as a guest, through their
-  sessions, and submits only with a username too, until the roll forward.
+  sessions, and submits only with a username too, until the roll forward. `MigrationsTest` reads a
+  table a later script dropped by name (`DROPPED_TABLES`), since `Tables.kt` no longer names it.
 - *Several instances booting at once* (Render starts a deploy's new instance before it stops the old
   one): on PostgreSQL each script runs under Flyway's advisory lock, so one boot migrates while the
   rest wait, up to 50 tries a second apart, and then find nothing to do. Every boot that finds a
@@ -1057,6 +1140,10 @@ returns and never recomputes points, so the two cannot disagree.
   an author is paid for their own like (§8d, *Reactions*), so liking their approved question gives its
   cost back. *Decided 2026-09-25: keep it.* The cost is 1 point only until release and will rise,
   and with thousands of questions an author rarely meets their own.
+- An account's deletion (§8a, *Deleting an account*) takes each like the player held back from its
+  author, a point per like, in its own transaction (`PlayerStore.payAuthor`), so the sum above holds
+  for every author who is left. Their approved questions are nobody's from then on, so a like of one
+  pays nobody, as a seed's.
 - `PlayerStore.addPoints` adds in SQL (`total_points = total_points + n`), never as a read then a
   write, so two votes by one player landing together cannot lose a point, nor a burst of likes for
   one author. `PlayerStore.spend` takes a cost the same way, as a compare-and-set on having it
@@ -1574,7 +1661,8 @@ listed on the Account screen.
     `ReactionResultDto`: the question, its `likeCount` and `dislikeCount`, and `myReaction`. A
     question that is not servable is 404 and an unknown player 401, as for votes and skips, and the
     id is checked as a vote's is. That holds for taking a reaction back too: a retired question's
-    reactions stay held, and its likes paid, until it is restored (*Moderation*).
+    reactions stay held, and its likes paid, until it is restored (*Moderation*) or the player's
+    account goes (§8a, *Deleting an account*).
   - The reaction held is read under its row lock (`SELECT ... FOR UPDATE`, §4), since what is written
     and what is paid depend on which of the three it is: a second request of the same player's for
     the same question waits, then reads what the first left. Only a like actually added pays the
@@ -1612,6 +1700,39 @@ listed on the Account screen.
     no points itself: a like of the player's own question moves their total without a vote, so the
     points between the cards show it from the next vote on, or from the next time the Play screen is
     shown, which reads them again. The thumbs, drawn by hand (§5b), took the heart's place.
+- **Reports** *(decided 2026-09-26, what Google Play asks of a game with players' questions: a way to
+  report one and to block its author; built on the server, no client yet)*: a player may **report** a
+  question to the moderator, **hide** it, or **hide its author**, and each hides from that player
+  alone, for good. The client will offer them in a list on the Play screen that stays out of the way
+  (the user). Comments on questions are not built: later, if at all.
+  - *Reporting* is `POST /v1/reports` (`WyrApi.Paths.REPORTS`) with a `ReportRequest`, the question
+    and a `ReportReason`: `OFFENSIVE`, `REAL_PERSON`, `SPAM`, `NOT_A_CHOICE` or `OTHER`, a growable
+    wire enum with `UNKNOWN` (§5), which, or no reason at all, is 400. A player holds **one report per
+    question** (`reports`, V11, under a primary key on both): a report sent again replaces its reason
+    and time, read under its row lock, and two first reports racing are the key's to decide (§4). A
+    report also hides the question from the reporter, and a moderator's dismissal (*Moderation*)
+    leaves it hidden. Answered 204.
+  - *Hiding a question* is `POST /v1/hidden-questions` with a `HideQuestionRequest`: the question is
+    never served to the player again, in any cycle (`hidden_questions`, V11). *Hiding an author* is
+    `POST /v1/hidden-authors` with a `HideAuthorRequest`, naming a question of theirs: every question
+    that author wrote, those approved later included, is never served to the player again
+    (`hidden_authors`, V11). The author stays anonymous: the player names them only by a question,
+    and learns nothing of who they are. A **seed** has no author, so hiding its author hides only that
+    seed, as it does a question whose author deleted their account: *provisional — user decision*,
+    since a player cannot tell a seed from any other question and
+    a refusal would be a failure they could do nothing about; the options were 409 or doing nothing.
+    An author may hide their own questions from themselves. Hiding again writes nothing. Each is 204,
+    and **nothing unhides** a question or an author, for now.
+  - *The feed* leaves out what a player hid: one more predicate beside the category filter
+    (`QuestionStore.visibleTo`, two `NOT EXISTS` found through the tables' keys), which the due count
+    shares, so a hidden question is neither served nor due and a cycle finishes without it. A player is
+    never stuck on what they hid, and one who hid every question is served an empty batch, which the
+    client reads as out of questions. A vote, skip or reaction to a hidden question still lands, as one
+    in flight when it was hidden would (`isServable` is unchanged).
+  - Each takes only a question the player may be served, 404 for any other, and resolves the player
+    before it writes, 401 for one who is gone, as a vote does. Limited per player: reports 30 an hour,
+    the two hides 60 an hour together (§8b). Nothing about them pays, costs, or touches the tally, the
+    reactions or the cycle. `ReportStoreTest`, `ReportFlowTest`.
 - **Submitting** *(built; details decided 2026-09-23; the cost 2026-09-25; registered players only
   2026-09-26)*: **only a registered player may submit** (§8a, *Accounts*): one with a username, or
   signed in with Play Games (§8a, *Play Games sign-in*), which registers a player as a username does;
@@ -1704,11 +1825,12 @@ listed on the Account screen.
     one's with `MessageDigest.isEqual`, so a refusal takes as long whatever was guessed.
   - `GET /v1/admin/submissions` is the queue: the players' submissions at `?status=` (`PENDING` when
     absent; `UNKNOWN`, an unknown name or a second value is 400), oldest first, bounded by `?limit=`
-    as the feed is, in a `SubmissionListDto` of `SubmissionDto`s. Never a seed, and no author.
+    as the feed is, in a `SubmissionListDto` of `SubmissionDto`s. Never a seed. Each names its author
+    by an opaque id alone (`authorId`, *Authors*, below).
   - `GET /v1/admin/questions` is the list of every question, seeds included, newest first, in an
     `AdminQuestionPageDto` of `AdminQuestionDto`s: options, categories, status, whether it is a seed,
     when it was stored, reviewed and retired, a rejected one's reason, its tally, its like count and
-    its dislike count, and no author. `?status=` and `?category=` narrow it, each repeated for several and matching any
+    its dislike count, and its author by id alone, null for a seed. `?status=` and `?category=` narrow it, each repeated for several and matching any
     of its values, none for all; `UNKNOWN` or a name that is no status, and an id no category has,
     is 400, as for the feed's category (`categoryFilter`, `CategoryStore.checked`). `?limit=` bounds a page as the feed's is. A page is asked for by
     cursor, not offset (`QuestionCursor`, `?cursor=`): `nextCursor` is the last question's place,
@@ -1754,6 +1876,38 @@ listed on the Account screen.
     as a status: `statusOf` and `standsAt` read the two columns as one status, so a rollback to the
     build before reads every row. The seed writes only what a database lacks and changes nothing
     there, so a retired seed stays retired through every boot. `RetirementTest` pins it, the races included.
+  - *Reports* (*built on the server 2026-09-26; the moderation app does not show them yet*):
+    `GET /v1/admin/reports` lists the reported questions (§8d, *Reports*), most reported first, then
+    the most lately reported, then by id, bounded by `?limit=` and with no cursor, since a moderator
+    works from the head as in the queue: an `AdminReportListDto` of `AdminReportDto`s, each the
+    question as the list of every question shows it, how many players report it now, and how many give
+    each reason (`ReportReasonCountDto`, a reason nobody gave left out), read with the question in one
+    statement so they add up (`ModerationStore.reports`, §4), and when it was last reported. No
+    reporter travels. `POST /v1/admin/report-dismissals` with a `DismissReportsRequest` clears every
+    report of a question, answered 204 (none to clear is 204 too, an unknown id 404): it leaves the list
+    until a player reports it again. The question stays as it stands, retired or not, and hidden from
+    each player who reported it. Whether to retire a reported question is the moderator's own call,
+    through *Retiring*; nothing retires one by itself, however many report it: *provisional — user
+    decision*, the other option being a threshold that retires it until a moderator looks.
+    `ReportModerationFlowTest`.
+  - *Authors* (*built on the server 2026-09-26; the moderation app does not use them yet*): every
+    admin DTO names a question's author by an opaque id, `authorId`, the author's player id, which says
+    nothing about them but which questions are theirs; never a username, and null for a seed and for
+    a question whose author deleted their account (§8a).
+    `AdminQuestionDto.authorId` and `SubmissionDto.authorId`, the latter filled on the admin routes
+    alone (`toSubmission`'s `forModerator`): the author's own list and a submission's answer never
+    carry it, nor does anything a player is sent. `POST /v1/admin/author-blocks` with a
+    `BlockAuthorRequest`, an author id and a reason held to a rejection's rules, blocks the author from
+    submitting (`players.submissions_blocked_at`, V12) and rejects each of their pending submissions
+    for that one reason, paying each one's cost back as a rejection does (§8c), answered with an
+    `AuthorBlockDto` (blocked, how many it rejected). Their approved questions stay served; a block of
+    a blocked author keeps the first block's time and rejects whatever is pending. From then on each
+    submission of theirs is 403 `SUBMISSIONS_BLOCKED`, checked before what they typed (a plain read)
+    and again under their row lock, which the block takes too, so a submission racing a block is either
+    rejected by it or refused (`AuthorBlockTest`). `POST /v1/admin/author-unblocks` with an
+    `UnblockAuthorRequest` lets them submit again; what the block rejected stays rejected. An id no
+    player has is 404 `AUTHOR_NOT_FOUND`. On the client, `SUBMISSIONS_BLOCKED` and `AUTHOR_NOT_FOUND`
+    read as `DomainError.UNKNOWN` until the branches that show them give each one of its own.
   - *The client* is `ModerationRepository` in `:core:domain`, behind `GetPendingSubmissions`,
     `ApproveSubmission` and `RejectSubmission`, none of which ensures a session: the moderator is
     not a player. `DefaultModerationRepository` calls `ModerationApi` through `runApi` alone, never

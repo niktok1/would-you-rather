@@ -308,8 +308,51 @@ the change, in `devRelease`, and not the count up's doing: the first frames afte
 take up to 750 ms on the UI thread (code not yet compiled, with no baseline profile), and the
 RenderThread sometimes waits 50 to 300 ms on the display's buffers.
 
-**On `feat/server-engagement`** (from e603694, in the worktree `~/Projects/.wyr-worktrees/server-engagement`;
-nothing pushed or merged; `feat/server-safety`, whose V11 to V14 come first, merges before it): the
+**`feat/server-safety`** (from e603694; merged to main 2026-09-26, 6e6fa23): the server side of Google Play readiness (the user's decisions,
+2026-09-26). The clients adopt it on later branches; this one adds only the `:core` contract and the
+smallest client compile fixes.
+- **Request bodies** are capped at 64 KiB (CLAUDE.md §8b, *Request bodies*): 413 on a
+  `Content-Length` over it, before the route runs, and a chunked body stopped one byte past it.
+- **Guest minting** defaults to 60 an hour per address, was 10 (§8b, *Rate limiting*): a carrier's
+  shared address or a school's Wi-Fi stands for many players. `RATE_LIMIT_GUESTS_PER_HOUR` still
+  overrides it.
+- **A minimum build** per platform (§8b, *Minimum client version*): `MIN_CLIENT_VERSION_ANDROID` and
+  the rest make an older build's request 426 `UPGRADE_REQUIRED`, first thing, but for `/health`. No
+  client sends `X-Client-Platform` and `X-Client-Version` yet, so nothing is refused until one does;
+  the client branch that sends them gives `UPGRADE_REQUIRED` a `DomainError` of its own (it reads as
+  `UNKNOWN` for now) and a screen that says to update.
+- **Reports and hiding** (§8d, *Reports*; V11): `POST /v1/reports` with a reason, one per player and
+  question, and `POST /v1/hidden-questions` and `/v1/hidden-authors`, each hiding from the player for
+  good; the feed and the due count leave hidden questions out. To ask the user: hiding a seed's author
+  hides that seed (provisional, the options were 409 or nothing), and nothing unhides yet.
+- **The moderator's side** (§8d, *Moderation*, *Reports* and *Authors*; V12): `GET /v1/admin/reports`,
+  most reported first with the reasons counted, and `POST /v1/admin/report-dismissals`; an opaque
+  `authorId` on `AdminQuestionDto` and on the admin routes' `SubmissionDto`s (never a player's); and
+  `POST /v1/admin/author-blocks` and `/author-unblocks`, a block rejecting whatever the author has
+  pending, paid back, and refusing their submissions with 403 `SUBMISSIONS_BLOCKED`. The moderation
+  app shows none of it yet. To ask the user: nothing retires a reported question by itself
+  (provisional; a threshold was the other option).
+- **An operator's trail** (§8b, *Logging*): one INFO line per stored submission and per admin action,
+  ids only, never what anyone typed, nor a token or password.
+- **Deleting an account** (§8a, *Deleting an account*; V13, V14): `POST /v1/me/deletion`, 204,
+  deletes the player and all that is theirs, keeps their approved questions with nobody as author, and
+  takes each like they held back from its author. The client then plays on as a fresh guest. A
+  request of theirs racing it from another device is 401, never a 500 (§4).
+
+Verified on this machine: `ktlintCheck`, `:server:test` (407 tests, H2 only), every `:core` module's
+`jvmTest`, `:core:network:testAndroidHostTest`, `:app:shared:jvmTest`, `:app:adminApp:jvmTest`, the
+verify job's client compiles, every `:core` module's and `:app:shared`'s iOS compiles, and the fat
+jar booted on port 18110 on H2 (health, a 426 for an old build, a report, a hide, the reports list,
+a 413, a deletion, and the feed, a vote, a skip and a registration after it, each 401). **Not
+verified**: V11 to V14 and the new SQL on PostgreSQL (the `server-postgres` CI job runs them: the
+feed's two `NOT EXISTS`, the reports list ordered by subqueries, the deletion's `INSERT ... SELECT`),
+and no race test runs on PostgreSQL (they are H2's, as all are): a re-answer, re-skip or registration
+waiting on the deletion is staged on H2, which leaves a lock read on a deleted row as PostgreSQL
+does, but a hide of the author racing it is not, since H2's foreign key check waits on no lock, so
+only its rerun is pinned. Migrations V11 to V14 are this branch's; `feat/server-engagement` starts at
+V15.
+
+**`feat/server-engagement`** (from e603694; merged to main 2026-09-26, after `feat/server-safety`): the
 server side of four of the user's asks of 2026-09-26, the contract beside it, and the clients only
 where the contract made them (the two new error codes in `ErrorMapper`). **The clients adopt all of
 it later.** One commit each:
@@ -330,15 +373,8 @@ it later.** One commit each:
 (*Push notifications*, *Play Games sign-in*): a Firebase project and its service account key for
 `FCM_SERVICE_ACCOUNT_JSON`, and a Play Console game with Play Games Services and a game server OAuth
 client for `PLAY_GAMES_CLIENT_ID` and `PLAY_GAMES_CLIENT_SECRET`, all set by hand on Render
-(`render.yaml` declares them `sync: false`). Unset, each says so once at boot. **At the merge**:
-`MigrationsTest.BASELINED_HISTORY` gains `feat/server-safety`'s 11 to 14 between 10 and 15, and
-`ErrorCode`, `ErrorMapper`, `RateLimits`, `RouteLimit`, `TestRateLimits`, `ServerConfigTest` and
-`RateLimitTest` will each conflict where both branches added a member: keep both. So will CLAUDE.md
-§4 (the lists of stores under each transaction rule) and §8b (the migrations paragraph's list of
-scripts, which then names V11 to V14 by what each does, as it names V15 to V18, and loses its "a gap
-included"; the rate limits' groups): keep both there too. If
-`feat/server-safety` deletes a player row, the push tokens and Play Games links go with it by their
-cascades, as long as it deletes the player's sessions first (their key restricts). Tests: `:server`
+(`render.yaml` declares them `sync: false`). Unset, each says so once at boot. Merged after `feat/server-safety`: an account's deletion takes
+the player's push tokens and Play Games links by their cascades. Tests: `:server`
 431 (365 before), `:core:data` 143 (`ErrorMapperTest`'s two new rows); the rest unchanged.
 
 **A review's fixes** (611c129 to a371b0e): a 401 from FCM naming its own error code
@@ -998,7 +1034,7 @@ sensitive personal data", the privacy policy to name FCM and Play Games (§8b *P
   address). The server's log names no address, so the check is by status alone. Until it passes,
   the per-address budgets are not to be relied on.
 - **The limits against real traffic.** The budgets are starting points nobody has watched: a
-  household or a mobile carrier's shared address (CGNAT) shares 10 new guests an hour, and an IPv6
+  household or a mobile carrier's shared address (CGNAT) shares 60 new guests an hour, and an IPv6
   client can rotate through its prefix for fresh per-address budgets. Every count is overridable
   without a build (`RATE_LIMIT_*`). CORS exposes `Retry-After` to a page on an allowed origin, so the
   moderation app's page can say how long to wait (`CorsTest` pins the header), but no browser has
@@ -1227,7 +1263,7 @@ run the app to read its own key.
 ### Rate limits
 
 The server limits locally too, with the same budgets as on Render (CLAUDE.md §8b), each keyed by the
-socket peer or the player. The one a developer meets first is 10 guests an hour: an eleventh fresh
+socket peer or the player. The one a developer meets first is 60 guests an hour: a sixty-first fresh
 guest in the hour (every fresh install, clear of storage and logout makes one) answers 429, which the
 **Account** tab shows as *Too many tries. Wait N s, then try again.*
 Raise any budget for a session with its variable, and a refused request says which one in the log:

@@ -120,9 +120,13 @@ object VoteStore {
      * starts one only when nothing is due, and this answer is not committed yet, so its question
      * was already answered or skipped in the cycle read here: counting this answer there too is what
      * answering just before the new cycle would have done.
+     *
+     * The player may be gone by now, and is then 401, as before the lock: their account's deletion
+     * (`AccountDeletion`) deletes their vote under its own lock, so a re-answer from another device
+     * that waited on it finds no vote once the deletion commits, and then no player.
      */
     private fun currentCycle(playerId: String): Int =
-        checkNotNull(PlayerStore.find(playerId)) { "player $playerId vanished mid-transaction" }.cycle
+        PlayerStore.find(playerId)?.cycle ?: throw ApiFailure.unauthorized("unknown player")
 
     private fun replay(
         playerId: String,
@@ -182,7 +186,7 @@ object VoteStore {
                 row[attemptId] = answer.attemptId
                 row[answerMillis] = answer.answerMillis
             }
-        // Nothing deletes a vote, and this transaction holds its lock.
+        // Only its player's account going deletes a vote, and this transaction holds its lock.
         check(moved == 1) { "vote by $playerId on $questionId vanished mid-transaction" }
     }
 

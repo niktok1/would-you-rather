@@ -60,6 +60,13 @@ public enum class ErrorCode {
     ACCOUNT_REQUIRED,
 
     /**
+     * A moderator has blocked this author from submitting questions (CLAUDE.md §8d, *Moderation*), so
+     * the submission is refused and costs nothing. Sent with 403, never 401: the session is fine, so a
+     * client must not refresh it or replace it.
+     */
+    SUBMISSIONS_BLOCKED,
+
+    /**
      * A moderator tried to approve or reject a submission that is not pending: a moderator decided
      * it already, or it is a seed, approved from the start. Sent with 409.
      */
@@ -82,6 +89,12 @@ public enum class ErrorCode {
 
     /** A moderator tried to rename a category no category has the id of. Sent with 404. */
     CATEGORY_NOT_FOUND,
+
+    /**
+     * A moderator named an author, to block or unblock, whom no player is: an id the admin routes never
+     * sent, or an author whose account is deleted since. Sent with 404.
+     */
+    AUTHOR_NOT_FOUND,
 
     /**
      * A registration's username breaks the rules of [io.ntole.wyr.core.auth.RegisterRequest]: lower-cased,
@@ -153,6 +166,14 @@ public enum class ErrorCode {
      * request did nothing.
      */
     RATE_LIMITED,
+
+    /**
+     * The client's build is older than the oldest the server serves on its platform
+     * ([io.ntole.wyr.core.api.WyrApi.Headers.CLIENT_VERSION]): the player must update the app. Sent with
+     * 426, before anything else about the request is looked at, so it did nothing, and every request of
+     * that build gets the same until it is updated.
+     */
+    UPGRADE_REQUIRED,
 
     /** Unexpected server-side failure. */
     INTERNAL,

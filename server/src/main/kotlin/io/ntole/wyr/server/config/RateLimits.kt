@@ -19,15 +19,19 @@ data class RequestBudget(
 /**
  * What one client may send (CLAUDE.md §8b, *Rate limiting*): a budget for each group of routes, spent
  * apart from every other group's. Registrations, logouts, the feed, votes, skips, reactions, submissions,
- * home picks, push tokens and the two reads of the player's own are per player, so players behind one
- * address do not share them; the rest, whose caller has no session to name, or needs none, per client
- * address.
+ * reports, hides, deletions, home picks, push tokens and the two reads of the player's own are per player,
+ * so players behind one address do not share them; the rest, whose caller has no session to name, or needs
+ * none, per client address.
  *
  * Each is overridable by the environment variable [fromEnvironment] names, a count per the period the
  * name ends in. The periods are fixed.
  */
 data class RateLimits(
-    /** `POST /v1/auth/guest`, per address: what a script minting guests to farm with can get. */
+    /**
+     * `POST /v1/auth/guest`, per address: what a script minting guests to farm with can get. Room for
+     * the many players one address can stand for, a mobile carrier's shared address or a school's
+     * Wi-Fi, each new install minting one.
+     */
     val guests: RequestBudget,
     /** `POST /v1/auth/refresh`, per address. A player refreshes about once per access token. */
     val refreshes: RequestBudget,
@@ -58,6 +62,12 @@ data class RateLimits(
     val reactions: RequestBudget,
     /** `POST /v1/questions`. The pending cap still applies within it. */
     val submissions: RequestBudget,
+    /** `POST /v1/reports`. A player reports what they come across, a few at most. */
+    val reports: RequestBudget,
+    /** `POST /v1/hidden-questions` and `POST /v1/hidden-authors` together. */
+    val hides: RequestBudget,
+    /** `POST /v1/me/deletion`. A player deletes their account once; a retry after a lost answer is 401. */
+    val deletions: RequestBudget,
     /** `GET /v1/me`. */
     val stats: RequestBudget,
     /** `GET /v1/me/questions`. */
@@ -96,7 +106,7 @@ data class RateLimits(
          */
         val DEFAULT: RateLimits =
             RateLimits(
-                guests = RequestBudget(requests = 10, per = 1.hours),
+                guests = RequestBudget(requests = 60, per = 1.hours),
                 refreshes = RequestBudget(requests = 30, per = 1.minutes),
                 logins = RequestBudget(requests = 20, per = 1.minutes),
                 playGames = RequestBudget(requests = 20, per = 1.minutes),
@@ -107,6 +117,9 @@ data class RateLimits(
                 skips = RequestBudget(requests = 120, per = 1.minutes),
                 reactions = RequestBudget(requests = 60, per = 1.minutes),
                 submissions = RequestBudget(requests = 30, per = 1.hours),
+                reports = RequestBudget(requests = 30, per = 1.hours),
+                hides = RequestBudget(requests = 60, per = 1.hours),
+                deletions = RequestBudget(requests = 10, per = 1.hours),
                 stats = RequestBudget(requests = 120, per = 1.minutes),
                 mySubmissions = RequestBudget(requests = 120, per = 1.minutes),
                 categories = RequestBudget(requests = 120, per = 1.minutes),
@@ -148,6 +161,9 @@ data class RateLimits(
                     skips = budget("RATE_LIMIT_SKIPS_PER_MINUTE", skips),
                     reactions = budget("RATE_LIMIT_REACTIONS_PER_MINUTE", reactions),
                     submissions = budget("RATE_LIMIT_SUBMISSIONS_PER_HOUR", submissions),
+                    reports = budget("RATE_LIMIT_REPORTS_PER_HOUR", reports),
+                    hides = budget("RATE_LIMIT_HIDES_PER_HOUR", hides),
+                    deletions = budget("RATE_LIMIT_DELETIONS_PER_HOUR", deletions),
                     stats = budget("RATE_LIMIT_STATS_PER_MINUTE", stats),
                     mySubmissions = budget("RATE_LIMIT_MY_SUBMISSIONS_PER_MINUTE", mySubmissions),
                     categories = budget("RATE_LIMIT_CATEGORIES_PER_MINUTE", categories),

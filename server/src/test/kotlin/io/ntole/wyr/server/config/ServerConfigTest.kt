@@ -141,7 +141,7 @@ class ServerConfigTest {
         val limits = ServerConfig.fromEnvironment { null }.rateLimits
 
         assertEquals(RateLimits.DEFAULT, limits)
-        assertEquals(RequestBudget(10, 1.hours), limits.guests)
+        assertEquals(RequestBudget(60, 1.hours), limits.guests)
         assertEquals(RequestBudget(30, 1.minutes), limits.refreshes)
         assertEquals(RequestBudget(20, 1.minutes), limits.logins)
         assertEquals(RequestBudget(20, 1.minutes), limits.playGames)
@@ -152,6 +152,9 @@ class ServerConfigTest {
         }
         assertEquals(RequestBudget(60, 1.minutes), limits.reactions)
         assertEquals(RequestBudget(30, 1.hours), limits.submissions)
+        assertEquals(RequestBudget(30, 1.hours), limits.reports)
+        assertEquals(RequestBudget(60, 1.hours), limits.hides)
+        assertEquals(RequestBudget(10, 1.hours), limits.deletions)
         assertEquals(RequestBudget(120, 1.minutes), limits.homePickCounts)
         assertEquals(RequestBudget(30, 1.minutes), limits.homePicks)
         assertEquals(RequestBudget(60, 1.hours), limits.pushTokens)
@@ -174,6 +177,9 @@ class ServerConfigTest {
                 Triple("RATE_LIMIT_SKIPS_PER_MINUTE", RateLimits::skips, 1.minutes),
                 Triple("RATE_LIMIT_REACTIONS_PER_MINUTE", RateLimits::reactions, 1.minutes),
                 Triple("RATE_LIMIT_SUBMISSIONS_PER_HOUR", RateLimits::submissions, 1.hours),
+                Triple("RATE_LIMIT_REPORTS_PER_HOUR", RateLimits::reports, 1.hours),
+                Triple("RATE_LIMIT_HIDES_PER_HOUR", RateLimits::hides, 1.hours),
+                Triple("RATE_LIMIT_DELETIONS_PER_HOUR", RateLimits::deletions, 1.hours),
                 Triple("RATE_LIMIT_STATS_PER_MINUTE", RateLimits::stats, 1.minutes),
                 Triple("RATE_LIMIT_MY_SUBMISSIONS_PER_MINUTE", RateLimits::mySubmissions, 1.minutes),
                 Triple("RATE_LIMIT_CATEGORIES_PER_MINUTE", RateLimits::categories, 1.minutes),
@@ -206,6 +212,35 @@ class ServerConfigTest {
         listOf("", "   ").forEach { blank ->
             val limits = ServerConfig.fromEnvironment(mapOf("RATE_LIMIT_VOTES_PER_MINUTE" to blank)::get).rateLimits
             assertEquals(RateLimits.DEFAULT, limits, "blank is unset: \"$blank\"")
+        }
+    }
+
+    @Test
+    fun `each platform's minimum build comes from its variable and none is set by default`() {
+        assertEquals(emptyMap(), ServerConfig.fromEnvironment { null }.minClientVersions)
+
+        val env =
+            mapOf(
+                "MIN_CLIENT_VERSION_ANDROID" to "12",
+                "MIN_CLIENT_VERSION_IOS" to " 3 ",
+                "MIN_CLIENT_VERSION_WEB" to "",
+                "MIN_CLIENT_VERSION_DESKTOP" to "1",
+            )
+        assertEquals(
+            mapOf("android" to 12, "ios" to 3, "desktop" to 1),
+            ServerConfig.fromEnvironment(env::get).minClientVersions,
+            "blank is unset",
+        )
+    }
+
+    @Test
+    fun `a minimum build that is not a whole number of at least 1 fails at config load and names its variable`() {
+        listOf("0", "-1", "abc", "1.5", "2147483648").forEach { raw ->
+            val failure =
+                assertFailsWith<IllegalArgumentException>("\"$raw\" should be rejected") {
+                    ServerConfig.fromEnvironment(mapOf("MIN_CLIENT_VERSION_IOS" to raw)::get)
+                }
+            assertContains(failure.message.orEmpty(), "MIN_CLIENT_VERSION_IOS")
         }
     }
 

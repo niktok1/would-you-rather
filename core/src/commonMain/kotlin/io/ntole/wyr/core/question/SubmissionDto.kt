@@ -7,7 +7,11 @@ import kotlinx.serialization.Serializable
  * what a submission is answered with, and what [io.ntole.wyr.core.api.WyrApi.Paths.MY_QUESTIONS]
  * lists. A moderator sees a submission the same way: the moderator's queue
  * ([io.ntole.wyr.core.api.WyrApi.Paths.ADMIN_SUBMISSIONS]) lists them, and a decision is answered
- * with one. It names no author either way.
+ * with one.
+ *
+ * [authorId] is the author's player id, an opaque name for who wrote it (CLAUDE.md §8d, *Moderation*),
+ * sent only on the admin routes, so a moderator can block an author, and null everywhere else: the
+ * author's own list and a submission's answer never carry it, nor does anything a player is sent.
  *
  * [id] is the question's id, the one the feed serves it under once it is approved. [optionA] and
  * [optionB] are as stored, trimmed. [categories] are the ones the question is filed under, which a
@@ -38,4 +42,5 @@ public data class SubmissionDto(
     public val likeCount: Int = 0,
     public val dislikeCount: Int = 0,
     public val answerCount: Int = 0,
+    public val authorId: String? = null,
 )

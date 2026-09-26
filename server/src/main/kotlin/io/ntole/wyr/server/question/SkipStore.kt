@@ -83,9 +83,12 @@ object SkipStore {
      * starts one only when nothing is due, and this skip is not committed yet, so its question was
      * already answered or skipped in the cycle read here: skipping it there as well changes nothing
      * that is due.
+     *
+     * The player may be gone by now, and is then 401, as for a vote (`VoteStore.currentCycle`): a skip
+     * that waited on the lock of one their account's deletion deleted finds no skip, and then no player.
      */
     private fun currentCycle(playerId: String): Int =
-        checkNotNull(PlayerStore.find(playerId)) { "player $playerId vanished mid-transaction" }.cycle
+        PlayerStore.find(playerId)?.cycle ?: throw ApiFailure.unauthorized("unknown player")
 
     private fun insertSkip(
         playerId: String,
@@ -109,7 +112,7 @@ object SkipStore {
             Skips.update({ (Skips.playerId eq playerId) and (Skips.questionId eq questionId) }) { row ->
                 row[skippedInCycle] = cycle
             }
-        // Nothing deletes a skip, and this transaction holds its lock.
+        // Only its player's account going deletes a skip, and this transaction holds its lock.
         check(moved == 1) { "skip by $playerId of $questionId vanished mid-transaction" }
     }
 }

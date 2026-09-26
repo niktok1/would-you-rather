@@ -1,7 +1,7 @@
 -- Push tokens (CLAUDE.md §8a, Push tokens): the devices a player's pushes reach, one row per Firebase
 -- registration token, kept under the session that registered it. Empty until a client registers one.
 --
--- Both foreign keys cascade, unlike every other table's: the logout that deletes a session deletes its
+-- Both foreign keys cascade, as identities' (V18) does, and no other table's: the logout that deletes a session deletes its
 -- device's tokens with it, and deleting a player deletes theirs, with no store having to know this
 -- table is there.
 --
@@ -26,3 +26,4 @@ CREATE TABLE IF NOT EXISTS push_tokens (
         REFERENCES sessions(id) ON DELETE CASCADE ON UPDATE RESTRICT
 );
 CREATE INDEX push_tokens_player_id_updated_at ON push_tokens (player_id, updated_at);
+CREATE INDEX push_tokens_session_id_token ON push_tokens (session_id, token);

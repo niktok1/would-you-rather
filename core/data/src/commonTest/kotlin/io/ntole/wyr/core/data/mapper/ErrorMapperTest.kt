@@ -26,17 +26,22 @@ class ErrorMapperTest {
                     ApiException(ErrorCode.NOT_ENOUGH_POINTS, status = 409) to DomainError.NOT_ENOUGH_POINTS,
                     // A guest's submission, with a 403: never UNAUTHORIZED, which would drop the session.
                     ApiException(ErrorCode.ACCOUNT_REQUIRED, status = 403) to DomainError.ACCOUNT_REQUIRED,
+                    // A blocked author's, with a 403 too: never UNAUTHORIZED, which would drop the session.
+                    ApiException(ErrorCode.SUBMISSIONS_BLOCKED, status = 403) to DomainError.UNKNOWN,
                     ApiException(ErrorCode.ALREADY_DECIDED, status = 409) to DomainError.ALREADY_DECIDED,
                     ApiException(ErrorCode.WRONG_STATUS, status = 409) to DomainError.WRONG_STATUS,
                     // A moderator's, adding or renaming a category: never ALREADY_DECIDED or QUESTION_NOT_FOUND.
                     ApiException(ErrorCode.CATEGORY_EXISTS, status = 409) to DomainError.CATEGORY_EXISTS,
                     ApiException(ErrorCode.CATEGORY_NOT_FOUND, status = 404) to DomainError.CATEGORY_NOT_FOUND,
+                    ApiException(ErrorCode.AUTHOR_NOT_FOUND, status = 404) to DomainError.UNKNOWN,
                     ApiException(ErrorCode.FORBIDDEN, status = 403) to DomainError.FORBIDDEN,
                     ApiException(ErrorCode.UNAUTHORIZED, status = 401) to DomainError.UNAUTHORIZED,
                     ApiException(ErrorCode.INVALID_REFRESH_TOKEN, status = 401) to DomainError.UNAUTHORIZED,
                     // No longer sent, and a 401 too: still never UNAUTHORIZED, which would drop the session.
                     ApiException(ErrorCode.INVALID_RECOVERY_SECRET, status = 401) to DomainError.UNKNOWN,
                     ApiException(ErrorCode.RATE_LIMITED, status = 429) to DomainError.RATE_LIMITED,
+                    // Until a build names itself and says to update; never SERVER, which would say retry.
+                    ApiException(ErrorCode.UPGRADE_REQUIRED, status = 426) to DomainError.UNKNOWN,
                     ApiException(ErrorCode.INVALID_USERNAME, status = 422) to DomainError.INVALID_USERNAME,
                     ApiException(ErrorCode.INVALID_PASSWORD, status = 422) to DomainError.INVALID_PASSWORD,
                     ApiException(ErrorCode.USERNAME_TAKEN, status = 409) to DomainError.USERNAME_TAKEN,

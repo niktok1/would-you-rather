@@ -45,6 +45,8 @@ object AccountStore {
      * set and is [ApiFailure.alreadyRegistered]. Two players racing for one name both find it free, and
      * the unique constraint refuses the second's write once the first commits (SQLState 23505). That is
      * never caught: Exposed rolls back and reruns the whole transaction, which finds the name taken.
+     * A registration racing the player's account's deletion (`AccountDeletion`) waits on the same row
+     * lock, then finds no row: one more read tells it from a registration that won, and it is 401.
      */
     fun register(
         playerId: String,
@@ -72,6 +74,14 @@ object AccountStore {
                 row[Players.username] = username
                 row[Players.passwordHash] = passwordHash
             }
-        if (named == 0) throw ApiFailure.alreadyRegistered()
+        if (named == 0) {
+            val gone =
+                Players
+                    .select(Players.id)
+                    .where { Players.id eq playerId }
+                    .empty()
+            if (gone) throw ApiFailure.unauthorized("unknown player")
+            throw ApiFailure.alreadyRegistered()
+        }
     }
 }

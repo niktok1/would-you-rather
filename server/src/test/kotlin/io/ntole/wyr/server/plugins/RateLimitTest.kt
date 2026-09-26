@@ -22,6 +22,8 @@ import io.ntole.wyr.core.auth.PlayGamesSignInRequest
 import io.ntole.wyr.core.auth.RefreshRequest
 import io.ntole.wyr.core.auth.RegisterRequest
 import io.ntole.wyr.core.auth.SessionDto
+import io.ntole.wyr.core.author.BlockAuthorRequest
+import io.ntole.wyr.core.author.UnblockAuthorRequest
 import io.ntole.wyr.core.category.CreateCategoryRequest
 import io.ntole.wyr.core.category.RenameCategoryRequest
 import io.ntole.wyr.core.error.ErrorCode
@@ -41,6 +43,11 @@ import io.ntole.wyr.core.question.SubmissionListDto
 import io.ntole.wyr.core.question.SubmitQuestionRequest
 import io.ntole.wyr.core.reaction.Reaction
 import io.ntole.wyr.core.reaction.ReactionRequest
+import io.ntole.wyr.core.report.DismissReportsRequest
+import io.ntole.wyr.core.report.HideAuthorRequest
+import io.ntole.wyr.core.report.HideQuestionRequest
+import io.ntole.wyr.core.report.ReportReason
+import io.ntole.wyr.core.report.ReportRequest
 import io.ntole.wyr.core.vote.OptionSide
 import io.ntole.wyr.core.vote.VoteRequest
 import io.ntole.wyr.server.NO_PRACTICAL_LIMIT
@@ -498,6 +505,32 @@ class RateLimitTest {
                 it.client.vote(it.player)
                 it.client.submit(it.player, "Question ${it.sent++}")
             },
+            // A report and a hide of one question, each answered alike by every one after the first.
+            Group("reports", { copy(reports = it) }, allowed = HttpStatusCode.NoContent) { caller ->
+                caller.client.post(WyrApi.Paths.REPORTS) {
+                    json(caller.player, ReportRequest(SEED, ReportReason.SPAM))
+                }
+            },
+            // Both routes, one after the other, so either left out of the group leaves its budget unspent.
+            Group("hides", { copy(hides = it) }, allowed = HttpStatusCode.NoContent) { caller ->
+                if (caller.sent++ % 2 == 0) {
+                    caller.client.post(WyrApi.Paths.HIDDEN_QUESTIONS) { json(caller.player, HideQuestionRequest(SEED)) }
+                } else {
+                    caller.client.post(WyrApi.Paths.HIDDEN_AUTHORS) { json(caller.player, HideAuthorRequest(SEED)) }
+                }
+            },
+            // A signed token of a player who is not there, so every one is answered alike, 401, and spends
+            // that player's budget: a real one's first deletion would leave nothing for the next.
+            Group(
+                "deletions",
+                { copy(deletions = it) },
+                allowed = HttpStatusCode.Unauthorized,
+                needsSession = false,
+            ) { caller ->
+                caller.client.post(WyrApi.Paths.ME_DELETION) {
+                    bearerAuth(accessTokenIssued("a-player-deleted-already", ago = Duration.ZERO))
+                }
+            },
             Group("stats", { copy(stats = it) }) { caller ->
                 caller.client.get(WyrApi.Paths.ME) { bearerAuth(caller.player.accessToken) }
             },
@@ -633,10 +666,27 @@ class RateLimitTest {
                         admin(token, CreateCategoryRequest(id = "FOOD", nameSr = "Храна", nameEn = "Food"))
                     }
                 },
+                AdminRoute("the reports", HttpStatusCode.OK) { client, token ->
+                    client.get(WyrApi.Paths.ADMIN_REPORTS) { token?.let { header(WyrApi.Headers.ADMIN_TOKEN, it) } }
+                },
+                AdminRoute("a dismissal", HttpStatusCode.NotFound) { client, token ->
+                    client.post(
+                        WyrApi.Paths.ADMIN_REPORT_DISMISSALS,
+                    ) { admin(token, DismissReportsRequest(NO_SUBMISSION)) }
+                },
+                AdminRoute("an author's block", HttpStatusCode.NotFound) { client, token ->
+                    client.post(
+                        WyrApi.Paths.ADMIN_AUTHOR_BLOCKS,
+                    ) { admin(token, BlockAuthorRequest(NO_AUTHOR, "Spam")) }
+                },
+                AdminRoute("an author's unblock", HttpStatusCode.NotFound) { client, token ->
+                    client.post(WyrApi.Paths.ADMIN_AUTHOR_UNBLOCKS) { admin(token, UnblockAuthorRequest(NO_AUTHOR)) }
+                },
             )
         val ADMIN_ROUTE_BUDGET = RequestBudget(requests = ADMIN_ROUTES.size, per = 1.minutes)
         const val NO_SUBMISSION = "no-such-submission"
         const val NO_CATEGORY = "NO_SUCH_CATEGORY"
+        const val NO_AUTHOR = "no-such-author"
 
         /** The header Render's proxy, Cloudflare, sets to the client's address, and two clients' addresses. */
         const val CLIENT_IP_HEADER = "CF-Connecting-IP"

@@ -53,15 +53,15 @@ class ModerationStoreTest {
 
         val approved = transaction(database) { ModerationStore.approve(submitted.id, chosen, now = 5_000L) }
 
-        assertEquals(submitted.copy(categories = chosen, status = QuestionStatus.APPROVED), approved)
+        assertEquals(submitted.copy(categories = chosen, status = QuestionStatus.APPROVED, authorId = author), approved)
         assertEquals(chosen, transaction(database) { storedCategories() }[submitted.id], "the author's rows replaced")
         val row = rowOf(submitted.id)
         assertEquals(QuestionStatus.APPROVED to 5_000L, row[Questions.status] to row[Questions.reviewedAt])
         assertNull(row[Questions.rejectionReason])
         assertEquals(
-            listOf(approved),
+            listOf(approved.copy(authorId = null)),
             transaction(database) { SubmissionStore.byAuthor(author) },
-            "as its author sees it",
+            "as its author sees it, named nowhere",
         )
     }
 
@@ -83,13 +83,16 @@ class ModerationStoreTest {
 
         val rejected = transaction(database) { ModerationStore.reject(submitted.id, "Not a dilemma", now = 5_000L) }
 
-        assertEquals(submitted.copy(status = QuestionStatus.REJECTED, rejectionReason = "Not a dilemma"), rejected)
+        assertEquals(
+            submitted.copy(status = QuestionStatus.REJECTED, rejectionReason = "Not a dilemma", authorId = author),
+            rejected,
+        )
         val row = rowOf(submitted.id)
         assertEquals(QuestionStatus.REJECTED to 5_000L, row[Questions.status] to row[Questions.reviewedAt])
         assertEquals(
-            listOf(rejected),
+            listOf(rejected.copy(authorId = null)),
             transaction(database) { SubmissionStore.byAuthor(author) },
-            "as its author sees it",
+            "as its author sees it, named nowhere",
         )
     }
 
@@ -223,8 +226,13 @@ class ModerationStoreTest {
 
         val pending = queue(QuestionStatus.PENDING)
 
-        assertEquals(oldest + middle + newest, pending, "as each submission was answered, one millisecond in id order")
-        assertEquals(oldest, queue(QuestionStatus.PENDING, limit = 2), "the head of the queue")
+        assertEquals(
+            oldest + middle + newest,
+            pending.map { it.copy(authorId = null) },
+            "as each submission was answered, one millisecond in id order",
+        )
+        assertEquals(listOf(other, other, one, one), pending.map { it.authorId }, "each naming its author by id")
+        assertEquals(pending.take(2), queue(QuestionStatus.PENDING, limit = 2), "the head of the queue")
         assertEquals(
             listOf(approved.id),
             queue(QuestionStatus.APPROVED).map { it.id },
