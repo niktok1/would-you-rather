@@ -124,4 +124,42 @@ class CorsTest {
                 HttpHeaders.RetryAfter.lowercase(),
             )
         }
+
+    @Test
+    fun `a browser on an allowed origin may name its build and read that it must update`() =
+        testApplication {
+            val origin = "https://app.example.com"
+            val config =
+                ServerConfig
+                    .fromEnvironment(mapOf("ALLOWED_WEB_ORIGINS" to origin, "MIN_CLIENT_VERSION_WEB" to "7")::get)
+
+            application {
+                installPlugins(config, TokenService(config))
+                routing { get(WyrApi.Paths.CATEGORIES) { call.respondText("ok") } }
+            }
+
+            // Headers of the app's own, so the browser asks first; refused, the web build could not send them.
+            val preflight =
+                client.options(WyrApi.Paths.CATEGORIES) {
+                    header(HttpHeaders.Origin, origin)
+                    header(HttpHeaders.AccessControlRequestMethod, "GET")
+                    header(
+                        HttpHeaders.AccessControlRequestHeaders,
+                        "${WyrApi.Headers.CLIENT_PLATFORM}, ${WyrApi.Headers.CLIENT_VERSION}",
+                    )
+                }
+            assertEquals(HttpStatusCode.OK, preflight.status)
+            val allowed = preflight.headers[HttpHeaders.AccessControlAllowHeaders].orEmpty().lowercase()
+            assertContains(allowed, WyrApi.Headers.CLIENT_PLATFORM.lowercase())
+            assertContains(allowed, WyrApi.Headers.CLIENT_VERSION.lowercase())
+
+            val refused =
+                client.get(WyrApi.Paths.CATEGORIES) {
+                    header(HttpHeaders.Origin, origin)
+                    header(WyrApi.Headers.CLIENT_PLATFORM, WyrApi.ClientPlatform.WEB)
+                    header(WyrApi.Headers.CLIENT_VERSION, "6")
+                }
+            assertEquals(HttpStatusCode.UpgradeRequired, refused.status)
+            assertEquals(origin, refused.headers[HttpHeaders.AccessControlAllowOrigin], "so the page can read it")
+        }
 }

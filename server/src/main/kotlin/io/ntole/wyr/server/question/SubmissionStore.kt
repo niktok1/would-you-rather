@@ -46,13 +46,17 @@ object SubmissionStore {
      *
      * A moderator deciding one of the author's submissions meanwhile only ever frees a place, so a
      * count that has not seen the decision refuses at worst a submission that would just have fit.
+     *
+     * An author a moderator has blocked is refused with 403, read under the same lock: a block takes the
+     * author's row lock too (`ModerationStore.blockAuthor`), so a submission either commits before the
+     * block, which then finds it pending and rejects it, or waits for the block and is refused.
      */
     fun submit(
         authorId: String,
         submission: SubmitQuestionRequest,
         now: Long = System.currentTimeMillis(),
     ): SubmissionDto {
-        lockAuthor(authorId)
+        if (lockAuthor(authorId).blocked) throw ApiFailure.submissionsBlocked()
 
         if (pendingBy(authorId) >= WyrApi.Limits.MAX_PENDING_SUBMISSIONS) {
             throw ApiFailure.submissionLimit(WyrApi.Limits.MAX_PENDING_SUBMISSIONS)
@@ -123,7 +127,8 @@ object SubmissionStore {
      * A question read with [SUBMISSION_COLUMNS], as its author sees it, filed under [categories].
      * Every reader of a submission maps it here, the author's list and the moderator's alike. A
      * retired one is [QuestionStatus.RETIRED] ([statusOf]), so its author sees that it is no longer
-     * served.
+     * served. [forModerator] names the author by id ([SubmissionDto.authorId]), which only the admin
+     * routes send, so it is off unless asked for.
      *
      * A reason goes out only with a rejected question, whatever the column holds, so what the
      * contract promises does not rest on every writer of the column clearing it.
@@ -131,6 +136,7 @@ object SubmissionStore {
     internal fun toSubmission(
         row: ResultRow,
         categories: List<String>,
+        forModerator: Boolean = false,
     ): SubmissionDto {
         val status = statusOf(row)
         return SubmissionDto(
@@ -144,6 +150,7 @@ object SubmissionStore {
             likeCount = row.countOf(likeCount),
             dislikeCount = row.countOf(dislikeCount),
             answerCount = row.countOf(answerCount),
+            authorId = row[Questions.authorPlayerId].takeIf { forModerator },
         )
     }
 
@@ -168,6 +175,7 @@ object SubmissionStore {
             Questions.id,
             Questions.optionA,
             Questions.optionB,
+            Questions.authorPlayerId,
             Questions.status,
             Questions.retiredAt,
             Questions.rejectionReason,
@@ -178,18 +186,25 @@ object SubmissionStore {
         )
 
     /**
-     * Locks the author's row until this transaction ends. It also resolves the author, as a vote
-     * resolves its player: a validly signed token can outlive its player, and inserting for one that
-     * is gone would trip the Questions foreign key instead of answering 401.
+     * Locks the author's row until this transaction ends, and returns what it holds. It also resolves
+     * the author, as a vote resolves its player: a validly signed token can outlive its player, and
+     * inserting for one that is gone would trip the Questions foreign key instead of answering 401.
      */
-    private fun lockAuthor(authorId: String) {
-        Players
-            .select(Players.id)
-            .where { Players.id eq authorId }
-            .forUpdate()
-            .singleOrNull()
-            ?: throw ApiFailure.unauthorized("unknown player")
+    private fun lockAuthor(authorId: String): LockedAuthor {
+        val row =
+            Players
+                .select(Players.id, Players.submissionsBlockedAt)
+                .where { Players.id eq authorId }
+                .forUpdate()
+                .singleOrNull()
+                ?: throw ApiFailure.unauthorized("unknown player")
+        return LockedAuthor(blocked = row[Players.submissionsBlockedAt] != null)
     }
+
+    /** What a submission reads of its author under their row lock. */
+    private class LockedAuthor(
+        val blocked: Boolean,
+    )
 
     private fun pendingBy(authorId: String): Long {
         val pending = Questions.id.count()

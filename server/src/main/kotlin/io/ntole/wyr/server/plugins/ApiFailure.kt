@@ -25,6 +25,17 @@ class ApiFailure(
             cause: Throwable? = null,
         ) = ApiFailure(HttpStatusCode.BadRequest, ErrorCode.VALIDATION_FAILED, message, cause)
 
+        /**
+         * A request body over [MAX_REQUEST_BODY_BYTES] ([RequestBodyCap]). [ErrorCode.VALIDATION_FAILED], with
+         * 413: no correct client sends one, so it is a bug on one side, as a malformed body is.
+         */
+        fun bodyTooLarge() =
+            ApiFailure(
+                HttpStatusCode.PayloadTooLarge,
+                ErrorCode.VALIDATION_FAILED,
+                "request body over $MAX_REQUEST_BODY_BYTES bytes",
+            )
+
         /** A submitted question the player can put right, as opposed to a malformed request ([validation]). */
         fun invalidSubmission(message: String) =
             ApiFailure(HttpStatusCode.UnprocessableEntity, ErrorCode.INVALID_SUBMISSION, message)
@@ -38,6 +49,14 @@ class ApiFailure(
         /** A guest's submission: only a registered player may submit (CLAUDE.md §8d, *Submitting*). */
         fun accountRequired() =
             ApiFailure(HttpStatusCode.Forbidden, ErrorCode.ACCOUNT_REQUIRED, "only a registered player may submit")
+
+        /** A submission by an author a moderator has blocked (CLAUDE.md §8d, *Moderation*). */
+        fun submissionsBlocked() =
+            ApiFailure(HttpStatusCode.Forbidden, ErrorCode.SUBMISSIONS_BLOCKED, "this author may not submit")
+
+        /** A block or an unblock of an author no player is. */
+        fun authorNotFound(id: String) =
+            ApiFailure(HttpStatusCode.NotFound, ErrorCode.AUTHOR_NOT_FOUND, "no author $id")
 
         /** A moderator's decision on a question that is no longer, or never was, pending. */
         fun alreadyDecided(id: String) =
@@ -77,6 +96,18 @@ class ApiFailure(
                 "no account has that username and password",
             )
 
+        /** A Play Games sign-in's server auth code Google refused. Never [unauthorized]: see the code's doc. */
+        fun playGamesCodeRefused() =
+            ApiFailure(
+                HttpStatusCode.UnprocessableEntity,
+                ErrorCode.PLAY_GAMES_CODE_REFUSED,
+                "Google refused the Play Games code; ask Play Games for a new one",
+            )
+
+        /** Google could not be asked who a Play Games sign-in's code names. */
+        fun playGamesUnavailable() =
+            ApiFailure(HttpStatusCode.BadGateway, ErrorCode.PLAY_GAMES_UNAVAILABLE, "Play Games could not be asked")
+
         fun unauthorized(message: String = "missing or invalid credentials") =
             ApiFailure(HttpStatusCode.Unauthorized, ErrorCode.UNAUTHORIZED, message)
 
@@ -92,5 +123,16 @@ class ApiFailure(
                 ErrorCode.INVALID_REFRESH_TOKEN,
                 "refresh token unknown, expired, or already rotated",
             )
+
+        /** A build older than its platform's [minimum] ([ClientVersionCheck]). */
+        fun upgradeRequired(
+            platform: String,
+            version: Int,
+            minimum: Int,
+        ) = ApiFailure(
+            HttpStatusCode.UpgradeRequired,
+            ErrorCode.UPGRADE_REQUIRED,
+            "$platform build $version is older than $minimum, the oldest this server serves",
+        )
     }
 }

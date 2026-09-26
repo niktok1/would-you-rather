@@ -63,6 +63,31 @@ public object WyrApi {
         public const val AUTH_LOGOUT: String = "/$VERSION/auth/logout"
 
         /**
+         * POST: signs in with Google Play Games Services, with a
+         * [io.ntole.wyr.core.auth.PlayGamesSignInRequest], answered with a
+         * [io.ntole.wyr.core.auth.SessionDto] for a new session, this device's own (CLAUDE.md §8a, *Play
+         * Games sign-in*): the no-click way to an account, beside [AUTH_REGISTER]'s username and
+         * password. A bearer token is optional. The server asks Google which Play Games player the code
+         * names, and then:
+         *  - one already linked to a player here signs in as that player, as a login does, whoever the
+         *    bearer names: a guest meeting it switches to it, and leaves its own points behind;
+         *  - one linked to no player is linked to the player the bearer names, who keeps everything they
+         *    have, unless that player is linked to another Play Games player already, or there is no
+         *    bearer, and then to a new player minted for it.
+         * Either way the player is registered from then on, as one with a username is: they may submit.
+         *
+         * A code Google refuses (spent, expired, or another app's) is 422
+         * [io.ntole.wyr.core.error.ErrorCode.PLAY_GAMES_CODE_REFUSED], answered by asking Play Games for a
+         * new one; Google not answering is 502 [io.ntole.wyr.core.error.ErrorCode.PLAY_GAMES_UNAVAILABLE].
+         * Neither changes anything here. An expired bearer token is 401
+         * [io.ntole.wyr.core.error.ErrorCode.UNAUTHORIZED] before the code is sent anywhere, so the
+         * refreshed retry can send it still unspent. A malformed body is 400
+         * [io.ntole.wyr.core.error.ErrorCode.VALIDATION_FAILED]. A server without Play Games configured
+         * has no such route: 404. Limited per client address, as a login is.
+         */
+        public const val AUTH_PLAY_GAMES: String = "/$VERSION/auth/play-games"
+
+        /**
          * GET: the next batch of questions for the player the bearer token names. Requires a
          * session, because the feed is per player (CLAUDE.md §8d): it runs in cycles, serving each
          * question once per cycle in a new random order, and a batch holds only what the player has
@@ -130,6 +155,34 @@ public object WyrApi {
         public const val REACTIONS: String = "/$VERSION/reactions"
 
         /**
+         * Reports a question to the moderator (CLAUDE.md §8d, *Reports*), with a
+         * [io.ntole.wyr.core.report.ReportRequest], answered 204. Requires a session. A player holds
+         * one report per question, and a report sent again replaces its reason. Reporting also hides
+         * the question from the player, as [HIDDEN_QUESTIONS] does, and the moderator dismissing the
+         * report leaves it hidden. A question no player is served is 404, as for [VOTES]; a reason that
+         * is none, [io.ntole.wyr.core.report.ReportReason.UNKNOWN] or absent, 400
+         * [io.ntole.wyr.core.error.ErrorCode.VALIDATION_FAILED]. Limited per player.
+         */
+        public const val REPORTS: String = "/$VERSION/reports"
+
+        /**
+         * Hides a question from the session player for good, with a
+         * [io.ntole.wyr.core.report.HideQuestionRequest], answered 204 (CLAUDE.md §8d, *Reports*): the
+         * feed never serves it to them again, and it is never due for them. Requires a session. Hiding
+         * it again changes nothing. A question no player is served is 404, as for [VOTES]. Limited per
+         * player, with [HIDDEN_AUTHORS].
+         */
+        public const val HIDDEN_QUESTIONS: String = "/$VERSION/hidden-questions"
+
+        /**
+         * Hides every question by the author of the one a [io.ntole.wyr.core.report.HideAuthorRequest]
+         * names from the session player for good, those approved later included, answered 204
+         * (CLAUDE.md §8d, *Reports*). Requires a session. The author stays anonymous. A question nobody
+         * wrote, a seed, hides only itself. Refused as [HIDDEN_QUESTIONS] refuses.
+         */
+        public const val HIDDEN_AUTHORS: String = "/$VERSION/hidden-authors"
+
+        /**
          * GET: every category questions are filed under, with its id and both its names, as a
          * [io.ntole.wyr.core.category.CategoryListDto], oldest first (CLAUDE.md §8d, *Categories*).
          * Needs no session, and reads none: the list is the same for everybody, so a client can have it
@@ -153,13 +206,65 @@ public object WyrApi {
         public const val MY_QUESTIONS: String = "/$VERSION/me/questions"
 
         /**
+         * POST, with no body: deletes the account of the player the bearer token names, answered 204
+         * (CLAUDE.md §8a, *Deleting an account*). Requires a session. Everything that is theirs goes:
+         * their username and password, their sessions on every device, their votes, skips, reactions,
+         * reports and hides, and their questions no player is served; their approved questions stay,
+         * with nobody as their author, and each like they held is taken back from its author. The client
+         * then plays on as a fresh guest ([AUTH_GUEST]). A token of a player deleted already is 401
+         * [io.ntole.wyr.core.error.ErrorCode.UNAUTHORIZED], as it is on every route. Limited per player.
+         */
+        public const val ME_DELETION: String = "/$VERSION/me/deletion"
+
+        /**
+         * The Home screen's two Play buttons, each in a card's colour and each starting the game
+         * (CLAUDE.md §8d, *Home picks*).
+         *
+         * GET: how many times each has been tapped, by every player together, as a
+         * [io.ntole.wyr.core.home.HomePicksDto]. Needs no session, and reads none: the counts are the
+         * same for everybody, so the Home screen can show them before it has a player. Limited per
+         * client address.
+         *
+         * POST: counts one tap of the session player's, with a
+         * [io.ntole.wyr.core.home.HomePickRequest], answered with both counts as they stand after it.
+         * Requires a session. Every tap counts, a player's repeats included, and none pays or costs
+         * anything. A malformed body is 400 [io.ntole.wyr.core.error.ErrorCode.VALIDATION_FAILED].
+         * Limited per player.
+         */
+        public const val HOME_PICKS: String = "/$VERSION/home-picks"
+
+        /**
+         * POST: registers this device's push token for the player the bearer token names, with a
+         * [io.ntole.wyr.core.push.PushTokenRequest], answered 204 (CLAUDE.md §8a, *Push tokens*).
+         * Requires a session, and the token is kept under it: the logout that ends the session
+         * ([AUTH_LOGOUT]) removes it. A token is one device's, so registering one another player
+         * registered moves it to this one, the latest owner winning. The player's pushes, a
+         * moderator's decision on one of their questions for now, reach every device they have
+         * registered, the latest ten. A token or platform the rules refuse, or a malformed body, is 400
+         * [io.ntole.wyr.core.error.ErrorCode.VALIDATION_FAILED]; a session already ended is 401
+         * [io.ntole.wyr.core.error.ErrorCode.UNAUTHORIZED]. Limited per player, with
+         * [MY_PUSH_TOKEN_REMOVALS].
+         */
+        public const val MY_PUSH_TOKENS: String = "/$VERSION/me/push-tokens"
+
+        /**
+         * POST: removes a push token the player the bearer token names registered, with a
+         * [io.ntole.wyr.core.push.RemovePushTokenRequest], answered 204 (CLAUDE.md §8a, *Push tokens*),
+         * so their pushes no longer reach that device. A token that is not theirs, another player's or
+         * none, is left as it is and answered 204 too. Requires a session. Refused as
+         * [MY_PUSH_TOKENS] refuses. Limited per player, with [MY_PUSH_TOKENS].
+         */
+        public const val MY_PUSH_TOKEN_REMOVALS: String = "/$VERSION/me/push-token-removals"
+
+        /**
          * The moderator's queue (CLAUDE.md §8d, *Moderation*): the submissions waiting for a decision,
          * oldest first, as a [io.ntole.wyr.core.question.SubmissionListDto], so its head is the next
          * to decide and asking again after deciding it gets the rest. [Query.STATUS] lists those of
          * another status instead, in the same order, and [Query.LIMIT] bounds how many, within the
-         * feed's bounds. Only players' submissions are listed, never a seed. No author travels: a
-         * moderator decides a question by what it says, not by who wrote it. An admin route: needs
-         * [Headers.ADMIN_TOKEN].
+         * feed's bounds. Only players' submissions are listed, never a seed. Each names its author by
+         * an opaque id alone ([io.ntole.wyr.core.question.SubmissionDto.authorId]), never a username:
+         * enough to block an author ([ADMIN_AUTHOR_BLOCKS]), and nothing about who they are. An admin
+         * route: needs [Headers.ADMIN_TOKEN].
          */
         public const val ADMIN_SUBMISSIONS: String = "/$VERSION/admin/submissions"
 
@@ -192,8 +297,8 @@ public object WyrApi {
          * [io.ntole.wyr.core.question.AdminQuestionDto]s, with its tally, like count and dislike count
          * (CLAUDE.md §8d, *Moderation*). [Query.STATUS] and [Query.CATEGORY] narrow it, each repeated for several and
          * each matching any of its values, none for all; [Query.LIMIT] bounds a page within the feed's
-         * bounds, and [Query.CURSOR] asks for the page after the one that sent it. No author travels.
-         * An admin route: needs [Headers.ADMIN_TOKEN].
+         * bounds, and [Query.CURSOR] asks for the page after the one that sent it. Each names its author
+         * by an opaque id alone, as the queue does. An admin route: needs [Headers.ADMIN_TOKEN].
          */
         public const val ADMIN_QUESTIONS: String = "/$VERSION/admin/questions"
 
@@ -244,6 +349,47 @@ public object WyrApi {
          * needs [Headers.ADMIN_TOKEN].
          */
         public const val ADMIN_CATEGORY_RENAMES: String = "/$VERSION/admin/category-renames"
+
+        /**
+         * The reported questions, most reported first, then the most lately reported, as an
+         * [io.ntole.wyr.core.report.AdminReportListDto] (CLAUDE.md §8d, *Reports*): each question as the
+         * list of every question shows it, with how many players report it and how many give each
+         * reason. [Query.LIMIT] bounds how many, within the feed's bounds; there is no cursor, since a
+         * moderator works from the head, as in the queue, and a dismissal takes a question off it. A
+         * question stays listed whatever it stands at, retired included, until its reports are
+         * dismissed. An admin route: needs [Headers.ADMIN_TOKEN].
+         */
+        public const val ADMIN_REPORTS: String = "/$VERSION/admin/reports"
+
+        /**
+         * Clears every report of a question, with an [io.ntole.wyr.core.report.DismissReportsRequest],
+         * answered 204: it leaves [ADMIN_REPORTS] until a player reports it again. The question stays
+         * as it stands, and hidden from each player who reported it. A question with no reports is
+         * answered 204 too; an id no question has is 404
+         * [io.ntole.wyr.core.error.ErrorCode.QUESTION_NOT_FOUND]. An admin route: needs
+         * [Headers.ADMIN_TOKEN].
+         */
+        public const val ADMIN_REPORT_DISMISSALS: String = "/$VERSION/admin/report-dismissals"
+
+        /**
+         * Blocks an author from submitting, with an [io.ntole.wyr.core.author.BlockAuthorRequest], and
+         * rejects every submission of theirs still pending for its one reason, paying each one's cost
+         * back as any rejection does (CLAUDE.md §8c), answered with an
+         * [io.ntole.wyr.core.author.AuthorBlockDto]. From then on their every submission is 403
+         * [io.ntole.wyr.core.error.ErrorCode.SUBMISSIONS_BLOCKED]. Their approved questions stay as they
+         * are. Blocking a blocked author again rejects whatever is pending and changes nothing else. An
+         * id no player has is 404 [io.ntole.wyr.core.error.ErrorCode.AUTHOR_NOT_FOUND]; a reason the
+         * rules refuse, or a malformed body, 400. An admin route: needs [Headers.ADMIN_TOKEN].
+         */
+        public const val ADMIN_AUTHOR_BLOCKS: String = "/$VERSION/admin/author-blocks"
+
+        /**
+         * Lets a blocked author submit again, with an [io.ntole.wyr.core.author.UnblockAuthorRequest],
+         * answered with an [io.ntole.wyr.core.author.AuthorBlockDto]. What the block rejected stays
+         * rejected. Unblocking an author who is not blocked changes nothing. Refused as
+         * [ADMIN_AUTHOR_BLOCKS] refuses. An admin route: needs [Headers.ADMIN_TOKEN].
+         */
+        public const val ADMIN_AUTHOR_UNBLOCKS: String = "/$VERSION/admin/author-unblocks"
     }
 
     public object Headers {
@@ -260,6 +406,28 @@ public object WyrApi {
          * admin token configured has no admin routes: each is 404, as a path the server does not have.
          */
         public const val ADMIN_TOKEN: String = "X-Admin-Token"
+
+        /**
+         * Which client sent the request, one of [ClientPlatform]'s names, sent with [CLIENT_VERSION] on
+         * every request of the game's (CLAUDE.md §8b, *Minimum client version*). With the two, a server
+         * that has a minimum build for the platform refuses an older build with 426
+         * [io.ntole.wyr.core.error.ErrorCode.UPGRADE_REQUIRED] before anything else, every path but
+         * [Paths.HEALTH]. A request without them, the moderation app's or a build's from before them,
+         * is never refused for its build, and neither is a platform with no minimum, nor a version that
+         * is no whole number.
+         */
+        public const val CLIENT_PLATFORM: String = "X-Client-Platform"
+
+        /** The client's build number, a whole number that grows with every release: see [CLIENT_PLATFORM]. */
+        public const val CLIENT_VERSION: String = "X-Client-Version"
+    }
+
+    /** What [Headers.CLIENT_PLATFORM] names, in lower case, as a client sends it. */
+    public object ClientPlatform {
+        public const val ANDROID: String = "android"
+        public const val IOS: String = "ios"
+        public const val WEB: String = "web"
+        public const val DESKTOP: String = "desktop"
     }
 
     public object Query {
@@ -303,6 +471,13 @@ public object WyrApi {
 
         /** Longest [io.ntole.wyr.core.vote.VoteRequest.attemptId] the server accepts. A UUID is 36. */
         public const val MAX_ATTEMPT_ID_LENGTH: Int = 64
+
+        /**
+         * Longest [io.ntole.wyr.core.vote.VoteRequest.answerMillis] the server keeps, 10 minutes: a
+         * longer one says the question sat on screen, not how long the player thought, and is kept as
+         * none.
+         */
+        public const val MAX_ANSWER_MILLIS: Long = 10L * 60L * 1_000L
 
         /**
          * Longest option a question can have, counted as Kotlin's `String.length` counts, in UTF-16
@@ -367,5 +542,18 @@ public object WyrApi {
 
         /** Longest password an account can have, counted as [MAX_OPTION_LENGTH] counts. */
         public const val MAX_PASSWORD_LENGTH: Int = 128
+
+        /**
+         * Longest push token the server keeps ([io.ntole.wyr.core.push.PushTokenRequest]), in
+         * characters, each visible ASCII. A Firebase token is about 160.
+         */
+        public const val MAX_PUSH_TOKEN_LENGTH: Int = 1024
+
+        /**
+         * Longest server auth code a Play Games sign-in may carry
+         * ([io.ntole.wyr.core.auth.PlayGamesSignInRequest]), in characters, each visible ASCII. One is
+         * about a hundred.
+         */
+        public const val MAX_SERVER_AUTH_CODE_LENGTH: Int = 2048
     }
 }

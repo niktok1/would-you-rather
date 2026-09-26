@@ -11,7 +11,8 @@ import kotlinx.coroutines.ensureActive
 
 /**
  * Reads the request body as [T], reporting a body the client got wrong as
- * [ApiFailure.validation] instead of letting it reach the catch-all 500.
+ * [ApiFailure.validation] instead of letting it reach the catch-all 500, and one over the cap
+ * ([RequestBodyCap]) as [ApiFailure.bodyTooLarge].
  *
  * Only Ktor's own parse failures are translated: a [BadRequestException] whose cause is a parse
  * failure (see [rejectionFor]), and a [ContentTransformationException] for a body that cannot be
@@ -25,32 +26,54 @@ import kotlinx.coroutines.ensureActive
 suspend inline fun <reified T : Any> ApplicationCall.receiveOrReject(description: String): T =
     try {
         receive<T>()
-    } catch (undecodable: BadRequestException) {
+    } catch (failure: Exception) {
         currentCoroutineContext().ensureActive()
-        throw rejectionFor(undecodable, description)
-    } catch (unreadable: ContentTransformationException) {
-        throw ApiFailure.validation("malformed $description", unreadable)
+        throw rejectionFor(failure, description)
     }
 
 /**
- * What to throw for a [BadRequestException] out of `receive`.
+ * What to throw for a [failure] out of `receive`.
  *
- * Ktor 3.5.1's content negotiation wraps any throwable from the converter in one, so the
- * exception alone does not say whose fault it is. The kotlinx converter reports a body that does
- * not decode as a [ContentConvertException], and a Content-Type header that does not parse
- * arrives as a [BadContentTypeFormatException]; those are the client's mistake. Anything else —
- * an I/O failure or an [Error] while buffering the body — is rethrown as itself, so `StatusPages`
- * logs it and answers 500 instead of blaming the client and leaving no trace.
+ * A body over the cap is 413 wherever along the causes its [BodyOverCap] is: the channel the route
+ * reads rethrows it wrapped, and content negotiation wraps that again or not, as the read that met it
+ * was the converter's or its own first look at the body.
+ *
+ * Ktor 3.5.1's content negotiation wraps any throwable from the converter in a [BadRequestException],
+ * so that exception alone does not say whose fault it is. The kotlinx converter reports a body that
+ * does not decode as a [ContentConvertException], and a Content-Type header that does not parse
+ * arrives as a [BadContentTypeFormatException]; those are the client's mistake. Anything else — an
+ * I/O failure or an [Error] while buffering the body — is rethrown as itself, so `StatusPages` logs
+ * it and answers 500 instead of blaming the client and leaving no trace. A
+ * [ContentTransformationException], a body no converter reads as the type asked for, is the client's
+ * mistake too, and any other failure is rethrown as it came.
  */
 @PublishedApi
 internal fun rejectionFor(
-    undecodable: BadRequestException,
+    failure: Throwable,
     description: String,
 ): Throwable {
-    val clientMistake = ApiFailure.validation("malformed $description", undecodable)
-    return when (val cause = undecodable.cause) {
-        null, is BadContentTypeFormatException -> clientMistake
-        is ContentConvertException -> (cause.cause as? Error) ?: clientMistake
-        else -> cause
+    if (generateSequence(failure) { it.cause }.take(MAX_CAUSE_DEPTH).any { it is BodyOverCap }) {
+        return ApiFailure.bodyTooLarge()
+    }
+    return when (failure) {
+        is BadRequestException -> {
+            val clientMistake = ApiFailure.validation("malformed $description", failure)
+            when (val cause = failure.cause) {
+                null, is BadContentTypeFormatException -> clientMistake
+                is ContentConvertException -> (cause.cause as? Error) ?: clientMistake
+                else -> cause
+            }
+        }
+
+        is ContentTransformationException -> {
+            ApiFailure.validation("malformed $description", failure)
+        }
+
+        else -> {
+            failure
+        }
     }
 }
+
+/** How far along a failure's causes [rejectionFor] looks, bounded in case of a cycle. */
+private const val MAX_CAUSE_DEPTH = 8

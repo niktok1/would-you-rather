@@ -53,9 +53,9 @@ object ReactionStore {
      * Any question the player may be served can be reacted to, answered or not, and no other: one a
      * moderator has not approved, or has retired, is not found, as for a vote
      * ([QuestionStore.isServable]), and so is taking a reaction back. A retired question's reactions
-     * stay held, and its likes paid, until it is restored (CLAUDE.md §8d, *Moderation*). A reaction
-     * does nothing else. It is no answer and no skip, so it pays the player nothing and leaves the
-     * tally, the cycle and what is due alone.
+     * stay held, and its likes paid, until it is restored (CLAUDE.md §8d, *Moderation*) or the player's
+     * account goes (`AccountDeletion`). A reaction does nothing else. It is no answer and no skip, so
+     * it pays the player nothing and leaves the tally, the cycle and what is due alone.
      *
      * The reaction held is read under its row lock ([heldBy]), since what is written, and what is paid,
      * depends on which of the three it is (CLAUDE.md §4). A second request of the same player's for the
@@ -139,8 +139,9 @@ object ReactionStore {
      * Pays the question's author [points], or takes them back when negative. A seed has no author,
      * and pays nobody.
      *
-     * The author is a plain read, safe because nothing ever changes who wrote a question. The points
-     * are an SQL increment ([PlayerStore.addPoints]), so a burst of likes for one author all count.
+     * The author is a plain read, safe because only the author's account going changes who wrote a
+     * question, to nobody, and a payment to an author who is gone pays nobody ([PlayerStore.payAuthor]).
+     * The points are an SQL increment, so a burst of likes for one author all count.
      */
     private fun payAuthorOf(
         questionId: String,
@@ -152,7 +153,7 @@ object ReactionStore {
                 .where { Questions.id eq questionId }
                 .single()[Questions.authorPlayerId]
                 ?: return
-        PlayerStore.addPoints(playerId = author, points = points)
+        PlayerStore.payAuthor(authorId = author, points = points)
     }
 
     /**

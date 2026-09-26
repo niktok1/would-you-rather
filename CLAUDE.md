@@ -37,7 +37,8 @@ add a new dependency without recording it in §4 and in `gradle/libs.versions.to
 
 Four Java libraries are in the tree by deliberate exception, all server-only where no Kotlin
 equivalent exists: HikariCP (connection pooling), the PostgreSQL JDBC driver, `java-jwt`
-(pulled in by Ktor's own `ktor-server-auth-jwt`), and Flyway (schema migrations, §8b; approved
+(pulled in by Ktor's own `ktor-server-auth-jwt`, which also signs the server's sign-in to Google as
+a service account, §8a *Push tokens*), and Flyway (schema migrations, §8b; approved
 2026-09-24), with the `flyway-database-postgresql` module Flyway needs to run on PostgreSQL. H2 is
 a fifth, used only as the local development database.
 
@@ -120,6 +121,7 @@ mechanism; this table is the rationale.
 | Server             | Ktor (server)          | Kotlin-native server                             |
 | Rate limiting      | Ktor RateLimit plugin  | Official Ktor plugin; in memory, per instance    |
 | HTTP client        | Ktor (client)          | Same family as the server                        |
+| Server to Google   | Ktor client, CIO       | `ktor-client-cio`, the desktop client's engine, and since 2026-09-26 the server's for its calls to Google: FCM pushes, Play Games sign-in (§8a); tests answer with `ktor-client-mock` |
 | Serialization      | kotlinx.serialization  | Backbone of :core                                |
 | Async              | Coroutines + Flow      | Official                                         |
 | Local cache        | SQLDelight             | **Declared, not yet wired — see below**          |
@@ -157,7 +159,8 @@ COMMITTED**, PostgreSQL's default, set on the pool in `DatabaseFactory.poolConfi
 follow, and code that breaks one loses updates or shows numbers that disagree, silently rather than
 failing:
 - A counter is an SQL increment (`total_points = total_points + n`), never a read then a write.
-  A burst on one row then just queues on its lock; `PlayerStoreTest` pins 8 at once.
+  A burst on one row then just queues on its lock; `PlayerStoreTest` pins 8 at once, and
+  `HomePickStoreTest` 8 taps of one Home button (`HomePickStore.pick`).
 - Any other read-then-write is a compare-and-set: the `UPDATE`'s `WHERE` repeats what the read
   relied on, and 0 rows updated means another transaction won (`PlayerStore.startNextCycle`,
   `ModerationStore.decide`, a retirement or restoration, `ModerationStore.move`, a registration
@@ -168,27 +171,39 @@ failing:
   racer re-checks it against the first's commit).
   Or the read takes the row lock (`SELECT ... FOR UPDATE`), so a concurrent writer waits and then
   reads the row as committed (`VoteStore.cast` and `ReactionStore.set`, which branch on more than
-  one outcome, and `SkipStore.skip`).
+  one outcome, and `SkipStore.skip` and `ReportStore.report`). `AccountDeletion.delete` locks the
+  player's row before anything of theirs is read, so each row of theirs a racing writer would add
+  waits on it through its foreign key and fails once the deletion commits, and its rerun finds them
+  gone. A writer that waited instead on a row the deletion removes (a re-answer on their vote, a
+  re-skip on their skip, a registration on their `players` row) finds no row once it commits, then
+  no player, and is 401 (`VoteStore.currentCycle`, `SkipStore.currentCycle`,
+  `AccountStore.register`). It locks their reactions before it counts their likes.
   A read of rows a racing writer is about to add has no row to lock, so it locks a parent row that
   every such writer locks first (`SubmissionStore.submit` counts an author's pending questions
-  under the author's `players` row).
+  under the author's `players` row, and `ModerationStore.blockAuthor` reads them under it too, so a
+  submission either lands before a block and is rejected by it or waits and is refused).
   The one exception is a value copied from another row, which may be a plain read where a stale
   copy is provably harmless, with the proof at the read (`VoteStore.currentCycle`: the feed moves
   the cycle on only once the answer's question is already answered or skipped in the one read).
-- Uniqueness is a constraint (the `Votes`, `Skips`, `Reactions` and `Categories` primary keys,
-  `players.username`'s unique constraint), never a prior `SELECT`. A violation is never caught and
+- Uniqueness is a constraint (the `Votes`, `Skips`, `Reactions`, `Reports`, `HiddenQuestions`,
+  `HiddenAuthors`, `Categories`, `PushTokens` and `Identities` primary keys, `players.username`'s
+  unique constraint and `identities`' on a player and a provider), never a prior `SELECT`. A violation
+  is never caught and
   carried on from: PostgreSQL aborts a transaction at its first error. It propagates, and Exposed
   rolls back and reruns the whole transaction, which then sees the committed row (`VoteStore.cast`,
-  `SkipStore.skip`, `ReactionStore.set`, `AccountStore.register`, which `AccountStoreTest` races,
-  `CategoryStore.create`, which `CategoryStoreTest` races, and `Seed.writeMissing`, which
-  `SeedTest` races). A plain read before such an insert only spares
+  `SkipStore.skip`, `ReactionStore.set`, `ReportStore.report` and its hides, which `ReportStoreTest`
+  races, `AccountStore.register`, which `AccountStoreTest` races,
+  `CategoryStore.create`, which `CategoryStoreTest` races, `Seed.writeMissing`, which
+  `SeedTest` races, `PushTokenStore.register`, which `PushTokenStoreTest` races, and
+  `IdentityStore.signIn`, which `IdentityStoreTest` races on both constraints). A plain read before such an insert only spares
   a certain violation, and needs no lock when finding the row writes nothing.
 - Numbers that must agree with one another are read in one statement, which sees one committed
   state; two statements can straddle another transaction's commit (the tally in `VoteStore`,
   `StatsStore.of`, a question's like and dislike counts beside the player's own reaction in
   `ReactionStore.reactionsOf`, a question's tally and reaction counts in the moderator's list,
-  `ModerationStore.questions`, and a submission's counts in its author's list,
-  `SubmissionStore.byAuthor`).
+  `ModerationStore.questions`, a reported question's report counts beside its numbers,
+  `ModerationStore.reports`, a submission's counts in its author's list,
+  `SubmissionStore.byAuthor`, and the Home screen's two counts, `HomePickStore.counts`).
 
 REPEATABLE_READ was dropped because it refuses the second of two concurrent writes to a row
 (SQLState 40001) and Exposed makes only 3 attempts with no delay, so a burst on one row, such as
@@ -380,6 +395,16 @@ This project must never be attributed to any employer identity.
   Render is the proxy, one budget for everyone: the server warns at boot when `RENDER` is `true` and
   no header is set. To be checked once deployed (NEXT-SESSION.md). No forwarded-header plugin:
   `ktor-server-forwarded-header` would be a new dependency for the one line this needs.
+- `MIN_CLIENT_VERSION_ANDROID`, `_IOS`, `_WEB` and `_DESKTOP` each name the oldest build of the game
+  the server serves on that platform (§8b, *Minimum client version*); none is set, so no build is
+  refused. Read at boot: raising one is changing the variable and restarting the service.
+- `FCM_SERVICE_ACCOUNT_JSON` is the Firebase service account's key file, whole, which pushes a
+  moderator's decision to its author (§8a, *Push tokens*), `sync: false` in `render.yaml`, one key per
+  service. It has no default: unset turns pushes off. Setting it up is §8b, *Push notifications*.
+- `PLAY_GAMES_CLIENT_ID` and `PLAY_GAMES_CLIENT_SECRET` are the game's OAuth client in Google Cloud,
+  which exchanges a Play Games sign-in's code (§8a, *Play Games sign-in*), both `sync: false`. No
+  default: both unset turns the sign-in off, one alone fails the boot. Setting it up is §8b, *Play
+  Games sign-in*.
 - The Docker build sets `WYR_SERVER_ONLY=1`, which makes `settings.gradle.kts` skip the app
   modules. Without it the Android Gradle plugin fails at configuration time for want of an SDK.
 - Free tier caveats to design around: free web services spin down after ~15 min idle (cold
@@ -406,9 +431,10 @@ decided in §8b).
   does not change when auth evolves.
 - **Sessions** (*decided 2026-09-25*): a player's refresh tokens live in `sessions`, **one
   refresh-token family per device**, each rotating on its own row, so a refresh on one device never
-  touches another's tokens. Nothing caps how many a player has, and only a logout deletes one: an
-  expired session is dead where it lies. A mint opens a player's first session (`SessionStore.open`);
-  V4 opened one for every player who held a refresh token then. A refresh reads and writes its session
+  touches another's tokens. Nothing caps how many a player has, and only a logout, or the account's
+  deletion (below), deletes one: an expired session is dead where it lies. A mint opens a player's
+  first session (`SessionStore.open`); V4 opened one for every player who held a refresh token then.
+  A refresh reads and writes its session
   alone. Every access token names its session beside its player (the `sessionId` claim), and a
   refresh keeps it. The players row's old refresh columns, V4's mirror for a rollback to a build from
   before sessions, are unused since `feat/simple-accounts` (§8b, *Rollbacks*).
@@ -434,8 +460,8 @@ decided in §8b).
     built first was dropped (§8b, *Refresh answers lost past the grace*).
   - *The cost* is a copy's: a refresh token copied to a second device, or stolen, keeps working
     beside the original for as long as the two take turns refreshing, each leaving the other's token
-    in the previous slot. Accepted for a game that stores nothing personal (the user's decision,
-    2026-09-24).
+    in the previous slot. Accepted for a game that stores no sensitive personal data (the user's
+    decision, 2026-09-24).
   - *The rotation* is one `UPDATE` of the session whose `WHERE` is the whole check, nothing read
     before it (`SessionStore.rotate`, §4). Of two refreshes racing with the current token, both go
     through, the first's new token becoming the previous one; of two racing with the previous token,
@@ -520,17 +546,123 @@ decided in §8b).
     where the game's client registers and logs in, leaves the screen (§8d, *The Account screen*).
     Both, once they worked, tell the analytics who plays here by player id, and a logout has them
     forget (§8g, *Who*).
+- **Deleting an account** (*decided 2026-09-26*: Google Play asks a game with accounts to let a
+  player delete theirs; built on the server, no client yet) is `POST /v1/me/deletion`
+  (`WyrApi.Paths.ME_DELETION`), bearer required, no body, answered 204, for a guest and a registered
+  player alike. It deletes, in one transaction (`AccountDeletion.delete`), the player's row with its
+  username and password hash, their sessions on every device, their votes, skips, reactions, reports
+  and hides, their push tokens and Play Games link (their keys cascade, below), and their
+  questions no player was ever served, pending and rejected; their **approved
+  questions stay**, retired ones included, with nobody as their author, as a seed has: served as
+  before, their votes and reactions kept, their likes from then on paying nobody. Each like the
+  player held is taken back as taking it back would, a point from its question's author (§8c), so
+  every other author's total still adds up. A player who hid the deleted author keeps each of their
+  approved questions hidden, one by one. The username is free for another from then on. The client
+  then plays on as a fresh guest. A token of a player deleted already is 401 `UNAUTHORIZED`, as on
+  every route, and so is a second deletion; limited per player, 10 an hour (§8b). A request of
+  theirs from another device that finds the player gone mid-request is 401 too, a vote, a skip, a
+  feed read or a registration (§4). One INFO line names the player. Edge cases, accepted: a deleted
+  author's approved question reads as a seed to the moderator (`seed`, and no `authorId`), since
+  nothing tells the two apart; a like or a refund racing the deletion pays nobody, and a hide of the
+  author hides only the question it was asked from (`PlayerStore.payAuthor`,
+  `ReportStore.hideAuthorOf`, `AccountDeletionTest`); and a login to the account racing its deletion
+  can fail as a 500.
+  `AccountDeletionTest`, `AccountDeletionFlowTest`.
+
+- **Push tokens** (*decided 2026-09-26; built on the server, Android first; the client adopts
+  later*): a device's Firebase Cloud Messaging token, so a player hears when a moderator decides one
+  of their questions.
+  - *Registering* is `POST /v1/me/push-tokens` with a `PushTokenRequest` (the `token` and its
+    `platform`, a `PushPlatform`: `ANDROID`, `IOS` or `WEB`, and `UNKNOWN`, its default, refused), bearer
+    required, answered 204. The token is kept in `push_tokens` (V17) under the player and the session
+    the bearer names, one row per token, since a token is one device's: registered again, by its
+    player or another, it moves to whoever sent it last, the primary key deciding two first
+    registrations racing (§4; `PushTokenStoreTest`). A player's pushes reach their 10 newest devices
+    (`PushTokenStore.MAX_TOKENS_PER_PLAYER`), so a decision sends a bounded few. A token is 1 to
+    `WyrApi.Limits.MAX_PUSH_TOKEN_LENGTH` (1024) of visible ASCII, or 400 `VALIDATION_FAILED`; a session
+    already ended, whose access token has not expired, is 401. Registered whether or not pushes are on,
+    so the devices are there once they are.
+  - *Removing* one, a device turning notifications off, is `POST /v1/me/push-token-removals` with a
+    `RemovePushTokenRequest`, 204, the caller's own token alone. A **logout needs no call**: the
+    session's row going takes its device's tokens with it, and deleting a player takes theirs, by
+    `ON DELETE CASCADE` on both of the table's foreign keys (`push_tokens`' and `identities`' keys
+    cascade, the schema's only cascading keys), so no store has to know the table is there.
+  - *A decision's push*: launched once a moderator's approval or rejection has committed, and not
+    waited for, `DecisionNotifier` pushes the author's every device, off the request, in a background
+    scope the server cancels at stop. Best effort: a failure is logged and dropped, never failing or
+    holding up the decision, and nothing is retried; a token FCM calls `UNREGISTERED` is deleted, and
+    only that code, since a wrong project answers 404 for every token. The title is *Твоје питање је одобрено*
+    or *Твоје питање није одобрено*, the body the question as My questions names it, *Пица или
+    Бурек*, a rejection's followed by *. Разлог:* and the moderator's reason, in Serbian Cyrillic, the
+    game's first language (§8f; the client may put it into the language shown later), and the data
+    `type` `submission_decided`, `questionId` and `status`.
+  - *FCM* is its HTTP v1 API (`FcmSender`), as the service account in `FCM_SERVICE_ACCOUNT_JSON`
+    (§8b, *Push notifications*): a JWT assertion signed RS256 with `java-jwt`, exchanged at the key
+    file's `token_uri` for an access token kept until a minute before it expires, so one exchange
+    serves an hour of pushes; a 401 from FCM with no error code of its own gets a new one and one
+    more try, and one naming `THIRD_PARTY_AUTH_ERROR` (an iOS or web device whose APNs key or web push
+    key Firebase lacks) fails that push alone, logged with its code, and keeps the token. Through
+    `googleHttpClient` over CIO (§4), 5 s to connect and 10 s a request. Every test answers for Google
+    with a MockEngine (`FcmSenderTest`, `PushFlowTest`). Never logged: the key, the assertion, the
+    access token, or a device's token. Unset, pushes are off: nothing is sent, and the boot says so.
+
+- **Play Games sign-in** (*decided 2026-09-26: the user's "no-click register", with the register
+  screen kept as the fallback; built on the server, the client adopts later*): a player on Android
+  gets an account with no form, as Google Play Games Services v2 vouches for who they are.
+  - *Signing in* is `POST /v1/auth/play-games` with a `PlayGamesSignInRequest`, the one-time server
+    auth code Play Games gave the app (`requestServerSideAccess`), answered with a `SessionDto` for a
+    new session, this device's own. A bearer token is optional. The server exchanges the code at
+    Google's OAuth token endpoint as the game's client (`PLAY_GAMES_CLIENT_ID`,
+    `PLAY_GAMES_CLIENT_SECRET`, §8b *Play Games sign-in*; the redirect URI empty, as Google's example
+    for a code an installed app got has it), reads the Play Games player the access token names from
+    `games/v1/players/me` (`playerId`), and keeps neither token (`GooglePlayGames`). Then
+    (`IdentityStore.signIn`): a Play Games player linked already signs in as its player, as a login
+    does, whoever the bearer names, so a guest meeting it switches to it and leaves its own points
+    behind (the user's earlier decision); one linked to nobody is linked to the bearer's player, who
+    keeps everything they have, or to a player minted for it when there is no bearer, the bearer's
+    player is linked to another Play Games player already, or the token outlived its player. Once
+    Google has vouched, nothing refuses the sign-in, since the code is spent.
+  - *Stored* in `identities` (V18): a provider (`IdentityProvider.PLAY_GAMES`, server-only, Game
+    Center to come), its player's id and the player here, the primary key on the provider and its
+    player and a unique constraint on the player here and the provider deciding every race (§4,
+    `IdentityStoreTest` races both). The foreign key cascades, as push tokens' do: deleting a player
+    deletes their links. Nothing else unlinks one.
+  - *The cost* is a link's: a Play Games player linked to nobody is linked, for good, to whichever
+    player the bearer names, one with a username included, so a leaked access token (15 minutes), or a
+    device whose Play Games profile is someone else's (a family tablet), gives that Google account
+    sign-in as the player on every device. For a registered player it is the one way an access token
+    alone becomes a lasting credential: registering again is `ALREADY_REGISTERED`, and a password
+    cannot be changed. Accepted for now, as the refresh token's copy is (*Refresh tokens*, above), for a casual
+    game that stores no sensitive personal data: *provisional — user decision* (§8b, *Linking Play
+    Games to an account*).
+  - *A linked player is registered*, as one with a username is: they may submit (§8d, *Submitting*),
+    and `GET /v1/me` says so (`PlayerStatsDto.playGamesLinked`). They may still register a username and
+    password, to log in where there is no Play Games: on iOS and the web.
+  - *Refusals*: a code Google refuses (`invalid_grant`: spent, expired, another app's) is 422
+    `PLAY_GAMES_CODE_REFUSED`, answered by asking Play Games for a new one; Google not answering,
+    refusing the server itself (`invalid_client`), or Play Games answering 403, the server's setup and
+    never the code's (its API not enabled in the Cloud project, say), is 502 `PLAY_GAMES_UNAVAILABLE`,
+    logged as a warning with Google's status and reason codes alone; neither changes anything. An
+    expired or forged bearer is 401 before the code goes anywhere (the route's authentication is
+    optional, which still refuses a bad token), so the refreshed retry can spend it.
+    A code is 1 to `WyrApi.Limits.MAX_SERVER_AUTH_CODE_LENGTH` (2048) of visible ASCII, or 400. Off
+    (the variables unset), the route is not served: 404. Limited per address, 20 a minute (§8b). On
+    the client both codes are mapped, never to `UNAUTHORIZED` (`ErrorMapper`).
+  - *A client signs in with Play Games* once per device, or once its session has died, not at every
+    launch: every sign-in answers a new session, and the one before is abandoned, as a login's guest
+    is. Never logged: the code, the client secret, an access token (`GooglePlayGamesTest`).
+    `PlayGamesFlowTest` takes every path with Google answered by a MockEngine.
 
 **Known limitation, by design for now:** a guest account is bound to one device's storage. Lose
 the device, reinstall the app or clear its storage, and the account — and its points — are gone,
 unless the guest registered (*Accounts*, above), and then only until it logs in again. Session storage is ordinary preference storage
 (SharedPreferences / NSUserDefaults / JVM Preferences / localStorage), not Keychain or
-EncryptedSharedPreferences: enough for a game that stores nothing personal.
+EncryptedSharedPreferences: enough for a game that stores no sensitive personal data.
 
 ## 8b. Open decisions (resolve before relevant work)
 
 - **Accounts** — *decided 2026-09-25; built (§8a, *Accounts*; the Account screen, §8d).* This
-  is a simple game that stores nothing personal, and most players stay a day or a few, so the
+  is a simple game that stores no sensitive personal data, and most players stay a day or a few, so the
   simplest design that is correct enough wins over maximum security. A new player plays at once as a
   guest (§8a). **Register** is optional and keeps the guest's points; **log in** is how a registered
   player gets their account on another device. What the app saves by itself is the session, so a
@@ -542,9 +674,12 @@ EncryptedSharedPreferences: enough for a game that stores nothing personal.
   names its algorithm and cost, `pbkdf2-sha256$<iterations>$<salt>$<hash>`, so the cost can be
   raised later and the hashes already stored still verify; nothing rehashes one at a new cost yet.
   No email is collected, so there is **no password reset**: a forgotten password means a new
-  account. No-click sign-in (Play Games Services on Android, Game Center on iOS) comes later, once
-  there is an Apple developer account: it would link a platform's player to a player here as
-  registering links a username, beside the password or in its place. This replaces the recovery
+  account. **No-click sign-in** links a platform's player to a player here as registering links a
+  username, beside the password or in its place: Play Games Services on Android is built on the
+  server (*decided 2026-09-26*, §8a *Play Games sign-in*; the client adopts it later), and the
+  register screen stays as the fallback, and the only way on iOS and the web until then; Game Center
+  on iOS comes once there is an Apple developer account, as another `IdentityProvider`. An optional
+  email, for a password reset, is not built. This replaces the recovery
   secret (V4), which is gone from the server and every client; its column stays, unused, until a
   later migration drops it. A `d4a9dbf` phone build that keeps a secret fails every call once its
   session dies, since the recovery it tries first is now 404: install a current build on it.
@@ -564,7 +699,11 @@ EncryptedSharedPreferences: enough for a game that stores nothing personal.
   `RenameCategoryRequest`, the `X-Admin-Token` header (`WyrApi.Headers`), `QuestionStatus.RETIRED`
   and the error codes `FORBIDDEN`, `ALREADY_DECIDED`, `WRONG_STATUS`, `CATEGORY_EXISTS` and
   `CATEGORY_NOT_FOUND`. The moderator's client (`ModerationApi` calls every admin route) and the
-  moderation app are built on it (§8d, *Moderation*).
+  moderation app are built on it (§8d, *Moderation*). Since 2026-09-26 the server has more that no
+  client calls yet: the reported questions and their dismissal (`AdminReportListDto`,
+  `DismissReportsRequest`), an author's opaque id on the admin DTOs (`authorId`), blocking and
+  unblocking an author (`BlockAuthorRequest`, `UnblockAuthorRequest`, `AuthorBlockDto`), and the error
+  codes `SUBMISSIONS_BLOCKED` and `AUTHOR_NOT_FOUND` (§8d, *Moderation*, *Reports* and *Authors*).
 - **A rejection reason is one line** — *provisional — user decision.* §8d asks for a short reason;
   the server also holds it to one line, as it does an option: no control character, nor U+2028 or
   U+2029 (`checkedRejection`). Chosen as the stricter reading, since a reason is shown to its author
@@ -575,9 +714,11 @@ EncryptedSharedPreferences: enough for a game that stores nothing personal.
   Built: a moderator retires an approved question, a seed included, and restores a retired one.
   Retired, it is served to nobody and due for nobody, and a vote, skip or reaction to it is 404, taking
   one back included; nothing it earned is taken back, so its answers' points stay and its reactions
-  stay held, its likes paid, and nobody can take one back until it is restored. Restored, it is due for every player who has not
-  answered or skipped it in their current cycle. It is stored as `questions.retired_at` beside an
-  `APPROVED` status, and sent as `QuestionStatus.RETIRED`, so a rollback to the build before (§8b,
+  stay held, its likes paid, and nobody can take one back until it is restored, unless their account
+  goes (§8a, *Deleting an account*), which takes each like they held back with its point. Restored,
+  it is due for every player who has not answered or skipped it in their current cycle. It is
+  stored as `questions.retired_at` beside an `APPROVED` status, and sent as `QuestionStatus.RETIRED`,
+  so a rollback to the build before (§8b,
   *Rollbacks*) reads every row and only serves retired questions again. A vote, skip or reaction reads
   servability plainly (`QuestionStore.isServable`, no lock on the question; *decided 2026-09-25*),
   so one in flight as a retirement commits may still land, uncounted in the retirement's answer.
@@ -638,9 +779,12 @@ EncryptedSharedPreferences: enough for a game that stores nothing personal.
   request and refills whole when its period ends, so up to twice a budget can pass in moments where
   one window ends and the next begins, while over any longer span the average holds:
   - *Per client address* (on Render, Cloudflare's `CF-Connecting-IP`: `CLIENT_IP_HEADER`, §8), for a
-    caller with no session to name: guest minting 10 an hour, refreshes 30 a minute, logins 20 a
-    minute (what bounds guessing a password, as each costs a hash), the categories list 120 a minute
-    (it needs no session), the admin routes 60 a minute together, and on top of that, admin requests with a wrong or missing token 10 a minute. A
+    caller with no session to name: guest minting 60 an hour (one address can stand for many players, a
+    mobile carrier's shared address or a school's Wi-Fi), refreshes 30 a minute, logins 20 a
+    minute (what bounds guessing a password, as each costs a hash), Play Games sign-ins 20 a minute
+    (each costs two calls to Google), the categories list 120 a minute
+    (it needs no session), the Home screen's counts (`GET /v1/home-picks`) 120 a minute (nor does
+    that), the admin routes 60 a minute together, and on top of that, admin requests with a wrong or missing token 10 a minute. A
     request with the right token spends none of that last budget, but once an address has spent it,
     every admin request from the address is refused until the budget is back, the right token's too
     (`LockingOut`): were that one let in, its 200 among the 429s would give it away, and guessing
@@ -650,7 +794,9 @@ EncryptedSharedPreferences: enough for a game that stores nothing personal.
   - *Per player*, so players behind one address do not share a budget: registrations 20 an hour
     (every one the rules take costs a password hash), logouts 30 a minute, the feed, votes and skips
     120 a minute each, reactions 60 a minute, submissions 30 an hour (the 20-pending cap still applies),
-    `GET /v1/me` and `GET /v1/me/questions` 120 a minute each. The key is the player id in the
+    reports 30 an hour, hiding a question or an author 60 an hour together, account deletions 10 an
+    hour, `GET /v1/me` and `GET /v1/me/questions` 120 a minute each, a tap on a Home button
+    (`POST /v1/home-picks`) 30 a minute, push token registrations and removals 60 an hour together. The key is the player id in the
     bearer token, which the limiter verifies itself (`verifiedPlayerId`): it runs before
     authentication, so no principal is there yet. A request without a token this server signed
     spends its address's budget of the group instead, and then gets its 401, so a forged token
@@ -675,12 +821,44 @@ EncryptedSharedPreferences: enough for a game that stores nothing personal.
 
   What remains: farming is bounded, not gone. A player can still earn 120 points a minute by
   re-answering, on average, and up to 240 where two windows meet (*decided 2026-09-23:* a re-answer
-  keeps paying every time, inside its cycle or not), and a script gets 10 fresh guests an hour per
-  address, 20 where two windows meet, each with budgets of its own, so liking one author's questions
+  keeps paying every time, inside its cycle or not), and a script gets 60 fresh guests an hour per
+  address, 120 where two windows meet, each with budgets of its own, so liking one author's questions
   is bounded per address and per hour, not per author (*Likes from fresh guests*, below:
   accepted). Counts are in memory and per instance: right for the one Render instance, but a second
   would grant every budget again, so running two needs a shared store first (Render Key Value, say).
   A restart, which a deploy or a free instance's spin-down is, resets them.
+- **Request bodies** *(built 2026-09-26)* — no request body over 64 KiB is read
+  (`MAX_REQUEST_BODY_BYTES`, `RequestBodyCap`, no dependency of its own): Ktor reads a whole body
+  into memory to decode it, and the largest a correct client sends, a submission, is some 10 KiB
+  with 300 categories picked. A
+  request whose `Content-Length` says more is 413 before anything else of it runs, its rate limit and
+  authentication included, whether or not its route reads a body; one that says no length, a chunked
+  body, is counted as it is read and stopped one byte past the cap (`BodyOverCap`), which
+  `receiveOrReject` answers 413. The code is `VALIDATION_FAILED`, since no correct client sends one.
+  `RequestBodyCapTest` pins both, and the cap's edge.
+- **Minimum client version** *(built 2026-09-26; no client sends the headers yet)* — every request of
+  the game's will name its build: `X-Client-Platform` (`android`, `ios`, `web` or `desktop`,
+  `WyrApi.ClientPlatform`) and `X-Client-Version`, a whole build number (`WyrApi.Headers`). Each
+  platform's oldest build served comes from `MIN_CLIENT_VERSION_ANDROID`, `_IOS`, `_WEB` or
+  `_DESKTOP` (unset, the default, no minimum; one that is not a whole number of at least 1 fails at
+  boot, naming it). An older build is 426 `UPGRADE_REQUIRED` before anything else of the request,
+  its rate limit, body and authentication included, on every path but `/health`
+  (`ClientVersionCheck`, installed after CORS, which lets a browser send both headers and read the
+  426). A request that names no build passes, the moderation app's and every build's from before the
+  headers, and so do a platform with no minimum and a version that is no whole number: *provisional*,
+  since refusing it would lock a broken build out whatever its number. On the client
+  `UPGRADE_REQUIRED` reads as `DomainError.UNKNOWN` until the branch that sends the headers gives it
+  one of its own. `ClientVersionTest`, `CorsTest`, `ServerConfigTest`.
+- **Logging** *(built 2026-09-26)* — beside Ktor's line per call and the rate limiter's per refusal,
+  one INFO line for each stored submission, naming the question and its author by id
+  (`submission <id> stored, by player <id>`), and one for each admin action that went through, a
+  repeat that changed nothing included (a dismissal of no reports, a block or an unblock of an author
+  standing so already), naming the action and the id it was done to (`admin approved question
+  <id>`, `logAdmin`): approvals, rejections, retirements and restorations, categories added and
+  renamed, reports dismissed, and
+  authors blocked and unblocked. A read, the moderator's lists included, logs nothing of its own.
+  Never a token, a password or its hash, an email, a question's text, a rejection's reason or a
+  name the moderator typed. `ActionLogTest`.
 - **Likes from fresh guests** — *decided 2026-09-24: no like limitations.* A like pays its author
   once per player (§8d, *Reactions*), and guests cost nothing to mint (§8a), so a script minting
   guests could pay one author a point per guest for each of their questions. The user accepted that:
@@ -735,6 +913,78 @@ EncryptedSharedPreferences: enough for a game that stores nothing personal.
     from §8f's *nothing reads the device's locale*.
   - *Rollbacks*: a build before the migration ignores audiences and serves local questions to
     everyone. Accepted (the user: the game is not released yet).
+- **Play Games sign-in** — *built on the server 2026-09-26 (§8a, *Play Games sign-in*); off until the
+  user sets it up.* The server exchanges a Play Games server auth code as the game's OAuth client in
+  Google Cloud, `PLAY_GAMES_CLIENT_ID` and `PLAY_GAMES_CLIENT_SECRET` (`sync: false`, set by hand,
+  never committed). Both unset or blank, the route is not served (404) and the boot says so; one
+  without the other fails the boot, naming the missing one and neither value. **What the user sets
+  up**, once:
+  1. A Google Play developer account (a one-time fee), and the game created in the Play Console.
+  2. In the Play Console, *Play Games Services → Setup and management → Configuration*: create a
+     Play Games Services project, which makes or links a Google Cloud project, and fill in the OAuth
+     consent screen it asks for.
+  3. Add two credentials there. An **Android** one for the app, `io.ntole.wyr`, with the SHA-1 of the
+     key it is signed with (the Play app signing key, and the debug key for builds made on a laptop);
+     the DEV and LOCAL flavors, `io.ntole.wyr.dev` and `io.ntole.wyr.local`, need their own to sign in,
+     to be settled when the client adopts it. And a **game server** one, an OAuth client of type *Web
+     application*: its client ID and secret are `PLAY_GAMES_CLIENT_ID` and `PLAY_GAMES_CLIENT_SECRET`,
+     and the same client ID is what the Android app passes to `requestServerSideAccess`.
+  4. Until the game is published, add each tester's Google account under *Testers*, or Play Games
+     refuses them.
+  5. On Render, set both variables on `wyr-server`, and on `wyr-server-dev` too to try it there, then
+     restart each. A sign-in the server's log warns of as `403 PERMISSION_DENIED SERVICE_DISABLED`
+     means the *Google Play Game Services* API is off in that Cloud project: enable it under *APIs &
+     Services*.
+- **Linking Play Games to an account** — *provisional — user decision.* Built as the no-click sign-in
+  asks (§8a, *Play Games sign-in*, *The cost*): the bearer's access token alone links a Play Games
+  player linked to nobody to the bearer's player, a registered one included, and nothing unlinks it.
+  The options: keep it; for a player who already has a username, link only when the request also
+  carries something only their device holds, the refresh token say, or never link one and sign the
+  Play Games player in as a new player instead; and, whichever is chosen, a moderator's route to
+  unlink a player, which there is none of yet.
+- **Push notifications** — *built on the server 2026-09-26 (§8a, *Push tokens*); off until the user
+  sets it up.* The server sends through Firebase Cloud Messaging as a Google service account, whose
+  JSON key file `FCM_SERVICE_ACCOUNT_JSON` holds whole (`sync: false` in `render.yaml`, set by hand in
+  the dashboard, never committed). Unset or blank, pushes are off and the boot says so; a value that is
+  no service account's key fails the boot, naming the variable and none of the value. It is read at
+  boot, so a new key applies once the service restarts. **What the user sets up**, once:
+  1. In the Firebase console, create a project (or add Firebase to a Google Cloud project), and add
+     the Android app three times, once per flavor (§8e): `io.ntole.wyr`, `io.ntole.wyr.dev` and
+     `io.ntole.wyr.local`. The client branch that adopts pushes takes the `google-services.json`
+     Firebase then offers. The *Firebase Cloud Messaging API (V1)* must be enabled in Google Cloud,
+     which a new Firebase project is.
+  2. In *Project settings → Service accounts*, *Generate new private key*: a JSON file downloads. It
+     is a secret: never commit it, never paste it in a chat.
+  3. On Render, paste the whole file as `FCM_SERVICE_ACCOUNT_JSON` on `wyr-server`, and a second key
+     of the same account on `wyr-server-dev` (so one can be revoked alone), then restart each.
+  4. For iOS and the web, once their clients adopt pushes: an APNs key and a web push key in
+     Firebase's *Cloud Messaging* settings. Until then a push to such a device fails, logged as
+     `THIRD_PARTY_AUTH_ERROR`, and no other push is held up by it.
+- **Personalization** — *design decided 2026-09-26; only the answer time is built.* In the end each
+  player is served the questions that suit them best, and the game's own questions are how the server
+  finds out: no survey, no profile form, nothing asked of the player but to play.
+  - *Signals kept now*: what the server already records as the player plays, their answers (each
+    question's latest side, and every re-answer), skips (per cycle), reactions (a like or a dislike),
+    and **how long each answer took** (`VoteRequest.answerMillis`, kept on the vote as
+    `votes.answer_millis`, V16: from 0 to `WyrApi.Limits.MAX_ANSWER_MILLIS`, 10 minutes, and none
+    otherwise, never a refusal; the latest answer's, as the side is; the client adopts it later).
+    Nothing reads any of them to choose a question yet.
+  - *Later, not built*: **question traits** a moderator sets beside the categories (light or deep,
+    silly or serious, and the like, the list to settle then); a **per-player affinity** for each
+    trait and category, learned from the signals (a like, a dislike, a skip, a quick or a slow
+    answer); and each cycle **ordered by predicted interest with randomness kept** (a weighted
+    shuffle, never a strict ranking), so every question still comes once per cycle (§8d, *Endless
+    feed*) and a player still meets what the model would not have picked.
+  - *Never*: questions on **religion, politics, health or sexuality** are never used to profile a
+    player: those are the special categories of personal data (GDPR art. 9, ZZPL art. 17), so such a
+    question carries a trait that keeps its answers out of every affinity. The privacy policy says so,
+    and says what is kept and why. The data is **never sold** and never given to an advertiser; it
+    stays on the server and serves only which question comes next.
+  - *Personal, if not sensitive*: a Play Games player id, a device's push token and the signals are
+    personal data under GDPR and ZZPL, so the privacy policy also names the Google services they go
+    through: Firebase Cloud Messaging, which gets each device's token and every decision's push, the
+    question's text and a rejection's reason with it (§8a, *Push tokens*), and Google Play Games
+    Services, which names the player (§8a, *Play Games sign-in*).
 
 `RANDOM` was an open item, resolved twice. First as a content category (the absurd questions), not a
 "surprise me" filter. Then, *decided 2026-09-25*: "RANDOM is actually all", so RANDOM is no category
@@ -768,8 +1018,12 @@ seed (`Migrations`, `DatabaseFactory.init`). Nothing builds a table any other wa
   (sessions and the recovery secret, since dropped) there; the next Manual Deploy runs V5 there
   (a player's username and password hash, *Accounts*, above), which every player already there takes
   as a guest, and every later script: V6 (the categories table, §8d *Categories*), V7 (what a
-  question cost, §8c), V8 (the seeds' made-up votes), V9 (the seeds in Serbian, §8d *Seeds*) and
-  V10 (likes become reactions, §8d *Reactions*).
+  question cost, §8c), V8 (the seeds' made-up votes), V9 (the seeds in Serbian, §8d *Seeds*),
+  V10 (likes become reactions, §8d *Reactions*), V11 (reports and hidden questions, §8d
+  *Reports*), V12 (an author's block, §8d *Moderation*), V13 (sessions indexed by player, for an
+  account's deletion, §8a), V14 (skips and hidden questions indexed by question, for the same), V15
+  (the Home screen's two counts, §8d *Home picks*), V16 (an answer's time, *Personalization*, above),
+  V17 (push tokens, §8a) and V18 (Play Games links, §8a).
   `Migrations.migrate` takes the baseline itself (`baselineVersion` 1), and only for a database
   holding every table V1 builds (`TABLES_BEFORE_MIGRATIONS`) and no history table; Flyway's
   `baselineOnMigrate` is off. Any other database with tables and no history fails the boot, rather
@@ -804,6 +1058,8 @@ seed (`Migrations`, `DatabaseFactory.init`). Nothing builds a table any other wa
   beside V1, in lower case and unquoted so it runs on both engines, one `ALTER TABLE` per column
   (H2 takes no list of `ADD` clauses, as PostgreSQL does), and make it right for the rows already
   there: a new NOT NULL column needs a default or a backfill, and a drop takes its data with it.
+  A new foreign key needs an index that leads with its column, since PostgreSQL makes none and would
+  read the whole table to check each row the key names as it goes (`ForeignKeyIndexTest`).
   `SchemaDriftTest` then holds the script to the definitions on H2 and, in CI, on PostgreSQL. In
   `MigrationsTest`, add the script's row to `BASELINED_HISTORY` and what it does to rows already
   there to `afterLaterScripts` (a column added empty goes in `ADDED_COLUMNS`). Its database built
@@ -847,7 +1103,15 @@ seed (`Migrations`, `DatabaseFactory.init`). Nothing builds a table any other wa
   and pays nothing back for a rejection, and its tallies leave out the made-up votes; V9 only
   rewrites the seeds' text. V10 moves every like into `reactions`, as a like, and drops `likes`, which
   every build before it reads, so none of them runs on what it leaves: accepted, since nothing is live
-  yet and so no build before it is a rollback target (the user, 2026-09-26). `MigrationsTest` reads a
+  yet and so no build before it is a rollback target (the user, 2026-09-26). V11 only adds tables,
+  which a build before never names, so it serves hidden questions again and takes no report until
+  the roll forward; V12 only adds a nullable column, so a blocked author submits again there; V13
+  and V14 only add indexes. V15
+  only adds a table no build before names, and V16 a nullable column: a build before it moves a vote
+  and leaves the answer time the answer before it left. V17 adds a table no build before names; a
+  logout there still deletes its session, and the cascade still takes its tokens. V18 adds a table no
+  build before names: a player signed in with Play Games plays on there as a guest, through their
+  sessions, and submits only with a username too, until the roll forward. `MigrationsTest` reads a
   table a later script dropped by name (`DROPPED_TABLES`), since `Tables.kt` no longer names it.
 - *Several instances booting at once* (Render starts a deploy's new instance before it stops the old
   one): on PostgreSQL each script runs under Flyway's advisory lock, so one boot migrates while the
@@ -900,6 +1164,10 @@ returns and never recomputes points, so the two cannot disagree.
   an author is paid for their own like (§8d, *Reactions*), so liking their approved question gives its
   cost back. *Decided 2026-09-25: keep it.* The cost is 1 point only until release and will rise,
   and with thousands of questions an author rarely meets their own.
+- An account's deletion (§8a, *Deleting an account*) takes each like the player held back from its
+  author, a point per like, in its own transaction (`PlayerStore.payAuthor`), so the sum above holds
+  for every author who is left. Their approved questions are nobody's from then on, so a like of one
+  pays nobody, as a seed's.
 - `PlayerStore.addPoints` adds in SQL (`total_points = total_points + n`), never as a read then a
   write, so two votes by one player landing together cannot lose a point, nor a burst of likes for
   one author. `PlayerStore.spend` takes a cost the same way, as a compare-and-set on having it
@@ -1322,7 +1590,8 @@ listed on the Account screen.
   bounded by rate limiting, 120 votes a minute per player on average, §8b), and the player may
   change their pick. Every answer, first or not, counts for the player's current cycle. The tally
   always holds **one vote per player per question**, their latest, beside a seed's made-up votes
-  (*Seeds*). Built in `VoteStore.cast`, which moves the player's vote.
+  (*Seeds*). Built in `VoteStore.cast`, which moves the player's vote, and with it how long the
+  latest answer took (`answer_millis`, §8b *Personalization*; `AnswerTimeTest`).
 - **Retry safety** *(built)*: every vote carries a client-generated idempotency key. A repeat of
   the key last recorded for that question is replayed: nothing is written, it pays nothing, and it
   reports the stored side with the current tally and total, not the result first returned. Any other
@@ -1342,7 +1611,9 @@ listed on the Account screen.
   (`ReactionStore.likesReceivedBy`, *Reactions*; dislikes are worth nothing, so not counted), the
   points spent: what the player's questions not rejected
   cost them (`pointsSpent`, *Submitting*), and the player's username, null for a guest (§8a,
-  *Accounts*; `PlayerStats.username` on the client, so a screen reads the name with the points).
+  *Accounts*; `PlayerStats.username` on the client, so a screen reads the name with the points), and
+  whether they signed in with Play Games (`playGamesLinked`, §8a, *Play Games sign-in*; the client
+  adopts it later).
   Built in `StatsStore.of`, as one statement, so the total always agrees with the answers given, the
   likes received and the points spent (§8c). It only reads, and the cycle starts lazily on the next
   feed request, so between the answer that finishes a cycle and that request it reports the finished
@@ -1416,7 +1687,8 @@ listed on the Account screen.
     `ReactionResultDto`: the question, its `likeCount` and `dislikeCount`, and `myReaction`. A
     question that is not servable is 404 and an unknown player 401, as for votes and skips, and the
     id is checked as a vote's is. That holds for taking a reaction back too: a retired question's
-    reactions stay held, and its likes paid, until it is restored (*Moderation*).
+    reactions stay held, and its likes paid, until it is restored (*Moderation*) or the player's
+    account goes (§8a, *Deleting an account*).
   - The reaction held is read under its row lock (`SELECT ... FOR UPDATE`, §4), since what is written
     and what is paid depend on which of the three it is: a second request of the same player's for
     the same question waits, then reads what the first left. Only a like actually added pays the
@@ -1454,17 +1726,52 @@ listed on the Account screen.
     no points itself: a like of the player's own question moves their total without a vote, so the
     points between the cards show it from the next vote on, or from the next time the Play screen is
     shown, which reads them again. The thumbs, drawn by hand (§5b), took the heart's place.
+- **Reports** *(decided 2026-09-26, what Google Play asks of a game with players' questions: a way to
+  report one and to block its author; built on the server, no client yet)*: a player may **report** a
+  question to the moderator, **hide** it, or **hide its author**, and each hides from that player
+  alone, for good. The client will offer them in a list on the Play screen that stays out of the way
+  (the user). Comments on questions are not built: later, if at all.
+  - *Reporting* is `POST /v1/reports` (`WyrApi.Paths.REPORTS`) with a `ReportRequest`, the question
+    and a `ReportReason`: `OFFENSIVE`, `REAL_PERSON`, `SPAM`, `NOT_A_CHOICE` or `OTHER`, a growable
+    wire enum with `UNKNOWN` (§5), which, or no reason at all, is 400. A player holds **one report per
+    question** (`reports`, V11, under a primary key on both): a report sent again replaces its reason
+    and time, read under its row lock, and two first reports racing are the key's to decide (§4). A
+    report also hides the question from the reporter, and a moderator's dismissal (*Moderation*)
+    leaves it hidden. Answered 204.
+  - *Hiding a question* is `POST /v1/hidden-questions` with a `HideQuestionRequest`: the question is
+    never served to the player again, in any cycle (`hidden_questions`, V11). *Hiding an author* is
+    `POST /v1/hidden-authors` with a `HideAuthorRequest`, naming a question of theirs: every question
+    that author wrote, those approved later included, is never served to the player again
+    (`hidden_authors`, V11). The author stays anonymous: the player names them only by a question,
+    and learns nothing of who they are. A **seed** has no author, so hiding its author hides only that
+    seed, as it does a question whose author deleted their account: *provisional — user decision*,
+    since a player cannot tell a seed from any other question and
+    a refusal would be a failure they could do nothing about; the options were 409 or doing nothing.
+    An author may hide their own questions from themselves. Hiding again writes nothing. Each is 204,
+    and **nothing unhides** a question or an author, for now.
+  - *The feed* leaves out what a player hid: one more predicate beside the category filter
+    (`QuestionStore.visibleTo`, two `NOT EXISTS` found through the tables' keys), which the due count
+    shares, so a hidden question is neither served nor due and a cycle finishes without it. A player is
+    never stuck on what they hid, and one who hid every question is served an empty batch, which the
+    client reads as out of questions. A vote, skip or reaction to a hidden question still lands, as one
+    in flight when it was hidden would (`isServable` is unchanged).
+  - Each takes only a question the player may be served, 404 for any other, and resolves the player
+    before it writes, 401 for one who is gone, as a vote does. Limited per player: reports 30 an hour,
+    the two hides 60 an hour together (§8b). Nothing about them pays, costs, or touches the tally, the
+    reactions or the cycle. `ReportStoreTest`, `ReportFlowTest`.
 - **Submitting** *(built; details decided 2026-09-23; the cost 2026-09-25; registered players only
-  2026-09-26)*: **only a registered player may submit** (§8a, *Accounts*); a guest registers first,
-  keeping everything it has. It **costs a point** (§8c) and earns no points directly, because authors
+  2026-09-26)*: **only a registered player may submit** (§8a, *Accounts*): one with a username, or
+  signed in with Play Games (§8a, *Play Games sign-in*), which registers a player as a username does;
+  a guest registers first, keeping everything it has. It **costs a point** (§8c) and earns no points directly, because authors
   earn through likes. The author writes both
   options (in Serbian, as §8f, *How an option is phrased*, asks, which the moderator holds them
   to) and **picks one or more categories** (each a category's id; *Categories*). A player may
   have at most **20 submissions pending** moderation at once. A submitted question is served only
   after a moderator approves it; once approved it is due for every player in their current cycle.
   Built as `POST /v1/questions`, in `SubmissionStore.submit` after `checkedSubmission`. A guest's
-  submission is 403 `ACCOUNT_REQUIRED` before anything it holds is checked (a plain read of the
-  player, `PlayerStore.find`: nothing unregisters one); a guest still lists whatever it submitted
+  submission is 403 `ACCOUNT_REQUIRED` before anything it holds is checked (plain reads of the
+  player, `PlayerStore.find`, and of their links, `IdentityStore.isLinked`: nothing unregisters or
+  unlinks one); a guest still lists whatever it submitted
   before the rule. Both options
   are trimmed, then each must be non-blank, at most `WyrApi.Limits.MAX_OPTION_LENGTH` (200, UTF-16
   units) and one line (no control character, nor U+2028 or U+2029, the line and paragraph
@@ -1544,11 +1851,12 @@ listed on the Account screen.
     one's with `MessageDigest.isEqual`, so a refusal takes as long whatever was guessed.
   - `GET /v1/admin/submissions` is the queue: the players' submissions at `?status=` (`PENDING` when
     absent; `UNKNOWN`, an unknown name or a second value is 400), oldest first, bounded by `?limit=`
-    as the feed is, in a `SubmissionListDto` of `SubmissionDto`s. Never a seed, and no author.
+    as the feed is, in a `SubmissionListDto` of `SubmissionDto`s. Never a seed. Each names its author
+    by an opaque id alone (`authorId`, *Authors*, below).
   - `GET /v1/admin/questions` is the list of every question, seeds included, newest first, in an
     `AdminQuestionPageDto` of `AdminQuestionDto`s: options, categories, status, whether it is a seed,
     when it was stored, reviewed and retired, a rejected one's reason, its tally, its like count and
-    its dislike count, and no author. `?status=` and `?category=` narrow it, each repeated for several and matching any
+    its dislike count, and its author by id alone, null for a seed. `?status=` and `?category=` narrow it, each repeated for several and matching any
     of its values, none for all; `UNKNOWN` or a name that is no status, and an id no category has,
     is 400, as for the feed's category (`categoryFilter`, `CategoryStore.checked`). `?limit=` bounds a page as the feed's is. A page is asked for by
     cursor, not offset (`QuestionCursor`, `?cursor=`): `nextCursor` is the last question's place,
@@ -1567,6 +1875,8 @@ listed on the Account screen.
     as an option is (provisional, §8b). A reason that breaks a rule is 400 `VALIDATION_FAILED`, not
     422: the moderator's client checks it against the same rules before it lets them send. Both
     answer 200 with the question's `SubmissionDto` as its author now sees it.
+  - A decision is pushed to its author's devices once it has committed (§8a, *Push tokens*), when
+    pushes are on; nothing about the push can fail or hold up the decision.
   - A decision is a compare-and-set on `PENDING` (`ModerationStore.decide`, §4): a question that is
     not pending, a seed included, is 409 `ALREADY_DECIDED` and changes nothing, an unknown id is 404,
     and of two moderators deciding one submission exactly one wins (`ModerationStoreTest` races
@@ -1592,6 +1902,38 @@ listed on the Account screen.
     as a status: `statusOf` and `standsAt` read the two columns as one status, so a rollback to the
     build before reads every row. The seed writes only what a database lacks and changes nothing
     there, so a retired seed stays retired through every boot. `RetirementTest` pins it, the races included.
+  - *Reports* (*built on the server 2026-09-26; the moderation app does not show them yet*):
+    `GET /v1/admin/reports` lists the reported questions (§8d, *Reports*), most reported first, then
+    the most lately reported, then by id, bounded by `?limit=` and with no cursor, since a moderator
+    works from the head as in the queue: an `AdminReportListDto` of `AdminReportDto`s, each the
+    question as the list of every question shows it, how many players report it now, and how many give
+    each reason (`ReportReasonCountDto`, a reason nobody gave left out), read with the question in one
+    statement so they add up (`ModerationStore.reports`, §4), and when it was last reported. No
+    reporter travels. `POST /v1/admin/report-dismissals` with a `DismissReportsRequest` clears every
+    report of a question, answered 204 (none to clear is 204 too, an unknown id 404): it leaves the list
+    until a player reports it again. The question stays as it stands, retired or not, and hidden from
+    each player who reported it. Whether to retire a reported question is the moderator's own call,
+    through *Retiring*; nothing retires one by itself, however many report it: *provisional — user
+    decision*, the other option being a threshold that retires it until a moderator looks.
+    `ReportModerationFlowTest`.
+  - *Authors* (*built on the server 2026-09-26; the moderation app does not use them yet*): every
+    admin DTO names a question's author by an opaque id, `authorId`, the author's player id, which says
+    nothing about them but which questions are theirs; never a username, and null for a seed and for
+    a question whose author deleted their account (§8a).
+    `AdminQuestionDto.authorId` and `SubmissionDto.authorId`, the latter filled on the admin routes
+    alone (`toSubmission`'s `forModerator`): the author's own list and a submission's answer never
+    carry it, nor does anything a player is sent. `POST /v1/admin/author-blocks` with a
+    `BlockAuthorRequest`, an author id and a reason held to a rejection's rules, blocks the author from
+    submitting (`players.submissions_blocked_at`, V12) and rejects each of their pending submissions
+    for that one reason, paying each one's cost back as a rejection does (§8c), answered with an
+    `AuthorBlockDto` (blocked, how many it rejected). Their approved questions stay served; a block of
+    a blocked author keeps the first block's time and rejects whatever is pending. From then on each
+    submission of theirs is 403 `SUBMISSIONS_BLOCKED`, checked before what they typed (a plain read)
+    and again under their row lock, which the block takes too, so a submission racing a block is either
+    rejected by it or refused (`AuthorBlockTest`). `POST /v1/admin/author-unblocks` with an
+    `UnblockAuthorRequest` lets them submit again; what the block rejected stays rejected. An id no
+    player has is 404 `AUTHOR_NOT_FOUND`. On the client, `SUBMISSIONS_BLOCKED` and `AUTHOR_NOT_FOUND`
+    read as `DomainError.UNKNOWN` until the branches that show them give each one of its own.
   - *The client* is `ModerationRepository` in `:core:domain`, behind `GetPendingSubmissions`,
     `ApproveSubmission` and `RejectSubmission`, none of which ensures a session: the moderator is
     not a player. `DefaultModerationRepository` calls `ModerationApi` through `runApi` alone, never
@@ -1677,6 +2019,17 @@ listed on the Account screen.
     scripted repositories,
     `ModerationOverHttpTest` over the real client configuration, and `ScreensDrawTest` draws every
     screen off screen at a desktop window's size. The game's builds do not moderate at all.
+- **Home picks** *(decided 2026-09-26; built on the server, the client adopts later)*: the Home screen
+  will show **two Play buttons**, one in each card's colour (§5b), both starting the game alike, each
+  with how many times players have tapped it, to fill the screen as a question would. A tap pays and
+  costs nothing and is no answer. **Every tap counts**, a player's repeats included, bounded only by
+  the per-player rate limit (§8b). `GET /v1/home-picks` (`WyrApi.Paths.HOME_PICKS`) answers both
+  counts, a `HomePicksDto` (`picksA`, `picksB`), and needs no session, so Home can show them before it
+  has a player; `POST` with a `HomePickRequest` (`side`, an `OptionSide`, closed as a vote's is) counts
+  one tap of the bearer's and answers both counts after it, 401 without a session and 400 for a body
+  naming no side. Built in `home_picks` (V15), one row per side written at 0, moved only by an SQL
+  increment (`HomePickStore.pick`, §4) and read in one statement (`HomePickStore.counts`).
+  `HomePickStoreTest` races 8 taps of one button, `HomePickFlowTest` the routes.
 
 ## 8e. Client environments — decided 2026-09-24
 
