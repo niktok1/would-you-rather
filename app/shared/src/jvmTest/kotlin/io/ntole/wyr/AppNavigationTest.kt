@@ -651,6 +651,7 @@ class AppNavigationTest {
             questionId: String,
             side: Side,
             attempt: AttemptId,
+            answerMillis: Long?,
         ): VoteOutcome = error("nothing votes here")
 
         override suspend fun setReaction(

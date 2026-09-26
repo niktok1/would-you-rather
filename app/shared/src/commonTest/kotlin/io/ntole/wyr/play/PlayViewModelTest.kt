@@ -137,6 +137,25 @@ class PlayViewModelTest {
             assertEquals(1, votes.attempts.toSet().size)
         }
 
+    /** How long the tap took goes with the vote, and a retry of it sends the first tap's time again. */
+    @Test
+    fun `a vote carries the time its tap took and its retry the same`() =
+        runTest(dispatcher) {
+            val votes = RecordingVoteRepository(DomainError.NETWORK)
+            val viewModel = viewModel(votes = votes)
+            testScheduler.advanceUntilIdle()
+            testScheduler.advanceTimeBy(2_500)
+            viewModel.choose(Side.A)
+            testScheduler.advanceUntilIdle()
+            testScheduler.advanceTimeBy(7_000)
+
+            viewModel.retry()
+            testScheduler.advanceUntilIdle()
+
+            assertIs<PlayUiState.Revealed>(viewModel.state.value)
+            assertEquals(listOf<Long?>(2_500, 2_500), votes.answerMillis)
+        }
+
     @Test
     fun `a second tap on Try again does not also move on`() =
         runTest(dispatcher) {
@@ -1198,6 +1217,7 @@ class PlayViewModelTest {
             questionId: String,
             side: Side,
             attempt: AttemptId,
+            answerMillis: Long?,
         ): VoteOutcome = OUTCOME.copy(yourSide = side)
     }
 
@@ -1209,6 +1229,7 @@ class PlayViewModelTest {
             questionId: String,
             side: Side,
             attempt: AttemptId,
+            answerMillis: Long?,
         ): VoteOutcome {
             gate.await()
             return OUTCOME.copy(yourSide = side)
@@ -1225,15 +1246,20 @@ class PlayViewModelTest {
 
         val sides = mutableListOf<Side>()
 
+        /** How long each vote's answer took, as sent. */
+        val answerMillis = mutableListOf<Long?>()
+
         val callCount: Int get() = attempts.size
 
         override suspend fun cast(
             questionId: String,
             side: Side,
             attempt: AttemptId,
+            answerMillis: Long?,
         ): VoteOutcome {
             attempts += attempt
             sides += side
+            this.answerMillis += answerMillis
             failures.removeFirstOrNull()?.let { throw WyrException(it) }
             return OUTCOME.copy(yourSide = side)
         }
@@ -1246,6 +1272,7 @@ class PlayViewModelTest {
             questionId: String,
             side: Side,
             attempt: AttemptId,
+            answerMillis: Long?,
         ): VoteOutcome = throw WyrException(error)
     }
 

@@ -285,7 +285,8 @@ class PlayViewModel(
         viewModelScope.launch {
             _state.value =
                 try {
-                    val outcome = castVote(vote.question.id, vote.side, vote.attempt)
+                    // The time it took goes with it, the first tap's on a retry (CLAUDE.md §8b, *Personalization*).
+                    val outcome = castVote(vote.question.id, vote.side, vote.attempt, vote.answerMillis)
                     // The vote's total is the newest the server has told: a read still in flight
                     // may be older.
                     pointsRead?.cancel()

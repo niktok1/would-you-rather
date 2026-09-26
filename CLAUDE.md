@@ -984,7 +984,10 @@ EncryptedSharedPreferences: enough for a game that stores no sensitive personal 
     question's latest side, and every re-answer), skips (per cycle), reactions (a like or a dislike),
     and **how long each answer took** (`VoteRequest.answerMillis`, kept on the vote as
     `votes.answer_millis`, V16: from 0 to `WyrApi.Limits.MAX_ANSWER_MILLIS`, 10 minutes, and none
-    otherwise, never a refusal; the latest answer's, as the side is; the client adopts it later).
+    otherwise, never a refusal; the latest answer's, as the side is). The game sends it with every
+    vote: the time the Play screen measures from the question shown to the tap, counted only while
+    the screen is shown (`ScreenStopwatch`, §8g), and a resend of the same attempt sends the same
+    value (`PendingVote.answerMillis`, through `CastVote` and `VoteRepository.cast`).
     Nothing reads any of them to choose a question yet.
   - *Later, not built*: **question traits** a moderator sets beside the categories (light or deep,
     silly or serious, and the like, the list to settle then); a **per-player affinity** for each

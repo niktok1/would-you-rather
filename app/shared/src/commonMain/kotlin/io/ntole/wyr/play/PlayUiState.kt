@@ -79,7 +79,8 @@ val PlayUiState.canChangeCategories: Boolean
 
 /**
  * One tap on a side, with the attempt made for it (CLAUDE.md §8d), and how long the question had been
- * on screen by then, [answerMillis], for the analytics (§8g): a retry answered no slower.
+ * on screen by then, [answerMillis], which goes with the vote (§8b, *Personalization*) and to the
+ * analytics (§8g): a retry sends the same, answered no slower.
  */
 data class PendingVote(
     val question: Question,
