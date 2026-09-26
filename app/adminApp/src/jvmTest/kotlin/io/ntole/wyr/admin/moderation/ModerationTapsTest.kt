@@ -42,7 +42,13 @@ class ModerationTapsTest {
             advance(scene)
 
             scene.tap(READY_REASONS[1])
-            assertEquals(READY_REASONS[1], viewModel.state.value.draftOf("q1").reason, "the first card's")
+            assertEquals(
+                READY_REASONS[1],
+                viewModel.state.value
+                    .draftOf("q1")
+                    .reason,
+                "the first card's",
+            )
             scene.tap("Reject")
             advance(scene)
 

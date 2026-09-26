@@ -39,7 +39,10 @@ internal fun ImageComposeScene.tap(text: String) {
 }
 
 private fun textsOf(node: SemanticsNode): List<String> =
-    node.config.getOrNull(SemanticsProperties.Text).orEmpty().map { it.text }
+    node.config
+        .getOrNull(SemanticsProperties.Text)
+        .orEmpty()
+        .map { it.text }
 
 /** Draws the scene again once what the last action changed has reached it. */
 internal fun ImageComposeScene.settle() {
