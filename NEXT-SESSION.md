@@ -1724,6 +1724,10 @@ are untouched. So the keystore below deserves a backup, but it is not the app.
    wyr.upload.keyPassword=<the same password>
    ```
 
+   The file reads a backslash as the start of an escape, so write each `\` in a value as `\\`, and
+   leave nothing after a value, not even a space: else signing fails with keytool's *Keystore was
+   tampered with, or password was incorrect*.
+
    A build machine can set `WYR_UPLOAD_STORE_FILE`, `WYR_UPLOAD_STORE_PASSWORD`,
    `WYR_UPLOAD_KEY_ALIAS` and `WYR_UPLOAD_KEY_PASSWORD` instead. `./gradlew
    :app:androidApp:signingReport` then says *Config: upload* for `prodRelease`, and *Config: debug*
