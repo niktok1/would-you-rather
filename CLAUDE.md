@@ -691,6 +691,14 @@ EncryptedSharedPreferences: enough for a game that stores nothing personal.
   since refusing it would lock a broken build out whatever its number. On the client
   `UPGRADE_REQUIRED` reads as `DomainError.UNKNOWN` until the branch that sends the headers gives it
   one of its own. `ClientVersionTest`, `CorsTest`, `ServerConfigTest`.
+- **Logging** *(built 2026-09-26)* — beside Ktor's line per call and the rate limiter's per refusal,
+  one INFO line for each stored submission, naming the question and its author by id
+  (`submission <id> stored, by player <id>`), and one for each admin action that changed something,
+  naming the action and the id it was done to (`admin approved question <id>`, `logAdmin`): approvals,
+  rejections, retirements and restorations, categories added and renamed, reports dismissed, and
+  authors blocked and unblocked. A read, the moderator's lists included, logs nothing of its own.
+  Never a token, a password or its hash, an email, a question's text, a rejection's reason or a
+  name the moderator typed. `ActionLogTest`.
 - **Likes from fresh guests** — *decided 2026-09-24: no like limitations.* A like pays its author
   once per player (§8d, *Reactions*), and guests cost nothing to mint (§8a), so a script minting
   guests could pay one author a point per guest for each of their questions. The user accepted that:

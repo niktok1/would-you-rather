@@ -2,6 +2,8 @@ package io.ntole.wyr.server.moderation
 
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.Parameters
+import io.ktor.server.application.ApplicationCall
+import io.ktor.server.application.log
 import io.ktor.server.response.respond
 import io.ktor.server.routing.Route
 import io.ktor.server.routing.get
@@ -65,12 +67,14 @@ fun Route.moderationRoutes(
                 // Checked before the transaction, as a submission is: a refusal needs no database.
                 val approval = checkedApproval(call.receiveOrReject<ApproveSubmissionRequest>("approval"))
 
-                call.respond(
+                val approved =
                     db.query {
                         // Before the decision, so an id no category has is refused whatever the question.
                         ModerationStore.approve(approval.questionId, CategoryStore.checked(approval.categories))
-                    },
-                )
+                    }
+                call.logAdmin("approved question", approved.id)
+
+                call.respond(approved)
             }
 
             post(WyrApi.Paths.ADMIN_REJECTIONS) {
@@ -78,7 +82,10 @@ fun Route.moderationRoutes(
 
                 val rejection = checkedRejection(call.receiveOrReject<RejectSubmissionRequest>("rejection"))
 
-                call.respond(db.query { ModerationStore.reject(rejection.questionId, rejection.reason) })
+                val rejected = db.query { ModerationStore.reject(rejection.questionId, rejection.reason) }
+                call.logAdmin("rejected question", rejected.id)
+
+                call.respond(rejected)
             }
 
             get(WyrApi.Paths.ADMIN_QUESTIONS) {
@@ -104,7 +111,10 @@ fun Route.moderationRoutes(
                 val retirement = call.receiveOrReject<RetireQuestionRequest>("retirement")
                 requireValidId("questionId", retirement.questionId)
 
-                call.respond(db.query { ModerationStore.retire(retirement.questionId) })
+                val retired = db.query { ModerationStore.retire(retirement.questionId) }
+                call.logAdmin("retired question", retired.id)
+
+                call.respond(retired)
             }
 
             post(WyrApi.Paths.ADMIN_RESTORATIONS) {
@@ -113,7 +123,10 @@ fun Route.moderationRoutes(
                 val restoration = call.receiveOrReject<RestoreQuestionRequest>("restoration")
                 requireValidId("questionId", restoration.questionId)
 
-                call.respond(db.query { ModerationStore.restore(restoration.questionId) })
+                val restored = db.query { ModerationStore.restore(restoration.questionId) }
+                call.logAdmin("restored question", restored.id)
+
+                call.respond(restored)
             }
 
             post(WyrApi.Paths.ADMIN_CATEGORIES) {
@@ -122,7 +135,10 @@ fun Route.moderationRoutes(
                 // Checked before the transaction: a refusal needs no database.
                 val category = checkedCreation(call.receiveOrReject<CreateCategoryRequest>("category"))
 
-                call.respond(HttpStatusCode.Created, db.query { CategoryStore.create(category) })
+                val created = db.query { CategoryStore.create(category) }
+                call.logAdmin("added category", created.id)
+
+                call.respond(HttpStatusCode.Created, created)
             }
 
             post(WyrApi.Paths.ADMIN_CATEGORY_RENAMES) {
@@ -130,7 +146,10 @@ fun Route.moderationRoutes(
 
                 val category = checkedRenaming(call.receiveOrReject<RenameCategoryRequest>("category rename"))
 
-                call.respond(db.query { CategoryStore.rename(category) })
+                val renamed = db.query { CategoryStore.rename(category) }
+                call.logAdmin("renamed category", renamed.id)
+
+                call.respond(renamed)
             }
 
             get(WyrApi.Paths.ADMIN_REPORTS) {
@@ -147,7 +166,8 @@ fun Route.moderationRoutes(
                 val dismissal = call.receiveOrReject<DismissReportsRequest>("report dismissal")
                 requireValidId("questionId", dismissal.questionId)
 
-                db.query { ModerationStore.dismissReports(dismissal.questionId) }
+                val dismissed = db.query { ModerationStore.dismissReports(dismissal.questionId) }
+                call.logAdmin("dismissed $dismissed reports of question", dismissal.questionId)
 
                 call.respond(HttpStatusCode.NoContent)
             }
@@ -158,7 +178,10 @@ fun Route.moderationRoutes(
                 // Checked before the transaction, as a rejection is: a refusal needs no database.
                 val block = checkedBlock(call.receiveOrReject<BlockAuthorRequest>("author block"))
 
-                call.respond(db.query { ModerationStore.blockAuthor(block.authorId, block.reason) })
+                val blocked = db.query { ModerationStore.blockAuthor(block.authorId, block.reason) }
+                call.logAdmin("blocked author, rejecting ${blocked.rejectedSubmissions} pending,", block.authorId)
+
+                call.respond(blocked)
             }
 
             post(WyrApi.Paths.ADMIN_AUTHOR_UNBLOCKS) {
@@ -167,11 +190,24 @@ fun Route.moderationRoutes(
                 val unblock = call.receiveOrReject<UnblockAuthorRequest>("author unblock")
                 requireValidId("authorId", unblock.authorId)
 
-                call.respond(db.query { ModerationStore.unblockAuthor(unblock.authorId) })
+                val unblocked = db.query { ModerationStore.unblockAuthor(unblock.authorId) }
+                call.logAdmin("unblocked author", unblocked.authorId)
+
+                call.respond(unblocked)
             }
         }
     }
 }
+
+/**
+ * One INFO line for an admin action that changed something, naming [what] it did and to [id]: the
+ * operator's trail of what the moderator did. Never a token, nor a reason or a name the moderator
+ * typed: the log is no place for either.
+ */
+private fun ApplicationCall.logAdmin(
+    what: String,
+    id: String,
+) = application.log.info("admin $what $id")
 
 /**
  * The status the queue is asked for, [QuestionStatus.PENDING] when none is, refused as [statusNamed]

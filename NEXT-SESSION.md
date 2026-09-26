@@ -333,6 +333,8 @@ smallest client compile fixes.
   pending, paid back, and refusing their submissions with 403 `SUBMISSIONS_BLOCKED`. The moderation
   app shows none of it yet. To ask the user: nothing retires a reported question by itself
   (provisional; a threshold was the other option).
+- **An operator's trail** (§8b, *Logging*): one INFO line per stored submission and per admin action,
+  ids only, never what anyone typed, nor a token or password.
 
 ### Verified working
 

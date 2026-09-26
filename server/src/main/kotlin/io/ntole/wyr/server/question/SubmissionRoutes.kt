@@ -1,6 +1,7 @@
 package io.ntole.wyr.server.question
 
 import io.ktor.http.HttpStatusCode
+import io.ktor.server.application.log
 import io.ktor.server.auth.authenticate
 import io.ktor.server.response.respond
 import io.ktor.server.routing.Route
@@ -65,6 +66,10 @@ fun Route.submissionRoutes(db: Db) {
                         val categories = CategoryStore.checked(request.categories)
                         SubmissionStore.submit(authorId, checkedSubmission(request.copy(categories = categories)))
                     }
+
+                // For the moderator's and the operator's trail: which question, by whom. Never its text,
+                // which is the player's own words.
+                call.application.log.info("submission ${stored.id} stored, by player $authorId")
 
                 call.respond(HttpStatusCode.Created, stored)
             }
