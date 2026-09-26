@@ -156,7 +156,7 @@ class ReportModerationFlowTest {
                 )
             }
             assertEquals(QuestionStatus.APPROVED, own.getValue(approved.id).status)
-            assertEquals(2 * Scoring.SUBMISSION_COST, client.stats(author).totalPoints, "both paid back")
+            assertEquals(2 * Scoring.DEFAULT_SUBMISSION_COST, client.stats(author).totalPoints, "both paid back")
 
             // Refused before the options are checked: nothing they could type would pass.
             assertRefused(

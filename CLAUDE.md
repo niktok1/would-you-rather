@@ -395,6 +395,11 @@ This project must never be attributed to any employer identity.
   Render is the proxy, one budget for everyone: the server warns at boot when `RENDER` is `true` and
   no header is set. To be checked once deployed (NEXT-SESSION.md). No forwarded-header plugin:
   `ktor-server-forwarded-header` would be a new dependency for the one line this needs.
+- `SUBMISSION_COST` is what submitting a question costs, in points (§8c): a whole number, 0 or more;
+  unset or blank is 1, and anything else fails the boot, naming it (`ServerConfig.submissionCost`). It
+  stays unset until the release, which sets 50 on `wyr-server` alone (the user's decision; declared
+  in `render.yaml` as a comment until then). Read at boot: changing it is changing the variable and
+  restarting the service. `GET /v1/me` names it, so the game says what the server charges.
 - `MIN_CLIENT_VERSION_ANDROID`, `_IOS`, `_WEB` and `_DESKTOP` each name the oldest build of the game
   the server serves on that platform (§8b, *Minimum client version*); none is set, so no build is
   refused. Read at boot: raising one is changing the variable and restarting the service.
@@ -669,8 +674,9 @@ EncryptedSharedPreferences: enough for a game that stores no sensitive personal 
   - *Age*: **16 and over**, for the store listing's target audience and in the terms.
   - *Languages*: Serbian in both scripts. **English is hidden** at launch: its strings stay in the
     code (§8f), and the language menu shows Ћирилица and Latinica only (not built).
-  - *Submitting* costs **50 points** from the release, 1 until then (§8c), and the server will tell
-    the client the cost rather than the client keeping a copy (not built).
+  - *Submitting* costs **50 points** from the release, 1 until then (§8c): the server's
+    `SUBMISSION_COST`, which `GET /v1/me` names and the Submit form shows (*built 2026-09-26*); the
+    release sets it on `wyr-server` (NEXT-SESSION.md).
   - *Email*: none, for now, so no password reset either (*Accounts*, below).
   - *Analytics* is PostHog (§8g); a moderator's decision is pushed to its author through Firebase
     Cloud Messaging on Android, and shown in the game too (§8a, *Push tokens*; the client adopts it
@@ -1163,11 +1169,13 @@ returns and never recomputes points, so the two cannot disagree.
 - A **dislike** earns and costs nobody anything (*decided 2026-09-26*): a guest costs nothing to mint
   (§8a), so a dislike that cost its author a point would let a script drive any author below zero,
   and so stop them submitting. It is a count, for now for the players and the moderator to see.
-- Submitting a question **costs** its author `Scoring.SUBMISSION_COST`, **1 point** until the game is
-  released (*decided 2026-09-25*) and **50** from then on (*decided 2026-09-26*, §8b *The launch*), taken in the submission's own transaction (§8d, *Submitting*). The
-  number is the wire's, `WyrApi.Limits.SUBMISSION_COST`, so a client can say what it is (the game's
-  one copy, `SubmissionRules.SUBMISSION_COST`, is on the Submit form's button, §8d); only the server
-  charges it. A player needs at least that many points to submit, or it is 409
+- Submitting a question **costs** its author the server's `SUBMISSION_COST` (§8,
+  `ServerConfig.submissionCost`; *built 2026-09-26*), **1 point** until the game is
+  released (*decided 2026-09-25*) and **50** from then on (*decided 2026-09-26*, §8b *The launch*), taken in the submission's own transaction (§8d, *Submitting*). Unset, it is
+  `Scoring.DEFAULT_SUBMISSION_COST`, the wire's `WyrApi.Limits.SUBMISSION_COST`, 1, which is only the
+  default now: `GET /v1/me` names the cost the server charges (`PlayerStatsDto.submissionCost`,
+  defaulting to 1 on the wire, so a server from before it reads as charging 1, which it did), and the
+  game shows that (§8d, *Submitting*); only the server charges it. A player needs at least that many points to submit, or it is 409
   `NOT_ENOUGH_POINTS` and costs nothing. A rejection pays the cost back, in the decision's
   transaction; an approval keeps it, and so does a retirement. Each question keeps what it cost (`questions.submission_cost`, V7), and a
   rejection pays back that, not the constant, so a question submitted before submitting cost
@@ -1184,7 +1192,8 @@ returns and never recomputes points, so the two cannot disagree.
   pays nothing back, so its author is short that point for good. One more, where two rules meet:
   an author is paid for their own like (§8d, *Reactions*), so liking their approved question gives its
   cost back. *Decided 2026-09-25: keep it.* The cost is 1 point only until release and will rise,
-  and with thousands of questions an author rarely meets their own.
+  and with thousands of questions an author rarely meets their own. A cost of 0 lets a player with no
+  points submit, and one taken below 0 (above) not even then: accepted.
 - An account's deletion (§8a, *Deleting an account*) takes each like the player held back from its
   author, a point per like, in its own transaction (`PlayerStore.payAuthor`), so the sum above holds
   for every author who is left. Their approved questions are nobody's from then on, so a like of one

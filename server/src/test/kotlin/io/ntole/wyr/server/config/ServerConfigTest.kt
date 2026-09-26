@@ -49,6 +49,31 @@ class ServerConfigTest {
     }
 
     @Test
+    fun `the submission cost comes from SUBMISSION_COST and unset or blank is 1`() {
+        mapOf("50" to 50, "0" to 0, " 7 " to 7).forEach { (raw, cost) ->
+            assertEquals(cost, ServerConfig.fromEnvironment(mapOf("SUBMISSION_COST" to raw)::get).submissionCost, raw)
+        }
+        listOf(null, "", "  ").forEach { unset ->
+            assertEquals(
+                1,
+                ServerConfig.fromEnvironment(mapOf("SUBMISSION_COST" to unset)::get).submissionCost,
+                "$unset",
+            )
+        }
+    }
+
+    @Test
+    fun `a submission cost that is no whole number of 0 or more fails at boot naming the variable`() {
+        listOf("-1", "fifty", "1.5", "50 points").forEach { raw ->
+            val failure =
+                assertFailsWith<IllegalArgumentException>(raw) {
+                    ServerConfig.fromEnvironment(mapOf("SUBMISSION_COST" to raw)::get)
+                }
+            assertContains(failure.message.orEmpty(), "SUBMISSION_COST", message = raw)
+        }
+    }
+
+    @Test
     fun `the admin token comes from ADMIN_TOKEN and a blank one is none`() {
         val token = "0123456789abcdef".repeat(4)
 

@@ -1,5 +1,6 @@
 package io.ntole.wyr.core.player
 
+import io.ntole.wyr.core.api.WyrApi
 import kotlinx.serialization.Serializable
 
 /**
@@ -27,6 +28,11 @@ import kotlinx.serialization.Serializable
  * (CLAUDE.md §8a, *Play Games sign-in*), which registers them as a username does: a player is a guest
  * while they have neither.
  *
+ * [submissionCost] is what submitting a question costs on this server, in points (CLAUDE.md §8c), the
+ * server's own setting, so a client says the cost the server charges rather than one it was built
+ * with. It defaults to [io.ntole.wyr.core.api.WyrApi.Limits.SUBMISSION_COST], so a server from before it
+ * reads as charging that, which it did.
+ *
  * The server reads every number at the same moment, so they always agree with one another.
  *
  * The numbers have defaults, zero and the first cycle, [username] null and [playGamesLinked] false, so
@@ -44,4 +50,5 @@ public data class PlayerStatsDto(
     public val pointsSpent: Int = 0,
     public val username: String? = null,
     public val playGamesLinked: Boolean = false,
+    public val submissionCost: Int = WyrApi.Limits.SUBMISSION_COST,
 )

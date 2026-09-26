@@ -76,6 +76,11 @@ services:
         sync: false
       - key: PLAY_GAMES_CLIENT_SECRET
         sync: false
+      # What submitting a question costs, in points (CLAUDE.md §8c). Unset is 1, which it stays until
+      # the release; the release sets 50 on this service, and on this service only (the user's
+      # decision, 2026-09-26). Declared as a comment until then, so no deploy changes it by itself:
+      # - key: SUBMISSION_COST
+      #   value: "50"
 
   - type: web
     name: wyr-server-dev

@@ -177,10 +177,10 @@ class ModerationStoreTest {
         val before = totalOf(author)
 
         transaction(database) { ModerationStore.reject(rejected.id, "Not a dilemma") }
-        assertEquals(before + Scoring.SUBMISSION_COST, totalOf(author), "the rejection paid it back")
+        assertEquals(before + Scoring.DEFAULT_SUBMISSION_COST, totalOf(author), "the rejection paid it back")
 
         transaction(database) { ModerationStore.approve(approved.id, emptyList()) }
-        assertEquals(before + Scoring.SUBMISSION_COST, totalOf(author), "the approval kept it")
+        assertEquals(before + Scoring.DEFAULT_SUBMISSION_COST, totalOf(author), "the approval kept it")
     }
 
     @Test
@@ -212,7 +212,7 @@ class ModerationStoreTest {
 
         assertEquals(true, first.isSuccess)
         assertEquals(ErrorCode.ALREADY_DECIDED, (second.exceptionOrNull() as? ApiFailure)?.code)
-        assertEquals(before + Scoring.SUBMISSION_COST, totalOf(author), "only the rejection that won paid")
+        assertEquals(before + Scoring.DEFAULT_SUBMISSION_COST, totalOf(author), "only the rejection that won paid")
     }
 
     @Test

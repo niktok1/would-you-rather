@@ -1111,7 +1111,7 @@ class ApiFlowTest {
     fun `a guest cannot submit whatever the submission holds, and can once registered`() =
         runServer("submit-guest") { client ->
             val guest = client.guest()
-            grantPoints(guest.playerId, Scoring.SUBMISSION_COST)
+            grantPoints(guest.playerId, Scoring.DEFAULT_SUBMISSION_COST)
 
             listOf(
                 "a question the rules take" to question("Fly"),
@@ -1126,7 +1126,7 @@ class ApiFlowTest {
                 assertEquals(ErrorCode.ACCOUNT_REQUIRED, response.body<ErrorDto>().code, case)
             }
             assertEquals(emptyList(), client.mySubmissions(guest), "nothing stored")
-            assertEquals(Scoring.SUBMISSION_COST, client.stats(guest).totalPoints, "and nothing taken")
+            assertEquals(Scoring.DEFAULT_SUBMISSION_COST, client.stats(guest).totalPoints, "and nothing taken")
 
             val registered =
                 client.post(WyrApi.Paths.AUTH_REGISTER) {
@@ -1155,15 +1155,15 @@ class ApiFlowTest {
                     client.submit(author.accessToken, question(text)).body<SubmissionDto>()
                 }
             assertEquals(0, client.stats(author).totalPoints, "two answers paid for two submissions")
-            assertEquals(2 * Scoring.SUBMISSION_COST, client.stats(author).pointsSpent)
+            assertEquals(2 * Scoring.DEFAULT_SUBMISSION_COST, client.stats(author).pointsSpent)
             assertEquals(HttpStatusCode.Conflict, client.submit(author.accessToken, question("Broke again")).status)
 
             client.approve(kept.id)
             client.reject(paidBack.id, "No")
 
             val stats = client.stats(author)
-            assertEquals(Scoring.SUBMISSION_COST, stats.totalPoints, "the rejected one's cost is back")
-            assertEquals(Scoring.SUBMISSION_COST, stats.pointsSpent, "the approved one's is kept")
+            assertEquals(Scoring.DEFAULT_SUBMISSION_COST, stats.totalPoints, "the rejected one's cost is back")
+            assertEquals(Scoring.DEFAULT_SUBMISSION_COST, stats.pointsSpent, "the approved one's is kept")
         }
 
     @Test
@@ -1263,7 +1263,7 @@ class ApiFlowTest {
             // As for the ghost-player vote, the helper's token for a real player has to pass first.
             val real = client.registered()
             val request = SubmitQuestionRequest("Fly", "Swim", listOf("FOOD"))
-            grantPoints(real.playerId, Scoring.SUBMISSION_COST)
+            grantPoints(real.playerId, Scoring.DEFAULT_SUBMISSION_COST)
             assertEquals(HttpStatusCode.Created, client.submit(signAccessToken(real.playerId), request).status)
 
             val response = client.submit(signAccessToken("no-such-player"), request)
@@ -2173,7 +2173,7 @@ class ApiFlowTest {
         session: SessionDto,
         request: SubmitQuestionRequest,
     ): HttpResponse {
-        grantPoints(session.playerId, Scoring.SUBMISSION_COST)
+        grantPoints(session.playerId, Scoring.DEFAULT_SUBMISSION_COST)
         registerIfGuest(session.playerId)
         return submit(session.accessToken, request)
     }
