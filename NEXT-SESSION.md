@@ -750,6 +750,65 @@ build, and this branch added one step after *Test*, the host tests; `AccountView
 `CurrentSession` now (Koin resolves it), so `feat/account-client`'s deletion needs nothing more for
 the screen to follow its fresh guest; `PlayGamesRepository.signIn` answers `String?`.
 
+**Merging main into `feat/android-services`** (e87f4a1, 2026-09-27; main at fa3e870, with
+`feat/moderation-reports`, `feat/android-release`, `feat/play-client` and `feat/account-client`; no
+commit rewritten, nothing pushed). 29 files conflicted, each kept both sides:
+- **Play's top bar**: home, the categories in what is left, the ⋮ menu, then the account icon with the
+  notice's dot (`PlayTopBar` takes `news` and `menu`); **Home**: the two Play buttons with their picks
+  and `onPlay(Side)`, and the dot (`Home` in `App.kt` passes `news`).
+- **Registered is one rule**: `stats.registered` (a username or a Play Games link) for Log out
+  (`LogOutAndDelete`), My questions' New question and the Submit form, which takes the server's cost
+  (`stats.submissionCost`); Delete account for everyone read. `PlayerStats` and `PlayerMapper` keep
+  both `playGamesLinked` and `submissionCost`.
+- **The deletion** ends the session through `DefaultSessionRepository.clear()`, the logout's path,
+  which auto-merged: it settles who plays here, so no launch signs the device back in with Play Games
+  (the Auth page's button still can), and the fresh guest is a session the push token and the notice
+  follow. `FakeServer`'s deletion drops the Play Games link, as the server's cascade does.
+- **The Auth page**: the Play Games button first, then Register with the terms line.
+- **The Android build**: per-flavor signing, R8 and `Theme.Wyr` beside the Google services' ids,
+  `BuildConfig` fields and the manifest's provider removals; `WyrApplication` hands `initKoin` both
+  `build` and `device` (`initKoin(env, analytics, build, device)`, `appModules(env, analytics, version,
+  device)`, `dataModule(env, analytics, build, playGames, push)`). ci.yml keeps both new steps.
+- The moderation app's `describe` names every `DomainError`; `App.kt` has the update screen in place of
+  everything, over this branch's `AppServices` and notice. CLAUDE.md is one text (§8a *Deleting an
+  account*, *Play Games sign-in* settled by a deletion too, §8b *When a launch signs in*, §8d
+  *Navigation*, *The Play screen*, *The notice of a decision*, the tap and error lists, the library
+  table).
+- One test line the merge broke (`nameOf` takes `Strings` since this branch), fixed in the merge.
+
+Follow-ups, one commit each: `DeletionSessionTest` (f4ac293: a deletion settles who plays here, the
+next launch signs nobody in, the button still can, and the fresh guest's push token is registered; it
+fails with `clear()` not settling); `TopBarsDrawTest` (b349b79: Play's bar with news has the menu, a
+long selection with news is cut as without, and the dot's pixels lie inside the account icon's 48 on
+Home's and Play's bars, none on a bar without news); the About screen's licences (6ce29bd: the
+Firebase Android SDK, Error Prone's annotations and javax.inject, Apache 2.0, now on
+`prodReleaseRuntimeClasspath`; Google Play services left off, being Google's own terms, CLAUDE.md §8b
+*Licence notices*); `HomeScreenDrawTest` with news (3f60f3e); a Play Games player submitting at the
+server's cost (a08fa5d); Delete account beside a Play Games player's Log out (6f55492).
+
+**Verified on this Mac after them**, each exit code read from a log file: `ktlintCheck`; the verify
+job's tests, each with `--rerun`: `:server:test` 486 (2 skipped, the PostgreSQL-only boots),
+`:core:domain` 117, `:core:data` 193, `:core:network` 122 and 128 as Android host tests, `:app:shared`
+490, `:app:adminApp` 148, `:app:androidApp:testDevDebugUnitTest` 5 (`WindowThemeTest`), and
+`:app:shared:testAndroidHostTest` 309, none failing; its client compiles with `assembleDebug` and
+`assembleProdRelease`; its *Release signing* step's commands under `bash -eo pipefail`; the desktop's
+and the web's (`compileKotlinWasmJs`) compiles; the iOS Kotlin compiles (`:app:shared` main and test,
+each `:core` module's test). `assembleProdRelease` also ran with placeholder ids for both services
+(`-Pwyr.playgames.*`, `-Pwyr.firebase.*`, never kept, never installed): R8 kept Play Games'
+and Firebase's classes (`GoogleServiceSettings` is not constant-folded, so the build without ids keeps
+them too), and warns only of Kotlin 2.4's metadata (§8b). **On an emulator** (`Emu`, API 35, on port
+5590, the app uninstalled after) against a local server (the fat jar on JDK 21, H2): the shrunk
+`localRelease` APK showed Home's two Play buttons, then their shares; Play with home, the categories,
+the ⋮ and the account icon; an answer and its reveal, the next question, a like, a skip, the menu's
+report (*Реклама или спам*, 204) and the next question; the Categories screen, *Храна* played;
+Account, About (*Верзија 1.0.0 (10000)*, 16+), Delete account's dialog (Cancel sent nothing) and a
+deletion to a fresh guest (204, then a guest minted, 0 points); the Auth page with the terms line and
+no Play Games button (off without ids). Every request was 200 or 204; logcat showed no crash and no
+serialization error, and said Play Games and pushes are off on the build. **Not verified**: anything
+with the services' real ids (a sign-in, a token, a notification), the notice's dot on a device (no
+moderator decision was made: moderation is off without `ADMIN_TOKEN`), a registered player's deletion
+(it needs a password typed), and CI's `ios` job.
+
 ### Verified working
 
 - **`feat/android-release`**, on this machine: `ktlintCheck`; the verify job's tests (server 480,
