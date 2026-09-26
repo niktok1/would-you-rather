@@ -1419,7 +1419,7 @@ Categories screen and the question's menu from its top bar (*Skipping*, *Reactio
   that failed leaves the question on screen and says why in the row's failure slot, as a reaction's
   does (`OnQuestion.rowError`, which a reaction's failure shares). Off, and drawn muted, with no
   question on screen and while anything is in flight (`canUseMenu`; `isHiding` while its own request
-  is). The categories played take what width the bar's four icons leave, 223 of 375, cut on their one
+  is). The categories played take what width the bar's three icon buttons leave, 223 of 375, cut on their one
   line, and no longer stand in the bar's exact middle, the end holding two icons to the start's one.
   `QuestionMenuDrawTest` opens it in both themes and every language and taps each choice and reason;
   `TopBarsDrawTest` holds Play's bar to 48 and 375 wide with it; `PlayViewModelTest` drives each
@@ -2131,7 +2131,9 @@ listed on the Account screen.
   - *The Home screen* (`io.ntole.wyr.home`, *built 2026-09-26*): under the game's name, the two
     buttons, *Играј* each, card A's pink and card B's amber, stand as the Play screen's cards do, stacked
     on a phone and side by side on a wide screen (the same `QuestionLayout`, a gap of `spaceMd` in the
-    row's place), at least `WyrDimens.playButtonHeight`, 64, high. Each shows its share of all taps,
+    row's place), sharing the room under the name: `WyrDimens.playButtonHeight`, 64, is what each asks
+    for where the room is unbounded, not a floor, since `QuestionLayout` gives each its share of the
+    room there is. Each shows its share of all taps,
     `Tally.percentA` and `percentB` as a question's are, counted up from 0 as the reveal's percentages
     are, drawn, not composed (`CountedUpText`, `rememberCountUp`, `percentStyle`); no number until the
     counts are read, none while nobody has tapped, and nothing said when a read fails, which keeps what

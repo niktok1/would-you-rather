@@ -14,8 +14,8 @@ import io.ntole.wyr.core.network.api.HomePickApi
 /**
  * Reads the Home screen's picks through [runApi] alone, as the categories are read: the counts need no
  * session, so there is none to recover and a read never mints a guest. A tap goes through
- * [withSessionRecovery], as a vote does, sent again as the fresh guest on a dead session; it counts
- * once more then, which a count of taps can bear.
+ * [withSessionRecovery], as a vote does, sent again as the fresh guest on a dead session: the 401
+ * counted nothing, so the tap counts once.
  */
 public class DefaultHomePickRepository(
     private val api: HomePickApi,
