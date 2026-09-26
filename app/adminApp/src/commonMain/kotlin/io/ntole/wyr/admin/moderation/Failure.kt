@@ -99,6 +99,8 @@ private fun describe(
         DomainError.USERNAME_TAKEN,
         DomainError.ALREADY_REGISTERED,
         DomainError.INVALID_LOGIN,
+        // The moderation app names no build, which the server never refuses as too old.
+        DomainError.UPGRADE_REQUIRED,
         -> {
             "Unexpected answer from the server: $error."
         }
