@@ -8,14 +8,25 @@ import androidx.compose.foundation.layout.safeContentPadding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LifecycleStartEffect
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.ntole.wyr.account.AccountScreen
 import io.ntole.wyr.account.AccountViewModel
 import io.ntole.wyr.account.AuthScreen
+import io.ntole.wyr.analytics.LocalAnalytics
+import io.ntole.wyr.analytics.ShownEffect
+import io.ntole.wyr.analytics.UsageTracker
+import io.ntole.wyr.analytics.rememberConfigurationChanging
 import io.ntole.wyr.categories.CategoriesScreen
 import io.ntole.wyr.categories.CategoriesViewModel
 import io.ntole.wyr.home.HomeScreen
@@ -50,15 +61,20 @@ import org.koin.compose.viewmodel.koinViewModel
  * The screens are the game's, in every build whatever server it talks to (CLAUDE.md §8d,
  * *Navigation*): Home first, and the rest opened from it through a [Navigator], a back stack made by
  * hand, no tabs and no navigation library. They are shown in the language picked on the Account
- * screen, Serbian Cyrillic until one is (§8f).
+ * screen, Serbian Cyrillic until one is (§8f). The app's comings and goings and every screen shown
+ * are reported to the analytics (§8g, [UsageTracker]).
  */
 @Composable
 fun App() {
     val languages = koinViewModel<LanguageViewModel>()
     val language by languages.language.collectAsStateWithLifecycle()
+    ReportForegroundAndBackground(koinInject(), language)
 
-    WyrTheme {
-        WyrStrings(language) { Screens(language, onSelectLanguage = languages::select) }
+    // Every tap on every screen is counted there (CLAUDE.md §8g, [io.ntole.wyr.analytics.tapped]).
+    CompositionLocalProvider(LocalAnalytics provides koinInject()) {
+        WyrTheme {
+            WyrStrings(language) { Screens(language, onSelectLanguage = languages::select) }
+        }
     }
 }
 
@@ -74,6 +90,8 @@ private fun Screens(
 ) {
     val navigator = rememberSaveable(saver = Navigator.Saver) { Navigator() }
     SystemBack(enabled = navigator.canGoBack, onBack = { navigator.back() })
+    val usage = koinInject<UsageTracker>()
+    LaunchedEffect(navigator.current) { usage.show(navigator.current.key) }
 
     Surface(color = MaterialTheme.colorScheme.background, modifier = Modifier.fillMaxSize()) {
         // The insets are applied once here, so the screens below find them already consumed.
@@ -130,6 +148,33 @@ private fun Screens(
     }
 }
 
+/**
+ * The app coming to the foreground and going to the background, as the platform's lifecycle tells it,
+ * to [usage]: Android's activity, the iOS view controller, the desktop window (minimized or not) and
+ * the browser page (hidden or not). The app shown in [language].
+ */
+@Composable
+private fun ReportForegroundAndBackground(
+    usage: UsageTracker,
+    language: Language,
+) {
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    val shownIn by rememberUpdatedState(language)
+    val configurationChanging = rememberConfigurationChanging()
+    DisposableEffect(lifecycle, usage) {
+        val observer =
+            LifecycleEventObserver { _, event ->
+                when (event) {
+                    Lifecycle.Event.ON_START -> usage.foreground(shownIn.tag)
+                    Lifecycle.Event.ON_STOP -> usage.background(configurationChanging())
+                    else -> Unit
+                }
+            }
+        lifecycle.addObserver(observer)
+        onDispose { lifecycle.removeObserver(observer) }
+    }
+}
+
 /** A screen under its top bar, in the height the bar leaves it. */
 @Composable
 private fun ColumnScope.Below(screen: @Composable () -> Unit) {
@@ -149,8 +194,9 @@ private fun Account(
     val submitState by submit.state.collectAsStateWithLifecycle()
 
     // Every time the screen is shown: the points move on the Play screen meanwhile, a guest's are what
-    // a login would leave behind, and a moderator decides the player's questions.
-    LaunchedEffect(viewModel) { viewModel.refresh() }
+    // a login would leave behind, and a moderator decides the player's questions. A rotation's shows the
+    // same visit, which the analytics count once (CLAUDE.md §8g).
+    ShownEffect(viewModel, viewModel::shown)
     // A question sent from the form whose answer came once the player had come back here: My questions
     // was read before it was stored, so it is read again, once no read is in flight.
     LaunchedEffect(submitState.sent, state.isBusy) {
@@ -160,12 +206,18 @@ private fun Account(
         }
     }
 
+    // The player's choice, kept on the device, which the analytics hold (CLAUDE.md §8g).
+    val analytics = LocalAnalytics.current
+    val statisticsOn by analytics.enabled.collectAsStateWithLifecycle()
+
     AccountScreen(
         state = state,
         actions = viewModel,
         environment = koinInject(),
         language = language,
         onSelectLanguage = onSelectLanguage,
+        statisticsOn = statisticsOn,
+        onStatisticsChange = analytics::setEnabled,
         onOpenAuth = onOpenAuth,
         onNewQuestion = onNewQuestion,
     )
@@ -204,7 +256,8 @@ private fun Submit(onSent: () -> Unit) {
 
     // Every time the form is shown: the points move meanwhile. Declared first, so it takes down a
     // `sent` left from a showing before, of a question whose answer came after the player went back.
-    LaunchedEffect(viewModel) { viewModel.refresh() }
+    // A rotation's shows the same visit, which the analytics count once (CLAUDE.md §8g).
+    ShownEffect(viewModel, viewModel::shown)
     LaunchedEffect(state.sent) {
         if (state.sent) {
             viewModel.leftForm()
@@ -249,6 +302,12 @@ private fun ColumnScope.Play(
 
     // Every time the screen is shown: the points move on the Account and Submit screens meanwhile.
     LaunchedEffect(viewModel) { viewModel.refreshPoints() }
+    // How long a question is on screen counts only while this screen is, the app in the foreground
+    // (CLAUDE.md §8g): not while Account or the categories are shown over it, nor in the background.
+    LifecycleStartEffect(viewModel) {
+        viewModel.screenShown()
+        onStopOrDispose { viewModel.screenHidden() }
+    }
 
     PlayTopBar(onHome = onHome, onAccount = onAccount) {
         CategoriesPlayed(

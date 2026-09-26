@@ -41,6 +41,7 @@ fun Route.voteRoutes(db: Db) {
                             questionId = body.questionId,
                             choice = body.choice,
                             attemptId = body.attemptId,
+                            answerMillis = keptAnswerMillis(body.answerMillis),
                         )
                     }
 

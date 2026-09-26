@@ -20,9 +20,12 @@ object PlayerStore {
         val cycle: Int,
         /**
          * The player's account name, lower-cased, or null for a guest (CLAUDE.md §8a, *Accounts*). Once
-         * set it never changes or goes: nothing unregisters a player or renames one.
+         * set it never changes: nothing unregisters a player or renames one. It goes only with the whole
+         * player, their account deleted (`AccountDeletion`), and is then free for another.
          */
         val username: String? = null,
+        /** Whether a moderator has blocked the player from submitting questions (CLAUDE.md §8d, *Moderation*). */
+        val submissionsBlocked: Boolean = false,
     )
 
     /**
@@ -49,8 +52,13 @@ object PlayerStore {
      */
     fun find(id: String): Player? =
         Players
-            .select(Players.id, Players.totalPoints, Players.currentCycle, Players.username)
-            .where { Players.id eq id }
+            .select(
+                Players.id,
+                Players.totalPoints,
+                Players.currentCycle,
+                Players.username,
+                Players.submissionsBlockedAt,
+            ).where { Players.id eq id }
             .limit(1)
             .firstOrNull()
             ?.toPlayer()
@@ -61,6 +69,7 @@ object PlayerStore {
             totalPoints = this[Players.totalPoints],
             cycle = this[Players.currentCycle],
             username = this[Players.username],
+            submissionsBlocked = this[Players.submissionsBlockedAt] != null,
         )
 
     /**
@@ -120,6 +129,23 @@ object PlayerStore {
             .select(Players.totalPoints)
             .where { Players.id eq playerId }
             .single()[Players.totalPoints]
+    }
+
+    /**
+     * Adds [points] to an author's total, as [addPoints] does, for what a question pays its author: a
+     * like held (`ReactionStore`), a rejection's cost paid back (`ModerationStore.reject`) and, negative,
+     * a deleted player's likes taken back (`AccountDeletion`). Must run inside a transaction.
+     *
+     * Unlike [addPoints], an author who is gone is paid nothing rather than failing: an author's account
+     * going makes their questions nobody's in the transaction that deletes them (CLAUDE.md §8a,
+     * *Deleting an account*), so a payment that read the author just before is then to nobody, as a
+     * seed's is. It waits for that transaction's row lock and then finds no row.
+     */
+    fun payAuthor(
+        authorId: String,
+        points: Int,
+    ) {
+        Players.update({ Players.id eq authorId }) { row -> row[totalPoints] = totalPoints + points }
     }
 
     /**

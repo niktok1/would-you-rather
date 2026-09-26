@@ -8,6 +8,7 @@ import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getAllSemanticsNodes
 import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.unit.Density
+import io.ntole.wyr.core.domain.analytics.Analytics
 import io.ntole.wyr.core.network.InMemoryTokenStorage
 import io.ntole.wyr.renderAt
 import io.ntole.wyr.theme.WyrTheme
@@ -88,7 +89,7 @@ class LanguageMenuTest {
         try {
             listOf(Locale.ENGLISH, Locale.GERMANY, Locale.forLanguageTag("sr-Latn-RS")).forEach { locale ->
                 Locale.setDefault(locale)
-                val shown = LanguageViewModel(InMemoryTokenStorage()).language.value
+                val shown = LanguageViewModel(InMemoryTokenStorage(), Analytics.None).language.value
                 assertEquals(Language.SERBIAN_CYRILLIC, shown, "on $locale")
             }
         } finally {

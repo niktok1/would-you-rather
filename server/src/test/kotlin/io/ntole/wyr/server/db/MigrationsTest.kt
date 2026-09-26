@@ -97,15 +97,18 @@ internal class MigrationsTest(
             buildAsBeforeMigrations(pool)
             val before = pool.inTransaction { contents() }
             serverFlyway(pool).baseline()
-            val latest = BASELINED_HISTORY.size
-            for (version in 2 until latest) {
+            // By each script's own version, not its place in the list: the versions have a gap (V11 to
+            // V14 are another branch's), and Flyway runs whatever is there in order.
+            val versions = BASELINED_HISTORY.map { entry -> entry.substringBefore(' ') }
+            for (index in 1 until versions.lastIndex) {
+                val version = versions[index]
                 Migrations
                     .configuration()
                     .dataSource(pool)
-                    .target("$version")
+                    .target(version)
                     .load()
                     .migrate()
-                assertEquals(BASELINED_HISTORY.take(version), history(pool), "the build whose latest is V$version")
+                assertEquals(BASELINED_HISTORY.take(index + 1), history(pool), "the build whose latest is V$version")
             }
 
             val result = Migrations.migrate(pool)
@@ -417,6 +420,11 @@ internal class MigrationsTest(
             PlayerStore.addPoints(author, points = 3)
             // Plain SQL: Tables.kt names no likes table since V10 replaced it with reactions.
             exec("INSERT INTO likes (player_id, question_id) VALUES ('$author', 'seed-1')")
+            // Plain SQL, as a build before V16 answered: V1's columns alone.
+            exec(
+                "INSERT INTO votes (player_id, question_id, side, created_at, answered_at, answered_in_cycle, " +
+                    "attempt_id) VALUES ('$author', 'seed-1', 'A', 1, 1, 1, 'attempt-before')",
+            )
         }
     }
 
@@ -487,8 +495,10 @@ internal class MigrationsTest(
      * with no username and no password. V6 adds the first categories ([Seed.CATEGORIES]) and files what
      * was under RANDOM under ABSURD instead. V7 gives every question a cost of 0. V8 gives every
      * question no made-up votes, then each seed those `Seed` gives it, and V9 each seed the Serbian
-     * options `Seed` gives it. V10 moves every like into reactions, as a like, and drops likes. None
-     * changes anything else. A later script that changes the rows already there adds what it does to
+     * options `Seed` gives it. V10 moves every like into reactions, as a like, and drops likes. V11
+     * adds reports and hidden questions and authors, empty. V15 adds the Home screen's two counts,
+     * each at 0, V16 gives every vote no answer time, and V17 and V18 add no push token and no Play
+     * Games link. None changes anything else. A later script that changes the rows already there adds what it does to
      * them here.
      */
     private fun afterLaterScripts(before: Contents): Contents {
@@ -554,6 +564,12 @@ internal class MigrationsTest(
                     Categories.tableName to categories,
                     QuestionCategories.tableName to filings,
                     Questions.tableName to questions,
+                    Reports.tableName to emptyList(),
+                    HiddenQuestions.tableName to emptyList(),
+                    HiddenAuthors.tableName to emptyList(),
+                    HomePicks.tableName to NO_HOME_PICKS_YET,
+                    PushTokens.tableName to emptyList(),
+                    Identities.tableName to emptyList(),
                 )
         ).mapValues { (_, rows) -> rows.canonical() }
     }
@@ -571,7 +587,30 @@ internal class MigrationsTest(
          * without running it, then every later script run.
          */
         private val BASELINED_HISTORY =
-            listOf("1 BASELINE", "2 SQL", "3 SQL", "4 SQL", "5 SQL", "6 SQL", "7 SQL", "8 SQL", "9 SQL", "10 SQL")
+            listOf(
+                "1 BASELINE",
+                "2 SQL",
+                "3 SQL",
+                "4 SQL",
+                "5 SQL",
+                "6 SQL",
+                "7 SQL",
+                "8 SQL",
+                "9 SQL",
+                "10 SQL",
+                "11 SQL",
+                "12 SQL",
+                "13 SQL",
+                "14 SQL",
+                "15 SQL",
+                "16 SQL",
+                "17 SQL",
+                "18 SQL",
+            )
+
+        /** The Home screen's two counts as V15 writes them, as JDBC reads them back as strings. */
+        private val NO_HOME_PICKS_YET =
+            listOf(mapOf("side" to "A", "picks" to "0"), mapOf("side" to "B", "picks" to "0"))
 
         /** V1's table of likes, which V10 replaced with reactions, so Tables.kt no longer names it. */
         private const val LIKES = "likes"
@@ -582,8 +621,8 @@ internal class MigrationsTest(
         /**
          * The columns the scripts after V1 add, by table, empty in every row already there but for
          * the players' mark, which V4 then sets ([afterLaterScripts]): V2's previous refresh token,
-         * V4's mark and recovery secret and V5's username and password hash on players, and V3's
-         * retirement on questions.
+         * V4's mark and recovery secret, V5's username and password hash and V12's block on players, and V3's
+         * retirement on questions, and V16's answer time on votes.
          */
         private val ADDED_COLUMNS =
             mapOf(
@@ -596,8 +635,10 @@ internal class MigrationsTest(
                         "recovery_secret_hash",
                         "username",
                         "password_hash",
+                        "submissions_blocked_at",
                     ),
                 Questions.tableName to listOf("retired_at"),
+                Votes.tableName to listOf("answer_millis"),
             )
 
         /**

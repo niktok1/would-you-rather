@@ -60,6 +60,13 @@ public enum class ErrorCode {
     ACCOUNT_REQUIRED,
 
     /**
+     * A moderator has blocked this author from submitting questions (CLAUDE.md §8d, *Moderation*), so
+     * the submission is refused and costs nothing. Sent with 403, never 401: the session is fine, so a
+     * client must not refresh it or replace it.
+     */
+    SUBMISSIONS_BLOCKED,
+
+    /**
      * A moderator tried to approve or reject a submission that is not pending: a moderator decided
      * it already, or it is a seed, approved from the start. Sent with 409.
      */
@@ -82,6 +89,12 @@ public enum class ErrorCode {
 
     /** A moderator tried to rename a category no category has the id of. Sent with 404. */
     CATEGORY_NOT_FOUND,
+
+    /**
+     * A moderator named an author, to block or unblock, whom no player is: an id the admin routes never
+     * sent, or an author whose account is deleted since. Sent with 404.
+     */
+    AUTHOR_NOT_FOUND,
 
     /**
      * A registration's username breaks the rules of [io.ntole.wyr.core.auth.RegisterRequest]: lower-cased,
@@ -112,6 +125,20 @@ public enum class ErrorCode {
      */
     INVALID_LOGIN,
 
+    /**
+     * Google refused the server auth code a Play Games sign-in sent
+     * ([io.ntole.wyr.core.auth.PlayGamesSignInRequest]): spent already, expired, or another app's.
+     * Nothing changed; a client asks Play Games for a new code. Sent with 422, never 401: the session,
+     * if one was sent, is fine.
+     */
+    PLAY_GAMES_CODE_REFUSED,
+
+    /**
+     * The server could not ask Google who a Play Games sign-in's code names: Google did not answer, or
+     * refused the server itself. Nothing changed, and the code may be spent. Sent with 502.
+     */
+    PLAY_GAMES_UNAVAILABLE,
+
     /** Caller is not authenticated, or the credential is expired. */
     UNAUTHORIZED,
 
@@ -139,6 +166,14 @@ public enum class ErrorCode {
      * request did nothing.
      */
     RATE_LIMITED,
+
+    /**
+     * The client's build is older than the oldest the server serves on its platform
+     * ([io.ntole.wyr.core.api.WyrApi.Headers.CLIENT_VERSION]): the player must update the app. Sent with
+     * 426, before anything else about the request is looked at, so it did nothing, and every request of
+     * that build gets the same until it is updated.
+     */
+    UPGRADE_REQUIRED,
 
     /** Unexpected server-side failure. */
     INTERNAL,

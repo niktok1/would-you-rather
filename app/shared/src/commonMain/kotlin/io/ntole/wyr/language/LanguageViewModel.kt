@@ -2,6 +2,9 @@ package io.ntole.wyr.language
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import io.ntole.wyr.core.domain.analytics.Analytics
+import io.ntole.wyr.core.domain.analytics.AnalyticsEvent
+import io.ntole.wyr.core.domain.analytics.AnalyticsProperty
 import io.ntole.wyr.core.network.TokenStorage
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -16,10 +19,11 @@ import kotlinx.coroutines.launch
  * Kept in [storage], the platform's own key-value storage the session is kept in, under [KEY], one
  * key for the device whatever server the build talks to: the language is the player's, not the
  * environment's (§8e), so every build on a desktop, an iPhone or a browser shows the one last
- * picked on it.
+ * picked on it. A language picked is reported to [analytics], by its tag (§8g).
  */
 class LanguageViewModel(
     private val storage: TokenStorage,
+    private val analytics: Analytics,
 ) : ViewModel() {
     private val selected = MutableStateFlow(Language.ofTag(storage.read(KEY)))
 
@@ -33,6 +37,7 @@ class LanguageViewModel(
     fun select(language: Language) {
         if (language == selected.value) return
         selected.value = language
+        analytics.track(AnalyticsEvent.LANGUAGE_CHANGED, mapOf(AnalyticsProperty.LANGUAGE to language.tag))
         viewModelScope.launch {
             try {
                 storage.write(KEY, language.tag)

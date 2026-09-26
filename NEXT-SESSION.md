@@ -331,7 +331,115 @@ the change, in `devRelease`, and not the count up's doing: the first frames afte
 take up to 750 ms on the UI thread (code not yet compiled, with no baseline profile), and the
 RenderThread sometimes waits 50 to 300 ms on the display's buffers.
 
+**`feat/analytics`** (from e603694; merged to main 2026-09-26, after `feat/server-engagement`): product analytics on PostHog, from
+shared code on all four platforms (CLAUDE.md §8g): a port in the domain, a PostHog sender over its
+HTTP API with the Ktor client (no SDK, no new library), the key per platform (none is off, as in
+every test and CI build), the app's openings and every screen with its time, every tap by a stable
+element name, the game's events from the ViewModels, identify on register and login and reset on
+logout, and a **Статистика** switch on Account. The switch took Log out's place beside the language
+menu, and Log out stands under that row now: *provisional*, CLAUDE.md §8b. Verified on this Mac: lint,
+the verify job's client tests (`:core:domain` 76, `:core:data` 145, `:core:network` 106 and 112 as
+Android host tests, `:app:shared` 383, `:app:adminApp` 106) and compiles, `assembleDebug`, the web
+and desktop apps' compiles, and the ios job's Kotlin compiles. **Not verified:** nothing has been sent
+to PostHog (no key here), nothing has run on a device, and the iOS Info.plist keys wait for CI's
+`xcodebuild`. To see events: *Analytics*, under *Running it locally*. The dashboards to build are
+listed in CLAUDE.md §8g, *Setting up PostHog*.
+
+**`feat/server-safety`** (from e603694; merged to main 2026-09-26, 6e6fa23): the server side of Google Play readiness (the user's decisions,
+2026-09-26). The clients adopt it on later branches; this one adds only the `:core` contract and the
+smallest client compile fixes.
+- **Request bodies** are capped at 64 KiB (CLAUDE.md §8b, *Request bodies*): 413 on a
+  `Content-Length` over it, before the route runs, and a chunked body stopped one byte past it.
+- **Guest minting** defaults to 60 an hour per address, was 10 (§8b, *Rate limiting*): a carrier's
+  shared address or a school's Wi-Fi stands for many players. `RATE_LIMIT_GUESTS_PER_HOUR` still
+  overrides it.
+- **A minimum build** per platform (§8b, *Minimum client version*): `MIN_CLIENT_VERSION_ANDROID` and
+  the rest make an older build's request 426 `UPGRADE_REQUIRED`, first thing, but for `/health`. No
+  client sends `X-Client-Platform` and `X-Client-Version` yet, so nothing is refused until one does;
+  the client branch that sends them gives `UPGRADE_REQUIRED` a `DomainError` of its own (it reads as
+  `UNKNOWN` for now) and a screen that says to update.
+- **Reports and hiding** (§8d, *Reports*; V11): `POST /v1/reports` with a reason, one per player and
+  question, and `POST /v1/hidden-questions` and `/v1/hidden-authors`, each hiding from the player for
+  good; the feed and the due count leave hidden questions out. To ask the user: hiding a seed's author
+  hides that seed (provisional, the options were 409 or nothing), and nothing unhides yet.
+- **The moderator's side** (§8d, *Moderation*, *Reports* and *Authors*; V12): `GET /v1/admin/reports`,
+  most reported first with the reasons counted, and `POST /v1/admin/report-dismissals`; an opaque
+  `authorId` on `AdminQuestionDto` and on the admin routes' `SubmissionDto`s (never a player's); and
+  `POST /v1/admin/author-blocks` and `/author-unblocks`, a block rejecting whatever the author has
+  pending, paid back, and refusing their submissions with 403 `SUBMISSIONS_BLOCKED`. The moderation
+  app shows none of it yet. To ask the user: nothing retires a reported question by itself
+  (provisional; a threshold was the other option).
+- **An operator's trail** (§8b, *Logging*): one INFO line per stored submission and per admin action,
+  ids only, never what anyone typed, nor a token or password.
+- **Deleting an account** (§8a, *Deleting an account*; V13, V14): `POST /v1/me/deletion`, 204,
+  deletes the player and all that is theirs, keeps their approved questions with nobody as author, and
+  takes each like they held back from its author. The client then plays on as a fresh guest. A
+  request of theirs racing it from another device is 401, never a 500 (§4).
+
+Verified on this machine: `ktlintCheck`, `:server:test` (407 tests, H2 only), every `:core` module's
+`jvmTest`, `:core:network:testAndroidHostTest`, `:app:shared:jvmTest`, `:app:adminApp:jvmTest`, the
+verify job's client compiles, every `:core` module's and `:app:shared`'s iOS compiles, and the fat
+jar booted on port 18110 on H2 (health, a 426 for an old build, a report, a hide, the reports list,
+a 413, a deletion, and the feed, a vote, a skip and a registration after it, each 401). **Not
+verified**: V11 to V14 and the new SQL on PostgreSQL (the `server-postgres` CI job runs them: the
+feed's two `NOT EXISTS`, the reports list ordered by subqueries, the deletion's `INSERT ... SELECT`),
+and no race test runs on PostgreSQL (they are H2's, as all are): a re-answer, re-skip or registration
+waiting on the deletion is staged on H2, which leaves a lock read on a deleted row as PostgreSQL
+does, but a hide of the author racing it is not, since H2's foreign key check waits on no lock, so
+only its rerun is pinned. Migrations V11 to V14 are this branch's; `feat/server-engagement` starts at
+V15.
+
+**`feat/server-engagement`** (from e603694; merged to main 2026-09-26, after `feat/server-safety`): the
+server side of four of the user's asks of 2026-09-26, the contract beside it, and the clients only
+where the contract made them (the two new error codes in `ErrorMapper`). **The clients adopt all of
+it later.** One commit each:
+- **Home picks** (601aa65, V15; CLAUDE.md §8d *Home picks*): two counts for the Home screen's two
+  Play buttons, `GET /v1/home-picks` with no session and `POST` with one, every tap counted.
+- **Answer time** (4e4f95a, V16; §8b *Personalization*): `VoteRequest.answerMillis`, kept on the
+  vote, 0 to 10 minutes or none. The personalization design is recorded there, not built.
+- **Push on decisions** (8442abc, V17; §8a *Push tokens*, §8b *Push notifications*):
+  `POST /v1/me/push-tokens` and `/push-token-removals`, and an approval or rejection pushed to the
+  author's devices through FCM HTTP v1 once it has committed. A logout drops its device's tokens by
+  itself (the foreign keys cascade). `io.ktor:ktor-client-cio` is the server's one new dependency.
+- **Play Games sign-in** (8660e01, V18; §8a *Play Games sign-in*, §8b *Play Games sign-in*):
+  `POST /v1/auth/play-games`, the no-click account; a linked player is registered, so may submit,
+  and `GET /v1/me` says `playGamesLinked`. The register screen stays as the fallback, and the only way
+  on iOS and the web for now.
+
+**Both features are off until the user sets them up**, which is listed plainly in CLAUDE.md §8b
+(*Push notifications*, *Play Games sign-in*): a Firebase project and its service account key for
+`FCM_SERVICE_ACCOUNT_JSON`, and a Play Console game with Play Games Services and a game server OAuth
+client for `PLAY_GAMES_CLIENT_ID` and `PLAY_GAMES_CLIENT_SECRET`, all set by hand on Render
+(`render.yaml` declares them `sync: false`). Unset, each says so once at boot. Merged after `feat/server-safety`: an account's deletion takes
+the player's push tokens and Play Games links by their cascades. Tests: `:server`
+431 (365 before), `:core:data` 143 (`ErrorMapperTest`'s two new rows); the rest unchanged.
+
+**A review's fixes** (611c129 to a371b0e): a 401 from FCM naming its own error code
+(`THIRD_PARTY_AUTH_ERROR`, an iOS or web device without an APNs or web push key) fails that push alone
+and keeps the access token; a 403 from Play Games' `players/me` (the API not enabled, say) is 502
+`PLAY_GAMES_UNAVAILABLE`, warned of with Google's codes, not 422; a registration's pruning deletes only
+its own player's tokens, so one another player moved meanwhile stays; the server closes its CIO
+engine at stop. Docs only: the cascades, CIO, push timing and the §8b list of scripts corrected;
+**for the user**, CLAUDE.md §8b *Linking Play Games to an account* (an access token alone links a
+registered player, for good, with no unlink: provisional); and "stores nothing personal" is now "no
+sensitive personal data", the privacy policy to name FCM and Play Games (§8b *Personalization*).
+
 ### Verified working
+
+- **`feat/server-engagement`**, on this machine, at 8660e01 and again at a371b0e after the review's
+  fixes: `ktlintCheck`; `:server:test` (431 at a371b0e, 2 skipped: the PostgreSQL-only boots),
+  `:core:domain:jvmTest`, `:core:data:jvmTest`, `:core:network:jvmTest`, `:core:network:testAndroidHostTest`, `:app:shared:jvmTest` and
+  `:app:adminApp:jvmTest`; ci.yml's client compiles, `:app:androidApp:assembleDebug` and both web
+  targets of `:app:shared` and `:app:adminApp` included; the ios job's Kotlin compiles
+  (`:core:compileKotlinIosSimulatorArm64`, `:app:shared:compileKotlinIosSimulatorArm64` and the
+  `compileTestKotlinIosSimulatorArm64` of `:app:shared` and the three `:core` modules); gradle's own
+  exit code 0, read from its log. `WYR_SERVER_ONLY=1 ./gradlew :server:buildFatJar`, then the jar
+  booted on JDK 21 with `PORT=18111` and no `DATABASE_URL`: V1 to V18 applied (14 scripts), `/health`,
+  both home pick routes, a push token registered, a vote with `answerMillis`, `GET /v1/me` with
+  `playGamesLinked`, and `/v1/auth/play-games` 404 while off; booted again with a throwaway service
+  account key and fake Play Games credentials, the CIO engine made, both features on and neither
+  secret in the log, and the Play Games route answering a malformed code 400 without calling Google.
+  Every call to Google is tested with Ktor's MockEngine; nothing called Google or a deployed server.
 
 - **`merge/redesign` after the review of the `feat/category-picker` merge** (6b44dc4, 5a8adf7 and
   48e3e0e), on this machine, at 48e3e0e, whose tree this note changes only in NEXT-SESSION.md: the
@@ -942,6 +1050,15 @@ RenderThread sometimes waits 50 to 300 ms on the display's buffers.
 
 ### NOT verified
 
+- **`feat/server-engagement` against real Google.** No push has reached a phone and no Play Games
+  code has been exchanged: the requests are built from Google's documentation (FCM HTTP v1's
+  `messages:send`, the JWT bearer grant with the `firebase.messaging` scope, the authorization code
+  grant with an empty redirect URI, `games/v1/players/me`), and only a MockEngine has answered them.
+  Nor has CIO's TLS to Google been seen from Render. Once the user has set up Firebase (CLAUDE.md
+  §8b), approve a question on dev whose author's phone registered a token; once Play Games is set up,
+  sign in from a tester's phone. Also unchecked: which Android credentials the DEV and LOCAL flavors
+  need to sign in with Play Games, and the `server-postgres` CI job on V15 to V18 (H2 only here).
+
 - **`CF-Connecting-IP` on a live Render service.** `CLIENT_IP_HEADER=CF-Connecting-IP` in
   `render.yaml` rests on Render's docs (every request to a web service passes through Cloudflare)
   and on others' reports of requests reaching live Render services, all of which carried it, set to
@@ -954,7 +1071,7 @@ RenderThread sometimes waits 50 to 300 ms on the display's buffers.
   address). The server's log names no address, so the check is by status alone. Until it passes,
   the per-address budgets are not to be relied on.
 - **The limits against real traffic.** The budgets are starting points nobody has watched: a
-  household or a mobile carrier's shared address (CGNAT) shares 10 new guests an hour, and an IPv6
+  household or a mobile carrier's shared address (CGNAT) shares 60 new guests an hour, and an IPv6
   client can rotate through its prefix for fresh per-address budgets. Every count is overridable
   without a build (`RATE_LIMIT_*`). CORS exposes `Retry-After` to a page on an allowed origin, so the
   moderation app's page can say how long to wait (`CorsTest` pins the header), but no browser has
@@ -1183,7 +1300,7 @@ run the app to read its own key.
 ### Rate limits
 
 The server limits locally too, with the same budgets as on Render (CLAUDE.md §8b), each keyed by the
-socket peer or the player. The one a developer meets first is 10 guests an hour: an eleventh fresh
+socket peer or the player. The one a developer meets first is 60 guests an hour: a sixty-first fresh
 guest in the hour (every fresh install, clear of storage and logout makes one) answers 429, which the
 **Account** tab shows as *Too many tries. Wait N s, then try again.*
 Raise any budget for a session with its variable, and a refused request says which one in the log:
@@ -1517,6 +1634,46 @@ one typed); *Add* stays off until the names are one line of at most 40 and the i
 *Save names* sends them. After an add or a rename the list is read again whatever became of it; an
 id a category has already says `A category has that id already (409)` under the form. *Lock* forgets
 what was typed there and keeps the categories read.
+
+### Analytics
+
+The game reports what players do to PostHog (CLAUDE.md §8g), from shared code, on all four
+platforms, but only a build given a project's key: without one, as every test and CI build runs, it
+sends nothing. The key is never committed.
+
+**To see events from a phone** (`devDebug`, against the dev server):
+
+1. Make a project on PostHog's **EU** cloud (https://eu.posthog.com), turn on *Settings → Project →
+   IP data capture configuration → Discard client IP data* (CLAUDE.md §8g, *Where the player is*),
+   and copy its *Project API key* (`phc_...`) from *Settings → Project → General*.
+2. Put it in `local.properties`, at the repository's root (git ignores it), and install:
+
+   ```properties
+   wyr.posthog.key=phc_...
+   ```
+
+   ```bash
+   ./gradlew :app:androidApp:installDevDebug
+   ```
+
+   A US project needs `wyr.posthog.host=us.i.posthog.com` beside it; none is the EU cloud.
+3. Play a little, then put the app in the background (which sends at once; otherwise a batch goes
+   every 20 events or 30 s), and open PostHog's *Activity*: `app_opened`, `$screen` for each screen,
+   `tap` with its `element`, `question_shown`, `question_answered`, each with `environment: dev`.
+
+The other platforms read the same key where they read their environment (CLAUDE.md §8e):
+
+- **Web**: `local.properties` too, or `-Pwyr.posthog.key=phc_...` on the build.
+- **Desktop**: `WYR_POSTHOG_KEY=phc_... WYR_ENV=dev ./gradlew :app:desktopApp:run`.
+- **iOS**: `app/iosApp/Configuration/Local.xcconfig` (git ignores it), holding
+  `WYR_POSTHOG_KEY=phc_...`, and a host, if any, without `https://`.
+
+A key someone else can read is no harm: a project's key can only send events, never read them. A
+key rotated in PostHog needs a build again.
+
+Every event names the app's version, `wyr.app.version` in `gradle.properties` (1.0.0), which every
+platform's build reads; a release bumps `MARKETING_VERSION` in `app/iosApp/Configuration/Config.xcconfig`
+with it, or Gradle refuses to build.
 
 ### Trying a change
 

@@ -1,6 +1,8 @@
 package io.ntole.wyr
 
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.saveable.LocalSaveableStateRegistry
+import androidx.compose.runtime.saveable.SaveableStateRegistry
 import androidx.compose.ui.ImageComposeScene
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
@@ -13,10 +15,14 @@ import androidx.lifecycle.ViewModelStore
 import androidx.lifecycle.ViewModelStoreOwner
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
+import io.ntole.wyr.analytics.RecordingAnalytics
 import io.ntole.wyr.core.domain.account.AccountRepository
 import io.ntole.wyr.core.domain.account.LogIn
 import io.ntole.wyr.core.domain.account.LogOut
 import io.ntole.wyr.core.domain.account.RegisterAccount
+import io.ntole.wyr.core.domain.analytics.Analytics
+import io.ntole.wyr.core.domain.analytics.AnalyticsEvent
+import io.ntole.wyr.core.domain.analytics.AnalyticsProperty
 import io.ntole.wyr.core.domain.category.Category
 import io.ntole.wyr.core.domain.category.CategoryRepository
 import io.ntole.wyr.core.domain.category.GetCategories
@@ -72,7 +78,13 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
+import kotlin.time.Duration.Companion.hours
+import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Duration.Companion.minutes
+import kotlin.time.Duration.Companion.seconds
 import kotlin.time.Instant
+import kotlin.time.TestTimeSource
+import kotlin.time.TimeSource
 
 /**
  * The whole app, [App] as every platform shows it, drawn off screen over fakes of the game and driven
@@ -83,14 +95,19 @@ import kotlin.time.Instant
 class AppNavigationTest {
     private val game = FakeGame()
     private val categories = FakeCategories()
+    private val analytics = RecordingAnalytics()
     private val storage = InMemoryTokenStorage()
     private val owner = TestOwner()
+    private val clock = TestTimeSource()
+    private var restored: Map<String, List<Any?>>? = null
+    private var saved: Map<String, List<Any?>>? = null
 
     @BeforeTest
     fun setUp() {
         // viewModelScope runs on Dispatchers.Main, which the JVM has none of under test.
         Dispatchers.setMain(UnconfinedTestDispatcher())
-        startKoin { modules(fakes(), uiModule) }
+        // The clock the analytics time with, which a test moves by hand.
+        startKoin { modules(fakes(), uiModule, module { single<TimeSource.WithComparableMarks> { clock } }) }
     }
 
     @AfterTest
@@ -107,6 +124,66 @@ class AppNavigationTest {
             assertEquals(listOf(CYRILLIC.account), scene.descriptions())
             assertEquals(0, game.questionsAsked)
         }
+
+    /** The app opened once, and every screen it shows, each named as it is left (CLAUDE.md §8g). */
+    @Test
+    fun `every screen shown is reported and each left named`() =
+        withApp { scene ->
+            scene.tap(CYRILLIC.play)
+            scene.tap(CYRILLIC.account)
+            scene.tap(CYRILLIC.back)
+
+            val shown = analytics.named(RecordingAnalytics.SCREEN).map { it.properties[RecordingAnalytics.SCREEN_NAME] }
+            assertEquals(listOf("home", "play", "account", "play"), shown)
+            val left = analytics.named(AnalyticsEvent.SCREEN_LEFT).map { it.properties[AnalyticsProperty.SCREEN] }
+            assertEquals(listOf("home", "play", "account"), left)
+            val opened = analytics.named(AnalyticsEvent.APP_OPENED).single()
+            assertEquals(false, opened.properties[AnalyticsProperty.FROM_BACKGROUND])
+            assertEquals(Language.SERBIAN_CYRILLIC.tag, opened.properties[AnalyticsProperty.LANGUAGE])
+        }
+
+    /** The player's choice is the analytics' own, which keep it for the device (CLAUDE.md §8g). */
+    @Test
+    fun `the Statistics switch on Account turns the analytics off and on again`() =
+        withApp { scene ->
+            val statistics = CYRILLIC.accountScreens.statistics
+            scene.tap(CYRILLIC.account)
+            assertEquals(ToggleableState.On, scene.toggleOf(statistics))
+
+            scene.tap(statistics)
+            assertFalse(analytics.enabled.value)
+            assertEquals(ToggleableState.Off, scene.toggleOf(statistics))
+
+            scene.tap(statistics)
+            assertTrue(analytics.enabled.value)
+            assertEquals(ToggleableState.On, scene.toggleOf(statistics))
+        }
+
+    /**
+     * An Android rotation makes the composition anew, its saved state restored, while the ViewModels
+     * and the analytics live on: the screen it shows is the visit it showed, not opened again, and
+     * leaving it and coming back is a visit of its own (CLAUDE.md §8g).
+     */
+    @Test
+    fun `a rotation on Account or Submit reports neither opened again`() {
+        game.username = "bob"
+        withApp { scene -> scene.tap(CYRILLIC.account) }
+        afterRotation { scene ->
+            assertTrue(CYRILLIC.accountScreens.newQuestion in scene.texts(), "the Account screen is not shown")
+            scene.tap(CYRILLIC.accountScreens.newQuestion)
+        }
+        assertEquals(1, analytics.named(AnalyticsEvent.ACCOUNT_OPENED).size)
+
+        afterRotation { scene ->
+            assertTrue(sendText(CYRILLIC) in scene.descriptions(), "the form is not shown")
+            scene.tap(CYRILLIC.back)
+        }
+
+        assertEquals(1, analytics.named(AnalyticsEvent.SUBMIT_OPENED).size)
+        assertEquals(2, analytics.named(AnalyticsEvent.ACCOUNT_OPENED).size, "back on Account is a visit of its own")
+        // Account, Account rotated, the form, the form rotated, and Account again: each reads the points.
+        assertEquals(5, game.statsRead)
+    }
 
     @Test
     fun `Play opens under a bar with home and the account icon`() =
@@ -170,6 +247,32 @@ class AppNavigationTest {
             // Once for the Account screen, and once more for Play shown again.
             assertEquals(3, game.statsRead)
         }
+
+    /**
+     * The time a question was on screen, which a skip reports, counts while Play is shown and the app
+     * in the foreground: not the time on Account, nor in the background (CLAUDE.md §8g).
+     */
+    @Test
+    fun `a question's time counts only while Play is shown`() {
+        game.serving = QUESTION
+        withApp { scene ->
+            scene.tap(CYRILLIC.play)
+            clock += 2.seconds
+            scene.tap(CYRILLIC.account)
+            clock += 10.minutes
+            scene.tap(CYRILLIC.back)
+            clock += 1.seconds
+            owner.lifecycle.currentState = Lifecycle.State.CREATED
+            clock += 1.hours
+            owner.lifecycle.currentState = Lifecycle.State.RESUMED
+            clock += 500.milliseconds
+
+            scene.tap(CYRILLIC.playScreen.skip)
+
+            val skipped = analytics.named(AnalyticsEvent.QUESTION_SKIPPED).single()
+            assertEquals(3_500L, skipped.properties[AnalyticsProperty.DURATION_MS])
+        }
+    }
 
     @Test
     fun `Play keeps its question through Home and back`() =
@@ -395,21 +498,38 @@ class AppNavigationTest {
         withApp { scene -> assertEquals(listOf(ENGLISH.gameName, ENGLISH.play), scene.texts()) }
     }
 
-    /** Draws [App] as a 375 by 599 phone, a lifecycle and a ViewModel owner of the test's around it. */
+    /**
+     * Draws [App] as a 375 by 599 phone, a lifecycle and a ViewModel owner of the test's around it, and
+     * its saved state restored from [restored], none unless a test sets it. What it saved as the test
+     * ended is in [saved].
+     */
     private fun withApp(test: (ImageComposeScene) -> Unit) {
+        val registry = SaveableStateRegistry(restored) { true }
         val scene =
             ImageComposeScene(width = 375, height = 599, density = Density(1f)) {
                 CompositionLocalProvider(
                     LocalLifecycleOwner provides owner,
                     LocalViewModelStoreOwner provides owner,
+                    LocalSaveableStateRegistry provides registry,
                 ) { App() }
             }
         try {
             scene.settle()
             test(scene)
+            // Before the composition goes, as an activity saves its state before it is destroyed.
+            saved = registry.performSave()
         } finally {
             scene.close()
         }
+    }
+
+    /**
+     * An Android rotation, then [test]: [App] drawn anew with the saved state the one before saved, over
+     * the same ViewModels, lifecycle and singletons, the analytics among them.
+     */
+    private fun afterRotation(test: (ImageComposeScene) -> Unit) {
+        restored = saved
+        withApp(test)
     }
 
     private fun fakes() =
@@ -424,14 +544,15 @@ class AppNavigationTest {
             single<AccountRepository> { game }
             single<SubmissionRepository> { game }
             single<CategoryRepository> { categories }
+            single<Analytics> { analytics }
             factory { GetNextQuestion(questions = get(), session = get()) }
             factory { SkipQuestion(questions = get(), session = get()) }
             factory { CastVote(votes = get(), session = get()) }
             factory { SetReaction(reactions = get(), session = get()) }
             factory { GetPlayerStats(players = get(), session = get()) }
-            factory { RegisterAccount(accounts = get(), session = get()) }
-            factory { LogIn(accounts = get(), questions = get()) }
-            factory { LogOut(accounts = get(), questions = get()) }
+            factory { RegisterAccount(accounts = get(), session = get(), analytics = get()) }
+            factory { LogIn(accounts = get(), questions = get(), session = get(), analytics = get()) }
+            factory { LogOut(accounts = get(), questions = get(), analytics = get()) }
             factory { SubmitQuestion(submissions = get(), session = get()) }
             factory { GetMySubmissions(submissions = get(), session = get()) }
             factory { GetCategories(categories = get()) }
@@ -461,7 +582,7 @@ class AppNavigationTest {
     private class TestOwner :
         LifecycleOwner,
         ViewModelStoreOwner {
-        override val lifecycle: Lifecycle =
+        override val lifecycle: LifecycleRegistry =
             LifecycleRegistry.createUnsafe(this).apply { currentState = Lifecycle.State.RESUMED }
 
         override val viewModelStore: ViewModelStore = ViewModelStore()

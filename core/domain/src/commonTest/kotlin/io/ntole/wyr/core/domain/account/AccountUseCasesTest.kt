@@ -1,5 +1,6 @@
 package io.ntole.wyr.core.domain.account
 
+import io.ntole.wyr.core.domain.analytics.Analytics
 import io.ntole.wyr.core.domain.error.DomainError
 import io.ntole.wyr.core.domain.error.WyrException
 import io.ntole.wyr.core.domain.question.Question
@@ -18,21 +19,41 @@ class AccountUseCasesTest {
     private val accounts = RecordingAccounts(calls)
     private val sessions = RecordingSessions(calls)
     private val questions = RecordingQuestions(calls)
+    private val analytics = RecordingAnalytics(calls)
 
     @Test
     fun `a registration ensures the session then registers the name as typed`() =
         runTest {
-            val username = RegisterAccount(accounts, sessions)("Bob_1", "correct horse")
+            val username = RegisterAccount(accounts, sessions, analytics)("Bob_1", "correct horse")
 
             assertEquals("bob_1", username)
             // The name untouched: lower-casing it is the server's, which answers with it as kept.
-            assertEquals(listOf("ensure", "register Bob_1"), calls)
+            assertEquals(listOf("ensure", "register Bob_1"), calls.take(2))
+        }
+
+    /** The player registered is who the install's analytics are from now on (CLAUDE.md §8g), by id. */
+    @Test
+    fun `a registration that worked identifies the player by id`() =
+        runTest {
+            RegisterAccount(accounts, sessions, analytics)("Bob_1", "correct horse")
+
+            assertEquals(listOf("ensure", "register Bob_1", "ensure", "identify p1"), calls)
+        }
+
+    @Test
+    fun `a refused registration identifies nobody`() =
+        runTest {
+            accounts.refuseRegistrations = true
+
+            assertFailsWith<WyrException> { RegisterAccount(accounts, sessions, analytics)("Bob_1", "correct horse") }
+
+            assertFalse(calls.any { it.startsWith("identify") }, "$calls")
         }
 
     @Test
     fun `a registration the rules refuse sends nothing and names nothing typed`() =
         runTest {
-            val registerAccount = RegisterAccount(accounts, sessions)
+            val registerAccount = RegisterAccount(accounts, sessions, analytics)
 
             listOf("a b" to "correct horse", "bob_1" to "short").forEach { (username, password) ->
                 val refused = assertFailsWith<IllegalArgumentException> { registerAccount(username, password) }
@@ -46,9 +67,18 @@ class AccountUseCasesTest {
     @Test
     fun `a login drops the queue the player before filled`() =
         runTest {
-            LogIn(accounts, questions)("bob_1", "correct horse")
+            LogIn(accounts, questions, sessions, analytics)("bob_1", "correct horse")
 
-            assertEquals(listOf("logIn bob_1", "reset"), calls)
+            assertEquals(listOf("logIn bob_1", "reset"), calls.take(2))
+        }
+
+    /** The player of the session the login stored, which ensuring finds without minting. */
+    @Test
+    fun `a login identifies the player it logged in to`() =
+        runTest {
+            LogIn(accounts, questions, sessions, analytics)("bob_1", "correct horse")
+
+            assertEquals(listOf("logIn bob_1", "reset", "ensure", "identify p1"), calls)
         }
 
     @Test
@@ -56,30 +86,50 @@ class AccountUseCasesTest {
         runTest {
             accounts.refuseLogins = true
 
-            val refused = assertFailsWith<WyrException> { LogIn(accounts, questions)("bob_1", "wrong horse") }
+            val refused =
+                assertFailsWith<WyrException> {
+                    LogIn(
+                        accounts,
+                        questions,
+                        sessions,
+                        analytics,
+                    )("bob_1", "wrong horse")
+                }
 
             assertEquals(DomainError.INVALID_LOGIN, refused.error)
+            // Nobody identified either.
             assertEquals(listOf("logIn bob_1"), calls)
         }
 
     @Test
     fun `a logout drops the queue the account filled`() =
         runTest {
-            LogOut(accounts, questions)()
+            LogOut(accounts, questions, analytics)()
 
-            assertEquals(listOf("logOut", "reset"), calls)
+            assertEquals(listOf("logOut", "reset"), calls.take(2))
+        }
+
+    /** Every event after a logout is a fresh anonymous player's, joined to nobody before (§8g). */
+    @Test
+    fun `a logout has analytics forget the player`() =
+        runTest {
+            LogOut(accounts, questions, analytics)()
+
+            assertEquals(listOf("logOut", "reset", "analytics reset"), calls)
         }
 
     private class RecordingAccounts(
         private val calls: MutableList<String>,
     ) : AccountRepository {
         var refuseLogins = false
+        var refuseRegistrations = false
 
         override suspend fun register(
             username: String,
             password: String,
         ): String {
             calls += "register $username"
+            if (refuseRegistrations) throw WyrException(DomainError.USERNAME_TAKEN)
             return username.lowercase()
         }
 
@@ -120,6 +170,19 @@ class AccountUseCasesTest {
 
         override suspend fun reset() {
             calls += "reset"
+        }
+    }
+
+    /** Only who the analytics are told the player is, and when they are told to forget. */
+    private class RecordingAnalytics(
+        private val calls: MutableList<String>,
+    ) : Analytics by Analytics.None {
+        override fun identify(playerId: String) {
+            calls += "identify $playerId"
+        }
+
+        override fun reset() {
+            calls += "analytics reset"
         }
     }
 }

@@ -1,8 +1,12 @@
 package io.ntole.wyr.server.db
 
 import io.ntole.wyr.core.api.WyrApi
+import io.ntole.wyr.core.push.PushPlatform
 import io.ntole.wyr.core.question.QuestionStatus
 import io.ntole.wyr.core.reaction.Reaction
+import io.ntole.wyr.core.report.ReportReason
+import io.ntole.wyr.server.auth.IdentityProvider
+import org.jetbrains.exposed.v1.core.ReferenceOption
 import org.jetbrains.exposed.v1.core.Table
 
 /**
@@ -73,6 +77,14 @@ object Players : Table("players") {
      */
     val passwordHash = varchar("password_hash", PASSWORD_HASH_LENGTH).nullable()
 
+    /**
+     * When a moderator blocked the player from submitting questions (CLAUDE.md §8d, *Moderation*), or
+     * null while they may submit (V12). Only `ModerationStore.blockAuthor` sets it, keeping the first
+     * block's time, and only `ModerationStore.unblockAuthor` clears it; a submission reads it under the
+     * author's row lock (`SubmissionStore.submit`).
+     */
+    val submissionsBlockedAt = long("submissions_blocked_at").nullable()
+
     override val primaryKey = PrimaryKey(id)
 
     init {
@@ -94,8 +106,9 @@ object Players : Table("players") {
  * Every session a player has (CLAUDE.md §8a, *Sessions*): one refresh-token family per device, each
  * rotating on its own, so a refresh on one device never touches another's tokens. A guest's mint
  * opens the first (`SessionStore.open`), and V4 opened one for every player who held a refresh token
- * then. Only a logout deletes a row (`SessionStore.close`): a session whose tokens have expired is dead
- * where it lies, and nothing caps how many a player has.
+ * then. Only a logout deletes a row (`SessionStore.close`), and an account's deletion every one of the
+ * player's (`AccountDeletion`): a session whose tokens have expired is dead where it lies, and nothing
+ * caps how many a player has.
  */
 object Sessions : Table("sessions") {
     val id = varchar("id", 36)
@@ -124,9 +137,14 @@ object Sessions : Table("sessions") {
     init {
         // A refresh looks its token up by either hash, so without an index every refresh, a stranger's
         // guess included, would read the whole table. Unique: a hash names one token, and that token
-        // one session. Nothing looks a player's sessions up, so player_id has no index of its own.
+        // one session.
         index(isUnique = true, refreshTokenHash)
         index(isUnique = true, previousRefreshTokenHash)
+        // For an account's deletion, which deletes the player's sessions, and the foreign key's check as
+        // their row goes, which PostgreSQL does not index by itself (V13): without it each would read the
+        // whole table, which never shrinks but by a logout. With id in it, as the reactions' is, so it is
+        // no copy of the index H2 makes for the key.
+        index(isUnique = false, playerId, id)
     }
 }
 
@@ -136,7 +154,9 @@ object Questions : Table("questions") {
     val optionB = varchar("option_b", WyrApi.Limits.MAX_OPTION_LENGTH)
 
     /**
-     * The player who submitted the question (CLAUDE.md §8d), or null for a seed, which nobody wrote.
+     * The player who submitted the question (CLAUDE.md §8d), or null for a seed, which nobody wrote, and
+     * for an approved question whose author deleted their account (`AccountDeletion`), which the rest of
+     * the server then takes for a seed.
      * The author is served it like any other player (`QuestionStore.servable`).
      */
     val authorPlayerId = varchar("author_player_id", 36).references(Players.id).nullable()
@@ -302,6 +322,15 @@ object Votes : Table("votes") {
     val attemptId = varchar("attempt_id", WyrApi.Limits.MAX_ATTEMPT_ID_LENGTH)
 
     /**
+     * How long the latest answer took, in milliseconds from the question showing to the tap, as the
+     * client measured it (`VoteRequest.answerMillis`), or null when it sent none or one outside 0 to
+     * [WyrApi.Limits.MAX_ANSWER_MILLIS] (V16). A signal kept for choosing questions to suit a player
+     * later (CLAUDE.md §8b, *Personalization*); nothing reads it yet. Follows the latest answer as
+     * [side] does, and a replay leaves it alone.
+     */
+    val answerMillis = long("answer_millis").nullable()
+
+    /**
      * One row per player per question, so the tally holds one vote per player. The key is what
      * enforces that — an application-level check would still lose a race between two concurrent
      * first answers from the same player.
@@ -333,10 +362,17 @@ object Skips : Table("skips") {
 
     /**
      * One row per player per question, holding only the latest skip: a skip from an earlier cycle
-     * says nothing about what is due now. The feed's join finds the player's skip by this key, so it
-     * needs no index of its own.
+     * says nothing about what is due now. The feed's join finds the player's skip by this key.
      */
     override val primaryKey = PrimaryKey(playerId, questionId)
+
+    init {
+        // For the foreign key's check as a question goes (`AccountDeletion` deletes a deleted player's
+        // unserved questions), which PostgreSQL does not index by itself (V14): question_id is the
+        // key's second column, so without it each question deleted would read the whole table. With
+        // player_id in it, as the reactions' is, so it is no copy of the index H2 makes for the key.
+        index(isUnique = false, questionId, playerId)
+    }
 }
 
 /**
@@ -370,10 +406,177 @@ object Reactions : Table("reactions") {
 }
 
 /**
+ * The reports players have made of questions (CLAUDE.md §8d, *Reports*), for the moderator to look at
+ * (`ModerationStore.reports`), until a moderator dismisses a question's. A report also hides its
+ * question from the player who made it, in [HiddenQuestions], which a dismissal leaves alone.
+ */
+object Reports : Table("reports") {
+    val playerId = varchar("player_id", 36).references(Players.id)
+    val questionId = varchar("question_id", 36).references(Questions.id)
+
+    /** Why, as the player last said: never [ReportReason.UNKNOWN], which a report is refused for. */
+    val reason = enumerationByName<ReportReason>("reason", 16)
+
+    /** When the player last reported the question, the reason a repeat replaced included. */
+    val reportedAt = long("reported_at")
+
+    /**
+     * A player holds one report per question. The key is what enforces it, as for a reaction: two
+     * first reports racing both find none, and only the key refuses the second.
+     */
+    override val primaryKey = PrimaryKey(playerId, questionId)
+
+    init {
+        // For the moderator's list, which counts a question's reports, and each reason's, and a
+        // dismissal, which deletes them. question_id is the key's second column, so the key cannot find
+        // one question's reports.
+        index(isUnique = false, questionId, reason)
+    }
+}
+
+/**
+ * The questions each player has hidden from themselves (CLAUDE.md §8d, *Reports*), by reporting one or
+ * hiding it: never served to them again, and never due for them (`QuestionStore.visibleTo`). A row is
+ * for good: nothing unhides a question, for now.
+ */
+object HiddenQuestions : Table("hidden_questions") {
+    val playerId = varchar("player_id", 36).references(Players.id)
+    val questionId = varchar("question_id", 36).references(Questions.id)
+
+    /** A question is hidden once. The feed finds a player's row for a question by this key. */
+    override val primaryKey = PrimaryKey(playerId, questionId)
+
+    init {
+        // For the foreign key's check as a question goes, as the skips' (V14).
+        index(isUnique = false, questionId, playerId)
+    }
+}
+
+/**
+ * The authors each player has hidden from themselves (CLAUDE.md §8d, *Reports*): every question an
+ * author wrote, those approved later included, is never served to the player again (`QuestionStore.visibleTo`).
+ * Named only through a question of theirs, so the author stays anonymous to the player. A row is for good.
+ */
+object HiddenAuthors : Table("hidden_authors") {
+    val playerId = varchar("player_id", 36).references(Players.id)
+    val authorPlayerId = varchar("author_player_id", 36).references(Players.id)
+
+    /** An author is hidden once. The feed finds a player's row for an author by this key. */
+    override val primaryKey = PrimaryKey(playerId, authorPlayerId)
+
+    init {
+        // For the rows that hide an author, found by author when the author's account goes, and for the
+        // foreign key's check as their row goes, which PostgreSQL does not index by itself. With
+        // player_id in it, as the reactions' is, so it is no copy of the index H2 makes for the key.
+        index(isUnique = false, authorPlayerId, playerId)
+    }
+}
+
+/**
+ * How many times each of the Home screen's two Play buttons has been tapped, by every player together
+ * (CLAUDE.md §8d, *Home picks*): one row per side, which V15 wrote at 0. Nothing adds or deletes a row;
+ * only `HomePickStore.pick` moves a count, as an SQL increment.
+ */
+object HomePicks : Table("home_picks") {
+    /** `A` or `B`, an [io.ntole.wyr.core.vote.OptionSide] by name, as a vote's side is. */
+    val side = varchar("side", 1)
+
+    /** Every tap of that side's button, a player's repeats included. */
+    val picks = long("picks").default(0)
+
+    override val primaryKey = PrimaryKey(side)
+}
+
+/**
+ * The devices a player's pushes reach (CLAUDE.md §8a, *Push tokens*): one row per Firebase registration
+ * token, since a token is one device's, kept under the session that registered it (V17). A token
+ * registered again, by its player or another, moves to whoever sent it last (`PushTokenStore.register`),
+ * the primary key deciding two registrations racing.
+ *
+ * Both foreign keys cascade, as `identities`' does, the schema's only cascading keys: the logout that
+ * deletes a session (`SessionStore.close`) deletes its device's tokens with it, and deleting a player
+ * deletes theirs, with no store having to know this table is there.
+ */
+object PushTokens : Table("push_tokens") {
+    /** The registration token Firebase gave the device, visible ASCII. */
+    val token = varchar("token", WyrApi.Limits.MAX_PUSH_TOKEN_LENGTH)
+
+    val playerId = varchar("player_id", 36).references(Players.id, onDelete = ReferenceOption.CASCADE)
+
+    /** The session that registered it, the device's own: its logout removes the token. */
+    val sessionId = varchar("session_id", 36).references(Sessions.id, onDelete = ReferenceOption.CASCADE)
+
+    /** Never [PushPlatform.UNKNOWN], which the route refuses. */
+    val platform = enumerationByName<PushPlatform>("platform", 16)
+
+    /** When it was last registered, which keeps a player's newest ones (`PushTokenStore.register`). */
+    val updatedAt = long("updated_at")
+
+    override val primaryKey = PrimaryKey(token)
+
+    init {
+        // For a decision's push and a registration's pruning, which read a player's tokens newest first,
+        // and the cascade from a player. PostgreSQL does not index a foreign key by itself. Two columns,
+        // not player_id alone, which on H2 would duplicate the index H2 makes for the foreign key.
+        index(isUnique = false, playerId, updatedAt)
+        // For the cascade from a logout, which finds a session's tokens, and ForeignKeyIndexTest. With
+        // the token in it, for the same reason as above.
+        index(isUnique = false, sessionId, token)
+    }
+}
+
+/**
+ * The players of other services linked to players here (CLAUDE.md §8a, *Play Games sign-in*): a
+ * Google Play Games player, and later a Game Center one, signing in as the player it is linked to
+ * (V18). Two constraints decide every race (CLAUDE.md §4): a service's player is linked to one player
+ * here (the primary key), and a player here to one of each service's (the unique index).
+ *
+ * The foreign key cascades, as `push_tokens`' do: deleting a player deletes their links, with no store
+ * having to know this table is there. Nothing else deletes one: a link, once made, stands.
+ */
+object Identities : Table("identities") {
+    val provider = enumerationByName<IdentityProvider>("provider", 16)
+
+    /** The service's own id for its player: the Play Games player id Google answered with. */
+    val subject = varchar("subject", MAX_SUBJECT_LENGTH)
+
+    val playerId = varchar("player_id", 36).references(Players.id, onDelete = ReferenceOption.CASCADE)
+
+    /** When the link was made. */
+    val createdAt = long("created_at")
+
+    override val primaryKey = PrimaryKey(provider, subject)
+
+    init {
+        // A player here is linked to one player of each service. Also what finds a player's links, the
+        // stats' among them, and the cascade from a player.
+        index(isUnique = true, playerId, provider)
+    }
+
+    /** Longest id a service's player can have here: Play Games' are about twenty digits. */
+    const val MAX_SUBJECT_LENGTH: Int = 255
+}
+
+/**
  * Every table the server owns. The migrations build the schema (`Migrations`), and SchemaDriftTest
  * holds them to this list: a new table belongs here and in a migration, or the build fails. The store
  * tests build their tables straight from it with `SchemaUtils.create`, which that same test shows
  * builds what the migrations do.
  */
 val appTables: Array<Table> =
-    arrayOf(Players, Sessions, Questions, Categories, QuestionCategories, Votes, Skips, Reactions)
+    arrayOf(
+        Players,
+        Sessions,
+        Questions,
+        Categories,
+        QuestionCategories,
+        Votes,
+        Skips,
+        Reactions,
+        Reports,
+        HiddenQuestions,
+        HiddenAuthors,
+        HomePicks,
+        PushTokens,
+        Identities,
+    )

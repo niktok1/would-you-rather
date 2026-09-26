@@ -1,5 +1,9 @@
 package io.ntole.wyr.submit
 
+import io.ntole.wyr.analytics.RecordingAnalytics
+import io.ntole.wyr.analytics.RecordingAnalytics.Recorded
+import io.ntole.wyr.core.domain.analytics.AnalyticsEvent
+import io.ntole.wyr.core.domain.analytics.AnalyticsProperty
 import io.ntole.wyr.core.domain.category.Category
 import io.ntole.wyr.core.domain.category.CategoryRepository
 import io.ntole.wyr.core.domain.category.GetCategories
@@ -40,6 +44,7 @@ import kotlin.time.Instant
 @OptIn(ExperimentalCoroutinesApi::class)
 class SubmitViewModelTest {
     private val dispatcher = StandardTestDispatcher()
+    private val analytics = RecordingAnalytics()
     private val server = FakeServer()
     private val categories = FakeCategoryRepository()
 
@@ -571,6 +576,90 @@ class SubmitViewModelTest {
             assertEquals(setOf("FOOD"), viewModel.state.value.categories)
         }
 
+    /** Every showing of the form, the funnel's step before a question sent (CLAUDE.md §8g). */
+    @Test
+    fun `each showing of the form is reported and reads the points`() =
+        runTest(dispatcher) {
+            val viewModel = viewModel()
+
+            viewModel.shown()
+            testScheduler.advanceUntilIdle()
+
+            assertEquals(listOf(Recorded(AnalyticsEvent.SUBMIT_OPENED)), analytics.events)
+            assertEquals(5, viewModel.state.value.points)
+        }
+
+    /** A rotation's composition shows the visit it showed: read again, and not reported again. */
+    @Test
+    fun `a showing that begins no visit reads the points and reports nothing`() =
+        runTest(dispatcher) {
+            val viewModel = viewModel()
+
+            viewModel.shown(newVisit = false)
+            testScheduler.advanceUntilIdle()
+
+            assertEquals(emptyList(), analytics.events)
+            assertEquals(5, viewModel.state.value.points)
+        }
+
+    /** The categories, by id, and how many; never what was typed. */
+    @Test
+    fun `a question stored is reported with its categories and nothing typed`() =
+        runTest(dispatcher) {
+            val viewModel = open()
+            viewModel.write("Fly", "Swim", "SUPERPOWERS", "FOOD")
+
+            viewModel.submit()
+            testScheduler.advanceUntilIdle()
+
+            val sent = analytics.named(AnalyticsEvent.SUBMIT_SENT).single()
+            assertEquals(
+                mapOf(AnalyticsProperty.CATEGORIES to listOf("FOOD", "SUPERPOWERS"), AnalyticsProperty.COUNT to 2),
+                sent.properties,
+            )
+            assertTrue(analytics.recorded.none { "Fly" in it.toString() || "Swim" in it.toString() })
+        }
+
+    @Test
+    fun `a question refused is reported with its code`() =
+        runTest(dispatcher) {
+            server.submitFailsWith = WyrException(DomainError.SUBMISSION_LIMIT)
+            val viewModel = open()
+            viewModel.write("Fly", "Swim", "FOOD")
+
+            viewModel.submit()
+            testScheduler.advanceUntilIdle()
+
+            assertEquals(
+                listOf(Recorded(AnalyticsEvent.SUBMIT_REFUSED, mapOf(AnalyticsProperty.CODE to "SUBMISSION_LIMIT"))),
+                analytics.named(AnalyticsEvent.SUBMIT_REFUSED),
+            )
+            assertEquals(
+                listOf("submit"),
+                analytics.named(AnalyticsEvent.ERROR_SHOWN).map {
+                    it.properties[AnalyticsProperty.ACTION]
+                },
+            )
+            assertEquals(emptyList(), analytics.named(AnalyticsEvent.SUBMIT_SENT))
+        }
+
+    @Test
+    fun `categories or points that could not be read are reported as shown`() =
+        runTest(dispatcher) {
+            categories.read = { throw WyrException(DomainError.NETWORK) }
+            server.statsFailWith = DomainError.SERVER
+
+            open()
+
+            assertEquals(
+                listOf(
+                    mapOf(AnalyticsProperty.CODE to "NETWORK", AnalyticsProperty.ACTION to "categories"),
+                    mapOf(AnalyticsProperty.CODE to "SERVER", AnalyticsProperty.ACTION to "points"),
+                ),
+                analytics.named(AnalyticsEvent.ERROR_SHOWN).map { it.properties },
+            )
+        }
+
     /** A view model whose form has been shown, and read the points. */
     private fun TestScope.open(): SubmitViewModel =
         viewModel().also {
@@ -584,6 +673,7 @@ class SubmitViewModelTest {
             getPlayerStats = GetPlayerStats(server, server),
             getCategories = GetCategories(categories),
             categoryList = categories,
+            analytics = analytics,
         )
 
     /** Types both options and picks exactly [categories]. */

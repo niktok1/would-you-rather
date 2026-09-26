@@ -145,8 +145,11 @@ fun Route.authRoutes(
     }
 }
 
-/** What a mint, a refresh and a login answer: [session]'s credentials, its new [refresh] token among them. */
-private fun TokenService.answer(
+/**
+ * What a mint, a refresh, a login and a Play Games sign-in answer: [session]'s credentials, its new
+ * [refresh] token among them.
+ */
+internal fun TokenService.answer(
     session: SessionStore.Session,
     refresh: TokenService.Opaque,
     config: ServerConfig,

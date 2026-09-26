@@ -15,6 +15,11 @@ data class AccountStrings(
     /** The Account card's stat of the distinct questions the player has answered. */
     val questionsAnswered: String,
     val logOut: String,
+    /**
+     * The Account screen's switch that lets the game send analytics (CLAUDE.md §8g), on until the
+     * player turns it off.
+     */
+    val statistics: String,
     /** A LOCAL or DEV build's server: its name, `{0}`, and its URL, `{1}`. */
     val serverLine: String,
     /** A guest's one way to register or log in, on the Account screen. */
@@ -106,6 +111,7 @@ data class AccountStrings(
             guest = transform(guest),
             questionsAnswered = transform(questionsAnswered),
             logOut = transform(logOut),
+            statistics = transform(statistics),
             serverLine = transform(serverLine),
             openAuth = transform(openAuth),
             username = transform(username),
@@ -168,6 +174,7 @@ internal val SerbianCyrillicAccountStrings: AccountStrings =
         guest = "Гост",
         questionsAnswered = "Одговорена питања",
         logOut = "Одјави се",
+        statistics = "Статистика",
         serverLine = "Сервер: {0} ({1})",
         openAuth = "Региструј се или се пријави",
         username = "Корисничко име",
@@ -228,6 +235,7 @@ internal val EnglishAccountStrings: AccountStrings =
         guest = "Guest",
         questionsAnswered = "Questions answered",
         logOut = "Log out",
+        statistics = "Statistics",
         serverLine = "Server: {0} ({1})",
         openAuth = "Register or log in",
         username = "Username",

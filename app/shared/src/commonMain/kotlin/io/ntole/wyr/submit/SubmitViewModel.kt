@@ -2,8 +2,12 @@ package io.ntole.wyr.submit
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import io.ntole.wyr.core.domain.analytics.Analytics
+import io.ntole.wyr.core.domain.analytics.AnalyticsEvent
+import io.ntole.wyr.core.domain.analytics.AnalyticsProperty
 import io.ntole.wyr.core.domain.category.CategoryRepository
 import io.ntole.wyr.core.domain.category.GetCategories
+import io.ntole.wyr.core.domain.error.DomainError
 import io.ntole.wyr.core.domain.error.WyrException
 import io.ntole.wyr.core.domain.player.GetPlayerStats
 import io.ntole.wyr.core.domain.submission.SubmitQuestion
@@ -39,12 +43,16 @@ interface SubmitActions {
  *
  * One action at a time, and the points read again after every submit, a failed one too: a submission
  * whose answer was lost may have been stored, and paid for.
+ *
+ * [analytics] hear of it (CLAUDE.md §8g): the form opened, a question sent and its categories, a
+ * refusal by its code, and every failure shown; never what was typed.
  */
 class SubmitViewModel(
     private val submitQuestion: SubmitQuestion,
     private val getPlayerStats: GetPlayerStats,
     private val getCategories: GetCategories,
     categoryList: CategoryRepository,
+    private val analytics: Analytics,
 ) : ViewModel(),
     SubmitActions {
     private val _state = MutableStateFlow(SubmitState(categoryOptions = categoryList.categories.value))
@@ -63,6 +71,15 @@ class SubmitViewModel(
      * down a [SubmitState.sent] left from a showing before.
      */
     override fun refresh() = perform(SubmitAction.LOAD) { readCategories() }
+
+    /**
+     * The form is shown: the categories and the points are read again, and the analytics hear of it
+     * when that begins a [newVisit], not when a rotation's composition shows the same one (CLAUDE.md §8g).
+     */
+    fun shown(newVisit: Boolean = true) {
+        if (newVisit) analytics.track(AnalyticsEvent.SUBMIT_OPENED)
+        refresh()
+    }
 
     override fun leftForm() = _state.update { it.copy(sent = false) }
 
@@ -85,8 +102,17 @@ class SubmitViewModel(
         perform(SubmitAction.SUBMIT) {
             try {
                 submitQuestion(draft.optionA, draft.optionB, draft.categories)
+                analytics.track(
+                    AnalyticsEvent.SUBMIT_SENT,
+                    mapOf(
+                        AnalyticsProperty.CATEGORIES to draft.categories.sorted(),
+                        AnalyticsProperty.COUNT to draft.categories.size,
+                    ),
+                )
                 _state.update { it.copy(optionA = "", optionB = "", categories = emptySet(), sent = true) }
             } catch (failure: WyrException) {
+                analytics.track(AnalyticsEvent.SUBMIT_REFUSED, mapOf(AnalyticsProperty.CODE to failure.error.name))
+                reportShown(failure.error, ACTION_SUBMIT)
                 _state.update { it.copy(submitFailure = failure.toSubmitFailure()) }
             }
         }
@@ -123,6 +149,7 @@ class SubmitViewModel(
                 getCategories()
                 null
             } catch (unread: WyrException) {
+                reportShown(unread.error, ACTION_CATEGORIES)
                 unread.toSubmitFailure()
             }
         _state.update { it.copy(categoriesFailure = failure) }
@@ -138,9 +165,24 @@ class SubmitViewModel(
             val stats = getPlayerStats()
             _state.update { it.copy(points = stats.totalPoints, registered = stats.username != null) }
         } catch (failure: WyrException) {
+            reportShown(failure.error, ACTION_POINTS)
             _state.update { it.copy(pointsFailure = failure.toSubmitFailure()) }
         }
+    }
+
+    private fun reportShown(
+        error: DomainError,
+        action: String,
+    ) {
+        analytics.track(
+            AnalyticsEvent.ERROR_SHOWN,
+            mapOf(AnalyticsProperty.CODE to error.name, AnalyticsProperty.ACTION to action),
+        )
     }
 }
 
 private fun WyrException.toSubmitFailure(): SubmitFailure = SubmitFailure(error, retryAfter)
+
+private const val ACTION_SUBMIT = "submit"
+private const val ACTION_CATEGORIES = "categories"
+private const val ACTION_POINTS = "points"

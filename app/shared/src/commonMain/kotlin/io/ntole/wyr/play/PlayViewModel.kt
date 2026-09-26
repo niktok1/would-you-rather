@@ -2,6 +2,9 @@ package io.ntole.wyr.play
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import io.ntole.wyr.core.domain.analytics.Analytics
+import io.ntole.wyr.core.domain.analytics.AnalyticsEvent
+import io.ntole.wyr.core.domain.analytics.AnalyticsProperty
 import io.ntole.wyr.core.domain.category.CategoryRepository
 import io.ntole.wyr.core.domain.error.DomainError
 import io.ntole.wyr.core.domain.error.WyrException
@@ -27,6 +30,7 @@ import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlin.time.TimeSource
 
 /**
  * How long after a reveal lands a tap on a card is still taken for the answering tap's double, and
@@ -35,6 +39,12 @@ import kotlinx.coroutines.launch
  */
 internal const val REVEAL_HOLD_MILLIS: Long = 500
 
+/**
+ * Drives the Play screen (CLAUDE.md §8d, *The Play screen*), and tells [analytics] what the player did
+ * there (§8g): each question shown, answered after how long, skipped, and reacted to, and every
+ * failure shown, by the question's id and its categories', never its text. [timeSource] measures how
+ * long a question was on screen, only while the Play screen is shown ([screenShown], [screenHidden]).
+ */
 class PlayViewModel(
     private val getNextQuestion: GetNextQuestion,
     private val castVote: CastVote,
@@ -43,6 +53,8 @@ class PlayViewModel(
     private val getPlayerStats: GetPlayerStats,
     private val questions: QuestionRepository,
     categoryList: CategoryRepository,
+    private val analytics: Analytics,
+    timeSource: TimeSource.WithComparableMarks,
 ) : ViewModel() {
     private val _state = MutableStateFlow<PlayUiState>(PlayUiState.Loading)
     val state: StateFlow<PlayUiState> = _state.asStateFlow()
@@ -75,6 +87,9 @@ class PlayViewModel(
 
     /** Active for [REVEAL_HOLD_MILLIS] from the moment a reveal lands, while [next] waits. */
     private var revealHold: Job? = null
+
+    /** How long the question asked has been on screen, for how long the player took over it. */
+    private val onQuestion = ScreenStopwatch(timeSource)
 
     init {
         load()
@@ -111,8 +126,9 @@ class PlayViewModel(
         viewModelScope.launch {
             _state.value =
                 try {
-                    PlayUiState.Asking(getNextQuestion())
+                    PlayUiState.Asking(getNextQuestion()).also { asked -> questionShown(asked.question) }
                 } catch (failure: WyrException) {
+                    reportShown(failure.error, ACTION_QUESTION)
                     PlayUiState.Failed(failure.error)
                 }
 
@@ -127,8 +143,8 @@ class PlayViewModel(
 
         // Guard against a double tap turning into two answers, and against answering mid-reaction.
         if (asking.isBusy) return
-        // One attempt per tap (CLAUDE.md §8d), kept for any retry of this vote.
-        submit(PendingVote(asking.question, side, AttemptId.random()))
+        // One attempt per tap (CLAUDE.md §8d), kept for any retry of this vote, as is how long it took.
+        submit(PendingVote(asking.question, side, AttemptId.random(), answerMillis = millisOnQuestion()))
     }
 
     /**
@@ -150,12 +166,22 @@ class PlayViewModel(
         // Loading at once, so a second tap finds nothing to skip.
         _state.value = PlayUiState.Loading
 
+        val millis = millisOnQuestion()
+
         viewModelScope.launch {
-            try {
-                skipQuestion(asking.question.id)
-            } catch (unrecorded: WyrException) {
-                // Moved on all the same (above). Only a WyrException: a cancellation must go on up.
-            }
+            val recorded =
+                try {
+                    skipQuestion(asking.question.id)
+                    true
+                } catch (unrecorded: WyrException) {
+                    // Moved on all the same (above). Only a WyrException: a cancellation must go on up.
+                    false
+                }
+            analytics.track(
+                AnalyticsEvent.QUESTION_SKIPPED,
+                about(asking.question) +
+                    mapOf(AnalyticsProperty.DURATION_MS to millis, AnalyticsProperty.RECORDED to recorded),
+            )
             load()
         }
     }
@@ -193,8 +219,17 @@ class PlayViewModel(
                         } else {
                             question
                         }
+                    analytics.track(
+                        AnalyticsEvent.REACTION_SET,
+                        about(question) +
+                            mapOf(
+                                AnalyticsProperty.REACTION to reaction.name.lowercase(),
+                                AnalyticsProperty.ANSWERED to (shown is PlayUiState.Revealed),
+                            ),
+                    )
                     reacting.withReaction(question = answered, isReacting = false, reactionError = null)
                 } catch (failure: WyrException) {
+                    reportShown(failure.error, ACTION_REACTION)
                     reacting.withReaction(isReacting = false, reactionError = failure.error)
                 }
             // Unless the player has moved on meanwhile, when it is no longer the question on screen.
@@ -212,6 +247,18 @@ class PlayViewModel(
         val lostVote = failed.lostVote
         if (lostVote == null) load() else submit(lostVote)
     }
+
+    /**
+     * The Play screen is shown again, from another screen or from the background: the time on the
+     * question asked goes on from now.
+     */
+    fun screenShown() = onQuestion.shown()
+
+    /**
+     * The Play screen is hidden, for another screen or the background: the time on the question asked
+     * stops, so a detour is not counted as time the player took over it.
+     */
+    fun screenHidden() = onQuestion.hidden()
 
     /**
      * Reads the player's points, each time the Play screen is shown: they move meanwhile on other
@@ -244,6 +291,15 @@ class PlayViewModel(
                     pointsRead?.cancel()
                     _points.value = outcome.totalPoints
                     revealHold = viewModelScope.launch { delay(REVEAL_HOLD_MILLIS) }
+                    analytics.track(
+                        AnalyticsEvent.QUESTION_ANSWERED,
+                        about(vote.question) +
+                            mapOf(
+                                AnalyticsProperty.SIDE to vote.side.name,
+                                AnalyticsProperty.ANSWER_MS to vote.answerMillis,
+                                AnalyticsProperty.AGREED_WITH_MAJORITY to outcome.agreedWithMajority,
+                            ),
+                    )
                     PlayUiState.Revealed(question = vote.question, outcome = outcome)
                 } catch (failure: WyrException) {
                     // Already voted is not really a failure to show: the question is spent, so move
@@ -255,9 +311,33 @@ class PlayViewModel(
                     // NETWORK is what retry safety is for: the vote may have landed, and only its
                     // response been lost. Anything else came back as an answer, and resending a vote
                     // the server refused would fail the same way every time, so Try again moves on.
+                    reportShown(failure.error, ACTION_VOTE)
                     PlayUiState.Failed(failure.error, lostVote = vote.takeIf { failure.error == DomainError.NETWORK })
                 }
         }
+    }
+
+    /** [question] is asked: the analytics hear of it, and the time the player takes over it starts. */
+    private fun questionShown(question: Question) {
+        onQuestion.start()
+        analytics.track(AnalyticsEvent.QUESTION_SHOWN, about(question))
+    }
+
+    /**
+     * How long the question asked has been on screen, while the Play screen was, in whole
+     * milliseconds, or null if none is.
+     */
+    private fun millisOnQuestion(): Long? = onQuestion.elapsed()?.inWholeMilliseconds
+
+    /** A failure the screen shows, [error], of [action], for the analytics. */
+    private fun reportShown(
+        error: DomainError,
+        action: String,
+    ) {
+        analytics.track(
+            AnalyticsEvent.ERROR_SHOWN,
+            mapOf(AnalyticsProperty.CODE to error.name, AnalyticsProperty.ACTION to action),
+        )
     }
 
     private fun PlayUiState.OnQuestion.withReaction(
@@ -270,3 +350,11 @@ class PlayViewModel(
             is PlayUiState.Revealed -> copy(question = question, isReacting = isReacting, reactionError = reactionError)
         }
 }
+
+/** What an event says of [question]: its id and its categories', never its text (CLAUDE.md §8g). */
+private fun about(question: Question): Map<String, Any?> =
+    mapOf(AnalyticsProperty.QUESTION_ID to question.id, AnalyticsProperty.CATEGORIES to question.categories.toList())
+
+private const val ACTION_QUESTION = "question"
+private const val ACTION_VOTE = "vote"
+private const val ACTION_REACTION = "reaction"

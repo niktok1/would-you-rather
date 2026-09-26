@@ -35,6 +35,7 @@ enum class RouteLimit(
     GUESTS(RateLimits::guests, KeyedBy.ADDRESS),
     REFRESHES(RateLimits::refreshes, KeyedBy.ADDRESS),
     LOGINS(RateLimits::logins, KeyedBy.ADDRESS),
+    PLAY_GAMES(RateLimits::playGames, KeyedBy.ADDRESS),
     REGISTRATIONS(RateLimits::registrations, KeyedBy.PLAYER),
     LOGOUTS(RateLimits::logouts, KeyedBy.PLAYER),
     FEED(RateLimits::feed, KeyedBy.PLAYER),
@@ -42,9 +43,15 @@ enum class RouteLimit(
     SKIPS(RateLimits::skips, KeyedBy.PLAYER),
     REACTIONS(RateLimits::reactions, KeyedBy.PLAYER),
     SUBMISSIONS(RateLimits::submissions, KeyedBy.PLAYER),
+    REPORTS(RateLimits::reports, KeyedBy.PLAYER),
+    HIDES(RateLimits::hides, KeyedBy.PLAYER),
+    DELETIONS(RateLimits::deletions, KeyedBy.PLAYER),
     STATS(RateLimits::stats, KeyedBy.PLAYER),
     MY_SUBMISSIONS(RateLimits::mySubmissions, KeyedBy.PLAYER),
     CATEGORIES(RateLimits::categories, KeyedBy.ADDRESS),
+    HOME_PICK_COUNTS(RateLimits::homePickCounts, KeyedBy.ADDRESS),
+    HOME_PICKS(RateLimits::homePicks, KeyedBy.PLAYER),
+    PUSH_TOKENS(RateLimits::pushTokens, KeyedBy.PLAYER),
     ADMIN(RateLimits::admin, KeyedBy.ADDRESS),
 
     /**
@@ -69,7 +76,7 @@ internal enum class KeyedBy {
 
     /**
      * The client's address, for a caller with no session to name: one minting a guest, refreshing,
-     * logging in, or moderating, or with none needed: one reading the categories.
+     * logging in, signing in with Play Games, or moderating, or with none needed: one reading the categories or the home picks.
      */
     ADDRESS,
 }

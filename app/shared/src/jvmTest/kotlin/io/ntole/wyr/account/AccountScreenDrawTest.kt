@@ -2,7 +2,12 @@ package io.ntole.wyr.account
 
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.ImageComposeScene
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.semantics.getOrNull
+import androidx.compose.ui.state.ToggleableState
+import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.unit.Density
 import io.ntole.wyr.assertInCentredColumn
 import io.ntole.wyr.core.domain.error.DomainError
@@ -26,6 +31,7 @@ import io.ntole.wyr.theme.WyrTheme
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.Instant
@@ -416,19 +422,97 @@ class AccountScreenDrawTest {
      */
     @Test
     fun `on a wide screen the content is a column down the middle`() {
-        // A guest's language menu spans the column; a registered player's shares its row with Log out,
-        // so nothing of theirs does, and the guest's shows the column is as wide as it should be.
+        // Nothing spans the column alone: the language menu shares its row with the Statistics switch,
+        // and the two, from the menu's left to the switch's right, show the column is as wide as it
+        // should be.
+        val strings = stringsOf(Language.DEFAULT)
         listOf(
-            AccountState(stats = GUEST, submissions = listOf(QUESTION)) to true,
-            AccountState(stats = REGISTERED, submissions = listOf(QUESTION)) to false,
-        ).forEach { (state, spanned) ->
+            AccountState(stats = GUEST, submissions = listOf(QUESTION)),
+            AccountState(stats = REGISTERED, submissions = listOf(QUESTION)),
+        ).forEach { state ->
             val scene = scene(state, Language.DEFAULT, width = WINDOW_WIDTH, height = WINDOW_HEIGHT)
             try {
-                scene.assertInCentredColumn(WINDOW_WIDTH, CONTENT_MAX_WIDTH, "$state", spanned = spanned)
+                scene.assertInCentredColumn(WINDOW_WIDTH, CONTENT_MAX_WIDTH, "$state", spanned = false)
+                val menu = scene.nodes().single { node -> node.descriptions.any { it.startsWith(strings.language) } }
+                val switch = scene.nodes().single { strings.accountScreens.statistics in it.texts }
+                val left = (WINDOW_WIDTH - CONTENT_MAX_WIDTH) / 2f
+                assertEquals(left, menu.boundsInRoot.left, 0.5f, "$state: the menu starts the column")
+                assertEquals(left + CONTENT_MAX_WIDTH, switch.boundsInRoot.right, 0.5f, "$state: the switch ends it")
             } finally {
                 scene.close()
             }
         }
+    }
+
+    /**
+     * The Statistics switch (CLAUDE.md §8g): on or off as the player left it, a switch to a screen
+     * reader, its word and all one control, and a tap on it turns it the other way.
+     */
+    @Test
+    fun `the Statistics switch shows the player's choice and a tap turns it the other way`() {
+        Language.entries.forEach { language ->
+            val word = stringsOf(language).accountScreens.statistics
+            listOf(true, false).forEach { on ->
+                val changes = mutableListOf<Boolean>()
+                val state = AccountState(stats = REGISTERED, submissions = emptyList())
+                val scene = scene(state, language, statisticsOn = on, onStatisticsChange = { changes += it })
+                try {
+                    val switch = scene.nodes().single { word in it.texts }
+                    val shown = switch.config.getOrNull(SemanticsProperties.ToggleableState)
+                    assertEquals(if (on) ToggleableState.On else ToggleableState.Off, shown, "$language")
+                    assertEquals(Role.Switch, switch.config.getOrNull(SemanticsProperties.Role), "$language")
+
+                    scene.tap(word)
+
+                    assertEquals(listOf(!on), changes, "$language")
+                } finally {
+                    scene.close()
+                }
+            }
+        }
+    }
+
+    /**
+     * In every state and language the language menu and the Statistics switch share one row, neither
+     * cut short, and a registered player's Log out is under them. Measured 400 wide, as the heights are.
+     */
+    @Test
+    fun `the language menu and the switch share a row and Log out is under them`() {
+        Language.entries.forEach { language ->
+            val strings = stringsOf(language)
+            (GUEST_STATES + NOT_A_GUEST).forEach { state ->
+                val scene = scene(state, language)
+                try {
+                    val menu =
+                        scene.nodes().single { node ->
+                            node.descriptions.any { it.startsWith(strings.language) }
+                        }
+                    val switch = scene.nodes().single { strings.accountScreens.statistics in it.texts }
+                    assertEquals(menu.boundsInRoot.center.y, switch.boundsInRoot.center.y, 0.5f, "$language: $state")
+                    listOf(language.ownName, strings.accountScreens.statistics).forEach { text ->
+                        assertFalse(scene.isCutShort(text), "$language: $state cuts \"$text\" short")
+                    }
+                    val logOut = scene.nodes().singleOrNull { strings.accountScreens.logOut in it.texts }
+                    if (state.stats?.username != null) {
+                        assertTrue(
+                            assertNotNull(logOut).boundsInRoot.top >= switch.boundsInRoot.bottom,
+                            "$language: $state",
+                        )
+                    }
+                } finally {
+                    scene.close()
+                }
+            }
+        }
+    }
+
+    /** Whether the one text node showing [text] is cut short: it needed more lines than it may take. */
+    private fun ImageComposeScene.isCutShort(text: String): Boolean {
+        val node = everyNode().single { text in it.texts }
+        val layouts = mutableListOf<TextLayoutResult>()
+        assertNotNull(node.config.getOrNull(SemanticsActions.GetTextLayoutResult)?.action, text).invoke(layouts)
+        // Skia's paragraphs on the desktop never report a line ellipsized, so the lines it needed.
+        return layouts.single().multiParagraph.didExceedMaxLines
     }
 
     private fun scene(
@@ -441,11 +525,22 @@ class AccountScreenDrawTest {
         dark: Boolean = false,
         width: Int = WIDTH,
         height: Int = HEIGHT,
+        statisticsOn: Boolean = true,
+        onStatisticsChange: (Boolean) -> Unit = {},
     ): ImageComposeScene =
         ImageComposeScene(width = width, height = height, density = Density(1f)) {
             WyrTheme(darkTheme = dark) {
                 WyrStrings(language) {
-                    Screen(state, language, environment, onOpenAuth, onNewQuestion, actions)
+                    Screen(
+                        state,
+                        language,
+                        environment,
+                        onOpenAuth,
+                        onNewQuestion,
+                        actions,
+                        statisticsOn,
+                        onStatisticsChange,
+                    )
                 }
             }
         }.also { it.render() }
@@ -458,6 +553,8 @@ class AccountScreenDrawTest {
         onOpenAuth: () -> Unit = {},
         onNewQuestion: () -> Unit = {},
         actions: AccountActions = Recorder(),
+        statisticsOn: Boolean = true,
+        onStatisticsChange: (Boolean) -> Unit = {},
     ) {
         AccountScreen(
             state = state,
@@ -465,6 +562,8 @@ class AccountScreenDrawTest {
             environment = environment,
             language = language,
             onSelectLanguage = {},
+            statisticsOn = statisticsOn,
+            onStatisticsChange = onStatisticsChange,
             onOpenAuth = onOpenAuth,
             onNewQuestion = onNewQuestion,
         )

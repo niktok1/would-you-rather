@@ -30,6 +30,8 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
+import io.ntole.wyr.analytics.tapped
+import io.ntole.wyr.core.domain.analytics.AnalyticsProperty
 import io.ntole.wyr.core.domain.error.DomainError
 import io.ntole.wyr.language.LocalLanguage
 import io.ntole.wyr.language.LocalStrings
@@ -86,7 +88,12 @@ fun CategoriesScreen(
                         fontSize = WyrTypeScale.statLabel,
                         modifier = Modifier.weight(1f),
                     )
-                    TextButton(onClick = actions::refresh, enabled = !state.isLoading) { Text(shared.tryAgain) }
+                    TextButton(
+                        onClick = tapped("categories.try_again", onClick = actions::refresh),
+                        enabled = !state.isLoading,
+                    ) {
+                        Text(shared.tryAgain)
+                    }
                 }
             }
 
@@ -97,7 +104,7 @@ fun CategoriesScreen(
                         ticked = state.ticked.isEmpty(),
                         enabled = !state.isPlaying,
                         bold = true,
-                        onClick = actions::selectAll,
+                        onClick = tapped("categories.all", onClick = actions::selectAll),
                     )
                 }
                 items(state.found, key = { it.id }) { category ->
@@ -105,7 +112,10 @@ fun CategoriesScreen(
                         label = categoryName(category, language),
                         ticked = category.id in state.ticked,
                         enabled = !state.isPlaying,
-                        onClick = { actions.toggle(category.id) },
+                        onClick =
+                            tapped("categories.category", mapOf(AnalyticsProperty.CATEGORY to category.id)) {
+                                actions.toggle(category.id)
+                            },
                     )
                 }
                 // Under All when nothing is listed: that the search found none, or a spinner while the
@@ -134,7 +144,9 @@ fun CategoriesScreen(
                         modifier = Modifier.weight(1f),
                     )
                 }
-                Button(onClick = actions::play, enabled = !state.isPlaying) { Text(shared.play, maxLines = 1) }
+                Button(onClick = tapped("categories.play", onClick = actions::play), enabled = !state.isPlaying) {
+                    Text(shared.play, maxLines = 1)
+                }
             }
         }
     }

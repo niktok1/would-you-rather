@@ -16,10 +16,19 @@ import kotlinx.serialization.Serializable
  * characters. Neither id may hold a control character. [questionId] must not be blank either, but
  * has no length limit: one longer than any question's id is only a question the server does not
  * have.
+ *
+ * [answerMillis] is how long the player took to answer, in milliseconds, from the question showing to
+ * the tap, or null when the client does not measure it: one of the signals the server keeps for
+ * choosing questions to suit a player later (CLAUDE.md §8b, *Personalization*). It is kept on the vote
+ * and follows the latest answer, as the side does. A time outside 0 to
+ * [io.ntole.wyr.core.api.WyrApi.Limits.MAX_ANSWER_MILLIS] is kept as none rather than refused, since a
+ * player who left a question on screen answered all the same. A client from before this field sends
+ * none, and a server from before it ignores it.
  */
 @Serializable
 public data class VoteRequest(
     public val questionId: String,
     public val choice: OptionSide,
     public val attemptId: String,
+    public val answerMillis: Long? = null,
 )

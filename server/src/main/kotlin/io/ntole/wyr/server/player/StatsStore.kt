@@ -2,6 +2,8 @@ package io.ntole.wyr.server.player
 
 import io.ntole.wyr.core.player.PlayerStatsDto
 import io.ntole.wyr.core.question.QuestionStatus
+import io.ntole.wyr.server.auth.IdentityProvider
+import io.ntole.wyr.server.db.Identities
 import io.ntole.wyr.server.db.Players
 import io.ntole.wyr.server.db.Questions
 import io.ntole.wyr.server.db.Votes
@@ -24,7 +26,8 @@ object StatsStore {
      * The player's stats (CLAUDE.md §8d), or null for a player that does not exist. Must run inside
      * a transaction.
      *
-     * Beside the numbers, the player's username, null for a guest (CLAUDE.md §8a, *Accounts*).
+     * Beside the numbers, the player's username, null for a guest (CLAUDE.md §8a, *Accounts*), and
+     * whether they signed in with Play Games (*Play Games sign-in*), in the same statement.
      *
      * All of them come from one statement: the player's row, with three counts and a sum beside it,
      * the due count compared with that row's own cycle. At READ COMMITTED each statement sees what was
@@ -45,6 +48,14 @@ object StatsStore {
         val dueThisCycle = QuestionStore.dueCount(playerId, categories = emptySet(), cycle = Players.currentCycle)
         val likesReceived = ReactionStore.likesReceivedBy(playerId)
         val pointsSpent = spentBy(playerId)
+        val playGamesLinks =
+            wrapAsExpression<Long>(
+                Identities
+                    .select(Identities.playerId.count())
+                    .where {
+                        (Identities.playerId eq playerId) and (Identities.provider eq IdentityProvider.PLAY_GAMES)
+                    },
+            )
 
         return Players
             .select(
@@ -57,6 +68,7 @@ object StatsStore {
                 dueThisCycle,
                 likesReceived,
                 pointsSpent,
+                playGamesLinks,
             ).where { Players.id eq playerId }
             .singleOrNull()
             ?.let { row ->
@@ -70,6 +82,7 @@ object StatsStore {
                     likesReceived = row.countOf(likesReceived),
                     pointsSpent = checkNotNull(row[pointsSpent]) { "a COALESCE came back null" },
                     username = row[Players.username],
+                    playGamesLinked = row.countOf(playGamesLinks) > 0,
                 )
             }
     }

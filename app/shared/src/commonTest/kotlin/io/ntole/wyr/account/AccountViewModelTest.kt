@@ -1,10 +1,15 @@
 package io.ntole.wyr.account
 
+import io.ntole.wyr.analytics.RecordingAnalytics
+import io.ntole.wyr.analytics.RecordingAnalytics.Recorded
 import io.ntole.wyr.core.domain.account.AccountRepository
 import io.ntole.wyr.core.domain.account.LogIn
 import io.ntole.wyr.core.domain.account.LogOut
 import io.ntole.wyr.core.domain.account.RegisterAccount
 import io.ntole.wyr.core.domain.account.UsernameProblem
+import io.ntole.wyr.core.domain.analytics.Analytics
+import io.ntole.wyr.core.domain.analytics.AnalyticsEvent
+import io.ntole.wyr.core.domain.analytics.AnalyticsProperty
 import io.ntole.wyr.core.domain.error.DomainError
 import io.ntole.wyr.core.domain.error.WyrException
 import io.ntole.wyr.core.domain.player.GetPlayerStats
@@ -44,6 +49,7 @@ import kotlin.time.Instant
 @OptIn(ExperimentalCoroutinesApi::class)
 class AccountViewModelTest {
     private val dispatcher = StandardTestDispatcher()
+    private val analytics = RecordingAnalytics()
     private val game = FakeGame()
 
     @BeforeTest
@@ -643,6 +649,196 @@ class AccountViewModelTest {
             assertEquals(5, viewModel.state.value.guestPointsWarning)
         }
 
+    /** Every showing of the screen, from which the funnel to an account starts (CLAUDE.md §8g). */
+    @Test
+    fun `each showing of the screen is reported and reads the player`() =
+        runTest(dispatcher) {
+            val viewModel = viewModel()
+
+            viewModel.shown()
+            testScheduler.advanceUntilIdle()
+            viewModel.shown()
+            testScheduler.advanceUntilIdle()
+
+            assertEquals(2, analytics.named(AnalyticsEvent.ACCOUNT_OPENED).size)
+            assertEquals(2, game.calls.count { it == "stats" })
+        }
+
+    /** A rotation's composition shows the visit it showed: read again, and not reported again. */
+    @Test
+    fun `a showing that begins no visit reads the player and reports nothing`() =
+        runTest(dispatcher) {
+            val viewModel = viewModel()
+
+            viewModel.shown(newVisit = false)
+            testScheduler.advanceUntilIdle()
+
+            assertEquals(emptyList(), analytics.named(AnalyticsEvent.ACCOUNT_OPENED))
+            assertEquals(1, game.calls.count { it == "stats" })
+        }
+
+    @Test
+    fun `a registration is reported as sent and as completed`() =
+        runTest(dispatcher) {
+            val viewModel = open()
+            viewModel.setRegisterUsername("Bob_1")
+            viewModel.setRegisterPassword("correct horse")
+
+            viewModel.register()
+            testScheduler.advanceUntilIdle()
+
+            assertEquals(
+                listOf(AnalyticsEvent.REGISTER_STARTED, AnalyticsEvent.REGISTER_COMPLETED),
+                analytics.events.map { it.name },
+            )
+        }
+
+    /** Its answer lost, the account it made is read after it all the same: it completed. */
+    @Test
+    fun `a registration whose answer was lost is reported as completed`() =
+        runTest(dispatcher) {
+            game.registerAnswerLost = true
+            val viewModel = open()
+            viewModel.setRegisterUsername("bob_1")
+            viewModel.setRegisterPassword("correct horse")
+
+            viewModel.register()
+            testScheduler.advanceUntilIdle()
+
+            assertEquals(
+                listOf(AnalyticsEvent.REGISTER_STARTED, AnalyticsEvent.REGISTER_COMPLETED),
+                analytics.events.map { it.name },
+            )
+        }
+
+    /** Never what was typed: only the failure's code, and what failed. */
+    @Test
+    fun `a refused registration is reported as started and its failure as shown`() =
+        runTest(dispatcher) {
+            game.accounts["bob_1"] = "correct horse" to "someone"
+            val viewModel = open()
+            viewModel.setRegisterUsername("bob_1")
+            viewModel.setRegisterPassword("horse battery")
+
+            viewModel.register()
+            testScheduler.advanceUntilIdle()
+
+            assertEquals(
+                listOf(
+                    Recorded(AnalyticsEvent.REGISTER_STARTED),
+                    Recorded(
+                        AnalyticsEvent.ERROR_SHOWN,
+                        mapOf(AnalyticsProperty.CODE to "USERNAME_TAKEN", AnalyticsProperty.ACTION to "register"),
+                    ),
+                ),
+                analytics.events,
+            )
+            assertTrue(analytics.recorded.none { "bob_1" in it.toString() || "horse" in it.toString() })
+        }
+
+    /**
+     * The Auth page takes signed in down as it leaves, which it does as soon as a frame shows the
+     * registration worked, while the read after it may still run, and fail.
+     */
+    @Test
+    fun `a registration is reported as completed although the Auth page left and the read after failed`() =
+        runTest(dispatcher) {
+            val viewModel = open()
+            viewModel.setRegisterUsername("bob_1")
+            viewModel.setRegisterPassword("correct horse")
+            val read = CompletableDeferred<Unit>()
+            game.statsWaitsFor = read
+
+            viewModel.register()
+            testScheduler.advanceUntilIdle()
+            viewModel.leftAuth()
+            game.statsFailWith = DomainError.NETWORK
+            read.complete(Unit)
+            testScheduler.advanceUntilIdle()
+
+            assertEquals(1, analytics.named(AnalyticsEvent.REGISTER_COMPLETED).size)
+        }
+
+    /** A read quick enough that the Auth page leaves only while My questions is read. */
+    @Test
+    fun `a login is reported as completed although the Auth page left while the list was read`() =
+        runTest(dispatcher) {
+            game.accounts["bob_1"] = "correct horse" to "bob-player"
+            val viewModel = open()
+            viewModel.setAuthMode(AuthMode.LOG_IN)
+            viewModel.setLoginUsername("bob_1")
+            viewModel.setLoginPassword("correct horse")
+            val list = CompletableDeferred<Unit>()
+            game.mineWaitsFor = list
+
+            viewModel.logIn()
+            testScheduler.advanceUntilIdle()
+            viewModel.leftAuth()
+            list.complete(Unit)
+            testScheduler.advanceUntilIdle()
+
+            assertEquals(1, analytics.named(AnalyticsEvent.LOGIN_COMPLETED).size)
+        }
+
+    @Test
+    fun `a login is reported once it worked`() =
+        runTest(dispatcher) {
+            game.accounts["bob_1"] = "correct horse" to "bob-player"
+            val viewModel = open()
+            viewModel.setAuthMode(AuthMode.LOG_IN)
+            viewModel.setLoginUsername("bob_1")
+
+            viewModel.setLoginPassword("wrong horse")
+            viewModel.logIn()
+            testScheduler.advanceUntilIdle()
+            assertEquals(emptyList(), analytics.named(AnalyticsEvent.LOGIN_COMPLETED))
+
+            viewModel.setLoginPassword("correct horse")
+            viewModel.logIn()
+            testScheduler.advanceUntilIdle()
+
+            assertEquals(1, analytics.named(AnalyticsEvent.LOGIN_COMPLETED).size)
+            val shown = analytics.named(AnalyticsEvent.ERROR_SHOWN).single()
+            assertEquals(
+                mapOf(AnalyticsProperty.CODE to "INVALID_LOGIN", AnalyticsProperty.ACTION to "log_in"),
+                shown.properties,
+            )
+        }
+
+    @Test
+    fun `a logout is reported`() =
+        runTest(dispatcher) {
+            val viewModel = open()
+
+            viewModel.logOut()
+            testScheduler.advanceUntilIdle()
+
+            assertEquals(listOf(Recorded(AnalyticsEvent.LOGOUT)), analytics.events)
+        }
+
+    @Test
+    fun `a read that failed is reported as shown and a list that failed too`() =
+        runTest(dispatcher) {
+            game.mineFailsWith = DomainError.SERVER
+            open()
+
+            assertEquals(
+                listOf(mapOf(AnalyticsProperty.CODE to "SERVER", AnalyticsProperty.ACTION to "my_questions")),
+                analytics.named(AnalyticsEvent.ERROR_SHOWN).map { it.properties },
+            )
+
+            analytics.recorded.clear()
+            game.statsFailWith = DomainError.NETWORK
+            val viewModel = viewModel()
+            viewModel.refresh()
+            testScheduler.advanceUntilIdle()
+
+            assertEquals(
+                listOf("account", "my_questions"),
+                analytics.named(AnalyticsEvent.ERROR_SHOWN).map { it.properties[AnalyticsProperty.ACTION] },
+            )
+        }
+
     /** The player the screen shows, which a test expects there to be. */
     private fun AccountState.shown(): PlayerStats = assertNotNull(stats, "no player read")
 
@@ -657,9 +853,10 @@ class AccountViewModelTest {
         AccountViewModel(
             getPlayerStats = GetPlayerStats(game, game),
             getMySubmissions = GetMySubmissions(game, game),
-            registerAccount = RegisterAccount(game, game),
-            logInToAccount = LogIn(game, game),
-            logOutOfAccount = LogOut(game, game),
+            registerAccount = RegisterAccount(game, game, Analytics.None),
+            logInToAccount = LogIn(game, game, game, Analytics.None),
+            logOutOfAccount = LogOut(game, game, Analytics.None),
+            analytics = analytics,
         )
 
     /**
@@ -682,6 +879,9 @@ class AccountViewModelTest {
         var questionsAnswered = 0
         var statsFailWith: DomainError? = null
 
+        /** When set, a read of the stats waits for it before it answers, or fails with [statsFailWith]. */
+        var statsWaitsFor: CompletableDeferred<Unit>? = null
+
         /** When set, a registration waits for it before it answers. */
         var registerWaitsFor: CompletableDeferred<Unit>? = null
 
@@ -692,6 +892,9 @@ class AccountViewModelTest {
         val questionsOf = mutableMapOf<String, List<Submission>>()
         var mineFailsWith: DomainError? = null
 
+        /** When set, a read of the player's questions waits for it before it answers. */
+        var mineWaitsFor: CompletableDeferred<Unit>? = null
+
         /** Who is playing on this device, as the stored session names them, or none. */
         var player: String? = null
             private set
@@ -701,6 +904,7 @@ class AccountViewModelTest {
 
         override suspend fun stats(): PlayerStats {
             calls += "stats"
+            statsWaitsFor?.await()
             statsFailWith?.let { throw WyrException(it) }
             val playing = ensure()
             return PlayerStats(
@@ -740,6 +944,7 @@ class AccountViewModelTest {
 
         override suspend fun mine(): List<Submission> {
             calls += "mine"
+            mineWaitsFor?.await()
             mineFailsWith?.let { throw WyrException(it) }
             return questionsOf[ensure()].orEmpty()
         }

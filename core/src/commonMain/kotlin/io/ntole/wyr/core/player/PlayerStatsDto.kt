@@ -23,12 +23,14 @@ import kotlinx.serialization.Serializable
  * with nothing due.
  *
  * [username] is the player's account name, lower-cased, or null for a guest, who has none
- * (CLAUDE.md §8a, *Accounts*).
+ * (CLAUDE.md §8a, *Accounts*). [playGamesLinked] is whether the player signed in with Play Games
+ * (CLAUDE.md §8a, *Play Games sign-in*), which registers them as a username does: a player is a guest
+ * while they have neither.
  *
  * The server reads every number at the same moment, so they always agree with one another.
  *
- * The numbers have defaults, zero and the first cycle, and [username] null, so a field a server stops
- * sending reads as that rather than failing to decode.
+ * The numbers have defaults, zero and the first cycle, [username] null and [playGamesLinked] false, so
+ * a field a server stops sending reads as that rather than failing to decode.
  */
 @Serializable
 public data class PlayerStatsDto(
@@ -41,4 +43,5 @@ public data class PlayerStatsDto(
     public val likesReceived: Int = 0,
     public val pointsSpent: Int = 0,
     public val username: String? = null,
+    public val playGamesLinked: Boolean = false,
 )

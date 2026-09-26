@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -21,14 +22,18 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import io.ntole.wyr.analytics.tapped
 import io.ntole.wyr.core.domain.player.PlayerStats
 import io.ntole.wyr.core.network.environment.WyrEnvironment
 import io.ntole.wyr.language.AccountStrings
@@ -48,7 +53,8 @@ import io.ntole.wyr.theme.contentWidth
  * [onOpenAuth] opens, to register or log in; then My questions, a table of them, whose New question
  * [onNewQuestion] answers with the Submit screen's form, for a registered player; then the language
  * menu, [language] the one the game is shown in, which [onSelectLanguage] changes (§8f), and beside
- * it Log out for a registered player.
+ * it the Statistics switch, [statisticsOn] whether the player lets the game send analytics, which
+ * [onStatisticsChange] changes (§8g); under them Log out for a registered player.
  * A build for any server but production's names that server last ([serverLine]), [environment] being
  * the one the build talks to.
  *
@@ -62,6 +68,8 @@ fun AccountScreen(
     environment: WyrEnvironment,
     language: Language,
     onSelectLanguage: (Language) -> Unit,
+    statisticsOn: Boolean,
+    onStatisticsChange: (Boolean) -> Unit,
     onOpenAuth: () -> Unit,
     onNewQuestion: () -> Unit,
     modifier: Modifier = Modifier,
@@ -86,16 +94,24 @@ fun AccountScreen(
             // The player's own questions, once there is a player to read them for.
             if (stats != null) MyQuestions(state, actions, onNewQuestion)
 
-            // The language menu, and beside it Log out for a registered player: one row of the two.
+            // The language menu and beside it the Statistics switch, one row of the two, and under them
+            // Log out for a registered player (provisional, CLAUDE.md §8b: Log out was beside the menu).
             Column(verticalArrangement = Arrangement.spacedBy(dimens.spaceSm)) {
-                if (stats?.username != null) FailureOf(state, AccountAction.LOG_OUT)
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(dimens.spaceSm),
                 ) {
                     LanguageMenu(selected = language, onSelect = onSelectLanguage, modifier = Modifier.weight(1f))
-                    if (stats?.username != null) {
-                        OutlinedButton(onClick = actions::logOut, enabled = !state.isBusy) { Text(strings.logOut) }
+                    StatisticsSwitch(on = statisticsOn, onChange = onStatisticsChange)
+                }
+                if (stats?.username != null) {
+                    FailureOf(state, AccountAction.LOG_OUT)
+                    OutlinedButton(
+                        onClick = tapped("account.log_out", onClick = actions::logOut),
+                        enabled = !state.isBusy,
+                        modifier = Modifier.align(Alignment.End),
+                    ) {
+                        Text(strings.logOut)
                     }
                 }
             }
@@ -104,6 +120,34 @@ fun AccountScreen(
                 Text(text = line, color = colors.muted, fontSize = WyrTypeScale.statLabel)
             }
         }
+    }
+}
+
+/**
+ * The Statistics switch (CLAUDE.md §8g): whether the player lets the game send analytics, [on], which
+ * a tap anywhere on it turns the other way, [onChange]. Its word and the switch are one control, which
+ * a screen reader hears as the word, a switch, and on or off.
+ */
+@Composable
+private fun StatisticsSwitch(
+    on: Boolean,
+    onChange: (Boolean) -> Unit,
+) {
+    val colors = WyrThemeAccessors.colors
+    val dimens = WyrThemeAccessors.dimens
+    val toggle = tapped("account.statistics") { onChange(!on) }
+
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(dimens.spaceSm),
+        modifier =
+            Modifier
+                .toggleable(value = on, role = Role.Switch, onValueChange = { toggle() })
+                .minimumInteractiveComponentSize(),
+    ) {
+        Text(text = LocalStrings.current.accountScreens.statistics, color = colors.primaryText, maxLines = 1)
+        // No click of its own: the row's toggleable is the one.
+        Switch(checked = on, onCheckedChange = null)
     }
 }
 
@@ -134,7 +178,7 @@ private fun Player(
         if (failure != null) {
             val tryAgain = @Composable {
                 OutlinedButton(
-                    onClick = actions::refresh,
+                    onClick = tapped("account.try_again", onClick = actions::refresh),
                     enabled = !state.isBusy,
                 ) { Text(LocalStrings.current.tryAgain) }
             }
@@ -208,7 +252,11 @@ private fun PlayerCard(
                 }
             }
             if (stats.username == null) {
-                Button(onClick = onOpenAuth, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
+                Button(
+                    onClick = tapped("account.open_auth", onClick = onOpenAuth),
+                    enabled = !busy,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
                     Text(strings.openAuth)
                 }
             }

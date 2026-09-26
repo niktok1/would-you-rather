@@ -15,6 +15,7 @@ import io.ntole.wyr.core.domain.account.AccountRepository
 import io.ntole.wyr.core.domain.account.LogIn
 import io.ntole.wyr.core.domain.account.LogOut
 import io.ntole.wyr.core.domain.account.RegisterAccount
+import io.ntole.wyr.core.domain.analytics.Analytics
 import io.ntole.wyr.core.domain.category.CategoryRepository
 import io.ntole.wyr.core.domain.category.GetCategories
 import io.ntole.wyr.core.domain.moderation.AddCategory
@@ -44,6 +45,8 @@ import io.ntole.wyr.core.network.InMemoryTokenStorage
 import io.ntole.wyr.core.network.SessionStore
 import io.ntole.wyr.core.network.TokenStorage
 import io.ntole.wyr.core.network.WyrHttpClient
+import io.ntole.wyr.core.network.analytics.PostHogAnalytics
+import io.ntole.wyr.core.network.analytics.PostHogConfig
 import io.ntole.wyr.core.network.api.AuthApi
 import io.ntole.wyr.core.network.api.CategoryApi
 import io.ntole.wyr.core.network.api.ModerationApi
@@ -65,11 +68,17 @@ import org.koin.dsl.module
  *
  * @param environment the server environment the build targets: every request goes to its
  *   [WyrEnvironment.apiBaseUrl], and its session is kept apart from every other environment's in
- *   that storage ([SessionStore]).
+ *   that storage ([SessionStore]), as its analytics id is.
+ * @param analytics the PostHog project the build sends its analytics to (CLAUDE.md §8g), or none,
+ *   when nothing is sent: the [Analytics] bound keeps only the player's switch then.
  */
-public fun dataModule(environment: WyrEnvironment): Module =
+public fun dataModule(
+    environment: WyrEnvironment,
+    analytics: PostHogConfig?,
+): Module =
     module {
         single { SessionStore(get<TokenStorage>(), environment) }
+        single<Analytics> { PostHogAnalytics(config = analytics, storage = get(), environment = environment) }
         single<HttpClient> { WyrHttpClient.create(baseUrl = environment.apiBaseUrl, sessionStore = get()) }
 
         single { AuthApi(get()) }
@@ -103,9 +112,9 @@ public fun dataModule(environment: WyrEnvironment): Module =
         factory { SubmitQuestion(submissions = get(), session = get()) }
         factory { GetMySubmissions(submissions = get(), session = get()) }
         factory { SetReaction(reactions = get(), session = get()) }
-        factory { RegisterAccount(accounts = get(), session = get()) }
-        factory { LogIn(accounts = get(), questions = get()) }
-        factory { LogOut(accounts = get(), questions = get()) }
+        factory { RegisterAccount(accounts = get(), session = get(), analytics = get()) }
+        factory { LogIn(accounts = get(), questions = get(), session = get(), analytics = get()) }
+        factory { LogOut(accounts = get(), questions = get(), analytics = get()) }
         factory { GetCategories(categories = get()) }
     }
 

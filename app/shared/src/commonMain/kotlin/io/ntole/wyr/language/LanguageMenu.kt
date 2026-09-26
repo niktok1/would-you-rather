@@ -27,6 +27,8 @@ import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import io.ntole.wyr.analytics.tapped
+import io.ntole.wyr.core.domain.analytics.AnalyticsProperty
 import io.ntole.wyr.theme.WyrIcons
 import io.ntole.wyr.theme.WyrThemeAccessors
 
@@ -58,7 +60,7 @@ fun LanguageMenu(
             modifier =
                 Modifier
                     .fillMaxWidth()
-                    .clickable(role = Role.DropdownList) { open = true }
+                    .clickable(role = Role.DropdownList, onClick = tapped("language.menu") { open = true })
                     .semantics(mergeDescendants = true) { contentDescription = "$label: ${selected.ownName}" },
         ) {
             Row(
@@ -91,10 +93,11 @@ fun LanguageMenu(
                             fontWeight = if (picked) FontWeight.Bold else null,
                         )
                     },
-                    onClick = {
-                        open = false
-                        onSelect(language)
-                    },
+                    onClick =
+                        tapped("language.option", mapOf(AnalyticsProperty.LANGUAGE to language.tag)) {
+                            open = false
+                            onSelect(language)
+                        },
                     modifier = Modifier.semantics { this.selected = picked },
                 )
             }

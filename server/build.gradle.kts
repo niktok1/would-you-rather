@@ -28,6 +28,10 @@ dependencies {
     implementation(libs.ktor.serverRateLimit)
     implementation(libs.ktor.serializationJson)
 
+    // The server's own calls to Google, for pushes (FCM) and Play Games sign-in (CLAUDE.md §4, §8a). The
+    // JSON is written and read by hand with kotlinx.serialization, so no client plugin is needed.
+    implementation(libs.ktor.clientCio)
+
     implementation(libs.exposed.core)
     implementation(libs.exposed.jdbc)
     implementation(libs.hikari)
@@ -46,6 +50,8 @@ dependencies {
     testImplementation(libs.exposed.migrationJdbc)
     testImplementation(libs.ktor.serverTestHost)
     testImplementation(libs.ktor.clientContentNegotiation)
+    // Answers for Google in every test of a call to it: no test reaches Google.
+    testImplementation(libs.ktor.clientMock)
     testImplementation(libs.kotlin.testJunit)
 }
 

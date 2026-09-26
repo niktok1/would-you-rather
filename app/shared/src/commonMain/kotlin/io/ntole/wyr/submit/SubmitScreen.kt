@@ -23,6 +23,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
+import io.ntole.wyr.analytics.tapped
+import io.ntole.wyr.core.domain.analytics.AnalyticsProperty
 import io.ntole.wyr.core.domain.error.DomainError
 import io.ntole.wyr.core.domain.submission.OptionProblem
 import io.ntole.wyr.core.domain.submission.SubmissionRules
@@ -116,7 +118,10 @@ private fun Form(
             state.categoryOptions.forEach { category ->
                 FilterChip(
                     selected = category.id in state.categories,
-                    onClick = { actions.toggleCategory(category.id) },
+                    onClick =
+                        tapped("submit.category", mapOf(AnalyticsProperty.CATEGORY to category.id)) {
+                            actions.toggleCategory(category.id)
+                        },
                     label = { Text(categoryName(category, language)) },
                     enabled = editable,
                     // The theme's primary, which is the palette's: it maps nothing to the container
@@ -134,7 +139,12 @@ private fun Form(
         // again reads both.
         state.categoriesFailure?.takeIf { state.pointsFailure == null }?.let { failure ->
             Text(text = categoriesFailureText(failure, LocalStrings.current), color = MaterialTheme.colorScheme.error)
-            OutlinedButton(onClick = actions::refresh, enabled = !state.isBusy) { Text(LocalStrings.current.tryAgain) }
+            OutlinedButton(
+                onClick = tapped("submit.categories_try_again", onClick = actions::refresh),
+                enabled = !state.isBusy,
+            ) {
+                Text(LocalStrings.current.tryAgain)
+            }
         }
 
         // The server's refusal for points, or for a guest, says what the line under it would: one line
@@ -148,7 +158,11 @@ private fun Form(
         } else if (state.tooFewPoints) {
             Text(text = strings.notEnoughPoints, color = colors.primaryText)
         }
-        Button(onClick = actions::submit, enabled = state.canSubmit, modifier = Modifier.fillMaxWidth()) {
+        Button(
+            onClick = tapped("submit.send", onClick = actions::submit),
+            enabled = state.canSubmit,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
             val shared = LocalStrings.current
             PointsText(
                 template = shared.accountScreens.send,
@@ -161,7 +175,9 @@ private fun Form(
         }
         state.pointsFailure?.let { failure ->
             FailureText(failure)
-            OutlinedButton(onClick = actions::refresh, enabled = !state.isBusy) { Text(LocalStrings.current.tryAgain) }
+            OutlinedButton(onClick = tapped("submit.try_again", onClick = actions::refresh), enabled = !state.isBusy) {
+                Text(LocalStrings.current.tryAgain)
+            }
         }
     }
 }

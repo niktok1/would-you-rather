@@ -1,5 +1,6 @@
 package io.ntole.wyr.server.vote
 
+import io.ntole.wyr.core.api.WyrApi
 import io.ntole.wyr.core.vote.OptionSide
 import io.ntole.wyr.core.vote.VoteResultDto
 import io.ntole.wyr.core.vote.VoteTallyDto
@@ -31,6 +32,9 @@ object VoteStore {
      * pays nothing, counts as no answer, and it reports the stored side with the current tally and
      * total.
      *
+     * [answerMillis] is how long the answer took, already bounded ([keptAnswerMillis]), or null; the
+     * vote keeps the latest answer's, as it keeps its side, and a replay leaves it alone.
+     *
      * A question the player may not be served is not found ([QuestionStore.isServable]): one a
      * moderator has not approved, or has retired. The player's own is served like any other.
      *
@@ -53,6 +57,7 @@ object VoteStore {
         questionId: String,
         choice: OptionSide,
         attemptId: String,
+        answerMillis: Long? = null,
         now: Long = System.currentTimeMillis(),
     ): VoteResultDto {
         if (!QuestionStore.isServable(questionId)) throw ApiFailure.questionNotFound(questionId)
@@ -65,11 +70,8 @@ object VoteStore {
 
         val cycle = currentCycle(playerId)
 
-        if (stored == null) {
-            insertVote(playerId, questionId, choice, attemptId, cycle, now)
-        } else {
-            moveVote(playerId, questionId, choice, attemptId, cycle, now)
-        }
+        val answer = Answer(choice, attemptId, answerMillis, cycle, now)
+        if (stored == null) insertVote(playerId, questionId, answer) else moveVote(playerId, questionId, answer)
 
         val tally = tally(questionId)
 
@@ -118,9 +120,13 @@ object VoteStore {
      * starts one only when nothing is due, and this answer is not committed yet, so its question
      * was already answered or skipped in the cycle read here: counting this answer there too is what
      * answering just before the new cycle would have done.
+     *
+     * The player may be gone by now, and is then 401, as before the lock: their account's deletion
+     * (`AccountDeletion`) deletes their vote under its own lock, so a re-answer from another device
+     * that waited on it finds no vote once the deletion commits, and then no player.
      */
     private fun currentCycle(playerId: String): Int =
-        checkNotNull(PlayerStore.find(playerId)) { "player $playerId vanished mid-transaction" }.cycle
+        PlayerStore.find(playerId)?.cycle ?: throw ApiFailure.unauthorized("unknown player")
 
     private fun replay(
         playerId: String,
@@ -140,22 +146,29 @@ object VoteStore {
         )
     }
 
+    /** What one answer writes to the vote: the side, its attempt and time taken, the cycle it counts for, and when. */
+    private class Answer(
+        val choice: OptionSide,
+        val attemptId: String,
+        val answerMillis: Long?,
+        val cycle: Int,
+        val at: Long,
+    )
+
     private fun insertVote(
         playerId: String,
         questionId: String,
-        choice: OptionSide,
-        attemptId: String,
-        cycle: Int,
-        now: Long,
+        answer: Answer,
     ) {
         Votes.insert { row ->
             row[Votes.playerId] = playerId
             row[Votes.questionId] = questionId
-            row[Votes.side] = choice.name
-            row[Votes.createdAt] = now
-            row[Votes.answeredAt] = now
-            row[Votes.answeredInCycle] = cycle
-            row[Votes.attemptId] = attemptId
+            row[side] = answer.choice.name
+            row[createdAt] = answer.at
+            row[answeredAt] = answer.at
+            row[answeredInCycle] = answer.cycle
+            row[attemptId] = answer.attemptId
+            row[answerMillis] = answer.answerMillis
         }
     }
 
@@ -163,19 +176,17 @@ object VoteStore {
     private fun moveVote(
         playerId: String,
         questionId: String,
-        choice: OptionSide,
-        attemptId: String,
-        cycle: Int,
-        now: Long,
+        answer: Answer,
     ) {
         val moved =
             Votes.update({ (Votes.playerId eq playerId) and (Votes.questionId eq questionId) }) { row ->
-                row[side] = choice.name
-                row[answeredAt] = now
-                row[answeredInCycle] = cycle
-                row[Votes.attemptId] = attemptId
+                row[side] = answer.choice.name
+                row[answeredAt] = answer.at
+                row[answeredInCycle] = answer.cycle
+                row[attemptId] = answer.attemptId
+                row[answerMillis] = answer.answerMillis
             }
-        // Nothing deletes a vote, and this transaction holds its lock.
+        // Only its player's account going deletes a vote, and this transaction holds its lock.
         check(moved == 1) { "vote by $playerId on $questionId vanished mid-transaction" }
     }
 
@@ -190,3 +201,10 @@ object VoteStore {
         return tally.of(Questions.select(tally.columns).where { Questions.id eq questionId }.single())
     }
 }
+
+/**
+ * The time an answer took as the vote keeps it (CLAUDE.md §8b, *Personalization*): [sent] when it is
+ * from 0 to [WyrApi.Limits.MAX_ANSWER_MILLIS], and none otherwise. Never a refusal: a player who left the
+ * question on screen, or a clock that jumped, still answered.
+ */
+internal fun keptAnswerMillis(sent: Long?): Long? = sent?.takeIf { it in 0..WyrApi.Limits.MAX_ANSWER_MILLIS }

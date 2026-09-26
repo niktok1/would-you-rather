@@ -1,5 +1,9 @@
 package io.ntole.wyr.play
 
+import io.ntole.wyr.analytics.RecordingAnalytics
+import io.ntole.wyr.analytics.RecordingAnalytics.Recorded
+import io.ntole.wyr.core.domain.analytics.AnalyticsEvent
+import io.ntole.wyr.core.domain.analytics.AnalyticsProperty
 import io.ntole.wyr.core.domain.category.Category
 import io.ntole.wyr.core.domain.category.CategoryRepository
 import io.ntole.wyr.core.domain.error.DomainError
@@ -42,6 +46,7 @@ import kotlin.test.assertTrue
 @OptIn(ExperimentalCoroutinesApi::class)
 class PlayViewModelTest {
     private val dispatcher = StandardTestDispatcher()
+    private val analytics = RecordingAnalytics()
 
     @BeforeTest
     fun setUp() {
@@ -850,6 +855,197 @@ class PlayViewModelTest {
             assertEquals(PlayUiState.Asking(FOOD_QUESTION), viewModel.state.value)
         }
 
+    /** Each question shown, by its id and categories, never its text (CLAUDE.md §8g). */
+    @Test
+    fun `a question asked is reported by id and categories`() =
+        runTest(dispatcher) {
+            viewModel()
+            testScheduler.advanceUntilIdle()
+
+            assertEquals(
+                listOf(Recorded(AnalyticsEvent.QUESTION_SHOWN, about(QUESTION))),
+                analytics.named(AnalyticsEvent.QUESTION_SHOWN),
+            )
+        }
+
+    /** How long the player took, from the question shown to the tap, not to the server's answer. */
+    @Test
+    fun `an answer is reported with its side and how long it took`() =
+        runTest(dispatcher) {
+            val gate = CompletableDeferred<Unit>()
+            val viewModel = viewModel(votes = GatedVoteRepository(gate))
+            testScheduler.advanceUntilIdle()
+            testScheduler.advanceTimeBy(1_234)
+
+            viewModel.choose(Side.B)
+            testScheduler.advanceTimeBy(5_000)
+            gate.complete(Unit)
+            testScheduler.advanceUntilIdle()
+
+            val answered = analytics.named(AnalyticsEvent.QUESTION_ANSWERED).single()
+            assertEquals(
+                about(QUESTION) +
+                    mapOf(
+                        AnalyticsProperty.SIDE to "B",
+                        AnalyticsProperty.ANSWER_MS to 1_234L,
+                        AnalyticsProperty.AGREED_WITH_MAJORITY to false,
+                    ),
+                answered.properties,
+            )
+        }
+
+    /** Time on Account, on the categories or in the background is none the player took over the question. */
+    @Test
+    fun `an answer counts only the time the Play screen was shown`() =
+        runTest(dispatcher) {
+            val viewModel = viewModel()
+            testScheduler.advanceUntilIdle()
+            testScheduler.advanceTimeBy(1_000)
+            viewModel.screenHidden()
+            testScheduler.advanceTimeBy(600_000)
+            viewModel.screenShown()
+            testScheduler.advanceTimeBy(500)
+
+            viewModel.choose(Side.A)
+            testScheduler.advanceUntilIdle()
+
+            val answered = analytics.named(AnalyticsEvent.QUESTION_ANSWERED).single()
+            assertEquals(1_500L, answered.properties[AnalyticsProperty.ANSWER_MS])
+        }
+
+    /** A question loaded while the screen is hidden, as one from the categories played is, counts from its showing. */
+    @Test
+    fun `a skip counts from when the Play screen showed its question`() =
+        runTest(dispatcher) {
+            val viewModel = viewModel()
+            viewModel.screenHidden()
+            testScheduler.advanceUntilIdle()
+            testScheduler.advanceTimeBy(5_000)
+            viewModel.screenShown()
+            testScheduler.advanceTimeBy(300)
+
+            viewModel.skip()
+            testScheduler.advanceUntilIdle()
+
+            val skipped = analytics.named(AnalyticsEvent.QUESTION_SKIPPED).single()
+            assertEquals(300L, skipped.properties[AnalyticsProperty.DURATION_MS])
+        }
+
+    @Test
+    fun `a vote that failed is reported as shown and no answer`() =
+        runTest(dispatcher) {
+            val viewModel = viewModel(votes = FailingVoteRepository(DomainError.NETWORK))
+            testScheduler.advanceUntilIdle()
+
+            viewModel.choose(Side.A)
+            testScheduler.advanceUntilIdle()
+
+            assertEquals(emptyList(), analytics.named(AnalyticsEvent.QUESTION_ANSWERED))
+            assertEquals(listOf(shown(DomainError.NETWORK, "vote")), analytics.named(AnalyticsEvent.ERROR_SHOWN))
+        }
+
+    /** Already voted moves the player on and shows nothing, so it reports no failure. */
+    @Test
+    fun `a vote already counted is no failure shown`() =
+        runTest(dispatcher) {
+            val viewModel = viewModel(votes = FailingVoteRepository(DomainError.ALREADY_VOTED))
+            testScheduler.advanceUntilIdle()
+
+            viewModel.choose(Side.A)
+            testScheduler.advanceUntilIdle()
+
+            assertEquals(emptyList(), analytics.named(AnalyticsEvent.ERROR_SHOWN))
+        }
+
+    @Test
+    fun `a question that could not be read is reported as shown`() =
+        runTest(dispatcher) {
+            viewModel(questions = FailingQuestionRepository(DomainError.OUT_OF_QUESTIONS))
+            testScheduler.advanceUntilIdle()
+
+            assertEquals(
+                listOf(shown(DomainError.OUT_OF_QUESTIONS, "question")),
+                analytics.named(AnalyticsEvent.ERROR_SHOWN),
+            )
+        }
+
+    @Test
+    fun `a skip is reported with how long the question was shown and whether it was heard`() =
+        runTest(dispatcher) {
+            listOf(null to true, DomainError.NETWORK to false).forEach { (failure, recorded) ->
+                analytics.recorded.clear()
+                val viewModel = viewModel(questions = FakeQuestionRepository(skipFailure = failure))
+                testScheduler.advanceUntilIdle()
+                testScheduler.advanceTimeBy(700)
+
+                viewModel.skip()
+                testScheduler.advanceUntilIdle()
+
+                assertEquals(
+                    about(QUESTION) +
+                        mapOf(AnalyticsProperty.DURATION_MS to 700L, AnalyticsProperty.RECORDED to recorded),
+                    analytics.named(AnalyticsEvent.QUESTION_SKIPPED).single().properties,
+                    "$failure",
+                )
+            }
+        }
+
+    @Test
+    fun `a reaction set is reported with what it is and whether the question was answered`() =
+        runTest(dispatcher) {
+            val viewModel = viewModel()
+            testScheduler.advanceUntilIdle()
+
+            viewModel.react(Reaction.LIKE)
+            testScheduler.advanceUntilIdle()
+            viewModel.choose(Side.A)
+            testScheduler.advanceUntilIdle()
+            viewModel.react(Reaction.NONE)
+            testScheduler.advanceUntilIdle()
+
+            assertEquals(
+                listOf("like" to false, "none" to true),
+                analytics.named(AnalyticsEvent.REACTION_SET).map {
+                    it.properties[AnalyticsProperty.REACTION] to it.properties[AnalyticsProperty.ANSWERED]
+                },
+            )
+        }
+
+    @Test
+    fun `a reaction that failed is reported as shown`() =
+        runTest(dispatcher) {
+            val reactions = FakeReactionRepository()
+            reactions.answer = { _, _ -> throw WyrException(DomainError.RATE_LIMITED) }
+            val viewModel = viewModel(reactions = reactions)
+            testScheduler.advanceUntilIdle()
+
+            viewModel.react(Reaction.DISLIKE)
+            testScheduler.advanceUntilIdle()
+
+            assertEquals(emptyList(), analytics.named(AnalyticsEvent.REACTION_SET))
+            assertEquals(
+                listOf(shown(DomainError.RATE_LIMITED, "reaction")),
+                analytics.named(AnalyticsEvent.ERROR_SHOWN),
+            )
+        }
+
+    private fun about(question: Question): Map<String, Any?> =
+        mapOf(
+            AnalyticsProperty.QUESTION_ID to question.id,
+            AnalyticsProperty.CATEGORIES to question.categories.toList(),
+        )
+
+    private fun shown(
+        error: DomainError,
+        action: String,
+    ) = Recorded(
+        AnalyticsEvent.ERROR_SHOWN,
+        mapOf(
+            AnalyticsProperty.CODE to error.name,
+            AnalyticsProperty.ACTION to action,
+        ),
+    )
+
     private fun viewModel(
         questions: QuestionRepository = FakeQuestionRepository(),
         votes: VoteRepository = FakeVoteRepository(),
@@ -864,6 +1060,8 @@ class PlayViewModelTest {
         getPlayerStats = GetPlayerStats(players, NoOpSessionRepository),
         questions = questions,
         categoryList = categories,
+        analytics = analytics,
+        timeSource = dispatcher.scheduler.timeSource,
     )
 
     private companion object {

@@ -13,6 +13,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import io.ntole.wyr.analytics.tapped
 import io.ntole.wyr.language.LocalStrings
 import io.ntole.wyr.theme.WyrIcons
 import io.ntole.wyr.theme.WyrThemeAccessors
@@ -39,7 +40,7 @@ fun PlayTopBar(
     categories: @Composable () -> Unit,
 ) {
     TopBar(
-        start = { IconAction(WyrIcons.Home, LocalStrings.current.home, onHome) },
+        start = { IconAction(WyrIcons.Home, LocalStrings.current.home, "top_bar.home", onHome) },
         middle = categories,
         end = { AccountButton(onAccount) },
     )
@@ -87,22 +88,26 @@ private fun TopBar(
 
 @Composable
 private fun AccountButton(onClick: () -> Unit) {
-    IconAction(WyrIcons.Account, LocalStrings.current.account, onClick)
+    IconAction(WyrIcons.Account, LocalStrings.current.account, "top_bar.account", onClick)
 }
 
 @Composable
 private fun BackButton(onClick: () -> Unit) {
-    IconAction(WyrIcons.Back, LocalStrings.current.back, onClick)
+    IconAction(WyrIcons.Back, LocalStrings.current.back, "top_bar.back", onClick)
 }
 
-/** An icon button, named for a screen reader in the language shown, in the heading's accent. */
+/**
+ * An icon button, named for a screen reader in the language shown, in the heading's accent, whose
+ * taps the analytics count as [element]'s (CLAUDE.md §8g).
+ */
 @Composable
 private fun IconAction(
     icon: ImageVector,
     name: String,
+    element: String,
     onClick: () -> Unit,
 ) {
-    IconButton(onClick = onClick) {
+    IconButton(onClick = tapped(element, onClick = onClick)) {
         Icon(imageVector = icon, contentDescription = name, tint = WyrThemeAccessors.colors.headingAccent)
     }
 }

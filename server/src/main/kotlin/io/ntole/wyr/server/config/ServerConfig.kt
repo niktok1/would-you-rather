@@ -1,5 +1,9 @@
 package io.ntole.wyr.server.config
 
+import io.ntole.wyr.core.api.WyrApi
+import io.ntole.wyr.server.auth.PlayGamesClient
+import io.ntole.wyr.server.push.FcmServiceAccount
+
 /**
  * Everything the server reads from the environment.
  *
@@ -58,6 +62,26 @@ data class ServerConfig(
     val clientIpHeader: String?,
     /** True on Render, which sets `RENDER` to `true` for every service. Only a boot warning reads it. */
     val onRender: Boolean,
+    /**
+     * The Google service account the server sends pushes as (CLAUDE.md §8b, *Push notifications*), from
+     * `FCM_SERVICE_ACCOUNT_JSON`, the Firebase project's JSON key file whole, or null when that is unset
+     * or blank, which turns pushes off: devices still register their tokens, and nothing is sent. A value
+     * that is no service account's key fails at boot, naming the variable and none of its value.
+     */
+    val fcmServiceAccount: FcmServiceAccount? = null,
+    /**
+     * The game's OAuth client in Google Cloud, which exchanges a Play Games server auth code (CLAUDE.md
+     * §8b, *Play Games sign-in*), from `PLAY_GAMES_CLIENT_ID` and `PLAY_GAMES_CLIENT_SECRET`, or null
+     * when both are unset or blank, which turns Play Games sign-in off: its route is not served. One set
+     * without the other fails at boot, naming the missing one and neither value.
+     */
+    val playGames: PlayGamesClient? = null,
+    /**
+     * The oldest build the server serves on each platform, by its `WyrApi.ClientPlatform` name, from
+     * `MIN_CLIENT_VERSION_ANDROID`, `_IOS`, `_WEB` and `_DESKTOP` (CLAUDE.md §8b, *Minimum client
+     * version*). A platform left out, the default for every one, has no minimum.
+     */
+    val minClientVersions: Map<String, Int> = emptyMap(),
 ) {
     /** True when running against the throwaway in-memory database. */
     val isEphemeralDatabase: Boolean get() = jdbcUrl.startsWith("jdbc:h2:")
@@ -116,8 +140,59 @@ data class ServerConfig(
                 rateLimits = RateLimits.fromEnvironment(env),
                 clientIpHeader = env("CLIENT_IP_HEADER")?.let(::parseClientIpHeader),
                 onRender = env("RENDER") == "true",
+                fcmServiceAccount =
+                    env("FCM_SERVICE_ACCOUNT_JSON")?.takeIf { it.isNotBlank() }?.let(FcmServiceAccount::parse),
+                playGames = parsePlayGames(env("PLAY_GAMES_CLIENT_ID"), env("PLAY_GAMES_CLIENT_SECRET")),
+                minClientVersions = parseMinClientVersions(env),
             )
         }
+
+        /**
+         * The Play Games OAuth client [clientId] and [clientSecret] name, each trimmed, or null when both
+         * are unset or blank. One without the other is a half-made configuration, and fails at config
+         * load naming the one missing, rather than leaving sign-in off unnoticed. Neither value is ever in
+         * the message: the secret is a secret, and the id sits beside it.
+         */
+        internal fun parsePlayGames(
+            clientId: String?,
+            clientSecret: String?,
+        ): PlayGamesClient? {
+            val id = clientId?.trim()?.takeIf { it.isNotEmpty() }
+            val secret = clientSecret?.trim()?.takeIf { it.isNotEmpty() }
+            if (id == null && secret == null) return null
+            require(
+                id != null,
+            ) { "PLAY_GAMES_CLIENT_SECRET is set but PLAY_GAMES_CLIENT_ID is not; set both, or neither." }
+            require(
+                secret != null,
+            ) { "PLAY_GAMES_CLIENT_ID is set but PLAY_GAMES_CLIENT_SECRET is not; set both, or neither." }
+            return PlayGamesClient(clientId = id, clientSecret = secret)
+        }
+
+        /**
+         * Each platform's minimum build whose variable is set, a whole number of at least 1, trimmed;
+         * blank is unset. Anything else fails at config load, naming the variable, rather than leaving
+         * the minimum off unnoticed, or refusing every build of the platform.
+         */
+        internal fun parseMinClientVersions(env: (String) -> String?): Map<String, Int> =
+            MIN_CLIENT_VERSION_VARIABLES
+                .mapNotNull { (platform, variable) ->
+                    val raw = env(variable)?.trim()?.takeIf { it.isNotEmpty() } ?: return@mapNotNull null
+                    val minimum = raw.toIntOrNull()
+                    require(minimum != null && minimum >= 1) {
+                        "$variable is \"$raw\"; expected a whole build number of at least 1, or unset for no minimum."
+                    }
+                    platform to minimum
+                }.toMap()
+
+        /** Each platform's variable naming its minimum build. */
+        private val MIN_CLIENT_VERSION_VARIABLES: Map<String, String> =
+            mapOf(
+                WyrApi.ClientPlatform.ANDROID to "MIN_CLIENT_VERSION_ANDROID",
+                WyrApi.ClientPlatform.IOS to "MIN_CLIENT_VERSION_IOS",
+                WyrApi.ClientPlatform.WEB to "MIN_CLIENT_VERSION_WEB",
+                WyrApi.ClientPlatform.DESKTOP to "MIN_CLIENT_VERSION_DESKTOP",
+            )
 
         /**
          * Refuses an admin token no request could present, so moderation cannot be configured on and
