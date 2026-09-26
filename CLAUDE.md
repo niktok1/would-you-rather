@@ -581,6 +581,14 @@ decided in §8b).
     player and a unique constraint on the player here and the provider deciding every race (§4,
     `IdentityStoreTest` races both). The foreign key cascades, as push tokens' do: deleting a player
     deletes their links. Nothing else unlinks one.
+  - *The cost* is a link's: a Play Games player linked to nobody is linked, for good, to whichever
+    player the bearer names, one with a username included, so a leaked access token (15 minutes), or a
+    device whose Play Games profile is someone else's (a family tablet), gives that Google account
+    sign-in as the player on every device. For a registered player it is the one way an access token
+    alone becomes a lasting credential: registering again is `ALREADY_REGISTERED`, and a password
+    cannot be changed. Accepted for now, as the refresh token's copy is (*Refresh tokens*, above), for a casual
+    game that stores no sensitive personal data: *provisional — user decision* (§8b, *Linking Play
+    Games to an account*).
   - *A linked player is registered*, as one with a username is: they may submit (§8d, *Submitting*),
     and `GET /v1/me` says so (`PlayerStatsDto.playGamesLinked`). They may still register a username and
     password, to log in where there is no Play Games: on iOS and the web.
@@ -826,6 +834,13 @@ EncryptedSharedPreferences: enough for a game that stores nothing personal.
      restart each. A sign-in the server's log warns of as `403 PERMISSION_DENIED SERVICE_DISABLED`
      means the *Google Play Game Services* API is off in that Cloud project: enable it under *APIs &
      Services*.
+- **Linking Play Games to an account** — *provisional — user decision.* Built as the no-click sign-in
+  asks (§8a, *Play Games sign-in*, *The cost*): the bearer's access token alone links a Play Games
+  player linked to nobody to the bearer's player, a registered one included, and nothing unlinks it.
+  The options: keep it; for a player who already has a username, link only when the request also
+  carries something only their device holds, the refresh token say, or never link one and sign the
+  Play Games player in as a new player instead; and, whichever is chosen, a moderator's route to
+  unlink a player, which there is none of yet.
 - **Push notifications** — *built on the server 2026-09-26 (§8a, *Push tokens*); off until the user
   sets it up.* The server sends through Firebase Cloud Messaging as a Google service account, whose
   JSON key file `FCM_SERVICE_ACCOUNT_JSON` holds whole (`sync: false` in `render.yaml`, set by hand in

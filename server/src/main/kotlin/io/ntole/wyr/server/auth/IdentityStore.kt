@@ -28,7 +28,8 @@ object IdentityStore {
      * player the request's bearer token names, who keeps everything they have, unless that player is
      * linked to another of [provider]'s players already, or there is no caller, or the token outlived its
      * player: then to a new player, minted for it as a guest is. Either way it never fails once Google
-     * has vouched for the subject, whose code a sign-in has spent by then.
+     * has vouched for the subject, whose code a sign-in has spent by then. So the bearer's access token
+     * alone links a registered player too, for good: accepted for now (CLAUDE.md §8a, *The cost*; §8b).
      *
      * The reads only spare a write sure to fail (CLAUDE.md §4). What decides a race is the write, and the
      * two constraints on it. Two sign-ins racing to link one subject both find it linked to nobody, and
