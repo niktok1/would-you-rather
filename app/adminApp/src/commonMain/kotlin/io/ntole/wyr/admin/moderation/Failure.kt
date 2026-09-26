@@ -99,6 +99,8 @@ private fun describe(
         DomainError.USERNAME_TAKEN,
         DomainError.ALREADY_REGISTERED,
         DomainError.INVALID_LOGIN,
+        DomainError.PLAY_GAMES_CODE_REFUSED,
+        DomainError.PLAY_GAMES_UNAVAILABLE,
         -> {
             "Unexpected answer from the server: $error."
         }
