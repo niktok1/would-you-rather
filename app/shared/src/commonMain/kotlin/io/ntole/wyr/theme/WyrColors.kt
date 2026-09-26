@@ -29,6 +29,11 @@ data class WyrColors(
     /** The coin the points are shown with (CLAUDE.md §5b): its face, and its rim and ring on it. */
     val coin: Color,
     val onCoin: Color,
+    /**
+     * A failure's words, on the page or a surface: a pink of the brand's, darker in the light theme and
+     * lighter in the dark one than card A's, so it reads at AA (CLAUDE.md §5b). Material's `error`.
+     */
+    val error: Color,
     val isDark: Boolean,
 )
 
@@ -40,7 +45,6 @@ private val OptionA = Color(0xFFD4537E)
 private val OnOptionA = Color(0xFFFFFFFF)
 private val OptionB = Color(0xFFEF9F27)
 private val OnOptionB = Color(0xFF412402)
-private val Muted = Color(0xFF888780)
 
 /** The cards' text colours, faint: the reveal's bar's empty track on each. Constant, as the cards are. */
 private val RevealTrackOnA = Color(0x4DFFFFFF)
@@ -56,7 +60,8 @@ val WyrLightColors: WyrColors =
         surface = Color(0xFFFFFFFF),
         primaryText = Color(0xFF412402),
         headingAccent = Color(0xFF993556),
-        muted = Muted,
+        // Darker than the dark theme's grey, which on this page read at 3.4 to 1, under AA (CLAUDE.md §5b).
+        muted = Color(0xFF6F6E68),
         orPillText = Color(0xFF993556),
         orPillBackground = Color(0xFFFBEAF0),
         optionA = OptionA,
@@ -67,6 +72,7 @@ val WyrLightColors: WyrColors =
         revealTrackOnB = RevealTrackOnB,
         coin = Coin,
         onCoin = OnCoin,
+        error = Color(0xFFB83A65),
         isDark = false,
     )
 
@@ -76,7 +82,7 @@ val WyrDarkColors: WyrColors =
         surface = Color(0xFF221F23),
         primaryText = Color(0xFFF3EDEF),
         headingAccent = Color(0xFFED93B1),
-        muted = Muted,
+        muted = Color(0xFF888780),
         orPillText = Color(0xFFF4C0D1),
         orPillBackground = Color(0xFF3A2330),
         optionA = OptionA,
@@ -87,5 +93,6 @@ val WyrDarkColors: WyrColors =
         revealTrackOnB = RevealTrackOnB,
         coin = Coin,
         onCoin = OnCoin,
+        error = Color(0xFFEC7AA0),
         isDark = true,
     )

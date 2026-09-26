@@ -1,6 +1,7 @@
 package io.ntole.wyr.theme
 
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
@@ -24,40 +25,44 @@ fun WyrTheme(
 ) {
     val colors = if (darkTheme) WyrDarkColors else WyrLightColors
 
-    val materialScheme =
-        if (darkTheme) {
-            darkColorScheme(
-                primary = colors.headingAccent,
-                onPrimary = colors.pageBackground,
-                background = colors.pageBackground,
-                onBackground = colors.primaryText,
-                surface = colors.surface,
-                onSurface = colors.primaryText,
-                surfaceVariant = colors.orPillBackground,
-                onSurfaceVariant = colors.orPillText,
-                error = colors.optionA,
-            )
-        } else {
-            lightColorScheme(
-                primary = colors.headingAccent,
-                onPrimary = colors.surface,
-                background = colors.pageBackground,
-                onBackground = colors.primaryText,
-                surface = colors.surface,
-                onSurface = colors.primaryText,
-                surfaceVariant = colors.orPillBackground,
-                onSurfaceVariant = colors.orPillText,
-                error = colors.optionA,
-            )
-        }
-
     CompositionLocalProvider(
         LocalWyrColors provides colors,
         LocalWyrDimens provides WyrDefaultDimens,
     ) {
-        MaterialTheme(colorScheme = materialScheme, content = content)
+        MaterialTheme(colorScheme = materialSchemeOf(colors), content = content)
     }
 }
+
+/**
+ * [colors] mirrored into Material's scheme, so stock components take the palette. Internal, not
+ * private, so a test can hold every pair it makes to AA contrast (CLAUDE.md §5b, `WyrContrastTest`).
+ */
+internal fun materialSchemeOf(colors: WyrColors): ColorScheme =
+    if (colors.isDark) {
+        darkColorScheme(
+            primary = colors.headingAccent,
+            onPrimary = colors.pageBackground,
+            background = colors.pageBackground,
+            onBackground = colors.primaryText,
+            surface = colors.surface,
+            onSurface = colors.primaryText,
+            surfaceVariant = colors.orPillBackground,
+            onSurfaceVariant = colors.orPillText,
+            error = colors.error,
+        )
+    } else {
+        lightColorScheme(
+            primary = colors.headingAccent,
+            onPrimary = colors.surface,
+            background = colors.pageBackground,
+            onBackground = colors.primaryText,
+            surface = colors.surface,
+            onSurface = colors.primaryText,
+            surfaceVariant = colors.orPillBackground,
+            onSurfaceVariant = colors.orPillText,
+            error = colors.error,
+        )
+    }
 
 /** Shorthand accessors so screens read `WyrTheme.colors.optionA`. */
 object WyrThemeAccessors {

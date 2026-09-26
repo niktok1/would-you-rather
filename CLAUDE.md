@@ -316,11 +316,20 @@ or sp literal outside that file.
 | primary text     | `#412402`  | `#F3EDEF`  |
 | heading accent   | `#993556`  | `#ED93B1`  |
 | OR pill text/bg  | `#993556` on `#FBEAF0` | `#F4C0D1` on `#3A2330` |
-| muted (pts)      | `#888780`  | `#888780`  |
+| muted (pts)      | `#6F6E68`  | `#888780`  |
+| error (failures) | `#B83A65`  | `#EC7AA0`  |
 
-**Open check (not blocking):** verify every text/background pair meets WCAG AA contrast — the
-amber block (`#412402` on `#EF9F27`) and `muted` `#888780` on both backgrounds are the ones to
-confirm. Not yet done.
+**Contrast** (*checked 2026-09-26*): every pair the theme puts text or an icon on meets WCAG AA in
+both themes, 4.5 to 1 for text, and 3 to 1 for large text (18.66 bold, 24 otherwise) and for icons
+and a graphic's edge, computed from the tokens and from the Material scheme they are mirrored into
+(`materialSchemeOf`) by `WyrContrastTest`. Two tokens changed for it: `muted` in the light theme,
+`#888780` before, 3.4 to 1 on the page (now 4.9), and `error`, a token of its own, where Material's
+error was card A's pink, 3.7 to 1 on the light page and 4.1 on the dark surface (now 5.2 and 6.1).
+The amber block, `#412402` on `#EF9F27`, reads at 6.5. The coin's face on the light page is 2.1, but
+its rim, drawn round it, is 13.5. One pair is left to the user: white on card A's pink is 3.9 to 1,
+enough for its large text but not for an option shrunk below large text (§8d, *The Play screen*), and
+the brand's colours stay unless the user changes them (§8b, *Card A's contrast*). The Material
+defaults the scheme does not set (secondary, tertiary, outline and the rest) are Material's own.
 
 ---
 
@@ -899,7 +908,13 @@ EncryptedSharedPreferences: enough for a game that stores no sensitive personal 
   too leaves a spent token, refused at the next refresh. That takes two lost answers in a row, or a
   settling refresh (`refreshAs`, §8a) whose answer is lost when the stored token was already the
   previous one.
-- **WCAG AA contrast audit** — see §5b. Paused along with UI polish (§8d).
+- **WCAG AA contrast audit** — *done 2026-09-26* (§5b, *Contrast*), but for card A, below.
+- **Card A's contrast** — *provisional — user decision.* White on card A's pink, `#D4537E`, is 3.9 to
+  1: AA for large text, which an option is at its own 22 bold and the percentage at 34, but not for an
+  option a long question shrinks below 18.66 bold (§8d, *The Play screen*), which needs 4.5. The brand's
+  colours were left as they are (§5b). The options: keep it; card A a little deeper, `#C4466F`, white
+  on it 4.7 to 1, the one token to change, the dark theme's included; or the option's floor at 19,
+  large text, which cuts a 200-character option on an iPhone SE.
 - **Local questions** — *design decided 2026-09-26; not built.* The game is for Serbia first and
   more countries later. Most questions translate, but some matter only in one place: a region of
   several countries (the former Yugoslavia), one country, or one city. Such a question reaches only
