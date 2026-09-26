@@ -8,6 +8,7 @@ import io.ntole.wyr.core.domain.error.WyrException
 import io.ntole.wyr.core.domain.moderation.AddCategory
 import io.ntole.wyr.core.domain.moderation.AdminToken
 import io.ntole.wyr.core.domain.moderation.ApproveSubmission
+import io.ntole.wyr.core.domain.moderation.BlockAuthor
 import io.ntole.wyr.core.domain.moderation.DismissReports
 import io.ntole.wyr.core.domain.moderation.GetPendingSubmissions
 import io.ntole.wyr.core.domain.moderation.GetQuestions
@@ -19,6 +20,7 @@ import io.ntole.wyr.core.domain.moderation.RejectSubmission
 import io.ntole.wyr.core.domain.moderation.RenameCategory
 import io.ntole.wyr.core.domain.moderation.RestoreQuestion
 import io.ntole.wyr.core.domain.moderation.RetireQuestion
+import io.ntole.wyr.core.domain.moderation.UnblockAuthor
 import io.ntole.wyr.core.domain.submission.SubmissionStatus
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
@@ -62,6 +64,25 @@ interface ModerationActions {
     fun loadReports()
 
     fun dismiss(questionId: String)
+
+    /** Asks the moderator to confirm blocking [authorId], the author of [questionId] as [from] shows it. */
+    fun askToBlock(
+        authorId: String,
+        questionId: String,
+        from: Screen,
+    )
+
+    fun setBlockReason(text: String)
+
+    fun cancelBlock()
+
+    fun confirmBlock()
+
+    fun unblock(
+        authorId: String,
+        questionId: String,
+        from: Screen,
+    )
 
     fun toggleStatusFilter(status: SubmissionStatus)
 
@@ -110,8 +131,9 @@ interface ModerationActions {
  * the list of every question, read through [GetQuestions] a page at a time, whose approved questions
  * [RetireQuestion] takes out of play once the moderator confirms it and whose retired ones
  * [RestoreQuestion] puts back; and the reported questions, read through [GetReportedQuestions], whose
- * reports [DismissReports] clears and which are retired and restored as in the list. A pending
- * question in the list is decided as in the queue. The
+ * reports [DismissReports] clears and which are retired and restored as in the list. [BlockAuthor]
+ * blocks a question's author, once the moderator confirms it, and [UnblockAuthor] lets them submit
+ * again, from any of the three. A pending question in the list is decided as in the queue. The
  * categories, read through [GetCategories] before the queue or the list each Load reads, are what the
  * chips offer and what names a question's categories; [AddCategory] adds one and [RenameCategory]
  * puts its names right.
@@ -133,6 +155,8 @@ class ModerationViewModel(
     private val restoreQuestion: RestoreQuestion,
     private val getReportedQuestions: GetReportedQuestions,
     private val dismissReports: DismissReports,
+    private val blockAuthor: BlockAuthor,
+    private val unblockAuthor: UnblockAuthor,
     private val getCategories: GetCategories,
     private val addCategory: AddCategory,
     private val renameCategory: RenameCategory,
@@ -252,6 +276,75 @@ class ModerationViewModel(
             failure
         }
     }
+
+    /**
+     * Asks the moderator to confirm blocking [authorId], the author of [questionId] as [from] shows
+     * it, and to give the reason each of their pending questions is rejected with. Nothing is sent
+     * until [confirmBlock].
+     */
+    override fun askToBlock(
+        authorId: String,
+        questionId: String,
+        from: Screen,
+    ) {
+        if (!_state.value.canSend) return
+        _state.update { it.copy(blocking = BlockDraft(authorId, questionId, from)) }
+    }
+
+    override fun setBlockReason(text: String) = _state.update { it.copy(blocking = it.blocking?.copy(reason = text)) }
+
+    override fun cancelBlock() = _state.update { it.copy(blocking = null) }
+
+    /**
+     * Blocks the author [askToBlock] asked about, once [ModerationState.blockReason] holds a reason,
+     * and keeps where the server answered they stand. Then reads again whatever was read, the queue,
+     * the reported questions and the list as deep as it was shown, whatever became of it: a block
+     * rejects each of the author's pending questions, and one whose answer was lost may have. Not
+     * after a refusal every request would meet ([refusesEveryRequest]), which blocked nobody.
+     */
+    override fun confirmBlock() {
+        val current = _state.value
+        val draft = current.blocking ?: return
+        val reason = current.blockReason ?: return
+        if (!current.canSend) return
+        _state.update { it.copy(blocking = null) }
+        acting(Running(Action.BLOCK_AUTHOR, draft.questionId), draft.from) { token ->
+            val failure =
+                failureOf {
+                    val block = blockAuthor(token, draft.authorId, reason)
+                    _state.update {
+                        it.standing(block.authorId, block.isBlocked).noticed(draft.from, blockedNoticeOf(block))
+                    }
+                }
+            if (failure.refusesEveryRequest) return@acting failure
+            val read = _state.value
+            if (read.pending.submissions != null) readQueue(token)
+            if (read.reports.reports != null) readReports(token)
+            if (read.questions.questions != null) rereadList(token)
+            failure
+        }
+    }
+
+    /**
+     * Lets [authorId], the author of [questionId] as [from] shows it, submit again, and keeps where
+     * the server answered they stand. Nothing is read again: nothing the server lists shows it.
+     */
+    override fun unblock(
+        authorId: String,
+        questionId: String,
+        from: Screen,
+    ) = acting(Running(Action.UNBLOCK_AUTHOR, questionId), from) { token ->
+        failureOf {
+            val unblock = unblockAuthor(token, authorId)
+            val notice = "Unblocked author ${shortAuthorOf(unblock.authorId)}: they may submit again."
+            _state.update { it.standing(unblock.authorId, unblock.isBlocked).noticed(from, notice) }
+        }
+    }
+
+    private fun ModerationState.standing(
+        authorId: String,
+        blocked: Boolean,
+    ): ModerationState = copy(authors = authors + (authorId to blocked))
 
     /**
      * Lists [status] too, or no longer; none listed is every status. Never

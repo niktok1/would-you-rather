@@ -4,6 +4,7 @@ import io.ktor.client.engine.mock.MockEngine
 import io.ktor.client.engine.mock.MockEngineConfig
 import io.ktor.client.engine.mock.MockRequestHandleScope
 import io.ktor.client.engine.mock.respond
+import io.ktor.client.engine.mock.toByteArray
 import io.ktor.client.request.HttpRequestData
 import io.ktor.client.request.HttpResponseData
 import io.ktor.http.ContentType
@@ -12,6 +13,7 @@ import io.ktor.http.HttpStatusCode
 import io.ktor.http.headers
 import io.ktor.http.headersOf
 import io.ntole.wyr.core.api.WyrApi
+import io.ntole.wyr.core.author.AuthorBlockDto
 import io.ntole.wyr.core.data.moderation.DefaultModerationRepository
 import io.ntole.wyr.core.domain.error.DomainError
 import io.ntole.wyr.core.domain.moderation.ReportReason
@@ -216,6 +218,94 @@ class ModerationOverHttpTest {
         }
 
     @Test
+    fun `a block and an unblock go with the author's id and the server's answer is where they stand`() =
+        runTest(dispatcher) {
+            val viewModel =
+                openOver { request ->
+                    when (request.url.encodedPath) {
+                        WyrApi.Paths.ADMIN_AUTHOR_BLOCKS -> {
+                            val answer = AuthorBlockDto("p1", blocked = true, rejectedSubmissions = 1)
+                            respond(WyrJson.encodeToString(answer), HttpStatusCode.OK, JSON)
+                        }
+
+                        WyrApi.Paths.ADMIN_AUTHOR_UNBLOCKS -> {
+                            respond(
+                                WyrJson.encodeToString(AuthorBlockDto("p1", blocked = false)),
+                                HttpStatusCode.OK,
+                                JSON,
+                            )
+                        }
+
+                        else -> {
+                            respondQueue()
+                        }
+                    }
+                }
+            loadPending(viewModel)
+            assertEquals(
+                "p1",
+                viewModel.state.value.pending.submissions
+                    ?.single()
+                    ?.authorId,
+                "the queue names its author",
+            )
+
+            viewModel.askToBlock("p1", "q1", Screen.PENDING)
+            viewModel.setBlockReason(READY_REASONS[1])
+            viewModel.confirmBlock()
+            settle(viewModel)
+            assertEquals(mapOf("p1" to true), viewModel.state.value.authors)
+            viewModel.unblock("p1", "q1", Screen.PENDING)
+            settle(viewModel)
+
+            assertEquals(mapOf("p1" to false), viewModel.state.value.authors)
+            assertEquals(
+                listOf(
+                    WyrApi.Paths.ADMIN_SUBMISSIONS,
+                    WyrApi.Paths.ADMIN_AUTHOR_BLOCKS,
+                    WyrApi.Paths.ADMIN_SUBMISSIONS,
+                    WyrApi.Paths.ADMIN_AUTHOR_UNBLOCKS,
+                ),
+                requests.map { it.url.encodedPath },
+            )
+            assertEquals(
+                listOf("""{"authorId":"p1","reason":"${READY_REASONS[1]}"}""", """{"authorId":"p1"}"""),
+                requests.filter { it.url.encodedPath != WyrApi.Paths.ADMIN_SUBMISSIONS }.map {
+                    it.body
+                        .toByteArray()
+                        .decodeToString()
+                },
+            )
+        }
+
+    @Test
+    fun `a 404 naming no author reads as no such author`() =
+        runTest(dispatcher) {
+            val viewModel =
+                openOver { request ->
+                    when (request.url.encodedPath) {
+                        WyrApi.Paths.ADMIN_AUTHOR_UNBLOCKS -> {
+                            respondError(HttpStatusCode.NotFound, ErrorCode.AUTHOR_NOT_FOUND, "no player p1")
+                        }
+
+                        else -> {
+                            respondQueue()
+                        }
+                    }
+                }
+            loadPending(viewModel)
+
+            viewModel.unblock("p1", "q1", Screen.PENDING)
+            settle(viewModel)
+
+            val failure =
+                viewModel.state.value.pending.outcomes.failures["q1"]
+                    ?.failure
+            assertEquals(Failure.Refused(DomainError.AUTHOR_NOT_FOUND, detail = "no player p1"), failure)
+            assertTrue("No such author on this server (404)" in describe(failure as Failure), describe(failure))
+        }
+
+    @Test
     fun `a 429 reads with the wait its Retry-After names`() =
         runTest(dispatcher) {
             val viewModel =
@@ -298,6 +388,7 @@ class ModerationOverHttpTest {
                 categories = listOf("SUPERPOWERS"),
                 status = QuestionStatus.PENDING,
                 submittedAt = 1_790_000_000_000L,
+                authorId = "p1",
             )
         return respond(WyrJson.encodeToString(SubmissionListDto(listOf(submission))), HttpStatusCode.OK, JSON)
     }

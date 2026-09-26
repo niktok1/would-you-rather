@@ -8,6 +8,7 @@ import io.ntole.wyr.admin.ModerationApp
 import io.ntole.wyr.admin.moderation.FakeModeration.Companion.TOKEN
 import io.ntole.wyr.admin.settle
 import io.ntole.wyr.admin.tap
+import io.ntole.wyr.admin.texts
 import io.ntole.wyr.core.network.environment.WyrEnvironment
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -18,6 +19,8 @@ import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 
 /** The app's buttons and chips tapped as a moderator taps them, over the ViewModel and a scripted repository. */
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -53,6 +56,27 @@ class ModerationTapsTest {
             advance(scene)
 
             assertEquals(listOf("pending", "reject q1 ${READY_REASONS[1]}", "pending"), moderation.calls)
+        }
+
+    @Test
+    fun `Block author asks in a dialog and a ready reason tapped there is the one sent`() =
+        onScreen(Screen.REPORTS) { viewModel, scene ->
+            scene.tap("Load reports")
+            advance(scene)
+
+            // The first reported question is a player's: the seed after it has no author to block.
+            scene.tap("Block author...")
+            assertEquals(BlockDraft("author-of-q5", "q5", Screen.REPORTS), viewModel.state.value.blocking)
+            scene.tap(READY_REASONS[0])
+            scene.tap("Block")
+            advance(scene)
+
+            assertEquals(listOf("reports", "blockAuthor author-of-q5 ${READY_REASONS[0]}", "reports"), moderation.calls)
+            // Where they stand now, and the one way to change it.
+            val shown = scene.texts()
+            assertTrue("Author author-o · blocked" in shown, "$shown")
+            assertTrue("Unblock author" in shown, "$shown")
+            assertFalse("Block author..." in shown, "$shown")
         }
 
     /** The app on [screen], the token typed, drawn off screen at a desktop window's size. */

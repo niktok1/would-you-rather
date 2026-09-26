@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
@@ -25,21 +26,25 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import io.ntole.wyr.admin.moderation.BlockDraft
 import io.ntole.wyr.admin.moderation.CategoriesScreen
 import io.ntole.wyr.admin.moderation.ModerationActions
 import io.ntole.wyr.admin.moderation.ModerationState
 import io.ntole.wyr.admin.moderation.ModerationViewModel
 import io.ntole.wyr.admin.moderation.PendingScreen
 import io.ntole.wyr.admin.moderation.QuestionsScreen
+import io.ntole.wyr.admin.moderation.ReadyReasonChips
 import io.ntole.wyr.admin.moderation.ReportsScreen
 import io.ntole.wyr.admin.moderation.Retiring
 import io.ntole.wyr.admin.moderation.Screen
 import io.ntole.wyr.admin.moderation.TokenBar
+import io.ntole.wyr.admin.moderation.blockWarningOf
 import io.ntole.wyr.admin.moderation.isFull
 import io.ntole.wyr.admin.moderation.retireWarningOf
 import io.ntole.wyr.admin.theme.AdminDimens
 import io.ntole.wyr.admin.theme.AdminTheme
 import io.ntole.wyr.admin.theme.AdminType
+import io.ntole.wyr.core.domain.moderation.RejectionReason
 import io.ntole.wyr.core.network.environment.WyrEnvironment
 import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
@@ -102,6 +107,7 @@ fun ModerationApp(
                 }
             }
             state.retiring?.let { retiring -> RetireDialog(retiring, state, actions) }
+            state.blocking?.let { blocking -> BlockDialog(blocking, state, actions) }
         }
     }
 }
@@ -120,6 +126,48 @@ private fun RetireDialog(
         text = { Text(retireWarningOf(question)) },
         confirmButton = { Button(onClick = actions::confirmRetire) { Text("Retire") } },
         dismissButton = { TextButton(onClick = actions::cancelRetire) { Text("Cancel") } },
+    )
+}
+
+/**
+ * Block asks first, and for the reason each of the author's pending questions is rejected with, typed
+ * or one of the ready reasons picked and edited: a block refuses every submission of theirs until
+ * unblocked.
+ */
+@Composable
+private fun BlockDialog(
+    blocking: BlockDraft,
+    state: ModerationState,
+    actions: ModerationActions,
+) {
+    val refused = blocking.reason.isNotBlank() && state.blockReason == null
+    AlertDialog(
+        onDismissRequest = actions::cancelBlock,
+        title = { Text("Block this author?") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(AdminDimens.spaceSm)) {
+                Text(blockWarningOf(blocking.authorId))
+                // One line, as a rejection's reason is (provisional, CLAUDE.md §8b).
+                OutlinedTextField(
+                    value = blocking.reason,
+                    onValueChange = actions::setBlockReason,
+                    label = { Text("Reason for their pending questions") },
+                    supportingText = {
+                        Text("Shown to the author. One line, at most ${RejectionReason.MAX_LENGTH} characters.")
+                    },
+                    isError = refused,
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                ReadyReasonChips(blocking.reason, actions::setBlockReason)
+            }
+        },
+        confirmButton = {
+            Button(onClick = actions::confirmBlock, enabled = state.canSend && state.blockReason != null) {
+                Text("Block")
+            }
+        },
+        dismissButton = { TextButton(onClick = actions::cancelBlock) { Text("Cancel") } },
     )
 }
 

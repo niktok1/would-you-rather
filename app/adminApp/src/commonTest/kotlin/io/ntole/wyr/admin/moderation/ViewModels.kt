@@ -4,6 +4,7 @@ import io.ntole.wyr.core.domain.category.CategoryRepository
 import io.ntole.wyr.core.domain.category.GetCategories
 import io.ntole.wyr.core.domain.moderation.AddCategory
 import io.ntole.wyr.core.domain.moderation.ApproveSubmission
+import io.ntole.wyr.core.domain.moderation.BlockAuthor
 import io.ntole.wyr.core.domain.moderation.DismissReports
 import io.ntole.wyr.core.domain.moderation.GetPendingSubmissions
 import io.ntole.wyr.core.domain.moderation.GetQuestions
@@ -13,6 +14,7 @@ import io.ntole.wyr.core.domain.moderation.RejectSubmission
 import io.ntole.wyr.core.domain.moderation.RenameCategory
 import io.ntole.wyr.core.domain.moderation.RestoreQuestion
 import io.ntole.wyr.core.domain.moderation.RetireQuestion
+import io.ntole.wyr.core.domain.moderation.UnblockAuthor
 
 /** The app's ViewModel over [moderation] and [categories], every use case on them, as the wiring builds it. */
 fun moderationViewModelOver(
@@ -28,6 +30,8 @@ fun moderationViewModelOver(
         restoreQuestion = RestoreQuestion(moderation),
         getReportedQuestions = GetReportedQuestions(moderation),
         dismissReports = DismissReports(moderation),
+        blockAuthor = BlockAuthor(moderation),
+        unblockAuthor = UnblockAuthor(moderation),
         getCategories = GetCategories(categories),
         addCategory = AddCategory(moderation),
         renameCategory = RenameCategory(moderation),

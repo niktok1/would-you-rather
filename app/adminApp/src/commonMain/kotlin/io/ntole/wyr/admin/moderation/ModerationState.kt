@@ -38,6 +38,14 @@ data class ModerationState(
     val drafts: Map<String, DecisionDraft> = emptyMap(),
     /** The approved question the moderator asked to retire, waiting for them to confirm it. */
     val retiring: Retiring? = null,
+    /**
+     * Whether each author is blocked from submitting, by their opaque id, as the server last answered a
+     * block or an unblock of them since the token was typed: the one place it says (CLAUDE.md §8d,
+     * *Moderation*, *Authors*). An author not in it stands as nothing here says.
+     */
+    val authors: Map<String, Boolean> = emptyMap(),
+    /** The author the moderator asked to block, with the reason typed, waiting for them to confirm it. */
+    val blocking: BlockDraft? = null,
     /** The action in flight, or `null` when idle. */
     val running: Running? = null,
     /**
@@ -80,6 +88,12 @@ data class ModerationState(
             Screen.REPORTS -> reports.reports?.firstOrNull { it.question.id == questionId }?.question
             Screen.PENDING, Screen.CATEGORIES -> null
         }
+
+    /**
+     * The reason to block the author [blocking] names with, or `null` while the one typed breaks a
+     * rule the server holds it to, a rejection's, which keeps Block off.
+     */
+    val blockReason: RejectionReason? get() = blocking?.let { RejectionReason.of(it.reason) }
 
     /** What [screen] shows of its actions' outcomes. */
     fun outcomesOf(screen: Screen): Outcomes =
@@ -136,6 +150,17 @@ data class ReportList(
     /** Why the last read failed, or `null` once one works. */
     val failure: Failure? = null,
     val outcomes: Outcomes = Outcomes(),
+)
+
+/**
+ * The author [authorId] the moderator asked to block from the question [questionId] on [from], and the
+ * reason typed, exactly as typed, which each of their pending questions is rejected with.
+ */
+data class BlockDraft(
+    val authorId: String,
+    val questionId: String,
+    val from: Screen,
+    val reason: String = "",
 )
 
 /** The approved question [questionId] the moderator asked to retire from [from], until they confirm it. */
@@ -260,6 +285,8 @@ enum class Action {
     REJECT,
     LOAD_REPORTS,
     DISMISS_REPORTS,
+    BLOCK_AUTHOR,
+    UNBLOCK_AUTHOR,
     LOAD_QUESTIONS,
     LOAD_MORE,
     RETIRE,

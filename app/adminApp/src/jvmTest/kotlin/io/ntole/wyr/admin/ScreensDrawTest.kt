@@ -3,6 +3,7 @@ package io.ntole.wyr.admin
 import androidx.compose.ui.ImageComposeScene
 import androidx.compose.ui.unit.Density
 import io.ntole.wyr.admin.moderation.Action
+import io.ntole.wyr.admin.moderation.BlockDraft
 import io.ntole.wyr.admin.moderation.CategoryDraft
 import io.ntole.wyr.admin.moderation.CategoryList
 import io.ntole.wyr.admin.moderation.DecisionDraft
@@ -28,6 +29,7 @@ import io.ntole.wyr.core.domain.submission.SubmissionStatus
 import io.ntole.wyr.core.network.environment.WyrEnvironment
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.seconds
 
 /**
@@ -117,12 +119,58 @@ class ScreensDrawTest {
             )
 
         WyrEnvironment.entries.forEach { environment -> draw(environment, reports, Screen.REPORTS) }
+        val texts = draw(WyrEnvironment.LOCAL, reports, Screen.REPORTS, height = TALL)
+        listOf(
+            "Reports (4)",
+            "Reported by 4 players",
+            "Offensive 3 · Real person 1",
+            "A reason this build cannot name 2 · Other 1",
+            "No reason counted.",
+            "Dismissing...",
+            "Dismiss reports",
+            "Retire...",
+            "Restore",
+            "Seed",
+            "Block author...",
+        ).forEach { text -> assertTrue(text in texts, "\"$text\" is not in $texts") }
         // Retire waiting to be confirmed from the reports, its dialog over them.
         draw(
             WyrEnvironment.PROD,
             reports.copy(running = null, retiring = Retiring("q5", Screen.REPORTS)),
             Screen.REPORTS,
         )
+    }
+
+    @Test
+    fun `the app draws every author action and the block's dialog on every tab that shows authors`() {
+        val shown =
+            ModerationState(
+                adminToken = SecretText("typed"),
+                pending = PendingQueue(submissions = FakeModeration.QUEUE),
+                reports = ReportList(reports = FakeModeration.REPORTED),
+                questions = QuestionList(questions = FakeModeration.LISTED),
+                categories = CategoryList(FakeCategories.LISTED),
+                // One author blocked, one not, and the rest as nothing has said.
+                authors = mapOf("author-1" to true, "author-of-q5" to false),
+                running = Running(Action.UNBLOCK_AUTHOR, "q2"),
+            )
+        val blocking =
+            shown.copy(
+                running = null,
+                blocking = BlockDraft("author-2", "q2", Screen.PENDING, "not\none line"),
+            )
+
+        listOf(Screen.PENDING, Screen.REPORTS, Screen.QUESTIONS).forEach { screen ->
+            val texts = draw(WyrEnvironment.DEV, shown, screen, height = TALL)
+            assertTrue(texts.any { it.startsWith("Author ") }, "$screen names its authors: $texts")
+            draw(WyrEnvironment.PROD, blocking, screen)
+        }
+        val pending = draw(WyrEnvironment.DEV, shown, Screen.PENDING, height = TALL)
+        assertTrue("Author author-1 · blocked" in pending, "$pending")
+        assertTrue("Unblocking..." in pending, "$pending")
+        val questions = draw(WyrEnvironment.DEV, shown, Screen.QUESTIONS, height = TALL)
+        assertTrue("Seed" in questions, "$questions")
+        assertTrue("Block author..." in questions, "$questions")
     }
 
     @Test
@@ -146,22 +194,33 @@ class ScreensDrawTest {
         WyrEnvironment.entries.forEach { environment -> draw(environment, categories, Screen.CATEGORIES) }
     }
 
+    /**
+     * Draws [screen] in each theme and answers the texts it shows, from the top down: only what fits in
+     * [height], since a list composes only the rows on screen.
+     */
     private fun draw(
         environment: WyrEnvironment,
         state: ModerationState,
         screen: Screen,
-    ) {
-        listOf(false, true).forEach { dark ->
-            val scene =
-                ImageComposeScene(width = 1100, height = 1400, density = Density(1f)) {
-                    ModerationApp(environment, state, NoActions, screen, onScreenChange = {}, darkTheme = dark)
+        height: Int = 1400,
+    ): List<String> =
+        listOf(false, true)
+            .map { dark ->
+                val scene =
+                    ImageComposeScene(width = 1100, height = height, density = Density(1f)) {
+                        ModerationApp(environment, state, NoActions, screen, onScreenChange = {}, darkTheme = dark)
+                    }
+                try {
+                    val image = scene.render()
+                    assertEquals(1100, image.width)
+                    scene.texts()
+                } finally {
+                    scene.close()
                 }
-            try {
-                val image = scene.render()
-                assertEquals(1100, image.width)
-            } finally {
-                scene.close()
-            }
-        }
+            }.last()
+
+    private companion object {
+        /** Tall enough for every row these states list to be composed, and so read. */
+        const val TALL = 4000
     }
 }

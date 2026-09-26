@@ -183,6 +183,7 @@ class FakeModeration : ModerationRepository {
                 status = SubmissionStatus.PENDING,
                 rejectionReason = null,
                 submittedAt = Instant.fromEpochMilliseconds(1_790_000_000_000L),
+                authorId = "author-1",
             )
 
         val SECOND =
@@ -194,6 +195,7 @@ class FakeModeration : ModerationRepository {
                 status = SubmissionStatus.PENDING,
                 rejectionReason = null,
                 submittedAt = Instant.fromEpochMilliseconds(1_790_000_000_001L),
+                authorId = "author-2",
             )
 
         /** Oldest first, as the server lists the queue. */
@@ -201,13 +203,17 @@ class FakeModeration : ModerationRepository {
 
         val RETIRED_AT: Instant = Instant.fromEpochMilliseconds(1_790_000_900_000L)
 
-        /** A question as the list shows one, approved and a player's unless a test says otherwise. */
+        /**
+         * A question as the list shows one, approved and a player's unless a test says otherwise, by an
+         * author of its own.
+         */
         fun listed(
             id: String,
             optionA: String = "A of $id",
             optionB: String = "B of $id",
             status: SubmissionStatus = SubmissionStatus.APPROVED,
             isSeed: Boolean = false,
+            authorId: String? = if (isSeed) null else "author-of-$id",
         ): ModeratedQuestion =
             ModeratedQuestion(
                 id = id,
@@ -222,6 +228,7 @@ class FakeModeration : ModerationRepository {
                 rejectionReason = if (status == SubmissionStatus.REJECTED) "a duplicate" else null,
                 tally = Tally(votesA = 3, votesB = 1),
                 likeCount = 2,
+                authorId = authorId,
             )
 
         /** Newest first, as the server lists every question: one of each status, a seed among them. */

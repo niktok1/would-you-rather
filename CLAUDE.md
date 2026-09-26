@@ -733,6 +733,14 @@ EncryptedSharedPreferences: enough for a game that stores no sensitive personal 
   rule the moderator holds a question to, the topics rule naming the four topics the user banned.
   The options: keep them; reword or add to them, which is the one list; or none, the reason always
   typed.
+- **Where an author stands, in the moderation app** — *provisional — user decision.* The server says
+  whether an author is blocked only in answer to a block or an unblock (`AuthorBlockDto`), and none of
+  its lists says it, so the moderation app shows it only for an author it blocked or unblocked since
+  the token was typed, and offers both Block author and Unblock author for any other (§8d,
+  *Moderation*). Chosen so the client alone changes; an author blocked in an earlier session reads as
+  unknown until unblocked or blocked again, which changes nothing but rejects what they have pending.
+  The options: keep it; or the server sends `authorBlocked` beside `authorId` on the admin DTOs, a
+  field with a default, so no installed client breaks, and the app shows it for every author.
 - **Retiring a question** — *provisional — user decision.* The user asked for a way to take an
   approved question out of play and put it back (§8d, *Moderation*); the details are this build's.
   Built: a moderator retires an approved question, a seed included, and restores a retired one.
@@ -1942,7 +1950,8 @@ listed on the Account screen.
     through *Retiring*; nothing retires one by itself, however many report it: *provisional — user
     decision*, the other option being a threshold that retires it until a moderator looks.
     `ReportModerationFlowTest`.
-  - *Authors* (*built on the server 2026-09-26; the moderation app does not use them yet*): every
+  - *Authors* (*built on the server 2026-09-26; the moderation app blocks and unblocks from each tab
+    that shows authors*): every
     admin DTO names a question's author by an opaque id, `authorId`, the author's player id, which says
     nothing about them but which questions are theirs; never a username, and null for a seed and for
     a question whose author deleted their account (§8a).
@@ -2042,14 +2051,27 @@ listed on the Account screen.
     `OTHER`) and any categories, none being every one: Load reads its first page and Load more the
     next, at the filter the list was read at, with the cursor the page before gave, and changing the
     filter drops what was read at the one before. Each question shows its options, categories,
-    status, whether it is a seed, its votes, likes and dislikes, its times and a rejection's reason, and what
-    can be done where it stands: Retire an approved one, only once the moderator confirms it in a
-    dialog; Restore a retired one; decide a pending one as in the queue, from the same draft of
+    status, its author or that it is a seed, its votes, likes and dislikes, its times and a
+    rejection's reason, and what can be done where it stands: Retire an approved one, only once the
+    moderator confirms it in a dialog; Restore a retired one; decide a pending one as in the queue, from the same draft of
     categories and reason. A retirement or restoration puts the question it answers with in its
     row, or drops it once the list's filter no longer picks it: the server reads that answer as it
     reads a page's row. A decision, whose answer lacks the row's tally and likes, reads the list
     again as many pages deep as were shown, and so does a move that failed, so the list shows what
     the server holds without losing the moderator's place; a decision reads the queue again too.
+    *Authors* show on Pending, Reports and All questions alike (`AuthorControls`): each question
+    names its author by the first 8 characters of their opaque id (`shortAuthorOf`), or says it is a
+    seed, with Block author... and Unblock author beside it. Block asks first, in a dialog that says
+    what it does and takes the reason each of the author's pending questions is rejected with, typed
+    or a ready reason picked and edited, and sends it once it is a `RejectionReason`; then reads again
+    whatever was read, the queue, the reports and the list as deep as it was shown, whatever became
+    of it, since the block rejects what the author had pending. Unblock goes at once and reads
+    nothing again, since nothing the server lists shows it. The server says whether an author is
+    blocked only in answer to a block or an unblock (`AuthorBlock`), so the app keeps each answer for
+    as long as the token is held (`ModerationState.authors`; Lock forgets them) and names it beside
+    the author, `· blocked` or `· not blocked`, offering the one action that changes it; an author it
+    has no answer for offers both (provisional, §8b). A block's line says how many pending questions
+    it rejected, and `AUTHOR_NOT_FOUND` reads as no such author, their account maybe deleted.
     Nothing is read again after a 403 or a 429, which did nothing and would refuse the read too:
     after a wrong token the read would only spend another of the address's ten a minute, past which
     every admin request from it is refused (§8b). A failure shows where it happened: a read's above
@@ -2067,10 +2089,12 @@ listed on the Account screen.
     rename, whatever became of it (the list is no admin route, so the rule above for a 403 or a 429
     does not apply), and a failure shows under the form or the card it came from, a 409 as an id a
     category has already. Lock forgets what was typed for a category and keeps the categories read.
-    `ModerationViewModelTest`, `ReportsViewModelTest`, `QuestionListViewModelTest` and
-    `CategoriesViewModelTest` drive it over scripted repositories,
+    `ModerationViewModelTest`, `ReportsViewModelTest`, `AuthorsViewModelTest`,
+    `QuestionListViewModelTest` and `CategoriesViewModelTest` drive it over scripted repositories,
+    `ModerationTapsTest` taps its chips and buttons, a ready reason and the block's dialog among them,
     `ModerationOverHttpTest` over the real client configuration, and `ScreensDrawTest` draws every
-    screen off screen at a desktop window's size. The game's builds do not moderate at all.
+    screen off screen at a desktop window's size, and reads the Reports tab's and the author actions'
+    texts. The game's builds do not moderate at all.
 - **Home picks** *(decided 2026-09-26; built on the server, the client adopts later)*: the Home screen
   will show **two Play buttons**, one in each card's colour (§5b), both starting the game alike, each
   with how many times players have tapped it, to fill the screen as a question would. A tap pays and

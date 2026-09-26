@@ -34,8 +34,8 @@ import kotlin.time.Instant
 /**
  * Every question, seeds included, newest first (CLAUDE.md §8d, *Moderation*), at the statuses and
  * categories picked, a page at a time: each with its options, categories, status, where it came
- * from, its votes, likes and dislikes, its times and a rejected one's reason, and what can be done with it
- * where it stands. Retire asks first.
+ * from, its votes, likes and dislikes, its times and a rejected one's reason, its author with Block
+ * author and Unblock author, and what can be done with it where it stands. Retire asks first.
  */
 @Composable
 fun QuestionsScreen(
@@ -140,16 +140,8 @@ private fun QuestionCard(
             modifier = Modifier.fillMaxWidth().padding(AdminDimens.spaceMd),
             verticalArrangement = Arrangement.spacedBy(AdminDimens.spaceSm),
         ) {
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(AdminDimens.spaceSm),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                StatusBadge(question.status)
-                Text(
-                    text = if (question.isSeed) "Seed" else "Submitted by a player",
-                    style = MaterialTheme.typography.labelMedium,
-                )
-            }
+            // Where it came from, a seed or its author, is the author line's to say, beside its buttons.
+            StatusBadge(question.status)
             Text(text = "A: ${question.optionA}", style = MaterialTheme.typography.titleMedium)
             Text(text = "B: ${question.optionB}", style = MaterialTheme.typography.titleMedium)
             Text(
@@ -165,6 +157,7 @@ private fun QuestionCard(
                 Text(text = "Rejected because: $reason", style = MaterialTheme.typography.bodyMedium)
             }
             Text(text = question.id, style = AdminType.code, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            AuthorControls(question.authorId, question.isSeed, question.id, Screen.QUESTIONS, state, actions)
             QuestionActions(question, state, actions)
             state.questions.outcomes.failures[question.id]
                 ?.let { FailureLine(it.failure) }

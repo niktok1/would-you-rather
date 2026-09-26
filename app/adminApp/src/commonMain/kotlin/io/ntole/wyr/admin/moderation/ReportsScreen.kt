@@ -29,8 +29,9 @@ import kotlin.time.Instant
 /**
  * The questions players reported (CLAUDE.md §8d, *Moderation*, *Reports*), most reported first: each
  * with how many report it and why, its options, categories, status, votes and reactions, and what can
- * be done with it: Dismiss reports, which takes it off the list until a player reports it again, and
- * Retire, which asks first, or Restore. The reports are read again after every dismissal.
+ * be done with it: Dismiss reports, which takes it off the list until a player reports it again,
+ * Retire, which asks first, or Restore, and Block author, which asks first, or Unblock author. The
+ * reports are read again after every dismissal and block.
  */
 @Composable
 fun ReportsScreen(
@@ -107,6 +108,7 @@ private fun ReportCard(
                 style = MaterialTheme.typography.bodyMedium,
             )
             Text(text = question.id, style = AdminType.code, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            AuthorControls(question.authorId, question.isSeed, question.id, Screen.REPORTS, state, actions)
             FlowRow(
                 horizontalArrangement = Arrangement.spacedBy(AdminDimens.spaceSm),
                 verticalArrangement = Arrangement.spacedBy(AdminDimens.spaceXs),
