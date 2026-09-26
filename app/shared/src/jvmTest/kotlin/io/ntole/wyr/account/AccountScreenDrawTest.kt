@@ -2,6 +2,10 @@ package io.ntole.wyr.account
 
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.ImageComposeScene
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.graphics.toComposeImageBitmap
+import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
@@ -27,7 +31,10 @@ import io.ntole.wyr.nodes
 import io.ntole.wyr.sizeNeeded
 import io.ntole.wyr.tap
 import io.ntole.wyr.texts
+import io.ntole.wyr.theme.WyrDarkColors
+import io.ntole.wyr.theme.WyrLightColors
 import io.ntole.wyr.theme.WyrTheme
+import kotlin.math.abs
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -269,6 +276,47 @@ class AccountScreenDrawTest {
             }
         }
     }
+
+    /**
+     * The dialog Delete account asks in is the theme's (CLAUDE.md §5b), never Material's own: the
+     * surface behind its line, and its line in the primary text colour, in both themes.
+     */
+    @Test
+    fun `the deletion's dialog is drawn in the theme's colours`() {
+        listOf(WyrLightColors, WyrDarkColors).forEach { colors ->
+            val delete = stringsOf(Language.DEFAULT).accountScreens.deleteAccount
+            val state = AccountState(stats = GUEST, submissions = emptyList())
+            val scene = scene(state, Language.DEFAULT, dark = colors.isDark)
+            try {
+                scene.tap(delete.button)
+                val line = scene.nodes().single { delete.warning in it.texts }.boundsInRoot
+                // The dialog fades in: draw it frame by frame until it has.
+                (1..FRAMES_TO_SHOW).forEach { frame -> scene.render(frame * FRAME) }
+                val pixels = scene.render(FRAMES_TO_SHOW * FRAME).toComposeImageBitmap().toPixelMap()
+
+                // Inside the dialog's padding, just before its line starts.
+                val behind = pixels[line.left.toInt() - DIALOG_INSET, line.center.y.toInt()]
+                assertEquals(colors.surface.toArgb(), behind.toArgb(), "dark: ${colors.isDark}")
+                // The line's most inked pixel, the one farthest from the surface, is the primary text's.
+                val ink =
+                    (line.top.toInt() until line.bottom.toInt())
+                        .flatMap { y -> (line.left.toInt() until line.right.toInt()).map { x -> pixels[x, y] } }
+                        .maxBy { distance(it, colors.surface) }
+                assertTrue(
+                    distance(ink, colors.primaryText) < distance(ink, colors.orPillText),
+                    "dark: ${colors.isDark}: the line is drawn in $ink",
+                )
+            } finally {
+                scene.close()
+            }
+        }
+    }
+
+    /** How far apart two colours are, channel by channel. */
+    private fun distance(
+        one: Color,
+        other: Color,
+    ): Float = abs(one.red - other.red) + abs(one.green - other.green) + abs(one.blue - other.blue)
 
     /** A deletion that failed says so, over the row, in the screen's words; offline as offline. */
     @Test
@@ -684,6 +732,13 @@ class AccountScreenDrawTest {
         /** An iPhone SE (667 high) less its status bar (20) and the top bar above the screen (48). */
         const val SHORT_PHONE_WIDTH = 375
         const val SHORT_PHONE_HEIGHT = 599
+
+        /** How far before a dialog's line its background is read, well inside its padding of 24. */
+        const val DIALOG_INSET = 8
+
+        /** A frame at 60 a second, in nanoseconds, and a second of them, which a dialog's fade takes less than. */
+        const val FRAME = 16_666_667L
+        const val FRAMES_TO_SHOW = 60
 
         val DEV = WyrEnvironment.DEV
 

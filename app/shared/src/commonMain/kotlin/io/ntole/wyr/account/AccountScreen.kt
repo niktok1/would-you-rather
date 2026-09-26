@@ -178,6 +178,9 @@ private fun DeleteAccount(
         AlertDialog(
             onDismissRequest = { confirming = false },
             text = { Text(strings.warning) },
+            // The theme's, not Material's own container and text colours (CLAUDE.md §5b).
+            containerColor = colors.surface,
+            textContentColor = colors.primaryText,
             confirmButton = {
                 TextButton(
                     onClick =

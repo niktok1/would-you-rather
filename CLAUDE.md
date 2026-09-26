@@ -275,7 +275,9 @@ hunting through UI files.
 Implemented as `WyrTheme` in `:app:shared` (`io.ntole.wyr.theme`): `WyrColors` + `WyrDimens` +
 `WyrTypeScale`, exposed through `LocalWyrColors`/`LocalWyrDimens` and read via
 `WyrThemeAccessors`. The theme also mirrors its palette into a Material 3 `ColorScheme` so stock
-Material components inherit it instead of falling back to Material defaults. Adding a theme =
+Material components inherit it instead of falling back to Material defaults. It mirrors none of the
+`surfaceContainer` slots, so a component drawn on one, a dialog or a menu, is given `WyrColors.surface`
+by name (the deletion's dialog; the language menu's `DropdownMenu` not yet). Adding a theme =
 adding another `WyrColors` value.
 
 **Icons** are drawn by hand in the theme too, as `ImageVector`s in `WyrIcons`, a few strokes each on
@@ -1332,8 +1334,10 @@ orientation, in common code alone:
   the menu until the switch took its place), with a quiet **Обриши налог** at the start of Log out's
   row, for a guest and a registered player alike (*Deleting*, below); and the server line, outside PROD.
 - *Deleting* (*built 2026-09-26*, §8a *Deleting an account*): **Обриши налог**, muted
-  (`WyrColors.muted`), opens a dialog of one line, *Налог и све у њему нестаће заувек.*, with
-  **Обриши** (in the error colour) and *Откажи* (`Strings.cancel`); only Обриши deletes
+  (`WyrColors.muted`), opens a dialog of one line, *Налог и све у њему нестаће заувек.*, on the
+  theme's surface in its primary text colour, given it by name since the `ColorScheme` mirrors no
+  `surfaceContainerHigh` (§5b), with **Обриши** (in the error colour) and *Откажи*
+  (`Strings.cancel`); only Обриши deletes
   (`AccountViewModel.deleteAccount`, `AccountAction.DELETE`). Deleted, the screen reads the player
   again and shows the fresh guest, on the same screen; a failure says so over the row, in the
   screen's words (offline, a rate limit, or anything else), and forgets nothing. It is offered once a
