@@ -167,6 +167,18 @@ object WyrIcons {
     }
 
     /**
+     * More: three dots one over the other, for the Play screen's menu about the question on screen
+     * (CLAUDE.md §8d, *The Play screen*, *Reports*): report it, or hide it or its author.
+     */
+    val More: ImageVector by lazy {
+        icon("More") {
+            path(fill = SolidColor(Color.Black)) {
+                listOf(5f, 12f, 19f).forEach { y -> dot(x = SIZE / 2, y = y) }
+            }
+        }
+    }
+
+    /**
      * A thumb up, or turned over top to bottom for a thumb down: the cuff on the left, and the hand
      * beside it, its thumb pointing up out of it, or down.
      */
@@ -199,6 +211,17 @@ object WyrIcons {
         moveTo(middle - radius, middle)
         arcTo(radius, radius, 0f, isMoreThanHalf = true, isPositiveArc = true, x1 = middle + radius, y1 = middle)
         arcTo(radius, radius, 0f, isMoreThanHalf = true, isPositiveArc = true, x1 = middle - radius, y1 = middle)
+        close()
+    }
+
+    /** A dot of [DOT_RADIUS] about ([x], [y]), in two half turns. */
+    private fun PathBuilder.dot(
+        x: Float,
+        y: Float,
+    ) {
+        moveTo(x - DOT_RADIUS, y)
+        arcTo(DOT_RADIUS, DOT_RADIUS, 0f, isMoreThanHalf = true, isPositiveArc = true, x1 = x + DOT_RADIUS, y1 = y)
+        arcTo(DOT_RADIUS, DOT_RADIUS, 0f, isMoreThanHalf = true, isPositiveArc = true, x1 = x - DOT_RADIUS, y1 = y)
         close()
     }
 
@@ -247,4 +270,7 @@ object WyrIcons {
 
     /** The ring stamped in a coin's face. */
     private const val COIN_RING_RADIUS = 5f
+
+    /** Each of [More]'s dots, a little wider than a stroke. */
+    private const val DOT_RADIUS = 2f
 }

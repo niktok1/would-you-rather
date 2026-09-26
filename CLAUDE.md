@@ -283,8 +283,9 @@ left) for the top bars (§8d, *Navigation*); for the Play screen `Skip` (a trian
 `ChevronDown`, the small chevron beside the categories played, and the reactions' `ThumbUp` and
 `ThumbUpFilled`, and `ThumbDown` and `ThumbDownFilled`, the thumb up turned over (§8d, *The Play
 screen*, *Reactions*); `CoinFace` and `CoinMark`, a disc and the rim and ring on it, the points' coin
-wherever they show (§8f, *Numbers and symbols*); `Globe` for the language menu; and `Players`, two
-players, heading My questions' answers (§8d, *The Account screen*). They carry no colour of their
+wherever they show (§8f, *Numbers and symbols*); `Globe` for the language menu; `Players`, two
+players, heading My questions' answers (§8d, *The Account screen*); and `More`, three dots one over the
+other, the Play screen's menu about the question (§8d, *The Play screen*, *Reports*). They carry no colour of their
 own: `Icon` tints each from `WyrColors`, so they follow the light and dark themes as text does. The
 coin is two icons drawn one on the other, the face in `WyrColors.coin` and the mark in
 `WyrColors.onCoin`, the brand's amber and its dark brown, the same in both themes as the cards are
@@ -781,6 +782,16 @@ EncryptedSharedPreferences: enough for a game that stores no sensitive personal 
   screens before it and the Account screens' *Нешто није у реду. Покушај поново.* already used. The
   options: keep it; or *Пробај опет*, a little shorter, in `Strings.tryAgain` and that sentence
   both.
+- **After a report or a hide** — *provisional — user decision.* Each of the Play screen's menu
+  choices (§8d, *The Play screen*) goes on to the next question once the server has it, with nothing
+  said, as a skip does: the question going is the acknowledgement, the least in the way. The options:
+  keep it; or a brief line in the row's slot on the next question, *Пријављено.* or *Скривено.*, until
+  the next action.
+- **The question's menu on the top bar** — *provisional — user decision.* The ⋮ stands before the
+  account icon, so the account icon keeps its place on every bar, and the categories played give up
+  48 of their width and the bar's exact middle (223 of 375 left them). The options: keep it; the ⋮
+  last, after the account icon, where Android puts an overflow menu; or an empty 48 beside home, to
+  keep the categories in the middle, at 175 wide.
 - **What submitting cost, on the Account screen** — *provisional — user decision.* The Account card
   shows the points and the questions answered and not `pointsSpent` (§8d, *Stats*), and the cost
   shows on the Submit form's button. The options: keep it; or a stat on the card, what was spent.
@@ -1369,7 +1380,8 @@ orientation, in common code alone:
 
 **The Play screen** (`io.ntole.wyr.play`; the user's layout, *decided 2026-09-25*, rearranged
 2026-09-26) asks a question and reveals its tally, holds Skip and the reactions, and opens the
-Categories screen from its top bar (*Skipping*, *Reactions* and *Categories*, below):
+Categories screen and the question's menu from its top bar (*Skipping*, *Reactions*, *Reports* and
+*Categories*, below):
 - Two answer cards in the brand colours (§5b) and, between them, **one row** (on a wide screen the
   cards side by side over it, *Wide screens*; the user: reactions "in the middle and points to
   left"): on the left the player's points, the coin and the number (`PointsAmount`, §8f); in the
@@ -1377,12 +1389,30 @@ Categories screen from its top bar (*Skipping*, *Reactions* and *Categories*, be
   how many hold it, before answering and after; and on the right **Skip** while the question is not
   answered yet (*Skipping*), its place kept empty in the reveal so nothing in the row moves. The
   **categories played**, *Све* or their names, cut to one line, with a small chevron, are in the middle
-  of the **top bar** (the user: "category goes to top bar in middle"), between home and the account
-  icon (`PlayTopBar`, `CategoriesPlayed`), and open the Categories screen. No title and no *OR*.
+  of the **top bar** (the user: "category goes to top bar in middle"), between home and the question's
+  **menu**, a ⋮ before the account icon (`PlayTopBar`, `CategoriesPlayed`, `QuestionMenu`), and open
+  the Categories screen. No title and no *OR*.
+- *The question's menu* (*built 2026-09-26*; the user: report "in the least obstructive way"): the ⋮
+  (`WyrIcons.More`, named *Опције питања* for a screen reader) opens a small menu about the question on
+  screen, asked or revealed: **Пријави питање**, which lists in its place the five reasons, one tap
+  each (*Увредљиво је*, *Помиње стварну особу*, *Реклама или спам*, *Нема шта да се бира*, *Нешто
+  друго*: `QuestionMenuStrings`, `ReportReason`'s five); **Не приказуј ми ово питање**; and **Не
+  приказуј питања овог аутора** (*Reports*). A choice closes the menu and goes to
+  `PlayViewModel.pickFromMenu`, and once the server has it the next question shows, with nothing more
+  said, as after a skip: each hides the question for good (*provisional — user decision*, §8b). One
+  that failed leaves the question on screen and says why in the row's failure slot, as a reaction's
+  does (`OnQuestion.rowError`, which a reaction's failure shares). Off, and drawn muted, with no
+  question on screen and while anything is in flight (`canUseMenu`; `isHiding` while its own request
+  is). The categories played take what width the bar's four icons leave, 223 of 375, cut on their one
+  line, and no longer stand in the bar's exact middle, the end holding two icons to the start's one.
+  `QuestionMenuDrawTest` opens it in both themes and every language and taps each choice and reason;
+  `TopBarsDrawTest` holds Play's bar to 48 and 375 wide with it; `PlayViewModelTest` drives each
+  choice, from the reveal too, its failure and the one action at a time; `AppNavigationTest` reports a
+  question through it and moves on.
 - *The categories' names* are the server's, in the language shown (`categoryName` in
   `io.ntole.wyr.language`, §8f), in the order the server lists them, and one not read yet by its id,
-  after the rest (`categoriesPlayed`). On the top bar they have the width home and the account icon
-  leave them, about 250 of 375, where the row gave them 115.
+  after the rest (`categoriesPlayed`). On the top bar they have the width home, the menu and the
+  account icon leave them, about 223 of 375, where the row gave them 115.
 - *The row's arrangement* (`CentredRow`): Skip gets its whole width first, then the thumbs, and the
   points what they leave, no wider than `WyrDimens.playRowStartMaxWidth` (88). The thumbs stand in
   the middle of the screen while the points leave them room, and move right only as far as a wider
@@ -1768,10 +1798,20 @@ listed on the Account screen.
     points between the cards show it from the next vote on, or from the next time the Play screen is
     shown, which reads them again. The thumbs, drawn by hand (§5b), took the heart's place.
 - **Reports** *(decided 2026-09-26, what Google Play asks of a game with players' questions: a way to
-  report one and to block its author; built on the server, no client yet)*: a player may **report** a
+  report one and to block its author; built on the server and the game)*: a player may **report** a
   question to the moderator, **hide** it, or **hide its author**, and each hides from that player
-  alone, for good. The client will offer them in a list on the Play screen that stays out of the way
-  (the user). Comments on questions are not built: later, if at all.
+  alone, for good. The game offers them in the menu on the Play screen's top bar, which stays out of
+  the way (the user; *The Play screen*, the question's menu). Comments on questions are not built:
+  later, if at all.
+  - *The client* is `ReportRepository` in `:core:domain` (`io.ntole.wyr.core.domain.report`), behind
+    `ReportQuestion`, `HideQuestion` and `HideAuthor`, each ensuring a session first, over a domain
+    `ReportReason` of its own, the wire's five without its `UNKNOWN`, which no report may give
+    (`ReportMapper`). `DefaultReportRepository` sends each through `withSessionRecovery`, as reactions
+    go, over `ReportApi`; a resend is safe, a report replacing its reason and a hide changing nothing.
+    `HideAuthor` then drops the question queue (`QuestionRepository.reset`), which may hold the
+    author's other questions, fetched before: the client never knows who wrote a question, so the
+    whole queue goes. `ReportUseCasesTest`, `DefaultReportRepositoryTest` (over `PlayServer`, a fake of
+    its own beside `FakeServer`).
   - *Reporting* is `POST /v1/reports` (`WyrApi.Paths.REPORTS`) with a `ReportRequest`, the question
     and a `ReportReason`: `OFFENSIVE`, `REAL_PERSON`, `SPAM`, `NOT_A_CHOICE` or `OTHER`, a growable
     wire enum with `UNKNOWN` (§5), which, or no reason at all, is 400. A player holds **one report per
@@ -2362,6 +2402,7 @@ the same events. The moderation app sends none.
   `$screen_name` says where. An element is `screen.what`, lower case and underscores: `home.play`;
   `top_bar.home`, `.account`, `.back`, `.categories`; `play.card_a` and `.card_b` (with `answered`,
   whether the tap went on from the reveal), `.like`, `.dislike`, `.skip`, `.try_again`;
+  `question_menu.open`, `.report`, `.reason` (with its `reason`), `.hide_question`, `.hide_author`;
   `account.open_auth`, `.log_out`, `.try_again`; `my_questions.new_question`, `.first_question`,
   `.try_again`; `language.menu` and `language.option` (with its `language` tag); `auth.register`,
   `.show_password`, `.to_log_in`, `.log_in`, `.log_in_anyway`, `.cancel`, `.to_register`,
@@ -2376,7 +2417,9 @@ the same events. The moderation app sends none.
     once the vote is counted (`side`, `answer_ms` from the question shown to the tap, a retry's the
     first tap's, and `agreed_with_majority`); `question_skipped` (`duration_ms` on it, and
     `recorded`, whether the server heard); `reaction_set` (`reaction`, `like`, `dislike` or `none`,
-    and `answered`). The time is the app's `TimeSource.WithComparableMarks` (`uiModule`), and a
+    and `answered`); and from the question's menu, once the server has each, `question_reported`
+    (`reason`, `offensive`, `real_person`, `spam`, `not_a_choice` or `other`, and `answered`),
+    `question_hidden` and `author_hidden` (`answered`). The time is the app's `TimeSource.WithComparableMarks` (`uiModule`), and a
     question's counts only while the Play screen is shown and the app in the foreground
     (`ScreenStopwatch`, which the Play screen's `LifecycleStartEffect` stops and starts), so a detour
     to Account or the categories, or an hour in the background, is not time taken over it.
@@ -2394,7 +2437,8 @@ the same events. The moderation app sends none.
     (`categories`, `count`, none being every category); what is played already sends nothing.
   - *Language* (`LanguageViewModel`): `language_changed` (`language`, its tag).
   - `error_shown` for every failure a screen shows (`code`, the `DomainError`'s name, and `action`:
-    `question`, `vote`, `reaction`, `account`, `my_questions`, `register`, `log_in`, `log_out`,
+    `question`, `vote`, `reaction`, `report`, `hide_question`, `hide_author`, `account`,
+    `my_questions`, `register`, `log_in`, `log_out`,
     `submit`, `points`, `categories`), but a vote already counted, which moves on and shows nothing,
     and a skip, which says nothing.
   - The ViewModel tests hold each, and that nothing typed is ever in one.

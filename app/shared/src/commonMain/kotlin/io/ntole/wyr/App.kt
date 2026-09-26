@@ -43,7 +43,9 @@ import io.ntole.wyr.navigation.SystemBack
 import io.ntole.wyr.play.CategoriesPlayed
 import io.ntole.wyr.play.PlayScreen
 import io.ntole.wyr.play.PlayViewModel
+import io.ntole.wyr.play.QuestionMenu
 import io.ntole.wyr.play.canChangeCategories
+import io.ntole.wyr.play.canUseMenu
 import io.ntole.wyr.play.categoriesPlayed
 import io.ntole.wyr.submit.SubmitScreen
 import io.ntole.wyr.submit.SubmitViewModel
@@ -309,7 +311,12 @@ private fun ColumnScope.Play(
         onStopOrDispose { viewModel.screenHidden() }
     }
 
-    PlayTopBar(onHome = onHome, onAccount = onAccount) {
+    PlayTopBar(
+        onHome = onHome,
+        onAccount = onAccount,
+        // The menu about the question on screen: report it, or hide it or its author (CLAUDE.md §8d).
+        menu = { QuestionMenu(enabled = state.canUseMenu, onPick = viewModel::pickFromMenu) },
+    ) {
         CategoriesPlayed(
             text =
                 categoriesPlayed(

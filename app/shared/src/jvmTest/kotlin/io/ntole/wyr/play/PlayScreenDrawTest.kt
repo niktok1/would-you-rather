@@ -244,7 +244,7 @@ class PlayScreenDrawTest {
                     assertEquals(
                         heightNeeded(asked, WIDTH, language = language, fontScale = fontScale),
                         heightNeeded(
-                            asked.copy(reactionError = error),
+                            asked.copy(rowError = error),
                             WIDTH,
                             language = language,
                             fontScale = fontScale,
@@ -254,7 +254,7 @@ class PlayScreenDrawTest {
                     assertEquals(
                         heightNeeded(revealed, WIDTH, language = language, fontScale = fontScale),
                         heightNeeded(
-                            revealed.copy(reactionError = error),
+                            revealed.copy(rowError = error),
                             WIDTH,
                             language = language,
                             fontScale = fontScale,
@@ -555,7 +555,7 @@ class PlayScreenDrawTest {
         Language.entries.forEach { language ->
             val strings = stringsOf(language).playScreen
             REACTION_FAILURES.forEach { error ->
-                withRow(WIDTH - 2 * PADDING, language = language, reactionError = error) { scene ->
+                withRow(WIDTH - 2 * PADDING, language = language, rowError = error) { scene ->
                     val failure = failureText(assertNotNull(error), strings)
                     assertTrue(failure in scene.texts(), "$error in $language")
                     assertFalse(POINTS_SHOWN in scene.descriptions(), "the points make way in $language")
@@ -782,7 +782,7 @@ class PlayScreenDrawTest {
                                     MiddleRow(
                                         question = question,
                                         points = 12345,
-                                        reactionError = error,
+                                        rowError = error,
                                         idle = true,
                                         onReact = {},
                                         onSkip = onSkip,
@@ -956,12 +956,12 @@ class PlayScreenDrawTest {
 
     /**
      * [test] on the row alone, [width] wide, in [language], asked with Skip: [POINTS], or how a
-     * reaction failed, [reactionError], and [LIKES] likes and [DISLIKES] dislikes.
+     * reaction failed, [rowError], and [LIKES] likes and [DISLIKES] dislikes.
      */
     private fun withRow(
         width: Int,
         language: Language = Language.DEFAULT,
-        reactionError: DomainError? = null,
+        rowError: DomainError? = null,
         test: (ImageComposeScene) -> Unit,
     ) {
         val scene =
@@ -971,7 +971,7 @@ class PlayScreenDrawTest {
                         MiddleRow(
                             question = REACTED_TO,
                             points = POINTS,
-                            reactionError = reactionError,
+                            rowError = rowError,
                             idle = true,
                             onReact = {},
                             onSkip = {},
@@ -1236,7 +1236,7 @@ class PlayScreenDrawTest {
                 PlayUiState.Asking(question),
                 PlayUiState.Asking(question, isSubmitting = true),
                 PlayUiState.Asking(question.copy(likeCount = 1, myReaction = Reaction.LIKE), isReacting = true),
-                PlayUiState.Asking(question.copy(likeCount = 12), reactionError = DomainError.NETWORK),
+                PlayUiState.Asking(question.copy(likeCount = 12), rowError = DomainError.NETWORK),
                 PlayUiState.Asking(question.copy(likeCount = 4, dislikeCount = 2, myReaction = Reaction.DISLIKE)),
                 PlayUiState.Revealed(question, OUTCOME),
                 PlayUiState.Revealed(question, OUTCOME.copy(pointsAwarded = 0, replayed = true)),
@@ -1245,8 +1245,8 @@ class PlayScreenDrawTest {
                     question.copy(likeCount = 1234, dislikeCount = 99, myReaction = Reaction.LIKE),
                     OUTCOME,
                 ),
-                PlayUiState.Revealed(question, OUTCOME, reactionError = DomainError.NETWORK),
-                PlayUiState.Revealed(question, OUTCOME, reactionError = DomainError.QUESTION_NOT_FOUND),
+                PlayUiState.Revealed(question, OUTCOME, rowError = DomainError.NETWORK),
+                PlayUiState.Revealed(question, OUTCOME, rowError = DomainError.QUESTION_NOT_FOUND),
                 PlayUiState.Asking(question.copy(answeredBefore = true)),
                 PlayUiState.Revealed(question.copy(answeredBefore = true), OUTCOME),
             )
@@ -1276,7 +1276,7 @@ class PlayScreenDrawTest {
                     (listOf(strings.outOfQuestions, tryAgain) to emptyList()),
                 PlayUiState.Failed(DomainError.SERVER) to (listOf(strings.somethingWrong, tryAgain) to emptyList()),
                 PlayUiState.Asking(QUESTION) to (listOf(a, "0", "0", b) to thumbsAndSkip + points),
-                PlayUiState.Asking(QUESTION.copy(likeCount = 12), reactionError = DomainError.NETWORK) to
+                PlayUiState.Asking(QUESTION.copy(likeCount = 12), rowError = DomainError.NETWORK) to
                     (listOf(a, strings.cannotReach, "12", "0", b) to thumbsAndSkip),
                 PlayUiState.Revealed(QUESTION, OUTCOME) to
                     (listOf(a, revealedA, "0", "0", b, revealedB) to thumbs + points),
@@ -1289,7 +1289,7 @@ class PlayScreenDrawTest {
                 PlayUiState.Revealed(
                     QUESTION.copy(likeCount = 3, dislikeCount = 1),
                     OUTCOME,
-                    reactionError = DomainError.QUESTION_NOT_FOUND,
+                    rowError = DomainError.QUESTION_NOT_FOUND,
                 ) to
                     (listOf(a, revealedA, strings.questionGone, "3", "1", b, revealedB) to thumbs),
             )

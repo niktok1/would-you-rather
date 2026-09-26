@@ -39,6 +39,11 @@ import io.ntole.wyr.core.domain.reaction.QuestionReactions
 import io.ntole.wyr.core.domain.reaction.Reaction
 import io.ntole.wyr.core.domain.reaction.ReactionRepository
 import io.ntole.wyr.core.domain.reaction.SetReaction
+import io.ntole.wyr.core.domain.report.HideAuthor
+import io.ntole.wyr.core.domain.report.HideQuestion
+import io.ntole.wyr.core.domain.report.ReportQuestion
+import io.ntole.wyr.core.domain.report.ReportReason
+import io.ntole.wyr.core.domain.report.ReportRepository
 import io.ntole.wyr.core.domain.session.SessionRepository
 import io.ntole.wyr.core.domain.submission.GetMySubmissions
 import io.ntole.wyr.core.domain.submission.Submission
@@ -185,12 +190,33 @@ class AppNavigationTest {
         assertEquals(5, game.statsRead)
     }
 
+    /**
+     * The menu on Play's top bar hides the question for good (CLAUDE.md §8d, *Reports*): a report, for
+     * the reason tapped, goes to the server, and the next question shows.
+     */
+    @Test
+    fun `a report from Play's menu sends it and moves on`() {
+        game.serving = QUESTION
+        withApp { scene ->
+            scene.tap(CYRILLIC.play)
+            val menu = CYRILLIC.playScreen.menu
+
+            scene.tap(menu.name)
+            scene.tap(menu.report)
+            scene.tap(menu.spam)
+
+            assertEquals(listOf("report ${QUESTION.id} SPAM"), game.reported)
+            assertEquals(2, game.questionsAsked)
+            assertEquals(1, analytics.named(AnalyticsEvent.QUESTION_REPORTED).size)
+        }
+    }
+
     @Test
     fun `Play opens under a bar with home and the account icon`() =
         withApp { scene ->
             scene.tap(CYRILLIC.play)
 
-            assertEquals(listOf(CYRILLIC.home, CYRILLIC.account), scene.descriptions().take(2))
+            assertEquals(PLAY_BAR, scene.descriptions().take(PLAY_BAR.size))
             assertEquals(1, game.questionsAsked)
         }
 
@@ -206,7 +232,7 @@ class AppNavigationTest {
         withApp { scene ->
             scene.tap(CYRILLIC.play)
             assertEquals(
-                listOf(CYRILLIC.home, CYRILLIC.account) +
+                PLAY_BAR +
                     listOf(CYRILLIC.playScreen.like, CYRILLIC.playScreen.dislike, CYRILLIC.playScreen.skip) +
                     CYRILLIC.points.fill(5),
                 scene.descriptions(),
@@ -230,7 +256,7 @@ class AppNavigationTest {
 
             scene.tap(CYRILLIC.back)
 
-            assertEquals(listOf(CYRILLIC.home, CYRILLIC.account), scene.descriptions().take(2))
+            assertEquals(PLAY_BAR, scene.descriptions().take(PLAY_BAR.size))
             assertEquals(1, game.questionsAsked)
         }
 
@@ -452,7 +478,7 @@ class AppNavigationTest {
             scene.tap("Етика")
             scene.tap(CYRILLIC.play)
 
-            assertEquals(listOf(CYRILLIC.home, CYRILLIC.account), scene.descriptions().take(2))
+            assertEquals(PLAY_BAR, scene.descriptions().take(PLAY_BAR.size))
             assertEquals(listOf(setOf("FOOD", "ETHICS")), game.categoryChanges)
             assertEquals(2, game.questionsAsked, "a question from them")
             assertTrue("Храна, Етика" in scene.texts(), "${scene.texts()}")
@@ -467,7 +493,7 @@ class AppNavigationTest {
 
             scene.tap(CYRILLIC.back)
 
-            assertEquals(listOf(CYRILLIC.home, CYRILLIC.account), scene.descriptions().take(2))
+            assertEquals(PLAY_BAR, scene.descriptions().take(PLAY_BAR.size))
             assertEquals(emptyList(), game.categoryChanges)
             assertEquals(1, game.questionsAsked)
             scene.tap(ALL_PLAYED)
@@ -540,6 +566,7 @@ class AppNavigationTest {
             single<SessionRepository> { game }
             single<VoteRepository> { game }
             single<ReactionRepository> { game }
+            single<ReportRepository> { game }
             single<PlayerRepository> { game }
             single<AccountRepository> { game }
             single<SubmissionRepository> { game }
@@ -549,6 +576,9 @@ class AppNavigationTest {
             factory { SkipQuestion(questions = get(), session = get()) }
             factory { CastVote(votes = get(), session = get()) }
             factory { SetReaction(reactions = get(), session = get()) }
+            factory { ReportQuestion(reports = get(), session = get()) }
+            factory { HideQuestion(reports = get(), session = get()) }
+            factory { HideAuthor(reports = get(), questions = get(), session = get()) }
             factory { GetPlayerStats(players = get(), session = get()) }
             factory { RegisterAccount(accounts = get(), session = get(), analytics = get()) }
             factory { LogIn(accounts = get(), questions = get(), session = get(), analytics = get()) }
@@ -598,6 +628,7 @@ class AppNavigationTest {
         SessionRepository,
         VoteRepository,
         ReactionRepository,
+        ReportRepository,
         PlayerRepository,
         AccountRepository,
         SubmissionRepository {
@@ -659,6 +690,24 @@ class AppNavigationTest {
             reaction: Reaction,
         ): QuestionReactions = error("nothing reacts here")
 
+        /** Every report and hide, in order. */
+        val reported = mutableListOf<String>()
+
+        override suspend fun report(
+            questionId: String,
+            reason: ReportReason,
+        ) {
+            reported += "report $questionId $reason"
+        }
+
+        override suspend fun hideQuestion(questionId: String) {
+            reported += "hide question $questionId"
+        }
+
+        override suspend fun hideAuthor(questionId: String) {
+            reported += "hide author $questionId"
+        }
+
         override suspend fun stats(): PlayerStats {
             statsRead++
             return PlayerStats(totalPoints = 5, questionsAnswered = 5, username = username)
@@ -712,6 +761,9 @@ class AppNavigationTest {
         val LISTED = listOf(FOOD, Category(id = "ETHICS", nameSr = "Етика", nameEn = "Ethics"))
 
         val QUESTION = Question(id = "q1", optionA = "Fly", optionB = "Swim", categories = setOf(FOOD.id))
+
+        /** What a screen reader hears first on Play: its top bar's icons, the question's menu among them. */
+        val PLAY_BAR = listOf(CYRILLIC.home, CYRILLIC.playScreen.menu.name, CYRILLIC.account)
 
         /** The Play screen's categories, All while none is played: a tap on them opens the Categories screen. */
         val ALL_PLAYED = CYRILLIC.allCategories

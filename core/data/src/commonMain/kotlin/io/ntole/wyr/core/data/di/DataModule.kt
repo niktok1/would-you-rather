@@ -8,6 +8,7 @@ import io.ntole.wyr.core.data.moderation.DefaultModerationRepository
 import io.ntole.wyr.core.data.player.DefaultPlayerRepository
 import io.ntole.wyr.core.data.question.DefaultQuestionRepository
 import io.ntole.wyr.core.data.reaction.DefaultReactionRepository
+import io.ntole.wyr.core.data.report.DefaultReportRepository
 import io.ntole.wyr.core.data.session.DefaultSessionRepository
 import io.ntole.wyr.core.data.submission.DefaultSubmissionRepository
 import io.ntole.wyr.core.data.vote.DefaultVoteRepository
@@ -35,6 +36,10 @@ import io.ntole.wyr.core.domain.question.QuestionRepository
 import io.ntole.wyr.core.domain.question.SkipQuestion
 import io.ntole.wyr.core.domain.reaction.ReactionRepository
 import io.ntole.wyr.core.domain.reaction.SetReaction
+import io.ntole.wyr.core.domain.report.HideAuthor
+import io.ntole.wyr.core.domain.report.HideQuestion
+import io.ntole.wyr.core.domain.report.ReportQuestion
+import io.ntole.wyr.core.domain.report.ReportRepository
 import io.ntole.wyr.core.domain.session.SessionRepository
 import io.ntole.wyr.core.domain.submission.GetMySubmissions
 import io.ntole.wyr.core.domain.submission.SubmissionRepository
@@ -53,6 +58,7 @@ import io.ntole.wyr.core.network.api.ModerationApi
 import io.ntole.wyr.core.network.api.PlayerApi
 import io.ntole.wyr.core.network.api.QuestionApi
 import io.ntole.wyr.core.network.api.ReactionApi
+import io.ntole.wyr.core.network.api.ReportApi
 import io.ntole.wyr.core.network.api.SubmissionApi
 import io.ntole.wyr.core.network.api.VoteApi
 import io.ntole.wyr.core.network.environment.WyrEnvironment
@@ -87,6 +93,7 @@ public fun dataModule(
         single { PlayerApi(get()) }
         single { SubmissionApi(get()) }
         single { ReactionApi(get()) }
+        single { ReportApi(get()) }
         single { CategoryApi(get()) }
 
         single<QuestionCache> { InMemoryQuestionCache() }
@@ -102,6 +109,7 @@ public fun dataModule(
         single<PlayerRepository> { DefaultPlayerRepository(api = get(), session = get()) }
         single<SubmissionRepository> { DefaultSubmissionRepository(api = get(), session = get()) }
         single<ReactionRepository> { DefaultReactionRepository(api = get(), session = get()) }
+        single<ReportRepository> { DefaultReportRepository(api = get(), session = get()) }
         single<AccountRepository> { DefaultAccountRepository(api = get(), session = get()) }
         single<CategoryRepository> { DefaultCategoryRepository(api = get()) }
 
@@ -112,6 +120,9 @@ public fun dataModule(
         factory { SubmitQuestion(submissions = get(), session = get()) }
         factory { GetMySubmissions(submissions = get(), session = get()) }
         factory { SetReaction(reactions = get(), session = get()) }
+        factory { ReportQuestion(reports = get(), session = get()) }
+        factory { HideQuestion(reports = get(), session = get()) }
+        factory { HideAuthor(reports = get(), questions = get(), session = get()) }
         factory { RegisterAccount(accounts = get(), session = get(), analytics = get()) }
         factory { LogIn(accounts = get(), questions = get(), session = get(), analytics = get()) }
         factory { LogOut(accounts = get(), questions = get(), analytics = get()) }

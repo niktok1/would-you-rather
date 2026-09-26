@@ -127,6 +127,7 @@ class WyrIconsDrawTest {
                 "CoinMark" to WyrIcons.CoinMark,
                 "Globe" to WyrIcons.Globe,
                 "Players" to WyrIcons.Players,
+                "More" to WyrIcons.More,
             )
     }
 }

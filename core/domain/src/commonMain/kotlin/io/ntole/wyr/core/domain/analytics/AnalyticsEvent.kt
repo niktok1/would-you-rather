@@ -33,6 +33,15 @@ public object AnalyticsEvent {
     /** A like, a dislike or neither, [AnalyticsProperty.REACTION], was set on a question. */
     public const val REACTION_SET: String = "reaction_set"
 
+    /** A question was reported to the moderator, for [AnalyticsProperty.REASON], from the Play screen's menu. */
+    public const val QUESTION_REPORTED: String = "question_reported"
+
+    /** A question was hidden from the player, from the Play screen's menu. */
+    public const val QUESTION_HIDDEN: String = "question_hidden"
+
+    /** A question's author was hidden from the player, from the Play screen's menu. */
+    public const val AUTHOR_HIDDEN: String = "author_hidden"
+
     /** Categories were played from the Categories screen, none being every category. */
     public const val CATEGORIES_CHANGED: String = "categories_changed"
 

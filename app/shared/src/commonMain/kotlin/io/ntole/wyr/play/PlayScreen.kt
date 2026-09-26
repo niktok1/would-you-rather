@@ -215,7 +215,7 @@ private fun ColumnScope.QuestionBody(
         MiddleRow(
             question = state.question,
             points = points,
-            reactionError = state.reactionError,
+            rowError = state.rowError,
             idle = !state.isBusy,
             onReact = onReact,
             // Only before answering (CLAUDE.md §8d, *Skipping*): once revealed, a card is the way on.
@@ -258,7 +258,7 @@ private fun ColumnScope.QuestionBody(
 internal fun MiddleRow(
     question: Question,
     points: Int?,
-    reactionError: DomainError?,
+    rowError: DomainError?,
     idle: Boolean,
     onReact: (Reaction) -> Unit,
     onSkip: (() -> Unit)?,
@@ -283,9 +283,9 @@ internal fun MiddleRow(
                 contentAlignment = Alignment.CenterStart,
                 modifier = Modifier.widthIn(max = dimens.playRowStartMaxWidth).height(touchTarget),
             ) {
-                if (reactionError != null) {
+                if (rowError != null) {
                     Text(
-                        text = failureText(reactionError, strings),
+                        text = failureText(rowError, strings),
                         color = MaterialTheme.colorScheme.error,
                         fontSize = WyrTypeScale.statLabel,
                         lineHeight = WyrTypeScale.statLabelLineHeight,
