@@ -38,8 +38,10 @@ Play links to it:
    username (no admin route does), and a way for a Play-Games-only player to name their account.
 3. Have a lawyer who knows the ZZPL, and the laws of BA, ME and MK, read both languages, and say
    whether the GDPR applies.
-4. From every page remove the draft comment, `<meta name="robots" content="noindex">` and the
-   `.draft` banner.
+4. From every page remove the draft comment, every `CHECK` comment (they hold internal notes, which
+   the live pages' source would show), `<meta name="robots" content="noindex">` and the `.draft`
+   banner. Then `grep -rn 'CHECK\|noindex\|class="draft"\|class="ph"' site/` must print nothing
+   before the merge to `main`.
 5. Merge to `main`, and the Blueprint creates `wyr-site` (sync it in the dashboard if not). Its URL
    is `https://wyr-site.onrender.com` unless a custom domain comes first: Play Console takes
    `/privacy.html` as the privacy policy and `/delete.html` as the account deletion URL, and the
