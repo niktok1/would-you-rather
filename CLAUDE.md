@@ -665,7 +665,8 @@ decided in §8b).
     any other failure: said over the button, nothing forgotten. No session stored sends nothing.
     *Edge, accepted:* a registered player whose session died unused past a refresh token's 30 days,
     their account still there, is told it is deleted and forgets the session: they log in again.
-    `DefaultAccountRepositoryTest`, `AccountUseCasesTest`, `AccountViewModelTest`,
+    `DefaultAccountRepositoryTest`, `DeletionSessionTest` (the fresh guest's push token, and no Play
+    Games sign-in at the next launch), `AccountUseCasesTest`, `AccountViewModelTest`,
     `AccountScreenDrawTest`, `AppNavigationTest`.
 
 - **Push tokens** (*decided 2026-09-26; built on the server, and on the Android client since
