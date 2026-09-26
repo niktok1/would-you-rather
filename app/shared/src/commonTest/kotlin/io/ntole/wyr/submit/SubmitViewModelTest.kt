@@ -433,19 +433,30 @@ class SubmitViewModelTest {
             assertEquals(emptyList(), server.calls, "nothing sent")
         }
 
-    /** Play Games registers a player as a username does (CLAUDE.md §8a, *Play Games sign-in*). */
+    /**
+     * Play Games registers a player as a username does (CLAUDE.md §8a, *Play Games sign-in*), and such a
+     * player pays the cost the server names, as any other (§8c).
+     */
     @Test
-    fun `a player registered by Play Games alone may send`() =
+    fun `a player registered by Play Games alone may send at the server's cost`() =
         runTest(dispatcher) {
             server.username = null
             server.playGamesLinked = true
+            server.cost = 50
+            server.points = 60
             val viewModel = open()
             viewModel.write("Fly", "Swim", "FOOD")
 
             val state = viewModel.state.value
             assertEquals(true, state.registered)
             assertFalse(state.isGuest)
+            assertEquals(50, state.submissionCost)
             assertTrue(state.canSubmit)
+
+            viewModel.submit()
+            testScheduler.advanceUntilIdle()
+
+            assertEquals(10, viewModel.state.value.points, "the server's cost taken, the points read again")
         }
 
     @Test
