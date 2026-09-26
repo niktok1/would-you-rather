@@ -1,5 +1,6 @@
 package io.ntole.wyr.di
 
+import io.ntole.wyr.about.AppVersion
 import io.ntole.wyr.account.AccountViewModel
 import io.ntole.wyr.analytics.AnalyticsSettings
 import io.ntole.wyr.analytics.UsageTracker
@@ -65,7 +66,7 @@ fun initKoin(
     startKoin {
         appDeclaration()
         modules(platformModule())
-        modules(appModules(environment, posthog, ClientBuild.of(build)))
+        modules(appModules(environment, posthog, AppVersion(name = analytics.appVersion, number = build)))
     }
 }
 
@@ -73,16 +74,20 @@ fun initKoin(
  * Every module but the platform's, for [environment]: the data module sends every request to its
  * URL, and the environment is bound for the screens that show it. Nothing can put another URL in its
  * place, so the server the Account screen names is where requests go. [analytics] is where the
- * analytics go, none sending nothing (§8g), and [build] the build every request names, none naming
- * nothing. Internal, not private, so a test can load them as [initKoin] does.
+ * analytics go, none sending nothing (§8g), and [version] the app's, whose build number every request
+ * names (none naming nothing) and the About screen shows. Internal, not private, so a test can load
+ * them as [initKoin] does.
  */
 internal fun appModules(
     environment: WyrEnvironment,
     analytics: PostHogConfig?,
-    build: ClientBuild?,
+    version: AppVersion,
 ): List<Module> =
     listOf(
-        module { single { environment } },
-        dataModule(environment, analytics, build),
+        module {
+            single { environment }
+            single { version }
+        },
+        dataModule(environment, analytics, ClientBuild.of(version.number)),
         uiModule,
     )

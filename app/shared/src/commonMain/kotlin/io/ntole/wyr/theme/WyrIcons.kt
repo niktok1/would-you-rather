@@ -166,6 +166,20 @@ object WyrIcons {
         }
     }
 
+    /** Info: an i in a circle, for the About screen, opened from the Account screen's top bar. */
+    val Info: ImageVector by lazy {
+        icon("Info") {
+            outline {
+                circle(COIN_RADIUS)
+                // The i's dot, a stroke so short its round ends make it a dot, and its stem.
+                moveTo(12f, 7.6f)
+                lineTo(12f, 8f)
+                moveTo(12f, 11f)
+                verticalLineTo(16.5f)
+            }
+        }
+    }
+
     /**
      * A thumb up, or turned over top to bottom for a thumb down: the cuff on the left, and the hand
      * beside it, its thumb pointing up out of it, or down.

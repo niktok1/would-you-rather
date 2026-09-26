@@ -1,5 +1,6 @@
 package io.ntole.wyr.di
 
+import io.ntole.wyr.about.AppVersion
 import io.ntole.wyr.account.AccountViewModel
 import io.ntole.wyr.analytics.AnalyticsSettings
 import io.ntole.wyr.categories.CategoriesViewModel
@@ -62,8 +63,10 @@ class AppModuleTest {
         koin.get<SubmitViewModel>()
         koin.get<LanguageViewModel>()
         koin.get<CategoriesViewModel>()
-        // What App asks for before any screen: whether the server refused this build.
+        // What App asks for before any screen: whether the server refused this build; and the About
+        // screen's version.
         koin.get<AppUpdate>()
+        koin.get<AppVersion>()
     }
 
     @Test
@@ -185,7 +188,8 @@ class AppModuleTest {
         val platform = module { single<TokenStorage> { storage } }
         return koinApplication {
             modules(
-                listOf(platform) + appModules(environment, analytics = null, build = null),
+                listOf(platform) +
+                    appModules(environment, analytics = null, version = AppVersion("1.0.0", number = null)),
             )
         }.koin
     }

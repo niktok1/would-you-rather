@@ -3,11 +3,15 @@ package io.ntole.wyr.analytics
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.ImageComposeScene
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsNode
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.unit.Density
+import io.ntole.wyr.RecordingUris
+import io.ntole.wyr.about.AboutScreen
+import io.ntole.wyr.about.AppVersion
 import io.ntole.wyr.account.AccountAction
 import io.ntole.wyr.account.AccountActions
 import io.ntole.wyr.account.AccountFailure
@@ -34,6 +38,7 @@ import io.ntole.wyr.descriptions
 import io.ntole.wyr.home.HomeScreen
 import io.ntole.wyr.language.Language
 import io.ntole.wyr.language.WyrStrings
+import io.ntole.wyr.navigation.AccountTopBar
 import io.ntole.wyr.navigation.BackTopBar
 import io.ntole.wyr.navigation.PlayTopBar
 import io.ntole.wyr.nodes
@@ -68,6 +73,9 @@ import kotlin.time.Instant
 class TapsTest {
     private val analytics = RecordingAnalytics()
 
+    /** Every URL a tap asked to open: nothing here reaches a browser. */
+    private val uris = RecordingUris()
+
     @Test
     fun `every tap on Home and the top bars is reported`() {
         assertEquals(setOf("home.play", "top_bar.account"), elementsTapped { HomeScreen(onPlay = {}, onAccount = {}) })
@@ -78,6 +86,20 @@ class TapsTest {
             },
         )
         assertEquals(setOf("top_bar.back"), elementsTapped { BackTopBar(onBack = {}) })
+        assertEquals(
+            setOf("top_bar.back", "top_bar.about"),
+            elementsTapped { AccountTopBar(onBack = {}, onAbout = {}) },
+        )
+    }
+
+    /** Each of the site's pages, and a licence's text: opened by the test's own handler, never a browser. */
+    @Test
+    fun `every tap on the About screen is reported`() {
+        assertEquals(
+            setOf("about.privacy", "about.terms", "about.delete_account", "about.contact", "about.licence"),
+            elementsTapped { AboutScreen(AppVersion("1.0.0", 10000)) },
+        )
+        assertTrue(uris.opened.isNotEmpty())
     }
 
     @Test
@@ -253,7 +275,7 @@ class TapsTest {
     private fun elementsTapped(content: @Composable () -> Unit): Set<String> {
         val scene =
             ImageComposeScene(width = WIDTH, height = HEIGHT, density = Density(1f)) {
-                CompositionLocalProvider(LocalAnalytics provides analytics) {
+                CompositionLocalProvider(LocalAnalytics provides analytics, LocalUriHandler provides uris) {
                     WyrTheme { WyrStrings(Language.DEFAULT) { content() } }
                 }
             }

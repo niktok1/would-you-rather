@@ -71,6 +71,8 @@ data class Strings(
     val accountScreens: AccountStrings,
     /** The words of the screen shown once the server serves this build nothing more. */
     val updateScreen: UpdateStrings,
+    /** The About screen's words, opened from the Account screen. */
+    val aboutScreen: AboutStrings,
 ) {
     /**
      * These strings with [transform] applied to every one of them, which is how Serbian Latin is made.
@@ -95,6 +97,7 @@ data class Strings(
             language = transform(language),
             accountScreens = accountScreens.map(transform),
             updateScreen = updateScreen.map(transform),
+            aboutScreen = aboutScreen.map(transform),
         )
 }
 
@@ -117,6 +120,7 @@ val SerbianCyrillicStrings: Strings =
         language = "Језик",
         accountScreens = SerbianCyrillicAccountStrings,
         updateScreen = SerbianCyrillicUpdateStrings,
+        aboutScreen = SerbianCyrillicAboutStrings,
     )
 
 /** Made from [SerbianCyrillicStrings], never written by hand, so the two cannot say different things. */
@@ -140,6 +144,7 @@ val EnglishStrings: Strings =
         language = "Language",
         accountScreens = EnglishAccountStrings,
         updateScreen = EnglishUpdateStrings,
+        aboutScreen = EnglishAboutStrings,
     )
 
 /** The strings [language] is written in. */

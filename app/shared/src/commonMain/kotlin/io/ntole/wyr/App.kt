@@ -20,6 +20,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LifecycleStartEffect
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import io.ntole.wyr.about.AboutScreen
 import io.ntole.wyr.account.AccountScreen
 import io.ntole.wyr.account.AccountViewModel
 import io.ntole.wyr.account.AuthScreen
@@ -36,6 +37,7 @@ import io.ntole.wyr.language.LanguageViewModel
 import io.ntole.wyr.language.LocalLanguage
 import io.ntole.wyr.language.LocalStrings
 import io.ntole.wyr.language.WyrStrings
+import io.ntole.wyr.navigation.AccountTopBar
 import io.ntole.wyr.navigation.BackTopBar
 import io.ntole.wyr.navigation.Navigator
 import io.ntole.wyr.navigation.PlayTopBar
@@ -137,7 +139,7 @@ private fun Screens(
                 }
 
                 Screen.Account -> {
-                    BackTopBar(onBack = { navigator.back() })
+                    AccountTopBar(onBack = { navigator.back() }, onAbout = { navigator.open(Screen.About) })
                     Below {
                         Account(
                             language = language,
@@ -161,6 +163,11 @@ private fun Screens(
                 Screen.Categories -> {
                     BackTopBar(onBack = { navigator.back() })
                     Below { Categories(onPlayed = { navigator.back() }) }
+                }
+
+                Screen.About -> {
+                    BackTopBar(onBack = { navigator.back() })
+                    Below { AboutScreen(version = koinInject()) }
                 }
             }
         }

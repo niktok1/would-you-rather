@@ -15,6 +15,7 @@ import androidx.lifecycle.ViewModelStore
 import androidx.lifecycle.ViewModelStoreOwner
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
+import io.ntole.wyr.about.AppVersion
 import io.ntole.wyr.analytics.RecordingAnalytics
 import io.ntole.wyr.core.domain.account.AccountRepository
 import io.ntole.wyr.core.domain.account.DeleteAccount
@@ -230,6 +231,21 @@ class AppNavigationTest {
             assertEquals(1, analytics.named(AnalyticsEvent.ACCOUNT_DELETED).size)
         }
     }
+
+    /** The Account screen's info icon opens the About screen, with the app's version, and back returns. */
+    @Test
+    fun `the About screen opens from the Account screen's top bar and shows the version`() =
+        withApp { scene ->
+            scene.tap(CYRILLIC.account)
+            scene.tap(CYRILLIC.aboutScreen.title)
+
+            assertTrue(CYRILLIC.aboutScreen.version.fill("1.0.0 (10000)") in scene.texts(), "${scene.texts()}")
+            val shown = analytics.named(RecordingAnalytics.SCREEN).map { it.properties[RecordingAnalytics.SCREEN_NAME] }
+            assertEquals("about", shown.last())
+
+            scene.tap(CYRILLIC.back)
+            assertTrue(CYRILLIC.accountScreens.statistics in scene.texts(), "back on Account: ${scene.texts()}")
+        }
 
     @Test
     fun `Play opens under a bar with home and the account icon`() =
@@ -592,6 +608,7 @@ class AppNavigationTest {
             single<CategoryRepository> { categories }
             single<Analytics> { analytics }
             single<AppUpdate> { update }
+            single { AppVersion(name = "1.0.0", number = 10000) }
             factory { GetNextQuestion(questions = get(), session = get()) }
             factory { SkipQuestion(questions = get(), session = get()) }
             factory { CastVote(votes = get(), session = get()) }

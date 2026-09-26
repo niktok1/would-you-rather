@@ -283,8 +283,9 @@ left) for the top bars (§8d, *Navigation*); for the Play screen `Skip` (a trian
 `ChevronDown`, the small chevron beside the categories played, and the reactions' `ThumbUp` and
 `ThumbUpFilled`, and `ThumbDown` and `ThumbDownFilled`, the thumb up turned over (§8d, *The Play
 screen*, *Reactions*); `CoinFace` and `CoinMark`, a disc and the rim and ring on it, the points' coin
-wherever they show (§8f, *Numbers and symbols*); `Globe` for the language menu; and `Players`, two
-players, heading My questions' answers (§8d, *The Account screen*). They carry no colour of their
+wherever they show (§8f, *Numbers and symbols*); `Globe` for the language menu; `Players`, two
+players, heading My questions' answers (§8d, *The Account screen*); and `Info`, an i in a circle, the
+Account screen's way to the About screen (§8d, *About*). They carry no colour of their
 own: `Icon` tints each from `WyrColors`, so they follow the light and dark themes as text does. The
 coin is two icons drawn one on the other, the face in `WyrColors.coin` and the mark in
 `WyrColors.onCoin`, the brand's amber and its dark brown, the same in both themes as the cards are
@@ -1251,11 +1252,12 @@ game's, or a place on one, theme tokens only (§5b), and its words in `Strings` 
   and nothing else, the user asking for less text. Play opens the **Play** screen under a top bar of
   the home icon, left, back to Home, the categories played in its middle, which open the
   **Categories** screen, and the account icon, right. The account icon, from Home or
-  Play, opens the **Account** screen under a top bar of a back arrow. On it, a guest's one button
+  Play, opens the **Account** screen under a top bar of a back arrow and, on the right, an info icon
+  to the **About** screen (*About*, below). On it, a guest's one button
   opens the **Auth** page, to register or log in, and My questions' *Ново питање* the **Submit**
   screen's form. On Play, the categories played open the **Categories** screen (*Categories*, *The
-  Categories screen*), whose **Играј** goes back to Play. The Account, Auth, Submit and Categories
-  bars hold a back arrow alone (`BackTopBar`); the Submit button the Account bar held before is
+  Categories screen*), whose **Играј** goes back to Play. The Auth, Submit, Categories and About
+  bars hold a back arrow alone (`BackTopBar`), Account's the info icon besides (`AccountTopBar`); the Submit button the Account bar held before is
   gone. The icons are the theme's (§5b), each named for a screen reader in the language shown (§8f).
 - *The back stack* is made by hand, no navigation library: a sealed `Screen` and a `Navigator` of
   the screens opened, Home at the bottom. `open` shows a screen over the one shown, or goes back to
@@ -1402,6 +1404,22 @@ orientation, in common code alone:
   language shown, *Сервер: Dev (https://wyr-server-dev.onrender.com)* (`serverLine`, §8e); a PROD
   build shows none. `AccountScreenDrawTest` finds it under everything else in every state and
   language.
+
+**About** (`io.ntole.wyr.about`, *built 2026-09-26*, what Google Play asks: a way to the privacy
+policy and the rest from inside the app): opened by the info icon on the Account screen's top bar, so it
+adds no text to the Account screen, under a back arrow. Top down, scrolling: the game's name; *Верзија
+1.0.0 (10000)*, the version and the build number (`AppVersion`, which `initKoin` binds from the
+entry point's version and build number, §8g) beside **16+** on a pill (`AGE_RATING`); four links that
+open in the browser (`LocalUriHandler`), *Политика приватности*, *Услови и правила питања*,
+*Брисање налога* and *Контакт*, the site's `/privacy.html`, `/terms.html`, `/delete.html` and
+`/contact.html`, under `/en/` in English, the Serbian pages for either script (`Site`, whose one
+`BASE_URL` is `https://stabiradije.rs`, not live yet, the domain being the user's to buy, §8b *The
+launch*); and **Лиценце отвореног кода**, the libraries the game ships with on any platform, each
+with its licence, a tap opening the licence's text (`OPEN_SOURCE_LIBRARIES`, written by hand, no
+library for it: every one Apache 2.0 today; a library added to the game's client is added there in the
+same change). Words: `Strings.aboutScreen`. `AboutScreenDrawTest` (every text in both themes and every
+language, each link's URL through a handler of the test's own, the links above 599 before any
+scrolling), `SiteTest`, `TapsTest`, `AppNavigationTest`, `TopBarsDrawTest`, `NavigatorTest`.
 
 **The Play screen** (`io.ntole.wyr.play`; the user's layout, *decided 2026-09-25*, rearranged
 2026-09-26) asks a question and reveals its tally, holds Skip and the reactions, and opens the
@@ -2207,7 +2225,11 @@ hand, so the two cannot say different things; and **English** stands beside them
   *Претражи категорије*, *Изабрано: 3* and *Нема резултата*); the Account screen, whole, with My
   questions and the server line; the Auth page, whole; and the Submit screen's form, whole
   (`Strings.accountScreens`, an `AccountStrings` of the Account screen's words and those of the
-  pages opened from it). **Try again** is one text of `Strings`, `tryAgain`, *Покушај поново*
+  pages opened from it, deleting an account's in `DeleteAccountStrings`); the update screen
+  (`Strings.updateScreen`, *Нова верзија је доступна*, *Ажурирај*, *Освежи*); and the About screen
+  (`Strings.aboutScreen`: *О игри*, the name its icon is given, *Верзија {0}*, the four links' names
+  and *Лиценце отвореног кода*). What is the same in every language is no `Strings`: *16+*, the
+  libraries' and licences' names. **Try again** is one text of `Strings`, `tryAgain`, *Покушај поново*
   (*provisional*, §8b), under a failure on Play, the Categories screen, the Account screen, My
   questions, the Auth page and the Submit form, so the game says it one way; the Account screens'
   *Нешто није у реду. Покушај поново.* asks in its words, and `StringsTest` holds the two together.
@@ -2392,7 +2414,7 @@ the same events. The moderation app sends none.
   the `visibilitychange` handler itself, with events the sender only queues a step later, and PostHog
   taking a beacon's `text/plain` body, unchecked; a tab only hidden sends as any platform does. Every screen the navigator
   shows is PostHog's `$screen`, named by its key (`home`, `play`, `account`, `auth`, `submit`,
-  `categories`), and the one left is `screen_left`, with `screen` and `duration_ms`, for another screen
+  `categories`, `about`), and the one left is `screen_left`, with `screen` and `duration_ms`, for another screen
   or for the background, back from which it is shown again. An Android rotation, whose activity stops
   only to start again, reports neither (`rememberConfigurationChanging`, over the activity's
   `isChangingConfigurations`: the one piece of it per platform), nor a second `account_opened` or
@@ -2403,7 +2425,8 @@ the same events. The moderation app sends none.
   with `element` to `LocalAnalytics` (the app's, which `App` provides; none for a screen drawn alone)
   before it acts, so a tap is counted by a name that never changes with the language or the text, and
   `$screen_name` says where. An element is `screen.what`, lower case and underscores: `home.play`;
-  `top_bar.home`, `.account`, `.back`, `.categories`; `play.card_a` and `.card_b` (with `answered`,
+  `top_bar.home`, `.account`, `.back`, `.categories`, `.about`; `about.privacy`, `.terms`,
+  `.delete_account`, `.contact` and `.licence`; `play.card_a` and `.card_b` (with `answered`,
   whether the tap went on from the reveal), `.like`, `.dislike`, `.skip`, `.try_again`;
   `account.open_auth`, `.log_out`, `.try_again`; `my_questions.new_question`, `.first_question`,
   `.try_again`; `language.menu` and `language.option` (with its `language` tag); `auth.register`,
