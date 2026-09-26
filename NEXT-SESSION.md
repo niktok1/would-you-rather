@@ -339,13 +339,23 @@ scripts, which then names V11 to V14 by what each does, as it names V15 to V18, 
 included"; the rate limits' groups): keep both there too. If
 `feat/server-safety` deletes a player row, the push tokens and Play Games links go with it by their
 cascades, as long as it deletes the player's sessions first (their key restricts). Tests: `:server`
-427 (365 before), `:core:data` 143 (`ErrorMapperTest`'s two new rows); the rest unchanged.
+431 (365 before), `:core:data` 143 (`ErrorMapperTest`'s two new rows); the rest unchanged.
+
+**A review's fixes** (611c129 to a371b0e): a 401 from FCM naming its own error code
+(`THIRD_PARTY_AUTH_ERROR`, an iOS or web device without an APNs or web push key) fails that push alone
+and keeps the access token; a 403 from Play Games' `players/me` (the API not enabled, say) is 502
+`PLAY_GAMES_UNAVAILABLE`, warned of with Google's codes, not 422; a registration's pruning deletes only
+its own player's tokens, so one another player moved meanwhile stays; the server closes its CIO
+engine at stop. Docs only: the cascades, CIO, push timing and the §8b list of scripts corrected;
+**for the user**, CLAUDE.md §8b *Linking Play Games to an account* (an access token alone links a
+registered player, for good, with no unlink: provisional); and "stores nothing personal" is now "no
+sensitive personal data", the privacy policy to name FCM and Play Games (§8b *Personalization*).
 
 ### Verified working
 
-- **`feat/server-engagement`**, on this machine, at 8660e01: `ktlintCheck`; `:server:test`
-  (427, 2 skipped: the PostgreSQL-only boots), `:core:domain:jvmTest`, `:core:data:jvmTest`,
-  `:core:network:jvmTest`, `:core:network:testAndroidHostTest`, `:app:shared:jvmTest` and
+- **`feat/server-engagement`**, on this machine, at 8660e01 and again at a371b0e after the review's
+  fixes: `ktlintCheck`; `:server:test` (431 at a371b0e, 2 skipped: the PostgreSQL-only boots),
+  `:core:domain:jvmTest`, `:core:data:jvmTest`, `:core:network:jvmTest`, `:core:network:testAndroidHostTest`, `:app:shared:jvmTest` and
   `:app:adminApp:jvmTest`; ci.yml's client compiles, `:app:androidApp:assembleDebug` and both web
   targets of `:app:shared` and `:app:adminApp` included; the ios job's Kotlin compiles
   (`:core:compileKotlinIosSimulatorArm64`, `:app:shared:compileKotlinIosSimulatorArm64` and the
