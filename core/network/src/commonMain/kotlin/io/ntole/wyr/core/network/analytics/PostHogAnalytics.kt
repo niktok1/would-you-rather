@@ -58,7 +58,8 @@ import kotlin.uuid.Uuid
  * - *Off* ([setEnabled]): nothing more is sent, and what waited is dropped. The choice is the
  *   device's, under [ENABLED_KEY], whatever the environment, as the language is (§8f).
  *
- * Every event carries the install's id, a session ([SESSION_IDLE] without an event starts another), the
+ * Every event carries the install's id, a session ([SESSION_IDLE] without an event starts another, by
+ * the wall clock as well as the monotonic one, since the monotonic stops while a phone sleeps), the
  * screen shown, the app's version, the platform and its OS, and the environment; nothing personal.
  * With no [config], a build with no key, nothing is kept, read or sent but the choice itself.
  */
@@ -206,15 +207,18 @@ public class PostHogAnalytics(
         return id
     }
 
-    /** The session [moment] is in: the one going, unless it has been idle too long or run too long. */
+    /**
+     * The session [moment] is in: the one going, unless it has been idle too long or run too long, by
+     * [Moment.since], so a phone that slept through the idle time starts a new one.
+     */
     private fun sessionAt(moment: Moment): String {
         val current = session
         val next =
             when {
                 current == null -> Session.startedAt(moment)
-                moment.mark - current.lastSeen >= SESSION_IDLE -> Session.startedAt(moment)
-                moment.mark - current.started >= SESSION_MAX -> Session.startedAt(moment)
-                else -> current.copy(lastSeen = maxOf(current.lastSeen, moment.mark))
+                moment.since(current.lastSeen) >= SESSION_IDLE -> Session.startedAt(moment)
+                moment.since(current.started) >= SESSION_MAX -> Session.startedAt(moment)
+                else -> current.copy(lastSeen = current.lastSeen.latest(moment))
             }
         session = next
         return next.id
@@ -307,16 +311,27 @@ public class PostHogAnalytics(
     private class Moment(
         val at: Instant,
         val mark: ComparableTimeMark,
-    )
+    ) {
+        /**
+         * How long after [earlier] this is: the longer of what the two clocks measured. The monotonic
+         * clock stops while a phone sleeps (Android's `System.nanoTime`, Apple's uptime), so a phone
+         * locked for hours counts only the minutes it was awake, and the wall clock can be set back;
+         * each covers the other.
+         */
+        fun since(earlier: Moment): Duration = maxOf(at - earlier.at, mark - earlier.mark)
+
+        /** The later of this and [other], by each clock apart. */
+        fun latest(other: Moment): Moment = Moment(maxOf(at, other.at), maxOf(mark, other.mark))
+    }
 
     private data class Session(
         val id: String,
-        val started: ComparableTimeMark,
-        val lastSeen: ComparableTimeMark,
+        val started: Moment,
+        val lastSeen: Moment,
     ) {
         companion object {
             fun startedAt(moment: Moment): Session =
-                Session(uuidV7(moment.at.toEpochMilliseconds()).toString(), moment.mark, moment.mark)
+                Session(uuidV7(moment.at.toEpochMilliseconds()).toString(), started = moment, lastSeen = moment)
         }
     }
 

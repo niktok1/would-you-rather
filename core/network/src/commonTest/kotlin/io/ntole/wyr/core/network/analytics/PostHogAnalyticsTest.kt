@@ -26,6 +26,8 @@ import kotlin.test.assertNotEquals
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlin.time.Clock
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.Instant
@@ -410,6 +412,47 @@ class PostHogAnalyticsTest {
             assertEquals('7', c[14], "a session's id is a version 7 UUID: $c")
         }
 
+    /**
+     * A phone locked for hours with the app still alive: its monotonic clock stops while it sleeps, as
+     * Android's `System.nanoTime` and Apple's uptime do, and only the wall clock counts the hours.
+     */
+    @Test
+    fun `a session ends after a phone slept although the monotonic clock barely moved`() =
+        runTest {
+            val posthog = FakePostHog(this)
+            val analytics = analytics(posthog)
+            analytics.track("a")
+            testScheduler.runCurrent()
+
+            wallClockAhead = 4.hours
+            testScheduler.advanceTimeBy(1.minutes)
+            analytics.track("b")
+            analytics.flush()
+            testScheduler.runCurrent()
+
+            val (a, b) = posthog.events.map { it.property("\$session_id") }
+            assertNotEquals(a, b)
+        }
+
+    /** A wall clock set back, by hand or by the network's time, keeps no session going: the monotonic one counts. */
+    @Test
+    fun `a session ends after thirty minutes although the wall clock was set back`() =
+        runTest {
+            val posthog = FakePostHog(this)
+            val analytics = analytics(posthog)
+            analytics.track("a")
+            testScheduler.runCurrent()
+
+            wallClockAhead = -(2.hours)
+            testScheduler.advanceTimeBy(30.minutes)
+            analytics.track("b")
+            analytics.flush()
+            testScheduler.runCurrent()
+
+            val (a, b) = posthog.events.map { it.property("\$session_id") }
+            assertNotEquals(a, b)
+        }
+
     @Test
     fun `a version 7 UUID begins with its time`() {
         val millis = 0x0192_3456_789AL
@@ -432,6 +475,9 @@ class PostHogAnalyticsTest {
         assertEquals("null", null.toJson().toString())
     }
 
+    /** How far the wall clock is from the monotonic one, which starts together with it at [START]. */
+    private var wallClockAhead = Duration.ZERO
+
     private fun TestScope.analytics(
         posthog: FakePostHog,
         config: PostHogConfig? = PostHogConfig.of("phc_test", null, "1.2.3"),
@@ -446,7 +492,8 @@ class PostHogAnalyticsTest {
             engine = posthog.engine,
             clock =
                 object : Clock {
-                    override fun now(): Instant = Instant.fromEpochMilliseconds(START + scheduler.currentTime)
+                    override fun now(): Instant =
+                        Instant.fromEpochMilliseconds(START + scheduler.currentTime) + wallClockAhead
                 },
             timeSource = scheduler.timeSource,
         )

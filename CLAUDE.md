@@ -1882,7 +1882,10 @@ the same events. The moderation app sends none.
   stays the install's until a login.
 - **What every event carries** *(built)*: `distinct_id`; `$session_id`, a version 7 UUID, a new one
   after 30 minutes without an event or 24 hours on (as PostHog's own SDKs count sessions, which its
-  session views need); `$screen_name`, the screen last shown; `$lib` (`wyr-kotlin`),
+  session views need), each measured by the wall clock and the monotonic one, whichever says longer
+  (`Moment.since`): a phone's monotonic clock stops while it sleeps (Android's `System.nanoTime`,
+  Apple's uptime), so a phone locked for hours would otherwise count only its waking minutes and go on
+  in the morning's session, and a wall clock can be set back; `$screen_name`, the screen last shown; `$lib` (`wyr-kotlin`),
   `$app_version`, `$os`, `$os_version` and `$device_type` as PostHog's SDKs name them (a browser's
   from its user agent, `osOfUserAgent`), `platform` (`android`, `ios`, `desktop` or `web`) and
   `environment` (`local`, `dev` or `prod`); and a `uuid` and a `timestamp` of its own.
