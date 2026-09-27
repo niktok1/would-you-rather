@@ -187,7 +187,7 @@
       <h2>6. Колико дуго чувамо податке</h2>
       <ul>
         <li><strong>Налог</strong>, са корисничким именом или повезан са Google Play играма: док га не обришеш.</li>
-        <li><strong>Гост:</strong> док га не обришеш. Гост до ког више не води ниједан уређај (апликација је обрисана, 30 дана није коришћена па је сесија истекла, или си се на том уређају пријавио на други налог): <span class="ph">[РОК / PERIOD]</span>.</li>
+        <li><strong>Гост:</strong> док га не обришеш. Гост до ког више не води ниједан уређај (апликација је обрисана, 30 дана није коришћена па је сесија истекла, или си се на том уређају пријавио на други налог): бришемо га, са свим његовим подацима, после 90 дана неактивности.</li>
         <li><strong>Сесија:</strong> док се са ње не одјавиш или не обришеш налог. Токен за освежавање престаје да важи после 30 дана без употребе; сесија се тада више не може користити, али остаје у бази док се не обрише играч ком припада, као и сесија коју је на уређају заменила нова пријава.</li>
         <li><strong>Одговори, прескочена питања, реакције и поени</strong> и, <span class="soon">у изради</span>, сакривена питања и аутори: док постоји налог.</li>
         <li><strong>Твоја питања:</strong> одобрена, и она повучена из игре, остају у игри и после брисања налога, али без аутора; питања на чекању и одбијена бришу се са налогом.</li>
@@ -200,7 +200,7 @@
         <li><strong>Имејл преписка:</strong> док се захтев не реши, а затим најдуже <span class="ph">[РОК / PERIOD]</span>.</li>
       </ul>
       <p>Брисање апликације са уређаја само по себи не брише налог.</p>
-      <!-- CHECK: nothing deletes a guest nobody can reach, nor an expired session, yet, and no period is decided (the earlier draft's 90 days never was): decide one and build the clean-up, or say plainly how long they stay. A moderator's dismissal deletes a question's reports; a reported question retired without a dismissal keeps them. Database backups, if the paid Postgres keeps any, need a line and a period. -->
+      <!-- CHECK: a guest nobody can reach is deleted after 90 days idle (CLAUDE.md §8b, Guest clean-up: no username, no Play Games link, no session that can still refresh, idle since its last refresh or, with no session left, since it was minted; GUEST_RETENTION_DAYS). An account's expired session still stays until its player is deleted: say so plainly, or build a clean-up for those too. A moderator's dismissal deletes a question's reports; a reported question retired without a dismissal keeps them. Database backups, if the paid Postgres keeps any, need a line and a period. -->
     </section>
 
     <section id="security">

@@ -27,11 +27,12 @@ named as the Google services they are), and every claim checked against the serv
 `у изради` / `coming` pill (`.soon`): deleting an account in the app (Налог → Обриши налог; the
 server's route is built), reports and hides, push tokens, Play Games sign-in, the answer time on the
 vote, and personalization (planned). Each also has a `CHECK` comment on the Serbian page. When one
-ships, drop its pill and put its text in the present tense, both languages. The earlier draft's
-90-day clean-up of guests was never decided and is gone: the period is a placeholder. Before Google
-Play links to it:
+ships, drop its pill and put its text in the present tense, both languages. An unreachable guest
+is deleted after 90 days of inactivity (the user, 2026-09-27; `feat/guest-cleanup`, CLAUDE.md §8b
+*Guest clean-up*), which `privacy.html` section 6 and `delete.html` now say, both languages. Before
+Google Play links to it:
 1. Fill the placeholders, `grep -rn 'class="ph"' site/`: name, address, email, date, year, the
-   retention periods (an unreachable guest's among them, which needs a clean-up built), the court's
+   retention periods (the logs', the analytics' and the email's), the court's
    town and the store link.
 2. Settle every `grep -rn 'CHECK' site/` against what ships, in both languages. Three need building
    before the email routes (`delete.html`, and `privacy.html` section 8's requests) are true: a way
@@ -41,14 +42,12 @@ Play links to it:
    documented read-only query by player id would do); and a way for a guest or a Play-Games-only
    player, who has no username, to name their account (an account id on the Account screen, to
    copy, was suggested: the user's decision). Then both pages ask for the username or that id.
-3. Build in the app what Google Play asks of the app itself, which the site cannot do (the terms'
-   section 1 and its `CHECK`): links to `privacy.html` and `terms.html` on the Account screen (its
-   User Data policy wants the privacy policy inside the app, not only in Play Console), and, under
-   Register and before a first Play Games sign-in, a line linking the terms and question rules, such
-   as *Регистрацијом прихваташ Услове коришћења и правила питања* (its User Generated Content
-   policy wants the terms accepted before a player can submit, and only registered players do).
-   Nothing in `app/` or `core/` does either yet. Whether a line is enough or it needs a checkbox is
-   for the policies and the lawyer.
+3. What Google Play asks of the app itself (the terms' section 1 and its `CHECK`) is built on
+   `main` and `feat/guest-cleanup`: the About screen links `privacy.html` and `terms.html`, Register
+   has a line linking the terms and the privacy policy, and the Submit form has *Слањем прихваташ
+   правила питања.* under Send, linking `terms.html`, which covers a Play-Games-only player too; the
+   terms' section 1 says so now, both languages, its pill dropped. Whether a line is enough or it
+   needs a checkbox is still for the policies and the lawyer.
 4. Have a lawyer who knows the ZZPL, and the laws of BA, ME and MK, read both languages, and say
    whether the GDPR applies.
 5. From every page remove the draft comment, every `CHECK` comment (they hold internal notes, which
