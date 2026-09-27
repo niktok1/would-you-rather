@@ -573,8 +573,11 @@ decided in §8b).
     and later, `backup_rules.xml` before, in `:app:androidApp`) keep `AndroidTokenStorage`'s
     `wyr.auth.xml` out of the cloud backup and a device-to-device transfer: a copy would share a
     refresh-token family with its source, and whichever refreshed less would end up a fresh guest. A
-    new phone starts as a guest of its own, and a registered player logs in there. `allowBackup` stays
-    on, with nothing else in it yet.
+    new phone starts as a guest of its own, and a registered player logs in there. They keep
+    `AndroidPush`'s `wyr.device.xml` on the device too, whether the notifications permission was asked
+    for (*Push tokens*, *On Android*), so a phone restored from a backup asks again, at most once,
+    rather than never where the grant did not come with it. `allowBackup` stays on, with nothing of the
+    app's own in it yet.
 - **Accounts** (*decided 2026-09-25*, §8b): a username and a password on a player, which a guest may
   add, keeping everything it has, and log in with on another device. Built on the server:
   `players.username`, lower-cased, under a unique constraint, and `players.password_hash` (V5), both
@@ -716,9 +719,9 @@ decided in §8b).
     replaces one, so a dead session's 401 is dropped, and the fresh guest the next call mints registers.
     Best effort: a failure is dropped, and the next session or token registers again; one request a
     launch mends one that failed. The Submit form asks for the notifications permission right after a
-    question is stored (`DevicePush.askPermissionOnce`), which the platform asks once, ever: the least
-    obstructive moment, when a decision is what the player waits for. No token is removed yet: a player
-    who turns notifications off in the phone's settings sees none, whatever FCM sends.
+    question is stored (`DevicePush.askPermissionOnce`), which the platform asks once an install:
+    the least obstructive moment, when a decision is what the player waits for. No token is removed
+    yet: a player who turns notifications off in the phone's settings sees none, whatever FCM sends.
     `KeepPushTokenRegisteredTest`, `DefaultPushTokenRepositoryTest`, `AppServicesTest`,
     `SubmitViewModelTest`.
   - *On Android* (`AndroidPush` and `WyrMessagingService` in `:app:shared`'s androidMain, over
@@ -741,8 +744,9 @@ decided in §8b).
     `WyrMessagingService.onMessageReceived`, which posts nothing, and the in-app notice reads the list
     and dots the account icon instead (§8d, *The notice of a decision*). A new token
     (`onNewToken`) is registered as above. The notifications permission (`POST_NOTIFICATIONS`, Android
-    13 and later) is asked from the activity on screen, once, ever, and kept as asked in the device's
-    own preferences (`wyr.device`, not the session's `wyr.auth.xml`), only once it was asked. A push the
+    13 and later) is asked from the activity on screen, once an install, and kept as asked in the
+    device's own preferences (`wyr.device`, not the session's `wyr.auth.xml`), only once it was asked,
+    which the backup rules keep out of a backup, as they keep the session (*On the client*). A push the
     server one day sends as data alone would show nothing with the app in the background: none does.
     *To revisit*: firebase-messaging 25.1 deprecates `getToken` and `onNewToken` for registering by
     Firebase installation id (`register`, `onRegistered`); the server's HTTP v1 sends name a

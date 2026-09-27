@@ -54,7 +54,7 @@ internal class AndroidPush(
     }
 
     /**
-     * Asks for `POST_NOTIFICATIONS` on Android 13 and later, once, ever, from the activity on screen;
+     * Asks for `POST_NOTIFICATIONS` on Android 13 and later, once an install, from the activity on screen;
      * before 13 notifications need no asking. Kept as asked only once it was asked, so a moment with no
      * activity on screen asks at the next one.
      */
@@ -72,7 +72,10 @@ internal class AndroidPush(
     }
 
     private companion object {
-        /** A device's own, which may go in a backup, unlike the session's (`wyr.auth.xml`). */
+        /**
+         * The device's own, which the backup rules keep on it as they keep the session's (`wyr.auth.xml`,
+         * CLAUDE.md §8a): a phone restored from a backup asks for the permission again, at most once.
+         */
         const val PREFERENCES = "wyr.device"
         const val ASKED = "notifications_asked"
     }
