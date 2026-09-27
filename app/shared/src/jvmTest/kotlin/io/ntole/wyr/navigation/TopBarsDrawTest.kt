@@ -146,6 +146,30 @@ class TopBarsDrawTest {
         }
     }
 
+    /**
+     * The dot takes no room from the categories played: on Play's bar a long selection has the same
+     * room with news as without, in every language, so it is cut short where it is without the dot.
+     */
+    @Test
+    fun `the dot leaves a long selection its room`() {
+        val (plain, withNews) =
+            listOf("Play's, with a long selection", "Play's, with news and a long selection").map { name ->
+                BARS.single { it.name == name }
+            }
+        Language.entries.forEach { language ->
+            val (without, with) =
+                listOf(plain, withNews).map { bar ->
+                    val scene = scene(bar, language)
+                    try {
+                        scene.nodes().single { LONG_SELECTION in it.texts }.boundsInRoot
+                    } finally {
+                        scene.close()
+                    }
+                }
+            assertEquals(without, with, "$language")
+        }
+    }
+
     /** What the bars' buttons were tapped for, in order. */
     private class Actions {
         val tapped = mutableListOf<String>()
@@ -260,7 +284,8 @@ class TopBarsDrawTest {
                     taps = listOf("home", "account", "categories"),
                     draw = { actions -> PlayBarWithNews(actions, LocalStrings.current.allCategories) },
                 ),
-                // The dot takes no width of the categories': a long selection is cut as it is without it.
+                // The dot takes no width of the categories': a long selection is cut as it is without it
+                // (`the dot leaves a long selection its room`).
                 Bar(
                     name = "Play's, with news and a long selection",
                     icons = { listOf(it.home, it.playScreen.menu.name, it.notice.accountWithNews.fill(it.account)) },
