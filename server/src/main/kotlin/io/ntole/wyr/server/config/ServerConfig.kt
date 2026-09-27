@@ -90,6 +90,12 @@ data class ServerConfig(
      * restarting the service, and a question keeps what it cost when it was submitted.
      */
     val submissionCost: Int = Scoring.DEFAULT_SUBMISSION_COST,
+    /**
+     * How many days a guest nobody can reach any more is kept (CLAUDE.md §8b, *Guest clean-up*), from
+     * `GUEST_RETENTION_DAYS`: a whole number of at least 1, [DEFAULT_GUEST_RETENTION_DAYS] when unset or
+     * blank, or null for `0`, which turns the clean-up off. Read at boot.
+     */
+    val guestRetentionDays: Int? = DEFAULT_GUEST_RETENTION_DAYS,
 ) {
     /** True when running against the throwaway in-memory database. */
     val isEphemeralDatabase: Boolean get() = jdbcUrl.startsWith("jdbc:h2:")
@@ -108,6 +114,9 @@ data class ServerConfig(
 
         /** Shortest admin token the server boots on without a warning. `openssl rand -hex 32` makes 64. */
         const val MIN_ADMIN_TOKEN_LENGTH: Int = 32
+
+        /** How many days an unreachable guest is kept when `GUEST_RETENTION_DAYS` is unset. */
+        const val DEFAULT_GUEST_RETENTION_DAYS: Int = 90
 
         private const val DEFAULT_PORT = 8080
         private const val ACCESS_TTL_SECONDS = 15L * 60L
@@ -153,7 +162,25 @@ data class ServerConfig(
                 playGames = parsePlayGames(env("PLAY_GAMES_CLIENT_ID"), env("PLAY_GAMES_CLIENT_SECRET")),
                 minClientVersions = parseMinClientVersions(env),
                 submissionCost = env("SUBMISSION_COST")?.let(::parseSubmissionCost) ?: Scoring.DEFAULT_SUBMISSION_COST,
+                guestRetentionDays = parseGuestRetentionDays(env("GUEST_RETENTION_DAYS")),
             )
+        }
+
+        /**
+         * A whole number of days, trimmed: at least 1, or 0, which turns the clean-up off (null); unset or
+         * blank is [DEFAULT_GUEST_RETENTION_DAYS]. Anything else fails at config load, naming the variable,
+         * rather than falling back to the default: a mistyped retention must not delete guests sooner, or
+         * keep them for ever, unnoticed.
+         */
+        internal fun parseGuestRetentionDays(raw: String?): Int? {
+            val trimmed = raw?.trim().orEmpty()
+            if (trimmed.isEmpty()) return DEFAULT_GUEST_RETENTION_DAYS
+            val days = trimmed.toIntOrNull()
+            require(days != null && days >= 0) {
+                "GUEST_RETENTION_DAYS is \"$raw\"; expected a whole number of days of at least 1, 0 to turn " +
+                    "the guest clean-up off, or unset for $DEFAULT_GUEST_RETENTION_DAYS."
+            }
+            return days.takeIf { it > 0 }
         }
 
         /**

@@ -74,6 +74,36 @@ class ServerConfigTest {
     }
 
     @Test
+    fun `the guest retention comes from GUEST_RETENTION_DAYS, unset or blank is 90, and 0 is off`() {
+        mapOf("30" to 30, "1" to 1, " 365 " to 365).forEach { (raw, days) ->
+            assertEquals(
+                days,
+                ServerConfig.fromEnvironment(mapOf("GUEST_RETENTION_DAYS" to raw)::get).guestRetentionDays,
+                raw,
+            )
+        }
+        listOf(null, "", "  ").forEach { unset ->
+            assertEquals(
+                90,
+                ServerConfig.fromEnvironment(mapOf("GUEST_RETENTION_DAYS" to unset)::get).guestRetentionDays,
+                "$unset",
+            )
+        }
+        assertNull(ServerConfig.fromEnvironment(mapOf("GUEST_RETENTION_DAYS" to "0")::get).guestRetentionDays)
+    }
+
+    @Test
+    fun `a guest retention that is no whole number of days fails at boot naming the variable`() {
+        listOf("-1", "ninety", "1.5", "90 days", "90d").forEach { raw ->
+            val failure =
+                assertFailsWith<IllegalArgumentException>(raw) {
+                    ServerConfig.fromEnvironment(mapOf("GUEST_RETENTION_DAYS" to raw)::get)
+                }
+            assertContains(failure.message.orEmpty(), "GUEST_RETENTION_DAYS", message = raw)
+        }
+    }
+
+    @Test
     fun `the admin token comes from ADMIN_TOKEN and a blank one is none`() {
         val token = "0123456789abcdef".repeat(4)
 
