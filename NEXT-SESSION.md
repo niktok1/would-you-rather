@@ -809,6 +809,57 @@ with the services' real ids (a sign-in, a token, a notification), the notice's d
 moderator decision was made: moderation is off without `ADMIN_TOKEN`), a registered player's deletion
 (it needs a password typed), and CI's `ios` job.
 
+**The merge review's fixes** (after 931389a; all four findings held up on checking, none rejected),
+one commit each:
+- **A Play Games player's Account screen fits 599 with a failure** (64435de; CLAUDE.md §8d *The
+  Account screen*): *Додај корисничко име* stood on a row of its own under the stats, which took the
+  screen to 606 when Delete account or Log out failed, 618 while the read after it ran, and 630 when
+  the read of the player failed. It is the stats' grid's next cell now, beside the one stat, at the
+  card's end (two lines in Serbian), and the draw test holds each of those states to 599 and finds the
+  link beside the stat.
+- **No bar under the card once a failure shows** (76f7d4e): a guest whose deletion failed, while the
+  read after it ran, needed 610 (on main too); the bar goes once a failure shows, so that state needs
+  598, the same failure's once the read is done. Tested both ways.
+- **The dot and a long selection** (cd1bcd8): `TopBarsDrawTest` now finds the categories played at the
+  same place and size on Play's bar with news as without, in every language; b349b79 only said so.
+- **The notifications flag stays off the backup** (10c6856; §8a): both backup rule files leave out
+  `wyr.device.xml` beside `wyr.auth.xml`, as CLAUDE.md's "nothing else in it" said, so a restored
+  phone asks for the permission again, at most once, rather than never where the grant did not come
+  with the backup. Checked in the shrunk APK's compiled rules (`aapt2 dump xmltree`).
+- **Docs**: the Account screen's heights (eeb1bac: 598 at the tallest, a guest whose deletion failed;
+  582 for a registered player, one by Play Games whose read failed; where the link is); the APK's two
+  native libraries (a53bc57, *16 KB pages* below: Firebase brings DataStore's
+  `libdatastore_shared_counter.so`, 16 KB aligned as Compose's is).
+
+**Verified on this Mac after them**, each exit code read from a log file: `ktlintCheck`; the verify
+job's tests, each with `--rerun`: `:server:test` 486 (2 skipped), `:core:domain` 117, `:core:data`
+193, `:core:network` 122 and 128 as Android host tests, `:app:shared` 492, `:app:adminApp` 148,
+`:app:androidApp:testDevDebugUnitTest` 5, and `:app:shared:testAndroidHostTest` 309, none failing;
+its client compiles with `assembleDebug` and `assembleProdRelease`; its *Release signing* step's
+commands under `bash -eo pipefail` (see the note below); the desktop's and the web's
+(`compileKotlinWasmJs`) compiles; the iOS Kotlin compiles (`:app:shared` main and test, and each
+`:core` module's test, `:core` itself included). The prod APK's two native libraries: every LOAD
+segment 0x4000, each stored uncompressed, `zipalign -c -P 16 -v 4` *Verification successful*. **On an
+emulator** (`Emu`, API 35, read-only on port 5590, the app uninstalled after) against a local server
+(the fat jar on JDK 21, H2): the shrunk `localRelease` APK opened Home and the Account screen; with
+the server stopped, Delete account's dialog and Обриши showed *Нема интернет везе.* over the row and
+no bar; with it back, Try again read the player, and a deletion answered 204 and a fresh guest was
+minted. No crash in logcat, and every answer 200 or 204 but the two 401s the server's restart gave the
+old session, which the app answered by minting a guest. **Not verified**: the Play Games link on a
+device (Play Games is off without ids), the backup itself (no backup was made and restored), and CI's
+`ios` job.
+
+**Found while verifying, not fixed** (on main too; for the user): a guest's deletion offline, whose
+read after it fails whole, shows *Нема интернет везе.* twice, under My questions with its Try again
+and over Delete account's row, and needs 686 (638 for a registered player whose deletion failed so);
+the draw test has no such state. The stats' failure after a failed action is folded into the
+action's (`loadStats`), so My questions does not know the read failed whole. The options: the list's
+failure hidden while an action's failure shows; or the read's failure kept beside the action's, so
+the screen says it once. And `signingReport` fails when Gradle reuses its configuration cache entry
+(the same placeholders twice on one machine: AGP's `SigningConfig$AgpDecorated` is not found on
+load); a fresh entry, as CI always has, passes, so only a second local run of the *Release signing*
+step needs `--no-configuration-cache` on its `signingReport`.
+
 ### Verified working
 
 - **`feat/android-release`**, on this machine: `ktlintCheck`; the verify job's tests (server 480,
