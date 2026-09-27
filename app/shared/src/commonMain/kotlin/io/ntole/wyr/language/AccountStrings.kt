@@ -110,6 +110,8 @@ data class AccountStrings(
     val deleteAccount: DeleteAccountStrings,
     /** The Register form's line under its button: registering accepts the terms and the privacy policy. */
     val termsLine: TermsLineStrings,
+    /** The Submit form's line under Send: sending a question accepts the question rules. */
+    val rulesLine: RulesLineStrings,
 ) {
     /** These strings with [transform] applied to every one of them, as [Strings.map] asks. */
     internal fun map(transform: (String) -> String): AccountStrings =
@@ -174,6 +176,7 @@ data class AccountStrings(
             submissionsBlocked = transform(submissionsBlocked),
             deleteAccount = deleteAccount.map(transform),
             termsLine = termsLine.map(transform),
+            rulesLine = rulesLine.map(transform),
         )
 }
 
@@ -240,6 +243,7 @@ internal val SerbianCyrillicAccountStrings: AccountStrings =
         submissionsBlocked = "Не можеш да шаљеш питања.",
         deleteAccount = SerbianCyrillicDeleteAccountStrings,
         termsLine = SerbianCyrillicTermsLineStrings,
+        rulesLine = SerbianCyrillicRulesLineStrings,
     )
 
 internal val EnglishAccountStrings: AccountStrings =
@@ -304,4 +308,5 @@ internal val EnglishAccountStrings: AccountStrings =
         submissionsBlocked = "You can't send questions.",
         deleteAccount = EnglishDeleteAccountStrings,
         termsLine = EnglishTermsLineStrings,
+        rulesLine = EnglishRulesLineStrings,
     )

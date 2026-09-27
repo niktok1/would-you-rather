@@ -2335,7 +2335,13 @@ listed on the Account screen.
   *Пошаљи ·* and the coin and the number (`PointsText`, §8f), which a screen reader hears as *Пошаљи ·
   Поени: 1*, and holds the button off while the player's points, read through
   `GetPlayerStats` each time the form is shown and after every submit, are fewer, with one short
-  line saying so, *Немаш довољно поена.* The server's own refusal, `NOT_ENOUGH_POINTS`
+  line saying so, *Немаш довољно поена.* Under Send, always, one short muted line (*built
+  2026-09-27*, what Google Play asks of a game whose players post: accepting the terms before posting,
+  which a player registered by Play Games alone never met on the Register form), *Слањем прихваташ
+  правила питања.*, its noun a link that opens the site's terms and question rules in the browser, in
+  the language shown (`AccountStrings.rulesLine`, a template whose `{0}` is the link; the About
+  screen's `Site` and `openIfAble`, through `SiteLinksLine`, which the Register form's terms line uses
+  too); its tap `submit.rules` (§8g). The server's own refusal, `NOT_ENOUGH_POINTS`
   (`DomainError.NOT_ENOUGH_POINTS`, points spent meanwhile), is that same line, shown once: the
   points read after it hold the button off again. No other line explains the cost, the user asking
   for less text. A stored question clears the form and goes back to My questions, which reads the
@@ -2731,7 +2737,9 @@ hand, so the two cannot say different things; and **English** stands beside them
   *Претражи категорије*, *Изабрано: 3* and *Нема резултата*); the Account screen, whole, with My
   questions and the server line; the Auth page, whole; and the Submit screen's form, whole
   (`Strings.accountScreens`, an `AccountStrings` of the Account screen's words and those of the
-  pages opened from it, deleting an account's in `DeleteAccountStrings`); the update screen
+  pages opened from it, deleting an account's in `DeleteAccountStrings`, the Register form's terms
+  line in `TermsLineStrings` and the Submit form's rules line, *Слањем прихваташ {0}.* with *правила
+  питања* as its link, in `RulesLineStrings`); the update screen
   (`Strings.updateScreen`, *Нова верзија је доступна*, *Ажурирај*, *Освежи*); and the About screen
   (`Strings.aboutScreen`: *О игри*, the name its icon is given, *Верзија {0}*, the four links' names
   and *Лиценце отвореног кода*). What is the same in every language is no `Strings`: *16+*, the
@@ -2949,7 +2957,7 @@ the same events. The moderation app sends none.
   `account.open_auth`, `.add_username`, `.log_out`, `.try_again`; `my_questions.new_question`, `.first_question`,
   `.try_again`; `language.menu` and `language.option` (with its `language` tag); `auth.register`,
   `.show_password`, `.to_log_in`, `.terms`, `.privacy`, `.log_in`, `.log_in_anyway`, `.cancel`, `.to_register`,
-  `.play_games`, `.try_again`; `submit.category` (with its `category` id), `.send`, `.categories_try_again`,
+  `.play_games`, `.try_again`; `submit.category` (with its `category` id), `.send`, `.rules`, `.categories_try_again`,
   `.try_again`; `categories.all`, `.category` (with its id), `.play`, `.try_again`; `update.store` and
   `.reload`; `account.delete`, `.delete_confirm` and `.delete_cancel`. A text field is no
   tap. `TapsTest` draws every screen in the states that show all it can be tapped on, taps everything a

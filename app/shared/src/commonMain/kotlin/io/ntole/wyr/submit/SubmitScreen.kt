@@ -23,6 +23,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
+import io.ntole.wyr.about.SiteLink
+import io.ntole.wyr.about.SiteLinksLine
+import io.ntole.wyr.about.SitePage
 import io.ntole.wyr.analytics.tapped
 import io.ntole.wyr.core.domain.analytics.AnalyticsProperty
 import io.ntole.wyr.core.domain.error.DomainError
@@ -170,6 +173,7 @@ private fun Form(
                 spoken = sendText(shared, state.submissionCost),
             )
         }
+        RulesLine()
         if (state.isBusy) {
             LinearProgressIndicator(color = colors.headingAccent, modifier = Modifier.fillMaxWidth())
         }
@@ -180,6 +184,17 @@ private fun Form(
             }
         }
     }
+}
+
+/**
+ * The one short line under Send (CLAUDE.md §8d, *Submitting*): sending a question accepts the question
+ * rules, the noun a link to the site's terms page ([SiteLinksLine]), which Google Play asks of a game
+ * whose players post: a player registered by Play Games alone never saw the Register form's terms line.
+ */
+@Composable
+private fun RulesLine() {
+    val strings = LocalStrings.current.accountScreens.rulesLine
+    SiteLinksLine(line = strings.line, links = listOf(SiteLink(strings.rules, SitePage.TERMS, "submit.rules")))
 }
 
 @Composable
