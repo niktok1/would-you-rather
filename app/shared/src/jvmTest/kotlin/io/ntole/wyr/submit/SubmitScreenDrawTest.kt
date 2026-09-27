@@ -1,18 +1,27 @@
 package io.ntole.wyr.submit
 
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.ImageComposeScene
+import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsNode
 import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.unit.Density
+import io.ntole.wyr.RecordingUris
+import io.ntole.wyr.about.Site
+import io.ntole.wyr.about.SitePage
 import io.ntole.wyr.assertInCentredColumn
 import io.ntole.wyr.core.domain.category.Category
 import io.ntole.wyr.core.domain.error.DomainError
 import io.ntole.wyr.core.domain.submission.SubmissionRules
 import io.ntole.wyr.descriptions
+import io.ntole.wyr.everyNode
 import io.ntole.wyr.everyText
 import io.ntole.wyr.language.Language
 import io.ntole.wyr.language.WyrStrings
 import io.ntole.wyr.language.categoryName
+import io.ntole.wyr.language.fill
 import io.ntole.wyr.language.stringsOf
 import io.ntole.wyr.nodes
 import io.ntole.wyr.sizeNeeded
@@ -83,6 +92,35 @@ class SubmitScreenDrawTest {
                 assertEquals(listOf("submit"), actions.calls, "$language")
             } finally {
                 scene.close()
+            }
+        }
+    }
+
+    /**
+     * Under Send, one short line: sending accepts the question rules, the noun a link to the site's
+     * terms page in the language shown (CLAUDE.md §8d, *Submitting*), in every state, a guest's too.
+     */
+    @Test
+    fun `the line under Send links the question rules`() {
+        Language.entries.forEach { language ->
+            val strings = stringsOf(language).accountScreens.rulesLine
+            val line = strings.line.fill(strings.rules)
+            STATES.forEach { state ->
+                val uris = RecordingUris()
+                val scene = scene(state, language, uris = uris)
+                try {
+                    val send = sendButton(scene, sendText(stringsOf(language), state.submissionCost))
+                    val shown = scene.everyNode().single { line in it.texts }
+                    assertTrue(
+                        shown.boundsInRoot.top >= send.boundsInRoot.bottom,
+                        "$language: under Send in $state",
+                    )
+
+                    scene.links().forEach { tap -> tap() }
+                } finally {
+                    scene.close()
+                }
+                assertEquals(listOf(Site.url(SitePage.TERMS, language)), uris.opened, "$language: $state")
             }
         }
     }
@@ -262,10 +300,21 @@ class SubmitScreenDrawTest {
         dark: Boolean = false,
         width: Int = WIDTH,
         height: Int = HEIGHT,
+        uris: RecordingUris = RecordingUris(),
     ): ImageComposeScene =
         ImageComposeScene(width = width, height = height, density = Density(1f)) {
-            WyrTheme(darkTheme = dark) { WyrStrings(language) { SubmitScreen(state = state, actions = actions) } }
+            // The rules link opens through the test's own handler, never the machine's browser.
+            CompositionLocalProvider(LocalUriHandler provides uris) {
+                WyrTheme(darkTheme = dark) { WyrStrings(language) { SubmitScreen(state = state, actions = actions) } }
+            }
         }.also { it.render() }
+
+    /** The taps of every link in a text the scene lays out: a link has only a click, and Compose's marker. */
+    private fun ImageComposeScene.links(): List<() -> Boolean> =
+        everyNode()
+            .filter { node -> node.config.any { (key, _) -> key.name == "LinkTestMarker" } }
+            .mapNotNull { it.config.getOrNull(SemanticsActions.OnClick)?.action }
+            .also { assertEquals(1, it.size, "the question rules") }
 
     /** What the form asked for, in order. */
     private class Recorder : SubmitActions {

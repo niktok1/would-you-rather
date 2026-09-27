@@ -24,6 +24,7 @@ import io.ntole.wyr.server.google.googleHttpClient
 import io.ntole.wyr.server.home.homePickRoutes
 import io.ntole.wyr.server.moderation.AdminToken
 import io.ntole.wyr.server.moderation.moderationRoutes
+import io.ntole.wyr.server.player.GuestCleanupJob
 import io.ntole.wyr.server.player.playerRoutes
 import io.ntole.wyr.server.plugins.installPlugins
 import io.ntole.wyr.server.plugins.installRateLimits
@@ -40,6 +41,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlin.time.Duration.Companion.days
+import kotlin.time.Duration.Companion.seconds
 
 fun main() {
     val config = ServerConfig.fromEnvironment()
@@ -94,6 +97,10 @@ fun Application.wyrModule(
             DecisionNotifier(db, FcmSender(account, checkNotNull(google)), background)
         }
     val playGames = config.playGames?.let { client -> GooglePlayGames(client, checkNotNull(google)) }
+    // Deletes the guests nobody can reach any more, at boot and every day after (CLAUDE.md §8b).
+    config.guestRetentionDays?.let { days ->
+        GuestCleanupJob(db, days.days, config.refreshTokenTtlSeconds.seconds, background).start()
+    }
 
     routing {
         // Render pings this to decide whether the service is live. In no rate-limit group, so a check
@@ -150,6 +157,9 @@ private fun Application.warnAboutInsecureDefaults(config: ServerConfig) {
             "PLAY_GAMES_CLIENT_ID and PLAY_GAMES_CLIENT_SECRET are unset — Play Games sign-in is off. Its " +
                 "route is not served, and players register with a username and password alone.",
         )
+    }
+    if (config.guestRetentionDays == null) {
+        log.info("GUEST_RETENTION_DAYS is 0 — the guest clean-up is off, so no guest is ever deleted for being idle.")
     }
     if (config.allowedWebOrigins.isEmpty()) {
         log.info("ALLOWED_WEB_ORIGINS is unset — browser clients will be blocked by CORS.")

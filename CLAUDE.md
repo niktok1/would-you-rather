@@ -188,7 +188,10 @@ failing:
   gone. A writer that waited instead on a row the deletion removes (a re-answer on their vote, a
   re-skip on their skip, a registration on their `players` row) finds no row once it commits, then
   no player, and is 401 (`VoteStore.currentCycle`, `SkipStore.currentCycle`,
-  `AccountStore.register`). It locks their reactions before it counts their likes.
+  `AccountStore.register`). It locks their reactions before it counts their likes. The guest
+  clean-up (§8b) locks a guest's row before it checks again that they are still unreachable, then
+  deletes them through it (`GuestCleanup.deleteIfUnreachable`), so a second instance's run waits and
+  finds them gone, and a registration or a Play Games link that got there first keeps them.
   A read of rows a racing writer is about to add has no row to lock, so it locks a parent row that
   every such writer locks first (`SubmissionStore.submit` counts an author's pending questions
   under the author's `players` row, and `ModerationStore.blockAuthor` reads them under it too, so a
@@ -432,6 +435,11 @@ This project must never be attributed to any employer identity.
   stays unset until the release, which sets 50 on `wyr-server` alone (the user's decision; declared
   in `render.yaml` as a comment until then). Read at boot: changing it is changing the variable and
   restarting the service. `GET /v1/me` names it, so the game says what the server charges.
+- `GUEST_RETENTION_DAYS` is how many days a guest nobody can reach any more is kept before the server
+  deletes them (§8b, *Guest clean-up*): a whole number of at least 1; unset or blank is 90, and `0`
+  turns the clean-up off; anything else fails the boot, naming it (`ServerConfig.guestRetentionDays`).
+  `render.yaml` sets 90 on `wyr-server`, a plain value, and leaves it unset on `wyr-server-dev`. Read
+  at boot.
 - `MIN_CLIENT_VERSION_ANDROID`, `_IOS`, `_WEB` and `_DESKTOP` each name the oldest build of the game
   the server serves on that platform (§8b, *Minimum client version*); none is set, so no build is
   refused. Read at boot: raising one is changing the variable and restarting the service, and only
@@ -517,7 +525,8 @@ decided in §8b).
 - **Sessions** (*decided 2026-09-25*): a player's refresh tokens live in `sessions`, **one
   refresh-token family per device**, each rotating on its own row, so a refresh on one device never
   touches another's tokens. Nothing caps how many a player has, and only a logout, or the account's
-  deletion (below), deletes one: an expired session is dead where it lies. A mint opens a player's
+  deletion (below), the guest clean-up's included (§8b), deletes one: an expired session is dead
+  where it lies. A mint opens a player's
   first session (`SessionStore.open`); V4 opened one for every player who held a refresh token then.
   A refresh reads and writes its session
   alone. Every access token names its session beside its player (the `sessionId` claim), and a
@@ -869,7 +878,12 @@ decided in §8b).
 
 **Known limitation, by design for now:** a guest account is bound to one device's storage. Lose
 the device, reinstall the app or clear its storage, and the account — and its points — are gone,
-unless the guest registered (*Accounts*, above), and then only until it logs in again. Session storage is ordinary preference storage
+unless the guest registered (*Accounts*, above), and then only until it logs in again. A guest
+nobody can reach any more, with no username, no Play Games link and no session that can still
+refresh, is deleted once idle 90 days (`GUEST_RETENTION_DAYS`; §8b, *Guest clean-up*), as their own
+deletion would (*Deleting an account*): idle since their session's last refresh, or since they were
+minted when no session is left, a logout's. Such a guest could never be played again anyway: the
+device that held them mints a fresh guest once its refresh token dies. Session storage is ordinary preference storage
 (SharedPreferences / NSUserDefaults / JVM Preferences / localStorage), not Keychain or
 EncryptedSharedPreferences: enough for a game that stores no sensitive personal data.
 
@@ -1162,6 +1176,29 @@ EncryptedSharedPreferences: enough for a game that stores no sensitive personal 
   an id). A read, the moderator's lists included, logs nothing of its own.
   Never a token, a password or its hash, an email, a question's text, a rejection's reason or a
   name the moderator typed. `ActionLogTest`.
+- **Guest clean-up** — *decided 2026-09-27; built.* The user: delete the guests nobody can reach any
+  more, after 90 days. A **guest** is a player with no username and no Play Games link (`identities`);
+  **unreachable** means no session of theirs can still refresh and they have been idle
+  `GUEST_RETENTION_DAYS` (§8), 90 by default. Nothing records when a player last played, and no
+  column was added for it (no migration): every refresh sets its session's expiry a refresh token's
+  lifetime ahead (`REFRESH_TTL_SECONDS`, 30 days), and a playing client refreshes every 15 minutes, so
+  a session's last refresh is its expiry less that lifetime. So a guest is deleted when they were
+  minted at least the retention ago and every session of theirs has expired, its last refresh at least
+  the retention ago (`GuestCleanup.unreachable`); one with no session left, after a logout, counts
+  from being minted. A session whose token can still refresh always keeps its guest, whatever the
+  lifetime was when it was issued. Each goes through `AccountDeletion.delete` (§8a, *Deleting an
+  account*), so every cascade holds and each like they held is taken back from its author, as §8c's
+  sum asks. The job (`GuestCleanupJob`) runs at boot and then every 24 hours, in the server's
+  background scope, which stops with the server; a run reads 100 guests at a time (`BATCH_SIZE`), at
+  most 100 batches, oldest first, and deletes each in a transaction of its own, which locks the row and
+  checks again first (§4), so two instances running at once delete each guest once. Best effort: a run
+  that fails is logged as a warning, by the failure's kind alone, and the next run tries again. Each
+  run logs one INFO line, `guest clean-up deleted <n> guests idle 90 days or more`, never an id.
+  `0` turns it off (*provisional — user decision*: the other option was to refuse 0, as only a whole
+  number of at least 1); a blank value is the default, as every other variable's is. Nothing is sent to
+  the deleted guest's device: its next refresh is 401, as it was since the token died, and it mints a
+  fresh guest. `GuestCleanupTest` (who is deleted and who kept, the sum for other authors, two runs at
+  once, the log line), `ServerConfigTest`.
 - **Likes from fresh guests** — *decided 2026-09-24: no like limitations.* A like pays its author
   once per player (§8d, *Reactions*), and guests cost nothing to mint (§8a), so a script minting
   guests could pay one author a point per guest for each of their questions. The user accepted that:
@@ -2334,7 +2371,13 @@ listed on the Account screen.
   *Пошаљи ·* and the coin and the number (`PointsText`, §8f), which a screen reader hears as *Пошаљи ·
   Поени: 1*, and holds the button off while the player's points, read through
   `GetPlayerStats` each time the form is shown and after every submit, are fewer, with one short
-  line saying so, *Немаш довољно поена.* The server's own refusal, `NOT_ENOUGH_POINTS`
+  line saying so, *Немаш довољно поена.* Under Send, always, one short muted line (*built
+  2026-09-27*, what Google Play asks of a game whose players post: accepting the terms before posting,
+  which a player registered by Play Games alone never met on the Register form), *Слањем прихваташ
+  правила питања.*, its noun a link that opens the site's terms and question rules in the browser, in
+  the language shown (`AccountStrings.rulesLine`, a template whose `{0}` is the link; the About
+  screen's `Site` and `openIfAble`, through `SiteLinksLine`, which the Register form's terms line uses
+  too); its tap `submit.rules` (§8g). The server's own refusal, `NOT_ENOUGH_POINTS`
   (`DomainError.NOT_ENOUGH_POINTS`, points spent meanwhile), is that same line, shown once: the
   points read after it hold the button off again. No other line explains the cost, the user asking
   for less text. A stored question clears the form and goes back to My questions, which reads the
@@ -2745,7 +2788,9 @@ hand, so the two cannot say different things; and **English** stands beside them
   *Претражи категорије*, *Изабрано: 3* and *Нема резултата*); the Account screen, whole, with My
   questions and the server line; the Auth page, whole; and the Submit screen's form, whole
   (`Strings.accountScreens`, an `AccountStrings` of the Account screen's words and those of the
-  pages opened from it, deleting an account's in `DeleteAccountStrings`); the update screen
+  pages opened from it, deleting an account's in `DeleteAccountStrings`, the Register form's terms
+  line in `TermsLineStrings` and the Submit form's rules line, *Слањем прихваташ {0}.* with *правила
+  питања* as its link, in `RulesLineStrings`); the update screen
   (`Strings.updateScreen`, *Нова верзија је доступна*, *Ажурирај*, *Освежи*); and the About screen
   (`Strings.aboutScreen`: *О игри*, the name its icon is given, *Верзија {0}*, the four links' names
   and *Лиценце отвореног кода*, and *ИД налога*, *Копирај ИД налога* and *Копирано*). What is the same in every language is no `Strings`: *16+*, the
@@ -2963,7 +3008,7 @@ the same events. The moderation app sends none.
   `account.open_auth`, `.add_username`, `.log_out`, `.try_again`; `my_questions.new_question`, `.first_question`,
   `.try_again`; `language.menu` and `language.option` (with its `language` tag); `auth.register`,
   `.show_password`, `.to_log_in`, `.terms`, `.privacy`, `.log_in`, `.log_in_anyway`, `.cancel`, `.to_register`,
-  `.play_games`, `.try_again`; `submit.category` (with its `category` id), `.send`, `.categories_try_again`,
+  `.play_games`, `.try_again`; `submit.category` (with its `category` id), `.send`, `.rules`, `.categories_try_again`,
   `.try_again`; `categories.all`, `.category` (with its id), `.play`, `.try_again`; `update.store` and
   `.reload`; `account.delete`, `.delete_confirm` and `.delete_cancel`. A text field is no
   tap. `TapsTest` draws every screen in the states that show all it can be tapped on, taps everything a

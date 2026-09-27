@@ -321,9 +321,11 @@ class TapsTest {
                 )
             }
 
-        assertEquals(setOf("submit.category", "submit.send"), form)
-        assertEquals(setOf("submit.category", "submit.categories_try_again", "submit.send"), unread)
-        assertEquals(setOf("submit.category", "submit.send", "submit.try_again"), pointsUnread)
+        // The line under Send links the question rules (CLAUDE.md §8d, *Submitting*).
+        val rules = setOf("submit.rules")
+        assertEquals(setOf("submit.category", "submit.send") + rules, form)
+        assertEquals(setOf("submit.category", "submit.categories_try_again", "submit.send") + rules, unread)
+        assertEquals(setOf("submit.category", "submit.send", "submit.try_again") + rules, pointsUnread)
         val chips =
             analytics.named(AnalyticsEvent.TAP).filter {
                 it.properties[AnalyticsProperty.ELEMENT] ==
