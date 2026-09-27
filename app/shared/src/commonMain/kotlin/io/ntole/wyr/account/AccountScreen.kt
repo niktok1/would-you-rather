@@ -239,7 +239,8 @@ private fun StatisticsSwitch(
 /**
  * Who is playing, their points and their stats, on a card, and a guest's one button to the Auth page,
  * or for a player registered by Play Games alone a quiet link there, to add a username; before the
- * first read works, a spinner, or why it failed with Try again.
+ * first read works, a spinner, or why it failed with Try again; and while an action runs, a bar under
+ * the card, unless a failure shows.
  */
 @Composable
 private fun Player(
@@ -258,7 +259,9 @@ private fun Player(
         } else if (failure == null) {
             LoadingSpinner()
         }
-        if (state.isBusy && stats != null) {
+        // Not while a failure shows: the action it names is over, and the read after it only keeps the
+        // buttons off a moment longer, so the bar's row goes to the failure and the screen still fits.
+        if (state.isBusy && stats != null && state.failure == null) {
             LinearProgressIndicator(color = colors.headingAccent, modifier = Modifier.fillMaxWidth())
         }
         if (failure != null) {

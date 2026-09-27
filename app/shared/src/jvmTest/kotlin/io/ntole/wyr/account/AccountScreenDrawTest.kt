@@ -405,6 +405,29 @@ class AccountScreenDrawTest {
         }
     }
 
+    /**
+     * While an action runs a bar under the card says so, and not once its failure shows: the read
+     * after it runs on a moment, and its row goes to the failure, so the screen still fits.
+     */
+    @Test
+    fun `the bar shows while an action runs and not once it failed`() {
+        val failed = AccountFailure(AccountAction.DELETE, DomainError.NETWORK)
+        val deleting = AccountState(stats = GUEST, submissions = emptyList(), running = AccountAction.DELETE)
+        listOf(
+            deleting to true,
+            deleting.copy(failure = failed) to false,
+            deleting.copy(running = null, failure = failed) to false,
+        ).forEach { (state, shown) ->
+            val scene = scene(state, Language.DEFAULT)
+            try {
+                val bars = scene.everyNode().filter { SemanticsProperties.ProgressBarRangeInfo in it.config }
+                assertEquals(shown, bars.isNotEmpty(), "$state")
+            } finally {
+                scene.close()
+            }
+        }
+    }
+
     /** A player who could not be read again is not offered a deletion, which would only fail too. */
     @Test
     fun `no deletion is offered while the player could not be read again or at all`() {
@@ -932,6 +955,13 @@ class AccountScreenDrawTest {
                     failure = AccountFailure(AccountAction.DELETE, DomainError.NETWORK),
                 ),
                 AccountState(stats = GUEST, submissions = emptyList(), running = AccountAction.DELETE),
+                // The deletion failed, and the read after it runs.
+                AccountState(
+                    stats = GUEST,
+                    submissions = emptyList(),
+                    failure = AccountFailure(AccountAction.DELETE, DomainError.NETWORK),
+                    running = AccountAction.DELETE,
+                ),
             )
 
         /** Every state with no button to the Auth page: no player read yet, and a registered player. */
