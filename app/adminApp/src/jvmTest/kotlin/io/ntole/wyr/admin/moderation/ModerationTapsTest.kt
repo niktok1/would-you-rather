@@ -9,6 +9,7 @@ import io.ntole.wyr.admin.moderation.FakeModeration.Companion.TOKEN
 import io.ntole.wyr.admin.settle
 import io.ntole.wyr.admin.tap
 import io.ntole.wyr.admin.texts
+import io.ntole.wyr.core.domain.moderation.AccountRef
 import io.ntole.wyr.core.network.environment.WyrEnvironment
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -77,6 +78,27 @@ class ModerationTapsTest {
             assertTrue("Author author-o · blocked" in shown, "$shown")
             assertTrue("Unblock author" in shown, "$shown")
             assertFalse("Block author..." in shown, "$shown")
+        }
+
+    @Test
+    fun `Delete account asks in a dialog that names the account and only its confirm deletes`() =
+        onScreen(Screen.ACCOUNTS) { viewModel, scene ->
+            viewModel.setAccountToDelete("Leaving_1")
+            scene.settle()
+
+            scene.tap("Delete account...")
+            assertTrue(deleteWarningOf(AccountRef.Username("leaving_1")) in scene.texts(), "${scene.texts()}")
+            scene.tap("Cancel")
+            advance(scene)
+            assertEquals(emptyList(), moderation.calls, "Cancel deletes nothing")
+
+            scene.tap("Delete account...")
+            scene.tap("Delete account")
+            advance(scene)
+
+            assertEquals(listOf("deleteAccount Username(username=leaving_1)"), moderation.calls)
+            val shown = scene.texts()
+            assertTrue("Deleted the account of username leaving_1. It cannot be undone." in shown, "$shown")
         }
 
     /** The app on [screen], the token typed, drawn off screen at a desktop window's size. */

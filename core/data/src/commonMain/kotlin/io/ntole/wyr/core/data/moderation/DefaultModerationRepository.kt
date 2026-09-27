@@ -12,6 +12,7 @@ import io.ntole.wyr.core.data.mapper.toModeratorsSubmission
 import io.ntole.wyr.core.data.mapper.wireCategories
 import io.ntole.wyr.core.data.mapper.wireStatuses
 import io.ntole.wyr.core.domain.category.Category
+import io.ntole.wyr.core.domain.moderation.AccountRef
 import io.ntole.wyr.core.domain.moderation.AdminToken
 import io.ntole.wyr.core.domain.moderation.AuthorBlock
 import io.ntole.wyr.core.domain.moderation.ModeratedQuestion
@@ -23,6 +24,7 @@ import io.ntole.wyr.core.domain.moderation.RejectionReason
 import io.ntole.wyr.core.domain.moderation.ReportedQuestion
 import io.ntole.wyr.core.domain.submission.Submission
 import io.ntole.wyr.core.network.api.ModerationApi
+import io.ntole.wyr.core.player.DeleteAccountRequest
 import io.ntole.wyr.core.question.RestoreQuestionRequest
 import io.ntole.wyr.core.question.RetireQuestionRequest
 import io.ntole.wyr.core.report.DismissReportsRequest
@@ -103,6 +105,11 @@ public class DefaultModerationRepository(
         authorId: String,
     ): AuthorBlock = runApi { api.unblockAuthor(token.value, UnblockAuthorRequest(authorId)) }.toDomain()
 
+    override suspend fun deleteAccount(
+        token: AdminToken,
+        account: AccountRef,
+    ): Unit = runApi { api.deleteAccount(token.value, account.toRequest()) }
+
     override suspend fun addCategory(
         token: AdminToken,
         id: String?,
@@ -117,3 +124,10 @@ public class DefaultModerationRepository(
         nameEn: String,
     ): Category = runApi { api.renameCategory(token.value, RenameCategoryRequest(id, nameSr, nameEn)) }.toDomain()
 }
+
+/** [this] as the server's request names it: by exactly one of the two. */
+private fun AccountRef.toRequest(): DeleteAccountRequest =
+    when (this) {
+        is AccountRef.Username -> DeleteAccountRequest(username = username)
+        is AccountRef.Id -> DeleteAccountRequest(accountId = accountId)
+    }

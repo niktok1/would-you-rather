@@ -306,6 +306,42 @@ class ModerationOverHttpTest {
         }
 
     @Test
+    fun `an account's deletion is posted with the token and its 404 reads as no such account`() =
+        runTest(dispatcher) {
+            var found = true
+            val viewModel =
+                openOver {
+                    if (found) {
+                        respond("", HttpStatusCode.NoContent)
+                    } else {
+                        respondError(HttpStatusCode.NotFound, ErrorCode.PLAYER_NOT_FOUND, "no such account")
+                    }
+                }
+
+            viewModel.setAccountToDelete(" Leaving_1 ")
+            viewModel.askToDeleteAccount()
+            viewModel.confirmDeleteAccount()
+            settle(viewModel)
+            found = false
+            viewModel.setAccountToDelete("0f8fad5b-d9cb-469f-a165-70867728950e")
+            viewModel.askToDeleteAccount()
+            viewModel.confirmDeleteAccount()
+            settle(viewModel)
+
+            assertEquals(
+                listOf(WyrApi.Paths.ADMIN_ACCOUNT_DELETIONS, WyrApi.Paths.ADMIN_ACCOUNT_DELETIONS),
+                requests.map { it.url.encodedPath },
+            )
+            requests.forEach { sent -> assertEquals(FakeModeration.TOKEN, sent.headers[WyrApi.Headers.ADMIN_TOKEN]) }
+            assertEquals(
+                listOf("""{"username":"leaving_1"}""", """{"accountId":"0f8fad5b-d9cb-469f-a165-70867728950e"}"""),
+                requests.map { it.body.toByteArray().decodeToString() },
+            )
+            val failure = viewModel.state.value.accounts.failure
+            assertEquals(Failure.Refused(DomainError.PLAYER_NOT_FOUND, detail = "no such account"), failure)
+        }
+
+    @Test
     fun `a 429 reads with the wait its Retry-After names`() =
         runTest(dispatcher) {
             val viewModel =

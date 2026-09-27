@@ -15,6 +15,7 @@ import io.ntole.wyr.core.author.UnblockAuthorRequest
 import io.ntole.wyr.core.category.CategoryDto
 import io.ntole.wyr.core.category.CreateCategoryRequest
 import io.ntole.wyr.core.category.RenameCategoryRequest
+import io.ntole.wyr.core.player.DeleteAccountRequest
 import io.ntole.wyr.core.question.AdminQuestionDto
 import io.ntole.wyr.core.question.AdminQuestionPageDto
 import io.ntole.wyr.core.question.ApproveSubmissionRequest
@@ -30,9 +31,9 @@ import io.ntole.wyr.core.report.DismissReportsRequest
 /**
  * The moderator's routes (CLAUDE.md §8d, *Moderation*): the queue and its decisions, the list of
  * every question with its retirement and restoration, adding and renaming a category, the reported
- * questions and their dismissal, and blocking and unblocking an author. Each call carries
- * [adminToken] in [WyrApi.Headers.ADMIN_TOKEN], and only that call: the token is the caller's to hold,
- * in memory, and is never set on the client or stored.
+ * questions and their dismissal, blocking and unblocking an author, and deleting an account. Each call
+ * carries [adminToken] in [WyrApi.Headers.ADMIN_TOKEN], and only that call: the token is the caller's to
+ * hold, in memory, and is never set on the client or stored.
  *
  * The player's session is left alone. The Auth plugin still attaches the bearer token when there is
  * one, as it does to every request, and the admin routes ignore it. They answer a wrong token 403,
@@ -192,6 +193,20 @@ public class ModerationApi(
                 admin(adminToken)
                 setBody(request)
             }.body()
+
+    /**
+     * Deletes the account [request] names, on its player's request, answered 204, with nothing to read
+     * back (CLAUDE.md §8a, *Deleting an account*, *By a moderator*).
+     */
+    public suspend fun deleteAccount(
+        adminToken: String,
+        request: DeleteAccountRequest,
+    ) {
+        client.post(WyrApi.Paths.ADMIN_ACCOUNT_DELETIONS) {
+            admin(adminToken)
+            setBody(request)
+        }
+    }
 
     private fun HttpRequestBuilder.admin(adminToken: String) {
         header(WyrApi.Headers.ADMIN_TOKEN, adminToken)

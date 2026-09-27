@@ -24,6 +24,7 @@ import io.ntole.wyr.core.data.storeHolding
 import io.ntole.wyr.core.domain.category.Category
 import io.ntole.wyr.core.domain.error.DomainError
 import io.ntole.wyr.core.domain.error.WyrException
+import io.ntole.wyr.core.domain.moderation.AccountRef
 import io.ntole.wyr.core.domain.moderation.AdminToken
 import io.ntole.wyr.core.domain.moderation.AuthorBlock
 import io.ntole.wyr.core.domain.moderation.ModeratedQuestion
@@ -43,6 +44,7 @@ import io.ntole.wyr.core.network.SessionStore
 import io.ntole.wyr.core.network.WyrHttpClient
 import io.ntole.wyr.core.network.WyrJson
 import io.ntole.wyr.core.network.api.ModerationApi
+import io.ntole.wyr.core.player.DeleteAccountRequest
 import io.ntole.wyr.core.question.AdminQuestionDto
 import io.ntole.wyr.core.question.ApproveSubmissionRequest
 import io.ntole.wyr.core.question.QuestionStatus
@@ -467,6 +469,34 @@ class DefaultModerationRepositoryTest {
             }
         }
 
+    @Test
+    fun `an account's deletion names it by username or by id with the token and needs no answer`() =
+        runTest {
+            val moderation = repositoryOver(storeHolding(null))
+
+            moderation.deleteAccount(token, AccountRef.Username("leaving"))
+            moderation.deleteAccount(token, AccountRef.Id("p1"))
+
+            assertEquals(
+                listOf(DeleteAccountRequest(username = "leaving"), DeleteAccountRequest(accountId = "p1")),
+                engine.requestHistory.map { decode<DeleteAccountRequest>(it) },
+            )
+            assertEquals(listOf(token.value, token.value), adminTokensSent())
+            assertEquals(0, engine.requestHistory.count { it.url.encodedPath == WyrApi.Paths.AUTH_GUEST })
+        }
+
+    @Test
+    fun `an account no player has reads as PLAYER_NOT_FOUND`() =
+        runTest {
+            val moderation = repositoryOver(storeHolding(null))
+            refuseWith =
+                { respondError(HttpStatusCode.NotFound, ErrorDto("no such account", ErrorCode.PLAYER_NOT_FOUND)) }
+
+            val failure = assertFailsWith<WyrException> { moderation.deleteAccount(token, AccountRef.Id("p9")) }
+
+            assertEquals(DomainError.PLAYER_NOT_FOUND, failure.error)
+        }
+
     private suspend fun MockRequestHandleScope.answer(request: HttpRequestData): HttpResponseData {
         val refusal = refuseWith
         return when {
@@ -535,6 +565,10 @@ class DefaultModerationRepositoryTest {
             request.url.encodedPath == WyrApi.Paths.ADMIN_AUTHOR_UNBLOCKS -> {
                 val unblock = decode<UnblockAuthorRequest>(request)
                 respondJson(WyrJson.encodeToString(AuthorBlockDto(unblock.authorId, blocked = false)))
+            }
+
+            request.url.encodedPath == WyrApi.Paths.ADMIN_ACCOUNT_DELETIONS -> {
+                respond("", HttpStatusCode.NoContent)
             }
 
             request.url.encodedPath == WyrApi.Paths.ADMIN_REJECTIONS -> {

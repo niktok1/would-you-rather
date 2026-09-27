@@ -89,4 +89,12 @@ object NoActions : ModerationActions {
     override fun cancelRenaming() = Unit
 
     override fun saveRenaming() = Unit
+
+    override fun setAccountToDelete(text: String) = Unit
+
+    override fun askToDeleteAccount() = Unit
+
+    override fun cancelDeleteAccount() = Unit
+
+    override fun confirmDeleteAccount() = Unit
 }

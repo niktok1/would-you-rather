@@ -1,6 +1,7 @@
 package io.ntole.wyr.admin.moderation
 
 import io.ntole.wyr.core.domain.category.Category
+import io.ntole.wyr.core.domain.moderation.AccountRef
 import io.ntole.wyr.core.domain.moderation.AdminToken
 import io.ntole.wyr.core.domain.moderation.AuthorBlock
 import io.ntole.wyr.core.domain.moderation.ModeratedQuestion
@@ -160,6 +161,18 @@ class FakeModeration : ModerationRepository {
         tokens += token
         calls += "blockAuthor $authorId ${reason.value}"
         return blockAuthor.invoke(authorId, reason)
+    }
+
+    /** A deletion that went through, as the server answers one: nothing to read back. */
+    var deleteAccount: suspend (AccountRef) -> Unit = {}
+
+    override suspend fun deleteAccount(
+        token: AdminToken,
+        account: AccountRef,
+    ) {
+        tokens += token
+        calls += "deleteAccount $account"
+        deleteAccount.invoke(account)
     }
 
     override suspend fun unblockAuthor(

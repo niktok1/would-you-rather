@@ -7,8 +7,9 @@ import io.ntole.wyr.core.domain.submission.SubmissionStatus
 /**
  * The players' submissions as the moderator decides them, every question as the moderator retires
  * and restores it, the categories as the moderator adds and renames them, the questions players
- * reported, and their authors as the moderator blocks and unblocks them (CLAUDE.md §8d,
- * *Moderation*). Implemented in `:core:data`.
+ * reported, their authors as the moderator blocks and unblocks them, and the players' accounts as
+ * the moderator deletes them on request (CLAUDE.md §8d, *Moderation*; §8a, *Deleting an account*).
+ * Implemented in `:core:data`.
  *
  * Every call sends the [AdminToken] it is given, and nothing here keeps it. None needs a player
  * session or touches the one there is: the moderator is whoever holds the token, not a player. A
@@ -179,6 +180,20 @@ public interface ModerationRepository {
         token: AdminToken,
         authorId: String,
     ): AuthorBlock
+
+    /**
+     * Deletes the account [account] names, on its player's request: their username and password, their
+     * sessions on every device, and everything else of theirs, as their own deletion does; their
+     * approved questions stay, with nobody as their author. It cannot be undone.
+     *
+     * @throws io.ntole.wyr.core.domain.error.WyrException on any failure, with
+     *   [io.ntole.wyr.core.domain.error.DomainError.PLAYER_NOT_FOUND] for an account no player has, one
+     *   deleted already included.
+     */
+    public suspend fun deleteAccount(
+        token: AdminToken,
+        account: AccountRef,
+    )
 
     public companion object {
         /**

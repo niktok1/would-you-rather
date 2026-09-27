@@ -27,6 +27,7 @@ import io.ntole.wyr.core.network.respondErrorDto
 import io.ntole.wyr.core.network.respondSession
 import io.ntole.wyr.core.network.session
 import io.ntole.wyr.core.network.storeHolding
+import io.ntole.wyr.core.player.DeleteAccountRequest
 import io.ntole.wyr.core.question.AdminQuestionDto
 import io.ntole.wyr.core.question.AdminQuestionPageDto
 import io.ntole.wyr.core.question.ApproveSubmissionRequest
@@ -268,6 +269,26 @@ class ModerationApiTest {
         }
 
     @Test
+    fun `an account's deletion is posted with the admin token and names the account one way alone`() =
+        runTest {
+            val engine = MockEngine { respond("", HttpStatusCode.NoContent) }
+            val api = moderationApi(engine, storeHolding(session("a")))
+
+            api.deleteAccount(ADMIN_TOKEN, DeleteAccountRequest(username = "leaving"))
+            api.deleteAccount(ADMIN_TOKEN, DeleteAccountRequest(accountId = "p1"))
+
+            engine.requestHistory.forEach { sent ->
+                assertEquals(HttpMethod.Post, sent.method)
+                assertEquals(WyrApi.Paths.ADMIN_ACCOUNT_DELETIONS, sent.url.encodedPath)
+                assertEquals(ADMIN_TOKEN, sent.headers[WyrApi.Headers.ADMIN_TOKEN])
+            }
+            assertEquals(
+                listOf("""{"username":"leaving"}""", """{"accountId":"p1"}"""),
+                engine.requestHistory.map { it.body.toByteArray().decodeToString() },
+            )
+        }
+
+    @Test
     fun `a block and an unblock are posted with the admin token and the author's id`() =
         runTest {
             val engine =
@@ -323,6 +344,7 @@ class ModerationApiTest {
                     { api.dismissReports("not-the-token", DismissReportsRequest("q1")) },
                     { api.blockAuthor("not-the-token", BlockAuthorRequest("p1", "a duplicate")) },
                     { api.unblockAuthor("not-the-token", UnblockAuthorRequest("p1")) },
+                    { api.deleteAccount("not-the-token", DeleteAccountRequest(accountId = "p1")) },
                 )
             calls.forEach { call ->
                 val failure = assertFailsWith<ApiException> { call() }
@@ -343,6 +365,7 @@ class ModerationApiTest {
                     WyrApi.Paths.ADMIN_REPORT_DISMISSALS,
                     WyrApi.Paths.ADMIN_AUTHOR_BLOCKS,
                     WyrApi.Paths.ADMIN_AUTHOR_UNBLOCKS,
+                    WyrApi.Paths.ADMIN_ACCOUNT_DELETIONS,
                 ),
                 engine.requestHistory.map { it.url.encodedPath },
             )

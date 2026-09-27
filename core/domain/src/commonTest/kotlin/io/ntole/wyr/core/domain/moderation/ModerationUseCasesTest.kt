@@ -136,6 +136,19 @@ class ModerationUseCasesTest {
             assertEquals(listOf(token, token), moderation.tokens)
         }
 
+    @Test
+    fun `a deletion sends the account as named and the token`() =
+        runTest {
+            DeletePlayerAccount(moderation)(token, AccountRef.Username("leaving"))
+            DeletePlayerAccount(moderation)(token, AccountRef.Id("p1"))
+
+            assertEquals(
+                listOf("deleteAccount Username(username=leaving)", "deleteAccount Id(accountId=p1)"),
+                moderation.calls,
+            )
+            assertEquals(listOf(token, token), moderation.tokens)
+        }
+
     private class RecordingModeration : ModerationRepository {
         val calls = mutableListOf<String>()
         val tokens = mutableListOf<AdminToken>()
@@ -247,6 +260,14 @@ class ModerationUseCasesTest {
             tokens += token
             calls += "unblockAuthor $authorId"
             return AuthorBlock(authorId, isBlocked = false, rejectedSubmissions = 0)
+        }
+
+        override suspend fun deleteAccount(
+            token: AdminToken,
+            account: AccountRef,
+        ) {
+            tokens += token
+            calls += "deleteAccount $account"
         }
     }
 

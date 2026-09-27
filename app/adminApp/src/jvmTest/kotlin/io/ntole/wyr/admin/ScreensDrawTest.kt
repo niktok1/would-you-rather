@@ -2,6 +2,7 @@ package io.ntole.wyr.admin
 
 import androidx.compose.ui.ImageComposeScene
 import androidx.compose.ui.unit.Density
+import io.ntole.wyr.admin.moderation.AccountDeletions
 import io.ntole.wyr.admin.moderation.Action
 import io.ntole.wyr.admin.moderation.BlockDraft
 import io.ntole.wyr.admin.moderation.CategoryDraft
@@ -21,7 +22,9 @@ import io.ntole.wyr.admin.moderation.Retiring
 import io.ntole.wyr.admin.moderation.Running
 import io.ntole.wyr.admin.moderation.Screen
 import io.ntole.wyr.admin.moderation.SecretText
+import io.ntole.wyr.admin.moderation.deleteWarningOf
 import io.ntole.wyr.core.domain.error.DomainError
+import io.ntole.wyr.core.domain.moderation.AccountRef
 import io.ntole.wyr.core.domain.moderation.QuestionCursor
 import io.ntole.wyr.core.domain.moderation.QuestionFilter
 import io.ntole.wyr.core.domain.moderation.ReportReason
@@ -192,6 +195,42 @@ class ScreensDrawTest {
             )
 
         WyrEnvironment.entries.forEach { environment -> draw(environment, categories, Screen.CATEGORIES) }
+    }
+
+    @Test
+    fun `the app draws an account to delete with its dialog and every outcome`() {
+        val typed =
+            ModerationState(
+                adminToken = SecretText("typed"),
+                accounts =
+                    AccountDeletions(
+                        typed = "Leaving_1",
+                        failure = Failure.Refused(DomainError.PLAYER_NOT_FOUND, detail = "no such account"),
+                        outcomes = Outcomes(notice = "Deleted the account of username gone_1. It cannot be undone."),
+                    ),
+                running = Running(Action.DELETE_ACCOUNT),
+            )
+
+        WyrEnvironment.entries.forEach { environment -> draw(environment, typed, Screen.ACCOUNTS) }
+        val texts = draw(WyrEnvironment.LOCAL, typed, Screen.ACCOUNTS)
+        listOf(
+            "Accounts",
+            "Delete an account on request",
+            "Username or account id",
+            "Sent as a username: leaving_1.",
+            "Deleting...",
+            "No such account on this server (404): check the username or the account id. It may be deleted already.",
+            "server: no such account",
+            "Deleted the account of username gone_1. It cannot be undone.",
+        ).forEach { text -> assertTrue(text in texts, "\"$text\" is not in $texts") }
+
+        // Delete account waiting to be confirmed, its dialog over the tab, naming what goes.
+        val id = AccountRef.Id("0f8fad5b-d9cb-469f-a165-70867728950e")
+        val asking = typed.copy(running = null, deleting = id)
+        val dialog = draw(WyrEnvironment.PROD, asking, Screen.ACCOUNTS)
+        listOf("Delete this account?", deleteWarningOf(id), "Delete account", "Cancel").forEach { text ->
+            assertTrue(text in dialog, "\"$text\" is not in $dialog")
+        }
     }
 
     /**

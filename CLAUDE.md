@@ -686,7 +686,9 @@ decided in §8b).
     it does for the player's own deletion, their sessions on every device with it (their next request
     is 401), and of two deletions of one player racing the second waits and is 404 (§4). One INFO line
     names the player by id, never the username asked for (§8b, *Logging*). `AccountToDeleteTest`,
-    `AccountDeletionByModeratorFlowTest`, `ActionLogTest`.
+    `AccountDeletionByModeratorFlowTest`, `ActionLogTest`. The moderation app's Accounts tab sends it
+    (§8d, *Moderation*); on the client `PLAYER_NOT_FOUND` is `DomainError.PLAYER_NOT_FOUND`, and the
+    call is `ModerationRepository.deleteAccount`, behind `DeletePlayerAccount`, with an `AccountRef`.
 
 - **Push tokens** (*decided 2026-09-26; built on the server, and on the Android client since
   `feat/android-services`*): a device's Firebase Cloud Messaging token, so a player hears when a moderator decides one
@@ -2338,7 +2340,8 @@ listed on the Account screen.
   its categories** when approving (*Categories*: at least one stays, and a change replaces the
   question's `question_categories` rows in one transaction), and **may retire an approved question
   and restore it** (*Retiring*, below; provisional, §8b), sees every question (the list), and **adds
-  categories and puts their names right** (*Categories*). A
+  categories and puts their names right** (*Categories*), and **deletes a player's account on their
+  request** (§8a, *Deleting an account*, *By a moderator*). A
   rejection carries a **short reason**, and the author sees the status of each of their submissions
   and, for a rejected one, that reason (`GET /v1/me/questions`, *Submitting*). The moderator is
   whoever holds the server's admin token (`ADMIN_TOKEN`, §8), not a role on a player account. Built
@@ -2474,6 +2477,9 @@ listed on the Account screen.
     `ModeratedQuestion.authorId`, and the queue's and the decisions' `Submission.authorId`
     (`toModeratorsSubmission`), carry the author's opaque id; a player's own `Submission` never does,
     whatever it is sent (`SubmissionMapperTest`). `AUTHOR_NOT_FOUND` is `DomainError.AUTHOR_NOT_FOUND`.
+    `DeletePlayerAccount` deletes an account on its player's request, named by an `AccountRef`, a
+    username or an id (§8a, *Deleting an account*, *By a moderator*), and `PLAYER_NOT_FOUND` is
+    `DomainError.PLAYER_NOT_FOUND`.
     `moderationDataModule(environment)` binds it, and only there, for a
     client that only moderates: an HTTP client of its own over an in-memory session store nothing
     writes, no `TokenStorage` needed, no session repository, so no bearer token goes out and no guest
@@ -2556,12 +2562,23 @@ listed on the Account screen.
     rename, whatever became of it (the list is no admin route, so the rule above for a 403 or a 429
     does not apply), and a failure shows under the form or the card it came from, a 409 as an id a
     category has already. Lock forgets what was typed for a category and keeps the categories read.
+    *Accounts*, the fifth tab (*built 2026-09-27*; §8a, *Deleting an account*, *By a moderator*),
+    deletes a player's account on their request: one field for a username or an account id, sent as a
+    username when the domain's `AccountRules` take it as one and as an id otherwise (`AccountRef.of`: a
+    player id, a UUID, is never a username), the field's hint saying which; Delete account... asks
+    first, in a dialog naming the account, what goes and that it cannot be undone (`deleteWarningOf`),
+    and only its Delete account sends (`DeletePlayerAccount`, through `runApi` alone, as every
+    moderator's call). The line under the field says it is done, or why not: `PLAYER_NOT_FOUND` reads
+    as no such account, and a 403 or a 429 as on every tab. What was typed is cleared once deleted, and
+    Lock forgets it, the dialog and the line. Nothing is read again: nothing the app lists shows a
+    player.
     `ModerationViewModelTest`, `ReportsViewModelTest`, `AuthorsViewModelTest`,
-    `QuestionListViewModelTest` and `CategoriesViewModelTest` drive it over scripted repositories,
-    `ModerationTapsTest` taps its chips and buttons, a ready reason and the block's dialog among them,
-    `ModerationOverHttpTest` over the real client configuration, and `ScreensDrawTest` draws every
-    screen off screen at a desktop window's size, and reads the Reports tab's and the author actions'
-    texts. The game's builds do not moderate at all.
+    `QuestionListViewModelTest`, `CategoriesViewModelTest` and `AccountsViewModelTest` drive it over
+    scripted repositories, `ModerationTapsTest` taps its chips and buttons, a ready reason, the block's
+    dialog and the deletion's among them, `ModerationOverHttpTest` over the real client configuration,
+    and `ScreensDrawTest` draws every screen off screen at a desktop window's size, and reads the
+    Reports tab's, the author actions' and the Accounts tab's texts. The game's builds do not moderate
+    at all.
 - **Home picks** *(decided 2026-09-26; built on the server and the game)*: the Home screen shows
   **two Play buttons**, one in each card's colour (§5b), both starting the game alike, each with how
   many times players have tapped it, to fill the screen as a question would (the user: a Home that

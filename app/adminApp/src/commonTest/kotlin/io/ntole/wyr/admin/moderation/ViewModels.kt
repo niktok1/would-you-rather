@@ -5,6 +5,7 @@ import io.ntole.wyr.core.domain.category.GetCategories
 import io.ntole.wyr.core.domain.moderation.AddCategory
 import io.ntole.wyr.core.domain.moderation.ApproveSubmission
 import io.ntole.wyr.core.domain.moderation.BlockAuthor
+import io.ntole.wyr.core.domain.moderation.DeletePlayerAccount
 import io.ntole.wyr.core.domain.moderation.DismissReports
 import io.ntole.wyr.core.domain.moderation.GetPendingSubmissions
 import io.ntole.wyr.core.domain.moderation.GetQuestions
@@ -35,4 +36,5 @@ fun moderationViewModelOver(
         getCategories = GetCategories(categories),
         addCategory = AddCategory(moderation),
         renameCategory = RenameCategory(moderation),
+        deletePlayerAccount = DeletePlayerAccount(moderation),
     )

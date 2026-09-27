@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.safeContentPadding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.PrimaryTabRow
@@ -26,6 +27,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import io.ntole.wyr.admin.moderation.AccountsScreen
 import io.ntole.wyr.admin.moderation.BlockDraft
 import io.ntole.wyr.admin.moderation.CategoriesScreen
 import io.ntole.wyr.admin.moderation.ModerationActions
@@ -39,11 +41,13 @@ import io.ntole.wyr.admin.moderation.Retiring
 import io.ntole.wyr.admin.moderation.Screen
 import io.ntole.wyr.admin.moderation.TokenBar
 import io.ntole.wyr.admin.moderation.blockWarningOf
+import io.ntole.wyr.admin.moderation.deleteWarningOf
 import io.ntole.wyr.admin.moderation.isFull
 import io.ntole.wyr.admin.moderation.retireWarningOf
 import io.ntole.wyr.admin.theme.AdminDimens
 import io.ntole.wyr.admin.theme.AdminTheme
 import io.ntole.wyr.admin.theme.AdminType
+import io.ntole.wyr.core.domain.moderation.AccountRef
 import io.ntole.wyr.core.domain.moderation.RejectionReason
 import io.ntole.wyr.core.network.environment.WyrEnvironment
 import org.koin.compose.koinInject
@@ -72,7 +76,8 @@ fun AdminApp() {
 /**
  * The server the app talks to, always on top, then the admin token, and [screen], one of the tabs.
  * Stateless, so what it shows is [state] alone, in the system's light or dark scheme unless
- * [darkTheme] says. The question waiting for Retire to be confirmed asks over it.
+ * [darkTheme] says. The question waiting for Retire to be confirmed asks over it, as do the author
+ * waiting for Block and the account waiting for Delete account.
  */
 @Composable
 fun ModerationApp(
@@ -103,11 +108,13 @@ fun ModerationApp(
                         Screen.REPORTS -> ReportsScreen(state, actions, modifier = Modifier.weight(1f))
                         Screen.QUESTIONS -> QuestionsScreen(state, actions, modifier = Modifier.weight(1f))
                         Screen.CATEGORIES -> CategoriesScreen(state, actions, modifier = Modifier.weight(1f))
+                        Screen.ACCOUNTS -> AccountsScreen(state, actions, modifier = Modifier.weight(1f))
                     }
                 }
             }
             state.retiring?.let { retiring -> RetireDialog(retiring, state, actions) }
             state.blocking?.let { blocking -> BlockDialog(blocking, state, actions) }
+            state.deleting?.let { account -> DeleteAccountDialog(account, state, actions) }
         }
     }
 }
@@ -126,6 +133,30 @@ private fun RetireDialog(
         text = { Text(retireWarningOf(question)) },
         confirmButton = { Button(onClick = actions::confirmRetire) { Text("Retire") } },
         dismissButton = { TextButton(onClick = actions::cancelRetire) { Text("Cancel") } },
+    )
+}
+
+/** Delete account asks first: it takes everything of the player's, for good. */
+@Composable
+private fun DeleteAccountDialog(
+    account: AccountRef,
+    state: ModerationState,
+    actions: ModerationActions,
+) {
+    AlertDialog(
+        onDismissRequest = actions::cancelDeleteAccount,
+        title = { Text("Delete this account?") },
+        text = { Text(deleteWarningOf(account)) },
+        confirmButton = {
+            Button(
+                onClick = actions::confirmDeleteAccount,
+                enabled = state.canSend,
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+            ) {
+                Text("Delete account")
+            }
+        },
+        dismissButton = { TextButton(onClick = actions::cancelDeleteAccount) { Text("Cancel") } },
     )
 }
 
@@ -185,6 +216,7 @@ fun tabLabelOf(
             Screen.REPORTS -> state.reports.reports?.let { if (isFull(it)) "${it.size}+" else "${it.size}" }
             Screen.QUESTIONS -> state.questions.questions?.let { "${it.size}" }
             Screen.CATEGORIES -> state.categories.categories?.let { "${it.size}" }
+            Screen.ACCOUNTS -> null
         }
     return screen.label + count?.let { " ($it)" }.orEmpty()
 }

@@ -17,6 +17,7 @@ import io.ntole.wyr.core.domain.category.GetCategories
 import io.ntole.wyr.core.domain.moderation.AddCategory
 import io.ntole.wyr.core.domain.moderation.ApproveSubmission
 import io.ntole.wyr.core.domain.moderation.BlockAuthor
+import io.ntole.wyr.core.domain.moderation.DeletePlayerAccount
 import io.ntole.wyr.core.domain.moderation.DismissReports
 import io.ntole.wyr.core.domain.moderation.GetPendingSubmissions
 import io.ntole.wyr.core.domain.moderation.GetQuestions
@@ -170,6 +171,7 @@ class DataModuleTest {
         assertNull(koin.getOrNull<DismissReports>())
         assertNull(koin.getOrNull<BlockAuthor>())
         assertNull(koin.getOrNull<UnblockAuthor>())
+        assertNull(koin.getOrNull<DeletePlayerAccount>())
         koin.close()
     }
 
@@ -294,6 +296,7 @@ class DataModuleTest {
                     koin.get<DismissReports>(),
                     koin.get<BlockAuthor>(),
                     koin.get<UnblockAuthor>(),
+                    koin.get<DeletePlayerAccount>(),
                 ).forEach { useCase -> assertNotNull(useCase, environment.name) }
                 assertNull(koin.getOrNull<SessionRepository>(), "nothing can mint a guest")
                 assertNull(koin.getOrNull<TokenStorage>())

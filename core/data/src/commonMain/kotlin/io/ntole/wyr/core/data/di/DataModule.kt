@@ -31,6 +31,7 @@ import io.ntole.wyr.core.domain.home.PickOnHome
 import io.ntole.wyr.core.domain.moderation.AddCategory
 import io.ntole.wyr.core.domain.moderation.ApproveSubmission
 import io.ntole.wyr.core.domain.moderation.BlockAuthor
+import io.ntole.wyr.core.domain.moderation.DeletePlayerAccount
 import io.ntole.wyr.core.domain.moderation.DismissReports
 import io.ntole.wyr.core.domain.moderation.GetPendingSubmissions
 import io.ntole.wyr.core.domain.moderation.GetQuestions
@@ -236,5 +237,6 @@ public fun moderationDataModule(environment: WyrEnvironment): Module =
         factory { DismissReports(moderation = get()) }
         factory { BlockAuthor(moderation = get()) }
         factory { UnblockAuthor(moderation = get()) }
+        factory { DeletePlayerAccount(moderation = get()) }
         factory { GetCategories(categories = get()) }
     }

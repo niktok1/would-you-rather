@@ -9,6 +9,7 @@ import io.ntole.wyr.core.domain.moderation.AddCategory
 import io.ntole.wyr.core.domain.moderation.AdminToken
 import io.ntole.wyr.core.domain.moderation.ApproveSubmission
 import io.ntole.wyr.core.domain.moderation.BlockAuthor
+import io.ntole.wyr.core.domain.moderation.DeletePlayerAccount
 import io.ntole.wyr.core.domain.moderation.DismissReports
 import io.ntole.wyr.core.domain.moderation.GetPendingSubmissions
 import io.ntole.wyr.core.domain.moderation.GetQuestions
@@ -123,6 +124,16 @@ interface ModerationActions {
     fun cancelRenaming()
 
     fun saveRenaming()
+
+    /** Replaces the username or account id typed for the account to delete with [text]. */
+    fun setAccountToDelete(text: String)
+
+    /** Asks the moderator to confirm deleting the account typed. */
+    fun askToDeleteAccount()
+
+    fun cancelDeleteAccount()
+
+    fun confirmDeleteAccount()
 }
 
 /**
@@ -136,7 +147,8 @@ interface ModerationActions {
  * again, from any of the three. A pending question in the list is decided as in the queue. The
  * categories, read through [GetCategories] before the queue, the reports or the list each Load reads,
  * are what the chips offer and what names a question's categories; [AddCategory] adds one and
- * [RenameCategory] puts its names right.
+ * [RenameCategory] puts its names right. [DeletePlayerAccount] deletes a player's account on their
+ * request, named by its username or its id, once the moderator confirms it.
  *
  * Nothing here has a player session, or could make one: the moderator is whoever holds the token,
  * and the app's wiring binds no session at all (`moderationDataModule`). Every request carries the
@@ -160,6 +172,7 @@ class ModerationViewModel(
     private val getCategories: GetCategories,
     private val addCategory: AddCategory,
     private val renameCategory: RenameCategory,
+    private val deletePlayerAccount: DeletePlayerAccount,
 ) : ViewModel(),
     ModerationActions {
     private val _state = MutableStateFlow(ModerationState())
@@ -512,6 +525,48 @@ class ModerationViewModel(
         }
     }
 
+    override fun setAccountToDelete(text: String) = _state.update { it.copy(accounts = it.accounts.copy(typed = text)) }
+
+    /**
+     * Asks the moderator to confirm deleting the account typed, a username or an id
+     * ([AccountDeletions.named]). Nothing is sent until [confirmDeleteAccount].
+     */
+    override fun askToDeleteAccount() {
+        val current = _state.value
+        val account = current.accounts.named ?: return
+        if (!current.canSend) return
+        _state.update { it.copy(deleting = account) }
+    }
+
+    override fun cancelDeleteAccount() = _state.update { it.copy(deleting = null) }
+
+    /**
+     * Deletes the account [askToDeleteAccount] asked about, for good, and says so; what was typed is
+     * cleared once it is deleted, unless typed over meanwhile. A failure, an account no player has
+     * among them, shows under the field until the next deletion.
+     */
+    override fun confirmDeleteAccount() {
+        val current = _state.value
+        val account = current.deleting ?: return
+        if (!current.canSend) return
+        val typed = current.accounts.typed
+        _state.update { it.copy(deleting = null) }
+        exclusively(Running(Action.DELETE_ACCOUNT)) { token ->
+            _state.update { it.copy(accounts = it.accounts.copy(failure = null)) }
+            val failure =
+                failureOf {
+                    deletePlayerAccount(token, account)
+                    val notice = "Deleted the account of ${accountLineOf(account)}. It cannot be undone."
+                    _state.update {
+                        val left = if (it.accounts.typed == typed) "" else it.accounts.typed
+                        val noticed = it.noticed(Screen.ACCOUNTS, notice)
+                        noticed.copy(accounts = noticed.accounts.copy(typed = left))
+                    }
+                }
+            if (failure != null) _state.update { it.copy(accounts = it.accounts.copy(failure = failure)) }
+        }
+    }
+
     /**
      * Sends a decision on [questionId] from [from], which answers with the line to show once it is
      * made, then reads the queue again, and the list if it was read, whatever became of it: a decision
@@ -568,7 +623,7 @@ class ModerationViewModel(
                 rereadList(token)
             }
 
-            Screen.PENDING, Screen.CATEGORIES -> {}
+            Screen.PENDING, Screen.CATEGORIES, Screen.ACCOUNTS -> {}
         }
         failure
     }
@@ -777,6 +832,7 @@ class ModerationViewModel(
             Screen.REPORTS -> copy(reports = reports.copy(outcomes = change(reports.outcomes)))
             Screen.QUESTIONS -> copy(questions = questions.copy(outcomes = change(questions.outcomes)))
             Screen.CATEGORIES -> withCategories { it.copy(outcomes = change(it.outcomes)) }
+            Screen.ACCOUNTS -> copy(accounts = accounts.copy(outcomes = change(accounts.outcomes)))
         }
 
     private fun ModerationState.withCategories(change: (CategoryList) -> CategoryList): ModerationState =

@@ -2,6 +2,7 @@ package io.ntole.wyr.admin.moderation
 
 import io.ntole.wyr.core.domain.category.Category
 import io.ntole.wyr.core.domain.category.CategoryRules
+import io.ntole.wyr.core.domain.moderation.AccountRef
 import io.ntole.wyr.core.domain.moderation.AdminToken
 import io.ntole.wyr.core.domain.moderation.ModeratedQuestion
 import io.ntole.wyr.core.domain.moderation.QuestionCursor
@@ -15,7 +16,7 @@ import kotlin.jvm.JvmInline
 /**
  * Everything the moderation app shows: the admin token as typed, the pending queue, the reported
  * questions, the list of every question, the categories, and what the moderator has picked or typed
- * for each pending one and for a category.
+ * for each pending one, for a category, and for an account to delete.
  *
  * Nothing is read until the moderator asks, since no token has been typed yet. One action runs at a
  * time ([running]), so what the screens show changes in the order things happened.
@@ -31,6 +32,8 @@ data class ModerationState(
     val reports: ReportList = ReportList(),
     val questions: QuestionList = QuestionList(),
     val categories: CategoryList = CategoryList(),
+    /** The account the moderator is naming to delete, on its player's request, and how the last went. */
+    val accounts: AccountDeletions = AccountDeletions(),
     /**
      * For each pending question, by id, the approval's categories and the rejection's reason, the
      * same whichever screen it is decided from.
@@ -46,6 +49,8 @@ data class ModerationState(
     val authors: Map<String, Boolean> = emptyMap(),
     /** The author the moderator asked to block, with the reason typed, waiting for them to confirm it. */
     val blocking: BlockDraft? = null,
+    /** The account the moderator asked to delete, waiting for them to confirm it. */
+    val deleting: AccountRef? = null,
     /** The action in flight, or `null` when idle. */
     val running: Running? = null,
     /**
@@ -86,7 +91,7 @@ data class ModerationState(
         when (screen) {
             Screen.QUESTIONS -> questions.questions?.firstOrNull { it.id == questionId }
             Screen.REPORTS -> reports.reports?.firstOrNull { it.question.id == questionId }?.question
-            Screen.PENDING, Screen.CATEGORIES -> null
+            Screen.PENDING, Screen.CATEGORIES, Screen.ACCOUNTS -> null
         }
 
     /**
@@ -102,6 +107,7 @@ data class ModerationState(
             Screen.REPORTS -> reports.outcomes
             Screen.QUESTIONS -> questions.outcomes
             Screen.CATEGORIES -> categories.outcomes
+            Screen.ACCOUNTS -> accounts.outcomes
         }
 }
 
@@ -119,6 +125,7 @@ enum class Screen(
     REPORTS("Reports"),
     QUESTIONS("All questions"),
     CATEGORIES("Categories"),
+    ACCOUNTS("Accounts"),
 }
 
 /**
@@ -247,6 +254,20 @@ data class CategoryDraft(
 }
 
 /**
+ * An account to delete on its player's request (CLAUDE.md §8a, *Deleting an account*, *By a moderator*),
+ * named by its username or its id exactly as typed, and why the last deletion failed, shown under the
+ * field until the next one, or in [outcomes] what the last that worked did.
+ */
+data class AccountDeletions(
+    val typed: String = "",
+    val failure: Failure? = null,
+    val outcomes: Outcomes = Outcomes(),
+) {
+    /** The account [typed] names, a username or an id, or `null` while nothing is typed. */
+    val named: AccountRef? get() = AccountRef.of(typed)
+}
+
+/**
  * The outcomes of the actions started from one screen: why each action on a question failed, by the
  * question's id, shown under it, or at the top once the screen no longer lists it, kept until the
  * next action on it or the screen's own Load; and what the last action that worked did, in a line,
@@ -294,6 +315,7 @@ enum class Action {
     LOAD_CATEGORIES,
     ADD_CATEGORY,
     RENAME_CATEGORY,
+    DELETE_ACCOUNT,
 }
 
 /**
