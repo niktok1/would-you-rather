@@ -493,11 +493,13 @@ This project must never be attributed to any employer identity.
     background and the launcher icon, with no library. The colour is a platform copy (§5b), held equal
     by `WindowThemeTest`, the app module's unit test, in CI's verify job.
   - *What Google Play asks of the build* (checked 2026-09-26): target API 36, which `android-targetSdk`
-    is; a bundle signed with the upload key (above); and 16 KB memory pages. The APK's one native
-    library, Compose's `libandroidx.graphics.path.so` (`androidx.graphics:graphics-path` 1.0.1), has
-    every LOAD segment 16 KB aligned and is stored uncompressed on a 16 KB boundary for all four ABIs;
-    a native library added later is checked the same way (NEXT-SESSION.md). What the app collects, for
-    the Data safety form, is listed there too.
+    is; a bundle signed with the upload key (above); and 16 KB memory pages. The APK's two native
+    libraries, Compose's `libandroidx.graphics.path.so` (`androidx.graphics:graphics-path` 1.0.1) and
+    DataStore's `libdatastore_shared_counter.so` (`androidx.datastore:datastore-core-android` 1.1.7,
+    which `firebase-messaging` 25.1.3 brings through `firebase-common` 22.0.1; checked 2026-09-27),
+    have every LOAD segment 16 KB aligned and are stored uncompressed on a 16 KB boundary for all four
+    ABIs; a native library added later is checked the same way (NEXT-SESSION.md). What the app
+    collects, for the Data safety form, is listed there too.
 
 ## 8a. Authentication — resolved
 

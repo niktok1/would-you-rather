@@ -819,7 +819,8 @@ moderator decision was made: moderation is off without `ADMIN_TOKEN`), a registe
   `assembleLocalRelease`; the ios job's Kotlin compiles. `bundleProdRelease` fails at once, naming
   the four settings. The prod APK: label *Шта би радије?*, the adaptive icon with its monochrome
   layer, `Theme.Wyr` with the splash items on v31, and its one native library 16 KB aligned
-  (`zipalign -c -P 16` and its ELF LOAD segments); an unsigned bundle (`packageLocalReleaseBundle`)
+  (`zipalign -c -P 16` and its ELF LOAD segments; Firebase brings a second on `feat/android-services`,
+  checked the same way, *16 KB pages* below); an unsigned bundle (`packageLocalReleaseBundle`)
   carries R8's mapping, as `BUNDLE-METADATA/com.android.tools.build.obfuscation/proguard.map`. **On
   an emulator** (the `Emu` AVD, API 35, booted read-only, the app uninstalled after) against a local
   server: the shrunk `localRelease` APK opened Home, Play, a like, an answer, the next question, a
@@ -2260,8 +2261,12 @@ and the categories, with `adb logcat` open for `FATAL` and `Serializ`.
 
 - *Target API* 36 (`android-targetSdk` in the catalog), Play's level for new apps and updates in
   2026. Play raises it every year: check its policy page before a release.
-- *16 KB pages*: the APK's one native library, Compose's `libandroidx.graphics.path.so`, is 16 KB
-  aligned for all four ABIs. After adding a library, check a release APK again:
+- *16 KB pages*: the APK's two native libraries, Compose's `libandroidx.graphics.path.so` and
+  DataStore's `libdatastore_shared_counter.so` (`androidx.datastore` 1.1.7, which
+  `firebase-messaging` 25.1.3 brings through `firebase-common` 22.0.1), are 16 KB aligned for all four
+  ABIs: every LOAD segment's alignment is 0x4000 (`objdump -p` on each `.so`), and zipalign's check
+  below ends in *Verification successful*, each `.so` stored uncompressed (checked 2026-09-27, on
+  `feat/android-services`). After adding a library, check a release APK again:
   `$ANDROID_HOME/build-tools/36.1.0/zipalign -c -P 16 -v 4 <apk>` must end in *Verification
   successful*, and Android Studio's *Build → Analyze APK* flags a `.so` whose segments are not.
 - *The Data safety form*, which is yours to fill in, from the list below.
