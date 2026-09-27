@@ -860,6 +860,32 @@ the screen says it once. And `signingReport` fails when Gradle reuses its config
 load); a fresh entry, as CI always has, passes, so only a second local run of the *Release signing*
 step needs `--no-configuration-cache` on its `signingReport`.
 
+**On `feat/guest-cleanup`** (from 1503192; not merged, not pushed), the user's two decisions of
+2026-09-27:
+- **Guest clean-up, 90 days** (CLAUDE.md §8b *Guest clean-up*; §8 `GUEST_RETENTION_DAYS`; §8a):
+  `GuestCleanupJob` deletes, at boot and every 24 hours, each guest (no username, no `identities` row)
+  minted at least 90 days ago whose every session has expired and last refreshed (expiry less
+  `REFRESH_TTL_SECONDS`) at least 90 days ago, through `AccountDeletion.delete`. No migration: the
+  sessions already keep the last refresh. 100 a batch, each in its own transaction that locks the row
+  and checks again; one INFO line with the count. `GUEST_RETENTION_DAYS`: at least 1, unset or blank
+  90, `0` off (provisional); `render.yaml` sets 90 on `wyr-server` as a plain value.
+- **The Submit form's rules line** (§8d *Submitting*, §8f, §8g): *Слањем прихваташ правила питања.*
+  under Send, the noun a link to the site's terms page, tapped as `submit.rules`, for Google Play's
+  UGC rule (a Play-Games-only player never sees Register's terms line). `SiteLinksLine` now draws
+  both lines.
+- The draft site (`docs/site`, 8d3a00f) says 90 days of inactivity for an unreachable guest and that
+  sending a question accepts the question rules, both languages.
+
+**Verified on this Mac**, each exit code read from a log file: `ktlintCheck`; the verify job's tests
+with `--rerun`: `:server:test` 494 (2 skipped), `:core:domain` 117, `:core:data` 193,
+`:core:network` 122 and 128 as Android host tests, `:app:shared` 493, `:app:adminApp` 148,
+`:app:androidApp:testDevDebugUnitTest` 5, `:app:shared:testAndroidHostTest`, none failing; the client
+compiles with `assembleDebug` and `assembleProdRelease`; the iOS Kotlin compiles (`:app:shared` main
+and test, each `:core` module's test); `:server:buildFatJar` and a boot on JDK 21, H2, port 18113,
+whose log said `guest clean-up deleted 0 guests idle 90 days or more`. **Not verified**: the job on
+PostgreSQL (CI's `server-postgres` job runs its tests), a deletion of a real idle guest on a deployed
+server, the rules line on a device, CI's `ios` job, and the *Release signing* step.
+
 ### Verified working
 
 - **`feat/android-release`**, on this machine: `ktlintCheck`; the verify job's tests (server 480,
