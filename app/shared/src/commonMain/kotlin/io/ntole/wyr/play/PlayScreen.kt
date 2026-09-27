@@ -1,6 +1,5 @@
 package io.ntole.wyr.play
 
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -429,7 +428,7 @@ internal fun categoriesPlayed(
 }
 
 /**
- * One answer card, in its side's brand colour (CLAUDE.md §5b), outlined once it is the player's pick.
+ * One answer card, in its side's brand colour (CLAUDE.md §5b), lifted once it is the player's pick ([pickLift]).
  * Once the answer is revealed it shows its side's share, [percent], counted up from 0 ([CountedUpText]),
  * and a bar along its edge at [barAt], from one side of the card to the other, filling with the count
  * to the share ([RevealBar]): in [contentColor] on a [barTrack]. [clickLabel], if any, is what a screen
@@ -464,13 +463,7 @@ private fun OptionCard(
                 .heightIn(min = dimens.optionMinHeight)
                 // Only the label: without an action of its own, the tap stays the Surface's.
                 .semantics { if (clickLabel != null) onClick(label = clickLabel, action = null) }
-                .then(
-                    if (isYourPick) {
-                        Modifier.border(width = dimens.pickBorder, color = contentColor, shape = shape)
-                    } else {
-                        Modifier
-                    },
-                ),
+                .pickLift(isPicked = isYourPick, shape = shape, colour = background),
     ) {
         // One count for the percentage and the bar, so they move as one.
         val counted = percent?.let { rememberCountUp(it) }
@@ -503,14 +496,13 @@ private fun OptionCard(
                     )
                 }
             }
-            // Inside the card, from edge to edge, the card's shape clipping its ends round; a little in from
-            // its edge, past the pick's outline, so the outline never hides it or merges with it.
+            // Flush along the card's edge, from one side to the other, the card's shape clipping its ends round.
             if (counted != null) {
                 RevealBar(
                     counted = counted,
                     fill = contentColor,
                     track = barTrack,
-                    modifier = Modifier.align(barAt).padding(vertical = dimens.revealBarInset),
+                    modifier = Modifier.align(barAt),
                 )
             }
         }

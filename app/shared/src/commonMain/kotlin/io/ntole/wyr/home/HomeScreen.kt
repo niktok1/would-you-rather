@@ -3,7 +3,6 @@ package io.ntole.wyr.home
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -42,6 +41,7 @@ import io.ntole.wyr.navigation.HomeTopBar
 import io.ntole.wyr.play.CountedUpText
 import io.ntole.wyr.play.RevealBar
 import io.ntole.wyr.play.percentStyle
+import io.ntole.wyr.play.pickLift
 import io.ntole.wyr.play.rememberCountUp
 import io.ntole.wyr.theme.WyrThemeAccessors
 import io.ntole.wyr.theme.WyrTypeScale
@@ -163,8 +163,8 @@ private fun Tally.plus(side: Side): Tally = if (side == Side.A) copy(votesA = vo
 
 /**
  * One of the two Play buttons, in [side]'s card colour: *Play* and, once a button is tapped, [share],
- * counted up from 0 with a bar along its bottom filling with it, as the reveal counts, and an outline
- * when [isPicked]. The share's room is kept from the start, so the reveal moves nothing. Its tap is
+ * counted up from 0 with a bar along its bottom filling with it, as the reveal counts, and lifted
+ * when [isPicked] ([pickLift]). The share's room is kept from the start, so the reveal moves nothing. Its tap is
  * `home.play` to the analytics, with its side (CLAUDE.md §8g).
  */
 @Composable
@@ -180,18 +180,19 @@ private fun PlayButton(
     val dimens = WyrThemeAccessors.dimens
     val strings = LocalStrings.current
     val shape = RoundedCornerShape(dimens.radiusCard)
+    val background = if (side == Side.A) colors.optionA else colors.optionB
     val contentColor = if (side == Side.A) colors.onOptionA else colors.onOptionB
 
     Surface(
         onClick = tapped("home.play", mapOf(AnalyticsProperty.SIDE to side.name), onClick),
         enabled = enabled,
         shape = shape,
-        color = if (side == Side.A) colors.optionA else colors.optionB,
+        color = background,
         contentColor = contentColor,
         modifier =
             modifier
                 .heightIn(min = dimens.homeButtonHeight)
-                .then(if (isPicked) Modifier.border(dimens.pickBorder, contentColor, shape) else Modifier),
+                .pickLift(isPicked = isPicked, shape = shape, colour = background),
     ) {
         val counted = share?.let { rememberCountUp(it, durationMillis = HOME_COUNT_UP_MILLIS) }
 
@@ -232,7 +233,7 @@ private fun PlayButton(
                     counted = counted,
                     fill = contentColor,
                     track = if (side == Side.A) colors.revealTrackOnA else colors.revealTrackOnB,
-                    modifier = Modifier.align(Alignment.BottomCenter).padding(vertical = dimens.revealBarInset),
+                    modifier = Modifier.align(Alignment.BottomCenter),
                 )
             }
         }

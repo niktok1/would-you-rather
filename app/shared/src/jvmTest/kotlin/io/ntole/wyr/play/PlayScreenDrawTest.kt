@@ -224,8 +224,8 @@ class PlayScreenDrawTest {
                         fill
                 }
 
-            assertTrue(filledAt(cardB.bottom - BAR_INSET - BAR_HEIGHT / 2) > 0, "no bar along card B's bottom")
-            assertEquals(0, filledAt(cardB.top + BAR_INSET + BAR_HEIGHT / 2), "a bar along card B's top")
+            assertTrue(filledAt(cardB.bottom - BAR_HEIGHT / 2) > 0, "no bar along card B's bottom")
+            assertEquals(0, filledAt(cardB.top + BAR_HEIGHT / 2), "a bar along card B's top")
         }
     }
 
@@ -677,16 +677,15 @@ class PlayScreenDrawTest {
             withScreen(PlayUiState.Revealed(QUESTION, OUTCOME), dark = colors.isDark) { scene, _ ->
                 val cardA = scene.node(QUESTION.optionA).boundsInRoot
                 val cardB = scene.node(QUESTION.optionB).boundsInRoot
-                // Along the middle of each bar, in from its card's edge past the pick's outline: card B is
-                // the pick here, outlined in the colour its bar fills with.
+                // Along the middle of each bar, flush along its card's edge by the row.
                 val bars =
                     listOf(
-                        Triple(cardA, cardA.bottom - BAR_INSET - BAR_HEIGHT / 2, colors.onOptionA),
-                        Triple(cardB, cardB.top + BAR_INSET + BAR_HEIGHT / 2, colors.onOptionB),
+                        Triple(cardA, cardA.bottom - BAR_HEIGHT / 2, colors.onOptionA),
+                        Triple(cardB, cardB.top + BAR_HEIGHT / 2, colors.onOptionB),
                     )
 
                 // How far each bar is filled, as a share of its card's width: from past the card's round
-                // corner and the outline beside it, as far right as the fill runs unbroken; null for none.
+                // corner, as far right as the fill runs unbroken; null for none.
                 fun filledTo(nanoTime: Long): List<Float?> {
                     scene.renderAt(nanoTime)
                     val pixels = scene.render(nanoTime).toComposeImageBitmap().toPixelMap()
@@ -1151,12 +1150,9 @@ class PlayScreenDrawTest {
         const val TOUCH_INSET = 4f
 
         /** The reveal's bar's height (`WyrDimens.revealBarHeight`). */
-        const val BAR_HEIGHT = 6f
+        const val BAR_HEIGHT = 8f
 
-        /** How far in from its card's edge each bar stands (`WyrDimens.revealBarInset`). */
-        const val BAR_INSET = 8f
-
-        /** Past a card's round corner, and the pick's outline along it, where a bar's fill shows first. */
+        /** Past a card's round corner, where a bar's fill shows first. */
         const val CORNER = 14
 
         /** How far a bar's fill may end from its share of the card's width: a pixel and its rounding. */

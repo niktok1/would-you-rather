@@ -110,7 +110,7 @@ class HomeScreenDrawTest {
     }
 
     /**
-     * A tap reveals both shares, the tap counted with every player's, outlines the button tapped and holds
+     * A tap reveals both shares, the tap counted with every player's, lifts the button tapped and holds
      * the other still; nothing moves, and a screen reader reads each share as it ends throughout the count.
      */
     @Test

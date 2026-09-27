@@ -17,15 +17,13 @@ data class WyrDimens(
     val spaceXl: Dp = 32.dp,
     val radiusCard: Dp = 24.dp,
     val optionMinHeight: Dp = 140.dp,
-    /** The outline of the answer card the player picked, once the answer is revealed. */
-    val pickBorder: Dp = 4.dp,
-    /** The reveal's bar along each card's edge by the row between them (CLAUDE.md §8d, *The Play screen*). */
-    val revealBarHeight: Dp = 6.dp,
     /**
-     * How far in from its card's edge the reveal's bar stands: past the pick's outline ([pickBorder]),
-     * with a strip of the card's colour between, so the outline, in the bar's colour, never merges with it.
+     * How high the answer card the player picked rises once the answer is revealed, its shadow's
+     * elevation, easing back to none as the next question comes (CLAUDE.md §8d, *The Play screen*).
      */
-    val revealBarInset: Dp = 8.dp,
+    val pickElevation: Dp = 12.dp,
+    /** The reveal's bar, flush along each card's edge by the row between them (CLAUDE.md §8d, *The Play screen*). */
+    val revealBarHeight: Dp = 8.dp,
     /**
      * The widest the start of the Play screen's row may be, the points or how a reaction failed, so the
      * thumbs stay in the middle and their counts and Skip are never cut short at 375 wide.

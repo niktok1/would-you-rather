@@ -1900,11 +1900,15 @@ Categories screen and the question's menu from its top bar (*Skipping*, *Reactio
   in flight; none until the first.
 - Tapping a card answers. In the reveal both cards count their percentage up from 0 to its value
   over 2.5 seconds, both at once (`COUNT_UP_MILLIS`), and each card fills a **bar** with it (the
-  user, 2026-09-26): along its edge by the row, the bottom of the top card and the top of the bottom
-  one, inside the card from one side to the other, 6 high (`WyrDimens.revealBarHeight`) and a little
-  in from the edge, past the pick's outline (`revealBarInset`), in the card's text colour on a faint
-  track of it (`WyrColors.revealTrackOnA`, `revealTrackOnB`), filling from its start to the card's
-  share as the number counts (`RevealBar`, one count for both, `rememberCountUp`). Tapping either card
+  user, 2026-09-26): flush along its edge by the row, the bottom of the top card and the top of the
+  bottom one, from one side to the other, the card's round corners clipping its ends, 8 high
+  (`WyrDimens.revealBarHeight`), in the card's text colour on a groove of the card's own colour,
+  darker (`WyrColors.revealTrackOnA`, `revealTrackOnB`; the user, 2026-09-27), filling from its start
+  to the card's share as the number counts (`RevealBar`, one count for both, `rememberCountUp`). The
+  card picked **lifts** in place of an outline (the user, 2026-09-27): its shadow rises to
+  `WyrDimens.pickElevation`, 12, over 0.25 s (`pickLift`, `PICK_LIFT_MILLIS`), black on the light
+  page and a glow of the card's own colour on the dark one, and eases back to none as the next
+  question comes; read only in its layer, so it composes nothing. Tapping either card
   again is the next
   question (`PlayViewModel.next`, from the reveal only), once the reveal has shown for half a second
   (`REVEAL_HOLD_MILLIS`), so a double tap cannot answer and skip the reveal: *provisional — user
@@ -2658,7 +2662,7 @@ listed on the Account screen.
     game's name, the two buttons, *Играј* each (provisional, §8b), card A's pink and card B's amber,
     small and side by side on every screen (`WyrDimens.homeButtonHeight`, 128, and the pair no wider
     than `homeButtonsMaxWidth`, 328), the name and the pair centred in the room under the top bar. No
-    share shows until a tap. A tap on either outlines it and holds both still, then both count their
+    share shows until a tap. A tap on either lifts it (`pickLift`, as a Play card) and holds both still, then both count their
     share of all taps up from 0 over 1.2 seconds (`HOME_COUNT_UP_MILLIS`, shorter than the Play screen's
     2.5), each with a reveal bar along its bottom, drawn, not composed, as the reveal is
     (`CountedUpText`, `rememberCountUp`, `RevealBar`, `percentStyle`), the tap counted on the device
