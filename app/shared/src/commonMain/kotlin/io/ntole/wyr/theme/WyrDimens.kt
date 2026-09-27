@@ -21,7 +21,9 @@ data class WyrDimens(
      * How high the answer card the player picked rises once the answer is revealed, its shadow's
      * elevation, easing back to none as the next question comes (CLAUDE.md §8d, *The Play screen*).
      */
-    val pickElevation: Dp = 12.dp,
+    val pickElevation: Dp = 6.dp,
+    /** The same on the dark page, where the lift is a glow of the card's own colour, which shows less. */
+    val pickGlowElevation: Dp = 12.dp,
     /** The reveal's bar, flush along each card's edge by the row between them (CLAUDE.md §8d, *The Play screen*). */
     val revealBarHeight: Dp = 8.dp,
     /**

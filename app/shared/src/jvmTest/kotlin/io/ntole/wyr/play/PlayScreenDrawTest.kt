@@ -8,6 +8,9 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.ImageComposeScene
 import androidx.compose.ui.Modifier
@@ -55,6 +58,7 @@ import io.ntole.wyr.renderAt
 import io.ntole.wyr.sizeNeeded
 import io.ntole.wyr.tap
 import io.ntole.wyr.texts
+import io.ntole.wyr.theme.WyrColors
 import io.ntole.wyr.theme.WyrDarkColors
 import io.ntole.wyr.theme.WyrLightColors
 import io.ntole.wyr.theme.WyrTheme
@@ -634,9 +638,12 @@ class PlayScreenDrawTest {
     @Test
     fun `the reveal's percentages count up from 0 over two and a half seconds`() {
         val strings = stringsOf(Language.DEFAULT).playScreen
-        listOf(WyrLightColors, WyrDarkColors).forEach { colors ->
-            val theme = if (colors.isDark) "dark" else "light"
-            withScreen(PlayUiState.Revealed(QUESTION, OUTCOME), dark = colors.isDark) { scene, _ ->
+        // Each card while it is the pick: the other stands faint, in colours of its own.
+        forEachPickAndTheme { pick, colors, theme ->
+            withScreen(
+                PlayUiState.Revealed(QUESTION, OUTCOME.copy(yourSide = pick)),
+                dark = colors.isDark,
+            ) { scene, _ ->
                 val cards =
                     listOf(
                         Triple(strings.percent(70), colors.optionA, colors.onOptionA),
@@ -648,6 +655,7 @@ class PlayScreenDrawTest {
                 val halfway = scene.pixelsAt(COUNTED_UP / 2, areas, from = 0)
                 val end = scene.pixelsAt(COUNTED_UP, areas, from = COUNTED_UP / 2)
                 cards.zip(areas).forEachIndexed { card, (colours, area) ->
+                    if (card != pick.ordinal) return@forEachIndexed
                     val (shown, background, text) = colours
                     val at = "card ${card + 1} in the $theme theme"
                     assertEquals(
@@ -672,9 +680,12 @@ class PlayScreenDrawTest {
      */
     @Test
     fun `each card's bar fills with its share over two and a half seconds`() {
-        listOf(WyrLightColors, WyrDarkColors).forEach { colors ->
-            val theme = if (colors.isDark) "dark" else "light"
-            withScreen(PlayUiState.Revealed(QUESTION, OUTCOME), dark = colors.isDark) { scene, _ ->
+        // Each card while it is the pick: the other stands faint, in colours of its own.
+        forEachPickAndTheme { pick, colors, theme ->
+            withScreen(
+                PlayUiState.Revealed(QUESTION, OUTCOME.copy(yourSide = pick)),
+                dark = colors.isDark,
+            ) { scene, _ ->
                 val cardA = scene.node(QUESTION.optionA).boundsInRoot
                 val cardB = scene.node(QUESTION.optionB).boundsInRoot
                 // Along the middle of each bar, flush along its card's edge by the row.
@@ -703,8 +714,9 @@ class PlayScreenDrawTest {
                 val halfway = filledTo(COUNTED_UP / 2)
                 val end = filledTo(COUNTED_UP)
                 val after = filledTo(COUNTED_UP * 2)
-                assertEquals(listOf<Float?>(null, null), start, "nothing filled at the start in the $theme theme")
+                assertEquals(null, start[pick.ordinal], "nothing filled at the start in the $theme theme")
                 listOf(0.7f, 0.3f).forEachIndexed { card, share ->
+                    if (card != pick.ordinal) return@forEachIndexed
                     val at = "card ${card + 1} in the $theme theme"
                     val half = assertNotNull(halfway[card], "$at halfway")
                     assertTrue(half > 0f && half < share, "$at is filled to $half halfway")
@@ -713,6 +725,49 @@ class PlayScreenDrawTest {
                 }
                 assertEquals(end, after, "still after, in the $theme theme")
             }
+        }
+    }
+
+    /**
+     * Going on is one smooth change, never a snap to a spinner (CLAUDE.md §8d, *The Play screen*): while
+     * the next question loads the one answered stays on screen, and only past [LOADING_GRACE] does the
+     * spinner show; the next question then slides onto the same cards, the face going heard by nobody,
+     * and once it has gone only the new question is on screen.
+     */
+    @Test
+    fun `the next question slides onto the cards with no spinner between`() {
+        val strings = stringsOf(Language.DEFAULT)
+        val next = QUESTION.copy(id = "q2", optionA = "Swim like a fish", optionB = "Run like a cheetah")
+        var state by mutableStateOf<PlayUiState>(PlayUiState.Revealed(QUESTION, OUTCOME))
+        val scene =
+            ImageComposeScene(width = SHORT_PHONE_WIDTH, height = SHORT_PHONE_HEIGHT, density = Density(1f)) {
+                WyrTheme(darkTheme = false) { WyrStrings(Language.DEFAULT) { Screen(state, POINTS) } }
+            }
+        try {
+            scene.renderAt(0)
+            state = PlayUiState.Loading
+            scene.renderAt(FRAME)
+            assertTrue(QUESTION.optionA in scene.texts(), "the question stays while the next loads")
+            assertTrue(strings.loading !in scene.descriptions(), "no spinner while the next loads")
+
+            state = PlayUiState.Asking(next)
+            scene.renderAt(2 * FRAME)
+            val heard = scene.texts()
+            assertTrue(next.optionA in heard && next.optionB in heard, "the next question is heard at once")
+            assertTrue(QUESTION.optionA !in heard, "the question going is heard by nobody: $heard")
+            assertTrue(QUESTION.optionA in scene.everyText(), "the question going is still drawn as it goes")
+
+            val gone = 2 * FRAME + (FACE_OUT_MILLIS + FACE_IN_MILLIS) * 1_000_000L + FRAME
+            scene.renderAt(gone)
+            assertTrue(QUESTION.optionA !in scene.everyText(), "the question before has gone")
+
+            state = PlayUiState.Loading
+            scene.renderAt(gone + FRAME)
+            assertTrue(strings.loading !in scene.descriptions(), "no spinner within the grace")
+            scene.renderAt(gone + FRAME + LOADING_GRACE.inWholeNanoseconds + FRAME)
+            assertTrue(strings.loading in scene.descriptions(), "the spinner once the next is slow to come")
+        } finally {
+            scene.close()
         }
     }
 
@@ -999,6 +1054,15 @@ class PlayScreenDrawTest {
     /** What the screen's callbacks were called for, in order. */
     private class Actions {
         val tapped = mutableListOf<String>()
+    }
+
+    /** Runs [test] for each side as the pick, in the light theme and the dark. */
+    private fun forEachPickAndTheme(test: (Side, WyrColors, String) -> Unit) {
+        Side.entries.forEach { pick ->
+            listOf(WyrLightColors, WyrDarkColors).forEach { colors ->
+                test(pick, colors, if (colors.isDark) "dark" else "light")
+            }
+        }
     }
 
     /**

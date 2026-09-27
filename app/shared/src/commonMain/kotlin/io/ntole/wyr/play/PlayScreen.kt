@@ -1,6 +1,17 @@
 package io.ntole.wyr.play
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.EnterExitState
+import androidx.compose.animation.core.FastOutLinearInEasing
+import androidx.compose.animation.core.LinearOutSlowInEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -29,18 +40,22 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.takeOrElse
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
@@ -50,6 +65,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.IntOffset
 import io.ntole.wyr.analytics.tapped
 import io.ntole.wyr.core.domain.analytics.AnalyticsProperty
 import io.ntole.wyr.core.domain.error.DomainError
@@ -67,6 +83,8 @@ import io.ntole.wyr.points.PointsAmount
 import io.ntole.wyr.theme.WyrIcons
 import io.ntole.wyr.theme.WyrThemeAccessors
 import io.ntole.wyr.theme.WyrTypeScale
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.milliseconds
 
 /**
  * The game (CLAUDE.md §8d, *The Play screen*): two answer cards and, between them, one row of the
@@ -93,6 +111,33 @@ fun PlayScreen(
     val colors = WyrThemeAccessors.colors
     val dimens = WyrThemeAccessors.dimens
 
+    // The question last on screen, kept while the next one loads, so going on is one smooth change of the
+    // cards' faces rather than a spinner between two questions; the spinner only past LOADING_GRACE.
+    val held = remember { HeldQuestion() }
+    when (state) {
+        is PlayUiState.OnQuestion -> held.question = state
+        is PlayUiState.Failed -> held.question = null
+        PlayUiState.Loading -> Unit
+    }
+    val loading = state is PlayUiState.Loading
+    var spinnerDue by remember { mutableStateOf(false) }
+    LaunchedEffect(loading) {
+        spinnerDue = false
+        if (loading) {
+            val start = withFrameNanos { it }
+            do {
+                val now = withFrameNanos { it }
+            } while (now - start < LOADING_GRACE.inWholeNanoseconds)
+            spinnerDue = true
+        }
+    }
+    val onScreen =
+        when (state) {
+            is PlayUiState.OnQuestion -> state
+            PlayUiState.Loading -> held.question.takeUnless { spinnerDue }
+            is PlayUiState.Failed -> null
+        }
+
     Surface(color = colors.pageBackground, modifier = modifier.fillMaxSize()) {
         Column(
             modifier =
@@ -103,32 +148,53 @@ fun PlayScreen(
                     .padding(start = dimens.screenPadding, end = dimens.screenPadding, bottom = dimens.screenPadding),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            when (state) {
-                PlayUiState.Loading -> {
-                    Spacer(Modifier.height(dimens.screenPadding))
-                    LoadingBody()
-                }
-
-                is PlayUiState.Failed -> {
-                    Spacer(Modifier.height(dimens.screenPadding))
-                    FailureBody(state.error, onRetry = onRetry)
-                }
-
-                is PlayUiState.OnQuestion -> {
-                    RepeatNotice(shown = state.question.answeredBefore)
-                    QuestionBody(
-                        state = state,
-                        points = points,
-                        onChoose = onChoose,
-                        onSkip = onSkip,
-                        onNext = onNext,
-                        onReact = onReact,
-                    )
-                }
+            if (onScreen != null) {
+                RepeatNotice(shown = onScreen.question.answeredBefore)
+                QuestionBody(
+                    state = onScreen,
+                    points = points,
+                    // A question held while the next one loads takes no tap.
+                    frozen = onScreen !== state,
+                    onChoose = onChoose,
+                    onSkip = onSkip,
+                    onNext = onNext,
+                    onReact = onReact,
+                )
+            } else if (state is PlayUiState.Failed) {
+                Spacer(Modifier.height(dimens.screenPadding))
+                FailureBody(state.error, onRetry = onRetry)
+            } else {
+                Spacer(Modifier.height(dimens.screenPadding))
+                LoadingBody()
             }
         }
     }
 }
+
+/** The question last on screen, written as it is composed; no state of its own, so it recomposes nothing. */
+private class HeldQuestion {
+    var question: PlayUiState.OnQuestion? = null
+}
+
+/**
+ * How long a question stays on screen, taking no tap, while the next one loads before the spinner
+ * shows instead: a question from the queue comes well within it, so going on shows no spinner.
+ */
+internal val LOADING_GRACE: Duration = 400.milliseconds
+
+/** How long a card's old face takes to go, and its new one to come, when the next question does. */
+internal const val FACE_OUT_MILLIS = 120
+internal const val FACE_IN_MILLIS = 220
+
+/** How far a card's face slides as it goes and comes, of the card's height. */
+private const val FACE_SLIDE_DIVISOR = 8
+
+/** What one card shows of one question: a new [questionId] is a new face, slid in. */
+private data class CardFace(
+    val questionId: String,
+    val text: String,
+    val percent: Int?,
+)
 
 /**
  * *Answered before*, small and muted, above the cards while the player has answered the question on
@@ -168,6 +234,7 @@ private fun RepeatNotice(shown: Boolean) {
 private fun ColumnScope.QuestionBody(
     state: PlayUiState.OnQuestion,
     points: Int?,
+    frozen: Boolean,
     onChoose: (Side) -> Unit,
     onSkip: () -> Unit,
     onNext: () -> Unit,
@@ -176,6 +243,8 @@ private fun ColumnScope.QuestionBody(
     val colors = WyrThemeAccessors.colors
     val dimens = WyrThemeAccessors.dimens
     val density = LocalDensity.current
+    val haptics = LocalHapticFeedback.current
+    val idle = !state.isBusy && !frozen
     val outcome = (state as? PlayUiState.Revealed)?.outcome
     // In Serbian Latin made Latin, as every Serbian Latin text is; as its author wrote it otherwise (§8f).
     val language = LocalLanguage.current
@@ -195,6 +264,7 @@ private fun ColumnScope.QuestionBody(
             },
     ) {
         OptionCard(
+            questionId = state.question.id,
             text = optionText(state.question.optionA, language),
             background = colors.optionA,
             contentColor = colors.onOptionA,
@@ -203,11 +273,17 @@ private fun ColumnScope.QuestionBody(
             barAt = Alignment.BottomCenter,
             percent = outcome?.tally?.percentA,
             isYourPick = outcome?.yourSide == Side.A,
-            enabled = !state.isBusy,
+            isDimmed = outcome != null && outcome.yourSide != Side.A,
+            enabled = idle,
             clickLabel = clickLabel,
             onClick =
                 tapped("play.card_a", mapOf(AnalyticsProperty.ANSWERED to (outcome != null))) {
-                    if (outcome == null) onChoose(Side.A) else onNext()
+                    if (outcome == null) {
+                        haptics.performHapticFeedback(HapticFeedbackType.Confirm)
+                        onChoose(Side.A)
+                    } else {
+                        onNext()
+                    }
                 },
         )
 
@@ -215,13 +291,14 @@ private fun ColumnScope.QuestionBody(
             question = state.question,
             points = points,
             rowError = state.rowError,
-            idle = !state.isBusy,
+            idle = idle,
             onReact = onReact,
             // Only before answering (CLAUDE.md §8d, *Skipping*): once revealed, a card is the way on.
             onSkip = if (state is PlayUiState.Asking) onSkip else null,
         )
 
         OptionCard(
+            questionId = state.question.id,
             text = optionText(state.question.optionB, language),
             background = colors.optionB,
             contentColor = colors.onOptionB,
@@ -229,11 +306,17 @@ private fun ColumnScope.QuestionBody(
             barAt = if (sideBySide) Alignment.BottomCenter else Alignment.TopCenter,
             percent = outcome?.tally?.percentB,
             isYourPick = outcome?.yourSide == Side.B,
-            enabled = !state.isBusy,
+            isDimmed = outcome != null && outcome.yourSide != Side.B,
+            enabled = idle,
             clickLabel = clickLabel,
             onClick =
                 tapped("play.card_b", mapOf(AnalyticsProperty.ANSWERED to (outcome != null))) {
-                    if (outcome == null) onChoose(Side.B) else onNext()
+                    if (outcome == null) {
+                        haptics.performHapticFeedback(HapticFeedbackType.Confirm)
+                        onChoose(Side.B)
+                    } else {
+                        onNext()
+                    }
                 },
         )
     }
@@ -326,7 +409,13 @@ internal fun MiddleRow(
         },
         end = {
             if (onSkip != null) {
-                IconButton(onClick = tapped("play.skip", onClick = onSkip), enabled = idle) {
+                val interaction = remember { MutableInteractionSource() }
+                IconButton(
+                    onClick = tapped("play.skip", onClick = onSkip),
+                    enabled = idle,
+                    interactionSource = interaction,
+                    modifier = Modifier.pressScale(interaction),
+                ) {
                     // Muted while off: a tint of its own hides the button's off colour.
                     Icon(
                         imageVector = WyrIcons.Skip,
@@ -362,9 +451,20 @@ private fun ReactionToggle(
     onClick: () -> Unit,
 ) {
     val colors = WyrThemeAccessors.colors
+    val haptics = LocalHapticFeedback.current
+    val interaction = remember { MutableInteractionSource() }
 
     Row(verticalAlignment = Alignment.CenterVertically) {
-        IconToggleButton(checked = held, onCheckedChange = { onClick() }, enabled = enabled) {
+        IconToggleButton(
+            checked = held,
+            onCheckedChange = {
+                haptics.performHapticFeedback(if (held) HapticFeedbackType.ToggleOff else HapticFeedbackType.ToggleOn)
+                onClick()
+            },
+            enabled = enabled,
+            interactionSource = interaction,
+            modifier = Modifier.pressScale(interaction),
+        ) {
             Icon(imageVector = if (held) heldIcon else icon, contentDescription = name, tint = colors.headingAccent)
         }
         Text(text = count.toString(), color = colors.primaryText, fontWeight = FontWeight.Medium, maxLines = 1)
@@ -428,14 +528,17 @@ internal fun categoriesPlayed(
 }
 
 /**
- * One answer card, in its side's brand colour (CLAUDE.md §5b), lifted once it is the player's pick ([pickLift]).
- * Once the answer is revealed it shows its side's share, [percent], counted up from 0 ([CountedUpText]),
- * and a bar along its edge at [barAt], from one side of the card to the other, filling with the count
- * to the share ([RevealBar]): in [contentColor] on a [barTrack]. [clickLabel], if any, is what a screen
- * reader says a tap on it does.
+ * One answer card, in its side's brand colour (CLAUDE.md §5b), moving as [cardMotion] moves it: sunk
+ * while pressed, lifted once it is the player's pick, faint while [isDimmed]. Once the answer is revealed
+ * it shows its side's share, [percent], counted up from 0 ([CountedUpText]), and a bar along its edge at
+ * [barAt], from one side of the card to the other, filling with the count to the share ([RevealBar]):
+ * in [contentColor] on a [barTrack]. A new [questionId] slides the card's face on, the old one fading
+ * up and away and the new one rising in, so the next question never snaps in. [clickLabel], if any, is
+ * what a screen reader says a tap on it does.
  */
 @Composable
 private fun OptionCard(
+    questionId: String,
     text: String,
     background: Color,
     contentColor: Color,
@@ -443,6 +546,7 @@ private fun OptionCard(
     barAt: Alignment,
     percent: Int?,
     isYourPick: Boolean,
+    isDimmed: Boolean,
     enabled: Boolean,
     clickLabel: String?,
     onClick: () -> Unit,
@@ -450,6 +554,7 @@ private fun OptionCard(
 ) {
     val dimens = WyrThemeAccessors.dimens
     val shape = RoundedCornerShape(dimens.radiusCard)
+    val interaction = remember { MutableInteractionSource() }
 
     Surface(
         onClick = onClick,
@@ -457,54 +562,102 @@ private fun OptionCard(
         shape = shape,
         color = background,
         contentColor = contentColor,
+        interactionSource = interaction,
         modifier =
             modifier
                 .fillMaxWidth()
                 .heightIn(min = dimens.optionMinHeight)
                 // Only the label: without an action of its own, the tap stays the Surface's.
                 .semantics { if (clickLabel != null) onClick(label = clickLabel, action = null) }
-                .pickLift(isPicked = isYourPick, shape = shape, colour = background),
+                .cardMotion(
+                    interaction,
+                    isPicked = isYourPick,
+                    isDimmed = isDimmed,
+                    shape = shape,
+                    colour = background,
+                ),
     ) {
-        // One count for the percentage and the bar, so they move as one.
-        val counted = percent?.let { rememberCountUp(it) }
+        AnimatedContent(
+            targetState = CardFace(questionId, text, percent),
+            contentKey = { it.questionId },
+            transitionSpec = {
+                val slideIn =
+                    tween<IntOffset>(FACE_IN_MILLIS, delayMillis = FACE_OUT_MILLIS, easing = LinearOutSlowInEasing)
+                (
+                    fadeIn(tween(FACE_IN_MILLIS, delayMillis = FACE_OUT_MILLIS)) +
+                        slideInVertically(slideIn) { it / FACE_SLIDE_DIVISOR }
+                ) togetherWith (
+                    fadeOut(tween(FACE_OUT_MILLIS)) +
+                        slideOutVertically(tween(FACE_OUT_MILLIS, easing = FastOutLinearInEasing)) {
+                            -it / FACE_SLIDE_DIVISOR
+                        }
+                ) using null
+            },
+            modifier = Modifier.fillMaxSize(),
+            label = "cardFace",
+        ) { face ->
+            // The face going is not read out: only the one coming is the question on screen.
+            val leaving = transition.targetState == EnterExitState.PostExit
+            CardFaceContent(
+                face = face,
+                contentColor = contentColor,
+                barTrack = barTrack,
+                barAt = barAt,
+                modifier = if (leaving) Modifier.clearAndSetSemantics {} else Modifier,
+            )
+        }
+    }
+}
 
-        Box(modifier = Modifier.fillMaxSize()) {
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                modifier = Modifier.align(Alignment.Center).padding(dimens.spaceMd),
-            ) {
-                // As large as the card leaves it room for, the percentage's room taken first, and in steps no
-                // smaller than the floor, so a long option shrinks rather than being cut (§8d, *The Play
-                // screen*).
-                Text(
-                    text = text,
-                    fontSize = WyrTypeScale.optionText,
-                    lineHeight = WyrTypeScale.optionLineHeight,
-                    fontWeight = FontWeight.Bold,
-                    textAlign = TextAlign.Center,
-                    autoSize = OptionTextAutoSize,
-                    modifier = Modifier.weight(1f, fill = false),
-                )
+/** One face of a card: its option and, once revealed, its share counted up and its bar. */
+@Composable
+private fun CardFaceContent(
+    face: CardFace,
+    contentColor: Color,
+    barTrack: Color,
+    barAt: Alignment,
+    modifier: Modifier = Modifier,
+) {
+    val dimens = WyrThemeAccessors.dimens
+    // One count for the percentage and the bar, so they move as one.
+    val counted = face.percent?.let { rememberCountUp(it) }
 
-                if (percent != null && counted != null) {
-                    Spacer(Modifier.size(dimens.spaceSm))
-                    CountedUpText(
-                        counted = counted,
-                        target = percent,
-                        text = LocalStrings.current.playScreen::percent,
-                        style = percentStyle(),
-                    )
-                }
-            }
-            // Flush along the card's edge, from one side to the other, the card's shape clipping its ends round.
-            if (counted != null) {
-                RevealBar(
+    Box(modifier = modifier.fillMaxSize()) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier.align(Alignment.Center).padding(dimens.spaceMd),
+        ) {
+            // As large as the card leaves it room for, the percentage's room taken first, and in steps no
+            // smaller than the floor, so a long option shrinks rather than being cut (§8d, *The Play
+            // screen*).
+            Text(
+                text = face.text,
+                fontSize = WyrTypeScale.optionText,
+                lineHeight = WyrTypeScale.optionLineHeight,
+                fontWeight = FontWeight.Bold,
+                textAlign = TextAlign.Center,
+                autoSize = OptionTextAutoSize,
+                modifier = Modifier.weight(1f, fill = false),
+            )
+
+            if (face.percent != null && counted != null) {
+                Spacer(Modifier.size(dimens.spaceSm))
+                CountedUpText(
                     counted = counted,
-                    fill = contentColor,
-                    track = barTrack,
-                    modifier = Modifier.align(barAt),
+                    target = face.percent,
+                    text = LocalStrings.current.playScreen::percent,
+                    style = percentStyle(),
                 )
             }
+        }
+        // Flush along the card's edge, from one side to the other, the card's shape clipping its ends round.
+        if (counted != null) {
+            RevealBar(
+                counted = counted,
+                fill = contentColor,
+                track = barTrack,
+                modifier = Modifier.align(barAt),
+            )
         }
     }
 }

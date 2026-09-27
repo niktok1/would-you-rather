@@ -3,6 +3,7 @@ package io.ntole.wyr.home
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -29,6 +30,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -40,8 +43,8 @@ import io.ntole.wyr.language.LocalStrings
 import io.ntole.wyr.navigation.HomeTopBar
 import io.ntole.wyr.play.CountedUpText
 import io.ntole.wyr.play.RevealBar
+import io.ntole.wyr.play.cardMotion
 import io.ntole.wyr.play.percentStyle
-import io.ntole.wyr.play.pickLift
 import io.ntole.wyr.play.rememberCountUp
 import io.ntole.wyr.theme.WyrThemeAccessors
 import io.ntole.wyr.theme.WyrTypeScale
@@ -88,6 +91,7 @@ fun HomeScreen(
     val dimens = WyrThemeAccessors.dimens
     val strings = LocalStrings.current
     var picked by rememberSaveable { mutableStateOf<Side?>(null) }
+    val haptics = LocalHapticFeedback.current
     // The tap counted on the device, so the reveal waits for nobody (the server hears of it in the background).
     val revealed = picked?.let { side -> picks?.plus(side) }
     val play by rememberUpdatedState(onPlay)
@@ -141,10 +145,12 @@ fun HomeScreen(
                             side = side,
                             share = revealed?.percentOf(side),
                             isPicked = picked == side,
+                            isDimmed = picked != null && picked != side,
                             enabled = picked == null,
                             onClick = {
                                 // Once: a screen reader's tap reaches a button that is off as well.
                                 if (picked == null) {
+                                    haptics.performHapticFeedback(HapticFeedbackType.Confirm)
                                     picked = side
                                     onPick(side)
                                 }
@@ -163,8 +169,8 @@ private fun Tally.plus(side: Side): Tally = if (side == Side.A) copy(votesA = vo
 
 /**
  * One of the two Play buttons, in [side]'s card colour: *Play* and, once a button is tapped, [share],
- * counted up from 0 with a bar along its bottom filling with it, as the reveal counts, and lifted
- * when [isPicked] ([pickLift]). The share's room is kept from the start, so the reveal moves nothing. Its tap is
+ * counted up from 0 with a bar along its bottom filling with it, as the reveal counts; sunk while
+ * pressed, lifted when [isPicked] and faint when [isDimmed] ([cardMotion]). The share's room is kept from the start, so the reveal moves nothing. Its tap is
  * `home.play` to the analytics, with its side (CLAUDE.md §8g).
  */
 @Composable
@@ -172,10 +178,12 @@ private fun PlayButton(
     side: Side,
     share: Int?,
     isPicked: Boolean,
+    isDimmed: Boolean,
     enabled: Boolean,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val interaction = remember { MutableInteractionSource() }
     val colors = WyrThemeAccessors.colors
     val dimens = WyrThemeAccessors.dimens
     val strings = LocalStrings.current
@@ -189,10 +197,11 @@ private fun PlayButton(
         shape = shape,
         color = background,
         contentColor = contentColor,
+        interactionSource = interaction,
         modifier =
             modifier
                 .heightIn(min = dimens.homeButtonHeight)
-                .pickLift(isPicked = isPicked, shape = shape, colour = background),
+                .cardMotion(interaction, isPicked = isPicked, isDimmed = isDimmed, shape = shape, colour = background),
     ) {
         val counted = share?.let { rememberCountUp(it, durationMillis = HOME_COUNT_UP_MILLIS) }
 

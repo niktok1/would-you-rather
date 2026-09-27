@@ -1905,10 +1905,19 @@ Categories screen and the question's menu from its top bar (*Skipping*, *Reactio
   (`WyrDimens.revealBarHeight`), in the card's text colour on a groove of the card's own colour,
   darker (`WyrColors.revealTrackOnA`, `revealTrackOnB`; the user, 2026-09-27), filling from its start
   to the card's share as the number counts (`RevealBar`, one count for both, `rememberCountUp`). The
-  card picked **lifts** in place of an outline (the user, 2026-09-27): its shadow rises to
-  `WyrDimens.pickElevation`, 12, over 0.25 s (`pickLift`, `PICK_LIFT_MILLIS`), black on the light
-  page and a glow of the card's own colour on the dark one, and eases back to none as the next
-  question comes; read only in its layer, so it composes nothing. Tapping either card
+  cards move (the user, 2026-09-27, "polished with these micro animations"; `cardMotion`, read only
+  in its layer, so it composes nothing): pressed, a card **sinks**, to 97% and flat, over 0.1 s, and
+  springs back with a small overshoot when let go; the card picked **lifts** in place of an outline,
+  its shadow rising to `WyrDimens.pickElevation`, 6 (12 cut off under the bottom card), over 0.25 s,
+  black on the light page and on the dark one a glow of the card's own colour, higher
+  (`pickGlowElevation`, 12), since a glow shows less; the card not picked stands at 85%; and all of it
+  eases back as the next question comes. An answer taps the phone (`HapticFeedbackType.Confirm`), and a
+  thumb ticks on and off; the thumbs and Skip sink under the finger too (`pressScale`). **Going on
+  never snaps**: while the next question loads the one answered stays on screen, taking no tap, and
+  the spinner shows only past `LOADING_GRACE`, 0.4 s, which a question from the queue never reaches;
+  the next question then slides onto the same cards (`AnimatedContent` keyed on the question, the old
+  face fading up and away in 0.12 s, its share and bar with it, the new one rising in over 0.22 s),
+  the face going heard by no screen reader. Tapping either card
   again is the next
   question (`PlayViewModel.next`, from the reveal only), once the reveal has shown for half a second
   (`REVEAL_HOLD_MILLIS`), so a double tap cannot answer and skip the reveal: *provisional — user
@@ -2662,7 +2671,7 @@ listed on the Account screen.
     game's name, the two buttons, *Играј* each (provisional, §8b), card A's pink and card B's amber,
     small and side by side on every screen (`WyrDimens.homeButtonHeight`, 128, and the pair no wider
     than `homeButtonsMaxWidth`, 328), the name and the pair centred in the room under the top bar. No
-    share shows until a tap. A tap on either lifts it (`pickLift`, as a Play card) and holds both still, then both count their
+    share shows until a tap. A tap on either sinks and lifts it, the other a little faint, with a tap of the phone (`cardMotion`, as a Play card) and holds both still, then both count their
     share of all taps up from 0 over 1.2 seconds (`HOME_COUNT_UP_MILLIS`, shorter than the Play screen's
     2.5), each with a reveal bar along its bottom, drawn, not composed, as the reveal is
     (`CountedUpText`, `rememberCountUp`, `RevealBar`, `percentStyle`), the tap counted on the device
