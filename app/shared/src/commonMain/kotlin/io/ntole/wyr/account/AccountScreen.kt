@@ -39,6 +39,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import io.ntole.wyr.analytics.tapped
 import io.ntole.wyr.core.domain.player.PlayerStats
@@ -287,8 +288,9 @@ private fun Player(
 /**
  * The card (CLAUDE.md §8d, *The Account screen*): the player's initial in a circle, a guest's figure
  * for a guest, their name and their points, a coin and the number; under a line, their stats, two to a
- * row, so more fit as they come; and for a guest the one button to the Auth page, or for a player
- * registered by Play Games alone, named for it, the quiet link there to add a username.
+ * row, so more fit as they come, and after them, the grid's next cell, for a player registered by Play
+ * Games alone, named for it, the quiet link to the Auth page to add a username; and for a guest the
+ * one button there.
  */
 @Composable
 private fun PlayerCard(
@@ -332,9 +334,34 @@ private fun PlayerCard(
                 )
             }
             HorizontalDivider(color = colors.orPillBackground)
-            statCells(stats, strings).chunked(STATS_PER_ROW).forEach { row ->
-                Row(horizontalArrangement = Arrangement.spacedBy(dimens.spaceSm)) {
-                    row.forEach { cell -> Stat(cell, Modifier.weight(1f)) }
+            // Registered by Play Games alone, as the name above says: a username is only for where there
+            // is no Play Games, so the way to one is quiet, the grid's next cell after the stats, a cell a
+            // row leaves free rather than a row of its own, so every state still fits an iPhone SE whole
+            // (CLAUDE.md §8d, *The Account screen*).
+            val addUsername: (@Composable (Modifier) -> Unit)? =
+                if (stats.registered && stats.username == null) {
+                    { modifier ->
+                        Box(contentAlignment = Alignment.CenterEnd, modifier = modifier) {
+                            TextButton(
+                                onClick = tapped("account.add_username", onClick = onOpenAuth),
+                                enabled = !busy,
+                            ) {
+                                // Half the card is narrow, so in Serbian the link takes two lines, set to
+                                // the end as the points above are.
+                                Text(playGames.addUsername, textAlign = TextAlign.End)
+                            }
+                        }
+                    }
+                } else {
+                    null
+                }
+            val cells = statCells(stats, strings).map { cell -> statSlot(cell) } + listOfNotNull(addUsername)
+            cells.chunked(STATS_PER_ROW).forEach { row ->
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(dimens.spaceSm),
+                ) {
+                    row.forEach { cell -> cell(Modifier.weight(1f)) }
                     repeat(STATS_PER_ROW - row.size) { Spacer(Modifier.weight(1f)) }
                 }
             }
@@ -345,12 +372,6 @@ private fun PlayerCard(
                     modifier = Modifier.fillMaxWidth(),
                 ) {
                     Text(strings.openAuth)
-                }
-            } else if (stats.username == null) {
-                // Registered by Play Games alone, as the name above says: a username is only for where
-                // there is no Play Games, so the way to one is quiet (CLAUDE.md §8d, *The Account screen*).
-                TextButton(onClick = tapped("account.add_username", onClick = onOpenAuth), enabled = !busy) {
-                    Text(playGames.addUsername)
                 }
             }
         }
@@ -387,6 +408,9 @@ private fun Avatar(username: String?) {
         }
     }
 }
+
+/** [cell] as one of the card's grid cells, laid out in the modifier its row gives it. */
+private fun statSlot(cell: StatCell): @Composable (Modifier) -> Unit = { modifier -> Stat(cell, modifier) }
 
 /** One stat, its number over what it counts, which a screen reader reads as one. */
 @Composable

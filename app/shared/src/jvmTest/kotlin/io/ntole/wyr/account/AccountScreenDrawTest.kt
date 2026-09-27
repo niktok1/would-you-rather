@@ -249,8 +249,8 @@ class AccountScreenDrawTest {
 
     /**
      * A player registered by Play Games alone is named for it where a guest is Гост, has no button to
-     * register or log in but a quiet link to add a username, which opens the Auth page, and may log out
-     * and ask a question (CLAUDE.md §8a, *Play Games sign-in*; §8d, *The Account screen*).
+     * register or log in but a quiet link to add a username, beside the stat, which opens the Auth page,
+     * and may log out and ask a question (CLAUDE.md §8a, *Play Games sign-in*; §8d, *The Account screen*).
      */
     @Test
     fun `a player registered by Play Games alone is named for it with a link to add a username`() {
@@ -268,6 +268,11 @@ class AccountScreenDrawTest {
                 assertTrue(strings.logOut in shown, "$language: Log out")
                 assertTrue(strings.firstQuestion in shown, "$language: a question to ask")
                 assertFalse(strings.registerToSubmit in shown, "$language: registered already")
+                // Beside the stat, the grid's free cell, not a row of its own under it.
+                val link = scene.nodes().single { all.playGames.addUsername in it.texts }.boundsInRoot
+                val stat = scene.nodes().single { strings.questionsAnswered in it.texts }.boundsInRoot
+                assertTrue(link.top < stat.bottom && stat.top < link.bottom, "$language: $link beside $stat")
+                assertTrue(stat.right <= link.left, "$language: $link after $stat")
                 scene.tap(all.playGames.addUsername)
             } finally {
                 scene.close()
@@ -939,6 +944,36 @@ class AccountScreenDrawTest {
                 AccountState(stats = REGISTERED, submissions = emptyList()),
                 AccountState(stats = PLAY_GAMES, submissions = emptyList()),
                 AccountState(stats = PLAY_GAMES, submissions = EVERY_STATUS),
+                // Every failure a Play Games player's screen can show, with the link to add a username.
+                AccountState(
+                    stats = PLAY_GAMES,
+                    submissions = emptyList(),
+                    failure = AccountFailure(AccountAction.LOAD, DomainError.NETWORK),
+                ),
+                // The read of the player failed, and the read of the list after it runs.
+                AccountState(
+                    stats = PLAY_GAMES,
+                    submissions = emptyList(),
+                    failure = AccountFailure(AccountAction.LOAD, DomainError.NETWORK),
+                    running = AccountAction.LOAD,
+                ),
+                AccountState(
+                    stats = PLAY_GAMES,
+                    submissions = emptyList(),
+                    failure = AccountFailure(AccountAction.LOG_OUT, DomainError.NETWORK),
+                ),
+                AccountState(
+                    stats = PLAY_GAMES,
+                    submissions = emptyList(),
+                    failure = AccountFailure(AccountAction.DELETE, DomainError.NETWORK),
+                ),
+                // The deletion failed, and the read after it runs.
+                AccountState(
+                    stats = PLAY_GAMES,
+                    submissions = emptyList(),
+                    failure = AccountFailure(AccountAction.DELETE, DomainError.NETWORK),
+                    running = AccountAction.DELETE,
+                ),
                 AccountState(stats = REGISTERED, submissions = EVERY_STATUS),
                 AccountState(stats = REGISTERED, submissions = emptyList(), running = AccountAction.LOAD),
                 AccountState(stats = REGISTERED, submissions = emptyList(), running = AccountAction.LOG_OUT),
