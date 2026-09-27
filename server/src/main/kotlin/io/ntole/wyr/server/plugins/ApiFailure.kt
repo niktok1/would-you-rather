@@ -58,6 +58,12 @@ class ApiFailure(
         fun authorNotFound(id: String) =
             ApiFailure(HttpStatusCode.NotFound, ErrorCode.AUTHOR_NOT_FOUND, "no author $id")
 
+        /**
+         * An account a moderator asked to delete that no player has. The message names neither the
+         * username nor the id asked for.
+         */
+        fun playerNotFound() = ApiFailure(HttpStatusCode.NotFound, ErrorCode.PLAYER_NOT_FOUND, "no such account")
+
         /** A moderator's decision on a question that is no longer, or never was, pending. */
         fun alreadyDecided(id: String) =
             ApiFailure(HttpStatusCode.Conflict, ErrorCode.ALREADY_DECIDED, "question $id is not pending")

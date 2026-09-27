@@ -673,6 +673,20 @@ decided in §8b).
     `DefaultAccountRepositoryTest`, `DeletionSessionTest` (the fresh guest's push token, and no Play
     Games sign-in at the next launch), `AccountUseCasesTest`, `AccountViewModelTest`,
     `AccountScreenDrawTest`, `AppNavigationTest`.
+  - *By a moderator* (*built 2026-09-27*, the user: "a moderator route to delete a player's account on
+    request"), for a player who asks by email, as the site's deletion page promises, a guest and a
+    player signed in with Play Games alone included, who have no username:
+    `POST /v1/admin/account-deletions` (`WyrApi.Paths.ADMIN_ACCOUNT_DELETIONS`), an admin route
+    (§8d, *Moderation*), with a `DeleteAccountRequest` naming the player by exactly one of `username`,
+    trimmed and lower-cased as a login compares it, and `accountId`, the player's id, which the game
+    shows on its About screen (§8d, *About*); answered 204. Neither or both, or either blank, is 400
+    `VALIDATION_FAILED`; a name or an id no player has, one the username rules refuse included, 404
+    `PLAYER_NOT_FOUND`. The player's row is locked as it is looked up (`AccountToDelete.lockedPlayerId`)
+    and then deleted by `AccountDeletion.delete`, in the one transaction, so everything above goes as
+    it does for the player's own deletion, their sessions on every device with it (their next request
+    is 401), and of two deletions of one player racing the second waits and is 404 (§4). One INFO line
+    names the player by id, never the username asked for (§8b, *Logging*). `AccountToDeleteTest`,
+    `AccountDeletionByModeratorFlowTest`, `ActionLogTest`.
 
 - **Push tokens** (*decided 2026-09-26; built on the server, and on the Android client since
   `feat/android-services`*): a device's Firebase Cloud Messaging token, so a player hears when a moderator decides one
@@ -915,7 +929,9 @@ EncryptedSharedPreferences: enough for a game that stores no sensitive personal 
   moderator's client calls too: the reported questions and their dismissal (`AdminReportListDto`,
   `DismissReportsRequest`), an author's opaque id on the admin DTOs (`authorId`), blocking and
   unblocking an author (`BlockAuthorRequest`, `UnblockAuthorRequest`, `AuthorBlockDto`), and the error
-  codes `SUBMISSIONS_BLOCKED` and `AUTHOR_NOT_FOUND` (§8d, *Moderation*, *Reports* and *Authors*).
+  codes `SUBMISSIONS_BLOCKED` and `AUTHOR_NOT_FOUND` (§8d, *Moderation*, *Reports* and *Authors*). Since
+  2026-09-27, deleting a player's account on their request (`DeleteAccountRequest`, the error code
+  `PLAYER_NOT_FOUND`; §8a, *Deleting an account*, *By a moderator*).
 - **A rejection reason is one line** — *provisional — user decision.* §8d asks for a short reason;
   the server also holds it to one line, as it does an option: no control character, nor U+2028 or
   U+2029 (`checkedRejection`). Chosen as the stricter reading, since a reason is shown to its author
@@ -1061,7 +1077,7 @@ EncryptedSharedPreferences: enough for a game that stores no sensitive personal 
     minute (what bounds guessing a password, as each costs a hash), Play Games sign-ins 20 a minute
     (each costs two calls to Google), the categories list 120 a minute
     (it needs no session), the Home screen's counts (`GET /v1/home-picks`) 120 a minute (nor does
-    that), the admin routes 60 a minute together, and on top of that, admin requests with a wrong or missing token 10 a minute. A
+    that), the admin routes 60 a minute together (an account's deletion by the moderator among them), and on top of that, admin requests with a wrong or missing token 10 a minute. A
     request with the right token spends none of that last budget, but once an address has spent it,
     every admin request from the address is refused until the budget is back, the right token's too
     (`LockingOut`): were that one let in, its 200 among the 429s would give it away, and guessing
@@ -1133,8 +1149,9 @@ EncryptedSharedPreferences: enough for a game that stores no sensitive personal 
   repeat that changed nothing included (a dismissal of no reports, a block or an unblock of an author
   standing so already), naming the action and the id it was done to (`admin approved question
   <id>`, `logAdmin`): approvals, rejections, retirements and restorations, categories added and
-  renamed, reports dismissed, and
-  authors blocked and unblocked. A read, the moderator's lists included, logs nothing of its own.
+  renamed, reports dismissed, authors blocked and unblocked, and accounts deleted
+  (`admin deleted the account of player <id>`, by id alone, whether the moderator named a username or
+  an id). A read, the moderator's lists included, logs nothing of its own.
   Never a token, a password or its hash, an email, a question's text, a rejection's reason or a
   name the moderator typed. `ActionLogTest`.
 - **Likes from fresh guests** — *decided 2026-09-24: no like limitations.* A like pays its author

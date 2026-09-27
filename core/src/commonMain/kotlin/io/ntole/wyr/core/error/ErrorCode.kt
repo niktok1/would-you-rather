@@ -97,6 +97,12 @@ public enum class ErrorCode {
     AUTHOR_NOT_FOUND,
 
     /**
+     * A moderator named an account to delete, by username or by id, that no player has: a name or an id
+     * mistyped, or an account deleted already. Sent with 404.
+     */
+    PLAYER_NOT_FOUND,
+
+    /**
      * A registration's username breaks the rules of [io.ntole.wyr.core.auth.RegisterRequest]: lower-cased,
      * it is too short, too long or holds a character other than `a` to `z`, `0` to `9` and `_`. The
      * player's to put right. Sent with 422.

@@ -82,6 +82,10 @@ private fun describe(
             "No such author on this server (404): their account may have been deleted."
         }
 
+        DomainError.PLAYER_NOT_FOUND -> {
+            "No such account on this server (404): check the username or the account id. It may be deleted already."
+        }
+
         DomainError.NETWORK -> {
             "No answer from the server. A Render service asleep takes up to a minute to wake: try again."
         }

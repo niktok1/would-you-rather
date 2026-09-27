@@ -391,6 +391,16 @@ public object WyrApi {
          * [ADMIN_AUTHOR_BLOCKS] refuses. An admin route: needs [Headers.ADMIN_TOKEN].
          */
         public const val ADMIN_AUTHOR_UNBLOCKS: String = "/$VERSION/admin/author-unblocks"
+
+        /**
+         * Deletes a player's account on their request, with an
+         * [io.ntole.wyr.core.player.DeleteAccountRequest] naming them by username or by account id,
+         * answered 204 (CLAUDE.md §8a, *Deleting an account*): the same deletion as [ME_DELETION], for a
+         * player who asked for it by email. Their sessions die with it, so their next request is 401. A
+         * name or an id no player has is 404 [io.ntole.wyr.core.error.ErrorCode.PLAYER_NOT_FOUND];
+         * neither or both named, or a malformed body, 400. An admin route: needs [Headers.ADMIN_TOKEN].
+         */
+        public const val ADMIN_ACCOUNT_DELETIONS: String = "/$VERSION/admin/account-deletions"
     }
 
     public object Headers {

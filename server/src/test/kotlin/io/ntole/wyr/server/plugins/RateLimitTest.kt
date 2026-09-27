@@ -29,6 +29,7 @@ import io.ntole.wyr.core.category.RenameCategoryRequest
 import io.ntole.wyr.core.error.ErrorCode
 import io.ntole.wyr.core.error.ErrorDto
 import io.ntole.wyr.core.home.HomePickRequest
+import io.ntole.wyr.core.player.DeleteAccountRequest
 import io.ntole.wyr.core.player.PlayerStatsDto
 import io.ntole.wyr.core.push.PushPlatform
 import io.ntole.wyr.core.push.PushTokenRequest
@@ -681,6 +682,11 @@ class RateLimitTest {
                 },
                 AdminRoute("an author's unblock", HttpStatusCode.NotFound) { client, token ->
                     client.post(WyrApi.Paths.ADMIN_AUTHOR_UNBLOCKS) { admin(token, UnblockAuthorRequest(NO_AUTHOR)) }
+                },
+                AdminRoute("an account's deletion", HttpStatusCode.NotFound) { client, token ->
+                    client.post(WyrApi.Paths.ADMIN_ACCOUNT_DELETIONS) {
+                        admin(token, DeleteAccountRequest(accountId = NO_AUTHOR))
+                    }
                 },
             )
         val ADMIN_ROUTE_BUDGET = RequestBudget(requests = ADMIN_ROUTES.size, per = 1.minutes)

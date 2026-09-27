@@ -28,6 +28,7 @@ import io.ntole.wyr.core.category.CreateCategoryRequest
 import io.ntole.wyr.core.category.RenameCategoryRequest
 import io.ntole.wyr.core.error.ErrorCode
 import io.ntole.wyr.core.error.ErrorDto
+import io.ntole.wyr.core.player.DeleteAccountRequest
 import io.ntole.wyr.core.player.PlayerStatsDto
 import io.ntole.wyr.core.question.AdminQuestionDto
 import io.ntole.wyr.core.question.AdminQuestionPageDto
@@ -2305,6 +2306,12 @@ class ApiFlowTest {
                     credentials()
                     contentType(ContentType.Application.Json)
                     setBody(UnblockAuthorRequest("no-such-author"))
+                },
+            "an account's deletion" to
+                post(WyrApi.Paths.ADMIN_ACCOUNT_DELETIONS) {
+                    credentials()
+                    contentType(ContentType.Application.Json)
+                    setBody(DeleteAccountRequest(accountId = "no-such-player"))
                 },
         )
 

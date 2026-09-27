@@ -134,6 +134,9 @@ internal fun ErrorCode.toDomain(): DomainError =
         // moderation app says which.
         ErrorCode.AUTHOR_NOT_FOUND -> DomainError.AUTHOR_NOT_FOUND
 
+        // A moderator's deletion of an account no player has, which the moderation app says in words.
+        ErrorCode.PLAYER_NOT_FOUND -> DomainError.PLAYER_NOT_FOUND
+
         // Never UNAUTHORIZED: that would throw the player's session away over a moderator's token.
         ErrorCode.FORBIDDEN -> DomainError.FORBIDDEN
 
