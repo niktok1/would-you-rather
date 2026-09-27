@@ -860,6 +860,37 @@ the screen says it once. And `signingReport` fails when Gradle reuses its config
 load); a fresh entry, as CI always has, passes, so only a second local run of the *Release signing*
 step needs `--no-configuration-cache` on its `signingReport`.
 
+**`feat/admin-deletion`** (from 1503192): the user's "a moderator route to delete a player's account
+on request, and a copyable account ID", which backs the legal site's promise to delete an account
+asked for by email, a guest's and a Play-Games-only player's included (CLAUDE.md §8a, *Deleting an
+account*, *By a moderator*):
+- **Server**: `POST /v1/admin/account-deletions` with a `DeleteAccountRequest` naming the player by
+  exactly one of `username` (trimmed, lower-cased, as a login compares it) and `accountId`; 204, 404
+  `PLAYER_NOT_FOUND` (a new `ErrorCode`, mapped on the client), 400 for neither or both. It locks the
+  player's row as it looks them up (`AccountToDelete.lockedPlayerId`) and runs `AccountDeletion.delete`
+  in the same transaction, so their sessions die with it and a second deletion racing is 404. Admin
+  token first, both admin budgets, one log line by id alone (`admin deleted the account of player
+  <id>`).
+- **Moderation app**: an **Accounts** tab, one field for a username or an account id (sent as a
+  username when the account rules take it as one, else as an id: a UUID is never a username), and
+  *Delete account...*, which asks in a dialog naming the account and what goes.
+- **Game**: the About screen shows the **account id** under the site's links, copyable, with
+  *Копирано* beside its label once copied. It is the stored session's player id (`CurrentSession`),
+  not a `GET /v1/me` read: it shows offline, mints nothing, and nothing shows with no session stored.
+  Copying goes through Compose's deprecated `LocalClipboardManager`, the one common clipboard call.
+- **An emailed deletion request**: `WYR_ENV=prod ./gradlew :app:adminApp:run`, type `wyr-server`'s
+  admin token, open *Accounts*, paste the username or the account id from the email, *Delete
+  account...*, check the account the dialog names, *Delete account*. *No such account (404)* means a
+  mistyped name or id, or one deleted already. Needs the branch deployed to prod first.
+
+**Verified on this Mac**, the exit code read from a log file, with `--rerun-tasks`: `ktlintCheck`; the
+verify job's tests, `:server:test` 497, `:core:domain` 122, `:core:data` 195, `:core:network` 123 and
+129 as Android host tests, `:app:shared` 494, `:app:adminApp` 158, `:app:androidApp:testDevDebugUnitTest`
+5 and `:app:shared:testAndroidHostTest` 309, none failing; its client compiles, `assembleDebug` and
+`assembleProdRelease`; and the iOS Kotlin compiles (`:app:shared` main and test, each `:core` module's
+test). **Not verified**: the route on a deployed server or PostgreSQL (the `server-postgres` job), the
+copy on a real clipboard on any platform (tests copy to a clipboard of their own), and CI's `ios` job.
+
 ### Verified working
 
 - **`feat/android-release`**, on this machine: `ktlintCheck`; the verify job's tests (server 480,
@@ -1510,6 +1541,10 @@ step needs `--no-configuration-cache` on its `signingReport`.
 - `ktlintCheck` clean across every module.
 
 ### NOT verified
+
+- **`feat/admin-deletion`**: an account deleted on a deployed server, and the About screen's copy
+  reaching a real clipboard on Android, iOS, the desktop and a browser (`LocalClipboardManager`;
+  a browser may ask for permission or refuse outside a user gesture).
 
 - **`feat/android-release`**: a build signed with a real upload key, and any upload to Play (the
   key is the user's to make); the themed icon on a launcher that themes icons (the emulator's does
@@ -2201,6 +2236,14 @@ one typed); *Add* stays off until the names are one line of at most 40 and the i
 *Save names* sends them. After an add or a rename the list is read again whatever became of it; an
 id a category has already says `A category has that id already (409)` under the form. *Lock* forgets
 what was typed there and keeps the categories read.
+
+**Accounts** (`feat/admin-deletion`) deletes a player's account on their request, as the site's
+deletion page promises for one asked for by email: type the username, or the account id the game's
+About screen shows (a guest, or a player signed in with Play Games alone, has only that), and *Delete
+account...* asks in a dialog naming the account, what goes and that it cannot be undone; *Delete
+account* there deletes it, and the line under the field says it is done or `No such account on this
+server (404)`. The username is compared as a login compares it; anything that is no username is sent
+as an id. *Lock* forgets what was typed. One admin request per deletion.
 
 ### Analytics
 

@@ -690,6 +690,11 @@ decided in §8b).
     `AccountDeletionByModeratorFlowTest`, `ActionLogTest`. The moderation app's Accounts tab sends it
     (§8d, *Moderation*); on the client `PLAYER_NOT_FOUND` is `DomainError.PLAYER_NOT_FOUND`, and the
     call is `ModerationRepository.deleteAccount`, behind `DeletePlayerAccount`, with an `AccountRef`.
+    *An emailed request*, as the owner handles it: open the moderation app against production
+    (`WYR_ENV=prod`), type `wyr-server`'s admin token, and on the Accounts tab paste the username or the
+    account id the email names; the dialog names the account, and Delete account deletes it. Answer
+    the email once it says it is done; *No such account* means a mistyped name or id, or one deleted
+    already. Nothing proves the email is the account's player: a username or an id is all it names.
 
 - **Push tokens** (*decided 2026-09-26; built on the server, and on the Android client since
   `feat/android-services`*): a device's Firebase Cloud Messaging token, so a player hears when a moderator decides one
