@@ -84,10 +84,16 @@ class TapsTest {
 
     @Test
     fun `every tap on Home and the top bars is reported`() {
-        assertEquals(
-            setOf("home.play", "top_bar.account"),
-            elementsTapped { HomeScreen(picks = Tally(votesA = 3, votesB = 1), onPlay = {}, onAccount = {}) },
-        )
+        // A tap on either Play button holds the other still through the reveal, so each is a Home of its own,
+        // the other left untapped: from the top, the account icon, then card A's colour and card B's.
+        listOf(2, 1).forEach { other ->
+            assertEquals(
+                setOf("home.play", "top_bar.account"),
+                elementsTapped(skipping = other) {
+                    HomeScreen(picks = Tally(votesA = 3, votesB = 1), onPick = {}, onPlay = {}, onAccount = {})
+                },
+            )
+        }
         // Home's two Play buttons are one element, told apart by their side (CLAUDE.md §8d, *Home picks*).
         val sides =
             analytics
@@ -351,7 +357,10 @@ class TapsTest {
      * Draws [content] and taps everything that can be tapped on it, and then on what the taps
      * brought up (the language menu's list), and returns the elements the taps reported.
      */
-    private fun elementsTapped(content: @Composable () -> Unit): Set<String> {
+    private fun elementsTapped(
+        skipping: Int? = null,
+        content: @Composable () -> Unit,
+    ): Set<String> {
         val scene =
             ImageComposeScene(width = WIDTH, height = HEIGHT, density = Density(1f)) {
                 CompositionLocalProvider(LocalAnalytics provides analytics, LocalUriHandler provides uris) {
@@ -364,7 +373,9 @@ class TapsTest {
             scene.settle()
             // Twice: what the first taps bring up is tapped too.
             repeat(2) {
-                scene.tappable().filter { signatureOf(it) !in done }.forEach { node ->
+                // [skipping], the first time round, is left alone: the index of a node from the top.
+                val nodes = scene.tappable().filterIndexed { index, _ -> it > 0 || index != skipping }
+                nodes.filter { signatureOf(it) !in done }.forEach { node ->
                     done += signatureOf(node)
                     val before = analytics.named(AnalyticsEvent.TAP).size
                     val tap = assertNotNull(node.config.getOrNull(SemanticsActions.OnClick)?.action, signatureOf(node))

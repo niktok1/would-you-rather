@@ -44,11 +44,12 @@ data class WyrDimens(
      */
     val topBarHeight: Dp = 48.dp,
     /**
-     * The least height each of the Home screen's two Play buttons asks for: what it takes where its room
-     * is unbounded, and what the height Home needs counts for it. In bounded room `QuestionLayout` gives
-     * each its share, fixed, which may be less.
+     * The Home screen's two Play buttons, small and side by side (CLAUDE.md §8d, *Home picks*): the least
+     * height of each, room for *Play*, its share and the reveal's bar, so the reveal moves nothing; and
+     * the widest the pair stands together, centred on anything wider.
      */
-    val playButtonHeight: Dp = 64.dp,
+    val homeButtonHeight: Dp = 128.dp,
+    val homeButtonsMaxWidth: Dp = 328.dp,
     /**
      * The least width, inside the screen's padding, at which the Play screen stands its cards side by
      * side over the row, when it is also wider than tall (CLAUDE.md §8d, *Wide screens*): a phone on

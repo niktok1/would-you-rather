@@ -79,6 +79,8 @@ import io.ntole.wyr.core.network.InMemoryTokenStorage
 import io.ntole.wyr.core.network.TokenStorage
 import io.ntole.wyr.core.network.environment.WyrEnvironment
 import io.ntole.wyr.di.uiModule
+import io.ntole.wyr.home.HOME_REVEAL_MILLIS
+import io.ntole.wyr.home.PLAY_ENTRANCE_MILLIS
 import io.ntole.wyr.language.EnglishStrings
 import io.ntole.wyr.language.Language
 import io.ntole.wyr.language.LanguageViewModel
@@ -377,9 +379,13 @@ class AppNavigationTest {
             assertEquals(2, game.picksRead)
         }
 
-    /** A tap on either Play button is counted in the background: Play opens at once, before it is. */
+    /**
+     * A tap on either Play button reveals both shares, the tap counted on the device, while the server
+     * hears of it in the background and the question loads; Play opens once the reveal is over, whether
+     * or not the tap was counted by then.
+     */
     @Test
-    fun `a tap on Home's Play opens Play at once and is counted by its side`() {
+    fun `a tap on Home's Play reveals the shares then opens Play and is counted by its side`() {
         val counted = CompletableDeferred<Unit>()
         game.pickWaitsFor = counted
         withApp { scene ->
@@ -392,7 +398,22 @@ class AppNavigationTest {
             )
             scene.settle()
 
+            // Three taps on card A's colour, and one on card B's before this one.
+            assertEquals(
+                listOf(
+                    CYRILLIC.gameName,
+                    CYRILLIC.play,
+                    CYRILLIC.playScreen.percent(60),
+                    CYRILLIC.play,
+                    CYRILLIC.playScreen.percent(40),
+                ),
+                scene.texts(),
+            )
+            assertEquals(1, game.questionsAsked, "the question loads during the reveal")
+
+            scene.passTime(HOME_REVEAL_MILLIS + PLAY_ENTRANCE_MILLIS.toLong())
             assertEquals(PLAY_BAR, scene.descriptions().take(PLAY_BAR.size))
+            assertEquals(1, game.questionsAsked)
             assertEquals(emptyList(), game.picked, "not counted yet")
             counted.complete(Unit)
             scene.settle()
@@ -801,17 +822,12 @@ class AppNavigationTest {
         assertTrue(tap != null, "nothing to tap shows Play: ${texts()}")
         tap()
         settle()
+        // Home's reveal, then its fade into Play; nothing on the Categories screen waits for it.
+        passTime(HOME_REVEAL_MILLIS + PLAY_ENTRANCE_MILLIS.toLong())
     }
 
-    /** What Home shows in [strings]' words: the name and two Play buttons, each with its share of [HOME_PICKS]. */
-    private fun homeTexts(strings: Strings): List<String> =
-        listOf(
-            strings.gameName,
-            strings.play,
-            strings.playScreen.percent(75),
-            strings.play,
-            strings.playScreen.percent(25),
-        )
+    /** What Home shows in [strings]' words before a tap: the name and two Play buttons, no share yet. */
+    private fun homeTexts(strings: Strings): List<String> = listOf(strings.gameName, strings.play, strings.play)
 
     /** Whether the line showing [text] is ticked. */
     private fun ImageComposeScene.toggleOf(text: String): ToggleableState? =

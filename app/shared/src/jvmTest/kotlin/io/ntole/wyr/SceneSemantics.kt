@@ -14,6 +14,7 @@ import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.toSize
+import java.util.WeakHashMap
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
@@ -119,13 +120,35 @@ internal fun ImageComposeScene.renderAt(nanoTime: Long) {
     }
 }
 
-/** Draws the scene again once what the last action changed has reached it. */
+/** Draws the scene again once what the last action changed has reached it, at the time [passTime] reached. */
 internal fun ImageComposeScene.settle() {
+    val now = timePassed[this] ?: 0L
     repeat(2) {
         Snapshot.sendApplyNotifications()
-        render()
+        render(now)
     }
 }
+
+/**
+ * Moves the scene's clock on by [millis] from where it is, a frame every [FRAME_MILLIS] of it, so what
+ * runs on the frame clock, an animation or a timeline, goes on as it would on a screen; [settle] draws
+ * at the time reached from then on, never back at 0.
+ */
+internal fun ImageComposeScene.passTime(millis: Long) {
+    val from = timePassed[this] ?: 0L
+    var passed = 0L
+    while (passed < millis) {
+        passed = minOf(millis, passed + FRAME_MILLIS)
+        renderAt(from + passed * NANOS_PER_MILLI)
+    }
+    timePassed[this] = from + millis * NANOS_PER_MILLI
+}
+
+/** Where [passTime] has moved each scene's clock, in nanoseconds; a scene it never moved is at 0. */
+private val timePassed = WeakHashMap<ImageComposeScene, Long>()
+
+private const val FRAME_MILLIS = 100L
+private const val NANOS_PER_MILLI = 1_000_000L
 
 /**
  * The least height [content] needs at [width] for nothing in it to be squeezed, and the width it

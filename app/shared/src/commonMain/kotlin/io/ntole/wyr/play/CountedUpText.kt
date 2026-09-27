@@ -34,7 +34,8 @@ import kotlin.math.roundToInt
 internal const val COUNT_UP_MILLIS = 2_500
 
 /**
- * The reveal's count up to [target], a share out of 100: from 0 over [COUNT_UP_MILLIS], fast at first
+ * The reveal's count up to [target], a share out of 100: from 0 over [durationMillis], [COUNT_UP_MILLIS]
+ * unless a screen asks for its own (the Home screen's, shorter), fast at first
  * and slowing into the value, once per reveal. One count for a card's percentage ([CountedUpText]) and
  * its bar ([RevealBar]) alike, so the two move as one.
  *
@@ -44,12 +45,15 @@ internal const val COUNT_UP_MILLIS = 2_500
  * times slower than a release build's, has no time for more at 60 frames a second.
  */
 @Composable
-internal fun rememberCountUp(target: Int): State<Float> {
+internal fun rememberCountUp(
+    target: Int,
+    durationMillis: Int = COUNT_UP_MILLIS,
+): State<Float> {
     val counted = remember { Animatable(0f) }
     LaunchedEffect(target) {
         counted.animateTo(
             targetValue = target.toFloat(),
-            animationSpec = tween(durationMillis = COUNT_UP_MILLIS, easing = LinearOutSlowInEasing),
+            animationSpec = tween(durationMillis = durationMillis, easing = LinearOutSlowInEasing),
         )
     }
     return counted.asState()

@@ -1,5 +1,7 @@
 package io.ntole.wyr
 
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
@@ -14,12 +16,14 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LifecycleStartEffect
@@ -38,8 +42,10 @@ import io.ntole.wyr.categories.CategoriesViewModel
 import io.ntole.wyr.core.domain.notice.DecisionNotices
 import io.ntole.wyr.core.domain.session.CurrentSession
 import io.ntole.wyr.core.domain.update.AppUpdate
+import io.ntole.wyr.home.FADE_THROUGH_SCALE
 import io.ntole.wyr.home.HomeScreen
 import io.ntole.wyr.home.HomeViewModel
+import io.ntole.wyr.home.PLAY_ENTRANCE_MILLIS
 import io.ntole.wyr.language.Language
 import io.ntole.wyr.language.LanguageViewModel
 import io.ntole.wyr.language.LocalLanguage
@@ -64,6 +70,7 @@ import io.ntole.wyr.submit.SubmitViewModel
 import io.ntole.wyr.theme.WyrTheme
 import io.ntole.wyr.update.UpdateScreen
 import io.ntole.wyr.update.rememberUpdateButton
+import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
 
@@ -138,13 +145,30 @@ private fun Screens(
         }
     }
 
+    // Play fades in when Home's Play buttons open it, the second half of Home's fade (CLAUDE.md §8d, *Home picks*).
+    val entrance = remember { Animatable(1f) }
+    val scope = rememberCoroutineScope()
+
     Surface(color = MaterialTheme.colorScheme.background, modifier = Modifier.fillMaxSize()) {
         // The insets are applied once here, so the screens below find them already consumed.
-        Column(modifier = Modifier.fillMaxSize().safeContentPadding()) {
+        Column(
+            modifier =
+                Modifier.fillMaxSize().safeContentPadding().graphicsLayer {
+                    alpha = entrance.value
+                    scaleX = 1f - FADE_THROUGH_SCALE * (1f - entrance.value)
+                    scaleY = scaleX
+                },
+        ) {
             when (navigator.current) {
                 Screen.Home -> {
                     Home(
-                        onPlay = { navigator.open(Screen.Play) },
+                        onPlay = {
+                            scope.launch {
+                                entrance.snapTo(0f)
+                                navigator.open(Screen.Play)
+                                entrance.animateTo(1f, tween(PLAY_ENTRANCE_MILLIS))
+                            }
+                        },
                         onAccount = { navigator.open(Screen.Account) },
                         news = news,
                     )
@@ -216,9 +240,10 @@ private fun About() {
 }
 
 /**
- * The Home screen, whose two Play buttons show how many picked each, read each time it is shown
- * (CLAUDE.md §8d, *Home picks*). A tap on either opens Play at once, [onPlay], and is counted in the
- * background, never holding the game up. The account icon has its dot while [news] waits there.
+ * The Home screen, whose two Play buttons reveal how many picked each, read each time it is shown
+ * (CLAUDE.md §8d, *Home picks*). A tap on either is counted in the background, never holding the game
+ * up, and starts the Play screen's question loading, so it is there once the reveal hands over to Play,
+ * [onPlay]. The account icon has its dot while [news] waits there.
  */
 @Composable
 private fun Home(
@@ -228,15 +253,23 @@ private fun Home(
 ) {
     val viewModel = koinViewModel<HomeViewModel>()
     val picks by viewModel.picks.collectAsStateWithLifecycle()
+    var tapped by remember { mutableStateOf(false) }
 
     LaunchedEffect(viewModel) { viewModel.shown() }
+    if (tapped) {
+        // The Play screen's own ViewModel, the owner's (App's Screens), made now so its question loads during
+        // the reveal; hidden until Play is shown, so the reveal is not time taken over the question (§8g).
+        val play = koinViewModel<PlayViewModel>()
+        LaunchedEffect(play) { play.screenHidden() }
+    }
 
     HomeScreen(
         picks = picks,
-        onPlay = { side ->
+        onPick = { side ->
             viewModel.pick(side)
-            onPlay()
+            tapped = true
         },
+        onPlay = onPlay,
         onAccount = onAccount,
         news = news,
     )

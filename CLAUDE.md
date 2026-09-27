@@ -1591,9 +1591,10 @@ feature is tried through the game and the moderation app. A new feature gets a p
 game's, or a place on one, theme tokens only (§5b), and its words in `Strings` (§8f).
 
 **Navigation** (*decided 2026-09-25*: no tabs; `App.kt`, `io.ntole.wyr.navigation`, `io.ntole.wyr.home`):
-- The app opens on **Home**: the game's name, two big **Play** buttons in the cards' colours, each
-  with how many picked it (*Home picks*), and the account icon top right, and nothing else, the user
-  asking for less text. Either Play opens the **Play** screen under a top bar of
+- The app opens on **Home**: the game's name, two small **Play** buttons side by side in the cards'
+  colours, which reveal how many picked each once tapped (*Home picks*), and the account icon top
+  right, and nothing else, the user asking for less text. Either Play, after its reveal, opens the
+  **Play** screen, fading into it, under a top bar of
   the home icon, left, back to Home, the categories played in its middle, which open the
   **Categories** screen, and the question's menu and the account icon, right. On Home's bar and
   Play's the account icon has a dot while a decision waits there (*The notice of a decision*). The
@@ -1625,8 +1626,8 @@ game's, or a place on one, theme tokens only (§5b), and its words in `Strings` 
   the Play, Account, Auth, Submit and Categories screens keep the 599 of an iPhone SE's 667 their
   draw tests hold them to. `TopBarsDrawTest` holds every bar to 48 at 375 wide with nothing cut
   short but a long selection of categories on Play's, cut on its one line, in both themes and every
-  language; `HomeScreenDrawTest` holds Home to 599 at 375 wide (436
-  on this Mac, the name on two lines, 390 in Latin, on one) and to its texts and one icon.
+  language; `HomeScreenDrawTest` holds Home to 599 at 375 wide and
+  to its texts and one icon.
 
 **Wide screens** (*decided 2026-09-26*: of two options, the user picked the cards side by side over
 the row with the top bar as it is, the other being the row moved into the top bar; and the other
@@ -1650,7 +1651,8 @@ orientation, in common code alone:
 - *The Account screen, the Auth page, the Submit form and the Categories screen* hold their content to
   a column `WyrDimens.contentMaxWidth`, 600, wide down the middle (`contentWidth`), placed after the
   scroll, so the whole width still scrolls; the Categories screen's list scrolls in its column. Home's
-  two Play buttons stand as the Play screen's cards do, by the same `QuestionLayout` (*Home picks*).
+  two Play buttons stand side by side on every screen, the pair no wider than
+  `WyrDimens.homeButtonsMaxWidth` (*Home picks*).
 - `QuestionLayoutDrawTest` holds the rule to boxes of known sizes, which no font changes: side by side
   from 600 across while wider than tall, stacked at 599, when square and on a tablet held upright, and
   the height it needs by the same rule. `PlayScreenDrawTest` draws every state on two phones on their
@@ -2640,9 +2642,10 @@ listed on the Account screen.
     Reports tab's, the author actions' and the Accounts tab's texts. The game's builds do not moderate
     at all.
 - **Home picks** *(decided 2026-09-26; built on the server and the game)*: the Home screen shows
-  **two Play buttons**, one in each card's colour (§5b), both starting the game alike, each with how
-  many times players have tapped it, to fill the screen as a question would (the user: a Home that
-  "mimics the game"). A tap pays and
+  **two Play buttons**, one in each card's colour (§5b), both starting the game alike, each revealing
+  how many times players have tapped it once one is tapped (the user, 2026-09-27: Home "different, not
+  same as play screen", the buttons small, the percentages animated as on Play, then a transition to
+  Play). A tap pays and
   costs nothing and is no answer. **Every tap counts**, a player's repeats included, bounded only by
   the per-player rate limit (§8b). `GET /v1/home-picks` (`WyrApi.Paths.HOME_PICKS`) answers both
   counts, a `HomePicksDto` (`picksA`, `picksB`), and needs no session, so Home can show them before it
@@ -2651,26 +2654,35 @@ listed on the Account screen.
   naming no side. Built in `home_picks` (V15), one row per side written at 0, moved only by an SQL
   increment (`HomePickStore.pick`, §4) and read in one statement (`HomePickStore.counts`).
   `HomePickStoreTest` races 8 taps of one button, `HomePickFlowTest` the routes.
-  - *The Home screen* (`io.ntole.wyr.home`, *built 2026-09-26*): under the game's name, the two
-    buttons, *Играј* each (provisional, §8b), card A's pink and card B's amber, stand as the Play screen's cards do, stacked
-    on a phone and side by side on a wide screen (the same `QuestionLayout`, a gap of `spaceMd` in the
-    row's place), sharing the room under the name: `WyrDimens.playButtonHeight`, 64, is what each asks
-    for where the room is unbounded, not a floor, since `QuestionLayout` gives each its share of the
-    room there is. Each shows its share of all taps,
-    `Tally.percentA` and `percentB` as a question's are, counted up from 0 as the reveal's percentages
-    are, drawn, not composed (`CountedUpText`, `rememberCountUp`, `percentStyle`); no number until the
-    counts are read, none while nobody has tapped, and nothing said when a read fails, which keeps what
-    was read before. They are read each time Home is shown (`HomeViewModel.shown`). A tap opens Play at
-    once and is counted in the background, best effort (`HomeViewModel.pick`), its answer not shown.
+  - *The Home screen* (`io.ntole.wyr.home`, *built 2026-09-26*, *redesigned 2026-09-27*): under the
+    game's name, the two buttons, *Играј* each (provisional, §8b), card A's pink and card B's amber,
+    small and side by side on every screen (`WyrDimens.homeButtonHeight`, 128, and the pair no wider
+    than `homeButtonsMaxWidth`, 328), the name and the pair centred in the room under the top bar. No
+    share shows until a tap. A tap on either outlines it and holds both still, then both count their
+    share of all taps up from 0 over 1.2 seconds (`HOME_COUNT_UP_MILLIS`, shorter than the Play screen's
+    2.5), each with a reveal bar along its bottom, drawn, not composed, as the reveal is
+    (`CountedUpText`, `rememberCountUp`, `RevealBar`, `percentStyle`), the tap counted on the device
+    with the counts read, so the reveal waits for no answer; the shares stay a second
+    (`HOME_HOLD_MILLIS`), then Home fades out, growing a little, over 0.2 s, and Play fades in, from a
+    little smaller, over 0.25 s (`HOME_FADE_MILLIS`, `PLAY_ENTRANCE_MILLIS`, `FADE_THROUGH_SCALE`), a
+    fade through with no library, on the frame clock. The share's room is held from the start, so the
+    reveal moves nothing. With no counts read (offline, a sleeping server) there is nothing to reveal,
+    and the tap opens Play at once. The counts are read each time Home is shown (`HomeViewModel.shown`),
+    and nothing is said when a read fails. The tap is counted in the background, best effort
+    (`HomeViewModel.pick`), its answer not shown, and it makes the Play screen's ViewModel, so its
+    question loads during the reveal, the question's time not counted until Play is shown (§8g). Only
+    Home to Play fades; every other change of screen is instant.
   - *The client* is `HomePickRepository` in `:core:domain` (`io.ntole.wyr.core.domain.home`), the
     counts as a `Tally`, one tap a vote: `GetHomePicks`, which ensures no session, and `PickOnHome`,
     which ensures one first, as a vote does, so a first launch's tap and the game it opens mint one
     guest between them. `DefaultHomePickRepository` reads through `runApi` alone, as the categories
     are, and counts a tap through `withSessionRecovery`, over `HomePickApi`. `HomePickUseCasesTest`,
     `DefaultHomePickRepositoryTest`, `HomeViewModelTest`, `HomeScreenDrawTest` (599 on an iPhone SE,
-    both themes, every language, the buttons side by side on a desktop window, the shares read as they
-    are through the count up), `AppNavigationTest` (read each time Home is shown; Play opens before the
-    tap is counted).
+    both themes, every language, the buttons small and side by side on phones and a desktop window, no
+    share before a tap, the shares with the tap counted read as they are through the count up, nothing
+    moved, one tap only, the game started once and not before the reveal is over, and at once with no
+    counts), `AppNavigationTest` (read each time Home is shown; the question asked during the reveal;
+    Play opens after it, whether or not the tap was counted by then).
 
 ## 8e. Client environments — decided 2026-09-24
 
