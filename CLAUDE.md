@@ -989,8 +989,9 @@ EncryptedSharedPreferences: enough for a game that stores no sensitive personal 
   there takes a registered player's screen, whose read again failed, to 638, past an iPhone SE's 599.
   Built beside Log out instead, at the start of Log out's row (a guest, who has no Log out, gets the
   row to itself), and not offered while a read of the player shows its failure, where a guest's screen
-  would reach 622: the deletion would fail then too. The options: keep it; a row of its own under Log
-  out, the failure states then scrolling to reach it; or Delete account on the About screen alone.
+  would reach 622: the deletion would fail then too. Every failure state then fits, 598 at the tallest
+  (§8d, *The Account screen*). The options: keep it; a row of its own under Log out, the failure
+  states then scrolling to reach it; or Delete account on the About screen alone.
 - **Licence notices** — *provisional — user decision.* SLF4J's MIT licence and Skia's BSD 3-Clause
   ask for their copyright and permission notice to ship with the app; the About screen shows each one's
   copyright line and opens its licence's full text in the browser, as it does Apache 2.0's (§8d,
@@ -1003,9 +1004,9 @@ EncryptedSharedPreferences: enough for a game that stores no sensitive personal 
   Log out beside the language menu, one row of the two; the Statistics switch (§8g) now shares that
   row, since a row of all three does not fit a phone's width, and a row of its own would take a
   guest's screen past the 599 of an iPhone SE (566 with the switch beside the menu, 630 under it).
-  So Log out stands under the row, at its end, for a registered player (574 at the tallest). The
-  options: keep it; Log out on the card, where a guest's button to the Auth page is; or the switch
-  elsewhere, off the Account screen's first view.
+  So Log out stands under the row, at its end, for a registered player (582 at the tallest, one
+  registered by Play Games alone whose read failed). The options: keep it; Log out on the card, where
+  a guest's button to the Auth page is; or the switch elsewhere, off the Account screen's first view.
 - **Where players are, in analytics** — *decided 2026-09-27: PostHog keeps it* (the user: "I would
   leave IP capture"). PostHog keeps the address each event's request came from and adds a country, a
   city and coordinates from it, so the dashboards can show players by country (§8g, *Where the
@@ -1251,9 +1252,9 @@ EncryptedSharedPreferences: enough for a game that stores no sensitive personal 
   only while not signed in to Play Games, as asked, which leaves that player the username form alone.
 - **A Play Games player's name on the card** — *provisional — user decision.* A player registered by
   Play Games alone has no username, so the card names them *Google Play Игре* (§8d, *The Account
-  screen*), with a quiet *Додај корисничко име* in place of the button to register. The options: keep
-  it; *Играч*; or their Play Games name, which Play Games' `PlayersClient` would have to be asked for
-  on the device, since the server keeps none.
+  screen*), with a quiet *Додај корисничко име* beside the stat, where a guest has the button to
+  register. The options: keep it; *Играч*; or their Play Games name, which Play Games'
+  `PlayersClient` would have to be asked for on the device, since the server keeps none.
 - **The notice's look** — *provisional — user decision.* A dot in the brand's pink on the account
   icon, and on each new row of My questions for the visit that first shows it (§8d, *The notice of a
   decision*); no banner and no text on screen (the user: less text). The options: keep it; a number of
@@ -1630,12 +1631,16 @@ orientation, in common code alone:
   guest is *Гост* (`nameOf`; the brand is `GOOGLE_PLAY`, the same in every language, as
   `USERNAME_CHARACTERS` is, since a Serbian text holds no Latin letter), and has in place of the button
   a quiet link, *Додај корисничко име*, to the Auth page's Register form: a username and a password
-  are for logging in where there is no Play Games, on iOS and the web (`PlayGamesStrings`). A read that fails says so under the card, beside its
-  *Покушај поново*, or in the card's place before any read worked; a read that failed whole, the
-  list's too, says so once.
+  are for logging in where there is no Play Games, on iOS and the web (`PlayGamesStrings`). The link
+  is the stats' grid's next cell, beside the one stat, set to the card's end, two lines in Serbian: on
+  a row of its own it took the screen past 599 whenever a failure showed. A read that fails says so
+  under the card, beside its *Покушај поново*, or in the card's place before any read worked; a read
+  that failed whole, the list's too, says so once. While an action runs a bar under the card says so,
+  and not once a failure shows, while the read after a failed action runs on.
 - `AccountScreenDrawTest` holds every state with no question listed to 599 high in every language,
   measured 400 wide as `PlayScreenDrawTest` measures and for DEV, whose server line is the longest
-  (594 on this Mac at the tallest, a guest whose deletion failed offline), and New question
+  (598 on this Mac at the tallest, a guest whose deletion failed offline, the read after it running
+  or done; 582 for a player registered by Play Games alone whose read failed), and New question
   above 599 however long the list; a list scrolls with the screen. It finds the language menu and the
   switch on one row, neither cut short, and Log out under them, in every state and language.
 - **The Auth page** (`AuthScreen`, *decided 2026-09-25*), on the Account screen's ViewModel, shows
