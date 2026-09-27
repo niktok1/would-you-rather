@@ -1899,7 +1899,7 @@ Categories screen and the question's menu from its top bar (*Skipping*, *Reactio
   the screen is shown, and moved to a vote's total when its answer arrives, which drops a read still
   in flight; none until the first.
 - Tapping a card answers. In the reveal both cards count their percentage up from 0 to its value
-  over 2.5 seconds, both at once (`COUNT_UP_MILLIS`), as a **race** (the user, 2026-09-27: "make ppl
+  over 3 seconds, both at once (`COUNT_UP_MILLIS`), as a **race** (the user, 2026-09-27: "make ppl
   guessing"): both climb together on one curve, slowing as they near the smaller share, so which side
   wins shows only once the smaller one stops there, and then the larger speeds on to its own and eases
   into it (`raceAt`). The climb together takes up to 72% of the time for a close result, less for a
@@ -2678,7 +2678,7 @@ listed on the Account screen.
     than `homeButtonsMaxWidth`, 328), the name and the pair centred in the room under the top bar. No
     share shows until a tap. A tap on either sinks and lifts it, the other a little faint, with a tap of the phone (`cardMotion`, as a Play card) and holds both still, then both count their
     share of all taps up from 0 over 1.2 seconds (`HOME_COUNT_UP_MILLIS`, shorter than the Play screen's
-    2.5), as the same race the reveal runs, each with a reveal bar along its bottom, drawn, not composed, as the reveal is
+    3), as the same race the reveal runs, each with a reveal bar along its bottom, drawn, not composed, as the reveal is
     (`CountedUpText`, `rememberCountUp`, `RevealBar`, `percentStyle`), the tap counted on the device
     with the counts read, so the reveal waits for no answer; the shares stay a second
     (`HOME_HOLD_MILLIS`), then Home fades out, growing a little, over 0.2 s, and Play fades in, from a

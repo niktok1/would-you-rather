@@ -27,15 +27,15 @@ import kotlin.test.assertTrue
  */
 class CountedUpTextDrawTest {
     /**
-     * The count is drawn from 0 at the start, a number between halfway, its target at 2.5 seconds, and
+     * The count is drawn from 0 at the start, a number between halfway, its target at 3 seconds, and
      * nothing again once it is there: the timing the reveal had when the count was a text.
      */
     @Test
-    fun `the count is drawn from 0 up to its target in two and a half seconds`() {
+    fun `the count is drawn from 0 up to its target in three seconds`() {
         val drawn = drawnFrameByFrame(target = 70)
         assertEquals(0, drawn.getValue(0), "at the start")
         assertTrue(drawn.getValue(COUNTED_UP / 2) in 1 until 70, "halfway: $drawn")
-        assertEquals(70, drawn.getValue(COUNTED_UP), "at 2.5 seconds")
+        assertEquals(70, drawn.getValue(COUNTED_UP), "at 3 seconds")
         assertEquals(70, drawn.getValue(COUNTED_UP * 2), "after")
     }
 
@@ -167,7 +167,7 @@ class CountedUpTextDrawTest {
         const val FRAME = 1_000_000_000L / 60
 
         /**
-         * Every frame of the count up at 60 a second, from the first, at 0, to the one at 2.5 seconds,
+         * Every frame of the count up at 60 a second, from the first, at 0, to the one at 3 seconds,
          * and one halfway.
          */
         val FRAMES: List<Long> = ((0..COUNTED_UP / FRAME).map { it * FRAME } + COUNTED_UP / 2 + COUNTED_UP).sorted()

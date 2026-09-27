@@ -33,7 +33,7 @@ import kotlin.math.roundToInt
  * How long the reveal's percentages take to count up from 0, both cards at once, and each card's bar
  * to fill with them (CLAUDE.md §8d, *The Play screen*). Internal, so a test can step the clock to it.
  */
-internal const val COUNT_UP_MILLIS = 2_500
+internal const val COUNT_UP_MILLIS = 3_000
 
 /**
  * The reveal's count up to [target], a share out of 100, as a race with [rival], the other side's share

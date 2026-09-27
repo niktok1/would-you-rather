@@ -629,7 +629,7 @@ class PlayScreenDrawTest {
     }
 
     /**
-     * Both percentages count up from 0 at once and reach their values at 2.5 seconds, on the scene's
+     * Both percentages count up from 0 at once and reach their values at 3 seconds, on the scene's
      * clock stepped a frame at a time as a phone's is, in both themes. The count is drawn, not a text
      * that changes, so what each card shows is told by its pixels where its percentage is: *0%* at the
      * start, centred there, a number between a quarter of the way in (both still climbing together, CLAUDE.md
@@ -637,7 +637,7 @@ class PlayScreenDrawTest {
      * text it replaced drew it, the same font, size, weight, colour and place, and nothing moving after.
      */
     @Test
-    fun `the reveal's percentages count up from 0 over two and a half seconds`() {
+    fun `the reveal's percentages count up from 0 over three seconds`() {
         val strings = stringsOf(Language.DEFAULT).playScreen
         // Each card while it is the pick: the other stands faint, in colours of its own.
         forEachPickAndTheme { pick, colors, theme ->
@@ -668,7 +668,7 @@ class PlayScreenDrawTest {
                         halfway[card] != start[card] && halfway[card] != end[card],
                         "$at a quarter of the way in",
                     )
-                    assertEquals(textPixels(shown, area, background, text), end[card], "$at at 2.5 seconds")
+                    assertEquals(textPixels(shown, area, background, text), end[card], "$at at 3 seconds")
                 }
                 val after = scene.pixelsAt(COUNTED_UP * 2, areas, from = COUNTED_UP)
                 assertEquals(end, after, "after, in the $theme theme")
@@ -678,12 +678,12 @@ class PlayScreenDrawTest {
 
     /**
      * Each card's bar, along its edge by the row, fills from its start with the count, over the same
-     * two and a half seconds, and stops where the card's share does: empty at the start, part way
-     * a quarter of the way in, and at 2.5 seconds filled to its share of the card's width, then still. Told by the
+     * three seconds, and stops where the card's share does: empty at the start, part way
+     * a quarter of the way in, and at 3 seconds filled to its share of the card's width, then still. Told by the
      * pixels along the middle of each bar: the card's text colour where it is filled.
      */
     @Test
-    fun `each card's bar fills with its share over two and a half seconds`() {
+    fun `each card's bar fills with its share over three seconds`() {
         // Each card while it is the pick: the other stands faint, in colours of its own.
         forEachPickAndTheme { pick, colors, theme ->
             withScreen(
@@ -724,7 +724,7 @@ class PlayScreenDrawTest {
                     val at = "card ${card + 1} in the $theme theme"
                     val half = assertNotNull(halfway[card], "$at a quarter of the way in")
                     assertTrue(half > 0f && half < share, "$at is filled to $half a quarter of the way in")
-                    val filled = assertNotNull(end[card], "$at at 2.5 seconds")
+                    val filled = assertNotNull(end[card], "$at at 3 seconds")
                     assertTrue(abs(filled - share) <= BAR_TOLERANCE, "$at is filled to $filled of $share")
                 }
                 assertEquals(end, after, "still after, in the $theme theme")
