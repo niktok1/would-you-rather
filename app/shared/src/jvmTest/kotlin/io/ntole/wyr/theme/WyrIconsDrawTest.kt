@@ -129,6 +129,7 @@ class WyrIconsDrawTest {
                 "Players" to WyrIcons.Players,
                 "Info" to WyrIcons.Info,
                 "More" to WyrIcons.More,
+                "Copy" to WyrIcons.Copy,
             )
     }
 }

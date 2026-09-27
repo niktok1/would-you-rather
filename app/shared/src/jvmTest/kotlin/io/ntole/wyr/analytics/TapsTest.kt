@@ -3,12 +3,14 @@ package io.ntole.wyr.analytics
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.ImageComposeScene
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsNode
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.unit.Density
+import io.ntole.wyr.RecordingClipboard
 import io.ntole.wyr.RecordingUris
 import io.ntole.wyr.about.AboutScreen
 import io.ntole.wyr.about.AppVersion
@@ -115,8 +117,20 @@ class TapsTest {
     @Test
     fun `every tap on the About screen is reported`() {
         assertEquals(
-            setOf("about.privacy", "about.terms", "about.delete_account", "about.contact", "about.licence"),
-            elementsTapped { AboutScreen(AppVersion("1.0.0", 10000)) },
+            setOf(
+                "about.privacy",
+                "about.terms",
+                "about.delete_account",
+                "about.contact",
+                "about.copy_account_id",
+                "about.licence",
+            ),
+            elementsTapped {
+                @Suppress("DEPRECATION")
+                CompositionLocalProvider(LocalClipboardManager provides RecordingClipboard()) {
+                    AboutScreen(AppVersion("1.0.0", 10000), accountId = "p1")
+                }
+            },
         )
         assertTrue(uris.opened.isNotEmpty())
     }

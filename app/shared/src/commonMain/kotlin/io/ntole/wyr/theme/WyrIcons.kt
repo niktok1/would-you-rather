@@ -193,6 +193,28 @@ object WyrIcons {
     }
 
     /**
+     * Copy: two sheets, one over the other, for copying the player's account id (CLAUDE.md §8d,
+     * *About*).
+     */
+    val Copy: ImageVector by lazy {
+        icon("Copy") {
+            outline {
+                // The sheet on top, then the edges of the one under it that show.
+                moveTo(9f, 9f)
+                horizontalLineTo(20f)
+                verticalLineTo(20f)
+                horizontalLineTo(9f)
+                close()
+                moveTo(15f, 9f)
+                verticalLineTo(4f)
+                horizontalLineTo(4f)
+                verticalLineTo(15f)
+                horizontalLineTo(9f)
+            }
+        }
+    }
+
+    /**
      * A thumb up, or turned over top to bottom for a thumb down: the cuff on the left, and the hand
      * beside it, its thumb pointing up out of it, or down.
      */

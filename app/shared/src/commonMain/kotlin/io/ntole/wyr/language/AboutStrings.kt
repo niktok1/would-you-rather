@@ -18,6 +18,15 @@ data class AboutStrings(
     val contact: String,
     /** The heading of the libraries the game ships with, each with its licence. */
     val licences: String,
+    /**
+     * The label over the player's account id, which they send to have their account deleted by email
+     * (CLAUDE.md §8a, *Deleting an account*, *By a moderator*).
+     */
+    val accountId: String,
+    /** The copy button beside the account id, as a screen reader names it. */
+    val copyAccountId: String,
+    /** Said beside the label once the account id is copied. */
+    val copied: String,
 ) {
     /** These strings with [transform] applied to every one of them, as [Strings.map] asks. */
     internal fun map(transform: (String) -> String): AboutStrings =
@@ -29,6 +38,9 @@ data class AboutStrings(
             deleteAccount = transform(deleteAccount),
             contact = transform(contact),
             licences = transform(licences),
+            accountId = transform(accountId),
+            copyAccountId = transform(copyAccountId),
+            copied = transform(copied),
         )
 }
 
@@ -42,6 +54,9 @@ internal val SerbianCyrillicAboutStrings: AboutStrings =
         deleteAccount = "Брисање налога",
         contact = "Контакт",
         licences = "Лиценце отвореног кода",
+        accountId = "ИД налога",
+        copyAccountId = "Копирај ИД налога",
+        copied = "Копирано",
     )
 
 internal val EnglishAboutStrings: AboutStrings =
@@ -53,4 +68,7 @@ internal val EnglishAboutStrings: AboutStrings =
         deleteAccount = "Deleting an account",
         contact = "Contact",
         licences = "Open-source licences",
+        accountId = "Account ID",
+        copyAccountId = "Copy account ID",
+        copied = "Copied",
     )

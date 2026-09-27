@@ -13,6 +13,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.listSaver
@@ -35,6 +36,7 @@ import io.ntole.wyr.analytics.rememberConfigurationChanging
 import io.ntole.wyr.categories.CategoriesScreen
 import io.ntole.wyr.categories.CategoriesViewModel
 import io.ntole.wyr.core.domain.notice.DecisionNotices
+import io.ntole.wyr.core.domain.session.CurrentSession
 import io.ntole.wyr.core.domain.update.AppUpdate
 import io.ntole.wyr.home.HomeScreen
 import io.ntole.wyr.home.HomeViewModel
@@ -192,11 +194,25 @@ private fun Screens(
 
                 Screen.About -> {
                     BackTopBar(onBack = { navigator.back() })
-                    Below { AboutScreen(version = koinInject()) }
+                    Below { About() }
                 }
             }
         }
     }
+}
+
+/**
+ * The About screen, with the account id of the session stored on the device, which it copies to send
+ * by email for the account's deletion (CLAUDE.md §8d, *About*): read from the device and never from
+ * the server, so it shows offline and mints no session. None while none is stored; and the new one
+ * should the device become another player while it is shown.
+ */
+@Composable
+private fun About() {
+    val session = koinInject<CurrentSession>()
+    val accountId by remember(session) { session.sessions }.collectAsStateWithLifecycle(session.current())
+
+    AboutScreen(version = koinInject(), accountId = accountId)
 }
 
 /**

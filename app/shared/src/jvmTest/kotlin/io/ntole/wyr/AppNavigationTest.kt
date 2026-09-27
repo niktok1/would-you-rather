@@ -335,6 +335,7 @@ class AppNavigationTest {
             scene.tap(CYRILLIC.aboutScreen.title)
 
             assertTrue(CYRILLIC.aboutScreen.version.fill("1.0.0 (10000)") in scene.texts(), "${scene.texts()}")
+            assertTrue("player" in scene.texts(), "the stored session's account id: ${scene.texts()}")
             val shown = analytics.named(RecordingAnalytics.SCREEN).map { it.properties[RecordingAnalytics.SCREEN_NAME] }
             assertEquals("about", shown.last())
 

@@ -1,5 +1,6 @@
 package io.ntole.wyr.theme
 
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
@@ -97,4 +98,7 @@ object WyrTypeScale {
     /** The game's name's line, set with it: it takes two lines on a phone, and the text style's own is for body text. */
     val gameNameLineHeight = 46.sp
     val playButton = 24.sp
+
+    /** An id shown for the player to copy, the About screen's account id: fixed width, so it reads as a value. */
+    val code = FontFamily.Monospace
 }

@@ -298,8 +298,9 @@ left) for the top bars (§8d, *Navigation*); for the Play screen `Skip` (a trian
 screen*, *Reactions*); `CoinFace` and `CoinMark`, a disc and the rim and ring on it, the points' coin
 wherever they show (§8f, *Numbers and symbols*); `Globe` for the language menu; `Players`, two
 players, heading My questions' answers (§8d, *The Account screen*); `Info`, an i in a circle, the
-Account screen's way to the About screen (§8d, *About*); and `More`, three dots one over the
-other, the Play screen's menu about the question (§8d, *The Play screen*, *Reports*). They carry no colour of their
+Account screen's way to the About screen (§8d, *About*); `More`, three dots one over the
+other, the Play screen's menu about the question (§8d, *The Play screen*, *Reports*); and `Copy`, two
+sheets one over the other, beside the About screen's account id (§8d, *About*). They carry no colour of their
 own: `Icon` tints each from `WyrColors`, so they follow the light and dark themes as text does. The
 coin is two icons drawn one on the other, the face in `WyrColors.coin` and the mark in
 `WyrColors.onCoin`, the brand's amber and its dark brown, the same in both themes as the cards are
@@ -1780,7 +1781,16 @@ open in the browser (`LocalUriHandler`), *Политика приватност�
 `/contact.html`, under `/en/` in English, the Serbian pages for either script (`Site`, whose one
 `BASE_URL` is `https://stabiradije.rs`, not live yet, the domain being the user's to buy, §8b *The
 launch*); a link nothing on the device opens, on a phone with no browser, does nothing
-(`openIfAble`, here, on a licence and in Register's terms line alike); and **Лиценце отвореног кода**, the libraries the game ships with on any platform, each
+(`openIfAble`, here, on a licence and in Register's terms line alike); under them the player's
+**account id** (*built 2026-09-27*, the user: "a copyable account ID"), which a guest or a player
+signed in with Play Games alone, who has no username, sends to have their account deleted by email
+(§8a, *Deleting an account*, *By a moderator*): a muted *ИД налога* over the id in a fixed width
+(`WyrTypeScale.code`), and a copy button (`WyrIcons.Copy`, named *Копирај ИД налога*), which puts it
+on the clipboard and says *Копирано* beside the label, on the same line, so nothing moves (Compose's
+`LocalClipboardManager`, deprecated but the one clipboard call common code has on every platform: its
+replacement's `ClipEntry` has no common constructor). The id is the stored session's player id
+(`CurrentSession`, the same id `GET /v1/me` names), read from the device, never the server: it
+shows offline, mints no session, and none shows while no session is stored; and **Лиценце отвореног кода**, the libraries the game ships with on any platform, each
 with its licence, a tap opening the licence's text (`OPEN_SOURCE_LIBRARIES`, written by hand, no
 library for it, from the Android and desktop dependency reports, NEXT-SESSION's *Releasing to
 production*: Apache 2.0 but for SLF4J's API, MIT, which Ktor brings, and Skia, BSD 3-Clause, which
@@ -1792,7 +1802,9 @@ Play Games and Firebase bring on Android (`play-services-games-v2`, `-base`, `-b
 `-stats`, `-cloud-messaging`), are under Google's own terms, not an open-source licence, so the list
 does not name them (*provisional — user decision*, §8b *Licence notices*). Words: `Strings.aboutScreen`.
 `AboutScreenDrawTest` (every text in both themes and every language, each link's URL through a handler
-of the test's own, one that opens nothing, the links above 599 before any scrolling), `LicencesTest`,
+of the test's own, one that opens nothing, the links and the account id's copy button above 599
+before any scrolling, the id copied whole through a clipboard of the test's own and nothing moved
+for it, none with no session), `LicencesTest`,
 `LinksTest`, `SiteTest`, `TapsTest`,
 `AppNavigationTest`, `TopBarsDrawTest`, `NavigatorTest`.
 
@@ -2731,7 +2743,7 @@ hand, so the two cannot say different things; and **English** stands beside them
   pages opened from it, deleting an account's in `DeleteAccountStrings`); the update screen
   (`Strings.updateScreen`, *Нова верзија је доступна*, *Ажурирај*, *Освежи*); and the About screen
   (`Strings.aboutScreen`: *О игри*, the name its icon is given, *Верзија {0}*, the four links' names
-  and *Лиценце отвореног кода*). What is the same in every language is no `Strings`: *16+*, the
+  and *Лиценце отвореног кода*, and *ИД налога*, *Копирај ИД налога* and *Копирано*). What is the same in every language is no `Strings`: *16+*, the
   libraries' and licences' names. **Try again** is one text of `Strings`, `tryAgain`, *Покушај поново*
   (*provisional*, §8b), under a failure on Play, the Categories screen, the Account screen, My
   questions, the Auth page and the Submit form, so the game says it one way; the Account screens'
@@ -2940,7 +2952,7 @@ the same events. The moderation app sends none.
   `$screen_name` says where. An element is `screen.what`, lower case and underscores: `home.play` (with
   its `side`, `A` or `B`, since Home's two buttons are one element);
   `top_bar.home`, `.account`, `.back`, `.categories`, `.about`; `about.privacy`, `.terms`,
-  `.delete_account`, `.contact` and `.licence`; `play.card_a` and `.card_b` (with `answered`,
+  `.delete_account`, `.contact`, `.copy_account_id` and `.licence`; `play.card_a` and `.card_b` (with `answered`,
   whether the tap went on from the reveal), `.like`, `.dislike`, `.skip`, `.try_again`;
   `question_menu.open`, `.report`, `.reason` (with its `reason`), `.hide_question`, `.hide_author`;
   `account.open_auth`, `.add_username`, `.log_out`, `.try_again`; `my_questions.new_question`, `.first_question`,
