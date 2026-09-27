@@ -144,6 +144,7 @@ fun HomeScreen(
                         PlayButton(
                             side = side,
                             share = revealed?.percentOf(side),
+                            rival = revealed?.percentOf(if (side == Side.A) Side.B else Side.A),
                             isPicked = picked == side,
                             isDimmed = picked != null && picked != side,
                             enabled = picked == null,
@@ -177,6 +178,7 @@ private fun Tally.plus(side: Side): Tally = if (side == Side.A) copy(votesA = vo
 private fun PlayButton(
     side: Side,
     share: Int?,
+    rival: Int?,
     isPicked: Boolean,
     isDimmed: Boolean,
     enabled: Boolean,
@@ -203,7 +205,7 @@ private fun PlayButton(
                 .heightIn(min = dimens.homeButtonHeight)
                 .cardMotion(interaction, isPicked = isPicked, isDimmed = isDimmed, shape = shape, colour = background),
     ) {
-        val counted = share?.let { rememberCountUp(it, durationMillis = HOME_COUNT_UP_MILLIS) }
+        val counted = share?.let { rememberCountUp(it, rival = rival ?: it, durationMillis = HOME_COUNT_UP_MILLIS) }
 
         // As high as the Surface's least height, which it passes on, or its content: never the whole screen.
         Box(modifier = Modifier.fillMaxWidth()) {

@@ -194,6 +194,7 @@ private data class CardFace(
     val questionId: String,
     val text: String,
     val percent: Int?,
+    val rival: Int?,
 )
 
 /**
@@ -272,6 +273,7 @@ private fun ColumnScope.QuestionBody(
             // The bars stand along the edges by the row, between the cards or under them.
             barAt = Alignment.BottomCenter,
             percent = outcome?.tally?.percentA,
+            rival = outcome?.tally?.percentB,
             isYourPick = outcome?.yourSide == Side.A,
             isDimmed = outcome != null && outcome.yourSide != Side.A,
             enabled = idle,
@@ -305,6 +307,7 @@ private fun ColumnScope.QuestionBody(
             barTrack = colors.revealTrackOnB,
             barAt = if (sideBySide) Alignment.BottomCenter else Alignment.TopCenter,
             percent = outcome?.tally?.percentB,
+            rival = outcome?.tally?.percentA,
             isYourPick = outcome?.yourSide == Side.B,
             isDimmed = outcome != null && outcome.yourSide != Side.B,
             enabled = idle,
@@ -545,6 +548,7 @@ private fun OptionCard(
     barTrack: Color,
     barAt: Alignment,
     percent: Int?,
+    rival: Int?,
     isYourPick: Boolean,
     isDimmed: Boolean,
     enabled: Boolean,
@@ -578,7 +582,7 @@ private fun OptionCard(
                 ),
     ) {
         AnimatedContent(
-            targetState = CardFace(questionId, text, percent),
+            targetState = CardFace(questionId, text, percent, rival),
             contentKey = { it.questionId },
             transitionSpec = {
                 val slideIn =
@@ -620,7 +624,7 @@ private fun CardFaceContent(
 ) {
     val dimens = WyrThemeAccessors.dimens
     // One count for the percentage and the bar, so they move as one.
-    val counted = face.percent?.let { rememberCountUp(it) }
+    val counted = face.percent?.let { rememberCountUp(it, rival = face.rival ?: it) }
 
     Box(modifier = modifier.fillMaxSize()) {
         Column(

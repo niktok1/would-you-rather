@@ -632,7 +632,8 @@ class PlayScreenDrawTest {
      * Both percentages count up from 0 at once and reach their values at 2.5 seconds, on the scene's
      * clock stepped a frame at a time as a phone's is, in both themes. The count is drawn, not a text
      * that changes, so what each card shows is told by its pixels where its percentage is: *0%* at the
-     * start, centred there, a number between halfway, and at the end its value drawn exactly as the
+     * start, centred there, a number between a quarter of the way in (both still climbing together, CLAUDE.md
+     * §8d, *The Play screen*), and at the end its value drawn exactly as the
      * text it replaced drew it, the same font, size, weight, colour and place, and nothing moving after.
      */
     @Test
@@ -652,8 +653,8 @@ class PlayScreenDrawTest {
                 val areas = cards.map { (shown, _, _) -> scene.everyNode().single { shown in it.texts }.boundsInRoot }
 
                 val start = scene.pixelsAt(0, areas)
-                val halfway = scene.pixelsAt(COUNTED_UP / 2, areas, from = 0)
-                val end = scene.pixelsAt(COUNTED_UP, areas, from = COUNTED_UP / 2)
+                val halfway = scene.pixelsAt(CLIMBING, areas, from = 0)
+                val end = scene.pixelsAt(COUNTED_UP, areas, from = CLIMBING)
                 cards.zip(areas).forEachIndexed { card, (colours, area) ->
                     if (card != pick.ordinal) return@forEachIndexed
                     val (shown, background, text) = colours
@@ -663,7 +664,10 @@ class PlayScreenDrawTest {
                         start[card],
                         "$at at the start",
                     )
-                    assertTrue(halfway[card] != start[card] && halfway[card] != end[card], "$at halfway")
+                    assertTrue(
+                        halfway[card] != start[card] && halfway[card] != end[card],
+                        "$at a quarter of the way in",
+                    )
                     assertEquals(textPixels(shown, area, background, text), end[card], "$at at 2.5 seconds")
                 }
                 val after = scene.pixelsAt(COUNTED_UP * 2, areas, from = COUNTED_UP)
@@ -675,7 +679,7 @@ class PlayScreenDrawTest {
     /**
      * Each card's bar, along its edge by the row, fills from its start with the count, over the same
      * two and a half seconds, and stops where the card's share does: empty at the start, part way
-     * halfway, and at 2.5 seconds filled to its share of the card's width, then still. Told by the
+     * a quarter of the way in, and at 2.5 seconds filled to its share of the card's width, then still. Told by the
      * pixels along the middle of each bar: the card's text colour where it is filled.
      */
     @Test
@@ -711,15 +715,15 @@ class PlayScreenDrawTest {
                 }
 
                 val start = filledTo(0)
-                val halfway = filledTo(COUNTED_UP / 2)
+                val halfway = filledTo(CLIMBING)
                 val end = filledTo(COUNTED_UP)
                 val after = filledTo(COUNTED_UP * 2)
                 assertEquals(null, start[pick.ordinal], "nothing filled at the start in the $theme theme")
                 listOf(0.7f, 0.3f).forEachIndexed { card, share ->
                     if (card != pick.ordinal) return@forEachIndexed
                     val at = "card ${card + 1} in the $theme theme"
-                    val half = assertNotNull(halfway[card], "$at halfway")
-                    assertTrue(half > 0f && half < share, "$at is filled to $half halfway")
+                    val half = assertNotNull(halfway[card], "$at a quarter of the way in")
+                    assertTrue(half > 0f && half < share, "$at is filled to $half a quarter of the way in")
                     val filled = assertNotNull(end[card], "$at at 2.5 seconds")
                     assertTrue(abs(filled - share) <= BAR_TOLERANCE, "$at is filled to $filled of $share")
                 }
@@ -1224,6 +1228,12 @@ class PlayScreenDrawTest {
 
         /** How far a layout's rounding may put one edge past another. */
         const val HALF_PIXEL = 0.5f
+
+        /**
+         * A quarter of the count's time, in nanoseconds: both sides still climbing together, short of
+         * the smaller share (70 against 30 climbs together for 43% of the time).
+         */
+        const val CLIMBING = COUNT_UP_MILLIS * 1_000_000L / 4
 
         /** The scene's clock, in nanoseconds, once the reveal has counted up. */
         const val COUNTED_UP = COUNT_UP_MILLIS * 1_000_000L

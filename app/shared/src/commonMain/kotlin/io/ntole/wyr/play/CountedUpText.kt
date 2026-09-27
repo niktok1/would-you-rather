@@ -1,6 +1,8 @@
 package io.ntole.wyr.play
 
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Box
@@ -34,10 +36,13 @@ import kotlin.math.roundToInt
 internal const val COUNT_UP_MILLIS = 2_500
 
 /**
- * The reveal's count up to [target], a share out of 100: from 0 over [durationMillis], [COUNT_UP_MILLIS]
- * unless a screen asks for its own (the Home screen's, shorter), fast at first
- * and slowing into the value, once per reveal. One count for a card's percentage ([CountedUpText]) and
- * its bar ([RevealBar]) alike, so the two move as one.
+ * The reveal's count up to [target], a share out of 100, as a race with [rival], the other side's share
+ * (CLAUDE.md §8d, *The Play screen*): over [durationMillis], [COUNT_UP_MILLIS] unless a screen asks for
+ * its own (the Home screen's, shorter), both sides climb together, slowing as they near the smaller
+ * share, so which side is ahead shows only once the smaller one stops there; then the larger speeds on
+ * to its own and eases into it. A card and the other count the same shared curve, each stopping at its
+ * own share, so they move in step. One count for a card's percentage ([CountedUpText]) and its bar
+ * ([RevealBar]) alike, so the two move as one; once per reveal.
  *
  * Read only where it is drawn, never composed (CLAUDE.md §8d, *The Play screen*): a frame of the count
  * draws the number and the bar again and does nothing else. Nothing is composed or laid out again, and
@@ -47,17 +52,60 @@ internal const val COUNT_UP_MILLIS = 2_500
 @Composable
 internal fun rememberCountUp(
     target: Int,
+    rival: Int = target,
     durationMillis: Int = COUNT_UP_MILLIS,
 ): State<Float> {
-    val counted = remember { Animatable(0f) }
-    LaunchedEffect(target) {
-        counted.animateTo(
-            targetValue = target.toFloat(),
-            animationSpec = tween(durationMillis = durationMillis, easing = LinearOutSlowInEasing),
-        )
+    val progress = remember { Animatable(0f) }
+    LaunchedEffect(target, rival) {
+        progress.animateTo(1f, animationSpec = tween(durationMillis = durationMillis, easing = LinearEasing))
     }
-    return counted.asState()
+    // Not a derived state: each read reads the animation itself, so whatever draws it is told of every frame.
+    return remember(progress, target, rival) { RaceState(progress, target, rival) }
 }
+
+/** [raceAt] of [progress]'s value, read afresh on every read. */
+private class RaceState(
+    private val progress: Animatable<Float, *>,
+    private val target: Int,
+    private val rival: Int,
+) : State<Float> {
+    override val value: Float get() = raceAt(progress.value, target, rival)
+}
+
+/**
+ * Where the race stands for [target] against [rival] at [progress], from 0 to 1 of the count's time:
+ * both on the one curve, climbing together and slowing into the smaller share, then the larger speeding
+ * on to its own; each capped at its own share. The climb together takes up to [TOGETHER_SHARE] of the
+ * time, less the smaller the smaller share is (no less than [TOGETHER_MIN]), so a lopsided result does
+ * not crawl; a tie climbs together the whole time. Internal, so a test can check the curve itself.
+ */
+internal fun raceAt(
+    progress: Float,
+    target: Int,
+    rival: Int,
+): Float {
+    val low = minOf(target, rival).toFloat()
+    val high = maxOf(target, rival).toFloat()
+    val p = progress.coerceIn(0f, 1f)
+    val together =
+        if (high == low) 1f else TOGETHER_SHARE * (low / HALF).coerceIn(TOGETHER_MIN, 1f)
+    val value =
+        if (p < together || together >= 1f) {
+            low * LinearOutSlowInEasing.transform(p / together)
+        } else {
+            low + (high - low) * FastOutSlowInEasing.transform((p - together) / (1f - together))
+        }
+    return minOf(value, target.toFloat())
+}
+
+/** How much of the count's time the two sides climb together at most, for a close result. */
+private const val TOGETHER_SHARE = 0.72f
+
+/** The least of that time, of [TOGETHER_SHARE], for a lopsided result. */
+private const val TOGETHER_MIN = 0.28f
+
+/** An even split, where the climb together takes all of [TOGETHER_SHARE]. */
+private const val HALF = 50f
 
 /**
  * [target] as the reveal shows it, worded by [text], in [style], at the whole number [counted] has
