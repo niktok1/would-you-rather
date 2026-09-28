@@ -397,6 +397,10 @@ transition left running would never end. What moves, besides what §8d describes
   old screen stays composed until the change ends. The first screen and the update screen (§8e) just
   appear, and Play opened from Home is a cut, left to Home's own fade through (§8d, *Home picks*),
   exactly as before (`isFadeThrough`). `ScreenTransitionsDrawTest`.
+- *The coin* (`PointsAmount`): when the points go up, on the Play screen's row, the Account card or the
+  shop, the coin bumps to `COIN_BUMP_SCALE` (1.3) and back, `COIN_BUMP_MILLIS` (250), and the number
+  beside it stays; the first amount shown, and one that falls or stays, bump nothing. No "+1" is shown
+  (the user). `CoinBumpDrawTest`.
 
 ---
 
