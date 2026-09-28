@@ -1,23 +1,8 @@
 <!DOCTYPE html>
-<!--
-  Нацрт / Draft — not legal advice.
-  Written for the owner to complete and have checked by a lawyer before Google Play links to it.
-  Before publishing, remove from every page: this comment, every CHECK comment (they hold internal
-  notes), the robots meta tag and the .draft banner; then grep -rn 'CHECK\|noindex\|class="draft"' site/
-  must print nothing.
-  Placeholders are in [BRACKETS] (class "ph"); CHECK comments mark what depends on a feature not
-  built yet, or on a fact to confirm. NEXT-SESSION.md has the list.
-  What the game does not do yet carries a "у изради" pill (class "soon") and is written as coming;
-  when the feature ships, drop the pill and put the text in the present tense, in both languages.
-  This page and en/terms.html say the same; the question rules follow CLAUDE.md §8d (Submitting,
-  Moderation, Reports, Seeds, The shop, Sharing), §8b (Personalization: the four banned topics) and
-  §8f (How an option is phrased), so change them together.
--->
 <html lang="sr-Cyrl">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="robots" content="noindex">
   <meta name="color-scheme" content="light dark">
   <meta name="description" content="Услови коришћења игре Шта би радије? и правила за питања која шаљу играчи.">
   <title>Услови коришћења и правила питања — Шта би радије?</title>
@@ -25,7 +10,6 @@
 </head>
 <body>
   <a class="skip" href="#main">Прескочи на садржај</a>
-  <div class="draft" role="note"><strong>Нацрт / Draft — not legal advice.</strong> Овај текст је нацрт: власник игре треба да га допуни и да га провери правник. Не важи док се не објави коначна верзија.</div>
 
   <header class="site">
     <div class="wrap bar">
@@ -81,14 +65,11 @@
       <p>Игра је на српском и доступна је у Србији, Босни и Херцеговини, Црној Гори и Северној Македонији.</p>
       <p>Кад користиш игру, прихваташ ове услове и <a href="privacy.html">политику приватности</a>. Ако се са њима не слажеш, немој да користиш игру.</p>
       <p>Питања шаљу само регистровани играчи. Регистрацијом прихваташ ове услове и политику приватности, а слањем питања прихваташ <a href="#rules">правила питања</a>; игра те на њих упућује испод дугмета за регистрацију и испод дугмета за слање питања.</p>
-      <!-- CHECK: Google Play's User Generated Content policy asks that players accept the terms before they can create or upload content, and its User Data policy asks for a privacy policy link inside the app as well as in Play Console. The app has them (CLAUDE.md §8d): the About screen links privacy.html and terms.html; under Register a line links the terms and the privacy policy („Регистрацијом прихваташ услове и политику приватности.“); and under the Submit form's Send a line links terms.html („Слањем прихваташ правила питања.“), which covers a player registered by Play Games alone, who never sees Register. The links open terms.html, not #rules: point the Submit line at the anchor if the rules should open first. Whether a line is enough or it needs a checkbox is for the policies' current text and the lawyer. -->
-      <!-- CHECK: the countries are CLAUDE.md §8b, The launch. The language menu is hidden for now (§8f), so the game shows Serbian Cyrillic; say "ћирилицом и латиницом" again when it comes back. -->
     </section>
 
     <section id="age">
       <h2>2. Узраст</h2>
       <p>Игру смеју да користе само особе од 13 година и старије. Налог за који сазнамо да припада млађој особи можемо да обришемо.</p>
-      <!-- CHECK: 13 and over since 2026-09-29; what 13 to 15 needs is privacy.html's section 9 comment. -->
     </section>
 
     <section id="account">
@@ -101,7 +82,6 @@
         <li>Корисничко име не сме да вређа нити да представља неког другог. Лозинку чувај за себе: одговараш за оно што се ради преко твог налога.</li>
         <li>Имејл не тражимо, па заборављену лозинку не можемо да повратимо: у том случају направи нови налог.</li>
       </ul>
-      <!-- CHECK: the 30 days are the refresh token's lifetime from its last use (REFRESH_TTL_SECONDS in ServerConfig; CLAUDE.md §8a): past them the app plays on as a fresh guest. If it changes, change it here, in privacy.html (sections 2 and 6) and in delete.html, both languages. The permanent Play Games link is the user's decision (§8b, Linking Play Games to an account). -->
     </section>
 
     <section id="points">
@@ -113,7 +93,6 @@
         <li>Поени немају новчану вредност. Не могу да се купе, продају, замене за новац или робу, нити да се пренесу на другог играча, а ни теме се не купују новцем.</li>
         <li>Правила бодовања, цену слања питања и цене у продавници можемо да променимо. Поене стечене кршењем ових услова, и оно што је за њих купљено, можемо да поништимо.</li>
       </ul>
-      <!-- CHECK: sending costs 1 point until the release and 50 from it (CLAUDE.md §8b, The launch); a theme costs 220 (§8d, The shop; THEME_PRICE). The text names no number, since the buttons show it. If the shop ever takes money (IDEAS.md: rewarded ads), this section needs the lawyer again (consumer law, refunds). -->
     </section>
 
     <section id="rules">
@@ -143,7 +122,6 @@
 
       <h3>Права на питање</h3>
       <p>Питање остаје твоје. Кад га пошаљеш, дајеш нам бесплатно и неискључиво право, без временског и територијалног ограничења, да га чувамо, приказујемо у игри, сврставамо у категорије, преводимо на језике игре, допустимо играчима да га поделе као слику из игре и задржимо у игри и после брисања твог налога, без твог имена.</p>
-      <!-- CHECK: have the lawyer word the licence; decide whether it also covers showing a question in the store listing or its screenshots. Translating player questions is not built (CLAUDE.md §8f, Not translated yet). Sharing is §8d, Sharing. -->
     </section>
 
     <section id="moderation">
@@ -168,7 +146,6 @@
       </ul>
       <p>Свака од ових радњи важи само за тебе, и трајно: за сада се сакривено не може вратити. Аутор остаје анониман: не сазнајеш ко је, а он не сазнаје да си га пријавио или сакрио. Почетна питања немају аутора, па сакривање аутора таквог питања сакрива само то питање. Модератор прегледа пријављена питања и одлучује да ли ће питање повући из игре. Пријаве и сакривање не доносе и не односе поене. Не злоупотребљавај пријаве.</p>
       <p>Ако питање не можеш да пријавиш у игри, <a href="contact.html">пиши нам</a>.</p>
-      <!-- CHECK: the reasons follow the app's labels (QuestionMenuStrings: Увредљиво је, Помиње приватну особу, Реклама или спам, Нема шта да се бира, Нешто друго); change them together. -->
     </section>
 
     <section id="sharing">
@@ -212,7 +189,6 @@
     <section id="law">
       <h2>14. Меродавно право</h2>
       <p>На ове услове примењује се право Републике Србије. За спорове је надлежан суд у Београду, осим ако закон за потрошаче одређује другачије.</p>
-      <!-- CHECK: governing law and court are the owner's choice; confirm with the lawyer, including for players in BA, ME and MK. -->
       <p>Питања? <a href="contact.html">Пиши нам</a>.</p>
     </section>
   </main>

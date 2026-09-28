@@ -1,22 +1,8 @@
 <!DOCTYPE html>
-<!--
-  Нацрт / Draft — not legal advice.
-  Written for the owner to complete and have checked by a lawyer before Google Play links to it.
-  Before publishing, remove from every page: this comment, every CHECK comment (they hold internal
-  notes), the robots meta tag and the .draft banner; then grep -rn 'CHECK\|noindex\|class="draft"' site/
-  must print nothing.
-  Placeholders are in [BRACKETS] (class "ph"); CHECK comments mark what depends on a feature not
-  built yet, or on a fact to confirm. NEXT-SESSION.md has the list.
-  What the game does not do yet carries a "у изради" pill (class "soon") and is written as coming;
-  when the feature ships, drop the pill and put the text in the present tense, in both languages.
-  This page and en/privacy.html say the same; change both together, in the same commit as the change
-  to the game that makes either untrue (CLAUDE.md §8).
--->
 <html lang="sr-Cyrl">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="robots" content="noindex">
   <meta name="color-scheme" content="light dark">
   <meta name="description" content="Политика приватности игре Шта би радије?: које податке обрађујемо, зашто, колико дуго и која су твоја права.">
   <title>Политика приватности — Шта би радије?</title>
@@ -24,7 +10,6 @@
 </head>
 <body>
   <a class="skip" href="#main">Прескочи на садржај</a>
-  <div class="draft" role="note"><strong>Нацрт / Draft — not legal advice.</strong> Овај текст је нацрт: власник игре треба да га допуни и да га провери правник. Не важи док се не објави коначна верзија.</div>
 
   <header class="site">
     <div class="wrap bar">
@@ -43,7 +28,6 @@
     <h1>Политика приватности</h1>
     <p class="meta">Шта би радије? · Последња измена: 29. 9. 2026.</p>
     <p>Политика постоји и на енглеском; ако се верзије разликују, важи српска.</p>
-    <!-- CHECK: which version governs, here and in the terms, is the lawyer's call. -->
 
     <section class="card" aria-labelledby="summary">
       <h2 id="summary">Укратко</h2>
@@ -77,7 +61,6 @@
       <p>За обраду података у игри „Шта би радије?“ одговара руковалац у смислу Закона о заштити података о личности:</p>
       <p class="card address">Никола Токић (toleapps)<br>Славка Родића, 11000 Београд, Србија<br>Имејл: <a href="mailto:application.eili@gmail.com">application.eili@gmail.com</a></p>
       <p>У овом тексту „ми“ је руковалац, а „ти“ играч. Игра је доступна у Србији, Босни и Херцеговини, Црној Гори и Северној Македонији, на Андроиду, преко Google Play-а; верзије за iPhone и прегледач стижу касније. Политика важи за сваку верзију игре и за овај сајт.</p>
-      <!-- CHECK: toleapps is the developer name on Google Play. At launch the game is on Google Play only, in RS, BA, ME and MK (CLAUDE.md §8b, The launch). Add the iOS and web versions here, and Apple's services in section 4, when they are released. -->
     </section>
 
     <section id="data">
@@ -92,7 +75,6 @@
 
       <h3>Налог (необавезно)</h3>
       <p>Ако се региструјеш, уз истог играча чувамо корисничко име које изабереш (од 3 до 20 знакова) и лозинку, али само као хеш (PBKDF2-HMAC-SHA256, са посебном насумичном „сољу“ за сваку лозинку). Лозинку не можемо да прочитамо, не уписује се ни у какве евиденције и не шаљемо је никоме. Имејл адресу не тражимо, па заборављену лозинку не можемо да повратимо.</p>
-      <!-- CHECK: an optional email is dropped for now (CLAUDE.md §8b, Accounts). If it ever ships, add it here (optional, what it is for, never shown to other players, how long it is kept), drop "Имејл адресу не тражимо" here, and add it to delete.html's list. -->
       <p>Ако се на уређају на ком играш као гост пријавиш на налог који већ имаш, поени и остали подаци госта не прелазе на налог. Гост остаје на серверу, али до њега више не води ниједан уређај (види <a href="#retention">колико дуго чувамо податке</a>). Игра те на то упозори пре пријаве, ако гост има поена.</p>
       <p><strong>Зашто:</strong> да се пријавиш на другом уређају са истим поенима, да шаљеш своја питања и купујеш у продавници.</p>
 
@@ -100,7 +82,6 @@
       <p>Google Play игре (Google Play Games Services) су Google-ова услуга за игре на Андроиду. Ако си на телефону пријављен у Google Play игре, игра те преко њих сама пријави, без корисничког имена и лозинке; можеш и дугметом на екрану за пријаву. Апликација тада од Google Play игара добија једнократни код, а сервер га код Google-а замени и сазна идентификатор твог играча у Google Play играма. Чувамо само тај идентификатор и кад је повезан са твојим играчем у игри; токене које Google при томе издаје не чувамо.</p>
       <p>Име твог профила у Google Play играма апликација чита са телефона, да би га показала на екрану налога; на сервер га не шаље и ми га не чувамо.</p>
       <p>Веза је трајна: профил се повезује са играчем са ког се пријавиш, гостом или налогом, и за сада може да се раскине само брисањем налога. Ако је профил већ повезан са другим налогом у игри, пријава те пребацује на тај налог, а поени госта остају иза.</p>
-      <!-- CHECK: the permanent link is the user's decision (CLAUDE.md §8b, Linking Play Games to an account); the sign-in at launch is §8a, Play Games sign-in, The client. What Google itself processes when a player signs in is under its own terms (section 4). Game Center comes to iOS later, as another sign-in: add it here then. -->
       <p><strong>Зашто:</strong> да налог добијеш без куцања корисничког имена и лозинке.</p>
 
       <h3>Подаци о игри</h3>
@@ -115,7 +96,6 @@
         <li><strong>куповине у продавници:</strong> које теме си купио, колико поена је свака коштала и кад.</li>
       </ul>
       <p>Додири на дугмад „Играј“ на почетном екрану рачунају се само збирно, по дугмету, без тога ко је додирнуо.</p>
-      <!-- CHECK: the answer time is votes.answer_millis (V16), sent with every vote. Skips, reactions and hides carry no time; a report carries its time. Purchases are the purchases table (V19). Home's taps are two counters (home_picks, V15), nothing per player. -->
       <p><strong>Зашто:</strong> да игра ради. Сервер бира питања која ти у овом кругу још нису дошла на ред, рачуна поене и приказује како су играчи одговорили. Остали играчи виде само збирне бројеве, никад ко је шта изабрао, а питања се приказују без имена аутора. Пријаве користимо да из игре уклонимо питања која крше <a href="terms.html#rules">правила</a>. Време одговора чувамо за персонализацију (испод); за сада га ништа не користи.</p>
 
       <h3>Дељење питања</h3>
@@ -125,28 +105,24 @@
       <p>Сервер игре ради код Render-а, у Франкфурту. Render испред својих сервиса користи мрежу компаније Cloudflare, па сваки захтев игре пролази кроз њу: Render и Cloudflare виде IP адресу уређаја и техничке податке о захтеву (време, адресу захтева, верзију апликације или прегледача). Cloudflare-а је ангажовао Render, као свог пружаоца услуга, а не ми.</p>
       <p>Ми IP адресу користимо само да ограничимо колико захтева може да пошаље једна адреса, против злоупотребе и погађања лозинки. Ти бројачи се чувају само у меморији сервера, најдуже један сат, и нестају при сваком поновном покретању сервера. IP адресу не уписујемо ни у базу ни у своје евиденције.</p>
       <p>Евиденције сервера бележе за сваки захтев метод, адресу захтева, одговор и трајање, и техничке грешке. Где догађај треба пратити, наводе само идентификаторе: играча, на пример кад захтев одбијемо због ограничења, кад пошаље питање, купи тему или обрише налог, и питања, кад о њему одлучи модератор. Токене, лозинке, њихове хешеве, текст питања и разлоге одбијања никад не бележимо.</p>
-      <!-- CHECK: how long Render keeps the service's logs on the workspace's plan (section 6), and what Render and Cloudflare log of their own. The server's own lines are listed in CLAUDE.md §8b, Logging; Ktor's line per request names the method, path, status and time, no address. -->
       <p><strong>Зашто:</strong> безбедност и исправан рад игре.</p>
 
       <h3>Аналитика (PostHog, ЕУ)</h3>
       <p>Да бисмо видели шта у игри ради, а шта збуњује, апликација шаље догађаје о коришћењу компанији PostHog, на њене сервере у Европској унији: кад отвориш и напустиш апликацију и колико је посета трајала, отворене и напуштене екране и колико си на њима провео, додире на дугмад, приказана, одговорена и прескочена питања (идентификатор питања, категорије, изабрану страну, колико је одговор трајао и да ли се твој избор поклопио са већином), реакције, пријаве и сакривања, подељена питања, промене језика и категорија, регистрацију, пријаву (и преко Google Play игара), одјаву и брисање налога, послата питања, продавницу, купљене и изабране теме, отворена обавештења и грешке. Уз њих иду верзија апликације, платформа, оперативни систем и његова верзија, врста уређаја и језик игре.</p>
       <p>Догађаји се везују за насумичан идентификатор направљен на уређају. Кад се региструјеш или пријавиш, везују се и за идентификатор твог играча у игри, који је такође насумичан, а никад за корисничко име. Не садрже име, имејл, лозинку, текст питања ни ништа што откуцаш. Захтеви до PostHog-а стижу са IP адресе твог уређаја: PostHog је чува уз догађаје и из ње одређује приближну локацију (државу и град), да бисмо видели одакле играчи долазе.</p>
       <p>Аналитика је подразумевано укључена. Искључујеш је прекидачем <strong>Статистика</strong> на екрану <strong>О игри</strong> (на екрану налога икона „i“ горе): док је искључена, апликација не шаље ниједан догађај, а избор се чува на уређају.</p>
-      <!-- CHECK: the list follows CLAUDE.md §8g (The app and its screens, Taps, The game's events); an event or property added there is added here, both languages. PostHog keeps the address and derives a location (§8b, Where players are, in analytics: the user's decision, 2026-09-27), so "Discard client IP data" stays off in the project. The analytics id is kept in the app's storage (the browser's localStorage), with no cookie. Whether storing it needs consent under ePrivacy-style rules, and whether an off switch is enough, is the lawyer's call (§8g, Consent), all the more for players of 13 to 15 (section 9). -->
       <p><strong>Зашто:</strong> да поправљамо грешке и игру чинимо бољом.</p>
 
       <h3>Обавештења (Firebase Cloud Messaging)</h3>
       <p>Андроид верзија те обавести кад модератор одобри или одбије твоје питање. За то телефон добија токен за обавештења од Google-ове услуге Firebase Cloud Messaging, а апликација га шаље нашем серверу. Уз токен чувамо платформу (Андроид, iOS или веб), сесију уређаја која га је послала и кад је последњи пут послат. Кад модератор одлучи о твом питању, сервер преко Firebase Cloud Messaging-а шаље обавештење на твоје уређаје, највише десет најновијих, а у њему су текст питања и, ако је одбијено, разлог. Токен користимо само за то.</p>
       <p>Апликација токен шаље серверу чим га телефон добије, и кад обавештења ниси дозволио: тада их телефон само не приказује. Дозволу апликација тражи једном, кад пошаљеш прво питање, а у подешавањима телефона можеш да је повучеш кад хоћеш.</p>
       <p>Токен бришемо кад се на том уређају одјавиш, кад обришеш налог и кад Firebase јави да уређај више не прима обавештења.</p>
-      <!-- CHECK: CLAUDE.md §8a, Push tokens (The client, On Android): the token is registered at launch for every session, whatever the permission; nothing removes it when the player turns notifications off, since the app has no switch of its own that calls the removal route. Firebase also keeps an installation id of its own on the device. iOS and the web come later (on iOS through Apple's push service: add it here and in section 4 then). -->
       <p><strong>Зашто:</strong> да сазнаш шта је било са твојим питањем.</p>
 
       <h3>Персонализација <span class="soon">у изради</span></h3>
       <p>Касније желимо да ти бирамо питања према томе шта волиш, на основу онога што сервер већ чува док играш: одговора, прескочених питања, реакција и времена одговора. То је профилисање само ради избора питања које ће ти се приказати: никад за рекламе, никад се не продаје и нико други га не види. Не доноси одлуке које за тебе имају правно дејство нити сличан значајан утицај.</p>
       <p>Питања о вери, политици, здрављу и сексуалности у игри за сада нису дозвољена (<a href="terms.html#rules">правила питања</a>), па их модератор одбија. Ако неко такво питање ипак прође, одговори на њега се никад не користе за персонализацију, нити из одговора покушавамо да закључимо било шта о тим темама.</p>
       <p>Пре него што персонализацију уведемо, ова политика ће описати како ради и како јој се противиш.</p>
-      <!-- CHECK: personalization is designed, not built (CLAUDE.md §8b, Personalization). No switch for it is decided: decide whether it gets one, or an objection by email is the way, before it starts. How a question on those topics is marked is not built either. -->
 
       <h3>Кад нам пишеш</h3>
       <p>Ако нам пошаљеш имејл, твоју адресу и поруку користимо само да ти одговоримо и решимо захтев. Имејлове примамо преко Google-ове услуге Gmail.</p>
@@ -156,7 +132,6 @@
 
       <h3>Шта не прикупљамо</h3>
       <p>Не тражимо име и презиме, имејл, број телефона, контакте ни фотографије. Не одређујемо где си тачно и не користимо GPS; приближну локацију из IP адресе одређује само аналитика (PostHog), као што је описано горе. У игри нема реклама ни рекламних идентификатора. Теме у продавници купују се само поенима из игре: ништа се не плаћа новцем и не обрађујемо податке о плаћању.</p>
-      <!-- CHECK: if the country is ever read from the address (CLAUDE.md §8b, Local questions), say so here and under gameplay data. If the shop ever takes money (rewarded ads or in-app purchases, IDEAS.md), this line and section 4 change. -->
     </section>
 
     <section id="legal-basis">
@@ -166,7 +141,6 @@
         <li><strong>Легитимни интерес</strong> (члан 12. став 1. тачка 6); члан 6(1)(f) GDPR): безбедност и ограничење броја захтева, евиденције сервера, модерација, пријаве и сакривање питања, аналитика ради побољшања игре и, кад буде уведена, персонализација. Овој обради можеш да уложиш приговор, а аналитику искључујеш и сам, прекидачем <strong>Статистика</strong>.</li>
         <li><strong>Правна обавеза</strong> (члан 12. став 1. тачка 3); члан 6(1)(c) GDPR): кад нам закон налаже да податке сачувамо или предамо надлежном органу.</li>
       </ul>
-      <!-- CHECK: the bases are a draft for the lawyer. Analytics on by default under legitimate interest is the user's decision (CLAUDE.md §8g, Consent). The game is offered in RS, BA, ME and MK, none in the EU: whether the GDPR applies, and so whether to cite it beside the ZZPL, is the lawyer's call, as is naming the laws of BA, ME and MK. Whether a contract with a player of 13 to 15 holds (section 9) is the lawyer's too. -->
     </section>
 
     <section id="recipients">
@@ -182,13 +156,11 @@
       </dl>
       <p>Render, заједно са Cloudflare-ом ког ангажује, PostHog и Google за Firebase Cloud Messaging обрађују податке по нашем налогу, као обрађивачи. Google Play и Google Play игре су Google-ове услуге: податке које у њима обрађује, Google обрађује по сопственим условима и политици приватности. Кад изађе верзија за iPhone, овде ће се наћи и Apple-ове услуге (App Store, обавештења на iPhone-у, Game Center).</p>
       <p>Модератор види текст, категорије и бројеве послатих питања, без корисничког имена аутора: види само насумичан идентификатор, по ком зна која питања имају истог аутора, да би могао да му забрани слање. Пријаве види збирно, по разлозима, без тога ко их је послао. Остали играчи виде само збирне бројеве и текст одобрених питања, без имена аутора. Податке дајемо државним органима само кад то закон налаже.</p>
-      <!-- CHECK: accept each provider's data processing terms (DPA) and confirm its legal entity: Render's should cover Cloudflare as its subprocessor; Firebase's are Google's. Whether Google acts as an independent controller for Play Games sign-in is for the lawyer to confirm; the text says it neutrally. -->
     </section>
 
     <section id="transfers">
       <h2>5. Пренос у друге државе</h2>
       <p>Сервер и база података су у Европској унији. Render, PostHog и Google имају седиште ван Србије и ЕУ, а мреже неких од њих, као и Cloudflare-ова, раде широм света, па се подаци могу пренети и у друге државе, пре свега у САД. Такав пренос заснивамо на заштитним мерама које закон предвиђа, као што су стандардне уговорне клаузуле или одлука о примереном нивоу заштите.</p>
-      <!-- CHECK: the basis for each provider under ZZPL art. 63–65 (and GDPR chapter V, if it applies): the EU–US Data Privacy Framework, standard contractual clauses. -->
     </section>
 
     <section id="retention">
@@ -208,7 +180,6 @@
         <li><strong>Имејл преписка:</strong> док се захтев не реши, а затим најдуже три године, колико траје рок за захтеве због штете.</li>
       </ul>
       <p>Брисање апликације са уређаја само по себи не брише налог.</p>
-      <!-- CHECK: a guest nobody can reach is deleted after 90 days idle (CLAUDE.md §8b, Guest clean-up: no username, no Play Games link, no session that can still refresh, idle since its last refresh or, with no session left, since it was minted; GUEST_RETENTION_DAYS). An account's expired session still stays until its player is deleted: say so plainly, or build a clean-up for those too. A moderator's dismissal deletes a question's reports; a reported question retired without a dismissal keeps them. The logs' period is the Render workspace plan's; the analytics' is the PostHog plan's retention: read both from the dashboards. Database backups, if the paid Postgres keeps any, need a line and a period. -->
     </section>
 
     <section id="security">
@@ -230,19 +201,16 @@
         <li>на притужбу Поверенику за информације од јавног значаја и заштиту података о личности (<a href="https://www.poverenik.rs">www.poverenik.rs</a>), а ако живиш у другој држави, и надзорном органу своје државе.</li>
       </ul>
       <p>Захтев пошаљи на <a href="mailto:application.eili@gmail.com">application.eili@gmail.com</a>, уз своје корисничко име или ИД налога. ИД налога има и гост: у игри отвори екран налога, па икону „i“ горе, и копирај га под <strong>ИД налога</strong>. Одговарамо без одлагања, најкасније у року од 30 дана. Лозинку ти никад нећемо тражити.</p>
-      <!-- CHECK: nothing in section 3 rests on consent today; keep the consent line only if something does (push or analytics, should the lawyer advise it). The moderator deletes an account by username or account id (CLAUDE.md §8a, Deleting an account, By a moderator); nothing finds one player's rows and exports them, so access and portability requests need a tool before launch: a documented read-only query by player id would do. Nothing proves an email comes from the account's player either. Name the supervisory authorities of BA, ME and MK if the lawyer advises it. -->
     </section>
 
     <section id="age">
       <h2>9. Узраст</h2>
       <p>Игра је намењена особама од 13 година и старијим. Ако имаш мање од 13 година, немој да је користиш. Ако сазнамо да налог припада млађој особи, можемо да га обришемо. Родитељ или старатељ може да нам пише на <a href="mailto:application.eili@gmail.com">application.eili@gmail.com</a>.</p>
-      <!-- CHECK: 13 and over since 2026-09-29 (the user set 13+ in the Play Console; 16 before). The ZZPL lets a minor consent alone to an information society service from 15 (art. 16), the GDPR from 16 by default (13 at the least): nothing here rests on consent, and the user decided (2026-09-29) that players of 13 to 15 need no parent's consent: no lawyer has checked it, for Serbia or for BA, ME and MK. Declare 13–15, 16–17 and 18+ as target age groups in the Play Console, none under 13, which keeps the Families policy out. -->
     </section>
 
     <section id="changes">
       <h2>10. Измене ове политике</h2>
       <p>Ако променимо ову политику, нову верзију објављујемо на овој страници и мењамо датум на врху. О важним изменама можемо да те обавестимо и у игри.</p>
-      <!-- CHECK: the game has no way to show a notice yet; whether one is needed before a change such as personalization is the lawyer's call. -->
       <p>Питања? <a href="contact.html">Пиши нам</a>.</p>
     </section>
   </main>

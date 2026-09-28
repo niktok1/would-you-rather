@@ -1,21 +1,8 @@
 <!DOCTYPE html>
-<!--
-  Нацрт / Draft — not legal advice.
-  Written for the owner to complete and have checked by a lawyer before Google Play links to it.
-  Before publishing, remove from every page: this comment, every CHECK comment (they hold internal
-  notes), the robots meta tag and the .draft banner; then grep -rn 'CHECK\|noindex\|class="draft"' site/
-  must print nothing.
-  Placeholders are in [BRACKETS] (class "ph"); CHECK comments mark what depends on a feature not
-  built yet, or on a fact to confirm. NEXT-SESSION.md has the list.
-  Google Play's "Delete account URL": it must name the app and its developer as on the listing, say
-  how to ask for deletion without the app, and what is deleted and kept, and for how long. The lists
-  below follow the server's deletion (AccountDeletion, CLAUDE.md §8a, Deleting an account).
--->
 <html lang="sr-Cyrl">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="robots" content="noindex">
   <meta name="color-scheme" content="light dark">
   <meta name="description" content="Како да обришеш налог у игри Шта би радије?, у апликацији или имејлом, и шта се брише.">
   <title>Брисање налога — Шта би радије?</title>
@@ -23,7 +10,6 @@
 </head>
 <body>
   <a class="skip" href="#main">Прескочи на садржај</a>
-  <div class="draft" role="note"><strong>Нацрт / Draft — not legal advice.</strong> Овај текст је нацрт: власник игре треба да га допуни и да га провери правник. Не важи док се не објави коначна верзија.</div>
 
   <header class="site">
     <div class="wrap bar">
@@ -41,7 +27,6 @@
   <main id="main" class="wrap">
     <h1>Брисање налога</h1>
     <p class="lead">Налог у игри „Шта би радије?“ (програмер: toleapps) можеш да обришеш у апликацији или имејлом. Брисање је трајно и не може да се поништи.</p>
-    <!-- CHECK: the developer's name must be as on the Play listing: toleapps. -->
 
     <section aria-labelledby="in-app">
       <h2 id="in-app">У апликацији</h2>
@@ -52,14 +37,12 @@
       </ol>
       <p>Налог се брише одмах, на свим уређајима, а на уређају са ког га обришеш игра се наставља као нови гост. Тако се брише и гост и налог, са корисничким именом или повезан са Google Play играма.</p>
       <p>Гост са ког се на неком уређају пријавиш на други налог остаје засебан играч и не брише се са тим налогом. Ако не желиш да остане, обриши га у апликацији пре пријаве.</p>
-      <!-- CHECK: the steps follow CLAUDE.md §8d (Navigation; About: the deletion is last on the About screen, after the licences; The Account screen, Deleting). Match them to the screen that ships. -->
     </section>
 
     <section aria-labelledby="by-email">
       <h2 id="by-email">Имејлом, без апликације</h2>
       <p>Пошаљи имејл на <a href="mailto:application.eili@gmail.com">application.eili@gmail.com</a> са насловом „Брисање налога“ и корисничким именом налога или његовим ИД-ом. ИД налога има и гост, и налог пријављен само преко Google Play игара: у игри га налазиш на екрану <strong>О игри</strong> (екран налога, па икона „i“ горе), под <strong>ИД налога</strong>, где га копираш једним додиром. Обрисаћемо налог најкасније у року од 30 дана и јавити ти кад то урадимо. Лозинку никад нећемо тражити.</p>
       <p>Ако апликацију више немаш, а налог нема корисничко име, можда нећемо моћи да га пронађемо. Такав гост се ипак не чува заувек: до њега више не води ниједан уређај, па га сервер брише после 90 дана неактивности.</p>
-      <!-- CHECK: the moderator deletes the account named by username or account id in the moderation app's Accounts tab (CLAUDE.md §8a, Deleting an account, By a moderator). Nothing proves the email comes from the account's player: a username or an id is all it names. Whether to ask for anything more (one of the player's questions, say) is for the user and the lawyer. -->
     </section>
 
     <section aria-labelledby="deleted">
@@ -83,7 +66,6 @@
         <li><strong>Евиденције сервера</strong>, у којима може бити идентификатор твог играча, и резервне копије базе, ако постоје, до истека свог рока, најдуже 30 дана.</li>
         <li>Подаци које закон налаже да сачувамо, само онолико колико налаже.</li>
       </ul>
-      <!-- CHECK: whether a deleted player's analytics should be deleted in PostHog too (a person can be deleted there by id; nothing does it yet) is for the user and the lawyer. -->
       <p>Брисање апликације са уређаја само по себи не брише налог.</p>
       <p>Више о подацима пише у <a href="privacy.html">политици приватности</a>.</p>
     </section>

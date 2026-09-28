@@ -595,14 +595,14 @@ This project must never be attributed to any employer identity.
   account deletion and contact that Google Play's listing and Data safety form link to and the About
   screen opens (`Site`, `https://ntole.com/wyr`), in Serbian Cyrillic there and English under
   `site/wyr/en/`, each page linking the other, in §5b's colours, light and dark. It deploys for a
-  commit on `main` that changes `site/` and passes CI. **Every game page is a draft, not legal
-  advice**, until the owner completes it and a lawyer checks it: each carries a comment, a `noindex`
-  and a visible banner, the owner's details are placeholders in brackets, a feature the game does
-  not have yet is written as coming under a `у изради` / `coming` pill (`.soon`: personalization
-  alone), and `CHECK` comments mark what to confirm (NEXT-SESSION.md lists what to do before
-  publishing). The privacy policy and the deletion page describe what the game processes, so a change
-  that makes either untrue changes them, both languages, in the same commit, and a feature that ships
-  drops its pill there.
+  commit on `main` that changes `site/` and passes CI. **Published 2026-09-29** (the user: Nikola
+  Tokić, Belgrade, `application.eili@gmail.com`, a Gmail inbox the policy names; logs 30 days,
+  analytics two years, email three years at most; disputes in Belgrade), **with no lawyer's review**:
+  the drafts' `CHECK` notes and markers are gone, and what they left open is in NEXT-SESSION.md (*The
+  public site*). A feature the game does not have yet is written as coming under a `у изради` /
+  `coming` pill (`.soon`: personalization alone). The privacy policy and the deletion page describe
+  what the game processes, so a change that makes either untrue changes them, both languages, in the
+  same commit, the date at the top with them, and a feature that ships drops its pill there.
 - `POST /v1/auth/guest` mints the player server-side and answers a `SessionDto`: a signed access JWT
   and an opaque refresh token. Nothing is asked of the player. Identity is **server-issued**, which
   is the whole point: a client-supplied device id would be forgeable and would let one device stuff

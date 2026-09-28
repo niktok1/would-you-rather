@@ -14,41 +14,30 @@ Postgres, promoted by hand with *Manual Deploy*, runs `d4a9dbf` since 2026-09-25
 applied; **dev** `wyr-server-dev` on in-memory H2, deployed automatically from every green commit on
 `main` (its URL is on its Render page).
 
-**On `docs/site`** (not merged): the **public site**, `site/`, served by a new Render static site,
-`ntole-site`, at `https://ntole.com` (CLAUDE.md §8, *The public site*). `site/index.html` is the
-developer's page (toleapps); the game's five pages, `index`, `privacy`, `terms`, `delete` and
-`contact`, are in Serbian Cyrillic under `site/wyr/` and in English under `site/wyr/en/`, plain HTML and
-`site/wyr/style.css`, no script, nothing loaded from another host. Preview: `python3 -m http.server
-8123 -d site`, then http://localhost:8123/wyr/. **All drafts, not legal advice.** Brought up to
-`main` on 2026-09-29 (after `b8e7560b`): everything the game does now is in the present tense
-(deleting in the app, on the About screen; deleting by email with a username or the About screen's
-account id, which the moderator's Accounts tab takes; reports and hides from the Play screen's ⋮;
-pushes, and the token sent whatever the permission; Play Games sign-in, at launch too, and its name
-read on the phone and never stored; the answer time; the shop's purchases, and themes bought with
-points only; sharing an image through the phone's share sheet, sent nowhere of ours; Home's taps as
-two totals; the platform and build number on every request, not kept), the Statistics switch on the
-About screen, 13 and over (the lawyer's question left in a `CHECK`), PostHog keeping the address and a
-location, the report reasons as the app words them, and the store link filled. Only personalization
-still carries a `у изради` / `coming` pill. Before Google Play links to it:
-1. Fill the placeholders, `grep -rn 'class="ph"' site/`: name, address, email, date, the retention
-   periods (the logs', the analytics' and the email's) and the court's town. The year is 2026 and the
-   developer is toleapps, as on the Play listing.
-2. Settle every `grep -rn 'CHECK' site/` in both languages. Still open: a way to find and export one
-   player's rows for an access or portability request (a documented read-only query by player id
-   would do); whether 13 to 15 need a parent's consent (LAUNCH.md); whether an emailed deletion needs
-   more than a username or an id.
-3. Have a lawyer who knows the ZZPL, and the laws of BA, ME and MK, read both languages, and say
-   whether the GDPR applies.
-4. From every game page remove the draft comment, every `CHECK` comment (they hold internal notes,
-   which the live pages' source would show), `<meta name="robots" content="noindex">` and the
-   `.draft` banner. Then `grep -rn 'CHECK\|noindex\|class="draft"\|class="ph"' site/` must print
-   nothing before the merge to `main`.
-5. Merge to `main`, and the Blueprint creates `ntole-site` (sync it in the dashboard if not). In
-   Cloudflare's DNS for `ntole.com`: a CNAME `@` to `ntole-site.onrender.com` and one `www` to the
-   same, both *DNS only*, then verify both domains on the service's *Custom Domains*. Play Console
-   takes `https://ntole.com/wyr/privacy.html` as the privacy policy and
-   `https://ntole.com/wyr/delete.html` as the account deletion URL, and the Data safety answers must
-   match the policy.
+**The public site** (CLAUDE.md §8, *The public site*), published 2026-09-29 from `site/`: the
+developer's page at `https://ntole.com` and the game's pages under `/wyr` (Serbian) and `/wyr/en/`
+(English), served by Render's static site `ntole-site`. Preview: `python3 -m http.server 8123 -d
+site`, then http://localhost:8123/wyr/. **No lawyer has read it.** What the drafts' notes left open:
+- **Access and portability requests**: nothing finds and exports one player's rows; answer one by
+  hand (a documented read-only query by player id would do). Nothing proves an emailed request, a
+  deletion's included, comes from the account's player: a username or an account id is all it names.
+- **Age**: 13 and over; the user decided players of 13 to 15 need no parent's consent (2026-09-29),
+  unchecked (the ZZPL lets a minor consent alone from 15). Whether the GDPR applies, and naming the
+  laws and authorities of BA, ME and MK, is unchecked too, as is the analytics id under ePrivacy.
+- **Providers**: accept Render's, PostHog's and Firebase's data processing terms; confirm each
+  transfer's basis (the EU–US Data Privacy Framework or standard contractual clauses).
+- **Retention**: analytics two years at most, so a PostHog plan that keeps longer needs deleting by
+  hand; a deleted player's analytics stay in PostHog (a person can be deleted there by id; nothing
+  does it); database backups, once the paid Postgres keeps any, need a line and a period; an
+  account's expired sessions stay until its player is deleted.
+- **When the game changes**: the privacy policy's lists follow CLAUDE.md §8g (events), §8a and §8d; the
+  terms' question rules follow §8d, §8b (*Personalization*) and §8f; the report reasons follow
+  `QuestionMenuStrings`; the deletion steps the About screen. Personalization needs a way to object
+  before it starts; Latin script goes back into the terms and the home page when the language menu
+  does; iOS, the web and Apple's services when they launch; the shop taking money would need the
+  terms reread.
+- **Play Console**: privacy policy `https://ntole.com/wyr/privacy.html`, account deletion
+  `https://ntole.com/wyr/delete.html`, developer website `https://ntole.com`.
 
 **`feat/simple-accounts` is on `main`**, and on `origin/main`, at b175247: stage 1 took the recovery
 secret, Block Store, the Keychain, the rollback mirror and the question's row lock out (CLAUDE.md
