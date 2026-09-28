@@ -917,6 +917,26 @@ whose log said `guest clean-up deleted 0 guests idle 90 days or more`. **Not ver
 PostgreSQL (CI's `server-postgres` job runs its tests), a deletion of a real idle guest on a deployed
 server, the rules line on a device, CI's `ios` job, and the *Release signing* step.
 
+**On `feat/visuals-port`** (from f7b5576; not merged, not pushed): what `feat/visuals` (1503192, 11
+commits, left unmerged) built that main lacked, ported onto main's shop themes and motion (CLAUDE.md
+§5b *Backgrounds*, *Motion*; §8b *The visuals' details*, provisional). The client alone changed.
+- *Screens fade and slide* (`ScreenTransitions`, `AnimatedContent` over the back stack): 250 ms over
+  24, forward from the end and back from the start; Home to Play stays main's fade through, a cut here.
+- *The coin bumps* when the points go up (`PointsAmount`, so Play's row, the Account card, the shop).
+- *The Classic theme's art*: `ThemeArt.QuestionMarks`, a faint pink wash at the top, amber at the
+  bottom (left and right on a wide window) and six faint question marks, one art per mode
+  (`GameTheme.art(darkMode)`), the same under every screen (visuals' dots elsewhere dropped: the art is
+  drawn once for the window). The page is in a layer of its own now (`WholePageArt`). `muted` moved
+  (light `#5E5D57`, dark `#9C9B94`) for AA on the tints.
+- *Skipped*, main having its own: the new question's cards rising, the pick pop and dim, Home's
+  buttons sliding in, the thumb bounce.
+- *Tests*: `ScreenTransitionsDrawTest`, `CoinBumpDrawTest`, `ClassicArtDrawTest`, `ScreenshotsTest`
+  (`WYR_SCREENSHOTS_DIR=/tmp/wyr-shots ./gradlew :app:shared:jvmTest --tests io.ntole.wyr.ScreenshotsTest --rerun`);
+  `AppNavigationTest` draws with `MotionOff` but for its Home reveal test.
+- **Verified on this Mac**: `ktlintCheck`, `:app:shared:jvmTest` (563), `:app:shared:testAndroidHostTest`
+  (332), the iOS Kotlin compiles (`:app:shared` main and test). **Not verified**: on a phone (the feel,
+  the accessibility service's load, a rotation mid-transition), iOS and the web at run time, CI.
+
 ### Verified working
 
 - **`feat/android-release`**, on this machine: `ktlintCheck`; the verify job's tests (server 480,

@@ -424,6 +424,9 @@ transition left running would never end. What moves, besides what §8d describes
   shop, the coin bumps to `COIN_BUMP_SCALE` (1.3) and back, `COIN_BUMP_MILLIS` (250), and the number
   beside it stays; the first amount shown, and one that falls or stays, bump nothing. No "+1" is shown
   (the user). `CoinBumpDrawTest`.
+`ScreenshotsTest` draws Home, Play asked and revealed (and on its side), Account and Categories on the
+page in the game's own theme light and dark and in Ocean, and writes PNGs where `WYR_SCREENSHOTS_DIR`
+says.
 
 ---
 
@@ -1411,6 +1414,22 @@ EncryptedSharedPreferences: enough for a game that stores no sensitive personal 
   Play Игре* only when the device's Play Games gives no name (§8d, *The Account screen*). Rejected: the
   server storing the name from its sign-in, which would show it on every platform but keep more
   personal data and go stale on a rename.
+- **The visuals' details** — *provisional — user decision.* The user asked for backgrounds and
+  animations (`feat/visuals`, 2026-09-27); main built the Play and Home motion and the shop's art
+  meanwhile, and what main lacked was ported onto them (§5b, *Backgrounds*, *Motion*); the details are
+  this build's. The game's own art is the same wash and question marks under every screen, where
+  `feat/visuals` had them under Home and Play and a few faint dots elsewhere: the art is drawn once
+  under the whole window, as the shop's is, and a variant per screen would need the page to know the
+  screen and fade between the two. The wash is 5 to 8 percent and the marks 4 to 5, and `muted` moved
+  for them (light `#5E5D57`, dark `#9C9B94`). On a wide window the wash runs left to right. A screen's
+  change is 250 ms over 24, and back from the home icon runs as back does; Home to Play keeps its own
+  fade through. The coin bumps wherever the points go up, 1.3 over 250 ms. Not ported, being built on
+  main already or in its place: the new question's cards rising in (main slides the next question onto
+  the cards), the reveal's pick pop and the other card's dim (main lifts the pick and stands the other at
+  85%), Home's buttons sliding in (main's Home has its reveal and fade through), and the thumb's bounce
+  (main sinks it under the finger and ticks the phone). The options: keep them; per-screen art (the
+  question marks under Home and Play only, dots elsewhere); `muted` as before and the washes at 2
+  percent, which do not show; top to bottom always; or change any duration or size, each a token.
 - **The notice's look** — *provisional — user decision.* A dot in the brand's pink on the account
   icon, and on each new row of My questions for the visit that first shows it (§8d, *The notice of a
   decision*); no banner and no text on screen (the user: less text). The options: keep it; a number of
