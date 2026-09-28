@@ -17,10 +17,13 @@ import io.ntole.wyr.core.api.WyrApi
  *
  * Every like a question holds earns its author [POINTS_PER_LIKE] for as long as it is held
  * (`ReactionStore.set`), their own likes included; a dislike earns and costs nobody anything.
- * Submitting a question costs its author [SUBMISSION_COST] (`SubmissionStore.submit`), which a
+ * Submitting a question costs its author the server's `SUBMISSION_COST` (`ServerConfig.submissionCost`,
+ * [DEFAULT_SUBMISSION_COST] unset; `SubmissionStore.submit`), which a
  * rejection pays back and an approval keeps, though an author who likes it is paid for that like as
- * for anyone's (CLAUDE.md §8c). So a player's total is always what their answers earned, plus that
- * much for each like their questions hold, less what their questions not rejected cost them.
+ * for anyone's (CLAUDE.md §8c), and a theme in the shop costs the server's `THEME_PRICE`
+ * (`ShopStore.buy`, §8d *The shop*). So a player's total is always what their answers earned, plus
+ * that much for each like their questions hold, less what their questions not rejected cost them and
+ * what they paid in the shop.
  */
 object Scoring {
     const val POINTS_PER_ANSWER: Int = 1
@@ -32,10 +35,11 @@ object Scoring {
     const val POINTS_PER_LIKE: Int = 1
 
     /**
-     * What submitting a question costs its author (CLAUDE.md §8c), 1 until the game is released. A
-     * player needs at least this much to submit. Each question keeps what it cost
-     * (`Questions.submissionCost`), so a rejection pays back what was paid, whatever this is then.
-     * The wire's number ([WyrApi.Limits.SUBMISSION_COST]), so a client can say what it costs.
+     * What submitting a question costs its author (CLAUDE.md §8c) when the server's `SUBMISSION_COST`
+     * is unset: 1, until the release sets 50 (§8b, *The launch*). A player needs at least the cost to
+     * submit. Each question keeps what it cost (`Questions.submissionCost`), so a rejection pays back
+     * what was paid, whatever the cost is by then. The wire's default ([WyrApi.Limits.SUBMISSION_COST]),
+     * which a client falls back to until it has read the cost the server charges (`GET /v1/me`).
      */
-    const val SUBMISSION_COST: Int = WyrApi.Limits.SUBMISSION_COST
+    const val DEFAULT_SUBMISSION_COST: Int = WyrApi.Limits.SUBMISSION_COST
 }

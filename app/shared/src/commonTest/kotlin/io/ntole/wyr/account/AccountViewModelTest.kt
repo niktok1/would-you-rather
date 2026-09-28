@@ -3,6 +3,7 @@ package io.ntole.wyr.account
 import io.ntole.wyr.analytics.RecordingAnalytics
 import io.ntole.wyr.analytics.RecordingAnalytics.Recorded
 import io.ntole.wyr.core.domain.account.AccountRepository
+import io.ntole.wyr.core.domain.account.DeleteAccount
 import io.ntole.wyr.core.domain.account.LogIn
 import io.ntole.wyr.core.domain.account.LogOut
 import io.ntole.wyr.core.domain.account.RegisterAccount
@@ -15,8 +16,12 @@ import io.ntole.wyr.core.domain.error.WyrException
 import io.ntole.wyr.core.domain.player.GetPlayerStats
 import io.ntole.wyr.core.domain.player.PlayerRepository
 import io.ntole.wyr.core.domain.player.PlayerStats
+import io.ntole.wyr.core.domain.playgames.LinkPlayGames
+import io.ntole.wyr.core.domain.playgames.PlayGames
+import io.ntole.wyr.core.domain.playgames.PlayGamesRepository
 import io.ntole.wyr.core.domain.question.Question
 import io.ntole.wyr.core.domain.question.QuestionRepository
+import io.ntole.wyr.core.domain.session.CurrentSession
 import io.ntole.wyr.core.domain.session.SessionRepository
 import io.ntole.wyr.core.domain.submission.GetMySubmissions
 import io.ntole.wyr.core.domain.submission.Submission
@@ -28,8 +33,10 @@ import io.ntole.wyr.language.SerbianLatinStrings
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.resetMain
@@ -51,6 +58,7 @@ class AccountViewModelTest {
     private val dispatcher = StandardTestDispatcher()
     private val analytics = RecordingAnalytics()
     private val game = FakeGame()
+    private val playGames = FakePlayGames()
 
     @BeforeTest
     fun setUp() {
@@ -82,6 +90,65 @@ class AccountViewModelTest {
             assertEquals(listOf("stats", "mine"), game.calls)
             assertEquals(listOf(QUESTION), state.submissions)
             assertNull(state.listFailure)
+        }
+
+    /**
+     * The notice of a decision marks seen only a list of the player playing (CLAUDE.md §8d, *The notice
+     * of a decision*), so each list is named for the player it was read for: a first launch's guest, and
+     * the player a launch's Play Games sign-in made the device.
+     */
+    @Test
+    fun `a list is named for the player it was read for`() =
+        runTest(dispatcher) {
+            val viewModel = open()
+            assertEquals("guest1", viewModel.state.value.readFor, "the guest the read minted")
+
+            game.player = "p2"
+            viewModel.refresh()
+            testScheduler.advanceUntilIdle()
+
+            assertEquals("p2", viewModel.state.value.readFor)
+        }
+
+    /** A launch's Play Games sign-in, or a dead session replaced, makes the device another player. */
+    @Test
+    fun `another player playing here is read again with nothing of the one before shown meanwhile`() =
+        runTest(dispatcher) {
+            game.points = 5
+            game.questionsOf["guest1"] = listOf(QUESTION)
+            val viewModel = open()
+            game.calls.clear()
+            game.statsWaitsFor = CompletableDeferred()
+
+            game.player = "p2"
+            testScheduler.advanceUntilIdle()
+
+            assertNull(viewModel.state.value.stats, "nothing of the guest's while the player is read")
+            assertNull(viewModel.state.value.submissions)
+            game.statsWaitsFor?.complete(Unit)
+            testScheduler.advanceUntilIdle()
+            val state = viewModel.state.value
+            assertEquals(listOf("stats", "mine"), game.calls)
+            assertEquals(emptyList(), state.submissions, "p2's own")
+            assertEquals("p2", state.readFor)
+            assertEquals(5, state.stats?.totalPoints)
+        }
+
+    /** The screen's own login, logout and sign-in read the player after themselves, and only then. */
+    @Test
+    fun `the screen's own login reads the player once`() =
+        runTest(dispatcher) {
+            game.accounts["bob_1"] = "correct horse" to "bob-player"
+            val viewModel = open()
+            game.calls.clear()
+
+            viewModel.setLoginUsername("bob_1")
+            viewModel.setLoginPassword("correct horse")
+            viewModel.logIn()
+            testScheduler.advanceUntilIdle()
+
+            assertEquals(listOf("logIn bob_1", "reset", "stats", "mine"), game.calls)
+            assertEquals("bob-player", viewModel.state.value.readFor)
         }
 
     /** My questions are the player's: another player's after a login, and a fresh guest's none. */
@@ -147,8 +214,8 @@ class AccountViewModelTest {
 
             val state = open().state.value
 
-            assertEquals("Guest", nameOf(state.shown(), ENGLISH))
-            assertEquals("Гост", nameOf(state.shown(), CYRILLIC))
+            assertEquals("Guest", nameOf(state.shown(), EnglishStrings))
+            assertEquals("Гост", nameOf(state.shown(), SerbianCyrillicStrings))
             assertEquals(12, state.shown().totalPoints)
             assertNull(state.failure)
         }
@@ -161,7 +228,7 @@ class AccountViewModelTest {
 
             val state = open().state.value
 
-            assertEquals("Guest", nameOf(state.shown(), ENGLISH))
+            assertEquals("Guest", nameOf(state.shown(), EnglishStrings))
             assertEquals(12, state.shown().totalPoints)
             assertEquals(listOf(StatCell("10", "Questions answered")), statCells(state.shown(), ENGLISH))
             assertEquals(listOf(StatCell("10", "Одговорена питања")), statCells(state.shown(), CYRILLIC))
@@ -176,7 +243,7 @@ class AccountViewModelTest {
 
             val state = open().state.value
 
-            assertEquals("bob_1", nameOf(state.shown(), ENGLISH))
+            assertEquals("bob_1", nameOf(state.shown(), EnglishStrings))
             assertEquals(1, state.shown().totalPoints)
             assertEquals(listOf(StatCell("1", "Questions answered")), statCells(state.shown(), ENGLISH))
         }
@@ -213,11 +280,14 @@ class AccountViewModelTest {
             testScheduler.advanceUntilIdle()
 
             val state = viewModel.state.value
-            assertEquals("bob_1", nameOf(state.shown(), ENGLISH))
+            assertEquals("bob_1", nameOf(state.shown(), EnglishStrings))
             assertEquals(12, state.stats?.totalPoints)
             assertEquals("guest1", game.player, "the same player")
             // A registered player sees no form, so nothing typed is kept; only the Auth page's cue to go back.
-            assertEquals(AccountState(stats = state.stats, submissions = emptyList(), signedIn = true), state)
+            assertEquals(
+                AccountState(stats = state.stats, submissions = emptyList(), readFor = "guest1", signedIn = true),
+                state,
+            )
             assertTrue("register Bob_1" in game.calls)
         }
 
@@ -264,7 +334,189 @@ class AccountViewModelTest {
             assertEquals("That name is taken.", failureMessage(assertNotNull(state.failure), ENGLISH))
             assertEquals("Bob_1", state.registerUsername)
             assertEquals("correct horse", state.registerPassword)
-            assertEquals("Guest", nameOf(state.shown(), ENGLISH))
+            assertEquals("Guest", nameOf(state.shown(), EnglishStrings))
+        }
+
+    /**
+     * A player registered by Play Games alone adds a username on the Auth page's Register form: one
+     * refused stays there, with its failure and what was typed, and one that works goes back, named
+     * (CLAUDE.md §8a, *Play Games sign-in*).
+     */
+    @Test
+    fun `a player registered by Play Games alone adds a username and a refused one stays on the form`() =
+        runTest(dispatcher) {
+            game.playGamesLinked = true
+            game.accounts["bob_1"] = "their password" to "someone"
+            val viewModel = open()
+            val linked = viewModel.state.value.shown()
+            assertTrue(linked.registered)
+            assertEquals("Google Play Games", nameOf(linked, EnglishStrings))
+
+            viewModel.setRegisterUsername("Bob_1")
+            viewModel.setRegisterPassword("correct horse")
+            viewModel.register()
+            testScheduler.advanceUntilIdle()
+
+            val refused = viewModel.state.value
+            assertEquals(AccountFailure(AccountAction.REGISTER, DomainError.USERNAME_TAKEN), refused.failure)
+            assertFalse(refused.signedIn, "a refusal stays on the form")
+            assertEquals("Bob_1", refused.registerUsername)
+
+            viewModel.setRegisterUsername("bob_2")
+            viewModel.register()
+            testScheduler.advanceUntilIdle()
+
+            val added = viewModel.state.value
+            assertTrue(added.signedIn)
+            assertNull(added.failure)
+            assertEquals("bob_2", nameOf(added.shown(), EnglishStrings))
+        }
+
+    /**
+     * The card names a player registered by Play Games alone as this device's Play Games names them,
+     * read with the stats, and nobody else: a guest's read asks Play Games nothing, and once the player
+     * has a username that is their name.
+     */
+    @Test
+    fun `a Play Games player is named as Play Games names them`() =
+        runTest(dispatcher) {
+            playGames.name = "nikola"
+            val guest = open()
+            assertNull(guest.state.value.playGamesName, "a guest is nobody's in Play Games")
+
+            game.playGamesLinked = true
+            guest.refresh()
+            testScheduler.advanceUntilIdle()
+            val linked = guest.state.value
+            assertEquals("nikola", linked.playGamesName)
+            assertEquals("nikola", nameOf(linked.shown(), EnglishStrings, linked.playGamesName))
+
+            playGames.name = null
+            guest.refresh()
+            testScheduler.advanceUntilIdle()
+            val unnamed = guest.state.value
+            assertEquals("Google Play Games", nameOf(unnamed.shown(), EnglishStrings, unnamed.playGamesName))
+
+            playGames.name = "nikola"
+            guest.setRegisterUsername("bob_2")
+            guest.setRegisterPassword("correct horse")
+            guest.register()
+            testScheduler.advanceUntilIdle()
+            val added = guest.state.value
+            assertNull(added.playGamesName, "a username is the name now")
+            assertEquals("bob_2", nameOf(added.shown(), EnglishStrings, added.playGamesName))
+        }
+
+    @Test
+    fun `a build without Play Games offers none and signs in with none`() =
+        runTest(dispatcher) {
+            val viewModel = open()
+
+            assertFalse(viewModel.state.value.offersPlayGames)
+            viewModel.signInWithPlayGames()
+            testScheduler.advanceUntilIdle()
+            assertFalse("playGames code-1" in game.calls)
+        }
+
+    /** The no-click way: the guest playing is linked, keeping everything, and the page goes back. */
+    @Test
+    fun `Play Games signs the guest in and goes back to the Account screen`() =
+        runTest(dispatcher) {
+            playGames.available = true
+            game.points = 5
+            val viewModel = open()
+            assertTrue(viewModel.state.value.offersPlayGames)
+
+            viewModel.signInWithPlayGames()
+            testScheduler.advanceUntilIdle()
+
+            val state = viewModel.state.value
+            assertTrue(state.signedIn)
+            assertNull(state.failure)
+            assertTrue(state.shown().registered)
+            assertEquals("Google Play Games", nameOf(state.shown(), EnglishStrings))
+            assertFalse(state.offersPlayGames, "linked already")
+            assertTrue(state.playGamesAvailable, "the build still has it")
+            assertTrue("playGames code-1" in game.calls)
+        }
+
+    /** A Play Games player linked to another player already: the device is theirs, its queue dropped. */
+    @Test
+    fun `Play Games signs in as the player it was linked to already`() =
+        runTest(dispatcher) {
+            playGames.available = true
+            game.accounts["bob_1"] = "correct horse" to "bob-player"
+            game.playGamesPlayer = "bob-player"
+            val viewModel = open()
+
+            viewModel.signInWithPlayGames()
+            testScheduler.advanceUntilIdle()
+
+            assertTrue(viewModel.state.value.signedIn)
+            assertEquals("bob_1", nameOf(viewModel.state.value.shown(), EnglishStrings))
+            assertTrue("reset" in game.calls, "the queue was the guest's")
+        }
+
+    /**
+     * Another player's from the sign-in on: nothing of the guest's is shown while theirs is read, so
+     * the rows the notice marks are never the guest's (CLAUDE.md §8d, *The notice of a decision*).
+     */
+    @Test
+    fun `a Play Games sign-in shows nothing of the guest's while the player's own is read`() =
+        runTest(dispatcher) {
+            playGames.available = true
+            game.questionsOf["guest1"] = listOf(QUESTION)
+            game.accounts["bob_1"] = "correct horse" to "bob-player"
+            game.playGamesPlayer = "bob-player"
+            val viewModel = open()
+            assertEquals(listOf(QUESTION), viewModel.state.value.submissions)
+            val listRead = CompletableDeferred<Unit>()
+            game.mineWaitsFor = listRead
+
+            viewModel.signInWithPlayGames()
+            testScheduler.advanceUntilIdle()
+            assertEquals(null, viewModel.state.value.submissions, "the guest's list is gone")
+
+            listRead.complete(Unit)
+            testScheduler.advanceUntilIdle()
+            assertEquals(emptyList(), viewModel.state.value.submissions, "bob's own")
+        }
+
+    @Test
+    fun `a player who does not sign in to Play Games stays on the page with nothing sent`() =
+        runTest(dispatcher) {
+            playGames.available = true
+            playGames.authenticated = false
+            val viewModel = open()
+
+            viewModel.signInWithPlayGames()
+            testScheduler.advanceUntilIdle()
+
+            val state = viewModel.state.value
+            assertFalse(state.signedIn)
+            assertNull(state.failure)
+            assertFalse("playGames code-1" in game.calls)
+        }
+
+    @Test
+    fun `a Play Games sign-in the server refuses says so under the button and is reported`() =
+        runTest(dispatcher) {
+            playGames.available = true
+            game.playGamesRefusedWith = DomainError.PLAY_GAMES_UNAVAILABLE
+            val viewModel = open()
+
+            viewModel.signInWithPlayGames()
+            testScheduler.advanceUntilIdle()
+
+            val state = viewModel.state.value
+            assertEquals(AccountFailure(AccountAction.PLAY_GAMES, DomainError.PLAY_GAMES_UNAVAILABLE), state.failure)
+            assertEquals(ENGLISH.somethingWrong, failureMessage(assertNotNull(state.failure), ENGLISH))
+            assertFalse(state.signedIn)
+            val shown = analytics.named(AnalyticsEvent.ERROR_SHOWN).single()
+            assertEquals("play_games", shown.properties[AnalyticsProperty.ACTION])
+            // The other form takes it down, as it does a form's.
+            viewModel.setAuthMode(AuthMode.LOG_IN)
+            assertNull(viewModel.state.value.failure)
         }
 
     @Test
@@ -289,7 +541,7 @@ class AccountViewModelTest {
             val state = viewModel.state.value
             assertTrue("logIn bob_1" in game.calls)
             assertEquals("bob-player", game.player)
-            assertEquals("bob_1", nameOf(state.shown(), ENGLISH))
+            assertEquals("bob_1", nameOf(state.shown(), EnglishStrings))
             assertNull(state.guestPointsWarning)
             assertEquals("", state.loginPassword)
         }
@@ -307,8 +559,27 @@ class AccountViewModelTest {
 
             val state = viewModel.state.value
             assertEquals("bob-player", game.player)
-            assertEquals("bob_1", nameOf(state.shown(), ENGLISH))
+            assertEquals("bob_1", nameOf(state.shown(), EnglishStrings))
             assertNull(state.guestPointsWarning)
+        }
+
+    /** Not a guest: their points stay on the Play Games account, which the Auth page signs in to again. */
+    @Test
+    fun `a player registered by Play Games alone logs in without a warning`() =
+        runTest(dispatcher) {
+            game.points = 5
+            game.playGamesLinked = true
+            game.accounts["bob_1"] = "correct horse" to "bob-player"
+            val viewModel = open()
+            viewModel.setAuthMode(AuthMode.LOG_IN)
+            viewModel.setLoginUsername("bob_1")
+            viewModel.setLoginPassword("correct horse")
+
+            viewModel.logIn()
+            testScheduler.advanceUntilIdle()
+
+            assertEquals("bob-player", game.player)
+            assertNull(viewModel.state.value.guestPointsWarning)
         }
 
     @Test
@@ -342,7 +613,7 @@ class AccountViewModelTest {
             val state = viewModel.state.value
             assertEquals(AccountFailure(AccountAction.LOG_IN, DomainError.INVALID_LOGIN), state.failure)
             assertEquals("guest1", game.player)
-            assertEquals("Guest", nameOf(state.shown(), ENGLISH))
+            assertEquals("Guest", nameOf(state.shown(), EnglishStrings))
             assertEquals("wrong horse", state.loginPassword, "kept, to put right")
         }
 
@@ -351,14 +622,75 @@ class AccountViewModelTest {
         runTest(dispatcher) {
             game.accounts["bob_1"] = "correct horse" to "guest1"
             val viewModel = open()
-            assertEquals("bob_1", nameOf(viewModel.state.value.shown(), ENGLISH))
+            assertEquals("bob_1", nameOf(viewModel.state.value.shown(), EnglishStrings))
 
             viewModel.logOut()
             testScheduler.advanceUntilIdle()
 
             val stats = viewModel.state.value.shown()
-            assertEquals("Guest", nameOf(stats, ENGLISH))
+            assertEquals("Guest", nameOf(stats, EnglishStrings))
             assertEquals("guest2", game.player)
+        }
+
+    /** Deleted, for a guest and a registered player alike: the screen then shows the fresh guest. */
+    @Test
+    fun `a deletion plays on as a fresh guest on the same screen`() =
+        runTest(dispatcher) {
+            game.accounts["bob_1"] = "correct horse" to "guest1"
+            game.questionsOf["guest1"] = listOf(QUESTION)
+            val viewModel = open()
+            game.calls.clear()
+
+            viewModel.deleteAccount()
+            testScheduler.advanceUntilIdle()
+
+            assertEquals(listOf("deleteAccount", "reset", "stats", "mine"), game.calls)
+            val state = viewModel.state.value
+            assertEquals("Guest", nameOf(state.shown(), EnglishStrings))
+            assertEquals("guest2", game.player)
+            assertEquals(emptyList(), state.submissions, "the fresh guest's none")
+            assertNull(state.failure)
+            assertTrue(state.deleted, "for the About screen to go back on")
+
+            viewModel.leftAfterDeletion()
+            assertFalse(viewModel.state.value.deleted)
+        }
+
+    /** A deletion raised for the About screen is taken down by the next action too, never left over. */
+    @Test
+    fun `the next action takes a deletion's flag down`() =
+        runTest(dispatcher) {
+            val viewModel = open()
+            viewModel.deleteAccount()
+            testScheduler.advanceUntilIdle()
+            assertTrue(viewModel.state.value.deleted)
+
+            viewModel.refresh()
+
+            assertFalse(viewModel.state.value.deleted)
+        }
+
+    /** Offline, or anything else: said so, and the player shown is the one still here. */
+    @Test
+    fun `a deletion that failed says so and forgets nothing`() =
+        runTest(dispatcher) {
+            game.accounts["bob_1"] = "correct horse" to "guest1"
+            game.deleteFailsWith = DomainError.NETWORK
+            val viewModel = open()
+
+            viewModel.deleteAccount()
+            testScheduler.advanceUntilIdle()
+
+            val state = viewModel.state.value
+            assertEquals(AccountFailure(AccountAction.DELETE, DomainError.NETWORK), state.failure)
+            assertFalse(state.deleted, "the About screen stays, saying why")
+            assertTrue(state.offersDeletion, "and offers it again")
+            assertEquals("bob_1", nameOf(state.shown(), EnglishStrings))
+            assertEquals("guest1", game.player)
+            assertEquals(
+                listOf(mapOf(AnalyticsProperty.CODE to "NETWORK", AnalyticsProperty.ACTION to "delete_account")),
+                analytics.named(AnalyticsEvent.ERROR_SHOWN).map { it.properties },
+            )
         }
 
     @Test
@@ -375,7 +707,7 @@ class AccountViewModelTest {
             testScheduler.advanceUntilIdle()
 
             val state = viewModel.state.value
-            assertEquals("Guest", nameOf(state.shown(), ENGLISH))
+            assertEquals("Guest", nameOf(state.shown(), EnglishStrings))
             assertNull(state.failure)
         }
 
@@ -532,7 +864,7 @@ class AccountViewModelTest {
 
             // Up through the read after it, which empties the forms of a registered player.
             assertTrue(viewModel.state.value.signedIn)
-            assertEquals("bob_1", nameOf(viewModel.state.value.shown(), ENGLISH))
+            assertEquals("bob_1", nameOf(viewModel.state.value.shown(), EnglishStrings))
 
             viewModel.leftAuth()
             assertFalse(viewModel.state.value.signedIn)
@@ -552,7 +884,7 @@ class AccountViewModelTest {
 
             val state = viewModel.state.value
             assertTrue(state.signedIn)
-            assertEquals("bob_1", nameOf(state.shown(), ENGLISH))
+            assertEquals("bob_1", nameOf(state.shown(), EnglishStrings))
             assertNull(state.failure)
         }
 
@@ -614,7 +946,7 @@ class AccountViewModelTest {
             viewModel.authShown()
             testScheduler.advanceUntilIdle()
             assertEquals(listOf("stats", "mine"), game.calls)
-            assertEquals("Guest", nameOf(viewModel.state.value.shown(), ENGLISH))
+            assertEquals("Guest", nameOf(viewModel.state.value.shown(), EnglishStrings))
 
             viewModel.authShown()
             testScheduler.advanceUntilIdle()
@@ -856,7 +1188,10 @@ class AccountViewModelTest {
             registerAccount = RegisterAccount(game, game, Analytics.None),
             logInToAccount = LogIn(game, game, game, Analytics.None),
             logOutOfAccount = LogOut(game, game, Analytics.None),
+            deleteTheAccount = DeleteAccount(game, game, Analytics.None),
             analytics = analytics,
+            linkPlayGames = LinkPlayGames(playGames, game, game, game, Analytics.None),
+            session = game,
         )
 
     /**
@@ -868,8 +1203,16 @@ class AccountViewModelTest {
         SessionRepository,
         AccountRepository,
         SubmissionRepository,
-        QuestionRepository {
+        QuestionRepository,
+        CurrentSession,
+        PlayGamesRepository {
         val calls = mutableListOf<String>()
+
+        /** When set, a Play Games sign-in is refused with it. */
+        var playGamesRefusedWith: DomainError? = null
+
+        /** The player a Play Games sign-in makes the device, when not the one playing. */
+        var playGamesPlayer: String? = null
 
         /** Each account's password and player, by username, lower-cased. */
         val accounts = mutableMapOf<String, Pair<String, String>>()
@@ -877,6 +1220,9 @@ class AccountViewModelTest {
         /** The stats of whoever is playing, as the server counts them. */
         var points = 0
         var questionsAnswered = 0
+
+        /** Whether whoever is playing signed in with Play Games (CLAUDE.md §8a). */
+        var playGamesLinked = false
         var statsFailWith: DomainError? = null
 
         /** When set, a read of the stats waits for it before it answers, or fails with [statsFailWith]. */
@@ -895,12 +1241,35 @@ class AccountViewModelTest {
         /** When set, a read of the player's questions waits for it before it answers. */
         var mineWaitsFor: CompletableDeferred<Unit>? = null
 
-        /** Who is playing on this device, as the stored session names them, or none. */
-        var player: String? = null
-            private set
+        private val stored = MutableStateFlow<String?>(null)
+
+        /**
+         * Who is playing on this device, as the stored session names them, or none. A test sets it for
+         * what makes the device another player with nothing asked of the screen: a launch's Play Games
+         * sign-in, or a dead session replaced.
+         */
+        var player: String?
+            get() = stored.value
+            set(value) {
+                stored.value = value
+            }
         private var guestsMinted = 0
 
         override suspend fun ensure(): String = player ?: "guest${++guestsMinted}".also { player = it }
+
+        override fun current(): String? = player
+
+        override val sessions: Flow<String> = stored.filterNotNull()
+
+        override fun isSettled(): Boolean = false
+
+        override suspend fun signIn(serverAuthCode: String): String? {
+            calls += "playGames $serverAuthCode"
+            playGamesRefusedWith?.let { throw WyrException(it) }
+            playGamesPlayer?.let { player = it }
+            playGamesLinked = true
+            return ensure()
+        }
 
         override suspend fun stats(): PlayerStats {
             calls += "stats"
@@ -911,6 +1280,7 @@ class AccountViewModelTest {
                 totalPoints = points,
                 questionsAnswered = questionsAnswered,
                 username = accounts.entries.firstOrNull { it.value.second == playing }?.key,
+                playGamesLinked = playGamesLinked,
             )
         }
 
@@ -942,6 +1312,18 @@ class AccountViewModelTest {
             player = null
         }
 
+        /** When set, a deletion fails with it and forgets nothing. */
+        var deleteFailsWith: DomainError? = null
+
+        override suspend fun deleteAccount() {
+            calls += "deleteAccount"
+            deleteFailsWith?.let { throw WyrException(it) }
+            val deleted = player
+            accounts.values.removeAll { it.second == deleted }
+            questionsOf.remove(deleted)
+            player = null
+        }
+
         override suspend fun mine(): List<Submission> {
             calls += "mine"
             mineWaitsFor?.await()
@@ -968,6 +1350,25 @@ class AccountViewModelTest {
         override suspend fun reset() {
             calls += "reset"
         }
+    }
+
+    /**
+     * Play Games on a build that has it, the player signed in to it, once a test says the build has it:
+     * none by default, as every build without its ids.
+     */
+    private class FakePlayGames : PlayGames {
+        override var available = false
+        var authenticated = true
+        var signsIn = false
+        var name: String? = null
+
+        override suspend fun isAuthenticated(): Boolean = authenticated
+
+        override suspend fun signIn(): Boolean = signsIn.also { authenticated = it }
+
+        override suspend fun serverAuthCode(): String = "code-1"
+
+        override suspend fun playerName(): String? = name
     }
 
     private companion object {

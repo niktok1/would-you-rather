@@ -26,5 +26,12 @@ enum class Language(
 
         /** The language [tag] names, or [DEFAULT] for none or one this build does not know. */
         fun ofTag(tag: String?): Language = entries.firstOrNull { it.tag == tag } ?: DEFAULT
+
+        /**
+         * The languages the language menu offers, in its order: the one list that decides it. English
+         * is hidden for the launch (CLAUDE.md §8b, *The launch*): its words stay, and a device that
+         * kept it shows it still, but the menu offers only Serbian, in both scripts.
+         */
+        val OFFERED: List<Language> = listOf(SERBIAN_CYRILLIC, SERBIAN_LATIN)
     }
 }

@@ -34,8 +34,9 @@ data class Strings(
      */
     val tryAgain: String,
     /**
-     * The button that closes without doing anything, on the Auth page's guest-points warning. One
-     * text, for every screen that needs it, so the game says it one way.
+     * The button that closes without doing anything, on the Auth page's guest-points warning and the
+     * Account screen's dialog before a deletion. One text, for every screen that needs it, so the game
+     * says it one way.
      */
     val cancel: String,
     /**
@@ -68,6 +69,21 @@ data class Strings(
     val language: String,
     /** The Account screen's own words and those of the pages opened from it. */
     val accountScreens: AccountStrings,
+    /** The words about Google Play Games Services, on the Account screen. */
+    val playGames: PlayGamesStrings,
+    /** The words of the notice that a moderator decided a question of the player's. */
+    val notice: NoticeStrings,
+    /** The words of the screen shown once the server serves this build nothing more. */
+    val updateScreen: UpdateStrings,
+    /** The About screen's words, opened from the Account screen. */
+    val aboutScreen: AboutStrings,
+    /** The shop's words (CLAUDE.md §8d, *The shop*). */
+    val shopScreen: ShopStrings,
+    /**
+     * The one line under a loading spinner that has turned for a while (CLAUDE.md §8d, *A slow first
+     * load*): on the Play screen, the Categories screen and the Account screen alike.
+     */
+    val stillLoading: String,
 ) {
     /**
      * These strings with [transform] applied to every one of them, which is how Serbian Latin is made.
@@ -91,6 +107,12 @@ data class Strings(
             back = transform(back),
             language = transform(language),
             accountScreens = accountScreens.map(transform),
+            playGames = playGames.map(transform),
+            notice = notice.map(transform),
+            updateScreen = updateScreen.map(transform),
+            aboutScreen = aboutScreen.map(transform),
+            shopScreen = shopScreen.map(transform),
+            stillLoading = transform(stillLoading),
         )
 }
 
@@ -112,6 +134,12 @@ val SerbianCyrillicStrings: Strings =
         back = "Назад",
         language = "Језик",
         accountScreens = SerbianCyrillicAccountStrings,
+        playGames = SerbianCyrillicPlayGamesStrings,
+        notice = SerbianCyrillicNoticeStrings,
+        updateScreen = SerbianCyrillicUpdateStrings,
+        aboutScreen = SerbianCyrillicAboutStrings,
+        shopScreen = SerbianCyrillicShopStrings,
+        stillLoading = "Још мало…",
     )
 
 /** Made from [SerbianCyrillicStrings], never written by hand, so the two cannot say different things. */
@@ -134,6 +162,12 @@ val EnglishStrings: Strings =
         back = "Back",
         language = "Language",
         accountScreens = EnglishAccountStrings,
+        playGames = EnglishPlayGamesStrings,
+        notice = EnglishNoticeStrings,
+        updateScreen = EnglishUpdateStrings,
+        aboutScreen = EnglishAboutStrings,
+        shopScreen = EnglishShopStrings,
+        stillLoading = "Just a moment…",
     )
 
 /** The strings [language] is written in. */

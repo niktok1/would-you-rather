@@ -72,18 +72,21 @@ class WyrIconsDrawTest {
         assertTrue(differing * 20 <= down.count { it }, "$differing pixels differ")
     }
 
-    /** The coin's face is a full disc, and its mark a rim and a ring on it, with the face's middle clear of both. */
+    /** The coin's face is a full disc, and its mark a rim and a star in the middle, with the face showing between. */
     @Test
-    fun `the coin's face is a disc under the ring of its mark`() {
+    fun `the coin's face is a disc under the star of its mark`() {
         val face = painted(WyrIcons.CoinFace)
         val mark = painted(WyrIcons.CoinMark)
         val middle = pixelAt(x = SIZE / 2, y = SIZE / 2)
 
         assertTrue(face[middle], "the face is a full disc")
-        assertFalse(mark[middle], "the ring leaves the face's middle to show")
-        // The ring, well inside the rim, lies on the face.
-        val ring = pixelAt(x = SIZE / 2 + 5, y = SIZE / 2)
-        assertTrue(mark[ring] && face[ring], "the ring is drawn on the face")
+        assertTrue(mark[middle], "the star is stamped in the face's middle")
+        // Between the star and the rim, the face alone shows.
+        val between = pixelAt(x = SIZE / 2 + 6, y = SIZE / 2)
+        assertTrue(face[between] && !mark[between], "the face shows between the star and the rim")
+        // The rim lies on the face's edge.
+        val rim = pixelAt(x = SIZE / 2 + 8, y = SIZE / 2)
+        assertTrue(mark[rim] && face[rim], "the rim is drawn on the face")
     }
 
     private fun pixelAt(
@@ -127,6 +130,12 @@ class WyrIconsDrawTest {
                 "CoinMark" to WyrIcons.CoinMark,
                 "Globe" to WyrIcons.Globe,
                 "Players" to WyrIcons.Players,
+                "Info" to WyrIcons.Info,
+                "More" to WyrIcons.More,
+                "Copy" to WyrIcons.Copy,
+                "Plus" to WyrIcons.Plus,
+                "ChevronRight" to WyrIcons.ChevronRight,
+                "Share" to WyrIcons.Share,
             )
     }
 }

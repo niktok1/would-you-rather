@@ -6,12 +6,15 @@ import io.ntole.wyr.core.domain.submission.SubmissionStatus
 
 /**
  * The players' submissions as the moderator decides them, every question as the moderator retires
- * and restores it, and the categories as the moderator adds and renames them (CLAUDE.md §8d,
- * *Moderation*). Implemented in `:core:data`.
+ * and restores it, the categories as the moderator adds and renames them, the questions players
+ * reported, their authors as the moderator blocks and unblocks them, and the players' accounts as
+ * the moderator deletes them on request (CLAUDE.md §8d, *Moderation*; §8a, *Deleting an account*).
+ * Implemented in `:core:data`.
  *
  * Every call sends the [AdminToken] it is given, and nothing here keeps it. None needs a player
  * session or touches the one there is: the moderator is whoever holds the token, not a player. A
- * submission comes back as its author sees it, which is how a moderator sees it too, with no author.
+ * submission comes back as its author sees it, and with its author's opaque id besides
+ * ([Submission.authorId]), which only the moderator is sent.
  *
  * Every call throws [io.ntole.wyr.core.domain.error.WyrException] on any failure, with
  * [io.ntole.wyr.core.domain.error.DomainError.FORBIDDEN] for a token that is not the server's. A
@@ -129,12 +132,76 @@ public interface ModerationRepository {
         nameEn: String,
     ): Category
 
+    /**
+     * The questions players reported, most reported first, then the most lately reported, at most
+     * [PAGE_SIZE] of them, read from the server every time: each as [questions] lists it, with its
+     * reports counted. A retired one stays listed until its reports are dismissed. A list of
+     * [PAGE_SIZE] may not be all of them.
+     *
+     * @throws io.ntole.wyr.core.domain.error.WyrException on any failure, as [pending] does.
+     */
+    public suspend fun reports(token: AdminToken): List<ReportedQuestion>
+
+    /**
+     * Clears every report of the question [questionId], which leaves [reports] until a player reports
+     * it again. The question stays as it stands, and hidden from each player who reported it. A
+     * question with no reports is no failure.
+     *
+     * @throws io.ntole.wyr.core.domain.error.WyrException on any failure, with
+     *   [io.ntole.wyr.core.domain.error.DomainError.QUESTION_NOT_FOUND] for an id no question has.
+     */
+    public suspend fun dismissReports(
+        token: AdminToken,
+        questionId: String,
+    )
+
+    /**
+     * Blocks the author [authorId] names ([ModeratedQuestion.authorId], [Submission.authorId]) from
+     * submitting, and rejects each of their pending submissions with [reason], paying each one's cost
+     * back as any rejection does. Their approved questions stay served. Blocking a blocked author again
+     * rejects whatever is pending and changes nothing else.
+     *
+     * @throws io.ntole.wyr.core.domain.error.WyrException on any failure, with
+     *   [io.ntole.wyr.core.domain.error.DomainError.AUTHOR_NOT_FOUND] for an id no player has.
+     */
+    public suspend fun blockAuthor(
+        token: AdminToken,
+        authorId: String,
+        reason: RejectionReason,
+    ): AuthorBlock
+
+    /**
+     * Lets the author [authorId] names submit again; what the block rejected stays rejected. An author
+     * who is not blocked is no failure.
+     *
+     * @throws io.ntole.wyr.core.domain.error.WyrException on any failure, as [blockAuthor] does.
+     */
+    public suspend fun unblockAuthor(
+        token: AdminToken,
+        authorId: String,
+    ): AuthorBlock
+
+    /**
+     * Deletes the account [account] names, on its player's request: their username and password, their
+     * sessions on every device, and everything else of theirs, as their own deletion does; their
+     * approved questions stay, with nobody as their author. It cannot be undone.
+     *
+     * @throws io.ntole.wyr.core.domain.error.WyrException on any failure, with
+     *   [io.ntole.wyr.core.domain.error.DomainError.PLAYER_NOT_FOUND] for an account no player has, one
+     *   deleted already included.
+     */
+    public suspend fun deleteAccount(
+        token: AdminToken,
+        account: AccountRef,
+    )
+
     public companion object {
         /**
-         * The most submissions [pending] lists, and questions a page of [questions] holds: the most
-         * the server lists at once, so the moderator's reads are few, each one a request of the
-         * address's admin budget (CLAUDE.md §8b). It is the server's `WyrApi.Limits.MAX_PAGE_SIZE`,
-         * which this module cannot see (CLAUDE.md §3), so `:core:data`'s tests pin the two equal.
+         * The most submissions [pending] lists, questions a page of [questions] holds, and reported
+         * questions [reports] lists: the most the server lists at once, so the moderator's reads are
+         * few, each one a request of the address's admin budget (CLAUDE.md §8b). It is the server's
+         * `WyrApi.Limits.MAX_PAGE_SIZE`, which this module cannot see (CLAUDE.md §3), so `:core:data`'s
+         * tests pin the two equal.
          */
         public const val PAGE_SIZE: Int = 100
     }

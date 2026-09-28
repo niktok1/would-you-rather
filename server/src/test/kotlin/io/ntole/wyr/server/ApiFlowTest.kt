@@ -28,6 +28,7 @@ import io.ntole.wyr.core.category.CreateCategoryRequest
 import io.ntole.wyr.core.category.RenameCategoryRequest
 import io.ntole.wyr.core.error.ErrorCode
 import io.ntole.wyr.core.error.ErrorDto
+import io.ntole.wyr.core.player.DeleteAccountRequest
 import io.ntole.wyr.core.player.PlayerStatsDto
 import io.ntole.wyr.core.question.AdminQuestionDto
 import io.ntole.wyr.core.question.AdminQuestionPageDto
@@ -851,7 +852,8 @@ class ApiFlowTest {
             )
             // Sent even where they equal the contract's defaults, which is all a fresh player has but
             // the due count, so the values above are the server's rather than the decoder's. A guest
-            // has no username, sent as null, and no Play Games link, sent as false.
+            // has no username, sent as null, and no Play Games link, sent as false; and the cost is the
+            // server's, 1 with SUBMISSION_COST unset (CLAUDE.md §8c).
             val sent = response.body<JsonObject>()
             assertEquals(
                 setOf(
@@ -865,11 +867,13 @@ class ApiFlowTest {
                     "pointsSpent",
                     "username",
                     "playGamesLinked",
+                    "submissionCost",
                 ),
                 sent.keys,
             )
             assertEquals(JsonNull, sent["username"])
             assertEquals(JsonPrimitive(false), sent["playGamesLinked"])
+            assertEquals(JsonPrimitive(1), sent["submissionCost"])
         }
 
     @Test
@@ -1111,7 +1115,7 @@ class ApiFlowTest {
     fun `a guest cannot submit whatever the submission holds, and can once registered`() =
         runServer("submit-guest") { client ->
             val guest = client.guest()
-            grantPoints(guest.playerId, Scoring.SUBMISSION_COST)
+            grantPoints(guest.playerId, Scoring.DEFAULT_SUBMISSION_COST)
 
             listOf(
                 "a question the rules take" to question("Fly"),
@@ -1126,7 +1130,7 @@ class ApiFlowTest {
                 assertEquals(ErrorCode.ACCOUNT_REQUIRED, response.body<ErrorDto>().code, case)
             }
             assertEquals(emptyList(), client.mySubmissions(guest), "nothing stored")
-            assertEquals(Scoring.SUBMISSION_COST, client.stats(guest).totalPoints, "and nothing taken")
+            assertEquals(Scoring.DEFAULT_SUBMISSION_COST, client.stats(guest).totalPoints, "and nothing taken")
 
             val registered =
                 client.post(WyrApi.Paths.AUTH_REGISTER) {
@@ -1155,15 +1159,15 @@ class ApiFlowTest {
                     client.submit(author.accessToken, question(text)).body<SubmissionDto>()
                 }
             assertEquals(0, client.stats(author).totalPoints, "two answers paid for two submissions")
-            assertEquals(2 * Scoring.SUBMISSION_COST, client.stats(author).pointsSpent)
+            assertEquals(2 * Scoring.DEFAULT_SUBMISSION_COST, client.stats(author).pointsSpent)
             assertEquals(HttpStatusCode.Conflict, client.submit(author.accessToken, question("Broke again")).status)
 
             client.approve(kept.id)
             client.reject(paidBack.id, "No")
 
             val stats = client.stats(author)
-            assertEquals(Scoring.SUBMISSION_COST, stats.totalPoints, "the rejected one's cost is back")
-            assertEquals(Scoring.SUBMISSION_COST, stats.pointsSpent, "the approved one's is kept")
+            assertEquals(Scoring.DEFAULT_SUBMISSION_COST, stats.totalPoints, "the rejected one's cost is back")
+            assertEquals(Scoring.DEFAULT_SUBMISSION_COST, stats.pointsSpent, "the approved one's is kept")
         }
 
     @Test
@@ -1263,7 +1267,7 @@ class ApiFlowTest {
             // As for the ghost-player vote, the helper's token for a real player has to pass first.
             val real = client.registered()
             val request = SubmitQuestionRequest("Fly", "Swim", listOf("FOOD"))
-            grantPoints(real.playerId, Scoring.SUBMISSION_COST)
+            grantPoints(real.playerId, Scoring.DEFAULT_SUBMISSION_COST)
             assertEquals(HttpStatusCode.Created, client.submit(signAccessToken(real.playerId), request).status)
 
             val response = client.submit(signAccessToken("no-such-player"), request)
@@ -1303,6 +1307,8 @@ class ApiFlowTest {
                     "likeCount",
                     "dislikeCount",
                     "answerCount",
+                    "votesA",
+                    "votesB",
                     "authorId",
                 ),
                 response
@@ -1434,7 +1440,7 @@ class ApiFlowTest {
             )
             assertEquals(emptyList(), client.queue(), "out of the queue")
             assertEquals(
-                listOf(approved.copy(answerCount = 1)),
+                listOf(approved.copy(answerCount = 1, votesB = 1)),
                 client.queue("?${WyrApi.Query.STATUS}=APPROVED"),
                 "its author's answer counted",
             )
@@ -2173,7 +2179,7 @@ class ApiFlowTest {
         session: SessionDto,
         request: SubmitQuestionRequest,
     ): HttpResponse {
-        grantPoints(session.playerId, Scoring.SUBMISSION_COST)
+        grantPoints(session.playerId, Scoring.DEFAULT_SUBMISSION_COST)
         registerIfGuest(session.playerId)
         return submit(session.accessToken, request)
     }
@@ -2302,6 +2308,12 @@ class ApiFlowTest {
                     credentials()
                     contentType(ContentType.Application.Json)
                     setBody(UnblockAuthorRequest("no-such-author"))
+                },
+            "an account's deletion" to
+                post(WyrApi.Paths.ADMIN_ACCOUNT_DELETIONS) {
+                    credentials()
+                    contentType(ContentType.Application.Json)
+                    setBody(DeleteAccountRequest(accountId = "no-such-player"))
                 },
         )
 

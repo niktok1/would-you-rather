@@ -41,3 +41,15 @@ fun desktopAnalyticsSettings(
         host = variables[POSTHOG_HOST_VARIABLE],
         appVersion = properties[APP_VERSION_PROPERTY].orEmpty(),
     )
+
+/** The system property the desktop build names its build number in (`:app:desktopApp`'s `jvmArgs`). */
+internal const val BUILD_NUMBER_PROPERTY: String = "wyr.app.build"
+
+/**
+ * The build number [BUILD_NUMBER_PROPERTY] names in [properties], the process's own unless a test gives
+ * others, or null when it names no whole number: a desktop app started without it, from an IDE say,
+ * whose requests then name no build (CLAUDE.md §8b, *Minimum client version*).
+ */
+fun desktopBuildNumber(
+    properties: Map<String, String> = System.getProperties().stringPropertyNames().associateWith(System::getProperty),
+): Int? = properties[BUILD_NUMBER_PROPERTY]?.trim()?.toIntOrNull()

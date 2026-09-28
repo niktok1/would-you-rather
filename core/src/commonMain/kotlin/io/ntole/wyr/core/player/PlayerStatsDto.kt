@@ -1,5 +1,6 @@
 package io.ntole.wyr.core.player
 
+import io.ntole.wyr.core.api.WyrApi
 import kotlinx.serialization.Serializable
 
 /**
@@ -13,9 +14,10 @@ import kotlinx.serialization.Serializable
  * [likesReceived] is how many likes the questions the player submitted hold now, the player's own
  * likes of them included (CLAUDE.md §8d). Each is a point in [totalPoints] for as long as it is held.
  *
- * [pointsSpent] is what the player's questions not rejected cost them to submit (CLAUDE.md §8c): a
- * rejection pays its cost back, and an approval keeps it. So [totalPoints] is what [answersGiven]
- * earned, plus what [likesReceived] earn, less [pointsSpent].
+ * [pointsSpent] is what the player's questions not rejected cost them to submit (CLAUDE.md §8c), a
+ * rejection paying its cost back and an approval keeping it, and what they paid in the shop (§8d, *The
+ * shop*). So [totalPoints] is what [answersGiven] earned, plus what [likesReceived] earn, less
+ * [pointsSpent].
  *
  * [cycle] is the player's current pass over the questions, counted from 1, and [dueThisCycle] how
  * many are still due in it, over every category. A cycle ends when nothing is due, but the next one
@@ -26,6 +28,11 @@ import kotlinx.serialization.Serializable
  * (CLAUDE.md §8a, *Accounts*). [playGamesLinked] is whether the player signed in with Play Games
  * (CLAUDE.md §8a, *Play Games sign-in*), which registers them as a username does: a player is a guest
  * while they have neither.
+ *
+ * [submissionCost] is what submitting a question costs on this server, in points (CLAUDE.md §8c), the
+ * server's own setting, so a client says the cost the server charges rather than one it was built
+ * with. It defaults to [io.ntole.wyr.core.api.WyrApi.Limits.SUBMISSION_COST], so a server from before it
+ * reads as charging that, which it did.
  *
  * The server reads every number at the same moment, so they always agree with one another.
  *
@@ -44,4 +51,5 @@ public data class PlayerStatsDto(
     public val pointsSpent: Int = 0,
     public val username: String? = null,
     public val playGamesLinked: Boolean = false,
+    public val submissionCost: Int = WyrApi.Limits.SUBMISSION_COST,
 )

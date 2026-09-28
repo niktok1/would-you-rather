@@ -13,6 +13,7 @@ import io.ntole.wyr.core.author.BlockAuthorRequest
 import io.ntole.wyr.core.author.UnblockAuthorRequest
 import io.ntole.wyr.core.category.CreateCategoryRequest
 import io.ntole.wyr.core.category.RenameCategoryRequest
+import io.ntole.wyr.core.player.DeleteAccountRequest
 import io.ntole.wyr.core.question.ApproveSubmissionRequest
 import io.ntole.wyr.core.question.QuestionStatus
 import io.ntole.wyr.core.question.RejectSubmissionRequest
@@ -24,6 +25,7 @@ import io.ntole.wyr.server.category.CategoryStore
 import io.ntole.wyr.server.category.checkedCreation
 import io.ntole.wyr.server.category.checkedRenaming
 import io.ntole.wyr.server.db.Db
+import io.ntole.wyr.server.player.AccountDeletion
 import io.ntole.wyr.server.plugins.ApiFailure
 import io.ntole.wyr.server.plugins.RouteLimit
 import io.ntole.wyr.server.plugins.pageLimit
@@ -202,6 +204,23 @@ fun Route.moderationRoutes(
                 call.logAdmin("unblocked author", unblocked.authorId)
 
                 call.respond(unblocked)
+            }
+
+            post(WyrApi.Paths.ADMIN_ACCOUNT_DELETIONS) {
+                call.requireAdmin(adminToken)
+
+                // Checked before the transaction: a refusal needs no database.
+                val account = checkedAccountDeletion(call.receiveOrReject<DeleteAccountRequest>("account deletion"))
+
+                // One transaction: the player named is locked, then deleted as they would delete themselves.
+                val deleted =
+                    db.query {
+                        account.lockedPlayerId().also(AccountDeletion::delete)
+                    }
+                // By id alone, never the username asked for (CLAUDE.md §8b, *Logging*).
+                call.logAdmin("deleted the account of player", deleted)
+
+                call.respond(HttpStatusCode.NoContent)
             }
         }
     }

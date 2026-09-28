@@ -15,9 +15,15 @@ import io.ntole.wyr.core.domain.question.QuestionRepository
 import io.ntole.wyr.core.domain.question.SkipQuestion
 import io.ntole.wyr.core.domain.reaction.Reaction
 import io.ntole.wyr.core.domain.reaction.SetReaction
+import io.ntole.wyr.core.domain.report.HideAuthor
+import io.ntole.wyr.core.domain.report.HideQuestion
+import io.ntole.wyr.core.domain.report.ReportQuestion
 import io.ntole.wyr.core.domain.vote.AttemptId
 import io.ntole.wyr.core.domain.vote.CastVote
 import io.ntole.wyr.core.domain.vote.Side
+import io.ntole.wyr.share.ShareOutcome
+import io.ntole.wyr.share.SharedQuestion
+import io.ntole.wyr.share.questionShared
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -41,15 +47,19 @@ internal const val REVEAL_HOLD_MILLIS: Long = 500
 
 /**
  * Drives the Play screen (CLAUDE.md §8d, *The Play screen*), and tells [analytics] what the player did
- * there (§8g): each question shown, answered after how long, skipped, and reacted to, and every
- * failure shown, by the question's id and its categories', never its text. [timeSource] measures how
- * long a question was on screen, only while the Play screen is shown ([screenShown], [screenHidden]).
+ * there (§8g): each question shown, answered after how long, skipped, reacted to, reported or hidden,
+ * and every failure shown, by the question's id and its categories', never its text. [timeSource]
+ * measures how long a question was on screen, only while the Play screen is shown ([screenShown],
+ * [screenHidden]).
  */
 class PlayViewModel(
     private val getNextQuestion: GetNextQuestion,
     private val castVote: CastVote,
     private val skipQuestion: SkipQuestion,
     private val setReaction: SetReaction,
+    private val reportQuestion: ReportQuestion,
+    private val hideQuestion: HideQuestion,
+    private val hideAuthor: HideAuthor,
     private val getPlayerStats: GetPlayerStats,
     private val questions: QuestionRepository,
     categoryList: CategoryRepository,
@@ -201,7 +211,7 @@ class PlayViewModel(
         val shown = _state.value as? PlayUiState.OnQuestion ?: return
         if (shown.isBusy) return
         val question = shown.question
-        val reacting = shown.withReaction(isReacting = true, reactionError = null)
+        val reacting = shown.with(isReacting = true, rowError = null)
         _state.value = reacting
 
         viewModelScope.launch {
@@ -227,15 +237,59 @@ class PlayViewModel(
                                 AnalyticsProperty.ANSWERED to (shown is PlayUiState.Revealed),
                             ),
                     )
-                    reacting.withReaction(question = answered, isReacting = false, reactionError = null)
+                    reacting.with(question = answered, isReacting = false, rowError = null)
                 } catch (failure: WyrException) {
                     reportShown(failure.error, ACTION_REACTION)
-                    reacting.withReaction(isReacting = false, reactionError = failure.error)
+                    reacting.with(isReacting = false, rowError = failure.error)
                 }
             // Unless the player has moved on meanwhile, when it is no longer the question on screen.
             _state.update { current -> if (current == reacting) settled else current }
         }
     }
+
+    /**
+     * Reports the question on screen, or hides it or its author, as the player chose from the menu on
+     * the top bar (CLAUDE.md §8d, *Reports*), asked or revealed. Each hides it from the player for good,
+     * so once the server has it the next question shows, with nothing more said, as after a skip. One
+     * that failed leaves the question on screen, and says why in the row's failure slot, as a reaction's
+     * failure does; choosing again sends the same again, which the server holds once. Nothing else goes
+     * while it is in flight.
+     */
+    fun pickFromMenu(choice: MenuChoice) {
+        val shown = _state.value as? PlayUiState.OnQuestion ?: return
+        if (shown.isBusy) return
+        val question = shown.question
+        val hiding = shown.with(isHiding = true, rowError = null)
+        _state.value = hiding
+
+        viewModelScope.launch {
+            try {
+                when (choice) {
+                    is MenuChoice.Report -> reportQuestion(question.id, choice.reason)
+                    MenuChoice.HideQuestion -> hideQuestion(question.id)
+                    MenuChoice.HideAuthor -> hideAuthor(question.id)
+                }
+                analytics.track(eventOf(choice), about(question) + propertiesOf(choice, shown))
+                // Nothing else could go meanwhile, so it is still the question on screen.
+                if (_state.value == hiding) load()
+            } catch (failure: WyrException) {
+                reportShown(failure.error, actionOf(choice))
+                _state.update { current ->
+                    if (current == hiding) hiding.with(isHiding = false, rowError = failure.error) else current
+                }
+            }
+        }
+    }
+
+    /**
+     * [question] was shared from the Play screen's dialog, [withResults] or not, as [outcome] says
+     * (CLAUDE.md §8d, *Sharing*): the analytics hear of it. Nothing on screen changes.
+     */
+    fun shared(
+        question: SharedQuestion,
+        withResults: Boolean,
+        outcome: ShareOutcome,
+    ) = analytics.questionShared(question, withResults, outcome)
 
     /**
      * Sends a lost vote again as the same attempt, so that if the first one did land the server
@@ -285,7 +339,8 @@ class PlayViewModel(
         viewModelScope.launch {
             _state.value =
                 try {
-                    val outcome = castVote(vote.question.id, vote.side, vote.attempt)
+                    // The time it took goes with it, the first tap's on a retry (CLAUDE.md §8b, *Personalization*).
+                    val outcome = castVote(vote.question.id, vote.side, vote.attempt, vote.answerMillis)
                     // The vote's total is the newest the server has told: a read still in flight
                     // may be older.
                     pointsRead?.cancel()
@@ -340,16 +395,50 @@ class PlayViewModel(
         )
     }
 
-    private fun PlayUiState.OnQuestion.withReaction(
+    private fun PlayUiState.OnQuestion.with(
         question: Question = this.question,
-        isReacting: Boolean,
-        reactionError: DomainError?,
+        isReacting: Boolean = this.isReacting,
+        isHiding: Boolean = this.isHiding,
+        rowError: DomainError?,
     ): PlayUiState.OnQuestion =
         when (this) {
-            is PlayUiState.Asking -> copy(question = question, isReacting = isReacting, reactionError = reactionError)
-            is PlayUiState.Revealed -> copy(question = question, isReacting = isReacting, reactionError = reactionError)
+            is PlayUiState.Asking -> {
+                copy(question = question, isReacting = isReacting, isHiding = isHiding, rowError = rowError)
+            }
+
+            is PlayUiState.Revealed -> {
+                copy(question = question, isReacting = isReacting, isHiding = isHiding, rowError = rowError)
+            }
         }
 }
+
+/** The event a menu choice that worked is reported as (CLAUDE.md §8g). */
+private fun eventOf(choice: MenuChoice): String =
+    when (choice) {
+        is MenuChoice.Report -> AnalyticsEvent.QUESTION_REPORTED
+        MenuChoice.HideQuestion -> AnalyticsEvent.QUESTION_HIDDEN
+        MenuChoice.HideAuthor -> AnalyticsEvent.AUTHOR_HIDDEN
+    }
+
+/**
+ * What a menu choice's event says of its own: a report's reason, and whether the question was answered,
+ * [shown] revealed when the choice was made.
+ */
+private fun propertiesOf(
+    choice: MenuChoice,
+    shown: PlayUiState.OnQuestion,
+): Map<String, Any?> {
+    val reason = (choice as? MenuChoice.Report)?.let { mapOf(AnalyticsProperty.REASON to it.reason.name.lowercase()) }
+    return reason.orEmpty() + mapOf(AnalyticsProperty.ANSWERED to (shown is PlayUiState.Revealed))
+}
+
+/** What a menu choice that failed is reported as having failed at (CLAUDE.md §8g). */
+private fun actionOf(choice: MenuChoice): String =
+    when (choice) {
+        is MenuChoice.Report -> ACTION_REPORT
+        MenuChoice.HideQuestion -> ACTION_HIDE_QUESTION
+        MenuChoice.HideAuthor -> ACTION_HIDE_AUTHOR
+    }
 
 /** What an event says of [question]: its id and its categories', never its text (CLAUDE.md §8g). */
 private fun about(question: Question): Map<String, Any?> =
@@ -358,3 +447,6 @@ private fun about(question: Question): Map<String, Any?> =
 private const val ACTION_QUESTION = "question"
 private const val ACTION_VOTE = "vote"
 private const val ACTION_REACTION = "reaction"
+private const val ACTION_REPORT = "report"
+private const val ACTION_HIDE_QUESTION = "hide_question"
+private const val ACTION_HIDE_AUTHOR = "hide_author"

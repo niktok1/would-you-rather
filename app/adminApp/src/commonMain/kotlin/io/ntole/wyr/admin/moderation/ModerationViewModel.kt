@@ -8,8 +8,12 @@ import io.ntole.wyr.core.domain.error.WyrException
 import io.ntole.wyr.core.domain.moderation.AddCategory
 import io.ntole.wyr.core.domain.moderation.AdminToken
 import io.ntole.wyr.core.domain.moderation.ApproveSubmission
+import io.ntole.wyr.core.domain.moderation.BlockAuthor
+import io.ntole.wyr.core.domain.moderation.DeletePlayerAccount
+import io.ntole.wyr.core.domain.moderation.DismissReports
 import io.ntole.wyr.core.domain.moderation.GetPendingSubmissions
 import io.ntole.wyr.core.domain.moderation.GetQuestions
+import io.ntole.wyr.core.domain.moderation.GetReportedQuestions
 import io.ntole.wyr.core.domain.moderation.ModeratedQuestion
 import io.ntole.wyr.core.domain.moderation.QuestionCursor
 import io.ntole.wyr.core.domain.moderation.QuestionFilter
@@ -17,6 +21,7 @@ import io.ntole.wyr.core.domain.moderation.RejectSubmission
 import io.ntole.wyr.core.domain.moderation.RenameCategory
 import io.ntole.wyr.core.domain.moderation.RestoreQuestion
 import io.ntole.wyr.core.domain.moderation.RetireQuestion
+import io.ntole.wyr.core.domain.moderation.UnblockAuthor
 import io.ntole.wyr.core.domain.submission.SubmissionStatus
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
@@ -57,6 +62,29 @@ interface ModerationActions {
         from: Screen,
     )
 
+    fun loadReports()
+
+    fun dismiss(questionId: String)
+
+    /** Asks the moderator to confirm blocking [authorId], the author of [questionId] as [from] shows it. */
+    fun askToBlock(
+        authorId: String,
+        questionId: String,
+        from: Screen,
+    )
+
+    fun setBlockReason(text: String)
+
+    fun cancelBlock()
+
+    fun confirmBlock()
+
+    fun unblock(
+        authorId: String,
+        questionId: String,
+        from: Screen,
+    )
+
     fun toggleStatusFilter(status: SubmissionStatus)
 
     fun toggleCategoryFilter(categoryId: String)
@@ -67,13 +95,19 @@ interface ModerationActions {
 
     fun loadMore()
 
-    fun askToRetire(questionId: String)
+    fun askToRetire(
+        questionId: String,
+        from: Screen,
+    )
 
     fun cancelRetire()
 
     fun confirmRetire()
 
-    fun restore(questionId: String)
+    fun restore(
+        questionId: String,
+        from: Screen,
+    )
 
     fun loadCategories()
 
@@ -90,6 +124,16 @@ interface ModerationActions {
     fun cancelRenaming()
 
     fun saveRenaming()
+
+    /** Replaces the username or account id typed for the account to delete with [text]. */
+    fun setAccountToDelete(text: String)
+
+    /** Asks the moderator to confirm deleting the account typed. */
+    fun askToDeleteAccount()
+
+    fun cancelDeleteAccount()
+
+    fun confirmDeleteAccount()
 }
 
 /**
@@ -97,10 +141,14 @@ interface ModerationActions {
  * nowhere else; the pending queue, decided through [ApproveSubmission] and [RejectSubmission]; and
  * the list of every question, read through [GetQuestions] a page at a time, whose approved questions
  * [RetireQuestion] takes out of play once the moderator confirms it and whose retired ones
- * [RestoreQuestion] puts back. A pending question in the list is decided as in the queue. The
- * categories, read through [GetCategories] before the queue or the list each Load reads, are what the
- * chips offer and what names a question's categories; [AddCategory] adds one and [RenameCategory]
- * puts its names right.
+ * [RestoreQuestion] puts back; and the reported questions, read through [GetReportedQuestions], whose
+ * reports [DismissReports] clears and which are retired and restored as in the list. [BlockAuthor]
+ * blocks a question's author, once the moderator confirms it, and [UnblockAuthor] lets them submit
+ * again, from any of the three. A pending question in the list is decided as in the queue. The
+ * categories, read through [GetCategories] before the queue, the reports or the list each Load reads,
+ * are what the chips offer and what names a question's categories; [AddCategory] adds one and
+ * [RenameCategory] puts its names right. [DeletePlayerAccount] deletes a player's account on their
+ * request, named by its username or its id, once the moderator confirms it.
  *
  * Nothing here has a player session, or could make one: the moderator is whoever holds the token,
  * and the app's wiring binds no session at all (`moderationDataModule`). Every request carries the
@@ -117,9 +165,14 @@ class ModerationViewModel(
     private val getQuestions: GetQuestions,
     private val retireQuestion: RetireQuestion,
     private val restoreQuestion: RestoreQuestion,
+    private val getReportedQuestions: GetReportedQuestions,
+    private val dismissReports: DismissReports,
+    private val blockAuthor: BlockAuthor,
+    private val unblockAuthor: UnblockAuthor,
     private val getCategories: GetCategories,
     private val addCategory: AddCategory,
     private val renameCategory: RenameCategory,
+    private val deletePlayerAccount: DeletePlayerAccount,
 ) : ViewModel(),
     ModerationActions {
     private val _state = MutableStateFlow(ModerationState())
@@ -207,6 +260,106 @@ class ModerationViewModel(
     }
 
     /**
+     * Reads the categories and then the reported questions, as an action of its own, starting the
+     * reports' outcomes afresh.
+     */
+    override fun loadReports() =
+        exclusively(Running(Action.LOAD_REPORTS)) { token ->
+            _state.update { it.copy(reports = it.reports.copy(outcomes = Outcomes())) }
+            readCategories()
+            readReports(token)
+        }
+
+    /**
+     * Clears every report of the reported question [questionId], then reads the reports again,
+     * whatever became of it: a dismissal takes the question off them, and one whose answer was lost
+     * may have been made. Not after a refusal every request would meet ([refusesEveryRequest]).
+     */
+    override fun dismiss(questionId: String) {
+        val question = nameOf(questionId)
+        acting(Running(Action.DISMISS_REPORTS, questionId), Screen.REPORTS) { token ->
+            val failure =
+                failureOf {
+                    dismissReports(token, questionId)
+                    val notice = "Dismissed the reports of $question: it stays as it stands."
+                    _state.update { it.noticed(Screen.REPORTS, notice) }
+                }
+            if (failure.refusesEveryRequest) return@acting failure
+            readReports(token)
+            failure
+        }
+    }
+
+    /**
+     * Asks the moderator to confirm blocking [authorId], the author of [questionId] as [from] shows
+     * it, and to give the reason each of their pending questions is rejected with. Nothing is sent
+     * until [confirmBlock].
+     */
+    override fun askToBlock(
+        authorId: String,
+        questionId: String,
+        from: Screen,
+    ) {
+        if (!_state.value.canSend) return
+        _state.update { it.copy(blocking = BlockDraft(authorId, questionId, from)) }
+    }
+
+    override fun setBlockReason(text: String) = _state.update { it.copy(blocking = it.blocking?.copy(reason = text)) }
+
+    override fun cancelBlock() = _state.update { it.copy(blocking = null) }
+
+    /**
+     * Blocks the author [askToBlock] asked about, once [ModerationState.blockReason] holds a reason,
+     * and keeps where the server answered they stand. Then reads again whatever was read, the queue,
+     * the reported questions and the list as deep as it was shown, whatever became of it: a block
+     * rejects each of the author's pending questions, and one whose answer was lost may have. Not
+     * after a refusal every request would meet ([refusesEveryRequest]), which blocked nobody.
+     */
+    override fun confirmBlock() {
+        val current = _state.value
+        val draft = current.blocking ?: return
+        val reason = current.blockReason ?: return
+        if (!current.canSend) return
+        _state.update { it.copy(blocking = null) }
+        acting(Running(Action.BLOCK_AUTHOR, draft.questionId), draft.from) { token ->
+            val failure =
+                failureOf {
+                    val block = blockAuthor(token, draft.authorId, reason)
+                    _state.update {
+                        it.standing(block.authorId, block.isBlocked).noticed(draft.from, blockedNoticeOf(block))
+                    }
+                }
+            if (failure.refusesEveryRequest) return@acting failure
+            val read = _state.value
+            if (read.pending.submissions != null) readQueue(token)
+            if (read.reports.reports != null) readReports(token)
+            if (read.questions.questions != null) rereadList(token)
+            failure
+        }
+    }
+
+    /**
+     * Lets [authorId], the author of [questionId] as [from] shows it, submit again, and keeps where
+     * the server answered they stand. Nothing is read again: nothing the server lists shows it.
+     */
+    override fun unblock(
+        authorId: String,
+        questionId: String,
+        from: Screen,
+    ) = acting(Running(Action.UNBLOCK_AUTHOR, questionId), from) { token ->
+        failureOf {
+            val unblock = unblockAuthor(token, authorId)
+            val notice = "Unblocked author ${shortAuthorOf(unblock.authorId)}: they may submit again."
+            _state.update { it.standing(unblock.authorId, unblock.isBlocked).noticed(from, notice) }
+        }
+    }
+
+    private fun ModerationState.standing(
+        authorId: String,
+        blocked: Boolean,
+    ): ModerationState = copy(authors = authors + (authorId to blocked))
+
+    /**
      * Lists [status] too, or no longer; none listed is every status. Never
      * [SubmissionStatus.OTHER], which names nothing the server can list by.
      */
@@ -251,14 +404,17 @@ class ModerationViewModel(
     }
 
     /**
-     * Asks the moderator to confirm retiring [questionId], an approved question the list shows.
-     * Nothing is sent until [confirmRetire].
+     * Asks the moderator to confirm retiring [questionId], an approved question [from] shows, the list
+     * of every question or the reported ones. Nothing is sent until [confirmRetire].
      */
-    override fun askToRetire(questionId: String) {
+    override fun askToRetire(
+        questionId: String,
+        from: Screen,
+    ) {
         val current = _state.value
-        val listed = current.questions.questions?.firstOrNull { it.id == questionId } ?: return
-        if (!current.canSend || listed.status != SubmissionStatus.APPROVED) return
-        _state.update { it.copy(retiring = questionId) }
+        val shown = current.shownOn(from, questionId) ?: return
+        if (!current.canSend || shown.status != SubmissionStatus.APPROVED) return
+        _state.update { it.copy(retiring = Retiring(questionId, from)) }
     }
 
     override fun cancelRetire() = _state.update { it.copy(retiring = null) }
@@ -266,19 +422,21 @@ class ModerationViewModel(
     /** Retires the question [askToRetire] asked about, and lists it as the server answered it. */
     override fun confirmRetire() {
         val current = _state.value
-        val questionId = current.retiring ?: return
+        val (questionId, from) = current.retiring ?: return
         if (!current.canSend) return
         _state.update { it.copy(retiring = null) }
-        move(Action.RETIRE, questionId, send = { token -> retireQuestion(token, questionId) }) { retired ->
+        move(Action.RETIRE, questionId, from, send = { token -> retireQuestion(token, questionId) }) { retired ->
             "Retired ${optionsOf(retired.optionA, retired.optionB)}: served to nobody until restored."
         }
     }
 
     /** Restores the retired question [questionId], and lists it as the server answered it. */
-    override fun restore(questionId: String) =
-        move(Action.RESTORE, questionId, send = { token -> restoreQuestion(token, questionId) }) { restored ->
-            "Restored ${optionsOf(restored.optionA, restored.optionB)}: served again."
-        }
+    override fun restore(
+        questionId: String,
+        from: Screen,
+    ) = move(Action.RESTORE, questionId, from, send = { token -> restoreQuestion(token, questionId) }) { restored ->
+        "Restored ${optionsOf(restored.optionA, restored.optionB)}: served again."
+    }
 
     /** Reads the categories, as an action of its own, starting the categories' outcomes afresh. */
     override fun loadCategories() =
@@ -367,6 +525,48 @@ class ModerationViewModel(
         }
     }
 
+    override fun setAccountToDelete(text: String) = _state.update { it.copy(accounts = it.accounts.copy(typed = text)) }
+
+    /**
+     * Asks the moderator to confirm deleting the account typed, a username or an id
+     * ([AccountDeletions.named]). Nothing is sent until [confirmDeleteAccount].
+     */
+    override fun askToDeleteAccount() {
+        val current = _state.value
+        val account = current.accounts.named ?: return
+        if (!current.canSend) return
+        _state.update { it.copy(deleting = account) }
+    }
+
+    override fun cancelDeleteAccount() = _state.update { it.copy(deleting = null) }
+
+    /**
+     * Deletes the account [askToDeleteAccount] asked about, for good, and says so; what was typed is
+     * cleared once it is deleted, unless typed over meanwhile. A failure, an account no player has
+     * among them, shows under the field until the next deletion.
+     */
+    override fun confirmDeleteAccount() {
+        val current = _state.value
+        val account = current.deleting ?: return
+        if (!current.canSend) return
+        val typed = current.accounts.typed
+        _state.update { it.copy(deleting = null) }
+        exclusively(Running(Action.DELETE_ACCOUNT)) { token ->
+            _state.update { it.copy(accounts = it.accounts.copy(failure = null)) }
+            val failure =
+                failureOf {
+                    deletePlayerAccount(token, account)
+                    val notice = "Deleted the account of ${accountLineOf(account)}. It cannot be undone."
+                    _state.update {
+                        val left = if (it.accounts.typed == typed) "" else it.accounts.typed
+                        val noticed = it.noticed(Screen.ACCOUNTS, notice)
+                        noticed.copy(accounts = noticed.accounts.copy(typed = left))
+                    }
+                }
+            if (failure != null) _state.update { it.copy(accounts = it.accounts.copy(failure = failure)) }
+        }
+    }
+
     /**
      * Sends a decision on [questionId] from [from], which answers with the line to show once it is
      * made, then reads the queue again, and the list if it was read, whatever became of it: a decision
@@ -392,28 +592,47 @@ class ModerationViewModel(
     }
 
     /**
-     * Retires or restores [questionId] through [send], which answers with the question as the list
-     * now shows it, puts that in the question's row, and says what was done in the line [noticeOf]
-     * makes of it. The server reads the answer as it reads a page's row, in the move's own
-     * transaction, so reading the list again would only spend the admin budget, a request per page
-     * shown. A move that failed reads the list again instead, whatever became of it: a question
-     * another moderator moved first answers `WRONG_STATUS`, and the list then shows where it stands.
-     * Not after a refusal every request would meet ([refusesEveryRequest]), which moved nothing.
+     * Retires or restores [questionId] from [from] through [send], which answers with the question as
+     * the list now shows it, puts that in the question's row wherever it is shown, the list of every
+     * question and the reported ones, and says what was done in the line [noticeOf] makes of it. The
+     * server reads the answer as it reads a page's row, in the move's own transaction, so reading
+     * again would only spend the admin budget, a request per page shown. A move that failed reads
+     * [from] again instead, whatever became of it: a question another moderator moved first answers
+     * `WRONG_STATUS`, and the screen then shows where it stands. Not after a refusal every request
+     * would meet ([refusesEveryRequest]), which moved nothing.
      */
     private fun move(
         action: Action,
         questionId: String,
+        from: Screen,
         send: suspend (AdminToken) -> ModeratedQuestion,
         noticeOf: (ModeratedQuestion) -> String,
-    ) = acting(Running(action, questionId), Screen.QUESTIONS) { token ->
+    ) = acting(Running(action, questionId), from) { token ->
         val failure =
             failureOf {
                 val moved = send(token)
-                _state.update { it.noticed(Screen.QUESTIONS, noticeOf(moved)).listing(moved) }
+                _state.update { it.noticed(from, noticeOf(moved)).listing(moved).reporting(moved) }
             }
         if (failure == null || failure.refusesEveryRequest) return@acting failure
-        rereadList(token)
+        when (from) {
+            Screen.REPORTS -> {
+                readReports(token)
+            }
+
+            Screen.QUESTIONS -> {
+                rereadList(token)
+            }
+
+            Screen.PENDING, Screen.CATEGORIES, Screen.ACCOUNTS -> {}
+        }
         failure
+    }
+
+    /** The reported questions with [question] in its row, as the server answered it, its reports as they were. */
+    private fun ModerationState.reporting(question: ModeratedQuestion): ModerationState {
+        val listed = reports.reports ?: return this
+        val rows = listed.map { row -> if (row.question.id == question.id) row.copy(question = question) else row }
+        return copy(reports = reports.copy(reports = rows))
     }
 
     /**
@@ -474,6 +693,16 @@ class ModerationViewModel(
                 _state.update { it.withCategories { list -> list.copy(categories = listed, failure = null) } }
             }
         if (failure != null) _state.update { it.copy(categories = it.categories.copy(failure = failure)) }
+    }
+
+    /** Reads the reported questions; a read that fails keeps what was listed and says why. */
+    private suspend fun readReports(token: AdminToken) {
+        val failure =
+            failureOf {
+                val reported = getReportedQuestions(token)
+                _state.update { it.copy(reports = it.reports.copy(reports = reported, failure = null)) }
+            }
+        if (failure != null) _state.update { it.copy(reports = it.reports.copy(failure = failure)) }
     }
 
     /** Reads the queue; a read that fails keeps what was listed and says why. */
@@ -583,7 +812,7 @@ class ModerationViewModel(
     private fun nameOf(questionId: String): String {
         val current = _state.value
         val submission = current.pending.submissions?.firstOrNull { it.id == questionId }
-        val question = current.questions.questions?.firstOrNull { it.id == questionId }
+        val question = current.shownOn(Screen.QUESTIONS, questionId) ?: current.shownOn(Screen.REPORTS, questionId)
         return submission?.let { optionsOf(it.optionA, it.optionB) }
             ?: question?.let { optionsOf(it.optionA, it.optionB) }
             ?: questionId
@@ -600,8 +829,10 @@ class ModerationViewModel(
     ): ModerationState =
         when (screen) {
             Screen.PENDING -> copy(pending = pending.copy(outcomes = change(pending.outcomes)))
+            Screen.REPORTS -> copy(reports = reports.copy(outcomes = change(reports.outcomes)))
             Screen.QUESTIONS -> copy(questions = questions.copy(outcomes = change(questions.outcomes)))
             Screen.CATEGORIES -> withCategories { it.copy(outcomes = change(it.outcomes)) }
+            Screen.ACCOUNTS -> copy(accounts = accounts.copy(outcomes = change(accounts.outcomes)))
         }
 
     private fun ModerationState.withCategories(change: (CategoryList) -> CategoryList): ModerationState =

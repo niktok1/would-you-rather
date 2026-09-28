@@ -20,4 +20,21 @@ class TemplatesTest {
     fun `a placeholder with no value is left as it is`() {
         assertEquals("Wait {0} s.", "Wait {0} s.".fill())
     }
+
+    /** Cut where its values go, so a screen can put a link where one is. */
+    @Test
+    fun `a template cuts into its text and the places of its values in order`() {
+        assertEquals(
+            listOf(
+                TemplatePart.Text("Регистрацијом прихваташ "),
+                TemplatePart.Value(0),
+                TemplatePart.Text(" и "),
+                TemplatePart.Value(1),
+                TemplatePart.Text("."),
+            ),
+            "Регистрацијом прихваташ {0} и {1}.".parts(),
+        )
+        assertEquals(listOf(TemplatePart.Value(1), TemplatePart.Value(0)), "{1}{0}".parts())
+        assertEquals(listOf(TemplatePart.Text("no values")), "no values".parts())
+    }
 }

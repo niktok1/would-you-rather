@@ -110,7 +110,7 @@ class StatsStoreTest {
     @Test
     fun `a submission committed while the stats are read shows in the points and the points spent or in neither`() {
         val author = newPlayer()
-        transaction(database) { PlayerStore.addPoints(author, points = Scoring.SUBMISSION_COST) }
+        transaction(database) { PlayerStore.addPoints(author, points = Scoring.DEFAULT_SUBMISSION_COST) }
         val elsewhere = Executors.newSingleThreadExecutor()
         try {
             val stats =
@@ -127,10 +127,10 @@ class StatsStoreTest {
                     StatsStore.of(author)
                 }
 
-            assertEquals(fresh(author).copy(totalPoints = Scoring.SUBMISSION_COST), stats, "all from before it")
+            assertEquals(fresh(author).copy(totalPoints = Scoring.DEFAULT_SUBMISSION_COST), stats, "all from before it")
             val spent = statsOf(author)
             assertEquals(0, spent?.totalPoints, "and it did land")
-            assertEquals(Scoring.SUBMISSION_COST, spent?.pointsSpent)
+            assertEquals(Scoring.DEFAULT_SUBMISSION_COST, spent?.pointsSpent)
         } finally {
             elsewhere.shutdownNow()
         }
@@ -140,7 +140,7 @@ class StatsStoreTest {
     fun `the points spent are what the questions not rejected cost and the total is what is left`() {
         val author = newPlayer()
         answer(author, pool.first())
-        transaction(database) { PlayerStore.addPoints(author, points = 2 * Scoring.SUBMISSION_COST) }
+        transaction(database) { PlayerStore.addPoints(author, points = 2 * Scoring.DEFAULT_SUBMISSION_COST) }
         val (_, approved, rejected) = Triple(submit(author), submit(author), submit(author))
         transaction(database) { ModerationStore.approve(approved, emptyList()) }
         like(newPlayer(), approved)
@@ -151,10 +151,10 @@ class StatsStoreTest {
 
         val stats = checkNotNull(statsOf(author))
 
-        assertEquals(2 * Scoring.SUBMISSION_COST, stats.pointsSpent, "the pending one and the retired one")
+        assertEquals(2 * Scoring.DEFAULT_SUBMISSION_COST, stats.pointsSpent, "the pending one and the retired one")
         assertEquals(
             stats.answersGiven * Scoring.POINTS_PER_ANSWER + stats.likesReceived * Scoring.POINTS_PER_LIKE -
-                stats.pointsSpent + 2 * Scoring.SUBMISSION_COST,
+                stats.pointsSpent + 2 * Scoring.DEFAULT_SUBMISSION_COST,
             stats.totalPoints,
             "what the answers and likes earned, less what was spent, besides the points given here",
         )

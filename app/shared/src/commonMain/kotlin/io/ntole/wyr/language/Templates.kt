@@ -17,5 +17,32 @@ fun String.fill(vararg values: Any): String =
         values.getOrNull(match.groupValues[1].toInt())?.toString() ?: match.value
     }
 
+/**
+ * This template cut at its placeholders: the text between them, and for each placeholder its index,
+ * in order, so a screen can put something other than a string where one is (a link, a coin).
+ */
+internal fun String.parts(): List<TemplatePart> {
+    val parts = mutableListOf<TemplatePart>()
+    var at = 0
+    PLACEHOLDER.findAll(this).forEach { match ->
+        if (match.range.first > at) parts += TemplatePart.Text(substring(at, match.range.first))
+        parts += TemplatePart.Value(match.groupValues[1].toInt())
+        at = match.range.last + 1
+    }
+    if (at < length) parts += TemplatePart.Text(substring(at))
+    return parts
+}
+
+/** A piece of a template ([parts]): text as it stands, or the place of the value at [Value.index]. */
+internal sealed interface TemplatePart {
+    data class Text(
+        val text: String,
+    ) : TemplatePart
+
+    data class Value(
+        val index: Int,
+    ) : TemplatePart
+}
+
 /** A template's placeholder, `{0}` to `{9}`. */
 internal val PLACEHOLDER = Regex("""\{(\d)\}""")

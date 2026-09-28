@@ -20,7 +20,11 @@ import platform.Foundation.NSBundle
 fun MainViewController() =
     ComposeUIViewController {
         if (KoinPlatform.getKoinOrNull() == null) {
-            initKoin(environmentName = bundledEnvironmentName(), analytics = bundledAnalyticsSettings())
+            initKoin(
+                environmentName = bundledEnvironmentName(),
+                analytics = bundledAnalyticsSettings(),
+                build = bundledBuildNumber(),
+            )
         }
         App()
     }
@@ -59,7 +63,21 @@ internal fun analyticsSettingsFrom(lookup: (String) -> Any?): AnalyticsSettings 
         appVersion = lookup(APP_VERSION_KEY)?.toString().orEmpty(),
     )
 
+/**
+ * The app's build number, `CFBundleVersion`, which Xcode makes from `CURRENT_PROJECT_VERSION` in
+ * `Config.xcconfig` (CLAUDE.md §8g, *The build number*), read from the main bundle by [buildNumberFrom].
+ */
+internal fun bundledBuildNumber(): Int? = buildNumberFrom { key -> NSBundle.mainBundle.objectForInfoDictionaryKey(key) }
+
+/**
+ * The build number [lookup] gives for `CFBundleVersion`, or null when it gives none that is a whole
+ * number, and the app's requests then name no build. Apart from the bundle, as [environmentNameFrom] is.
+ */
+internal fun buildNumberFrom(lookup: (String) -> Any?): Int? =
+    lookup(BUILD_NUMBER_KEY)?.toString()?.trim()?.toIntOrNull()
+
 private const val ENVIRONMENT_KEY = "WYR_ENV"
 private const val POSTHOG_KEY = "WYR_POSTHOG_KEY"
 private const val POSTHOG_HOST = "WYR_POSTHOG_HOST"
 private const val APP_VERSION_KEY = "CFBundleShortVersionString"
+private const val BUILD_NUMBER_KEY = "CFBundleVersion"

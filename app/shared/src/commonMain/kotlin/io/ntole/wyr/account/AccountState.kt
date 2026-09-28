@@ -21,10 +21,23 @@ data class AccountState(
     /** The player as last read: their username, null for a guest, and their stats. Null until read. */
     val stats: PlayerStats? = null,
     /**
+     * For a player registered by Play Games alone, who has no username, the name they go by in Play
+     * Games, as this device's Play Games gave it with [stats] (CLAUDE.md §8d, *The Account screen*):
+     * null for anyone else, and when the device's Play Games gave none.
+     */
+    val playGamesName: String? = null,
+    /**
      * The questions the player submitted, newest first, as last read: My questions. Null until a read
      * works, and again once another player plays here, whose list is theirs.
      */
     val submissions: List<Submission>? = null,
+    /**
+     * The player [stats] and [submissions] were read for, as the session named them when the read
+     * began: for the notice of a decision, which marks seen only a list of the player playing (CLAUDE.md
+     * §8d, *The notice of a decision*), and so that nothing of theirs stays shown once another player
+     * plays here. Null until a read.
+     */
+    val readFor: String? = null,
     val registerUsername: String = "",
     val registerPassword: String = "",
     val showRegisterPassword: Boolean = false,
@@ -53,8 +66,26 @@ data class AccountState(
      * later showing of the page.
      */
     val signedIn: Boolean = false,
+    /**
+     * The account was deleted, and the About screen, where it is deleted, has not gone back to the
+     * Account screen for it yet ([AccountActions.leftAfterDeletion]), which shows the fresh guest. The
+     * next action takes it down too.
+     */
+    val deleted: Boolean = false,
+    /**
+     * Whether this build has Google Play Games Services, so the Auth page offers to sign in with it
+     * (CLAUDE.md §8a, *Play Games sign-in*): an Android build that has it set up, and none elsewhere.
+     */
+    val playGamesAvailable: Boolean = false,
 ) {
     val isBusy: Boolean get() = running != null
+
+    /**
+     * Whether the About screen offers to delete the account: a player is read, and a read of them has
+     * not just failed, when the deletion, which needs the server as the read did, would only fail too.
+     */
+    val offersDeletion: Boolean
+        get() = stats != null && failure?.action != AccountAction.LOAD
 
     /** What the rules refuse in the username typed to register, or null while nothing is typed. */
     val usernameProblem: UsernameProblem?
@@ -77,9 +108,20 @@ data class AccountState(
     val canLogIn: Boolean
         get() = !isBusy && stats != null && loginUsername.isNotEmpty() && loginPassword.isNotEmpty()
 
-    /** The points a login would leave behind, for a guest who has any, or null. */
+    /**
+     * Whether the Auth page offers to sign in with Play Games: this build has it, and the player read is
+     * not linked to it yet.
+     */
+    val offersPlayGames: Boolean
+        get() = playGamesAvailable && stats?.playGamesLinked != true
+
+    /**
+     * The points a login would leave behind, for a guest who has any: nothing brings a guest back. Null
+     * otherwise, a player registered by Play Games alone included, whose points stay on their account,
+     * one tap away on this page.
+     */
     val pointsLeftBehindByLogIn: Int?
-        get() = stats?.takeIf { it.username == null && it.totalPoints > 0 }?.totalPoints
+        get() = stats?.takeIf { !it.registered && it.totalPoints > 0 }?.totalPoints
 }
 
 /** The Auth page's two forms (CLAUDE.md §8d, *The Account screen*). */
@@ -94,7 +136,13 @@ enum class AccountAction {
     LOAD,
     REGISTER,
     LOG_IN,
+
+    /** Signing in with Google Play Games Services, from the Auth page. */
+    PLAY_GAMES,
     LOG_OUT,
+
+    /** Deleting the account, for good (CLAUDE.md §8a, *Deleting an account*). */
+    DELETE,
 }
 
 /**

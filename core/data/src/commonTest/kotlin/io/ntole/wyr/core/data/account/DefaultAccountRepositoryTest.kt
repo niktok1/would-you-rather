@@ -175,6 +175,64 @@ class DefaultAccountRepositoryTest {
             assertEquals(emptyList(), server.logoutsSentAs)
         }
 
+    @Test
+    fun `a deletion tells the server and the next call plays as a fresh guest`() =
+        runTest {
+            val device = Device(storeHolding(null))
+            device.sessions.ensure()
+            device.accounts.register("bob_1", "correct horse")
+
+            device.accounts.deleteAccount()
+
+            assertEquals<List<String?>>(listOf("Bearer access-guest1"), server.deletionsSentAs)
+            assertNull(device.store.read())
+            val next = device.stats()
+            assertEquals("guest2", device.store.read()?.playerId)
+            assertNull(next.username, "a fresh guest, the account gone")
+            assertEquals(null, server.accounts["bob_1"])
+        }
+
+    /**
+     * An account deleted already, from another device or by an answer lost on the way, is a player the
+     * server no longer has: its 401, the refresh refused too, counts as deleted. Never recovered, whose
+     * retry would delete the fresh guest minted for it.
+     */
+    @Test
+    fun `a player the server no longer has counts as deleted and no guest is minted for it`() =
+        runTest {
+            // The server has never heard of "a".
+            val device = Device(storeHolding(session("a")))
+
+            device.accounts.deleteAccount()
+
+            assertEquals<List<String?>>(listOf("Bearer access-a"), server.deletionsSentAs, "sent once, as a")
+            assertEquals(1, server.refreshesSent)
+            assertEquals(0, server.guestsMinted)
+            assertNull(device.store.read())
+        }
+
+    @Test
+    fun `a deletion that fails forgets nothing`() =
+        runTest {
+            server.refuseDeletionsWith = HttpStatusCode.InternalServerError to ErrorCode.INTERNAL
+            val device = Device(storeHolding(null))
+            device.sessions.ensure()
+            val before = device.store.read()
+
+            val refused = assertFailsWith<WyrException> { device.accounts.deleteAccount() }
+
+            assertEquals(DomainError.SERVER, refused.error)
+            assertEquals(before, device.store.read())
+        }
+
+    @Test
+    fun `a deletion with no session sends nothing`() =
+        runTest {
+            Device(storeHolding(null)).accounts.deleteAccount()
+
+            assertEquals(emptyList(), server.deletionsSentAs)
+        }
+
     /** One installation of the app: its own store, over the one [server]. */
     private inner class Device(
         val store: SessionStore,

@@ -113,6 +113,44 @@ class NavigatorTest {
         assertEquals(listOf(Home, Play), navigator.screens)
     }
 
+    /** The screen each was opened from, which the Categories screen plays by (CLAUDE.md §8d, *Categories*). */
+    @Test
+    fun `the screen shown knows the one it was opened from`() {
+        assertEquals(null, Navigator().previous)
+        assertEquals(Home, navigatorAt(Categories).previous)
+        assertEquals(Play, navigatorAt(Play, Categories).previous)
+    }
+
+    /** Home's categories: Play in the Categories screen's place, so back from Play is Home. */
+    @Test
+    fun `Play replaces the categories opened from Home and back returns to Home`() {
+        val navigator = navigatorAt(Categories)
+
+        navigator.replace(Play)
+        assertEquals(listOf(Home, Play), navigator.screens)
+
+        assertTrue(navigator.back())
+        assertEquals(listOf(Home), navigator.screens)
+    }
+
+    @Test
+    fun `a screen replacing one goes back to itself when it is below`() {
+        val navigator = navigatorAt(Play, Categories)
+
+        navigator.replace(Play)
+
+        assertEquals(listOf(Home, Play), navigator.screens)
+    }
+
+    @Test
+    fun `replacing Home opens over it since Home never leaves the stack`() {
+        val navigator = Navigator()
+
+        navigator.replace(Play)
+
+        assertEquals(listOf(Home, Play), navigator.screens)
+    }
+
     /** No screen is on the stack twice, so no back ever shows the one it leaves. */
     @Test
     fun `a screen opened while it is on the stack is gone back to`() {
@@ -142,6 +180,8 @@ class NavigatorTest {
             listOf(Home, Play, Account, Submit),
             listOf(Home, Play, Account, Auth),
             listOf(Home, Play, Categories),
+            listOf(Home, Categories),
+            listOf(Home, Account, Screen.About),
         ).forEach { screens ->
             val saved = save(Navigator(screens))
 

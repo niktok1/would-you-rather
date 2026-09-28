@@ -1,14 +1,23 @@
 package io.ntole.wyr.account
 
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.ImageComposeScene
+import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.unit.Density
+import io.ntole.wyr.RecordingUris
+import io.ntole.wyr.about.Site
+import io.ntole.wyr.about.SitePage
 import io.ntole.wyr.assertInCentredColumn
 import io.ntole.wyr.core.domain.error.DomainError
 import io.ntole.wyr.core.domain.player.PlayerStats
 import io.ntole.wyr.descriptions
 import io.ntole.wyr.everyNode
 import io.ntole.wyr.everyText
+import io.ntole.wyr.language.GOOGLE_PLAY
 import io.ntole.wyr.language.Language
+import io.ntole.wyr.language.LocalStrings
 import io.ntole.wyr.language.WyrStrings
 import io.ntole.wyr.language.fill
 import io.ntole.wyr.language.stringsOf
@@ -63,6 +72,29 @@ class AuthScreenDrawTest {
         }
     }
 
+    /**
+     * Where Play Games is set up, its button is first on the page, over either form, and signs in with
+     * it; a player linked to it already, and a build without it, get none (CLAUDE.md §8a).
+     */
+    @Test
+    fun `where Play Games is set up its button signs in with it`() {
+        Language.entries.forEach { language ->
+            val signIn = stringsOf(language).playGames.signIn.fill(GOOGLE_PLAY)
+            listOf(AuthMode.REGISTER, AuthMode.LOG_IN).forEach { mode ->
+                val actions = Recorder()
+                val state = AccountState(stats = GUEST, authMode = mode, playGamesAvailable = true)
+                tapping(state, language, actions) { scene ->
+                    assertEquals(signIn, scene.everyText().first(), "$language, $mode: first on the page")
+                    scene.tap(signIn)
+                }
+                assertEquals(listOf("play games"), actions.calls, "$language, $mode")
+            }
+            val linked = AccountState(stats = GUEST.copy(playGamesLinked = true), playGamesAvailable = true)
+            assertFalse(signIn in textsOf(linked, language), "$language: linked already")
+            assertFalse(signIn in textsOf(AccountState(stats = GUEST), language), "$language: no Play Games")
+        }
+    }
+
     /** Register only: the two fields with their rules, the show toggle, the button and the link to Log in. */
     @Test
     fun `the page opens on the register form`() {
@@ -81,6 +113,76 @@ class AuthScreenDrawTest {
             ).forEach { text -> assertTrue(text in shown, "$language: \"$text\" is not in $shown") }
             assertFalse(strings.logIn in shown, "$language: $shown")
             assertFalse(strings.toRegister in shown, "$language: $shown")
+        }
+    }
+
+    /**
+     * Under Register, one short line: registering accepts the terms and the privacy policy, each noun a
+     * link to its page on the site in the language shown (CLAUDE.md §8d, *The Account screen*).
+     */
+    @Test
+    fun `the register form's line under its button links the terms and the privacy policy`() {
+        Language.entries.forEach { language ->
+            val strings = stringsOf(language).accountScreens
+            val line = strings.termsLine.line.fill(strings.termsLine.terms, strings.termsLine.privacyPolicy)
+            val uris = RecordingUris()
+            val scene = scene(AccountState(stats = GUEST), language, uris = uris)
+            try {
+                val shown = scene.everyText()
+                val register = shown.indexOf(strings.register)
+                assertEquals(register + 1, shown.indexOf(line), "$language: right under Register in $shown")
+
+                scene.links().forEach { tap -> tap() }
+            } finally {
+                scene.close()
+            }
+            assertEquals(
+                setOf(Site.url(SitePage.TERMS, language), Site.url(SitePage.PRIVACY, language)),
+                uris.opened.toSet(),
+                "$language",
+            )
+        }
+    }
+
+    /** A terms link nothing on the device opens, on a phone with no browser, does nothing. */
+    @Test
+    fun `a terms link nothing on the device opens does nothing`() {
+        val uris = RecordingUris(opens = false)
+        val scene = scene(AccountState(stats = GUEST), Language.DEFAULT, uris = uris)
+        try {
+            scene.links().forEach { tap -> tap() }
+        } finally {
+            scene.close()
+        }
+        assertEquals(2, uris.opened.size, "${uris.opened}")
+    }
+
+    /**
+     * A placeholder the terms line has no link for, which `StringsTest` keeps out of every language,
+     * shows as it stands rather than failing the page.
+     */
+    @Test
+    fun `a placeholder the terms line has no link for shows as it stands`() {
+        val strings = stringsOf(Language.DEFAULT)
+        val terms = strings.accountScreens.termsLine
+        val screens = strings.accountScreens.copy(termsLine = terms.copy(line = "{0} {1} {2}"))
+        val odd = strings.copy(accountScreens = screens)
+        val scene =
+            ImageComposeScene(width = WIDTH, height = HEIGHT, density = Density(1f)) {
+                CompositionLocalProvider(LocalUriHandler provides RecordingUris()) {
+                    WyrTheme {
+                        CompositionLocalProvider(LocalStrings provides odd) {
+                            AuthScreen(state = AccountState(stats = GUEST), actions = Recorder())
+                        }
+                    }
+                }
+            }
+        try {
+            scene.render()
+            val shown = scene.everyText()
+            assertTrue("${terms.terms} ${terms.privacyPolicy} {2}" in shown, "$shown")
+        } finally {
+            scene.close()
         }
     }
 
@@ -264,10 +366,24 @@ class AuthScreenDrawTest {
         dark: Boolean = false,
         width: Int = WIDTH,
         height: Int = HEIGHT,
+        uris: RecordingUris = RecordingUris(),
     ): ImageComposeScene =
         ImageComposeScene(width = width, height = height, density = Density(1f)) {
-            WyrTheme(darkTheme = dark) { WyrStrings(language) { AuthScreen(state = state, actions = actions) } }
+            // The page's links open through the test's own handler, never the machine's browser.
+            CompositionLocalProvider(LocalUriHandler provides uris) {
+                WyrTheme(darkTheme = dark) { WyrStrings(language) { AuthScreen(state = state, actions = actions) } }
+            }
         }.also { it.render() }
+
+    /**
+     * The taps of every link in a text the scene lays out, in order: a link has no text of its own in
+     * the semantics, only a click, and Compose's own marker of a link.
+     */
+    private fun ImageComposeScene.links(): List<() -> Boolean> =
+        everyNode()
+            .filter { node -> node.config.any { (key, _) -> key.name == "LinkTestMarker" } }
+            .mapNotNull { it.config.getOrNull(SemanticsActions.OnClick)?.action }
+            .also { assertEquals(2, it.size, "the terms and the privacy policy") }
 
     /** What the page asked for, in order. */
     private class Recorder : AccountActions {
@@ -316,6 +432,14 @@ class AuthScreenDrawTest {
         override fun logOut() {
             calls += "log out"
         }
+
+        override fun signInWithPlayGames() {
+            calls += "play games"
+        }
+
+        override fun deleteAccount() {
+            calls += "delete account"
+        }
     }
 
     private companion object {
@@ -336,6 +460,31 @@ class AuthScreenDrawTest {
         val GUEST = PlayerStats(totalPoints = 12, questionsAnswered = 10)
 
         val READ_FAILED = AccountFailure(AccountAction.LOAD, DomainError.NETWORK)
+
+        /** Where Play Games is set up: its button above each form, and its failure under it. */
+        val PLAY_GAMES_STATES =
+            listOf(
+                AccountState(stats = GUEST, playGamesAvailable = true),
+                AccountState(failure = READ_FAILED, playGamesAvailable = true),
+                AccountState(
+                    stats = GUEST,
+                    registerUsername = "a b",
+                    registerPassword = "short",
+                    showRegisterPassword = true,
+                    failure = AccountFailure(AccountAction.PLAY_GAMES, DomainError.PLAY_GAMES_UNAVAILABLE),
+                    playGamesAvailable = true,
+                ),
+                AccountState(
+                    stats = GUEST,
+                    authMode = AuthMode.LOG_IN,
+                    loginUsername = "bob_1",
+                    loginPassword = "correct horse",
+                    guestPointsWarning = 123_456,
+                    failure = AccountFailure(AccountAction.LOG_IN, DomainError.RATE_LIMITED, 42.seconds),
+                    running = AccountAction.PLAY_GAMES,
+                    playGamesAvailable = true,
+                ),
+            )
 
         val STATES =
             listOf(
@@ -386,6 +535,6 @@ class AuthScreenDrawTest {
                     failure = AccountFailure(AccountAction.LOG_IN, DomainError.RATE_LIMITED, 42.seconds),
                     running = AccountAction.LOG_IN,
                 ),
-            )
+            ) + PLAY_GAMES_STATES
     }
 }

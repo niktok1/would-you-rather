@@ -47,6 +47,20 @@ class FailureTest {
     }
 
     @Test
+    fun `a 404 naming the author says there is no such author`() {
+        assertTrue(
+            "No such author on this server (404)" in describe(Failure.Refused(DomainError.AUTHOR_NOT_FOUND)),
+        )
+    }
+
+    @Test
+    fun `a 404 naming the account says there is no such account`() {
+        assertTrue(
+            "No such account on this server (404)" in describe(Failure.Refused(DomainError.PLAYER_NOT_FOUND)),
+        )
+    }
+
+    @Test
     fun `a 429 says how long to wait when the server named it`() {
         val named = describe(Failure.Refused(DomainError.RATE_LIMITED, retryAfter = 42.seconds))
         val unnamed = describe(Failure.Refused(DomainError.RATE_LIMITED))

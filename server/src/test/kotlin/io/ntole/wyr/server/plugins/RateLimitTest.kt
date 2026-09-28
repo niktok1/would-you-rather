@@ -29,6 +29,7 @@ import io.ntole.wyr.core.category.RenameCategoryRequest
 import io.ntole.wyr.core.error.ErrorCode
 import io.ntole.wyr.core.error.ErrorDto
 import io.ntole.wyr.core.home.HomePickRequest
+import io.ntole.wyr.core.player.DeleteAccountRequest
 import io.ntole.wyr.core.player.PlayerStatsDto
 import io.ntole.wyr.core.push.PushPlatform
 import io.ntole.wyr.core.push.PushTokenRequest
@@ -48,6 +49,7 @@ import io.ntole.wyr.core.report.HideAuthorRequest
 import io.ntole.wyr.core.report.HideQuestionRequest
 import io.ntole.wyr.core.report.ReportReason
 import io.ntole.wyr.core.report.ReportRequest
+import io.ntole.wyr.core.shop.PurchaseRequest
 import io.ntole.wyr.core.vote.OptionSide
 import io.ntole.wyr.core.vote.VoteRequest
 import io.ntole.wyr.server.NO_PRACTICAL_LIMIT
@@ -558,6 +560,18 @@ class RateLimitTest {
                     ) { json(caller.player, RemovePushTokenRequest("token")) }
                 }
             },
+            Group("shop", { copy(shop = it) }) { caller ->
+                caller.client.get(WyrApi.Paths.SHOP) { bearerAuth(caller.player.accessToken) }
+            },
+            // A registered player with no points, so every one is refused alike, 409, and buys nothing.
+            Group(
+                "purchases",
+                { copy(purchases = it) },
+                allowed = HttpStatusCode.Conflict,
+                needsAccount = true,
+            ) { caller ->
+                caller.client.post(WyrApi.Paths.MY_PURCHASES) { json(caller.player, PurchaseRequest("OCEAN")) }
+            },
             Group("admin", { copy(admin = it) }, needsSession = false) { caller ->
                 caller.client.queue(ADMIN_TOKEN)
             },
@@ -681,6 +695,11 @@ class RateLimitTest {
                 },
                 AdminRoute("an author's unblock", HttpStatusCode.NotFound) { client, token ->
                     client.post(WyrApi.Paths.ADMIN_AUTHOR_UNBLOCKS) { admin(token, UnblockAuthorRequest(NO_AUTHOR)) }
+                },
+                AdminRoute("an account's deletion", HttpStatusCode.NotFound) { client, token ->
+                    client.post(WyrApi.Paths.ADMIN_ACCOUNT_DELETIONS) {
+                        admin(token, DeleteAccountRequest(accountId = NO_AUTHOR))
+                    }
                 },
             )
         val ADMIN_ROUTE_BUDGET = RequestBudget(requests = ADMIN_ROUTES.size, per = 1.minutes)

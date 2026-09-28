@@ -2,27 +2,37 @@ package io.ntole.wyr.navigation
 
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.ImageComposeScene
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.graphics.toComposeImageBitmap
+import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.unit.Density
 import io.ntole.wyr.descriptions
 import io.ntole.wyr.language.Language
 import io.ntole.wyr.language.LocalStrings
 import io.ntole.wyr.language.Strings
 import io.ntole.wyr.language.WyrStrings
+import io.ntole.wyr.language.fill
 import io.ntole.wyr.language.stringsOf
+import io.ntole.wyr.nodes
 import io.ntole.wyr.play.CategoriesPlayed
+import io.ntole.wyr.play.QuestionMenu
 import io.ntole.wyr.sizeNeeded
 import io.ntole.wyr.tap
 import io.ntole.wyr.texts
+import io.ntole.wyr.theme.WyrDarkColors
 import io.ntole.wyr.theme.WyrDefaultDimens
+import io.ntole.wyr.theme.WyrLightColors
 import io.ntole.wyr.theme.WyrTheme
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 /**
- * The top bars above the Play, Account, Auth, Submit and Categories screens (CLAUDE.md §8d,
+ * The top bars above the Play, Account, Auth, Submit, Categories and About screens (CLAUDE.md §8d,
  * *Navigation*), drawn off screen at a short phone's width, in each theme and each language, and read
- * through their semantics. Home's is drawn with the Home screen (`HomeScreenDrawTest`).
+ * through their semantics. Home's is drawn with the Home screen (`HomeScreenDrawTest`), and here with
+ * the dot of a decision not seen yet, as Play's is.
  */
 class TopBarsDrawTest {
     @Test
@@ -99,6 +109,71 @@ class TopBarsDrawTest {
         }
     }
 
+    /**
+     * The notice's dot is drawn inside the account icon's touch target, 48 square, on Home's bar, in
+     * both themes, and nowhere else on the bar: a bar with no news draws none, Play's among them, which
+     * has no account icon.
+     */
+    @Test
+    fun `the dot is drawn inside the account icon's touch target and only with news`() {
+        listOf(WyrLightColors, WyrDarkColors).forEach { colors ->
+            BARS.forEach { bar ->
+                val strings = stringsOf(Language.DEFAULT)
+                val dotted = strings.notice.accountWithNews.fill(strings.account)
+                val scene = scene(bar, Language.DEFAULT, dark = colors.isDark)
+                try {
+                    val pixels = scene.render().toComposeImageBitmap().toPixelMap()
+                    val dot =
+                        (0 until pixels.height).flatMap { y ->
+                            (0 until pixels.width)
+                                .filter { x -> pixels[x, y].toArgb() == colors.optionA.toArgb() }
+                                .map { x -> Offset(x.toFloat(), y.toFloat()) }
+                        }
+                    val name = "${bar.name}, dark: ${colors.isDark}"
+                    if (dotted !in bar.icons(strings)) {
+                        assertEquals(emptyList(), dot, "$name: no dot")
+                    } else {
+                        assertTrue(dot.isNotEmpty(), "$name: no dot drawn")
+                        val icon = scene.nodes().single { dotted in it.descriptions }.boundsInRoot
+                        // The icon button's bounds are 40 square inside its touch target of 48.
+                        val target = icon.inflate((TOUCH_TARGET - icon.width) / 2)
+                        assertEquals(TOUCH_TARGET.toFloat(), target.width, name)
+                        assertTrue(dot.all { target.contains(it) }, "$name: a dot outside $target")
+                    }
+                } finally {
+                    scene.close()
+                }
+            }
+        }
+    }
+
+    /**
+     * Play's bar is one icon on each side, home and the question's menu, so the categories played stand
+     * in its exact middle, in both themes and every language, whether they fit or are cut short in the
+     * width the two icons leave them (CLAUDE.md §8d, *The Play screen*).
+     */
+    @Test
+    fun `the categories played stand in the exact middle of Play's bar`() {
+        val bars = BARS.filter { it.name.startsWith("Play's") }
+        assertEquals(2, bars.size)
+        bars.forEach { bar ->
+            listOf(false, true).forEach { dark ->
+                Language.entries.forEach { language ->
+                    val scene = scene(bar, language, dark)
+                    try {
+                        val text = bar.texts(stringsOf(language)).single()
+                        val categories = scene.nodes().single { text in it.texts }.boundsInRoot
+                        val name = "${bar.name} in $language, dark: $dark"
+                        assertEquals(SHORT_PHONE_WIDTH / 2f, categories.center.x, HALF_PIXEL, name)
+                        assertTrue(categories.left >= 0f && categories.right <= SHORT_PHONE_WIDTH, name)
+                    } finally {
+                        scene.close()
+                    }
+                }
+            }
+        }
+    }
+
     /** What the bars' buttons were tapped for, in order. */
     private class Actions {
         val tapped = mutableListOf<String>()
@@ -138,18 +213,28 @@ class TopBarsDrawTest {
 
         val TOP_BAR_HEIGHT = WyrDefaultDimens.topBarHeight.value.toInt()
 
+        /** How far off the bar's middle the categories may stand: the rounding of a layout to pixels. */
+        const val HALF_PIXEL = 0.5f
+
+        /** An icon button's touch target, as Material sets it. */
+        const val TOUCH_TARGET = 48
+
         /** The server's first five categories, every one played, as the Play screen names them in Cyrillic. */
         const val LONG_SELECTION = "Храна, Начин живота, Етика, Супермоћи, Апсурдно"
 
         val BARS =
             listOf(
+                // Home, the categories and the question's menu, whose tap only opens it: no account icon.
                 Bar(
                     name = "Play's",
-                    icons = { listOf(it.home, it.account) },
+                    icons = { listOf(it.home, it.playScreen.menu.name) },
                     texts = { listOf(it.allCategories) },
-                    taps = listOf("home", "account", "categories"),
+                    taps = listOf("home", "categories"),
                     draw = { actions ->
-                        PlayTopBar(onHome = actions.record("home"), onAccount = actions.record("account")) {
+                        PlayTopBar(
+                            onHome = actions.record("home"),
+                            menu = { QuestionMenu(enabled = true, onPick = { actions.tapped += "pick $it" }) },
+                        ) {
                             CategoriesPlayed(
                                 text = LocalStrings.current.allCategories,
                                 enabled = true,
@@ -162,12 +247,15 @@ class TopBarsDrawTest {
                 // never the icons, and never a second line.
                 Bar(
                     name = "Play's, with a long selection",
-                    icons = { listOf(it.home, it.account) },
+                    icons = { listOf(it.home, it.playScreen.menu.name) },
                     texts = { listOf(LONG_SELECTION) },
-                    taps = listOf("home", "account", "categories"),
+                    taps = listOf("home", "categories"),
                     cutShort = true,
                     draw = { actions ->
-                        PlayTopBar(onHome = actions.record("home"), onAccount = actions.record("account")) {
+                        PlayTopBar(
+                            onHome = actions.record("home"),
+                            menu = { QuestionMenu(enabled = true, onPick = { actions.tapped += "pick $it" }) },
+                        ) {
                             CategoriesPlayed(
                                 text = LONG_SELECTION,
                                 enabled = true,
@@ -177,7 +265,27 @@ class TopBarsDrawTest {
                     },
                 ),
                 Bar(
-                    name = "Account's, the Auth page's, Submit's and the Categories screen's",
+                    name = "Home's, with news",
+                    icons = { listOf(it.notice.accountWithNews.fill(it.account)) },
+                    texts = { emptyList() },
+                    taps = listOf("account"),
+                    draw = { HomeTopBar(onAccount = it.record("account"), news = true) },
+                ),
+                Bar(
+                    name = "Account's",
+                    icons = { listOf(it.back, it.shopScreen.title, it.aboutScreen.title) },
+                    texts = { emptyList() },
+                    taps = listOf("back", "shop", "about"),
+                    draw = {
+                        AccountTopBar(
+                            onBack = it.record("back"),
+                            onAbout = it.record("about"),
+                            onShop = it.record("shop"),
+                        )
+                    },
+                ),
+                Bar(
+                    name = "the Auth page's, Submit's, the Categories screen's and the About screen's",
                     icons = { listOf(it.back) },
                     texts = { emptyList() },
                     taps = listOf("back"),

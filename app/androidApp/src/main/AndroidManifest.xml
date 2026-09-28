@@ -3,6 +3,9 @@
     xmlns:tools="http://schemas.android.com/tools">
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- A moderator's decision is a notification (CLAUDE.md §8a, Push tokens): asked for on Android 13
+         and later once, right after the player's first question is sent. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <application
         android:name=".WyrApplication"
@@ -13,7 +16,7 @@
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
-        android:theme="@android:style/Theme.Material.Light.NoActionBar"
+        android:theme="@style/Theme.Wyr"
         android:usesCleartextTraffic="${usesCleartextTraffic}"
         tools:targetApi="31">
         <activity
@@ -25,6 +28,53 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- A shared question's image (CLAUDE.md §8d, Sharing), which :app:shared writes to the cache and hands
+             to the app the player picks through this provider, readable only by that app. -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.share"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/share_paths" />
+        </provider>
+
+        <!-- Google Play Games Services' project (CLAUDE.md §8a, Play Games sign-in): empty on a build
+             without its id, where nothing starts Play Games. Its SDK would start itself through its
+             provider, whatever the build: the app starts it instead, and only with its ids
+             (androidDeviceServices, from WyrApplication). -->
+        <meta-data
+            android:name="com.google.android.gms.games.APP_ID"
+            android:value="@string/game_services_project_id" />
+        <provider
+            android:name="com.google.android.gms.games.provider.PlayGamesInitProvider"
+            android:authorities="${applicationId}.playgamesinitprovider"
+            tools:node="remove" />
+
+        <!-- Firebase Cloud Messaging (CLAUDE.md §8a, Push tokens), started by the app from the build's
+             ids, and only with them: its own provider, which starts it from a google-services.json's
+             resources, is taken out. A push that arrives with the app in the background is posted on
+             the decisions channel with the game's own icon; one with the app open reaches the service,
+             which posts nothing. -->
+        <provider
+            android:name="com.google.firebase.provider.FirebaseInitProvider"
+            android:authorities="${applicationId}.firebaseinitprovider"
+            tools:node="remove" />
+        <service
+            android:name="io.ntole.wyr.services.WyrMessagingService"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.google.firebase.MESSAGING_EVENT" />
+            </intent-filter>
+        </service>
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_channel_id"
+            android:value="decisions" />
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_icon"
+            android:resource="@drawable/ic_notification" />
     </application>
 
 </manifest>

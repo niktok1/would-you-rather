@@ -12,6 +12,7 @@ import io.ntole.wyr.core.domain.error.WyrException
 import io.ntole.wyr.core.domain.player.GetPlayerStats
 import io.ntole.wyr.core.domain.player.PlayerRepository
 import io.ntole.wyr.core.domain.player.PlayerStats
+import io.ntole.wyr.core.domain.push.DevicePush
 import io.ntole.wyr.core.domain.session.SessionRepository
 import io.ntole.wyr.core.domain.submission.OptionProblem
 import io.ntole.wyr.core.domain.submission.Submission
@@ -47,6 +48,7 @@ class SubmitViewModelTest {
     private val analytics = RecordingAnalytics()
     private val server = FakeServer()
     private val categories = FakeCategoryRepository()
+    private val push = AskingPush()
 
     @BeforeTest
     fun setUp() {
@@ -132,10 +134,33 @@ class SubmitViewModelTest {
             assertFalse(state.isBusy)
         }
 
+    /** Until the server has named its cost, the form holds the points to the default, 1. */
     @Test
-    fun `a question costs the points the client keeps and no more`() {
+    fun `a question costs the default until the server names its cost`() {
         assertEquals(1, SubmissionRules.SUBMISSION_COST)
+        assertEquals(SubmissionRules.SUBMISSION_COST, viewModel().state.value.submissionCost)
     }
+
+    /** The cost is the server's (CLAUDE.md §8c), read with the points each time the form is shown. */
+    @Test
+    fun `the form shows and checks the cost the server names`() =
+        runTest(dispatcher) {
+            server.cost = 50
+            server.points = 49
+            val viewModel = open()
+            viewModel.write("Fly", "Swim", "FOOD")
+
+            assertEquals(50, viewModel.state.value.submissionCost)
+            assertTrue(viewModel.state.value.tooFewPoints)
+            assertFalse(viewModel.state.value.canSubmit)
+
+            server.points = 50
+            viewModel.refresh()
+            testScheduler.advanceUntilIdle()
+
+            assertFalse(viewModel.state.value.tooFewPoints)
+            assertTrue(viewModel.state.value.canSubmit)
+        }
 
     @Test
     fun `a player with the cost can send and one with fewer points cannot`() =
@@ -300,6 +325,29 @@ class SubmitViewModelTest {
             assertEquals("Fly", server.stored.single().optionA)
         }
 
+    /**
+     * The least obstructive moment to ask for notifications, which tell of a decision: right after a
+     * question is stored, the platform asking once, ever (CLAUDE.md §8a, *Push tokens*). Not before,
+     * nor after a refusal.
+     */
+    @Test
+    fun `a stored question asks for notifications and a refused one does not`() =
+        runTest(dispatcher) {
+            val viewModel = open()
+            assertEquals(0, push.asked)
+
+            server.submitFailsWith = WyrException(DomainError.SUBMISSION_LIMIT, "twenty pending")
+            viewModel.write("Fly", "Swim", "FOOD")
+            viewModel.submit()
+            testScheduler.advanceUntilIdle()
+            assertEquals(0, push.asked, "a refusal asks nothing")
+
+            server.submitFailsWith = null
+            viewModel.submit()
+            testScheduler.advanceUntilIdle()
+            assertEquals(1, push.asked)
+        }
+
     @Test
     fun `a stored question is sent until the form goes back for it`() =
         runTest(dispatcher) {
@@ -383,6 +431,32 @@ class SubmitViewModelTest {
             viewModel.submit()
             testScheduler.advanceUntilIdle()
             assertEquals(emptyList(), server.calls, "nothing sent")
+        }
+
+    /**
+     * Play Games registers a player as a username does (CLAUDE.md §8a, *Play Games sign-in*), and such a
+     * player pays the cost the server names, as any other (§8c).
+     */
+    @Test
+    fun `a player registered by Play Games alone may send at the server's cost`() =
+        runTest(dispatcher) {
+            server.username = null
+            server.playGamesLinked = true
+            server.cost = 50
+            server.points = 60
+            val viewModel = open()
+            viewModel.write("Fly", "Swim", "FOOD")
+
+            val state = viewModel.state.value
+            assertEquals(true, state.registered)
+            assertFalse(state.isGuest)
+            assertEquals(50, state.submissionCost)
+            assertTrue(state.canSubmit)
+
+            viewModel.submit()
+            testScheduler.advanceUntilIdle()
+
+            assertEquals(10, viewModel.state.value.points, "the server's cost taken, the points read again")
         }
 
     @Test
@@ -674,6 +748,7 @@ class SubmitViewModelTest {
             getCategories = GetCategories(categories),
             categoryList = categories,
             analytics = analytics,
+            devicePush = push,
         )
 
     /** Types both options and picks exactly [categories]. */
@@ -691,7 +766,7 @@ class SubmitViewModelTest {
     /**
      * The server and this device's session in one. Every call that reaches it is in [calls], a
      * submission with its options quoted as sent and its categories in id order. A question stored
-     * costs [SubmissionRules.SUBMISSION_COST], as the server takes it.
+     * costs [cost], as the server takes it and names it with the stats.
      */
     private class FakeServer :
         SubmissionRepository,
@@ -700,9 +775,11 @@ class SubmitViewModelTest {
         val calls = mutableListOf<String>()
         val stored = mutableListOf<Submission>()
         var points = 5
+        var cost = SubmissionRules.SUBMISSION_COST
 
         /** The player's username, a registered player's unless a test makes them a guest. */
         var username: String? = "bob"
+        var playGamesLinked = false
         var statsFailWith: DomainError? = null
         var submitFailsWith: WyrException? = null
 
@@ -732,7 +809,7 @@ class SubmitViewModelTest {
                     rejectionReason = null,
                     submittedAt = Instant.fromEpochMilliseconds(1_790_000_000_010L),
                 )
-            points -= SubmissionRules.SUBMISSION_COST
+            points -= cost
             stored += submission
             return submission
         }
@@ -742,7 +819,22 @@ class SubmitViewModelTest {
         override suspend fun stats(): PlayerStats {
             calls += "stats"
             statsFailWith?.let { throw WyrException(it) }
-            return PlayerStats(totalPoints = points, questionsAnswered = 0, username = username)
+            return PlayerStats(
+                totalPoints = points,
+                questionsAnswered = 0,
+                username = username,
+                playGamesLinked = playGamesLinked,
+                submissionCost = cost,
+            )
+        }
+    }
+
+    /** Pushes that count how often the form asked for notifications. */
+    private class AskingPush : DevicePush by DevicePush.None {
+        var asked = 0
+
+        override fun askPermissionOnce() {
+            asked++
         }
     }
 

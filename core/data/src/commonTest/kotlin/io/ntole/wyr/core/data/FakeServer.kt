@@ -15,6 +15,7 @@ import io.ktor.http.headersOf
 import io.ntole.wyr.core.api.WyrApi
 import io.ntole.wyr.core.auth.AccountDto
 import io.ntole.wyr.core.auth.LoginRequest
+import io.ntole.wyr.core.auth.PlayGamesSignInRequest
 import io.ntole.wyr.core.auth.RefreshRequest
 import io.ntole.wyr.core.auth.RegisterRequest
 import io.ntole.wyr.core.auth.SessionDto
@@ -24,6 +25,7 @@ import io.ntole.wyr.core.error.ErrorCode
 import io.ntole.wyr.core.error.ErrorDto
 import io.ntole.wyr.core.network.WyrJson
 import io.ntole.wyr.core.player.PlayerStatsDto
+import io.ntole.wyr.core.push.PushTokenRequest
 import io.ntole.wyr.core.question.QuestionDto
 import io.ntole.wyr.core.question.QuestionPageDto
 import io.ntole.wyr.core.question.QuestionStatus
@@ -78,6 +80,9 @@ internal class FakeServer {
     /** The attempt id of every vote, in arrival order. */
     val voteAttempts = mutableListOf<String>()
 
+    /** How long each vote's answer took, as sent, in arrival order. */
+    val voteAnswerMillis = mutableListOf<Long?>()
+
     /** The `Authorization` header of every feed request, in arrival order. */
     val feedsSentAs = mutableListOf<String?>()
 
@@ -125,6 +130,33 @@ internal class FakeServer {
 
     /** When set, every logout is refused with this status and code, whoever sends it. */
     var refuseLogoutsWith: Pair<HttpStatusCode, ErrorCode>? = null
+
+    /**
+     * The Play Games player each server auth code names, as Google would answer: a code not here is one
+     * Google refuses. Each works once, as Google's do.
+     */
+    val playGamesCodes = mutableMapOf<String, String>()
+
+    /** The player each Play Games player is linked to, by the Play Games player's id. */
+    val playGamesLinks = mutableMapOf<String, String>()
+
+    /** The `Authorization` header and code of every Play Games sign-in, in arrival order. */
+    val playGamesSentAs = mutableListOf<Pair<String?, String>>()
+
+    /** When set, every Play Games sign-in is refused with this status and code, whoever sends it. */
+    var refusePlayGamesWith: Pair<HttpStatusCode, ErrorCode>? = null
+
+    /** Run as a Play Games sign-in has asked Google and before it answers: a login meanwhile, say. */
+    var whilePlayGamesExchanges: suspend () -> Unit = {}
+
+    /** The `Authorization` header and body of every push token registration, in arrival order. */
+    val pushTokensSentAs = mutableListOf<Pair<String?, PushTokenRequest>>()
+
+    /** The `Authorization` header of every account deletion, in arrival order. */
+    val deletionsSentAs = mutableListOf<String?>()
+
+    /** When set, every account deletion is refused with this status and code, and deletes nothing. */
+    var refuseDeletionsWith: Pair<HttpStatusCode, ErrorCode>? = null
 
     /** What a read of the categories answers, whoever sends it: [CATEGORIES] unless a test says otherwise. */
     var categories: CategoryListDto = CATEGORIES
@@ -184,8 +216,9 @@ internal class FakeServer {
             WyrApi.Paths.VOTES -> {
                 val authorization = request.headers[HttpHeaders.Authorization]
                 votesSentAs += authorization
-                voteAttempts +=
-                    WyrJson.decodeFromString<VoteRequest>(request.body.toByteArray().decodeToString()).attemptId
+                val vote = WyrJson.decodeFromString<VoteRequest>(request.body.toByteArray().decodeToString())
+                voteAttempts += vote.attemptId
+                voteAnswerMillis += vote.answerMillis
                 val player = authorization?.removePrefix("Bearer access-")
                 val refusal = refuseVotesWith
                 when {
@@ -238,6 +271,22 @@ internal class FakeServer {
                 }
             }
 
+            WyrApi.Paths.AUTH_PLAY_GAMES -> {
+                playGames(request)
+            }
+
+            WyrApi.Paths.MY_PUSH_TOKENS -> {
+                val authorization = request.headers[HttpHeaders.Authorization]
+                pushTokensSentAs +=
+                    authorization to
+                    WyrJson.decodeFromString<PushTokenRequest>(request.body.toByteArray().decodeToString())
+                if (authorization?.removePrefix("Bearer access-") in players) {
+                    respond("", HttpStatusCode.NoContent)
+                } else {
+                    respondErrorDto(HttpStatusCode.Unauthorized, ErrorCode.UNAUTHORIZED)
+                }
+            }
+
             WyrApi.Paths.AUTH_LOGOUT -> {
                 val authorization = request.headers[HttpHeaders.Authorization]
                 logoutsSentAs += authorization
@@ -250,13 +299,44 @@ internal class FakeServer {
                 }
             }
 
+            WyrApi.Paths.ME_DELETION -> {
+                val authorization = request.headers[HttpHeaders.Authorization]
+                deletionsSentAs += authorization
+                val player = authorization?.removePrefix("Bearer access-")
+                val refusal = refuseDeletionsWith
+                when {
+                    refusal != null -> {
+                        respondErrorDto(refusal.first, refusal.second)
+                    }
+
+                    player == null || player !in players -> {
+                        respondErrorDto(HttpStatusCode.Unauthorized, ErrorCode.UNAUTHORIZED)
+                    }
+
+                    else -> {
+                        // Gone for good, every session with it: a refresh of theirs is refused from now on.
+                        // Their Play Games link goes too, as the server's foreign key cascades it.
+                        players -= player
+                        liveRefreshTokens.values.removeAll { it == player }
+                        accounts.values.removeAll { it.second == player }
+                        playGamesLinks.values.removeAll { it == player }
+                        respond("", HttpStatusCode.NoContent)
+                    }
+                }
+            }
+
             WyrApi.Paths.ME -> {
                 val authorization = request.headers[HttpHeaders.Authorization]
                 statsSentAs += authorization
                 val player = authorization?.removePrefix("Bearer access-")
                 if (player != null && player in players) {
                     val username = accounts.entries.firstOrNull { it.value.second == player }?.key
-                    respondJson(WyrJson.encodeToString(STATS.copy(playerId = player, username = username)))
+                    val linked = player in playGamesLinks.values
+                    respondJson(
+                        WyrJson.encodeToString(
+                            STATS.copy(playerId = player, username = username, playGamesLinked = linked),
+                        ),
+                    )
                 } else {
                     respondErrorDto(HttpStatusCode.Unauthorized, ErrorCode.UNAUTHORIZED)
                 }
@@ -323,6 +403,33 @@ internal class FakeServer {
                 respondJson(WyrJson.encodeToString(AccountDto(username)))
             }
         }
+    }
+
+    /**
+     * A Play Games sign-in, as the server's: a bearer it does not know is 401 before the code is spent;
+     * a code Google refuses is 422; a Play Games player linked already signs in as its player, and one
+     * linked to nobody is linked to the bearer's player, or to one minted for it. A new session either
+     * way.
+     */
+    private suspend fun MockRequestHandleScope.playGames(request: HttpRequestData): HttpResponseData {
+        val authorization = request.headers[HttpHeaders.Authorization]
+        val code = WyrJson.decodeFromString<PlayGamesSignInRequest>(request.body.toByteArray().decodeToString())
+        playGamesSentAs += authorization to code.serverAuthCode
+        val caller = authorization?.removePrefix("Bearer access-")
+        val refusal = refusePlayGamesWith
+        if (refusal != null) return respondErrorDto(refusal.first, refusal.second)
+        if (caller != null && caller !in players) {
+            return respondErrorDto(HttpStatusCode.Unauthorized, ErrorCode.UNAUTHORIZED)
+        }
+        val gamesPlayer =
+            playGamesCodes.remove(code.serverAuthCode)
+                ?: return respondErrorDto(HttpStatusCode.UnprocessableEntity, ErrorCode.PLAY_GAMES_CODE_REFUSED)
+        whilePlayGamesExchanges()
+        val player =
+            playGamesLinks.getOrPut(gamesPlayer) {
+                caller?.takeUnless { it in playGamesLinks.values } ?: "games-$gamesPlayer"
+            }
+        return issueSession(player)
     }
 
     /** Stores nothing: answers a known player's submission as pending, exactly as it was sent. */

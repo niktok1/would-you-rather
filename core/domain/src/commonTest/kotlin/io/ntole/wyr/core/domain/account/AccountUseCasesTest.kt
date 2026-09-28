@@ -118,11 +118,31 @@ class AccountUseCasesTest {
             assertEquals(listOf("logOut", "reset", "analytics reset"), calls)
         }
 
+    /** Gone, then the queue it filled and who the analytics thought played (CLAUDE.md §8g). */
+    @Test
+    fun `a deletion drops the queue and has analytics forget the player once it worked`() =
+        runTest {
+            DeleteAccount(accounts, questions, analytics)()
+
+            assertEquals(listOf("deleteAccount", "reset", "track account_deleted", "analytics reset"), calls)
+        }
+
+    @Test
+    fun `a deletion that failed forgets nothing`() =
+        runTest {
+            accounts.refuseDeletions = true
+
+            assertFailsWith<WyrException> { DeleteAccount(accounts, questions, analytics)() }
+
+            assertEquals(listOf("deleteAccount"), calls)
+        }
+
     private class RecordingAccounts(
         private val calls: MutableList<String>,
     ) : AccountRepository {
         var refuseLogins = false
         var refuseRegistrations = false
+        var refuseDeletions = false
 
         override suspend fun register(
             username: String,
@@ -143,6 +163,11 @@ class AccountUseCasesTest {
 
         override suspend fun logOut() {
             calls += "logOut"
+        }
+
+        override suspend fun deleteAccount() {
+            calls += "deleteAccount"
+            if (refuseDeletions) throw WyrException(DomainError.NETWORK)
         }
     }
 
@@ -183,6 +208,13 @@ class AccountUseCasesTest {
 
         override fun reset() {
             calls += "analytics reset"
+        }
+
+        override fun track(
+            event: String,
+            properties: Map<String, Any?>,
+        ) {
+            calls += "track $event"
         }
     }
 }

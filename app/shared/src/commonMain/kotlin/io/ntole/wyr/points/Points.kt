@@ -1,5 +1,9 @@
 package io.ntole.wyr.points
 
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -11,10 +15,15 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.State
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.Placeholder
@@ -29,6 +38,7 @@ import androidx.compose.ui.unit.em
 import io.ntole.wyr.language.LocalStrings
 import io.ntole.wyr.language.fill
 import io.ntole.wyr.theme.WyrIcons
+import io.ntole.wyr.theme.WyrMotion
 import io.ntole.wyr.theme.WyrThemeAccessors
 import io.ntole.wyr.theme.WyrTypeScale
 
@@ -58,9 +68,12 @@ private fun CoinLayers() {
 }
 
 /**
- * [points] as the game shows an amount on its own, on the Play screen's row and the Account card: the
- * coin and the number, the coin as tall as the number's text and a little more. A screen reader hears
- * *Поени: 43*, in the language shown.
+ * [points] as the game shows an amount on its own, on the Play screen's row, the Account card and the
+ * shop: the coin and the number, the coin as tall as the number's text and a little more. A screen
+ * reader hears *Поени: 43*, in the language shown. With [onClick] it is a button, the way to the shop
+ * where the points are spent (CLAUDE.md §8d, *The shop*), heard as the same words and a button. When
+ * [points] go up the coin bumps, larger and back (CLAUDE.md §5b, *Motion*), drawn in its layer, and
+ * nothing beside it moves; the first amount shown does not.
  */
 @Composable
 fun PointsAmount(
@@ -69,6 +82,7 @@ fun PointsAmount(
     fontSize: TextUnit = TextUnit.Unspecified,
     fontWeight: FontWeight? = null,
     color: Color = Color.Unspecified,
+    onClick: (() -> Unit)? = null,
 ) {
     val dimens = WyrThemeAccessors.dimens
     val label = LocalStrings.current.points.fill(points)
@@ -77,16 +91,51 @@ fun PointsAmount(
     val textSize =
         listOf(fontSize, LocalTextStyle.current.fontSize).firstOrNull { it.isSp } ?: WyrTypeScale.sectionTitle
     val coin = with(LocalDensity.current) { (textSize * COIN_TO_TEXT).toDp() }
+    val bump = rememberBumpOnRise(points)
 
+    val tappable = if (onClick != null) Modifier.clickable(role = Role.Button, onClick = onClick) else Modifier
     Row(
         verticalAlignment = Alignment.CenterVertically,
-        modifier = modifier.clearAndSetSemantics { contentDescription = label },
+        modifier = modifier.then(tappable).clearAndSetSemantics { contentDescription = label },
     ) {
-        CoinIcon(size = coin)
+        CoinIcon(
+            size = coin,
+            modifier =
+                Modifier.graphicsLayer {
+                    // Read only as it is drawn: the bump composes nothing.
+                    val grown = 1f + (WyrMotion.COIN_BUMP_SCALE - 1f) * WyrMotion.bump(bump.value)
+                    scaleX = grown
+                    scaleY = grown
+                },
+        )
         Spacer(Modifier.size(dimens.spaceXs))
         Text(text = points.toString(), fontSize = fontSize, fontWeight = fontWeight, color = color, maxLines = 1)
     }
 }
+
+/**
+ * The coin's bump, from 0 to 1 over [WyrMotion.COIN_BUMP_MILLIS] each time [points] rise above the
+ * amount before, and resting at 1: never for the first amount, nor for one that falls or stays.
+ */
+@Composable
+private fun rememberBumpOnRise(points: Int): State<Float> {
+    val bump = remember { Animatable(1f) }
+    val before = remember { Shown(points) }
+    LaunchedEffect(points) {
+        val rose = points > before.points
+        before.points = points
+        if (rose) {
+            bump.snapTo(0f)
+            bump.animateTo(1f, tween(WyrMotion.COIN_BUMP_MILLIS, easing = LinearEasing))
+        }
+    }
+    return bump.asState()
+}
+
+/** The amount shown last, which only the bump's effect reads and sets. */
+private class Shown(
+    var points: Int,
+)
 
 /**
  * [template] with [points] in place of its `{0}`, as the coin and the number, in running text: the

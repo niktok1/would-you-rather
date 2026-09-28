@@ -42,6 +42,13 @@ a service account, §8a *Push tokens*), and Flyway (schema migrations, §8b; app
 2026-09-24), with the `flyway-database-postgresql` module Flyway needs to run on PostgreSQL. H2 is
 a fifth, used only as the local development database.
 
+Google's own Android SDKs are the client's one exception, the platform's services with no
+multiplatform equivalent, each Android-only in `:app:shared`'s androidMain behind a port of
+`:core:domain`, so common code never sees them (§4): Google Play Games Services v2
+(`play-services-games-v2`, §8a *Play Games sign-in*) and Firebase Cloud Messaging
+(`firebase-messaging`, §8a *Push tokens*), approved 2026-09-26 with the user's choice of Play Games
+and FCM.
+
 ---
 
 ## 3. Module structure
@@ -74,7 +81,8 @@ dependency.
                      Depends on :core:domain, :core, and :core:network.
 
 :app:shared          Compose Multiplatform UI shared across all client platforms:
-                     screens, theme, ViewModels, DI wiring.
+                     screens, theme, ViewModels, DI wiring; and in its androidMain
+                     Android's Google services behind :core:domain's ports (§8a).
                      Depends on :core:domain, :core:data, :core:network.
 
 :app:androidApp      Android Application/Activity, manifest, Android-only wiring, and one
@@ -135,6 +143,9 @@ mechanism; this table is the rationale.
 | Local dev DB       | H2 (in-memory)         | Dev/test only. Never production                  |
 | Lint               | ktlint (Gradle plugin) | Style pinned in `.editorconfig`                  |
 | Product analytics  | PostHog (service, HTTP API, no SDK) | EU cloud; over the Ktor client (§8g) |
+| Play Games sign-in | Play Games Services v2 | `play-services-games-v2`; Android only, the §2 exception, behind `PlayGames` (§8a) |
+| Push (client)      | Firebase Cloud Messaging | `firebase-messaging`, no BOM, no google-services plugin; Android only, the §2 exception, behind `DevicePush` (§8a) |
+| Browser APIs       | Kotlin Wrappers (`kotlin-browser`) | JetBrains; web source sets only: `:core:network`'s storage and user agent, `:app:shared`'s page reload (§8e) |
 
 Server database engine: **PostgreSQL** (via Exposed). Hosting: **Render** — see §8.
 
@@ -177,16 +188,22 @@ failing:
   gone. A writer that waited instead on a row the deletion removes (a re-answer on their vote, a
   re-skip on their skip, a registration on their `players` row) finds no row once it commits, then
   no player, and is 401 (`VoteStore.currentCycle`, `SkipStore.currentCycle`,
-  `AccountStore.register`). It locks their reactions before it counts their likes.
+  `AccountStore.register`). It locks their reactions before it counts their likes. The guest
+  clean-up (§8b) locks a guest's row before it checks again that they are still unreachable, then
+  deletes them through it (`GuestCleanup.deleteIfUnreachable`), so a second instance's run waits and
+  finds them gone, and a registration or a Play Games link that got there first keeps them.
   A read of rows a racing writer is about to add has no row to lock, so it locks a parent row that
   every such writer locks first (`SubmissionStore.submit` counts an author's pending questions
   under the author's `players` row, and `ModerationStore.blockAuthor` reads them under it too, so a
   submission either lands before a block and is rejected by it or waits and is refused).
+  `ShopStore.buy` locks the buyer's `players` row before it reads what they own, so of a double tap
+  on one theme the second waits and finds it owned, `ALREADY_OWNED`, rather than too few points, and
+  the price is still a compare-and-set, `PlayerStore.spend` (§8d, *The shop*).
   The one exception is a value copied from another row, which may be a plain read where a stale
   copy is provably harmless, with the proof at the read (`VoteStore.currentCycle`: the feed moves
   the cycle on only once the answer's question is already answered or skipped in the one read).
 - Uniqueness is a constraint (the `Votes`, `Skips`, `Reactions`, `Reports`, `HiddenQuestions`,
-  `HiddenAuthors`, `Categories`, `PushTokens` and `Identities` primary keys, `players.username`'s
+  `HiddenAuthors`, `Categories`, `PushTokens`, `Identities` and `Purchases` primary keys, `players.username`'s
   unique constraint and `identities`' on a player and a provider), never a prior `SELECT`. A violation
   is never caught and
   carried on from: PostgreSQL aborts a transaction at its first error. It propagates, and Exposed
@@ -274,24 +291,50 @@ hunting through UI files.
 Implemented as `WyrTheme` in `:app:shared` (`io.ntole.wyr.theme`): `WyrColors` + `WyrDimens` +
 `WyrTypeScale`, exposed through `LocalWyrColors`/`LocalWyrDimens` and read via
 `WyrThemeAccessors`. The theme also mirrors its palette into a Material 3 `ColorScheme` so stock
-Material components inherit it instead of falling back to Material defaults. Adding a theme =
-adding another `WyrColors` value.
+Material components inherit it instead of falling back to Material defaults. It mirrors none of the
+`surfaceContainer` slots, so a component drawn on one, a dialog or a menu, is given `WyrColors.surface`
+by name (the deletion's dialog; the language menu's `DropdownMenu` not yet). The game's own look is
+`WyrLightColors` and `WyrDarkColors`, with an art for each mode (`WyrLightArt`, `WyrDarkArt`, *Backgrounds*,
+below; `GameTheme.art(darkMode)`); each theme the shop sells (§8d, *The shop*) is a `GameTheme`
+(`GameThemes`), one `WyrColors` for both modes (`ShopThemes.kt`) and a `ThemeArt`, drawn by hand on
+the page behind every screen: once, under the whole window, the system bars' strips included (`App`'s
+`WholePage`, `LocalThemeArt`), so a screen's own `PageSurface` draws nothing there (`LocalPageDrawn`)
+and draws its page only when drawn alone, as a test draws one. On Android the system bars' icons follow
+the theme's page, light on a dark one (`SystemBarsOn`). The screens are inset by the safe drawing area,
+the system bars and a cutout (`safeDrawingPadding`), never the gesture areas besides, which with gesture
+navigation added some 30 on each side. Adding
+a theme = adding a `WyrColors` value and a `ThemeArt` there, a `GameTheme` in `GameThemes.ALL`, its id in
+the server's `ShopCatalog`, and its name in `ShopStrings`.
 
 **Icons** are drawn by hand in the theme too, as `ImageVector`s in `WyrIcons`, a few strokes each on
 a 24 by 24 grid, so no icon library is needed (§2): `Home`, `Account` and `Back` (an arrow pointing
 left) for the top bars (§8d, *Navigation*); for the Play screen `Skip` (a triangle against a bar),
 `ChevronDown`, the small chevron beside the categories played, and the reactions' `ThumbUp` and
 `ThumbUpFilled`, and `ThumbDown` and `ThumbDownFilled`, the thumb up turned over (§8d, *The Play
-screen*, *Reactions*); `CoinFace` and `CoinMark`, a disc and the rim and ring on it, the points' coin
-wherever they show (§8f, *Numbers and symbols*); `Globe` for the language menu; and `Players`, two
-players, heading My questions' answers (§8d, *The Account screen*). They carry no colour of their
+screen*, *Reactions*); `CoinFace` and `CoinMark`, a disc and the rim and star on it, the points' coin
+wherever they show (§8f, *Numbers and symbols*); `Globe` for the language menu; `Players`, two
+players, heading My questions' answers (§8d, *The Account screen*); `Info`, an i in a circle, the
+Account screen's way to the About screen (§8d, *About*); `More`, three dots one over the
+other, the Play screen's menu about the question (§8d, *The Play screen*, *Reports*); and `Copy`, two
+sheets one over the other, beside the About screen's account id (§8d, *About*); `Shop`, a bag, the
+Account screen's way to the shop (§8d, *The shop*); `Plus`, two strokes
+crossed, My questions' way to a new question, and `ChevronRight`, on each of its rows, which opens the
+question whole (§8d, *The Account screen*, *Question details*); and `Share`, three rings joined, sharing
+a question from the Play screen's row and Question details (§8d, *Sharing*). They carry no colour of their
 own: `Icon` tints each from `WyrColors`, so they follow the light and dark themes as text does. The
 coin is two icons drawn one on the other, the face in `WyrColors.coin` and the mark in
 `WyrColors.onCoin`, the brand's amber and its dark brown, the same in both themes as the cards are
 (`CoinIcon`). Adding an icon = adding a `WyrIcons` value.
 `WyrIconsDrawTest` draws each off screen: every one a figure of the theme's size, no two the same,
 each filled thumb covering its outline and the hand's inside, the thumb down the thumb up turned
-over, and the coin's ring on its face.
+over, and the coin's rim and star on its face.
+
+**Platform copies.** Android draws its window and splash screen before Compose starts, from
+resources, which cannot read `WyrColors`: so `:app:androidApp`'s `res/values/colors.xml` and
+`res/values-night/colors.xml` copy `pageBackground`, light and dark, as `wyr_page_background` (§8,
+*Release builds*), and `WindowThemeTest` holds the copy equal, so a palette change fails it until the
+copy changes too. The launcher icon's two drawables copy `optionA` and `optionB`, unpinned, being a
+placeholder.
 
 The moderation app has a theme of its own, `AdminTheme` in `:app:adminApp` (`io.ntole.wyr.admin.theme`),
 since it may not depend on `:app:shared` (§3): Material 3's default light and dark schemes and type
@@ -300,7 +343,8 @@ or sp literal outside that file.
 
 **Visual direction:** playful & bold, theme-aware (full light + dark support).
 
-**Brand option colors — constant across all modes** (these are the identity):
+**Brand option colors — constant across all modes of the game's own theme** (these are the identity;
+a theme bought in the shop gives the cards colours of its own, *decided 2026-09-28*, the user):
 - `optionA` = `#D4537E` (pink), text-on = `#FFFFFF`
 - `optionB` = `#EF9F27` (amber), text-on = `#412402`
 - The two answer choices always use these, and side is positional — `optionA` is whichever
@@ -315,11 +359,74 @@ or sp literal outside that file.
 | primary text     | `#412402`  | `#F3EDEF`  |
 | heading accent   | `#993556`  | `#ED93B1`  |
 | OR pill text/bg  | `#993556` on `#FBEAF0` | `#F4C0D1` on `#3A2330` |
-| muted (pts)      | `#888780`  | `#888780`  |
+| muted (pts)      | `#5E5D57`  | `#9C9B94`  |
+| error (failures) | `#B83A65`  | `#EC7AA0`  |
 
-**Open check (not blocking):** verify every text/background pair meets WCAG AA contrast — the
-amber block (`#412402` on `#EF9F27`) and `muted` `#888780` on both backgrounds are the ones to
-confirm. Not yet done.
+**Contrast** (*checked 2026-09-26*): every pair the theme puts text or an icon on meets WCAG AA in
+both themes, 4.5 to 1 for text, and 3 to 1 for large text (18.66 bold, 24 otherwise) and for icons
+and a graphic's edge, computed from the tokens and from the Material scheme they are mirrored into
+(`materialSchemeOf`) by `WyrContrastTest`, which holds every palette of the shop's themes to the same
+pairs, card A's text included (every one reads at 4.5 to 1 there), and every colour of a theme's art
+to the page's text, muted text, heading accent, error and a field's label at 4.5 to 1, so text over the
+art reads as on the plain page. Two tokens changed for it: `muted` in the light theme,
+`#888780` before, 3.4 to 1 on the page (then 4.9, and 6.3 since the game's own art, *Backgrounds*,
+below), and `error`, a token of its own, where Material's
+error was card A's pink, 3.7 to 1 on the light page and 4.1 on the dark surface (now 5.2 and 6.1).
+The amber block, `#412402` on `#EF9F27`, reads at 6.5. The coin's face on the light page is 2.1, but
+its rim, drawn round it, is 13.5. One pair is left to the user: white on card A's pink is 3.9 to 1,
+enough for its large text but not for an option shrunk below large text (§8d, *The Play screen*), and
+the brand's colours stay unless the user changes them (§8b, *Card A's contrast*). The Material
+defaults the scheme does not set (secondary, tertiary, outline and the rest) are Material's own.
+
+**Backgrounds** (*built 2026-09-29*, the user's, ported from `feat/visuals` onto the shop's themes): the
+game's own theme, the free *Класична*, draws art too, `ThemeArt.QuestionMarks` (`ThemeArt.kt`), drawn in
+code and, as every theme's art, once under the whole window (`WholePageArt`, a layer of its own, so a
+screen's change moves over it without drawing it again; `ClassicArtDrawTest`): a faint wash of card A's
+pink toward the top and card B's amber toward the bottom, the plain page across the middle, echoing the
+two cards, and six faint question marks, drawn as the icons are, scattered by the edges; on a window
+wider than tall and at least `wideLayoutMinWidth` across, where the Play screen stands its cards side by
+side (§8d, *Wide screens*), the wash runs left to right and the marks follow it. The same under every
+screen, the shop's art being so: `feat/visuals` had it under Home and Play alone and a few faint dots
+under the rest, which the art drawn once for the whole window does not allow without a variant per
+screen (*provisional — user decision*, §8b, *The visuals' details*). Its colours are in `WyrColors.kt`:
+each wash its colour at 5 to 8 percent over the page, opaque, and the marks the heading accent at 4 to
+5 percent, translucent, drawn over the wash; `WyrDimens.backgroundMarkSize`; the places and turns are
+fractions in `ThemeArt.kt`. Bought themes' art is unchanged. Every text the page holds still reads at
+AA on the strongest tint, a mark over a wash (`WyrContrastTest`, which lists each composite as an art
+colour): the least is 4.6 to 1 in the light theme, a failure on the pink wash under a mark, and 5.3 in
+the dark, muted text on the amber wash under a mark. For it `muted` moved again, to `#5E5D57` in the
+light theme (4.9 to 1 on the page before, 6.3 now) and `#9C9B94` in the dark (5.1 before, 6.6), since
+it fell under AA on the tints (4.3 and 4.5) and a wash any fainter would not show. `WyrContrastTest` also
+holds the game's own art within an eighth of the page, channel by channel.
+
+**Motion** (*built 2026-09-29*, the user's): the timing and size of the motion shared across screens is
+a token, the durations and scales in `WyrMotion` (`io.ntole.wyr.theme`) and the distances in `WyrDimens`
+(`screenSlide`); a screen's own motion (the Play cards' sink, lift and slide, Home's reveal and fade
+through) keeps its timing beside it, as it did. None loops forever, and each ends exactly where the
+screen stood before there was motion. **The rule** (the user's phone runs an accessibility service,
+§8d *The Play screen*): an animation moves a thing where it is drawn or placed, a `graphicsLayer { }`
+lambda, a placement's offset or a draw, reading its value there and nowhere else, so a frame of it
+composes nothing and changes no semantics property; the tests step the scene's clock through each and
+count what a frame composes. Compose scales every duration by the platform's animator duration scale
+by itself, so Android's *Remove animations* ends each at once. A test of what the app does rather than
+how it moves draws with that scale at 0 (`MotionOff`, `AppNavigationTest`, but for its Home reveal
+test, which needs the reveal's frame clock), since its scene draws every frame at one time, where a
+transition left running would never end. What moves, besides what §8d describes:
+- *Screens* (`ScreenTransitions`, `io.ntole.wyr.navigation`): each change of the navigator's top
+  screen fades and slides, `SCREEN_MILLIS` (250) over `screenSlide` (24): a screen opened comes in from
+  the end, the right in a left-to-right language, and the one it covers goes the other way; going
+  back, to a screen lower on the stack, the home icon's `open(Screen.Home)` included, runs the other way
+  round. An `AnimatedContent` over the back stack, keyed by its top screen, with no size animation; the
+  old screen stays composed until the change ends. The first screen and the update screen (§8e) just
+  appear, and Play opened from Home is a cut, left to Home's own fade through (§8d, *Home picks*),
+  exactly as before (`isFadeThrough`). `ScreenTransitionsDrawTest`.
+- *The coin* (`PointsAmount`): when the points go up, on the Play screen's row, the Account card or the
+  shop, the coin bumps to `COIN_BUMP_SCALE` (1.3) and back, `COIN_BUMP_MILLIS` (250), and the number
+  beside it stays; the first amount shown, and one that falls or stays, bump nothing. No "+1" is shown
+  (the user). `CoinBumpDrawTest`.
+`ScreenshotsTest` draws Home, Play asked and revealed (and on its side), Account and Categories on the
+page in the game's own theme light and dark and in Ocean, and writes PNGs where `WYR_SCREENSHOTS_DIR`
+says.
 
 ---
 
@@ -359,8 +466,8 @@ This project must never be attributed to any employer identity.
     data resets on every deploy, restart and free-tier spin-down (a paid Postgres for dev comes
     later). Its own `JWT_SECRET` and `ADMIN_TOKEN`, so nothing from one environment works on the
     other.
-  - **prod**, `wyr-server` on `wyr-postgres`, at https://wyr-server.onrender.com: `autoDeployTrigger:
-    "off"`. It deploys **only by hand**, with Render's *Manual Deploy → Deploy a specific commit*,
+  - **prod**, `wyr-server` on `wyr-postgres`, at https://wyr-api.ntole.com (§8b, *The launch*;
+    Render's own https://wyr-server.onrender.com answers too): `autoDeployTrigger: "off"`. It deploys **only by hand**, with Render's *Manual Deploy → Deploy a specific commit*,
     and only a commit that is green in CI and already live on dev. That is the one exception to
     "never hand-deploy": promoting to production is a person's decision. First deployed 2026-09-24
     (`4cdc819`); it runs `d4a9dbf` since 2026-09-25, with V1 to V4 applied.
@@ -395,9 +502,26 @@ This project must never be attributed to any employer identity.
   Render is the proxy, one budget for everyone: the server warns at boot when `RENDER` is `true` and
   no header is set. To be checked once deployed (NEXT-SESSION.md). No forwarded-header plugin:
   `ktor-server-forwarded-header` would be a new dependency for the one line this needs.
+- `SUBMISSION_COST` is what submitting a question costs, in points (§8c): a whole number, 0 or more;
+  unset or blank is 1, and anything else fails the boot, naming it (`ServerConfig.submissionCost`). It
+  stays unset until the release, which sets 50 on `wyr-server` alone (the user's decision; declared
+  in `render.yaml` as a comment until then). Read at boot: changing it is changing the variable and
+  restarting the service. `GET /v1/me` names it, so the game says what the server charges.
+- `THEME_PRICE` is what each theme in the shop costs, in points (§8d, *The shop*): a whole number, 0 or
+  more; unset or blank is 220 (`ShopCatalog.DEFAULT_THEME_PRICE`), and anything else fails the boot,
+  naming it (`ServerConfig.themePrice`). `render.yaml` sets 1 on `wyr-server-dev` alone (the user's
+  decision), so a tester can buy every theme after a few answers. Read at boot; a purchase keeps what it
+  paid.
+- `GUEST_RETENTION_DAYS` is how many days a guest nobody can reach any more is kept before the server
+  deletes them (§8b, *Guest clean-up*): a whole number of at least 1; unset or blank is 90, and `0`
+  turns the clean-up off; anything else fails the boot, naming it (`ServerConfig.guestRetentionDays`).
+  `render.yaml` sets 90 on `wyr-server`, a plain value, and leaves it unset on `wyr-server-dev`. Read
+  at boot.
 - `MIN_CLIENT_VERSION_ANDROID`, `_IOS`, `_WEB` and `_DESKTOP` each name the oldest build of the game
   the server serves on that platform (§8b, *Minimum client version*); none is set, so no build is
-  refused. Read at boot: raising one is changing the variable and restarting the service.
+  refused. Read at boot: raising one is changing the variable and restarting the service, and only
+  once that platform's store serves the newer build to all its users, or the update screen sends
+  players to a store page with nothing new on it.
 - `FCM_SERVICE_ACCOUNT_JSON` is the Firebase service account's key file, whole, which pushes a
   moderator's decision to its author (§8a, *Push tokens*), `sync: false` in `render.yaml`, one key per
   service. It has no default: unset turns pushes off. Setting it up is §8b, *Push notifications*.
@@ -416,6 +540,52 @@ This project must never be attributed to any employer identity.
 - The paths: push to `main` → CI (ktlint + tests) → Render builds and publishes **dev**; then, by
   hand, Manual Deploy that same commit to **prod**. Never deploy prod a commit CI has not passed or
   dev has not run.
+- **Release builds** (*decided 2026-09-26*, for the Google Play launch, §8b *The launch*), in
+  `:app:androidApp`:
+  - *Signing*: only `prod` goes to Play, so only its release build is signed with the **Play upload
+    key**, when `local.properties` (which git ignores) names all four of `wyr.upload.storeFile`,
+    `wyr.upload.storePassword`, `wyr.upload.keyAlias` and `wyr.upload.keyPassword`, each else read
+    from the environment (`WYR_UPLOAD_STORE_FILE`, `WYR_UPLOAD_STORE_PASSWORD`,
+    `WYR_UPLOAD_KEY_ALIAS`, `WYR_UPLOAD_KEY_PASSWORD`); the store file's path is absolute or from the
+    repository's root. Short of all four, it is signed with the debug key, so it still installs on a
+    phone for testing, and its packaging says so in one warning line; `signProdReleaseBundle`, which
+    writes the `.aab` Play takes and which `bundleProdRelease` and `bundleRelease` run, is refused
+    before anything runs, naming what is missing. `dev`'s and `local`'s release builds always take the
+    debug key, as their debug builds do (a signing config per flavor, since a build type's would win
+    over the flavors'), so each installs over the other and back, keeping its data: Android refuses an
+    update signed with another key. CI's verify job holds all three rules (*Release signing*). The
+    keystore is the user's, never committed (`.gitignore` refuses `*.jks` and `*.keystore`), made
+    and uploaded as NEXT-SESSION.md says (*Release builds and Google Play*). **Play App Signing**:
+    Play keeps the app signing key, which signs what phones install; the upload key only proves an
+    upload is the developer's, and a lost one is reset in the Play Console without touching the app.
+  - *R8*: `isMinifyEnabled` and `isShrinkResources` on. The libraries ship their own keep rules
+    (kotlinx.serialization, Ktor, OkHttp, coroutines, Koin, Compose); `proguard-rules.pro` adds only
+    the line numbers a stack trace keeps. The mapping lands in
+    `app/androidApp/build/outputs/mapping/<variant>/mapping.txt`, and a bundle carries it inside, so
+    Play deobfuscates Android vitals' crashes by itself. CI's verify job builds `assembleProdRelease`,
+    so a shrink that fails the build fails CI; one that fails only at run time shows on a device
+    alone (NEXT-SESSION.md, *Release builds and Google Play*, has the emulator check). R8 warns that
+    it cannot read Kotlin 2.4's metadata (§8b, *R8 and Kotlin 2.4's metadata*).
+  - *The launcher icon*: adaptive (`mipmap-anydpi-v26/ic_launcher.xml`, and `_round`), of
+    `drawable/launcher_background.xml`, option A's pink over option B's amber (§5b), and
+    `drawable/launcher_foreground.xml`, a white question mark inside the 66dp circle every launcher's
+    mask keeps, which is the themed icon's monochrome layer too; Android 7 gets the two layers square
+    (`mipmap/ic_launcher.xml`). A placeholder (§8b, *The launcher icon and name*): the final icon
+    replaces the two drawables. The Play listing's own 512 by 512 icon is uploaded in the Play Console.
+  - *The label*: *Шта би радије?* for `prod`, *WYR Dev* and *WYR Local* for the others (§8e).
+  - *The window and the splash*: `Theme.Wyr` (`values/themes.xml`, dark in `values-night`) gives the
+    window and the status bar the page background before Compose's first frame, so a dark phone never
+    flashes white; on Android 12 and later (`values-v31`) the system's own splash screen is the page
+    background and the launcher icon, with no library. The colour is a platform copy (§5b), held equal
+    by `WindowThemeTest`, the app module's unit test, in CI's verify job.
+  - *What Google Play asks of the build* (checked 2026-09-26): target API 36, which `android-targetSdk`
+    is; a bundle signed with the upload key (above); and 16 KB memory pages. The APK's two native
+    libraries, Compose's `libandroidx.graphics.path.so` (`androidx.graphics:graphics-path` 1.0.1) and
+    DataStore's `libdatastore_shared_counter.so` (`androidx.datastore:datastore-core-android` 1.1.7,
+    which `firebase-messaging` 25.1.3 brings through `firebase-common` 22.0.1; checked 2026-09-27),
+    have every LOAD segment 16 KB aligned and are stored uncompressed on a 16 KB boundary for all four
+    ABIs; a native library added later is checked the same way (NEXT-SESSION.md). What the app
+    collects, for the Data safety form, is listed there too.
 - **The public site**, `wyr-site` in `render.yaml` (*drafted 2026-09-26*, `docs/site`): a Render
   static site, free, with no plan or region, published from `site/`, which holds plain HTML and one
   CSS file, with no build step and no script. It is the home page, the privacy policy, the terms and
@@ -448,7 +618,8 @@ decided in §8b).
 - **Sessions** (*decided 2026-09-25*): a player's refresh tokens live in `sessions`, **one
   refresh-token family per device**, each rotating on its own row, so a refresh on one device never
   touches another's tokens. Nothing caps how many a player has, and only a logout, or the account's
-  deletion (below), deletes one: an expired session is dead where it lies. A mint opens a player's
+  deletion (below), the guest clean-up's included (§8b), deletes one: an expired session is dead
+  where it lies. A mint opens a player's
   first session (`SessionStore.open`); V4 opened one for every player who held a refresh token then.
   A refresh reads and writes its session
   alone. Every access token names its session beside its player (the `sessionId` claim), and a
@@ -507,8 +678,11 @@ decided in §8b).
     and later, `backup_rules.xml` before, in `:app:androidApp`) keep `AndroidTokenStorage`'s
     `wyr.auth.xml` out of the cloud backup and a device-to-device transfer: a copy would share a
     refresh-token family with its source, and whichever refreshed less would end up a fresh guest. A
-    new phone starts as a guest of its own, and a registered player logs in there. `allowBackup` stays
-    on, with nothing else in it yet.
+    new phone starts as a guest of its own, and a registered player logs in there. They keep
+    `AndroidPush`'s `wyr.device.xml` on the device too, whether the notifications permission was asked
+    for (*Push tokens*, *On Android*), so a phone restored from a backup asks again, at most once,
+    rather than never where the grant did not come with it. `allowBackup` stays on, with nothing of the
+    app's own in it yet.
 - **Accounts** (*decided 2026-09-25*, §8b): a username and a password on a player, which a guest may
   add, keeping everything it has, and log in with on another device. Built on the server:
   `players.username`, lower-cased, under a unique constraint, and `players.password_hash` (V5), both
@@ -563,11 +737,11 @@ decided in §8b).
     Both, once they worked, tell the analytics who plays here by player id, and a logout has them
     forget (§8g, *Who*).
 - **Deleting an account** (*decided 2026-09-26*: Google Play asks a game with accounts to let a
-  player delete theirs; built on the server, no client yet) is `POST /v1/me/deletion`
+  player delete theirs; built on the server, and in the game since `feat/account-client`, below) is `POST /v1/me/deletion`
   (`WyrApi.Paths.ME_DELETION`), bearer required, no body, answered 204, for a guest and a registered
   player alike. It deletes, in one transaction (`AccountDeletion.delete`), the player's row with its
   username and password hash, their sessions on every device, their votes, skips, reactions, reports
-  and hides, their push tokens and Play Games link (their keys cascade, below), and their
+  and hides, their push tokens, Play Games link and purchases in the shop (their keys cascade, below), and their
   questions no player was ever served, pending and rejected; their **approved
   questions stay**, retired ones included, with nobody as their author, as a seed has: served as
   before, their votes and reactions kept, their likes from then on paying nobody. Each like the
@@ -584,9 +758,48 @@ decided in §8b).
   `ReportStore.hideAuthorOf`, `AccountDeletionTest`); and a login to the account racing its deletion
   can fail as a 500.
   `AccountDeletionTest`, `AccountDeletionFlowTest`.
+  - *The client* is `AccountRepository.deleteAccount`, behind `DeleteAccount` (`:core:domain`), from
+    the About screen's **Обриши налог** (§8d, *About*). `AuthApi.deleteAccount` posts
+    it through `runApi` alone, never `withSessionRecovery`, whose retry would delete the fresh guest
+    minted for a dead session. A 204, or a 401 (`UNAUTHORIZED`, the refresh refused too: the player is
+    gone already, from another device or by an answer lost on the way), and the device forgets its
+    session as a logout does (`DefaultSessionRepository.clear`): the player's choice, so it settles who
+    plays here and no launch signs the device back in with Play Games (*Play Games sign-in*, *The
+    client*, below; the Auth page's button still can), and the fresh guest the next call mints is a
+    session like any other, which the push token follows (*Push tokens*) and the notice's seen set
+    too (§8d, *The notice of a decision*). Then `DeleteAccount` drops the question queue, reports
+    `account_deleted` and resets the analytics (§8g), and the Account screen's read after it mints
+    the fresh guest it shows. Offline or
+    any other failure: said over the button, nothing forgotten. No session stored sends nothing.
+    *Edge, accepted:* a registered player whose session died unused past a refresh token's 30 days,
+    their account still there, is told it is deleted and forgets the session: they log in again.
+    `DefaultAccountRepositoryTest`, `DeletionSessionTest` (the fresh guest's push token, and no Play
+    Games sign-in at the next launch), `AccountUseCasesTest`, `AccountViewModelTest`,
+    `AccountScreenDrawTest`, `AppNavigationTest`.
+  - *By a moderator* (*built 2026-09-27*, the user: "a moderator route to delete a player's account on
+    request"), for a player who asks by email, as the site's deletion page promises, a guest and a
+    player signed in with Play Games alone included, who have no username:
+    `POST /v1/admin/account-deletions` (`WyrApi.Paths.ADMIN_ACCOUNT_DELETIONS`), an admin route
+    (§8d, *Moderation*), with a `DeleteAccountRequest` naming the player by exactly one of `username`,
+    trimmed and lower-cased as a login compares it, and `accountId`, the player's id, which the game
+    shows on its About screen (§8d, *About*); answered 204. Neither or both, or either blank, is 400
+    `VALIDATION_FAILED`; a name or an id no player has, one the username rules refuse included, 404
+    `PLAYER_NOT_FOUND`. The player's row is locked as it is looked up (`AccountToDelete.lockedPlayerId`)
+    and then deleted by `AccountDeletion.delete`, in the one transaction, so everything above goes as
+    it does for the player's own deletion, their sessions on every device with it (their next request
+    is 401), and of two deletions of one player racing the second waits and is 404 (§4). One INFO line
+    names the player by id, never the username asked for (§8b, *Logging*). `AccountToDeleteTest`,
+    `AccountDeletionByModeratorFlowTest`, `ActionLogTest`. The moderation app's Accounts tab sends it
+    (§8d, *Moderation*); on the client `PLAYER_NOT_FOUND` is `DomainError.PLAYER_NOT_FOUND`, and the
+    call is `ModerationRepository.deleteAccount`, behind `DeletePlayerAccount`, with an `AccountRef`.
+    *An emailed request*, as the owner handles it: open the moderation app against production
+    (`WYR_ENV=prod`), type `wyr-server`'s admin token, and on the Accounts tab paste the username or the
+    account id the email names; the dialog names the account, and Delete account deletes it. Answer
+    the email once it says it is done; *No such account* means a mistyped name or id, or one deleted
+    already. Nothing proves the email is the account's player: a username or an id is all it names.
 
-- **Push tokens** (*decided 2026-09-26; built on the server, Android first; the client adopts
-  later*): a device's Firebase Cloud Messaging token, so a player hears when a moderator decides one
+- **Push tokens** (*decided 2026-09-26; built on the server, and on the Android client since
+  `feat/android-services`*): a device's Firebase Cloud Messaging token, so a player hears when a moderator decides one
   of their questions.
   - *Registering* is `POST /v1/me/push-tokens` with a `PushTokenRequest` (the `token` and its
     `platform`, a `PushPlatform`: `ANDROID`, `IOS` or `WEB`, and `UNKNOWN`, its default, refused), bearer
@@ -601,8 +814,8 @@ decided in §8b).
   - *Removing* one, a device turning notifications off, is `POST /v1/me/push-token-removals` with a
     `RemovePushTokenRequest`, 204, the caller's own token alone. A **logout needs no call**: the
     session's row going takes its device's tokens with it, and deleting a player takes theirs, by
-    `ON DELETE CASCADE` on both of the table's foreign keys (`push_tokens`' and `identities`' keys
-    cascade, the schema's only cascading keys), so no store has to know the table is there.
+    `ON DELETE CASCADE` on both of the table's foreign keys (`push_tokens`', `identities`' and
+    `purchases`' keys cascade, the schema's only cascading keys), so no store has to know the table is there.
   - *A decision's push*: launched once a moderator's approval or rejection has committed, and not
     waited for, `DecisionNotifier` pushes the author's every device, off the request, in a background
     scope the server cancels at stop. Best effort: a failure is logged and dropped, never failing or
@@ -621,9 +834,54 @@ decided in §8b).
     `googleHttpClient` over CIO (§4), 5 s to connect and 10 s a request. Every test answers for Google
     with a MockEngine (`FcmSenderTest`, `PushFlowTest`). Never logged: the key, the assertion, the
     access token, or a device's token. Unset, pushes are off: nothing is sent, and the boot says so.
+  - *The client* (common code; the platform's pushes behind the `DevicePush` port in `:core:domain`,
+    `DevicePush.None` but on an Android build that has Firebase set up): `KeepPushTokenRegistered`,
+    which `AppServices` starts at launch, registers the device's token (`PushApi`, `PushPlatform`
+    `ANDROID`) for the session stored then and for **every session the device stores after it**
+    (`CurrentSession.sessions`): a mint's, a login's, a logout's fresh guest's, a Play Games sign-in's,
+    and a deletion's fresh guest's, since a token is kept under its session and a logout's cascade
+    drops it; and again for every new token the platform gives (`DevicePush.newTokens`). Through
+    `runApi` alone, never `withSessionRecovery`: a registration follows the session and never mints or
+    replaces one, so a dead session's 401 is dropped, and the fresh guest the next call mints registers.
+    Best effort: a failure is dropped, and the next session or token registers again; one request a
+    launch mends one that failed. The Submit form asks for the notifications permission right after a
+    question is stored (`DevicePush.askPermissionOnce`), which the platform asks once an install:
+    the least obstructive moment, when a decision is what the player waits for. No token is removed
+    yet: a player who turns notifications off in the phone's settings sees none, whatever FCM sends.
+    `KeepPushTokenRegisteredTest`, `DefaultPushTokenRepositoryTest`, `AppServicesTest`,
+    `SubmitViewModelTest`.
+  - *On Android* (`AndroidPush` and `WyrMessagingService` in `:app:shared`'s androidMain, over
+    `firebase-messaging`, §4): Firebase starts from `FirebaseOptions` of the build's ids
+    (`GoogleServiceSettings`: `wyr.firebase.projectId`, `.apiKey` and `.senderId`, one project for
+    every flavor, and `wyr.firebase.appId.local`, `.dev` or `.prod`, the flavor's app in it, since
+    Firebase has one Android app per package; a Gradle property or `local.properties`, never
+    committed), with no `google-services.json` and no plugin; its `FirebaseInitProvider` is taken out
+    of the merged manifest. A build missing any of them has pushes off (`DevicePush.None`), says so in
+    one log line at launch, and never starts Firebase, which is how every test and CI build runs. The
+    decision's push (`DecisionNotifier`) carries a notification and data: **with the app in the
+    background** the system posts it by itself, on the **decisions** channel, *Твоја питања* in the
+    phone's settings (`NoticeStrings.channel`, in Serbian Cyrillic, as the push's text is; the
+    manifest's `default_notification_channel_id`), with the game's small icon, the coin
+    (`ic_notification`), and a tap opens the app on the **Account screen**, where My questions shows it
+    (`openedFromNotification`, from `MainActivity`'s intent, never a rotation's, nor the one Recents
+    relaunches the task with, `FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY`, which a tap that made the task
+    leaves behind on Android 11 and before, where Back on Home finishes the activity; `NotificationsTest`;
+    `AppServices.accountAsked`; `notification_opened`, §8g); **with the app open** it reaches
+    `WyrMessagingService.onMessageReceived`, which posts nothing, and the in-app notice reads the list
+    and dots the account icon instead (§8d, *The notice of a decision*). A new token
+    (`onNewToken`) is registered as above. The notifications permission (`POST_NOTIFICATIONS`, Android
+    13 and later) is asked from the activity on screen, once an install, and kept as asked in the
+    device's own preferences (`wyr.device`, not the session's `wyr.auth.xml`), only once it was asked,
+    which the backup rules keep out of a backup, as they keep the session (*On the client*). A push the
+    server one day sends as data alone would show nothing with the app in the background: none does.
+    *To revisit*: firebase-messaging 25.1 deprecates `getToken` and `onNewToken` for registering by
+    Firebase installation id (`register`, `onRegistered`); the server's HTTP v1 sends name a
+    registration token, and Google says tokens keep working meanwhile, so the client stays on them
+    (the deprecation suppressed where it is used) until sending to an installation id is documented.
 
 - **Play Games sign-in** (*decided 2026-09-26: the user's "no-click register", with the register
-  screen kept as the fallback; built on the server, the client adopts later*): a player on Android
+  screen kept as the fallback; built on the server, and on the Android client since
+  `feat/android-services`*): a player on Android
   gets an account with no form, as Google Play Games Services v2 vouches for who they are.
   - *Signing in* is `POST /v1/auth/play-games` with a `PlayGamesSignInRequest`, the one-time server
     auth code Play Games gave the app (`requestServerSideAccess`), answered with a `SessionDto` for a
@@ -653,7 +911,11 @@ decided in §8b).
     account*).
   - *A linked player is registered* (*decided 2026-09-26*), as one with a username is: they may submit (§8d, *Submitting*),
     and `GET /v1/me` says so (`PlayerStatsDto.playGamesLinked`). They may still register a username and
-    password, to log in where there is no Play Games: on iOS and the web.
+    password, to log in where there is no Play Games: on iOS and the web. The game's client reads it
+    with the username (`PlayerStats.playGamesLinked`, and `registered`, either of the two): such a
+    player may submit, and their card on the Account screen names them for Play Games when they have no
+    username (§8d, *The Account screen*). One with no username has no Log out (*decided 2026-09-28*): it
+    would only make the device a fresh guest, the Auth page's Play Games button the one way back.
   - *Refusals*: a code Google refuses (`invalid_grant`: spent, expired, another app's) is 422
     `PLAY_GAMES_CODE_REFUSED`, answered by asking Play Games for a new one; Google not answering,
     refusing the server itself (`invalid_client`), or Play Games answering 403, the server's setup and
@@ -668,10 +930,54 @@ decided in §8b).
     launch: every sign-in answers a new session, and the one before is abandoned, as a login's guest
     is. Never logged: the code, the client secret, an access token (`GooglePlayGamesTest`).
     `PlayGamesFlowTest` takes every path with Google answered by a MockEngine.
+  - *The client* (common code; the platform's Play Games behind the `PlayGames` port in
+    `:core:domain`, `PlayGames.None` but on an Android build that has it): `LinkPlayGames`, bound once
+    for the app. **At launch** (`automatically`, which `AppServices` starts on the app's first coming
+    to the foreground), once a session exists (`CurrentSession.sessions`, which never mints: the first
+    launch mints its guest only as the player starts to play), while who plays on the device is
+    **unsettled**, and when Play Games says the player is signed in to it (v2 signs a player with a
+    profile in by itself), it asks Play Games for a server auth code and sends it
+    (`AuthApi.playGames`, with the session's bearer, through `withSessionRecovery`, so a dead
+    session's 401, which comes before the code is spent, is retried as the fresh guest). The session
+    answered is stored in place of the device's, as a login's is, but only while the device still plays
+    as the player the sign-in went out as (`DefaultSessionRepository.replaceIfStill`, under the lock
+    minting takes): a login or a logout landing during the exchange, which takes seconds, stands, and
+    the answer is dropped, though the server may have linked the Play Games player to the one it went
+    out as all the same (rare, and accepted). When it is another player's, the question queue is dropped; the analytics identify the player
+    either way (§8g). A refusal (`PLAY_GAMES_CODE_REFUSED`, `PLAY_GAMES_UNAVAILABLE`, each a
+    `DomainError` of its own now, offline, no code) leaves the player as they are, shows nothing, and
+    is tried again at the next launch. **Settled** (`PlayGamesSettled`, `wyr.playgames.settled.local`,
+    `.dev` or `.prod` in the session's storage, one per environment as the session is, §8e) is set by a
+    Play Games sign-in, a login, a logout and an account's deletion, each the player's own doing, and
+    forgotten when a dead
+    session is replaced by a fresh guest (`resetIfStill`), so that device signs in with Play Games at
+    its next launch, which may bring back the player the dead session was; a fresh install has none
+    (*provisional — user decision*, §8b *When a launch signs in with Play Games*). `LinkPlayGamesTest`,
+    `DefaultPlayGamesRepositoryTest`, `CurrentSessionTest`, `AppServicesTest`.
+  - *On Android* (`AndroidPlayGames` in `:app:shared`'s androidMain, over `play-services-games-v2`,
+    §4): each call asks the activity on screen (`ActivityTracker`) for its `GamesSignInClient`, on the
+    main thread, and answers a failure as nothing done; the code is `requestServerSideAccess(serverClientId,
+    false)`. The activity on screen is the most recent one started and not stopped, one not finishing
+    first, since Play Games shows an explicit sign-in through a translucent activity of its own
+    (`GamesResolutionActivity`) over the app's, which is only paused and never starts again
+    (`ActivityTrackerTest`, an Android host test, which the verify job runs). Its ids are the build's (`GoogleServiceSettings`, gradle/wyr-android-services.gradle.kts):
+    `wyr.playgames.appId`, the Play Games project id, which the manifest's
+    `com.google.android.gms.games.APP_ID` names through the `game_services_project_id` string, and
+    `wyr.playgames.serverClientId`, the game server credential's OAuth client id, the server's
+    `PLAY_GAMES_CLIENT_ID`; a Gradle property or `local.properties`, never committed, one for every
+    flavor. A build without both has Play Games off (`PlayGames.None`), says so in one log line at launch,
+    and never starts it: the SDK's own `PlayGamesInitProvider`, which would start it on every build, is
+    taken out of the merged manifest, and `androidDeviceServices` calls `PlayGamesSdk.initialize` only
+    with the ids. Every test and CI build runs without them, so nothing reaches Google from one.
 
 **Known limitation, by design for now:** a guest account is bound to one device's storage. Lose
 the device, reinstall the app or clear its storage, and the account — and its points — are gone,
-unless the guest registered (*Accounts*, above), and then only until it logs in again. Session storage is ordinary preference storage
+unless the guest registered (*Accounts*, above), and then only until it logs in again. A guest
+nobody can reach any more, with no username, no Play Games link and no session that can still
+refresh, is deleted once idle 90 days (`GUEST_RETENTION_DAYS`; §8b, *Guest clean-up*), as their own
+deletion would (*Deleting an account*): idle since their session's last refresh, or since they were
+minted when no session is left, a logout's. Such a guest could never be played again anyway: the
+device that held them mints a fresh guest once its refresh token dies. Session storage is ordinary preference storage
 (SharedPreferences / NSUserDefaults / JVM Preferences / localStorage), not Keychain or
 EncryptedSharedPreferences: enough for a game that stores no sensitive personal data.
 
@@ -682,19 +988,30 @@ EncryptedSharedPreferences: enough for a game that stores no sensitive personal 
   - *Countries*: Serbia, Bosnia and Herzegovina, Montenegro and North Macedonia (RS, BA, ME, MK), the
     Play Console's availability. The seeds are universal already (§8d, *Seeds*); local questions
     come later (*Local questions*, below).
-  - *Age*: **16 and over**, for the store listing's target audience and in the terms.
+  - *Age*: **13 and over** (*changed 2026-09-29*, the user set 13+ in the Play Console; 16 before),
+    for the store listing's target audience and in the terms. Play's Families policy applies only to
+    an audience under 13, so none of it applies; what 13 to 15 means under the GDPR and the ZZPL (a
+    minor's own consent from 15 in Serbia, 16 by default in the GDPR) is the lawyer's to check against
+    the privacy policy, analytics on by default included (§8g, *Consent*).
   - *Languages*: Serbian in both scripts. **English is hidden** at launch: its strings stay in the
-    code (§8f), and the language menu shows Ћирилица and Latinica only (not built).
-  - *Submitting* costs **50 points** from the release, 1 until then (§8c), and the server will tell
-    the client the cost rather than the client keeping a copy (not built).
+    code (§8f), and the language menu shows Ћирилица and Latinica only (`Language.OFFERED`, *built
+    2026-09-26*).
+  - *Submitting* costs **50 points** from the release, 1 until then (§8c): the server's
+    `SUBMISSION_COST`, which `GET /v1/me` names and the Submit form shows (*built 2026-09-26*); the
+    release sets it on `wyr-server` (NEXT-SESSION.md).
   - *Email*: none, for now, so no password reset either (*Accounts*, below).
   - *Analytics* is PostHog (§8g); a moderator's decision is pushed to its author through Firebase
-    Cloud Messaging on Android, and shown in the game too (§8a, *Push tokens*; the client adopts it
-    later).
+    Cloud Messaging on Android, and shown in the game too, on every platform (§8a, *Push tokens*;
+    §8d, *The notice of a decision*).
   - *Staging*: dev gets a PostgreSQL database of its own, so it runs as production does before a
     commit is promoted (§8); a paid instance type, so the `render.yaml` change waits for the user's go.
-  - *Domain*: `stabiradije.rs`, with `stabiradije.com` beside it, and the API at
-    `api.stabiradije.rs`; both were free on 2026-09-26 and are the user's to buy.
+  - *Domain* (*decided 2026-09-29*): the developer's own, **`ntole.com`**, bought by the user on
+    Cloudflare, one for every app of theirs, language-neutral where `stabiradije.rs`, the first plan,
+    read as Serbian alone. The game's API is `wyr-api.ntole.com`, a CNAME to `wyr-server.onrender.com`,
+    DNS only (Cloudflare's proxy off, so the rate limits keep keying by Render's `CF-Connecting-IP`,
+    §8), a Render custom domain with Render's certificate; `WyrEnvironment.PROD` names it, so the
+    service can leave Render without stranding a build. Its site is under `ntole.com/wyr` (`Site`,
+    §8d *About*), not written yet. Dev stays on Render's own name.
 - **Accounts** — *decided 2026-09-25; built (§8a, *Accounts*; the Account screen, §8d).* This
   is a simple game that stores no sensitive personal data, and most players stay a day or a few, so the
   simplest design that is correct enough wins over maximum security. A new player plays at once as a
@@ -710,7 +1027,7 @@ EncryptedSharedPreferences: enough for a game that stores no sensitive personal 
   No email is collected, so there is **no password reset**: a forgotten password means a new
   account. **No-click sign-in** links a platform's player to a player here as registering links a
   username, beside the password or in its place: Play Games Services on Android is built on the
-  server (*decided 2026-09-26*, §8a *Play Games sign-in*; the client adopts it later), and the
+  server and the Android client (*decided 2026-09-26*, §8a *Play Games sign-in*), and the
   register screen stays as the fallback, and the only way on iOS and the web until then; Game Center
   on iOS comes once there is an Apple developer account, as another `IdentityProvider`. An optional
   email, for a password reset, is dropped for now (*decided 2026-09-26*). This replaces the recovery
@@ -733,16 +1050,39 @@ EncryptedSharedPreferences: enough for a game that stores no sensitive personal 
   `RenameCategoryRequest`, the `X-Admin-Token` header (`WyrApi.Headers`), `QuestionStatus.RETIRED`
   and the error codes `FORBIDDEN`, `ALREADY_DECIDED`, `WRONG_STATUS`, `CATEGORY_EXISTS` and
   `CATEGORY_NOT_FOUND`. The moderator's client (`ModerationApi` calls every admin route) and the
-  moderation app are built on it (§8d, *Moderation*). Since 2026-09-26 the server has more that no
-  client calls yet: the reported questions and their dismissal (`AdminReportListDto`,
+  moderation app are built on it (§8d, *Moderation*). Since 2026-09-26 the server has more, which the
+  moderator's client calls too: the reported questions and their dismissal (`AdminReportListDto`,
   `DismissReportsRequest`), an author's opaque id on the admin DTOs (`authorId`), blocking and
   unblocking an author (`BlockAuthorRequest`, `UnblockAuthorRequest`, `AuthorBlockDto`), and the error
-  codes `SUBMISSIONS_BLOCKED` and `AUTHOR_NOT_FOUND` (§8d, *Moderation*, *Reports* and *Authors*).
+  codes `SUBMISSIONS_BLOCKED` and `AUTHOR_NOT_FOUND` (§8d, *Moderation*, *Reports* and *Authors*). Since
+  2026-09-27, deleting a player's account on their request (`DeleteAccountRequest`, the error code
+  `PLAYER_NOT_FOUND`; §8a, *Deleting an account*, *By a moderator*).
 - **A rejection reason is one line** — *provisional — user decision.* §8d asks for a short reason;
   the server also holds it to one line, as it does an option: no control character, nor U+2028 or
   U+2029 (`checkedRejection`). Chosen as the stricter reading, since a reason is shown to its author
   as a line of text; allowing line breaks later breaks no client. The options: keep it, or allow
   line breaks in a reason.
+- **Ready-made rejection reasons** — *provisional — user decision.* The moderation app offers six
+  reasons a tap puts in the reason field, to reject a question or to block its author with (§8d,
+  *Moderation*, `READY_REASONS`): the wording is this build's, in Serbian Cyrillic, one per question
+  rule the moderator holds a question to, the topics rule naming the four topics the user banned.
+  The options: keep them; reword or add to them, which is the one list; or none, the reason always
+  typed.
+- **Where an author stands, in the moderation app** — *provisional — user decision.* The server says
+  whether an author is blocked only in answer to a block or an unblock (`AuthorBlockDto`), and none of
+  its lists says it, so the moderation app shows it only for an author it blocked or unblocked since
+  the token was typed, and offers both Block author and Unblock author for any other (§8d,
+  *Moderation*). Chosen so the client alone changes; an author blocked in an earlier session reads as
+  unknown until unblocked or blocked again, which changes nothing but rejects what they have pending.
+  The options: keep it; or the server sends `authorBlocked` beside `authorId` on the admin DTOs, a
+  field with a default, so no installed client breaks, and the app shows it for every author.
+- **A move from the Reports tab** — *provisional — user decision.* A retirement or restoration from
+  the moderation app's Reports tab puts the question the server answers with in its row on both
+  tabs, its reports as they were, as a move from All questions does, and reads nothing again; one
+  that failed reads the Reports tab again (§8d, *Moderation*). Chosen since the answer is the
+  question as a read lists it, so a read would spend one more of the address's admin budget (§8b,
+  *Rate limiting*) to show the same, but for reports given meanwhile. The options: keep it; or read
+  the reports again after every move, which shows those too.
 - **Retiring a question** — *provisional — user decision.* The user asked for a way to take an
   approved question out of play and put it back (§8d, *Moderation*); the details are this build's.
   Built: a moderator retires an approved question, a seed included, and restores a retired one.
@@ -771,32 +1111,80 @@ EncryptedSharedPreferences: enough for a game that stores no sensitive personal 
   batch, which the client reads as out of questions. The Categories screen sends the categories
   selected (§8d, *The Categories screen*), so a player reaches this in every build, PROD's included.
   `SkipStoreTest` pins what is built.
+- **The launcher icon and name** — *provisional — user decision* (§8, *Release builds*). Built: a
+  placeholder icon, option A's pink over option B's amber and a white question mark, and the `prod`
+  label *Шта би радије?* in Cyrillic whatever the phone's language, as the game opens in Cyrillic
+  (§8f). The options: the user's own icon, in the placeholder's two drawables; and the label in Latin,
+  *Šta bi radije?*, on a phone set to Serbian Latin (one more string, in `values-b+sr+Latn`).
+- **R8 and Kotlin 2.4's metadata** — *provisional — user decision.* AGP 9.0.1's R8 warns, a dozen
+  times a release build, that it cannot parse the metadata of Kotlin 2.4.10's classes. Only
+  kotlin-reflect reads that metadata at run time, and the app has none; the shrunk build played on an
+  emulator without an error (§8, *Release builds*). The options: keep it until an AGP whose R8 reads
+  Kotlin 2.4; or pin a newer R8 (`com.android.tools:r8` on the build's classpath), a build dependency
+  of its own (§4).
 - **The categories on the Play screen** — *resolved 2026-09-26*: the user moved them from the row
   between the cards, where the redesign of 2026-09-25 had put them, to the middle of the top bar
   (§8d, *The Play screen*).
-- **The Play row's arrangement** — *resolved 2026-09-26*: the user's, the points on the left, the
-  thumbs in the middle and Skip on the right (§8d, *The Play screen*).
-- **Log out under the language row** — *provisional — user decision.* The user's Account redesign put
-  Log out beside the language menu, one row of the two; the Statistics switch (§8g) now shares that
-  row, since a row of all three does not fit a phone's width, and a row of its own would take a
-  guest's screen past the 599 of an iPhone SE (566 with the switch beside the menu, 630 under it).
-  So Log out stands under the row, at its end, for a registered player (574 at the tallest). The
-  options: keep it; Log out on the card, where a guest's button to the Auth page is; or the switch
-  elsewhere, off the Account screen's first view.
-- **Where players are, in analytics** — *provisional — user decision.* By default PostHog keeps the
-  address each event's request came from and adds a country, a city and coordinates from it, which
-  is personal data under the GDPR and would have to be in the privacy policy (§8g, *Consent*). Built
-  as the stricter choice: every event asks for no location (`$geoip_disable`), and the project
-  discards the address (§8g, *Where the player is*). The options: keep it; or let PostHog add a
-  location (drop `$geoip_disable`, still discarding the address), for players by country on the
-  dashboards, and say in the privacy policy that an approximate location is derived from the
-  address. A country the game itself keeps is another matter (*Local questions*, below).
+- **The Play row's arrangement** — *resolved 2026-09-28*: the user's, the points on the left with the
+  thumbs right beside them, and Share, always shown, and Skip on the right (§8d, *The Play screen*),
+  replacing the thumbs in the middle (2026-09-26).
+- **Sharing** — *decided 2026-09-28* (the user: "we need to allow players to share question they found
+  interesting with or without results, to their social media"); built (§8d, *Sharing*). An image of the
+  question and the platform's own share sheet, no social network's SDK. Two details are
+  *provisional — user decision*: the message links to the game's **Play Store page**, whichever
+  platform shares, since there is no domain yet, where a link to the question itself would open it in
+  the game or on a page with the store's button (a public route for one question, a preview page,
+  Android App Links, the feed serving that question first), which comes once the site under
+  `ntole.com/wyr` is live; and a reaction's failure, in the points' place, moves the thumbs over while it shows, where
+  the thumbs in the middle never moved for it. The options for the second: keep it; or the points'
+  slot always `WyrDimens.playRowStartMaxWidth` wide, which leaves a gap between the points and the
+  thumbs.
+- **Delete account beside Log out** — *resolved 2026-09-28*: the user moved **Обриши налог** off
+  the Account screen to the bottom of the About screen, after the licences (§8d, *About*), the other
+  option this item listed.
+- **Licence notices** — *provisional — user decision.* SLF4J's MIT licence and Skia's BSD 3-Clause
+  ask for their copyright and permission notice to ship with the app; the About screen shows each one's
+  copyright line and opens its licence's full text in the browser, as it does Apache 2.0's (§8d,
+  *About*). The options: keep it; or every licence's full text inside the app, a screen of its own
+  per licence, which needs no network. Google Play services (Play Games, and what firebase-messaging
+  brings on Android) are under Google's own terms, not open source, and the list leaves them out: the
+  options are that, or a line for them under their terms, or Google's `oss-licenses` plugin, a new
+  dependency (§2), which lists what Play services bundle.
+- **Log out under the language row** — *resolved 2026-09-28*: the user hid the language menu for now
+  (§8f) and grouped what was left, dimmed: the Statistics switch with an info icon, and under it Log
+  out, for a player with a username (§8d, *The Account screen*); the switch moved to the About screen
+  since (2026-09-28).
+- **Where players are, in analytics** — *decided 2026-09-27: PostHog keeps it* (the user: "I would
+  leave IP capture"). PostHog keeps the address each event's request came from and adds a country, a
+  city and coordinates from it, so the dashboards can show players by country (§8g, *Where the
+  player is*). That is personal data under the GDPR and the ZZPL, so the privacy policy says PostHog
+  receives the address and derives an approximate location from it (§8g, *Consent*), and the Data
+  safety form declares an approximate location. Rejected: every event asking for no location
+  (`$geoip_disable`) and the project discarding the address. A country the game itself keeps is
+  another matter (*Local questions*, below).
 - **One Try again** — *provisional — user decision.* The Play and Account redesigns said Try again
   two ways in Serbian, *Пробај опет* and *Покушај поново*, and so did the Categories screen, with
   *Пробај опет*; it is one text now (§8f, *The strings*), *Покушај поново*, which four of the five
   screens before it and the Account screens' *Нешто није у реду. Покушај поново.* already used. The
   options: keep it; or *Пробај опет*, a little shorter, in `Strings.tryAgain` and that sentence
   both.
+- **After a report or a hide** — *provisional — user decision.* Each of the Play screen's menu
+  choices (§8d, *The Play screen*) goes on to the next question once the server has it, with nothing
+  said, as a skip does: the question going is the acknowledgement, the least in the way. The options:
+  keep it; or a brief line in the row's slot on the next question, *Пријављено.* or *Скривено.*, until
+  the next action.
+- **The question's menu on the top bar** — *resolved 2026-09-29*: the account icon left Play's bar,
+  which is home, the categories played in its exact middle, and the ⋮, one icon on each side, so the
+  categories have the 271 of 375 the two leave them (§8d, *The Play screen*). The Account screen is
+  reached from Home, whose account icon carries the notice's dot (§8d, *Navigation*).
+- **The report reasons' wording** — *provisional — user decision.* The menu's five reasons (§8d, *The
+  Play screen*; `QuestionMenuStrings`) are *Увредљиво је*, *Помиње приватну особу*, *Реклама или спам*,
+  *Нема шта да се бира* and *Нешто друго* (*a private person* since 2026-09-29, the legal review:
+  a public figure may be named, a private person not; the wire's `REAL_PERSON` keeps its name). The options: keep the five phrases; or reword them, in
+  `QuestionMenuStrings` alone.
+- **Home's two labels** — *provisional — user decision.* Both of Home's Play buttons say *Играј*
+  (§8d, *Home picks*), since both start the game alike. The options: *Играј* on both; or a different
+  word on each card.
 - **What submitting cost, on the Account screen** — *provisional — user decision.* The Account card
   shows the points and the questions answered and not `pointsSpent` (§8d, *Stats*), and the cost
   shows on the Submit form's button. The options: keep it; or a stat on the card, what was spent.
@@ -818,7 +1206,7 @@ EncryptedSharedPreferences: enough for a game that stores no sensitive personal 
     minute (what bounds guessing a password, as each costs a hash), Play Games sign-ins 20 a minute
     (each costs two calls to Google), the categories list 120 a minute
     (it needs no session), the Home screen's counts (`GET /v1/home-picks`) 120 a minute (nor does
-    that), the admin routes 60 a minute together, and on top of that, admin requests with a wrong or missing token 10 a minute. A
+    that), the admin routes 60 a minute together (an account's deletion by the moderator among them), and on top of that, admin requests with a wrong or missing token 10 a minute. A
     request with the right token spends none of that last budget, but once an address has spent it,
     every admin request from the address is refused until the budget is back, the right token's too
     (`LockingOut`): were that one let in, its 200 among the 429s would give it away, and guessing
@@ -830,7 +1218,9 @@ EncryptedSharedPreferences: enough for a game that stores no sensitive personal 
     120 a minute each, reactions 60 a minute, submissions 30 an hour (the 20-pending cap still applies),
     reports 30 an hour, hiding a question or an author 60 an hour together, account deletions 10 an
     hour, `GET /v1/me` and `GET /v1/me/questions` 120 a minute each, a tap on a Home button
-    (`POST /v1/home-picks`) 30 a minute, push token registrations and removals 60 an hour together. The key is the player id in the
+    (`POST /v1/home-picks`) 30 a minute, push token registrations and removals 60 an hour together,
+    reading the shop 120 a minute and buying in it 30 an hour (`RATE_LIMIT_SHOP_PER_MINUTE`,
+    `RATE_LIMIT_PURCHASES_PER_HOUR`). The key is the player id in the
     bearer token, which the limiter verifies itself (`verifiedPlayerId`): it runs before
     authentication, so no principal is there yet. A request without a token this server signed
     spends its address's budget of the group instead, and then gets its 401, so a forged token
@@ -870,8 +1260,9 @@ EncryptedSharedPreferences: enough for a game that stores no sensitive personal 
   body, is counted as it is read and stopped one byte past the cap (`BodyOverCap`), which
   `receiveOrReject` answers 413. The code is `VALIDATION_FAILED`, since no correct client sends one.
   `RequestBodyCapTest` pins both, and the cap's edge.
-- **Minimum client version** *(built 2026-09-26; no client sends the headers yet)* — every request of
-  the game's will name its build: `X-Client-Platform` (`android`, `ios`, `web` or `desktop`,
+- **Minimum client version** *(built 2026-09-26; the game sends the headers since
+  `feat/account-client`, §8e *The build on every request*)* — every request of
+  the game's names its build: `X-Client-Platform` (`android`, `ios`, `web` or `desktop`,
   `WyrApi.ClientPlatform`) and `X-Client-Version`, a whole build number (`WyrApi.Headers`). Each
   platform's oldest build served comes from `MIN_CLIENT_VERSION_ANDROID`, `_IOS`, `_WEB` or
   `_DESKTOP` (unset, the default, no minimum; one that is not a whole number of at least 1 fails at
@@ -881,18 +1272,43 @@ EncryptedSharedPreferences: enough for a game that stores no sensitive personal 
   426). A request that names no build passes, the moderation app's and every build's from before the
   headers, and so do a platform with no minimum and a version that is no whole number: *provisional*,
   since refusing it would lock a broken build out whatever its number. On the client
-  `UPGRADE_REQUIRED` reads as `DomainError.UNKNOWN` until the branch that sends the headers gives it
-  one of its own. `ClientVersionTest`, `CorsTest`, `ServerConfigTest`.
+  `UPGRADE_REQUIRED`, or a bare 426, is `DomainError.UPGRADE_REQUIRED`, and the first one raises the
+  game's `AppUpdate` (§8e). `ClientVersionTest`, `CorsTest`, `ServerConfigTest`.
 - **Logging** *(built 2026-09-26)* — beside Ktor's line per call and the rate limiter's per refusal,
   one INFO line for each stored submission, naming the question and its author by id
-  (`submission <id> stored, by player <id>`), and one for each admin action that went through, a
+  (`submission <id> stored, by player <id>`), one for each purchase in the shop (`player <id> bought
+  <itemId>`), and one for each admin action that went through, a
   repeat that changed nothing included (a dismissal of no reports, a block or an unblock of an author
   standing so already), naming the action and the id it was done to (`admin approved question
   <id>`, `logAdmin`): approvals, rejections, retirements and restorations, categories added and
-  renamed, reports dismissed, and
-  authors blocked and unblocked. A read, the moderator's lists included, logs nothing of its own.
+  renamed, reports dismissed, authors blocked and unblocked, and accounts deleted
+  (`admin deleted the account of player <id>`, by id alone, whether the moderator named a username or
+  an id). A read, the moderator's lists included, logs nothing of its own.
   Never a token, a password or its hash, an email, a question's text, a rejection's reason or a
   name the moderator typed. `ActionLogTest`.
+- **Guest clean-up** — *decided 2026-09-27; built.* The user: delete the guests nobody can reach any
+  more, after 90 days. A **guest** is a player with no username and no Play Games link (`identities`);
+  **unreachable** means no session of theirs can still refresh and they have been idle
+  `GUEST_RETENTION_DAYS` (§8), 90 by default. Nothing records when a player last played, and no
+  column was added for it (no migration): every refresh sets its session's expiry a refresh token's
+  lifetime ahead (`REFRESH_TTL_SECONDS`, 30 days), and a playing client refreshes every 15 minutes, so
+  a session's last refresh is its expiry less that lifetime. So a guest is deleted when they were
+  minted at least the retention ago and every session of theirs has expired, its last refresh at least
+  the retention ago (`GuestCleanup.unreachable`); one with no session left, after a logout, counts
+  from being minted. A session whose token can still refresh always keeps its guest, whatever the
+  lifetime was when it was issued. Each goes through `AccountDeletion.delete` (§8a, *Deleting an
+  account*), so every cascade holds and each like they held is taken back from its author, as §8c's
+  sum asks. The job (`GuestCleanupJob`) runs at boot and then every 24 hours, in the server's
+  background scope, which stops with the server; a run reads 100 guests at a time (`BATCH_SIZE`), at
+  most 100 batches, oldest first, and deletes each in a transaction of its own, which locks the row and
+  checks again first (§4), so two instances running at once delete each guest once. Best effort: a run
+  that fails is logged as a warning, by the failure's kind alone, and the next run tries again. Each
+  run logs one INFO line, `guest clean-up deleted <n> guests idle 90 days or more`, never an id.
+  `0` turns it off (*provisional — user decision*: the other option was to refuse 0, as only a whole
+  number of at least 1); a blank value is the default, as every other variable's is. Nothing is sent to
+  the deleted guest's device: its next refresh is 401, as it was since the token died, and it mints a
+  fresh guest. `GuestCleanupTest` (who is deleted and who kept, the sum for other authors, two runs at
+  once, the log line), `ServerConfigTest`.
 - **Likes from fresh guests** — *decided 2026-09-24: no like limitations.* A like pays its author
   once per player (§8d, *Reactions*), and guests cost nothing to mint (§8a), so a script minting
   guests could pay one author a point per guest for each of their questions. The user accepted that:
@@ -904,7 +1320,13 @@ EncryptedSharedPreferences: enough for a game that stores no sensitive personal 
   too leaves a spent token, refused at the next refresh. That takes two lost answers in a row, or a
   settling refresh (`refreshAs`, §8a) whose answer is lost when the stored token was already the
   previous one.
-- **WCAG AA contrast audit** — see §5b. Paused along with UI polish (§8d).
+- **WCAG AA contrast audit** — *done 2026-09-26* (§5b, *Contrast*), but for card A, below.
+- **Card A's contrast** — *provisional — user decision.* White on card A's pink, `#D4537E`, is 3.9 to
+  1: AA for large text, which an option is at its own 22 bold and the percentage at 34, but not for an
+  option a long question shrinks below 18.66 bold (§8d, *The Play screen*), which needs 4.5. The brand's
+  colours were left as they are (§5b). The options: keep it; card A a little deeper, `#C4466F`, white
+  on it 4.7 to 1, the one token to change, the dark theme's included; or the option's floor at 19,
+  large text, which cuts a 200-character option on an iPhone SE.
 - **Local questions** — *design decided 2026-09-26; not built.* The game is for Serbia first and
   more countries later. Most questions translate, but some matter only in one place: a region of
   several countries (the former Yugoslavia), one country, or one city. Such a question reaches only
@@ -957,12 +1379,21 @@ EncryptedSharedPreferences: enough for a game that stores no sensitive personal 
   2. In the Play Console, *Play Games Services → Setup and management → Configuration*: create a
      Play Games Services project, which makes or links a Google Cloud project, and fill in the OAuth
      consent screen it asks for.
-  3. Add two credentials there. An **Android** one for the app, `io.ntole.wyr`, with the SHA-1 of the
-     key it is signed with (the Play app signing key, and the debug key for builds made on a laptop);
-     the DEV and LOCAL flavors, `io.ntole.wyr.dev` and `io.ntole.wyr.local`, need their own to sign in,
-     to be settled when the client adopts it. And a **game server** one, an OAuth client of type *Web
-     application*: its client ID and secret are `PLAY_GAMES_CLIENT_ID` and `PLAY_GAMES_CLIENT_SECRET`,
-     and the same client ID is what the Android app passes to `requestServerSideAccess`.
+  3. Add the credentials there. An **Android** one per package and signing key that should sign in,
+     one credential each: `io.ntole.wyr` with the SHA-1 of the Play app signing key, of the upload key
+     (a release build installed by hand) and of the debug key (a PROD build made on a laptop,
+     `prodDebug`), and the DEV flavor, `io.ntole.wyr.dev`, with the debug key's SHA-1, for builds made
+     on a laptop (LOCAL's `io.ntole.wyr.local` likewise, for the emulator). Google's documentation asks
+     for a credential whose package name is the app's and says nothing against several packages in one
+     game project, which is what this relies on; if the Play Console refuses a package that is not its
+     app's, Play Games works on the PROD flavor alone, a laptop's `prodDebug` build through the debug
+     key's credential, and a DEV build finds nobody signed in to it, which shows nothing (§8a, *The
+     client*). And a **game server** one, an
+     OAuth client of type *Web application*: its client ID and secret are `PLAY_GAMES_CLIENT_ID` and
+     `PLAY_GAMES_CLIENT_SECRET`, and the same client ID is the app's `wyr.playgames.serverClientId`,
+     which it passes to `requestServerSideAccess`. The project id the Play Console shows is the app's
+     `wyr.playgames.appId`. Both go in `local.properties` (NEXT-SESSION.md, *Play Games and pushes on a
+     phone*, has the exact steps).
   4. Until the game is published, add each tester's Google account under *Testers*, or Play Games
      refuses them.
   5. On Render, set both variables on `wyr-server`, and on `wyr-server-dev` too to try it there, then
@@ -975,6 +1406,59 @@ EncryptedSharedPreferences: enough for a game that stores no sensitive personal 
   Games counts as registered, so may submit (the user: "yes"). Rejected: asking more than the access
   token of a player who already has a username, and signing such a Play Games player in as a new
   player. A moderator's route to unlink one comes if a player ever needs it.
+- **When a launch signs in with Play Games** — *provisional — user decision.* The scope asked for a
+  flag forgotten "when the session dies or is replaced"; built instead, the flag is forgotten only
+  when the session dies (a dead session replaced by a fresh guest), and a login, a logout, an
+  account's deletion and a Play Games sign-in settle it (§8a, *Play Games sign-in*, *The client*).
+  Forgotten on every replacement,
+  a login to another account, or a logout, would be undone at the next launch: the Play Games player
+  linked already signs the device back in as its player, whoever the bearer names. The options: keep
+  it; forget it on every replacement, as asked; or sign in at every launch until the player is linked.
+  One edge, accepted: a device from before this build holds a session and no flag, so its next launch
+  signs in with Play Games, and when the Play Games player is linked to another player already, the
+  device becomes theirs (only testers' devices).
+- **Where the Auth page offers Play Games** — *provisional — user decision.* The scope asked for the
+  button "when Play Games is configured and the player is not signed in to it"; built, it shows where
+  Play Games is set up and the player read is not linked to it (`AccountState.offersPlayGames`), signed
+  in to Play Games or not, and signs them in to Play Games first only when they are not. So a player
+  who logged out of a Play Games account, and whose device then signs in with Play Games by itself no
+  more (*When a launch signs in with Play Games*), gets back in with one tap. The options: keep it; or
+  only while not signed in to Play Games, as asked, which leaves that player the username form alone.
+- **The shop's details** — *provisional — user decision* (§8d, *The shop*). The user decided the price
+  (220, and 1 on dev), registered players only, the theme worn kept on the device and the bag on the
+  Account bar; the rest is this build's: each theme one palette whatever the device's mode, where a
+  light and a dark variant of each is the other option; a theme bought put on at once; an owned theme
+  showing the current price; the owned themes a picker on the shop screen until a second kind of item
+  comes, then a collection screen of their own; the four themes' look and names; the preview a small Play screen of *Пица*
+  and *Бурек*; and a theme worn that the server says is no longer owned taken off. The options: keep
+  them; or change any, each in one place (`ShopThemes.kt`, `ShopStrings`, `ThemePreview`).
+- **A Play Games player's name on the card** — *decided 2026-09-28* (the user: "it should be name from
+  google play services account"): a player registered by Play Games alone, who has no username, is
+  named by their Play Games name, which the device's Play Games gives (`PlayGames.playerName`, over
+  `PlayersClient.getCurrentPlayer`), read with the stats each time; the server keeps none. *Google
+  Play Игре* only when the device's Play Games gives no name (§8d, *The Account screen*). Rejected: the
+  server storing the name from its sign-in, which would show it on every platform but keep more
+  personal data and go stale on a rename.
+- **The visuals' details** — *provisional — user decision.* The user asked for backgrounds and
+  animations (`feat/visuals`, 2026-09-27); main built the Play and Home motion and the shop's art
+  meanwhile, and what main lacked was ported onto them (§5b, *Backgrounds*, *Motion*); the details are
+  this build's. The game's own art is the same wash and question marks under every screen, where
+  `feat/visuals` had them under Home and Play and a few faint dots elsewhere: the art is drawn once
+  under the whole window, as the shop's is, and a variant per screen would need the page to know the
+  screen and fade between the two. The wash is 5 to 8 percent and the marks 4 to 5, and `muted` moved
+  for them (light `#5E5D57`, dark `#9C9B94`). On a wide window the wash runs left to right. A screen's
+  change is 250 ms over 24, and back from the home icon runs as back does; Home to Play keeps its own
+  fade through. The coin bumps wherever the points go up, 1.3 over 250 ms. Not ported, being built on
+  main already or in its place: the new question's cards rising in (main slides the next question onto
+  the cards), the reveal's pick pop and the other card's dim (main lifts the pick and stands the other at
+  85%), Home's buttons sliding in (main's Home has its reveal and fade through), and the thumb's bounce
+  (main sinks it under the finger and ticks the phone). The options: keep them; per-screen art (the
+  question marks under Home and Play only, dots elsewhere); `muted` as before and the washes at 2
+  percent, which do not show; top to bottom always; or change any duration or size, each a token.
+- **The notice's look** — *provisional — user decision.* A dot in the brand's pink on the account
+  icon, and on each new row of My questions for the visit that first shows it (§8d, *The notice of a
+  decision*); no banner and no text on screen (the user: less text). The options: keep it; a number of
+  decisions in the dot; or the heading's accent in place of the pink.
 - **Push notifications** — *built on the server 2026-09-26 (§8a, *Push tokens*); off until the user
   sets it up.* The server sends through Firebase Cloud Messaging as a Google service account, whose
   JSON key file `FCM_SERVICE_ACCOUNT_JSON` holds whole (`sync: false` in `render.yaml`, set by hand in
@@ -983,9 +1467,11 @@ EncryptedSharedPreferences: enough for a game that stores no sensitive personal 
   boot, so a new key applies once the service restarts. **What the user sets up**, once:
   1. In the Firebase console, create a project (or add Firebase to a Google Cloud project), and add
      the Android app three times, once per flavor (§8e): `io.ntole.wyr`, `io.ntole.wyr.dev` and
-     `io.ntole.wyr.local`. The client branch that adopts pushes takes the `google-services.json`
-     Firebase then offers. The *Firebase Cloud Messaging API (V1)* must be enabled in Google Cloud,
-     which a new Firebase project is.
+     `io.ntole.wyr.local`. The app takes no `google-services.json` and no google-services plugin: the
+     ids in it go in `local.properties`, `wyr.firebase.projectId`, `.apiKey`, `.senderId` and each
+     flavor's `wyr.firebase.appId.<flavor>` (§8a, *Push tokens*, *On Android*; NEXT-SESSION.md, *Play
+     Games and pushes on a phone*, has the exact steps). The *Firebase Cloud Messaging API (V1)* must
+     be enabled in Google Cloud, which a new Firebase project is.
   2. In *Project settings → Service accounts*, *Generate new private key*: a JSON file downloads. It
      is a secret: never commit it, never paste it in a chat.
   3. On Render, paste the whole file as `FCM_SERVICE_ACCOUNT_JSON` on `wyr-server`, and a second key
@@ -1000,7 +1486,10 @@ EncryptedSharedPreferences: enough for a game that stores no sensitive personal 
     question's latest side, and every re-answer), skips (per cycle), reactions (a like or a dislike),
     and **how long each answer took** (`VoteRequest.answerMillis`, kept on the vote as
     `votes.answer_millis`, V16: from 0 to `WyrApi.Limits.MAX_ANSWER_MILLIS`, 10 minutes, and none
-    otherwise, never a refusal; the latest answer's, as the side is; the client adopts it later).
+    otherwise, never a refusal; the latest answer's, as the side is). The game sends it with every
+    vote: the time the Play screen measures from the question shown to the tap, counted only while
+    the screen is shown (`ScreenStopwatch`, §8g), and a resend of the same attempt sends the same
+    value (`PendingVote.answerMillis`, through `CastVote` and `VoteRepository.cast`).
     Nothing reads any of them to choose a question yet.
   - *Later, not built*: **question traits** a moderator sets beside the categories (light or deep,
     silly or serious, and the like, the list to settle then); a **per-player affinity** for each
@@ -1059,7 +1548,7 @@ seed (`Migrations`, `DatabaseFactory.init`). Nothing builds a table any other wa
   *Reports*), V12 (an author's block, §8d *Moderation*), V13 (sessions indexed by player, for an
   account's deletion, §8a), V14 (skips and hidden questions indexed by question, for the same), V15
   (the Home screen's two counts, §8d *Home picks*), V16 (an answer's time, *Personalization*, above),
-  V17 (push tokens, §8a) and V18 (Play Games links, §8a).
+  V17 (push tokens, §8a), V18 (Play Games links, §8a) and V19 (purchases in the shop, §8d *The shop*).
   `Migrations.migrate` takes the baseline itself (`baselineVersion` 1), and only for a database
   holding every table V1 builds (`TABLES_BEFORE_MIGRATIONS`) and no history table; Flyway's
   `baselineOnMigrate` is off. Any other database with tables and no history fails the boot, rather
@@ -1147,7 +1636,9 @@ seed (`Migrations`, `DatabaseFactory.init`). Nothing builds a table any other wa
   and leaves the answer time the answer before it left. V17 adds a table no build before names; a
   logout there still deletes its session, and the cascade still takes its tokens. V18 adds a table no
   build before names: a player signed in with Play Games plays on there as a guest, through their
-  sessions, and submits only with a username too, until the roll forward. `MigrationsTest` reads a
+  sessions, and submits only with a username too, until the roll forward. V19 adds a table no build
+  before names: a buyer's themes are gone there, and their stats do not add up (the price is out of
+  their total but not in `pointsSpent`) until the roll forward. `MigrationsTest` reads a
   table a later script dropped by name (`DROPPED_TABLES`), since `Tables.kt` no longer names it.
 - *Several instances booting at once* (Render starts a deploy's new instance before it stops the old
   one): on PostgreSQL each script runs under Flyway's advisory lock, so one boot migrates while the
@@ -1178,18 +1669,24 @@ returns and never recomputes points, so the two cannot disagree.
 - A **dislike** earns and costs nobody anything (*decided 2026-09-26*): a guest costs nothing to mint
   (§8a), so a dislike that cost its author a point would let a script drive any author below zero,
   and so stop them submitting. It is a count, for now for the players and the moderator to see.
-- Submitting a question **costs** its author `Scoring.SUBMISSION_COST`, **1 point** until the game is
-  released (*decided 2026-09-25*) and **50** from then on (*decided 2026-09-26*, §8b *The launch*), taken in the submission's own transaction (§8d, *Submitting*). The
-  number is the wire's, `WyrApi.Limits.SUBMISSION_COST`, so a client can say what it is (the game's
-  one copy, `SubmissionRules.SUBMISSION_COST`, is on the Submit form's button, §8d); only the server
-  charges it. A player needs at least that many points to submit, or it is 409
+- Submitting a question **costs** its author the server's `SUBMISSION_COST` (§8,
+  `ServerConfig.submissionCost`; *built 2026-09-26*), **1 point** until the game is
+  released (*decided 2026-09-25*) and **50** from then on (*decided 2026-09-26*, §8b *The launch*), taken in the submission's own transaction (§8d, *Submitting*). Unset, it is
+  `Scoring.DEFAULT_SUBMISSION_COST`, the wire's `WyrApi.Limits.SUBMISSION_COST`, 1, which is only the
+  default now: `GET /v1/me` names the cost the server charges (`PlayerStatsDto.submissionCost`,
+  defaulting to 1 on the wire, so a server from before it reads as charging 1, which it did), and the
+  game shows that (§8d, *Submitting*); only the server charges it. A player needs at least that many points to submit, or it is 409
   `NOT_ENOUGH_POINTS` and costs nothing. A rejection pays the cost back, in the decision's
   transaction; an approval keeps it, and so does a retirement. Each question keeps what it cost (`questions.submission_cost`, V7), and a
   rejection pays back that, not the constant, so a question submitted before submitting cost
   anything (V7 gave every question there 0) pays back nothing, and one submitted at 1 pays back 1
   whatever the cost is by then. A seed costs nothing and pays nobody.
+- A theme bought in the shop **costs** the server's `THEME_PRICE` (§8; 220, and 1 on dev), taken in the
+  purchase's own transaction and kept on the purchase (`purchases.price`, V19), never paid back (§8d,
+  *The shop*).
 - So a player's total is always what their answers earned, plus a point for each like their
-  questions hold, less what their questions not rejected cost them (`PlayerStatsDto.pointsSpent`),
+  questions hold, less what their questions not rejected cost them and what they paid in the shop
+  (`PlayerStatsDto.pointsSpent`),
   which `GET /v1/me` reports in one read. Retiring a question takes nothing back (§8d,
   *Moderation*): its answers' points stay, and so do its likes, held and paid and counted in its
   author's likes received, so the sum holds over every question, retired or not. Two edge cases,
@@ -1199,7 +1696,8 @@ returns and never recomputes points, so the two cannot disagree.
   pays nothing back, so its author is short that point for good. One more, where two rules meet:
   an author is paid for their own like (§8d, *Reactions*), so liking their approved question gives its
   cost back. *Decided 2026-09-25: keep it.* The cost is 1 point only until release and will rise,
-  and with thousands of questions an author rarely meets their own.
+  and with thousands of questions an author rarely meets their own. A cost of 0 lets a player with no
+  points submit, and one taken below 0 (above) not even then: accepted.
 - An account's deletion (§8a, *Deleting an account*) takes each like the player held back from its
   author, a point per like, in its own transaction (`PlayerStore.payAuthor`), so the sum above holds
   for every author who is left. Their approved questions are nobody's from then on, so a like of one
@@ -1225,8 +1723,9 @@ answer what they think is popular instead of what they actually prefer. A mode t
 rewards reading the crowd may come later as a separate, opt-in mode, never as the default.
 
 **Current focus.** UI polish is paused. The game's own screens are the app: **Home**, **Play**,
-**Account**, **Submit** and the **Auth** page opened from Account, and the **Categories** screen
-opened from Play, reached from one another by buttons (*Navigation*, below), in every build, LOCAL,
+**Account**, **Submit**, the **Auth** page, the **About** screen and the **Shop** opened from Account,
+and the **Categories** screen opened from Play, besides the update screen that takes their place once the
+server refuses the build (§8e), reached from one another by buttons (*Navigation*, below), in every build, LOCAL,
 DEV and PROD alike, opening on Home. The engineering dev console functionality was first built
 behind is gone since `chore/remove-console` (*decided 2026-09-25*: the console is not needed), and
 nothing replaces it: a LOCAL or DEV build names its server on the Account screen (§8e), and a
@@ -1234,39 +1733,53 @@ feature is tried through the game and the moderation app. A new feature gets a p
 game's, or a place on one, theme tokens only (§5b), and its words in `Strings` (§8f).
 
 **Navigation** (*decided 2026-09-25*: no tabs; `App.kt`, `io.ntole.wyr.navigation`, `io.ntole.wyr.home`):
-- The app opens on **Home**: the game's name, a big **Play** button and the account icon top right,
-  and nothing else, the user asking for less text. Play opens the **Play** screen under a top bar of
-  the home icon, left, back to Home, the categories played in its middle, which open the
-  **Categories** screen, and the account icon, right. The account icon, from Home or
-  Play, opens the **Account** screen under a top bar of a back arrow. On it, a guest's one button
-  opens the **Auth** page, to register or log in, and My questions' *Ново питање* the **Submit**
-  screen's form. On Play, the categories played open the **Categories** screen (*Categories*, *The
-  Categories screen*), whose **Играј** goes back to Play. The Account, Auth, Submit and Categories
-  bars hold a back arrow alone (`BackTopBar`); the Submit button the Account bar held before is
+- The app opens on **Home**: the game's name, two small **Play** buttons side by side in the cards'
+  colours, which reveal how many picked each once tapped (*Home picks*), under them the categories
+  played, which open the **Categories** screen (*built 2026-09-29*, the user: the category picker on
+  Home, below the two Play buttons), and the account icon top right, and nothing else, the user asking
+  for less text. Either Play, after its reveal, opens the
+  **Play** screen, fading into it, under a top bar of
+  the home icon, left, back to Home, the categories played in its exact middle, which open the
+  **Categories** screen, and the question's menu, right; no account icon (*resolved 2026-09-29*, §8b
+  *The question's menu on the top bar*). On Home's bar the account icon has a dot while a decision
+  waits there (*The notice of a decision*). The
+  account icon, on Home, opens the **Account** screen under a top bar of a back arrow and, on the right, a bag
+  to the **Shop** (*The shop*, below) and an info icon to the **About** screen (*About*, below). The
+  points, the coin and the number, on Play's row and on the Account card, open the Shop too. On it, a guest's one button
+  opens the **Auth** page, to register or log in, My questions' plus the **Submit** screen's form,
+  and a question's row the **Question** screen, that question whole (*Question details*). On Play, the categories played open the **Categories** screen (*Categories*, *The
+  Categories screen*), whose **Играј** goes back to Play; opened from Home, its **Играј** opens Play in
+  its place, so the stack is Home and Play and back from Play is Home. The Auth, Submit, Categories, About and
+  Question and Shop bars hold a back arrow alone (`BackTopBar`), Account's the bag and the info icon besides (`AccountTopBar`); the Submit button the Account bar held before is
   gone. The icons are the theme's (§5b), each named for a screen reader in the language shown (§8f).
 - *The back stack* is made by hand, no navigation library: a sealed `Screen` and a `Navigator` of
   the screens opened, Home at the bottom. `open` shows a screen over the one shown, or goes back to
   it when it is on the stack already, so no screen is on it twice and the home icon is
-  `open(Screen.Home)`; `back` goes to the screen before, and at Home does nothing. The stack is saved
+  `open(Screen.Home)`; `back` goes to the screen before, and at Home does nothing; `replace` shows a
+  screen in place of the one shown, which leaves the stack (the Categories screen's Play, opened from
+  Home), and `previous` names the screen under the one shown, which it was opened from. The stack is saved
   state (`Navigator.Saver`), so an Android activity made anew, on a rotation say, shows the screen it
   showed. `NavigatorTest` pins it.
+- *Between screens* a quick fade and a slight slide, forward from the end and back from the start
+  (§5b, *Motion*, `ScreenTransitions`), over the page and its art, which the app draws once under the
+  whole window (§5b, *Backgrounds*); Home to Play is Home's own fade through (*Home picks*).
 - *Android's back*, button or gesture, goes back through the navigator (`SystemBack`, over
   `BackHandler` from the catalog's `androidx.activity:activity-compose`, in `:app:shared`'s
   androidMain); at Home it is left to the system, so it leaves the app. Desktop, the web and iOS bind
   nothing: their on-screen buttons are the way back.
 - *ViewModels* belong to the platform's owner, the activity's or the window's, as under the tabs,
   never to the back stack: each screen's lives as long as the app, so Play keeps its question
-  through Account and back, or Home and back, and Account, Submit and Categories read the server
+  through Home and Account and back, and Account, Submit and Categories read the server
   again each time they are shown; the Auth page is on the Account screen's, and the Categories
   screen starts each visit afresh from what is played (`CategoriesViewModel.open`, which Play's tap
-  calls before it opens the screen). `AppNavigationTest` drives the whole `App` over fakes by
+  and Home's call before they open the screen). `AppNavigationTest` drives the whole `App` over fakes by
   tapping its buttons, and counts the questions asked.
 - *Heights*: each top bar is `WyrDimens.topBarHeight` high, 48, the tab row's height before it, so
   the Play, Account, Auth, Submit and Categories screens keep the 599 of an iPhone SE's 667 their
   draw tests hold them to. `TopBarsDrawTest` holds every bar to 48 at 375 wide with nothing cut
   short but a long selection of categories on Play's, cut on its one line, in both themes and every
-  language; `HomeScreenDrawTest` holds Home to 599 at 375 wide (276
-  on this Mac) and to its two texts and one icon.
+  language; `HomeScreenDrawTest` holds Home to 599 at 375 wide, a long selection of categories
+  included, and to its texts and one icon.
 
 **Wide screens** (*decided 2026-09-26*: of two options, the user picked the cards side by side over
 the row with the top bar as it is, the other being the row moved into the top bar; and the other
@@ -1284,55 +1797,91 @@ orientation, in common code alone:
   same, but a subcomposition cannot answer the intrinsic heights the draw tests measure the screen by.
   The cards are then the same composables whichever way they stand, so a window resized across the
   rule, or an iPhone turned, keeps a reveal's count up where it is; an Android activity, made anew on
-  a rotation, counts it up again. Each card's bar in the reveal stands along its edge by the row: side
+  a rotation, resumes it where it was (*The Play screen*, *A reveal resumes*). Each card's bar in the reveal stands along its edge by the row: side
   by side, along both cards' bottoms, card B's too, which stacked stands along its top; the Play
   screen asks QuestionLayout's rule of the size it was last laid out at (`standsSideBySide`).
 - *The Account screen, the Auth page, the Submit form and the Categories screen* hold their content to
   a column `WyrDimens.contentMaxWidth`, 600, wide down the middle (`contentWidth`), placed after the
-  scroll, so the whole width still scrolls; the Categories screen's list scrolls in its column. Home is
-  centred already and stays as it is.
+  scroll, so the whole width still scrolls; the Categories screen's list scrolls in its column. Home's
+  two Play buttons stand side by side on every screen, the pair no wider than
+  `WyrDimens.homeButtonsMaxWidth` (*Home picks*).
 - `QuestionLayoutDrawTest` holds the rule to boxes of known sizes, which no font changes: side by side
   from 600 across while wider than tall, stacked at 599, when square and on a tablet held upright, and
   the height it needs by the same rule. `PlayScreenDrawTest` draws every state on two phones on their
   side and in a desktop window, holds each state to the room a 360-by-780 phone on its side (720 by
   256) and an iPhone SE on its side (667 by 327) give, measured wider for CI's fonts as the portrait
-  test is, finds the row under the cards, the points under card A, Skip under card B and the thumbs
-  in the middle of the screen, card B's bar along its bottom, and nothing in the row moved by the
-  reveal. The Account, Auth, Submit and Categories draw tests find every text, button
+  test is, finds the row under the cards, the points and the thumbs beside them under card A, Share
+  and Skip under card B, card B's bar along its bottom, and nothing in the row moved by the reveal. The Account, Auth, Submit and Categories draw tests find every text, button
   and field in a column of 600 down the middle of a desktop window's 800, and something spanning it.
 
 **The Account screen** (`io.ntole.wyr.account`; §8a *Accounts*, *Stats* below):
-- *Its order* (*decided 2026-09-25*, the user's redesign, with less text overall): the player on a
-  card, with a guest's one button to the Auth page; **My questions**, a table; the **language menu**
-  (§8f, `LanguageMenu`) and beside it the **Statistics** switch (§8g), one row of the two, and under
-  them **Log out**, for a registered player (*provisional — user decision*, §8b: Log out was beside
-  the menu until the switch took its place); and the server line, outside PROD.
+- *Its order* (*decided 2026-09-25*, the user's redesign, with less text overall; the options
+  grouped 2026-09-28): the player on a card, with a guest's one button to the Auth page; **My
+  questions**, a table; then, dimmed under a line (`Settings`, `WyrColors.muted`), **Log out**, for a
+  player with a username, and nothing, line included, for anyone else; and the server line, outside
+  PROD. No language menu, for now (§8f); no Delete account, which is on the About screen (*Deleting*,
+  below); and no Statistics switch, which moved to the About screen too (*decided 2026-09-28*, the
+  user: "move statistics toggle into info section").
+- *Deleting* (*built 2026-09-26*, on the About screen since 2026-09-28, §8a *Deleting an account*):
+  **Обриши налог** (`DeleteAccount`, in `io.ntole.wyr.account`), muted
+  (`WyrColors.muted`), opens a dialog of one line, *Налог и све у њему нестаће заувек.*, on the
+  theme's surface in its primary text colour, given it by name since the `ColorScheme` mirrors no
+  `surfaceContainerHigh` (§5b), with **Обриши** (in the error colour) and *Откажи*
+  (`Strings.cancel`); only Обриши deletes
+  (`AccountViewModel.deleteAccount`, `AccountAction.DELETE`, on the Account screen's ViewModel, which
+  the About screen reads the player on if none is read yet). Deleted, the ViewModel reads the player
+  again and raises `AccountState.deleted`, on which the About screen goes back to the Account screen,
+  showing the fresh guest; a failure says so over the button, in the Account screen's words (offline,
+  a rate limit, or anything else), and forgets nothing. It is offered once a player is read, and not
+  while a read of the player has just failed, when a deletion would only fail too
+  (`AccountState.offersDeletion`). Words: `AccountStrings.deleteAccount`, a `DeleteAccountStrings`.
 - *The card* (*redesigned 2026-09-26*, the user: "a bit nicer... later more things will be added to
   it"): the player's initial in a circle, the first letter of the username in capitals, or a guest's
   figure (`Avatar`); the username, or *Гост*; and on the right the points, the coin and the number
-  (`PointsAmount`, §8f), read through `GetPlayerStats` each time the screen is shown, since the points
+  (`PointsAmount`, §8f), a tap on which opens the shop (`account.points`), read through `GetPlayerStats` each time the screen is shown, since the points
   move on Play meanwhile. Under a line, the stats, two to a row so more fit as they come
   (`statCells`): one for now, *Одговорена питања*, the distinct questions the player has answered.
   The answers given, the cycle and the likes received left the card (the user: "Remove cycles", "no
   need for two fields saying the same", "Likes can go to questions table"); not what the player's
   questions cost either (`pointsSpent`, *Stats*, provisional). A screen reader reads each number with
   its word. A guest gets **one button** on the card, *Региструј се или се пријави*, to the Auth page
-  (below), instead of the forms; a registered player gets **Log out** under the language menu, after
-  which the device plays on as a fresh guest. A read that fails says so under the card, beside its
-  *Покушај поново*, or in the card's place before any read worked; a read that failed whole, the
-  list's too, says so once.
+  (below), instead of the forms; a player with a username gets **Log out** under My questions,
+  after which the device plays on as a fresh guest. A player
+  registered by Play Games alone, with no username, is named on the card by their Play Games name, the
+  device's Play Games' (`AccountState.playGamesName`, read with the stats through
+  `LinkPlayGames.playerName`; nothing kept by the server), its first letter in the circle, and *Google
+  Play Игре* when that gives none, where a guest is *Гост* (`nameOf`; the brand is `GOOGLE_PLAY`, the same in every language, as
+  `USERNAME_CHARACTERS` is, since a Serbian text holds no Latin letter), and has no way to the Auth
+  page and no Log out (*decided 2026-09-28*, the user: registering again is "redundant"): a username
+  and a password are only for logging in where there is no Play Games, on iOS and the web, neither
+  launched, and a logout would only make the device a guest. A read that fails says so
+  under the card, beside its *Покушај поново*, or in the card's place before any read worked; a read
+  that failed whole, the list's too, says so once. While an action runs a bar under the card says so,
+  and not once a failure shows, while the read after a failed action runs on.
 - `AccountScreenDrawTest` holds every state with no question listed to 599 high in every language,
   measured 400 wide as `PlayScreenDrawTest` measures and for DEV, whose server line is the longest
-  (574 on this Mac at the tallest, a registered player whose read again failed), and New question
-  above 599 however long the list; a list scrolls with the screen. It finds the language menu and the
-  switch on one row, neither cut short, and Log out under them, in every state and language.
+  (598 on this Mac at the tallest, a guest whose deletion failed offline, the read after it running
+  or done), and a registered player's plus above 599 however long the list; a list scrolls with the
+  screen. It finds Log out for a player with a username alone, and no Statistics switch, in every
+  state and language; the points opening the shop; no language menu and no Delete account in any state; a question's options on two lines at most, the longest cut short; and
+  the info icon's dialog in the theme's colours.
 - **The Auth page** (`AuthScreen`, *decided 2026-09-25*), on the Account screen's ViewModel, shows
   **Register** only (username, and password with a show/hide toggle), which keeps the points, and a
   link, *Већ имаш налог? Пријави се*, that switches the same page to **Log in** (username, password),
   with a link back, *Немаш налог? Региструј се* (`AccountState.authMode`, Register on a first
-  showing; not while an action runs). No heading and no notes, the user asking for less text. Under
-  each register field its rule, *3–20 знакова: a–z, 0–9, _* and *6–128 знакова*, in the error colour
-  while what is typed breaks it, and Register sends nothing until both pass. A register or a login
+  showing; not while an action runs). Where Play Games is set up (§8a, *Play Games sign-in*) and the
+  player is not linked to it, one more button comes first, over either form, **Пријави се преко
+  Google Play Игара** (`AccountState.offersPlayGames`, `LinkPlayGames.manually`): it asks the player
+  to sign in to Play Games unless they are, then signs in with it, the guest linked and keeping
+  everything or the device the player it was linked to already, and goes back to the Account screen
+  as a login does; a player who does not sign in to Play Games stays with nothing sent, and a refusal
+  says *Нешто није у реду. Покушај поново.* under the button. No heading and no notes, the user asking
+  for less text. Under each register field its rule, *3–20 знакова: a–z, 0–9, _* and *6–128 знакова*,
+  in the error colour while what is typed breaks it, and Register sends nothing until both pass. Under
+  Register one short line (*built 2026-09-26*), *Регистрацијом прихваташ услове и политику
+  приватности.*, its two nouns links that open the site's terms and privacy policy in the browser, in
+  the language shown (`AccountStrings.termsLine`, a template whose `{0}` and `{1}` are the links,
+  `parts`; the About screen's `Site`); taps `auth.terms` and `auth.privacy` (§8g). A register or a login
   that worked goes back to the Account screen, which reads the player again (`AccountState.signedIn`,
   which the page takes down as it goes and the next action takes down too, so a page left before its
   answer came is not sent back later). Shown with no player read yet (an Android process brought
@@ -1343,14 +1892,20 @@ orientation, in common code alone:
 - A refusal from the server shows under the form that sent it, in a few words: a taken name, a wrong
   login, a rate limit with its wait, offline. A guest with points who logs in is warned once that the
   guest's points stay behind, *Поени госта (12) неће прећи на налог.*, the 12 after a coin
-  (`PointsText`, §8f), and the next *Ипак се пријави* goes ahead; switching forms takes the warning down, and a form's failure with it.
+  (`PointsText`, §8f), and the next *Ипак се пријави* goes ahead; a player registered by Play Games
+  alone is not warned, their points staying on that account, which the page's Play Games button signs
+  in to again; switching forms takes the warning down, and a form's failure with it.
 - Each field names its autofill content type (`NewUsername` and `NewPassword` to register,
   `Username` and `Password` to log in), so the phone's password manager can fill them and offer to
   save them once a register or login that worked takes the page off the screen (Compose on Android
   commits autofill when no autofillable field is left, so nothing typed is cleared before then).
   What is typed lives in `AccountViewModel`'s memory only, never in saved state.
 - One action at a time, and the player read again after every one, a failed one too: a registration
-  whose answer was lost shows as the account it made. A register or a login whose read after it
+  whose answer was lost shows as the account it made. The device can also become another player with
+  nothing asked of the screen, by the launch's Play Games sign-in or a dead session replaced: the
+  ViewModel hears it (`CurrentSession.sessions`), and what it read of the player before is dropped and
+  read again as the player now (`AccountState.readFor`), so neither the card nor the Auth page shows
+  the guest's name, points or buttons meanwhile. A register or a login whose read after it
   names an account goes back to the Account screen as one that answered does, its failure dropped;
   what was typed is gone by then, so the password manager has nothing to save. `AccountViewModelTest`
   drives it over fakes, `AccountScreenDrawTest` and `AuthScreenDrawTest` draw every state in both
@@ -1371,67 +1926,253 @@ orientation, in common code alone:
   columns up (`totalOf`), the author's likes and answers received. A screen reader hears a row as
   one, each number after its column's name, *Лајкови: 5*. With no question the table stays, with one
   row: **Постави прво питање**, to the form, for a registered player, or for a guest *Региструј се да
-  додаш питање.* Its heading holds **Ново питање**, which opens the Submit screen's form
-  (*Submitting*), a registered player's alone: for a guest it is off, and a guest with questions from
-  before the rule is told under it to register first. A list that cannot be read says so under it,
-  with Try again, apart from the stats (`AccountState.listFailure`).
+  додаш питање.* Its heading, *Моја питања*, is inside the table's card (*decided 2026-09-28*), with a
+  **plus** (`WyrIcons.Plus`, *Ново питање* to a screen reader), which opens the Submit screen's form
+  (*Submitting*), a registered player's alone: a guest has none, and a guest with questions from
+  before the rule is told under the heading to register first. A question's options take **two lines
+  at most**, cut short with an ellipsis, and its status one, with a chevron at the column's end; a tap
+  anywhere on the row opens the question whole (*Question details*, below). A list that cannot be read
+  says so under it, with Try again, apart from the stats (`AccountState.listFailure`).
+- **Question details** (`QuestionDetailsScreen`, *built 2026-09-28*, the user: a question "opened in
+  new screen where all the details could be seen, with more statistics"): `Screen.Question`, opened
+  from a row of My questions under a back arrow, the question's id kept in saved state beside the back
+  stack, and found in the list the Account screen's ViewModel read (read first when none is, an
+  Android process brought back on it; a question the list no longer holds goes back to Account).
+  Top down, scrolling: each option whole on a card of its colour (§5b), at the Play screen's option
+  size; for a question served, approved or retired, each side's **share** of the players who answered
+  it, counted up with its bar along the card's bottom as the Play screen's reveal races them
+  (`rememberCountUp`, over the Home screen's 1.2 s, resumed after a rotation as the Play screen's is,
+  *The Play screen*, *A reveal resumes*), and how many picked it after two players; where
+  it stands, a rejection's reason whole, and, approved, **Share** beside it (*Sharing*); *Послато 25. 9. 2026.*, the day it was sent on this device
+  (`dateText`, numbers only, so no `Strings`: *25/9/2026* in English; UTC's day where the platform names
+  no zone); its categories, named in the language shown from those read, read once if none are; and,
+  once served, its likes, dislikes and answers, each after its icon, heard with its name. The shares
+  are `SubmissionDto.votesA` and `votesB` (*built 2026-09-28*), how many of the players who answered it
+  picked each side, each by their latest pick, read in `SubmissionStore.byAuthor`'s one statement and
+  adding up to `answerCount`; defaults of 0, so a server from before them reads as none, and the
+  domain's `Submission.tally`. `QuestionDetailsDrawTest`, `AppNavigationTest`, `SubmissionStoreTest`,
+  `SubmissionMapperTest`.
+- **The notice of a decision** (*built 2026-09-26*, the user: a notification when their question is
+  approved, and the game saying so too): common code, every platform, pushes or none
+  (`DecisionNotices`, `io.ntole.wyr.core.domain.notice`). `AppServices` reads the player's questions
+  (`GET /v1/me/questions`, only when a session is stored, so it never mints a first one; a dead one its
+  read replaces with a fresh guest, as any call's does, `withSessionRecovery`) at launch for the session
+  stored and for every session after it, each time the app comes back to the foreground, and when a
+  push arrives while it is open (§8a, *Push tokens*). A question decided, approved or rejected (a
+  retired one was approved, and a status this build cannot name is none), that this device has not
+  shown the player yet is **news**: a **dot** on the account icon of Home's top bar (Play's has none
+  since 2026-09-29, §8d *Navigation*), in
+  the brand's pink (`WyrColors.optionA`, Material's `Badge`), which a screen reader hears in the
+  icon's name, *Налог: ново* (`NoticeStrings`); and, once the Account screen reads the list, a dot on
+  each of those rows of My questions, *Ново* to a screen reader, for that visit (a rotation's
+  included), after which every decision in the list is seen and the icon's dot goes. No banner and no
+  text on screen, the user asking for less. What is seen is kept on the device beside the session, per
+  environment (`StoredSeenDecisions`, `wyr.decisions.seen.local`, `.dev` or `.prod`), one player's at a
+  time: a player's first read on a device seeds it, so nothing decided before badges, and another
+  player's first read seeds theirs. A read that fails changes nothing; one read for a player who plays
+  here no more, a login, a logout, a deletion or a Play Games sign-in having come meanwhile, is dropped, and so is
+  a list the Account screen still shows of the player before (`AccountState.readFor`, the player each
+  list was read for: a first launch's guest, once the launch's Play Games sign-in has made the device a
+  returning player, would otherwise mark that player's old decisions as news). What is seen is only
+  ever added to, since a decision stays one, so no list read before another can make one news again.
+  `DecisionNoticesTest`,
+  `StoredSeenDecisionsTest`, `AppServicesTest`, `TopBarsDrawTest` (Home's bar with the dot, 48 high at
+  375 wide, in both themes and every language, the dot drawn inside the account icon's 48, and on no
+  bar without news, Play's among them), `AccountScreenDrawTest`,
+  and `AppNavigationTest`, which dots the icon on Home, finds none on Play, and takes the dot down on
+  Account.
 - Its last line, in a LOCAL or DEV build, names the server the build talks to and its URL, in the
   language shown, *Сервер: Dev (https://wyr-server-dev.onrender.com)* (`serverLine`, §8e); a PROD
   build shows none. `AccountScreenDrawTest` finds it under everything else in every state and
   language.
 
+**A slow first load** (*built 2026-09-26*): a free Render service sleeps after some 15 minutes idle,
+and its first request takes up to a minute (§8). So wherever the game shows its loading spinner, the
+Play screen's question, the Categories screen's first read and the Account screen's first read of the
+player, the spinner (`LoadingSpinner`, `io.ntole.wyr.loading`) says one short line under it once it has
+turned for 5 seconds (`SLOW_AFTER`), *Још мало…* (`Strings.stillLoading`), and nothing else. Counted in
+the frames the spinner draws anyway, so it asks for none more. `LoadingSpinnerDrawTest` steps the
+scene's clock a frame at a time through each of the three.
+
+**About** (`io.ntole.wyr.about`, *built 2026-09-26*, what Google Play asks: a way to the privacy
+policy and the rest from inside the app): opened by the info icon on the Account screen's top bar, so it
+adds no text to the Account screen, under a back arrow. Top down, scrolling: the game's name; *Верзија
+1.0.0 (10000)*, the version and the build number (`AppVersion`, which `initKoin` binds from the
+entry point's version and build number, §8g) beside **13+** on a pill (`AGE_RATING`); four links that
+open in the browser (`LocalUriHandler`), *Политика приватности*, *Услови и правила питања*,
+*Брисање налога* and *Контакт*, the site's `/privacy.html`, `/terms.html`, `/delete.html` and
+`/contact.html`, under `/en/` in English, the Serbian pages for either script (`Site`, whose one
+`BASE_URL` is `https://ntole.com/wyr`, not live yet, no page being written, §8b *The
+launch*); a link nothing on the device opens, on a phone with no browser, does nothing
+(`openIfAble`, here, on a licence and in Register's terms line alike); under them the player's
+**account id** (*built 2026-09-27*, the user: "a copyable account ID"), which a guest or a player
+signed in with Play Games alone, who has no username, sends to have their account deleted by email
+(§8a, *Deleting an account*, *By a moderator*): a muted *ИД налога* over the id in a fixed width
+(`WyrTypeScale.code`), and a copy button (`WyrIcons.Copy`, named *Копирај ИД налога*), which puts it
+on the clipboard and says *Копирано* beside the label, on the same line, so nothing moves (Compose's
+`LocalClipboardManager`, deprecated but the one clipboard call common code has on every platform: its
+replacement's `ClipEntry` has no common constructor). The id is the stored session's player id
+(`CurrentSession`, the same id `GET /v1/me` names), read from the device, never the server: it
+shows offline, mints no session, and none shows while no session is stored; under a line, the
+**Statistics** switch (§8g, `StatisticsSwitch`, here since 2026-09-28), dimmed, its word and the switch
+one control, with an info icon, *О статистици* to a screen reader, whose dialog says what it sends
+(*Шаљемо податке о томе како се игра користи, да бисмо је побољшали. Без твог имена и текста
+питања.*, `AccountStrings.statisticsInfo`, and *У реду*); its taps keep their Account names,
+`account.statistics` and the rest (§8g); and **Лиценце отвореног кода**, the libraries the game ships with on any platform, each
+with its licence, a tap opening the licence's text (`OPEN_SOURCE_LIBRARIES`, written by hand, no
+library for it, from the Android and desktop dependency reports, NEXT-SESSION's *Releasing to
+production*: Apache 2.0 but for SLF4J's API, MIT, which Ktor brings, and Skia, BSD 3-Clause, which
+Skiko builds into the desktop, iOS and web apps, each of those two with the copyright line its licence
+asks to ship with the app, *provisional*, §8b *Licence notices*; the Firebase Android SDK, Error Prone's
+annotations and javax.inject, which Android's pushes bring, are Apache 2.0 too; a library added to the
+game's client is added there in the same change, under its own licence). Google Play services, which
+Play Games and Firebase bring on Android (`play-services-games-v2`, `-base`, `-basement`, `-tasks`,
+`-stats`, `-cloud-messaging`), are under Google's own terms, not an open-source licence, so the list
+does not name them (*provisional — user decision*, §8b *Licence notices*); and last, after a line,
+quiet, **Обриши налог**, deleting the account (*The Account screen*, *Deleting*; the user, 2026-09-28:
+"hide delete account in maybe info screen"). Words: `Strings.aboutScreen`.
+`AboutScreenDrawTest` (every text in both themes and every language, the Statistics switch under the
+account id and before the licences, on or off as left and turned by a tap, its info dialog, each link's URL through a handler
+of the test's own, one that opens nothing, the links and the account id's copy button above 599
+before any scrolling, the id copied whole through a clipboard of the test's own and nothing moved
+for it, none with no session, and the deletion last, after every licence), `LicencesTest`,
+`LinksTest`, `SiteTest`, `TapsTest`,
+`AppNavigationTest`, `TopBarsDrawTest`, `NavigatorTest`.
+
 **The Play screen** (`io.ntole.wyr.play`; the user's layout, *decided 2026-09-25*, rearranged
 2026-09-26) asks a question and reveals its tally, holds Skip and the reactions, and opens the
-Categories screen from its top bar (*Skipping*, *Reactions* and *Categories*, below):
+Categories screen and the question's menu from its top bar (*Skipping*, *Reactions*, *Reports* and
+*Categories*, below):
 - Two answer cards in the brand colours (§5b) and, between them, **one row** (on a wide screen the
-  cards side by side over it, *Wide screens*; the user: reactions "in the middle and points to
-  left"): on the left the player's points, the coin and the number (`PointsAmount`, §8f); in the
-  middle the **thumbs**, a thumb up and a thumb down, each filled while the player holds it and beside
-  how many hold it, before answering and after; and on the right **Skip** while the question is not
-  answered yet (*Skipping*), its place kept empty in the reveal so nothing in the row moves. The
-  **categories played**, *Све* or their names, cut to one line, with a small chevron, are in the middle
-  of the **top bar** (the user: "category goes to top bar in middle"), between home and the account
-  icon (`PlayTopBar`, `CategoriesPlayed`), and open the Categories screen. No title and no *OR*.
+  cards side by side over it, *Wide screens*; the user, 2026-09-28: share "always visible in the
+  middle right, while likes and dislikes move next to coins"): on the left the player's points, the
+  coin and the number (`PointsAmount`, §8f), and right beside them the **thumbs**, a thumb up and a
+  thumb down, each filled while the player holds it and beside how many hold it, before answering and
+  after; and on the right **Share** (*Sharing*), always, and **Skip** after it, always too (the user,
+  2026-09-28): before the answer it skips (*Skipping*), and in the reveal it goes on to the next
+  question as a tap on a card does (`PlayViewModel.next`, its half-second hold included), so nothing in
+  the row moves. The
+  **categories played**, *Све* or their names, cut to one line, with a small chevron, are in the exact
+  middle of the **top bar** (the user: "category goes to top bar in middle"), between home and the
+  question's **menu**, a ⋮, one icon on each side (*resolved 2026-09-29*, §8b *The question's menu on
+  the top bar*: the account icon left the bar, reached from Home; `PlayTopBar`, `CategoriesPlayed`,
+  `QuestionMenu`), and open the Categories screen. No title and no *OR*.
+- *The question's menu* (*built 2026-09-26*; the user: report "in the least obstructive way"): the ⋮
+  (`WyrIcons.More`, named *Опције питања* for a screen reader) opens a small menu about the question on
+  screen, asked or revealed: **Пријави питање**, which lists in its place the five reasons, one tap
+  each (*Увредљиво је*, *Помиње приватну особу*, *Реклама или спам*, *Нема шта да се бира*, *Нешто
+  друго*: `QuestionMenuStrings`, `ReportReason`'s five; the wording provisional, §8b); **Не приказуј ми ово питање**; and **Не
+  приказуј питања овог аутора** (*Reports*). A choice closes the menu and goes to
+  `PlayViewModel.pickFromMenu`, and once the server has it the next question shows, with nothing more
+  said, as after a skip: each hides the question for good (*provisional — user decision*, §8b). One
+  that failed leaves the question on screen and says why in the row's failure slot, as a reaction's
+  does (`OnQuestion.rowError`, which a reaction's failure shares). Off, and drawn muted, with no
+  question on screen and while anything is in flight (`canUseMenu`; `isHiding` while its own request
+  is). The categories played take what width the bar's two icon buttons leave, 271 of 375, cut on their one
+  line, in the bar's exact middle, home and the ⋮ as wide as each other.
+  `QuestionMenuDrawTest` opens it in both themes and every language and taps each choice and reason;
+  `TopBarsDrawTest` holds Play's bar to 48 and 375 wide with it, and the categories to its exact
+  middle, *Све* or a long selection cut short, in both themes and every language; `PlayViewModelTest` drives each
+  choice, from the reveal too, its failure and the one action at a time; `AppNavigationTest` reports a
+  question through it and moves on.
 - *The categories' names* are the server's, in the language shown (`categoryName` in
   `io.ntole.wyr.language`, §8f), in the order the server lists them, and one not read yet by its id,
-  after the rest (`categoriesPlayed`). On the top bar they have the width home and the account icon
-  leave them, about 250 of 375, where the row gave them 115.
-- *The row's arrangement* (`CentredRow`): Skip gets its whole width first, then the thumbs, and the
-  points what they leave, no wider than `WyrDimens.playRowStartMaxWidth` (88). The thumbs stand in
-  the middle of the screen while the points leave them room, and move right only as far as a wider
-  start needs, which only a reaction's failure is. *Decided 2026-09-26*, replacing the provisional
-  arrangement of the categories, the points in the middle, and the heart.
+  after the rest (`categoriesPlayed`). On the top bar they have the width home and the menu leave
+  them, 271 of 375, where the row gave them 115.
+- *The row's arrangement* (`PlayRow`): Share and Skip get their whole width first, then the thumbs,
+  and the points what they leave, no wider than `WyrDimens.playRowStartMaxWidth` (80), the thumbs
+  right after them, `WyrDimens.spaceXs` apart, each count standing `reactionCountInset` (10) into its
+  thumb's touch target, so the row fits 375 wide with four-digit counts and a failure. A reaction's
+  failure, in the points' place, moves the thumbs over while it shows (*provisional*, §8b *Sharing*).
+  *Decided 2026-09-28*, replacing the thumbs in the middle (2026-09-26), which replaced the
+  provisional arrangement of the categories, the points in the middle, and the heart.
 - A thumb asks for its reaction, or for none when the player holds it already, so a second tap takes
   it back (`reactionAfterTap`; *Reactions*).
 - The points are the server's (`PlayViewModel.points`, §8c): read through `GetPlayerStats` each time
   the screen is shown, and moved to a vote's total when its answer arrives, which drops a read still
   in flight; none until the first.
 - Tapping a card answers. In the reveal both cards count their percentage up from 0 to its value
-  over 2.5 seconds, both at once (`COUNT_UP_MILLIS`), and each card fills a **bar** with it (the
-  user, 2026-09-26): along its edge by the row, the bottom of the top card and the top of the bottom
-  one, inside the card from one side to the other, 6 high (`WyrDimens.revealBarHeight`) and a little
-  in from the edge, past the pick's outline (`revealBarInset`), in the card's text colour on a faint
-  track of it (`WyrColors.revealTrackOnA`, `revealTrackOnB`), filling from its start to the card's
-  share as the number counts (`RevealBar`, one count for both, `rememberCountUp`). Tapping either card
-  again is the next
+  over 3 seconds, both at once (`COUNT_UP_MILLIS`), as a **race** (the user, 2026-09-27: "make ppl
+  guessing"): both climb together on one curve, slowing as they near the smaller share, so which side
+  wins shows only once the smaller one stops there, and then the larger speeds on to its own and eases
+  into it (`raceAt`). The climb together takes up to 72% of the time for a close result, less for a
+  lopsided one (no less than 28% of that), so a 3 against 97 does not crawl, and a tie climbs together
+  the whole time. Each card fills a **bar** with it (the
+  user, 2026-09-26): flush along its edge by the row, the bottom of the top card and the top of the
+  bottom one, from one side to the other, the card's round corners clipping its ends, 8 high
+  (`WyrDimens.revealBarHeight`), in the card's text colour on a groove of the card's own colour,
+  darker (`WyrColors.revealTrackOnA`, `revealTrackOnB`; the user, 2026-09-27), filling from its start
+  to the card's share as the number counts (`RevealBar`, one count for both, `rememberCountUp`). The
+  cards move (the user, 2026-09-27, "polished with these micro animations"; `cardMotion`, read only
+  in its layer, so it composes nothing): pressed, a card **sinks**, to 97% and flat, over 0.1 s, and
+  springs back with a small overshoot when let go; the card picked **lifts** in place of an outline,
+  its shadow rising to `WyrDimens.pickElevation`, 6 (12 cut off under the bottom card), over 0.25 s,
+  black on the light page and on the dark one a glow of the card's own colour, higher
+  (`pickGlowElevation`, 12), since a glow shows less; the card not picked stands at 85%; and all of it
+  eases back as the next question comes. An answer taps the phone (`HapticFeedbackType.Confirm`), and a
+  thumb ticks on and off; the thumbs and Skip sink under the finger too (`pressScale`). **Going on
+  never snaps**: while the next question loads the one answered stays on screen, taking no tap, and
+  the spinner shows only past `LOADING_GRACE`, 0.4 s, which a question from the queue never reaches;
+  the next question then slides onto the same cards (`AnimatedContent` keyed on the question, the old
+  face fading up and away in 0.12 s, its share and bar with it, the new one rising in over 0.22 s),
+  the face going heard by no screen reader. Tapping either card
+  again, or Skip, is the next
   question (`PlayViewModel.next`, from the reveal only), once the reveal has shown for half a second
   (`REVEAL_HOLD_MILLIS`), so a double tap cannot answer and skip the reveal: *provisional — user
   decision*, the other option being no hold. Nothing else shows: no verdict, no points of the vote,
   no vote counts (the domain still has `VoteOutcome.agreedWithMajority`). A screen reader hears what
   a tap does where no text says it: *Следеће питање* on a revealed card, *Промени категорије* on the
   categories played.
+- *An option that fits* (*built 2026-09-26*): an option too long for its card shrinks its type in steps
+  rather than being cut, from `WyrTypeScale.optionText`, 22, down 2 at a time to a floor,
+  `optionTextMin`, 14, the largest that fits whole (Compose's `TextAutoSize.StepBased`, in
+  multiplatform foundation since 1.8; one `OptionTextAutoSize`), stacked or side by side, the
+  percentage's room taken first on the reveal (the option is the card column's weighted child), its
+  line in `em` (`optionLineHeight`) so it shrinks with it. An option that fits keeps 22. At the floor
+  what still does not fit is cut, which only a phone smaller than an iPhone SE on its side, or a large
+  font size, does to a 200-character option. `PlayScreenDrawTest` holds two options of 200 characters
+  whole, their type no smaller than the floor, on an iPhone SE and on one on its side, asked and
+  revealed, in every language, and a short option at 22.
+- *The repeat notice* (*built 2026-09-26*): a question the feed serves as answered before
+  (`Question.answeredBefore`) shows a small muted *Већ одговорено* (`PlayStrings.answeredBefore`)
+  above the cards, asked and revealed, in a slot of its own (`RepeatNotice`): every question has it,
+  in the screen's top padding, which it grows only past the padding's height at a large font size, the
+  notice laid out unseen and unheard when not shown, so nothing on the screen moves for it. The pick
+  made before is not shown. `PlayScreenDrawTest` finds it above card A, and every part of the screen
+  where it is for a question not answered before, at font scales 1, 1.3 and 2.
 - *The count up is drawn, not composed* (`CountedUpText`, `RevealBar`): the count is read only as it
   is drawn, the number over the final percentage's own text, laid out once, which sizes it and is
   what a screen reader reads, and the bar in a layer of its own. So a frame of it draws two numbers
   and two bars and nothing else, where a text changed every frame recomposed both cards, laid them
   out again and told any accessibility service, too much for a debug build, several times slower, to
   do 60 times a second.
-- One action at a time (`isBusy`, `canChangeCategories`): while a vote, a skip or a reaction is in
-  flight, the cards, the thumbs, Skip and the categories are off, and Skip is drawn muted
-  (`WyrColors.muted`). A reaction that failed says why in the points' place, in two short lines at
+- *A reveal resumes* (*built 2026-09-29*, the user: "resume"): an Android activity made anew mid-reveal,
+  on a rotation, a switch to dark mode, a new font size or language, finds the ViewModel's `Revealed`
+  still there and picks the reveal up where it was, never replaying it. How far each card's count has
+  come, from 0 to 1 of its time, is kept in saved state under the question's id (`rememberCountUp`'s
+  `saveKey`, a `rememberSaveable` of a plain field, `CountUpProgress`), written by the animation on
+  every frame and read only when the state is saved and as a restored count starts, so a frame still
+  composes nothing: part way, the count goes on at its own speed for the time it had left; done, the
+  final values are drawn at once and nothing counts. The card motion needs nothing kept: its
+  `animate*AsState` start at their first target, so the pick is lifted and the other card faint from
+  the first frame, and `AnimatedContent`'s first composition slides nothing in. The half second before
+  a card goes on is the ViewModel's (`revealHold`), which the activity's recreation neither restarts
+  nor ends. A new question counts from 0 as ever (another id), and so does the same question revealed
+  again later, its count having left the composition between. The Question details screen's count
+  resumes the same way, under the question's id; Home's reveal, a timeline of its count, hold and fade
+  into Play, still plays again from its start after a rotation mid-reveal. `PlayScreenDrawTest` and
+  `QuestionDetailsDrawTest` restore a composition's saved state part way and done and find its first
+  frame drawn pixel for pixel as it was saved, in both themes with each card the pick; `CountedUpTextDrawTest`
+  finds a restored count going on from the number it had reached, in order, to its target in the time
+  it had left, and a finished one drawing only its target, and a kept count's frames composing
+  nothing; `AppNavigationTest` rotates the whole app mid-reveal and once it is done, and holds the
+  half second across the rotation.
+- One action at a time (`isBusy`, `canChangeCategories`): while a vote, a skip, a reaction or a menu
+  choice is in flight, the cards, the thumbs, Share, Skip, the categories and the menu are off, and
+  Share, Skip and the menu are drawn muted (`WyrColors.muted`). A reaction that failed says why in the points' place, in two short lines at
   most, in a slot as high as a thumb's touch target at any font size, so it moves nothing; a skip that
   failed moves on all the same.
-- Loading is a spinner; a failure is one short sentence and *Покушај поново* (`Strings.tryAgain`,
+- Loading is a spinner, with *Још мало…* under it after 5 seconds (*A slow first load*); a failure is one short sentence and *Покушај поново* (`Strings.tryAgain`,
   §8f), the categories played on the top bar being the way out of a selection with nothing to serve.
   The words are `PlayStrings` (§8f), but for those the Categories screen says too, *Све* and the
   spinner's name (`Strings.allCategories`, `Strings.loading`).
@@ -1450,13 +2191,48 @@ Categories screen from its top bar (*Skipping*, *Reactions* and *Categories*, be
   cards before and after the reveal and each thumb, asking for its reaction or none; steps the
   scene's clock through the count up, reading the numbers and each bar by their pixels and finding a
   frame of them composing and moving nothing (`CountedUpTextDrawTest`: each number drawn once, in
-  order); holds the row to 335 wide with nothing cut short, asked with Skip and answered with its
-  place kept, and to one height with a reaction's failure or without at font scales 1, 1.3 and 2;
-  finds Skip after the thumbs only while a question is asked, off and drawn muted while anything is in
-  flight (by its pixels' colours, in both themes and every language), the thumbs in the middle, and
-  nothing in the row moved by the reveal; and holds `CentredRow` to its rule on boxes of known widths,
-  which no font changes. `AppNavigationTest` skips through it, under a bar of home, the categories
-  played and the account icon, and plays categories picked on the Categories screen.
+  order); holds the row to 335 wide with nothing cut short, asked and answered, and to one height with a reaction's failure or without at font scales 1, 1.3 and 2;
+  finds Skip after the thumbs and Share, skipping while a question is asked and going on from the
+  reveal, off and drawn muted while
+  anything is in flight (by its pixels' colours, in both themes and every language), the thumbs beside
+  the points, Share, and nothing in the row moved by the reveal; and holds `PlayRow` to its rule on
+  boxes of known widths, which no font changes. `AppNavigationTest` skips through it, under a bar of home, the categories
+  played and the question's menu, and plays categories picked on the Categories screen.
+
+**Sharing** (`io.ntole.wyr.share`, *built 2026-09-28*, the user: share a question "with or without
+results, to their social media"; §8b *Sharing*): a question the player finds interesting goes out as
+an image, through the platform's own share sheet, so every app the phone has that takes an image,
+Instagram, WhatsApp, Viber and the rest, takes it, with no social network's SDK or app id.
+- *Where*: **Share** on the Play screen's row, always, asked or revealed (*The Play screen*); and on
+  the Question details screen, beside where the question stands, for one of the player's own that is
+  approved (a question pending, rejected or retired is no one's to play). Each opens a dialog
+  (`ShareDialog`) of the image as it will go, shrunk to the dialog's width; **Прикажи резултате**, a
+  switch, on at first, while the question has results: answered on Play, or served, on Question
+  details; and **Подели** and *Откажи*.
+- *The image* (`ShareCard`): 1080 by 1350, 4 to 5 as a feed's post takes it, laid out at
+  `WyrDimens.shareCardWidth` by `shareCardHeight` (360 by 450) in a density of its own, so it is the
+  same on every screen (`ShareCardFrame`, recorded into a `GraphicsLayer` and made an image with
+  `toImageBitmap`), in the theme shown: the game's name, the two options on cards of their colours in
+  the language shown (`optionText`, §8f), and *Играј и ти на Google Play* (`GOOGLE_PLAY`). With the
+  results, each card's share of the players and a bar filled to it, as the reveal ends, and on Play
+  the player's pick marked *Мој избор* on a pill astride its card's top edge; Question details has no
+  pick to mark, the question being the author's. Nothing of the player's: no name, no points.
+- *The message* beside it: *Шта би ти радије? Играј и ти:* and the game's Play Store page
+  (`STORE_URL`, the `prod` flavor's, whichever build shares; *provisional*, §8b *Sharing*).
+- *The platforms* (`ShareSheet`, `rememberShareSheet`, which `App` provides as `LocalShareSheet`):
+  Android's share sheet, the PNG written to the cache's `shared/` and handed out through
+  `androidx.core`'s `FileProvider` (`${applicationId}.share`, in `:app:androidApp`'s manifest over
+  `res/xml/share_paths.xml`; `androidx-core-ktx` in the catalog, at 1.18.0, the version the app already
+  resolved, since 1.19 needs compile SDK 37); iOS's `UIActivityViewController`, a popover from the
+  screen's middle on an iPad; a browser's Web Share with the image as a file where it shares files,
+  else the image downloaded and the message copied (*Слика је сачувана.*); and the desktop's clipboard,
+  the image and the message as one (*Слика је копирана.*). A share sheet that opened closes the dialog;
+  a copy or a download says so and turns *Откажи* into *Затвори*; a failure says *Дељење није успело.*
+  and stays. *Not verified* on a device: the Android chooser, the iOS sheet and Web Share have run only
+  as compiled code, the desktop's clipboard only through the dialog's tests.
+- `question_shared` (§8g) says what was shared, never its text. `ShareDialogTest` (the image's size,
+  its colours in both themes, its texts with and without the results in every language, the message,
+  each outcome), `TapsTest`, `PlayScreenDrawTest`, `PlayViewModelTest`, `WyrIconsDrawTest`.
 
 **The Submit screen** (`io.ntole.wyr.submit`), opened from My questions on the Account screen
 (*Navigation*), is the form a question is written in (*Submitting*, below); the player's own are
@@ -1491,8 +2267,9 @@ listed on the Account screen.
     too, so a skip does not hold through a category filter: *provisional — user decision* (§8b). The
     client selects any number (`QuestionRepository.setCategories`, from the Categories screen), none
     for every category; a change drops the queue, and a login or a logout keeps the selection.
-  - `answeredBefore` (`QuestionDto`) means the player has a vote on the question, from any cycle. No
-    client reads it: the domain's `Question` has no such field since the dev console went.
+  - `answeredBefore` (`QuestionDto`) means the player has a vote on the question, from any cycle.
+    The domain's `Question` has it again (`QuestionMapper`), and the Play screen says so, quietly
+    (*The Play screen*, the repeat notice).
 - **Categories** *(decided 2026-09-24; server data since 2026-09-25; built)*: a
   question is filed under **any number of categories, at least one**. A player may pick **several**
   categories to play, and a question matches when it is filed under **any** of them; none picked
@@ -1589,8 +2366,8 @@ listed on the Account screen.
     picker, as there will be hundreds of categories, and players should be able to pick multiple,
     random is actually all. There should be also category search."): `io.ntole.wyr.categories`, a
     `Screen` of the navigator's own (`Screen.Categories`), opened by a tap on the categories played
-    on the Play screen, in place of the dialog the Play screen had for them, under a top bar of a
-    back arrow (`BackTopBar`). Top down: a search field, then one lazy list (a `LazyColumn`, so
+    on the Play screen, in place of the dialog the Play screen had for them, or on those under Home's
+    Play buttons (*built 2026-09-29*), under a top bar of a back arrow (`BackTopBar`). Top down: a search field, then one lazy list (a `LazyColumn`, so
     hundreds draw only the lines on screen) of **Све**, ticked while no category is, and every
     category the search finds, each ticked or not, in the server's order; and at the bottom how many
     are ticked (*Изабрано: 3*, nothing while Све is) and **Играј**. Ticking Све unticks every
@@ -1604,18 +2381,22 @@ listed on the Account screen.
     *Начин живота*, *djak* and *đak* find *Ђак*, *dzu* finds *Џунгла* and *ćevap* a name a moderator
     typed as *Cevapi*. A category the search hides stays ticked, and a search that finds none says
     so under Све. Each visit starts from the categories played, nothing searched
-    (`CategoriesViewModel.open`, called by the Play screen's tap, so a rotation keeps what is
-    ticked), and reads the list (`GetCategories`) as it is shown: a read that fails says so above
+    (`CategoriesViewModel.open`, called by the Play screen's tap and Home's, so a rotation keeps
+    what is ticked), and reads the list (`GetCategories`) as it is shown: a read that fails says so above
     the list, *Игра није доступна.* offline, as the Play screen says it, and *Категорије нису
     учитане.* otherwise (`unreadText`), with *Покушај поново* (`Strings.tryAgain`), the categories
     read before staying to tick, and with none read before a spinner shows while it reads. **Играј**
     sets what is ticked in one `QuestionRepository.setCategories`, waits for it to land, the list
     and Играј off meanwhile, then goes back to the Play screen, which shows a question from it (*The
-    client*, above); what is played already is not sent again, so the question stays. Back, the
-    arrow or Android's, plays nothing. `CategoriesViewModelTest`, `CategoriesScreenDrawTest` (every
+    client*, above); what is played already is not sent again, so the question stays. Opened from
+    Home, Играј opens the Play screen in its place instead (`Navigator.replace`), so back from Play is
+    Home; where it was opened from is the screen under it on the back stack (`Navigator.previous`),
+    which saved state keeps, so an Android rotation keeps it too. Back, the arrow or Android's, plays
+    nothing and goes to the screen it was opened from, Home or Play. `CategoriesViewModelTest`, `CategoriesScreenDrawTest` (every
     state in both themes and every language at 400x900 and 375x599; with 301 categories at 375x599
     the search field and Play on screen, nothing cut short, only the lines that fit composed, and
-    the list scrolled to its last), `AppNavigationTest` (Play, Categories and back, played or not),
+    the list scrolled to its last), `AppNavigationTest` (Play, Categories and back, played or not;
+    Home, Categories and Играј to Play over Home, after a rotation too, or back to Home playing nothing),
     `NavigatorTest`, `TopBarsDrawTest`.
   - *A known limit:* the game's picker is a screen of its own, searched and lazy (*The Categories
     screen*), but the Submit form, the moderation app's category filter and each pending card lay out
@@ -1648,8 +2429,8 @@ listed on the Account screen.
   points spent: what the player's questions not rejected
   cost them (`pointsSpent`, *Submitting*), and the player's username, null for a guest (§8a,
   *Accounts*; `PlayerStats.username` on the client, so a screen reads the name with the points), and
-  whether they signed in with Play Games (`playGamesLinked`, §8a, *Play Games sign-in*; the client
-  adopts it later).
+  whether they signed in with Play Games (`playGamesLinked`, §8a, *Play Games sign-in*;
+  `PlayerStats.playGamesLinked` on the client, which counts such a player registered).
   Built in `StatsStore.of`, as one statement, so the total always agrees with the answers given, the
   likes received and the points spent (§8c). It only reads, and the cycle starts lazily on the next
   feed request, so between the answer that finishes a cycle and that request it reports the finished
@@ -1657,7 +2438,8 @@ listed on the Account screen.
   Account screen*), and not `pointsSpent`, for less text (*provisional — user decision*, §8b); the
   likes and answers the player's questions received are in My questions' table, question by question
   and added up, read with the list rather than with the stats. The client reads only the points, the
-  questions answered and the username: the domain's `PlayerStats` has no field for the answers given,
+  questions answered, the username and what submitting costs (`submissionCost`, §8c): the domain's
+  `PlayerStats` has no field for the answers given,
   the cycle and what is due in it, the likes received, the points spent or the player id, which the
   server still sends, the cycle's two for its own tests.
 - **Skipping** *(built; decided 2026-09-23)*: allowed, earns nothing, and never touches the
@@ -1666,12 +2448,12 @@ listed on the Account screen.
   with nothing due in it (*Categories* above; provisional, §8b). A player is therefore never
   stuck at the end of a cycle on a question they keep skipping. Built as `POST /v1/skips` in
   `SkipStore.skip`, on `skips.skipped_in_cycle`, which the feed's due predicate compares with the
-  cycle as it does the vote's. The Play screen's Skip, in the row between the cards while a question
-  is not answered yet, sends it through `SkipQuestion` and then shows the next question
+  cycle as it does the vote's. The Play screen's Skip, in the row between the cards, on a question
+  not answered yet sends it through `SkipQuestion` and then shows the next question
   (`PlayViewModel.skip`), even when the skip failed, and says nothing of it: the player asked not to
   answer that question, and an unrecorded skip only leaves it due, so the feed may serve it again
-  this cycle, where Skip works on it again. Nothing else goes while a skip is in flight, and an
-  answered question goes on with a tap on a card instead.
+  this cycle, where Skip works on it again. Nothing else goes while a skip is in flight, and on an
+  answered question Skip goes on as a tap on a card does, recording no skip.
 - **Own questions** *(built; decided 2026-09-24)*: an author is served their own questions
   **like any other player** and may answer, skip and react to them; the user chose the simpler logic.
   `QuestionStore.servable` is the one predicate the feed, the due count and votes, skips and reactions
@@ -1763,10 +2545,20 @@ listed on the Account screen.
     points between the cards show it from the next vote on, or from the next time the Play screen is
     shown, which reads them again. The thumbs, drawn by hand (§5b), took the heart's place.
 - **Reports** *(decided 2026-09-26, what Google Play asks of a game with players' questions: a way to
-  report one and to block its author; built on the server, no client yet)*: a player may **report** a
+  report one and to block its author; built on the server and the game)*: a player may **report** a
   question to the moderator, **hide** it, or **hide its author**, and each hides from that player
-  alone, for good. The client will offer them in a list on the Play screen that stays out of the way
-  (the user). Comments on questions are not built: later, if at all.
+  alone, for good. The game offers them in the menu on the Play screen's top bar, which stays out of
+  the way (the user; *The Play screen*, the question's menu). Comments on questions are not built:
+  later, if at all.
+  - *The client* is `ReportRepository` in `:core:domain` (`io.ntole.wyr.core.domain.report`), behind
+    `ReportQuestion`, `HideQuestion` and `HideAuthor`, each ensuring a session first, over a domain
+    `ReportReason` of its own, the wire's five without its `UNKNOWN`, which no report may give
+    (`ReportMapper`). `DefaultReportRepository` sends each through `withSessionRecovery`, as reactions
+    go, over `ReportApi`; a resend is safe, a report replacing its reason and a hide changing nothing.
+    `HideAuthor` then drops the question queue (`QuestionRepository.reset`), which may hold the
+    author's other questions, fetched before: the client never knows who wrote a question, so the
+    whole queue goes. `ReportUseCasesTest`, `DefaultReportRepositoryTest` (over `PlayServer`, a fake of
+    its own beside `FakeServer`).
   - *Reporting* is `POST /v1/reports` (`WyrApi.Paths.REPORTS`) with a `ReportRequest`, the question
     and a `ReportReason`: `OFFENSIVE`, `REAL_PERSON`, `SPAM`, `NOT_A_CHOICE` or `OTHER`, a growable
     wire enum with `UNKNOWN` (§5), which, or no reason at all, is 400. A player holds **one report per
@@ -1845,21 +2637,29 @@ listed on the Account screen.
   categories that fails says so under them in one line, *Категорије нису учитане.* (*Нема интернет
   везе.* offline), with Try again, and those read before stay to pick from; when the points could
   not be read either, the one failure under Send says so, and its Try again reads both. **The cost**
-  has one copy on the client, `SubmissionRules.SUBMISSION_COST`, the domain's copy of
-  `WyrApi.Limits.SUBMISSION_COST`, which is what `Scoring.SUBMISSION_COST` charges, so a change to
-  the cost fails `SubmissionLimitsTest` until the copy changes too (an installed build shows the
-  cost it was built with). The form shows it on the button, *Пошаљи ·* and the coin and the number
-  (`PointsText`, §8f), which a screen reader hears as *Пошаљи · Поени: 1*, and holds the button off
-  while the player's points, read through
+  is the server's (§8c, *built 2026-09-26*): read with the points, `PlayerStats.submissionCost`
+  (`SubmitState.cost`), and until a read works the domain's copy of the wire's default,
+  `SubmissionRules.SUBMISSION_COST`, 1, which `SubmissionLimitsTest` pins to
+  `WyrApi.Limits.SUBMISSION_COST` (`SubmitState.submissionCost`). The form shows it on the button,
+  *Пошаљи ·* and the coin and the number (`PointsText`, §8f), which a screen reader hears as *Пошаљи ·
+  Поени: 1*, and holds the button off while the player's points, read through
   `GetPlayerStats` each time the form is shown and after every submit, are fewer, with one short
-  line saying so, *Немаш довољно поена.* The server's own refusal, `NOT_ENOUGH_POINTS`
+  line saying so, *Немаш довољно поена.* Under Send, always, one short muted line (*built
+  2026-09-27*, what Google Play asks of a game whose players post: accepting the terms before posting,
+  which a player registered by Play Games alone never met on the Register form), *Слањем прихваташ
+  правила питања.*, its noun a link that opens the site's terms and question rules in the browser, in
+  the language shown (`AccountStrings.rulesLine`, a template whose `{0}` is the link; the About
+  screen's `Site` and `openIfAble`, through `SiteLinksLine`, which the Register form's terms line uses
+  too); its tap `submit.rules` (§8g). The server's own refusal, `NOT_ENOUGH_POINTS`
   (`DomainError.NOT_ENOUGH_POINTS`, points spent meanwhile), is that same line, shown once: the
   points read after it hold the button off again. No other line explains the cost, the user asking
   for less text. A stored question clears the form and goes back to My questions, which reads the
   list again (`SubmitState.sent`, which the form takes down as it goes and the next action takes
   down too), and one stored once the player had gone back is read again by the Account screen if it
   is shown then, which takes `sent` down; a refusal keeps it and says why under it,
-  `INVALID_SUBMISSION`, `SUBMISSION_LIMIT` with the 20, a rate limit with its wait, or offline.
+  `INVALID_SUBMISSION`, `SUBMISSION_LIMIT` with the 20, a blocked author's `SUBMISSIONS_BLOCKED`
+  (*Не можеш да шаљеш питања.*, `DomainError.SUBMISSIONS_BLOCKED`), a rate limit with its wait, or
+  offline.
   Points that cannot be read say so under Send, with Try again, apart from a refusal
   (`SubmitState.submitFailure`, `pointsFailure`, `categoriesFailure`). One action at a time, and the
   form cannot change while it is sent. `SubmitViewModelTest` drives it over fakes, the categories'
@@ -1873,7 +2673,8 @@ listed on the Account screen.
   its categories** when approving (*Categories*: at least one stays, and a change replaces the
   question's `question_categories` rows in one transaction), and **may retire an approved question
   and restore it** (*Retiring*, below; provisional, §8b), sees every question (the list), and **adds
-  categories and puts their names right** (*Categories*). A
+  categories and puts their names right** (*Categories*), and **deletes a player's account on their
+  request** (§8a, *Deleting an account*, *By a moderator*). A
   rejection carries a **short reason**, and the author sees the status of each of their submissions
   and, for a rejected one, that reason (`GET /v1/me/questions`, *Submitting*). The moderator is
   whoever holds the server's admin token (`ADMIN_TOKEN`, §8), not a role on a player account. Built
@@ -1938,7 +2739,7 @@ listed on the Account screen.
     as a status: `statusOf` and `standsAt` read the two columns as one status, so a rollback to the
     build before reads every row. The seed writes only what a database lacks and changes nothing
     there, so a retired seed stays retired through every boot. `RetirementTest` pins it, the races included.
-  - *Reports* (*built on the server 2026-09-26; the moderation app does not show them yet*):
+  - *Reports* (*built on the server 2026-09-26; the moderation app's Reports tab shows them*):
     `GET /v1/admin/reports` lists the reported questions (§8d, *Reports*), most reported first, then
     the most lately reported, then by id, bounded by `?limit=` and with no cursor, since a moderator
     works from the head as in the queue: an `AdminReportListDto` of `AdminReportDto`s, each the
@@ -1952,7 +2753,8 @@ listed on the Account screen.
     through *Retiring*; nothing retires one by itself, however many report it: *provisional — user
     decision*, the other option being a threshold that retires it until a moderator looks.
     `ReportModerationFlowTest`.
-  - *Authors* (*built on the server 2026-09-26; the moderation app does not use them yet*): every
+  - *Authors* (*built on the server 2026-09-26; the moderation app blocks and unblocks from each tab
+    that shows authors*): every
     admin DTO names a question's author by an opaque id, `authorId`, the author's player id, which says
     nothing about them but which questions are theirs; never a username, and null for a seed and for
     a question whose author deleted their account (§8a).
@@ -1968,8 +2770,9 @@ listed on the Account screen.
     and again under their row lock, which the block takes too, so a submission racing a block is either
     rejected by it or refused (`AuthorBlockTest`). `POST /v1/admin/author-unblocks` with an
     `UnblockAuthorRequest` lets them submit again; what the block rejected stays rejected. An id no
-    player has is 404 `AUTHOR_NOT_FOUND`. On the client, `SUBMISSIONS_BLOCKED` and `AUTHOR_NOT_FOUND`
-    read as `DomainError.UNKNOWN` until the branches that show them give each one of its own.
+    player has is 404 `AUTHOR_NOT_FOUND`. On the client, `SUBMISSIONS_BLOCKED` is
+    `DomainError.SUBMISSIONS_BLOCKED`, which the Submit form says (*Submitting*), and `AUTHOR_NOT_FOUND`
+    is `DomainError.AUTHOR_NOT_FOUND` (*The client*, below).
   - *The client* is `ModerationRepository` in `:core:domain`, behind `GetPendingSubmissions`,
     `ApproveSubmission` and `RejectSubmission`, none of which ensures a session: the moderator is
     not a player. `DefaultModerationRepository` calls `ModerationApi` through `runApi` alone, never
@@ -1996,7 +2799,21 @@ listed on the Account screen.
     filter by
     `SubmissionStatus.OTHER` is refused before anything is sent; its categories are ids, in id
     order. `WRONG_STATUS`
-    is `DomainError.WRONG_STATUS`. `moderationDataModule(environment)` binds it, and only there, for a
+    is `DomainError.WRONG_STATUS`. The reported questions and the authors (*Reports*, *Authors*, above)
+    are `GetReportedQuestions`, a `ReportedQuestion` each (its `ModeratedQuestion`, how many report it,
+    its `reasons` counted most given first, and when it was last reported), read
+    `ModerationRepository.PAGE_SIZE` at a time as the queue is; `DismissReports`; and `BlockAuthor`,
+    with a `RejectionReason`, and `UnblockAuthor`, each answered with an `AuthorBlock` (blocked or not,
+    and how many it rejected), the one place the server says where an author stands; through `runApi`
+    alone, as the rest. A domain `ReportReason` names each reason, and `UNKNOWN` one this build cannot
+    name, where every such reason lands with their counts added, so they still add up to the reports.
+    `ModeratedQuestion.authorId`, and the queue's and the decisions' `Submission.authorId`
+    (`toModeratorsSubmission`), carry the author's opaque id; a player's own `Submission` never does,
+    whatever it is sent (`SubmissionMapperTest`). `AUTHOR_NOT_FOUND` is `DomainError.AUTHOR_NOT_FOUND`.
+    `DeletePlayerAccount` deletes an account on its player's request, named by an `AccountRef`, a
+    username or an id (§8a, *Deleting an account*, *By a moderator*), and `PLAYER_NOT_FOUND` is
+    `DomainError.PLAYER_NOT_FOUND`.
+    `moderationDataModule(environment)` binds it, and only there, for a
     client that only moderates: an HTTP client of its own over an in-memory session store nothing
     writes, no `TokenStorage` needed, no session repository, so no bearer token goes out and no guest
     can be minted. The game's `dataModule` binds none of it,
@@ -2011,29 +2828,56 @@ listed on the Account screen.
     anew on every Lock (`ModerationState.locks`): a text field keeps its undo history for as
     long as it is shown, so Undo in the one that held the token gave it back (`TokenBarTest`).
     Nothing is sent until what is typed can be a token (`AdminToken.of`), and one action runs at
-    a time. Every Load, of either tab, reads the categories first (`GetCategories`, needing no
+    a time. Every Load, of any tab, reads the categories first (`GetCategories`, needing no
     token), since a moderator adds them without a build: they are the approval's and the filter's
     chips, and name a question's categories, in Serbian, one not listed by its id
     (`ModerationState.categories`); a read that fails says so above the tab and keeps those read
     before, and Lock keeps them, being the same for everybody. *Pending* lists the queue, oldest
     first, each submission with its options,
     categories and age: Approve files it under the categories picked for it, none keeping the
-    author's, and Reject sends the reason typed once it is a `RejectionReason`. The queue is
+    author's, and Reject sends the reason typed once it is a `RejectionReason`. Beside the reason
+    field, a chip for each ready reason (`READY_REASONS`, provisional, §8b) puts it in the field, to
+    send as it is or edit first, in Serbian Cyrillic, since the author reads it in the game while the
+    app's own words stay English: *Није избор између две ствари*, *Увредљиво*, *Помиње приватну особу*,
+    *Дупликат*, *Тема није дозвољена (вера, политика, здравље, сексуалност)*, the question rules (§8b,
+    *Personalization*), and *Неразумљиво*; `ReadyReasonsTest` holds each to `RejectionReason`'s rules
+    as it reads, and to Serbian Cyrillic. The queue is
     read again after every decision, whatever became of it. A read lists at most
     `ModerationRepository.PAGE_SIZE`, and a queue that long says more may be waiting,
-    its tab `Pending (100+)`, rather than naming itself the whole. *All questions* is the
+    its tab `Pending (100+)`, rather than naming itself the whole. *Reports* lists the reported
+    questions (*Reports*, above), most reported first, at most `ModerationRepository.PAGE_SIZE`, a list
+    that long saying more may be reported, its tab `Reports (100+)`: each with how many players report
+    it and how many give each reason, one this build cannot name as such, when it was last reported,
+    its status, options, categories, votes, likes, dislikes and id, and Dismiss reports, which clears
+    them and reads the reports again, whatever became of it, and Retire, confirmed in the same dialog,
+    or Restore, as in the list. A retirement or restoration, from either tab, puts the question it
+    answers with in its row on both, its reports as they were, and one that failed reads again the tab
+    it was started from (provisional, §8b, *A move from the Reports tab*). *All questions* is the
     list, seeds included, newest first, filtered by any statuses (`RETIRED` among them; never
     `OTHER`) and any categories, none being every one: Load reads its first page and Load more the
     next, at the filter the list was read at, with the cursor the page before gave, and changing the
     filter drops what was read at the one before. Each question shows its options, categories,
-    status, whether it is a seed, its votes, likes and dislikes, its times and a rejection's reason, and what
-    can be done where it stands: Retire an approved one, only once the moderator confirms it in a
-    dialog; Restore a retired one; decide a pending one as in the queue, from the same draft of
+    status, its author or that it is a seed, its votes, likes and dislikes, its times and a
+    rejection's reason, and what can be done where it stands: Retire an approved one, only once the
+    moderator confirms it in a dialog; Restore a retired one; decide a pending one as in the queue, from the same draft of
     categories and reason. A retirement or restoration puts the question it answers with in its
     row, or drops it once the list's filter no longer picks it: the server reads that answer as it
     reads a page's row. A decision, whose answer lacks the row's tally and likes, reads the list
     again as many pages deep as were shown, and so does a move that failed, so the list shows what
     the server holds without losing the moderator's place; a decision reads the queue again too.
+    *Authors* show on Pending, Reports and All questions alike (`AuthorControls`): each question
+    names its author by the first 8 characters of their opaque id (`shortAuthorOf`), or says it is a
+    seed, with Block author... and Unblock author beside it. Block asks first, in a dialog that says
+    what it does and takes the reason each of the author's pending questions is rejected with, typed
+    or a ready reason picked and edited, and sends it once it is a `RejectionReason`; then reads again
+    whatever was read, the queue, the reports and the list as deep as it was shown, whatever became
+    of it, since the block rejects what the author had pending. Unblock goes at once and reads
+    nothing again, since nothing the server lists shows it. The server says whether an author is
+    blocked only in answer to a block or an unblock (`AuthorBlock`), so the app keeps each answer for
+    as long as the token is held (`ModerationState.authors`; Lock forgets them) and names it beside
+    the author, `· blocked` or `· not blocked`, offering the one action that changes it; an author it
+    has no answer for offers both (provisional, §8b). A block's line says how many pending questions
+    it rejected, and `AUTHOR_NOT_FOUND` reads as no such author, their account maybe deleted.
     Nothing is read again after a 403 or a 429, which did nothing and would refuse the read too:
     after a wrong token the read would only spend another of the address's ten a minute, past which
     every admin request from it is refused (§8b). A failure shows where it happened: a read's above
@@ -2043,7 +2887,7 @@ listed on the Account screen.
     named (`WyrException.retryAfter`, §8b). An answer the data layer cannot name (`UNKNOWN`) claims
     no status, leaving it to the detail line under it, and says a bare 404 means moderation is off
     on that server: a proxy's own page or an error code newer than the build reads as `UNKNOWN` too.
-    *Categories*, the third tab, lists every category, oldest first, with its id and both names, and
+    *Categories*, the fourth tab, lists every category, oldest first, with its id and both names, and
     adds one and puts one's names right (*Categories*, above): Add, from a form of the two names and
     an id, blank for the server to make one, goes once `CategoryDraft.isValid` holds by
     `CategoryRules`, and clears the form once added; Rename... opens a category's names in its own
@@ -2051,13 +2895,28 @@ listed on the Account screen.
     rename, whatever became of it (the list is no admin route, so the rule above for a 403 or a 429
     does not apply), and a failure shows under the form or the card it came from, a 409 as an id a
     category has already. Lock forgets what was typed for a category and keeps the categories read.
-    `ModerationViewModelTest`, `QuestionListViewModelTest` and `CategoriesViewModelTest` drive it over
-    scripted repositories,
-    `ModerationOverHttpTest` over the real client configuration, and `ScreensDrawTest` draws every
-    screen off screen at a desktop window's size. The game's builds do not moderate at all.
-- **Home picks** *(decided 2026-09-26; built on the server, the client adopts later)*: the Home screen
-  will show **two Play buttons**, one in each card's colour (§5b), both starting the game alike, each
-  with how many times players have tapped it, to fill the screen as a question would. A tap pays and
+    *Accounts*, the fifth tab (*built 2026-09-27*; §8a, *Deleting an account*, *By a moderator*),
+    deletes a player's account on their request: one field for a username or an account id, sent as a
+    username when the domain's `AccountRules` take it as one and as an id otherwise (`AccountRef.of`: a
+    player id, a UUID, is never a username), the field's hint saying which; Delete account... asks
+    first, in a dialog naming the account, what goes and that it cannot be undone (`deleteWarningOf`),
+    and only its Delete account sends (`DeletePlayerAccount`, through `runApi` alone, as every
+    moderator's call). The line under the field says it is done, or why not: `PLAYER_NOT_FOUND` reads
+    as no such account, and a 403 or a 429 as on every tab. What was typed is cleared once deleted, and
+    Lock forgets it, the dialog and the line. Nothing is read again: nothing the app lists shows a
+    player.
+    `ModerationViewModelTest`, `ReportsViewModelTest`, `AuthorsViewModelTest`,
+    `QuestionListViewModelTest`, `CategoriesViewModelTest` and `AccountsViewModelTest` drive it over
+    scripted repositories, `ModerationTapsTest` taps its chips and buttons, a ready reason, the block's
+    dialog and the deletion's among them, `ModerationOverHttpTest` over the real client configuration,
+    and `ScreensDrawTest` draws every screen off screen at a desktop window's size, and reads the
+    Reports tab's, the author actions' and the Accounts tab's texts. The game's builds do not moderate
+    at all.
+- **Home picks** *(decided 2026-09-26; built on the server and the game)*: the Home screen shows
+  **two Play buttons**, one in each card's colour (§5b), both starting the game alike, each revealing
+  how many times players have tapped it once one is tapped (the user, 2026-09-27: Home "different, not
+  same as play screen", the buttons small, the percentages animated as on Play, then a transition to
+  Play). A tap pays and
   costs nothing and is no answer. **Every tap counts**, a player's repeats included, bounded only by
   the per-player rate limit (§8b). `GET /v1/home-picks` (`WyrApi.Paths.HOME_PICKS`) answers both
   counts, a `HomePicksDto` (`picksA`, `picksB`), and needs no session, so Home can show them before it
@@ -2066,6 +2925,98 @@ listed on the Account screen.
   naming no side. Built in `home_picks` (V15), one row per side written at 0, moved only by an SQL
   increment (`HomePickStore.pick`, §4) and read in one statement (`HomePickStore.counts`).
   `HomePickStoreTest` races 8 taps of one button, `HomePickFlowTest` the routes.
+  - *The Home screen* (`io.ntole.wyr.home`, *built 2026-09-26*, *redesigned 2026-09-27*): under the
+    game's name, the two buttons, *Играј* each (provisional, §8b), card A's pink and card B's amber,
+    small and side by side on every screen (`WyrDimens.homeButtonHeight`, 128, and the pair no wider
+    than `homeButtonsMaxWidth`, 328), and just under the pair (`WyrDimens.spaceSm`) the **categories
+    played**, as Play's top bar names them (`CategoriesPlayed`, `categoriesPlayed`: *Све* or their
+    names in the language shown, one line cut short within the pair's width, the small chevron), whose
+    tap (`home.categories`) opens the Categories screen (*The Categories screen*); the name, the pair and
+    the categories centred in the room under the top bar. Both buttons play whatever is selected. No
+    share shows until a tap. A tap on either sinks and lifts it, the other a little faint, with a tap of the phone (`cardMotion`, as a Play card) and holds both still, then both count their
+    share of all taps up from 0 over 1.2 seconds (`HOME_COUNT_UP_MILLIS`, shorter than the Play screen's
+    3), as the same race the reveal runs, each with a reveal bar along its bottom, drawn, not composed, as the reveal is
+    (`CountedUpText`, `rememberCountUp`, `RevealBar`, `percentStyle`), the tap counted on the device
+    with the counts read, so the reveal waits for no answer; the shares stay a second
+    (`HOME_HOLD_MILLIS`), then Home fades out, growing a little, over 0.2 s, and Play fades in, from a
+    little smaller, over 0.25 s (`HOME_FADE_MILLIS`, `PLAY_ENTRANCE_MILLIS`, `FADE_THROUGH_SCALE`), a
+    fade through with no library, on the frame clock. The share's room is held from the start, so the
+    reveal moves nothing; the categories stay where they are, and take no tap once a button is tapped. With no counts read (offline, a sleeping server) there is nothing to reveal,
+    and the tap opens Play at once. The counts are read each time Home is shown (`HomeViewModel.shown`),
+    and nothing is said when a read fails. The tap is counted in the background, best effort
+    (`HomeViewModel.pick`), its answer not shown, and it makes the Play screen's ViewModel, so its
+    question loads during the reveal, the question's time not counted until Play is shown (§8g). Home to
+    Play is that fade through alone; every other change of screen fades and slides (§5b, *Motion*).
+  - *The client* is `HomePickRepository` in `:core:domain` (`io.ntole.wyr.core.domain.home`), the
+    counts as a `Tally`, one tap a vote: `GetHomePicks`, which ensures no session, and `PickOnHome`,
+    which ensures one first, as a vote does, so a first launch's tap and the game it opens mint one
+    guest between them. `DefaultHomePickRepository` reads through `runApi` alone, as the categories
+    are, and counts a tap through `withSessionRecovery`, over `HomePickApi`. `HomePickUseCasesTest`,
+    `DefaultHomePickRepositoryTest`, `HomeViewModelTest`, `HomeScreenDrawTest` (599 on an iPhone SE,
+    both themes, every language, *Све* or a long selection, the buttons small and side by side on
+    phones and a desktop window, the categories under them in the pair's middle on one line, opening
+    the Categories screen once, no share before a tap, the shares with the tap counted read as they are through the count up, nothing
+    moved, the categories neither moved nor taking a tap, one tap only, the game started once and not before the reveal is over, and at once with no
+    counts), `AppNavigationTest` (read each time Home is shown; the question asked during the reveal;
+    Play opens after it, whether or not the tap was counted by then).
+
+- **The shop** *(decided 2026-09-28; built on the server and the game)*: the user's, from `IDEAS.md`:
+  themes players buy with their points, each unlike the game's own, with art behind every screen and a
+  preview before buying; for now only themes, and a line that more is coming. The price is 220 points,
+  and 1 on dev (the user: "hardcode price to 220, and on dev it should be 1"), the server's
+  `THEME_PRICE` (§8); remote config for themes and prices comes later (`IDEAS.md`). The user's choices
+  (2026-09-28): themes recolour the cards too (§5b); **only a registered player may buy**, as only one
+  may submit; the theme worn is kept on the device; and the shop opens from a bag on the Account bar
+  besides the points.
+  - *The themes* (`GameThemes`, §5b): the game's own, free, *Класична*, in the device's light or dark
+    mode, its art a faint pink and amber wash and question marks (§5b, *Backgrounds*); and four on sale, each one palette whatever the mode (*provisional — user decision*: a
+    light and a dark variant of each is the other option): **Неонска ноћ** (`NEON_NIGHT`: magenta and
+    cyan on near-black, a grid to the horizon, a half sun and stars), **Океан** (`OCEAN`: coral and sea
+    foam on deep teal, two waves and bubbles), **Шума** (`FOREST`: moss and terracotta on cream, two
+    a line of pines behind two hills) and **Залазак** (`SUNSET`: violet and gold on dusk, a low sun behind two dunes).
+    Their names are `ShopStrings`, their ids the server's `ShopCatalog`, in that order.
+  - *The server* (`io.ntole.wyr.server.shop`): `GET /v1/shop` (`WyrApi.Paths.SHOP`), bearer required,
+    answers a `ShopDto`, every theme of `ShopCatalog` as a `ShopThemeDto` (`id`, a plain string, never
+    an enum, §5; `price`, the current one; `owned`), the player's `totalPoints` and whether they are
+    `registered` (a username or a Play Games link), in one statement (`ShopStore.shopOf`, §4). `POST
+    /v1/me/purchases` (`MY_PURCHASES`) with a `PurchaseRequest` (`itemId`) buys one, answered with the
+    shop after it: a guest is 403 `ACCOUNT_REQUIRED` before anything else is checked; an id not 1 to
+    `WyrApi.Limits.MAX_SHOP_ITEM_ID_LENGTH` (32) of `A`-`Z`, `0`-`9` and `_` is 400, one the catalog
+    lacks 404 `ITEM_NOT_FOUND`, one owned 409 `ALREADY_OWNED`, too few points 409 `NOT_ENOUGH_POINTS`,
+    each taking nothing. `ShopStore.buy` locks the buyer's row, reads what they own, takes the price by
+    `PlayerStore.spend` and writes the purchase (`purchases`, V19: the player, the item, what it paid
+    and when, under a primary key on the player and the item, its foreign key cascading), so a double
+    tap buys once (§4). A purchase is never paid back, and counts in `pointsSpent` (§8c). An owned
+    theme shows the current price, not what it paid. `ShopStoreTest`, `ShopFlowTest`.
+  - *The client* is `ShopRepository` (`:core:domain`, `io.ntole.wyr.core.domain.shop`), behind `GetShop`
+    and `BuyTheme`, each ensuring a session first, over a `Shop` of `ShopTheme`s;
+    `DefaultShopRepository` sends both through `withSessionRecovery`, as a submission goes (a dead
+    session's retry is the fresh guest's, refused as a guest), over `ShopApi`. `ALREADY_OWNED` and
+    `ITEM_NOT_FOUND` are `DomainError`s of their own. `ShopUseCasesTest`, `DefaultShopRepositoryTest`.
+  - *The Shop screen* (`io.ntole.wyr.shop`, `Screen.Shop`), under a back arrow, read each time it is
+    shown (`ShopViewModel.shown`), scrolling: *Продавница* and the points; then **Твоје теме**, the themes
+    the player owns, the game's own first, a horizontal picker (*decided 2026-09-28*, the user: owned
+    themes looked odd left among those on sale, and "horizontal picker"): a tile each, a small preview
+    and the name, a tap putting it on, the one worn outlined in the accent and marked *Активна*, the
+    picker opened scrolled to it; then **У понуди**, the themes not owned, and none when every one is,
+    over which a guest is told *Региструј се да купујеш у продавници.*, with the Auth page's button, and a
+    registered player short of points *Немаш довољно поена.*: a card each, its preview (`ThemePreview`: a
+    small Play screen in the theme's own tokens, page, art, two cards of *Пица* and *Бурек* and, but on a
+    tile, the row's coin and thumbs, heard as *Преглед: Океан*), its name and *Купи ·* the coin and the
+    price, which opens a dialog, *Купи тему Океан?*, of the preview larger, *Купи ·* the price and
+    *Откажи*, and only its Buy buys. A theme this build has no colours for is left out. A theme bought is
+    put on at once and moves up into the picker. Under them, muted, *Ускоро још ствари у продавници.* A
+    purchase refused says why (bought already, a rate limit, offline) and reads the shop again; a read
+    that fails with nothing shown says so, with *Покушај поново*. When the shop sells a second kind of
+    item, the picker becomes a collection screen of its own (*provisional*, §8b). `ShopViewModelTest`,
+    `ShopScreenDrawTest`, `TapsTest`, `AppNavigationTest` (the points on Play and the Account card and the
+    bag open it; a theme bought is worn and leaves what is on sale).
+  - *The theme worn* (`ThemeViewModel`, which `App` asks for once and wears through `WyrTheme(theme)`):
+    kept in the session's storage under `wyr.theme.local`, `.dev` or `.prod`, the player's id over the
+    theme's, and worn only while the session stored names that player, so a logout, a login to another
+    account or a dead session's fresh guest takes it off with no network, and the player back puts it
+    on again; the game's own for anyone else. A shop read that says the player no longer owns the theme
+    worn (a dev server's data reset) takes it off (`ThemeViewModel.owned`). `ThemeViewModelTest`.
 
 ## 8e. Client environments — decided 2026-09-24
 
@@ -2079,7 +3030,7 @@ game UI (the moderation app, `:app:adminApp`, §3) can name one too.
 |-------------|------------------------------------------------------------------|
 | `LOCAL`     | `http://localhost:8080`; the Android emulator's `10.0.2.2:8080`  |
 | `DEV`       | `https://wyr-server-dev.onrender.com` (§8: in-memory H2)         |
-| `PROD`      | `https://wyr-server.onrender.com`                                |
+| `PROD`      | `https://wyr-api.ntole.com`, a CNAME to `wyr-server.onrender.com` |
 
 - *Naming one.* `WyrEnvironment.parse` takes `local`, `dev` or `prod`, in any case, trimmed; no name,
   or a blank one, is LOCAL. Any other value throws, naming it, rather than falling back. Every entry
@@ -2089,7 +3040,7 @@ game UI (the moderation app, `:app:adminApp`, §3) can name one too.
 - *Android*: product flavors `local`, `dev` and `prod` in one `environment` dimension;
   `BuildConfig.WYR_ENV` is the flavor's name, which `WyrApplication` passes on. Each installs beside
   the others: application id suffix `.local`, `.dev` or none, launcher label *WYR Local*, *WYR Dev* or
-  *WYR*. Cleartext HTTP (the `usesCleartextTraffic` manifest placeholder) is on for `local` alone;
+  *Шта би радије?* (§8, *Release builds*). Cleartext HTTP (the `usesCleartextTraffic` manifest placeholder) is on for `local` alone;
   `dev` and `prod` are https only. `dev` is Android Studio's default variant, since a physical phone
   cannot reach LOCAL. `assembleDebug` builds all three.
 - *Desktop*: the `WYR_ENV` environment variable, read in `:app:shared`'s jvmMain
@@ -2125,6 +3076,26 @@ game UI (the moderation app, `:app:adminApp`, §3) can name one too.
   Preferences node, one bundle id's `NSUserDefaults`, one origin's `localStorage`. With one key, a
   build for one server sent the other's tokens to it and, once they were refused, replaced that
   guest, and its points, with a new one (§8a). Android's flavors have storage of their own anyway.
+- *The build on every request* (*built 2026-09-26*, §8b *Minimum client version*). Each entry point
+  reads the build number (§8g, *The build number*) where it reads the environment's name, Android's
+  `BuildConfig.VERSION_CODE`, the web build's `BUILD_NUMBER`, desktop's `wyr.app.build` property and
+  iOS's `CFBundleVersion`, and hands it to `initKoin`, which makes it a `ClientBuild` (`:core:network`)
+  with the platform's name. The game's HTTP client (`WyrHttpClient.create`'s `build`, bound by
+  `dataModule`) sends `X-Client-Platform` and `X-Client-Version` on every request, a refresh's
+  included; the moderation app's sends neither, and neither does a build that read no number (a
+  desktop app started without the property), which the server serves as a build from before the
+  headers. The first answer `UPGRADE_REQUIRED`, or a bare 426, raises the `UpgradeSignal` the client is
+  given, bound as the domain's `AppUpdate`, whichever call it was. `WyrHttpClientTest`,
+  `ClientBuildTest`, `DataModuleTest`, `DesktopBuildNumberTest`, `BundledBuildNumberTest`.
+  - *The update screen* (`io.ntole.wyr.update`): once `AppUpdate` is raised, `App` shows one full
+    screen in place of every other, for the app's life, *Нова верзија је доступна*
+    (`Strings.updateScreen`), and one button, the platform's (`rememberUpdateButton`): on Android
+    **Ажурирај**, the game's Play Store page (`market://details?id=` the build's own application id,
+    or the `https://play.google.com` page where no app takes that, and nothing where no app takes
+    either, `openFirst`), on the web **Освежи**, which
+    loads the page again, and on the desktop and iOS none, no store having the build yet. No top bar
+    and no way back: every call would be refused again. `UpdateScreenDrawTest`, `AppNavigationTest`,
+    `TapsTest`. A DEV or LOCAL flavor's id has no store page, so its button finds none: accepted.
 - *Analytics* (§8g). Each entry point reads the PostHog project the build sends to where it reads the
   environment's name, and hands both to `initKoin`. Every event names its environment, and an
   install's analytics id is one per environment, as its session is.
@@ -2142,7 +3113,8 @@ hand, so the two cannot say different things; and **English** stands beside them
   precomposed Đ, Ž, Ć, Č and Š, the accented Ѐ and Ѝ (ѝ, her, beside и, and) the precomposed È and
   Ì, and Dž is two letters, never Unicode's one-character digraph. Latin letters, digits,
   punctuation, spacing and the Cyrillic letters Serbian does not use (Я, Щ, Ы...) come back as they
-  were. Pure and in the domain, so a question's text can go through it later. `SerbianScriptTest`
+  were. Pure and in the domain, so a question's options go through it too (*Questions in Latin*,
+  below). `SerbianScriptTest`
   pins every letter, capital and small, the digraphs in each case, the accented letters, and text
   that must not change.
 - **The strings** *(built)*: `Strings` (`:app:shared`, `io.ntole.wyr.language`), a data class of
@@ -2157,11 +3129,22 @@ hand, so the two cannot say different things; and **English** stands beside them
   no Latin or English one has a Cyrillic letter. Translated so far: the Home screen, the game's name
   (*Шта би радије?*, *Would You Rather?*) and *Играј*; the top bars and the icons' names (*Почетна*,
   *Налог*, *Назад*); the language menu's name, *Језик*; the Play screen's words (`PlayStrings`,
-  `Strings.playScreen`); the Categories screen (`CategoryStrings`, `Strings.categoriesScreen`:
+  `Strings.playScreen`), its repeat notice and its question's menu (`QuestionMenuStrings`,
+  `PlayStrings.menu`) and sharing's (`ShareStrings`, `PlayStrings.share`: *Подели*, *Прикажи
+  резултате*, *Мој избор*, *Играј и ти на {0}*, the message, and what a copy, a download or a failure
+  says) among them; the Categories screen (`CategoryStrings`, `Strings.categoriesScreen`:
   *Претражи категорије*, *Изабрано: 3* and *Нема резултата*); the Account screen, whole, with My
   questions and the server line; the Auth page, whole; and the Submit screen's form, whole
   (`Strings.accountScreens`, an `AccountStrings` of the Account screen's words and those of the
-  pages opened from it). **Try again** is one text of `Strings`, `tryAgain`, *Покушај поново*
+  pages opened from it, deleting an account's in `DeleteAccountStrings`, the Register form's terms
+  line in `TermsLineStrings` and the Submit form's rules line, *Слањем прихваташ {0}.* with *правила
+  питања* as its link, in `RulesLineStrings`); the update screen
+  (`Strings.updateScreen`, *Нова верзија је доступна*, *Ажурирај*, *Освежи*); and the About screen
+  (`Strings.aboutScreen`: *О игри*, the name its icon is given, *Верзија {0}*, the four links' names
+  and *Лиценце отвореног кода*, and *ИД налога*, *Копирај ИД налога* and *Копирано*); and the shop
+  (`Strings.shopScreen`, a `ShopStrings`: *Продавница*, *Теме*, the themes' names, *Купи · {0}*,
+  *Примени*, *Активна*, *Купи тему {0}?*, *Ускоро још ствари у продавници.* and the rest). What is the same in every language is no `Strings`: *13+*, the
+  libraries' and licences' names. **Try again** is one text of `Strings`, `tryAgain`, *Покушај поново*
   (*provisional*, §8b), under a failure on Play, the Categories screen, the Account screen, My
   questions, the Auth page and the Submit form, so the game says it one way; the Account screens'
   *Нешто није у реду. Покушај поново.* asks in its words, and `StringsTest` holds the two together.
@@ -2169,7 +3152,9 @@ hand, so the two cannot say different things; and **English** stands beside them
   (`categoriesUnread`), on the Categories screen and under the Submit form's categories alike, and
   the Categories screen's Play is the Home screen's *Играј* (`Strings.play`). So too are *Све*
   (`allCategories`), on the Play screen's row and first in the Categories screen's list, and
-  *Учитавање* (`loading`), the name both screens give their spinner for a screen reader.
+  *Учитавање* (`loading`), the name both screens give their spinner for a screen reader, and *Још
+  мало…* (`stillLoading`), under the Play, Categories and Account spinners after 5 seconds (§8d, *A
+  slow first load*).
 - **The categories' names** *(built)*: the server's, not `Strings`, since a moderator adds and
   renames categories without a build (§8d, *Categories*): `nameSr` in Serbian Cyrillic,
   `SerbianScript.toLatin(nameSr)` in Serbian Latin, as every Latin text is made, and `nameEn` in
@@ -2196,15 +3181,21 @@ hand, so the two cannot say different things; and **English** stands beside them
   nothing reads the device's locale (`Language.DEFAULT`; `LanguageMenuTest` sets an English, a
   German and a Serbian Latin locale on the JVM and still opens in Cyrillic).
 - **The language menu** *(built; a menu since 2026-09-26, the user: "there will be more languages
-  segmented buttons wont fit everything")*: on the Account screen, under My questions (§8d), a row of
+  segmented buttons wont fit everything"; **hidden** since 2026-09-28, the user: "for now hide
+  language, we will introduce it later")*: on no screen for now, so the game shows the language kept on
+  the device, Cyrillic unless one was picked before (a tester's phone that picked Latinica stays in
+  it); the code and its tests are kept, to put back under My questions (§8d). When shown, a row of
   a globe, the language shown named in itself and a chevron (`LanguageMenu`); a tap opens a menu of
-  every language, **Ћирилица**, **Latinica** and **English**, each named in itself whatever the
-  language shown, the one shown marked, so a player who picked one they cannot read finds the menu by
+  every language offered, **Ћирилица** and **Latinica** (`Language.OFFERED`, the one list that
+  decides it: **English is hidden** for the launch, §8b *The launch*, its words and tests kept, and a
+  device that kept `en` shows English still, none of the menu's marked), each named in itself whatever
+  the language shown, the one shown marked, so a player who picked one they cannot read finds the menu by
   its globe and their own by its name (`Language.ownName`, which is why the names are not `Strings`).
   A screen reader hears the row as *Језик: Ћирилица*, in the language shown (`Strings.language`). A
   tap on a language changes every screen at once and is then kept (`LanguageViewModel`, bound in
-  `uiModule` and asked for once by `App`). `LanguageMenuTest` opens it and picks each.
-- **The Statistics switch** *(built)*: beside the language menu, *Статистика*, *Statistika*,
+  `uiModule` and asked for once by `App`). `LanguageMenuTest` opens it and picks each offered.
+- **The Statistics switch** *(built)*: on the About screen (the Account screen's options before
+  2026-09-28), *Статистика*, *Statistika*,
   *Statistics* (`AccountStrings.statistics`), the word and the switch one control, which a screen
   reader hears as the word, a switch, and on or off (§8g).
 - **Kept on the device** *(built)*: under `wyr.language` in the storage the session is kept in (the
@@ -2235,9 +3226,14 @@ hand, so the two cannot say different things; and **English** stands beside them
     Romance adjective, *content*/*contente*), and how an option avoids it; and whether the game
     says the familiar or the formal *you* (*du* or *Sie*, *tu* or *vous*). Croatian and Bosnian
     would take Serbian's answers.
-- **Not translated yet**: question texts stay as their authors wrote them (server data; a later
-  change may put Serbian ones through `SerbianScript.toLatin`; a local question is never
-  translated, §8b *Local questions*), and the moderation app
+- **Questions in Latin** *(built 2026-09-26)*: in Serbian Latin a question's options show through
+  `SerbianScript.toLatin`, as the categories' names do, and in Serbian Cyrillic and English as their
+  author wrote them; a Latin letter comes back as it was, so an option written in Latin or in English
+  reads the same in all three. One function makes the choice, `optionText(option, language)`
+  (`io.ntole.wyr.language`), for the Play screen's cards and My questions alike (`OptionTextTest`,
+  `PlayScreenDrawTest`, `AccountScreenDrawTest`).
+- **Not translated yet**: question texts stay as their authors wrote them, but for the script above
+  (server data; a local question is never translated, §8b *Local questions*), and the moderation app
   (`:app:adminApp`) stays English, naming categories in Serbian (`nameOf`).
 
 ## 8g. Analytics — decided 2026-09-26
@@ -2274,7 +3270,8 @@ the same events. The moderation app sends none.
   as a question's is; never the username. The account's use cases do both (`RegisterAccount` and
   `LogIn` once the server took them, by the player id of the session then stored, `LogOut` once the
   session is dropped), so a login on a second device joins its install to the same player, and the
-  guest a logout leaves is nobody's. An account's deletion, once there is one, resets too. Not
+  guest a logout leaves is nobody's. An account's deletion resets too, once the server has deleted it,
+  after its `account_deleted` (`DeleteAccount`). Not
   joined: a registration whose answer was lost (its read after names the account, but no id), which
   stays the install's until a login.
 - **What every event carries** *(built)*: `distinct_id`; `$session_id`, a version 7 UUID, a new one
@@ -2289,14 +3286,13 @@ the same events. The moderation app sends none.
 - **What is never sent**: the username, an email, a password, any question's or option's text, the
   moderator's reason, anything typed, a token or the admin token. A question is its id, a category
   its id, a failure the domain's name for it (`DomainError`).
-- **Where the player is** *(built; provisional — user decision, §8b, Where players are, in
-  analytics)*: nowhere. A request to PostHog comes from the player's address, as one to the game's
-  server does, and by default PostHog keeps that address as `$ip` and adds a country, a city and
-  coordinates to every event from it (GeoIP). So every event carries `$geoip_disable: true`, which
-  has PostHog add no location (`PostHogAnalytics.GEOIP_DISABLE`, `PostHogAnalyticsTest`), and the
-  project is set to discard the address (*Setting up PostHog*, below), which no code can do. What
-  stays is pseudonymous: the install's random id, and an account's player id once it registers or
-  logs in; the privacy policy says so.
+- **Where the player is** *(built; decided 2026-09-27, §8b, Where players are, in analytics)*:
+  PostHog's own reading of it. A request to PostHog comes from the player's address, as one to the
+  game's server does, and PostHog keeps that address as `$ip` and adds a country, a city and
+  coordinates to every event from it (GeoIP); the game sends no location of its own, and no event
+  asks PostHog to skip the lookup (`PostHogAnalyticsTest`). Beside that, what is sent is
+  pseudonymous: the install's random id, and an account's player id once it registers or logs in;
+  the privacy policy says so.
 - **The key, per platform** *(built)*: a PostHog project's key and host, set when a build is made or
   started as the environment is (§8e), never committed; **no key is analytics off**, a no-op, which is
   how every test and every CI build runs. The key is the project's public one, which can only send.
@@ -2323,6 +3319,15 @@ the same events. The moderation app sends none.
     `packageVersion` and the web build's `APP_VERSION`. Xcode reads iOS's `MARKETING_VERSION` from
     `Config.xcconfig`, which Gradle cannot write, so every Gradle build fails, naming both, until the
     two agree: a release changes them together.
+  - *The build number* (*built 2026-09-26*) is made from it, one for every platform: MAJOR * 10000 +
+    MINOR * 100 + PATCH, so 1.0.0 is 10000 and 1.2.3 is 10203, MINOR and PATCH each checked below 100,
+    or the build fails. It is Android's `versionCode` (`BuildConfig.VERSION_CODE`), desktop's
+    `wyr.app.build` system property, the web build's `BUILD_NUMBER` constant beside `APP_VERSION`, and
+    iOS's `CFBundleVersion`, from `CURRENT_PROJECT_VERSION` in `Config.xcconfig`, which the Gradle
+    build checks as it checks `MARKETING_VERSION`. Every request of the game's names it (§8e, *The
+    build on every request*), and the About screen shows it (§8d, *About*). Nothing else sets
+    `versionCode`, and Play refuses one it has seen, so every upload to any Play track, internal
+    testing included, bumps PATCH (or MINOR) first (NEXT-SESSION's *Releasing to production*).
 - **The app and its screens** *(built)*: `UsageTracker` (`io.ntole.wyr.analytics`), one for the app's
   life, which `App` tells of the platform lifecycle's start and stop: Android's activity, the iOS view
   controller, the desktop window minimized and back, the browser page hidden and shown. `app_opened`
@@ -2338,7 +3343,7 @@ the same events. The moderation app sends none.
   the `visibilitychange` handler itself, with events the sender only queues a step later, and PostHog
   taking a beacon's `text/plain` body, unchecked; a tab only hidden sends as any platform does. Every screen the navigator
   shows is PostHog's `$screen`, named by its key (`home`, `play`, `account`, `auth`, `submit`,
-  `categories`), and the one left is `screen_left`, with `screen` and `duration_ms`, for another screen
+  `categories`, `about`, `question`, `shop`), and the one left is `screen_left`, with `screen` and `duration_ms`, for another screen
   or for the background, back from which it is shown again. An Android rotation, whose activity stops
   only to start again, reports neither (`rememberConfigurationChanging`, over the activity's
   `isChangingConfigurations`: the one piece of it per platform), nor a second `account_opened` or
@@ -2348,14 +3353,23 @@ the same events. The moderation app sends none.
   `onClick` through `tapped(element, properties)` (`io.ntole.wyr.analytics`), which reports a `tap`
   with `element` to `LocalAnalytics` (the app's, which `App` provides; none for a screen drawn alone)
   before it acts, so a tap is counted by a name that never changes with the language or the text, and
-  `$screen_name` says where. An element is `screen.what`, lower case and underscores: `home.play`;
-  `top_bar.home`, `.account`, `.back`, `.categories`; `play.card_a` and `.card_b` (with `answered`,
-  whether the tap went on from the reveal), `.like`, `.dislike`, `.skip`, `.try_again`;
-  `account.open_auth`, `.log_out`, `.try_again`; `my_questions.new_question`, `.first_question`,
-  `.try_again`; `language.menu` and `language.option` (with its `language` tag); `auth.register`,
-  `.show_password`, `.to_log_in`, `.log_in`, `.log_in_anyway`, `.cancel`, `.to_register`,
-  `.try_again`; `submit.category` (with its `category` id), `.send`, `.categories_try_again`,
-  `.try_again`; `categories.all`, `.category` (with its id), `.play`, `.try_again`. A text field is no
+  `$screen_name` says where. An element is `screen.what`, lower case and underscores: `home.play` (with
+  its `side`, `A` or `B`, since Home's two buttons are one element), `home.categories`;
+  `top_bar.home`, `.account`, `.back`, `.categories`, `.about`, `.shop`; `about.privacy`, `.terms`,
+  `.delete_account`, `.contact`, `.copy_account_id` and `.licence`; `play.card_a` and `.card_b` (with `answered`,
+  whether the tap went on from the reveal), `.like`, `.dislike`, `.skip` (with `answered`, as the cards'), `.points`, `.try_again`;
+  `question_menu.open`, `.report`, `.reason` (with its `reason`), `.hide_question`, `.hide_author`;
+  `account.open_auth`, `.log_out`, `.points`, `.try_again`, and `.statistics`, `.statistics_info` and
+  `.statistics_info_ok`, on the About screen since 2026-09-28, their names kept;
+  `my_questions.new_question`, `.first_question`, `.question`, `.try_again`; `language.menu` and `language.option` (with its `language` tag); `auth.register`,
+  `.show_password`, `.to_log_in`, `.terms`, `.privacy`, `.log_in`, `.log_in_anyway`, `.cancel`, `.to_register`,
+  `.play_games`, `.try_again`; `submit.category` (with its `category` id), `.send`, `.rules`, `.categories_try_again`,
+  `.try_again`; `categories.all`, `.category` (with its id), `.play`, `.try_again`; `update.store` and
+  `.reload`; `account.delete`, `.delete_confirm` and `.delete_cancel`, on the About screen; `shop.buy`,
+  `.buy_confirm` and `.apply` (each with its `theme` id), `.buy_cancel`, `.open_auth` and `.try_again`;
+  `play.share` and `question.share` (Question details), and the share dialog's `share.results`,
+  `.send` and `.cancel`.
+  (`account.add_username` was sent until 2026-09-28, when its link went.) A text field is no
   tap. `TapsTest` draws every screen in the states that show all it can be tapped on, taps everything a
   screen reader could, and fails on anything that reports no tap, or a name not in its lists: a new
   button gets its name by being written with `tapped`, and a name once sent never changes.
@@ -2365,7 +3379,12 @@ the same events. The moderation app sends none.
     once the vote is counted (`side`, `answer_ms` from the question shown to the tap, a retry's the
     first tap's, and `agreed_with_majority`); `question_skipped` (`duration_ms` on it, and
     `recorded`, whether the server heard); `reaction_set` (`reaction`, `like`, `dislike` or `none`,
-    and `answered`). The time is the app's `TimeSource.WithComparableMarks` (`uiModule`), and a
+    and `answered`); and from the question's menu, once the server has each, `question_reported`
+    (`reason`, `offensive`, `real_person`, `spam`, `not_a_choice` or `other`, and `answered`),
+    `question_hidden` and `author_hidden` (`answered`); and `question_shared` (`question_id`,
+    `categories`, `with_results` and `outcome`, `opened`, `copied` or `saved`; a share that failed sends
+    none), from the Play screen and from Question details (`AccountViewModel.shared`), which
+    `$screen_name` tells apart (§8d, *Sharing*). The time is the app's `TimeSource.WithComparableMarks` (`uiModule`), and a
     question's counts only while the Play screen is shown and the app in the foreground
     (`ScreenStopwatch`, which the Play screen's `LifecycleStartEffect` stops and starts), so a detour
     to Account or the categories, or an hour in the background, is not time taken over it.
@@ -2376,33 +3395,42 @@ the same events. The moderation app sends none.
     lost included, the read after it naming the account; `login_completed` the same way. Each is
     decided from the action's own answer and that read, never from `AccountState.signedIn`, which the
     Auth page takes down as it leaves, while the read may still run, and fail; `logout`, sent before
-    the logout so it is the account's.
+    the logout so it is the account's; `account_deleted`, from `DeleteAccount` once the server has
+    deleted the account, before the analytics forget whose it was.
+  - *Notifications* (`AppServices`, §8a *Push tokens*): `notification_opened` when a tap on a
+    decision's notification opens the Account screen.
+  - *Play Games* (`LinkPlayGames`, §8a *Play Games sign-in*): `play_games_signed_in` once the server
+    took a Play Games sign-in, `automatic` whether it was the launch's, with no tap, and `switched`
+    whether it made the device another player's; the player id is identified either way.
   - *Submit* (`SubmitViewModel`): `submit_opened` for each visit of the form, as Account's;
     `submit_sent` once stored (`categories`, `count`); `submit_refused` (`code`) for any refusal.
   - *Categories* (`CategoriesViewModel`): `categories_changed` when Play sends a new selection
     (`categories`, `count`, none being every category); what is played already sends nothing.
   - *Language* (`LanguageViewModel`): `language_changed` (`language`, its tag).
+  - *Shop* (`ShopViewModel`, `ThemeViewModel`): `shop_opened` for each visit, as Account's;
+    `theme_bought` once the server took it (`theme`, its id, and `price`); `theme_applied` for a theme
+    put on, a purchase's included (`theme`).
   - `error_shown` for every failure a screen shows (`code`, the `DomainError`'s name, and `action`:
-    `question`, `vote`, `reaction`, `account`, `my_questions`, `register`, `log_in`, `log_out`,
-    `submit`, `points`, `categories`), but a vote already counted, which moves on and shows nothing,
+    `question`, `vote`, `reaction`, `report`, `hide_question`, `hide_author`, `account`,
+    `my_questions`, `register`, `log_in`, `play_games`, `log_out`, `delete_account`,
+    `submit`, `points`, `categories`, `shop`, `buy_theme`), but a vote already counted, which moves on and shows nothing,
     and a skip, which says nothing.
   - The ViewModel tests hold each, and that nothing typed is ever in one.
-- **The switch** *(built)*: **Статистика** on the Account screen, beside the language menu (§8d,
-  *The Account screen*; §8f), `analytics.enabled` and `setEnabled` through `LocalAnalytics`. On by
+- **The switch** *(built)*: **Статистика** on the About screen (§8d, *About*; §8f), `analytics.enabled` and `setEnabled` through `LocalAnalytics`. On by
   default, and off is kept for the device, under `wyr.analytics.enabled` (`on` or `off`), whatever the
   environment, as the language is (§8f): the choice is the person's. Off sends nothing more and drops
   what waited, the tap on the switch included; on sends from the next event. A build with no key keeps
-  the choice all the same, since a player cannot tell one build from another. `AccountScreenDrawTest`
+  the choice all the same, since a player cannot tell one build from another. `AboutScreenDrawTest`
   draws it on and off and taps it, and `AppNavigationTest` turns the app's analytics off and on.
 - **Consent** (*the user's, 2026-09-26*): on by default, under legitimate interest, for a game for
-  16 and over; the privacy policy says what is sent, that it is on, and how to turn it off (the
-  Statistics switch), and that PostHog sees the address each request comes from, discards it and
-  derives no location from it (*Where the player is*). *To check before an EU launch*: whether the install id kept on the device (the
+  13 and over (16 when decided; *to check with the lawyer* for players of 13 to 15); the privacy policy says what is sent, that it is on, and how to turn it off (the
+  Statistics switch, on the About screen), and that PostHog sees the address each request comes from, keeps it and
+  derives an approximate location from it (*Where the player is*). *To check before an EU launch*: whether the install id kept on the device (the
   browser's in `localStorage`) is itself a storing the ePrivacy rules want consent for, whatever the
   basis for the rest.
 - **Setting up PostHog** (*the user's, not in the repository*): make a project on the **EU** cloud
-  (https://eu.posthog.com), turn on *Settings → Project → IP data capture configuration → Discard
-  client IP data*, so the address events come from is not kept (*Where the player is*, above), put
+  (https://eu.posthog.com), leave *IP data capture* as it is, so the address and a location are kept
+  (*Where the player is*, above), put
   its *Project API key* in each build's settings (above; for a phone, `wyr.posthog.key` in
   `local.properties`), and build a dashboard, filtered to `environment = prod` (a DEV or LOCAL build's
   events are tests), of these insights:
@@ -2437,7 +3465,8 @@ the same events. The moderation app sends none.
   surface the decision rather than assuming.
 - When a decision is made, encode it here and in config — not just in conversation.
 - Verify with `./gradlew ktlintCheck` plus the test and compile tasks listed in
-  `.github/workflows/ci.yml`. That workflow is the definition of "green". Besides `verify` it runs
+  `.github/workflows/ci.yml`. That workflow is the definition of "green"; its `verify` job runs the
+  game's Android host tests too (`:app:shared:testAndroidHostTest`). Besides `verify` it runs
   `server-postgres` (the server suite against a Postgres service container), `docker-smoke` (builds
   the image and polls `/health`), and `ios` (framework link, simulator tests, the three `:core`
   modules' test compiles, and an `xcodebuild` simulator build on macOS). All four passed on

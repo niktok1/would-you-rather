@@ -10,6 +10,7 @@ import io.ntole.wyr.core.domain.category.GetCategories
 import io.ntole.wyr.core.domain.error.DomainError
 import io.ntole.wyr.core.domain.error.WyrException
 import io.ntole.wyr.core.domain.player.GetPlayerStats
+import io.ntole.wyr.core.domain.push.DevicePush
 import io.ntole.wyr.core.domain.submission.SubmitQuestion
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -39,7 +40,7 @@ interface SubmitActions {
  * Drives the Submit screen's form (CLAUDE.md §8d, *Submitting*): a question written and filed under
  * the categories picked from the server's, read through [GetCategories], sent through
  * [SubmitQuestion], and the player's points read through [GetPlayerStats], since a question costs
- * [io.ntole.wyr.core.domain.submission.SubmissionRules.SUBMISSION_COST].
+ * points, as many as the server says with them ([SubmitState.submissionCost], CLAUDE.md §8c).
  *
  * One action at a time, and the points read again after every submit, a failed one too: a submission
  * whose answer was lost may have been stored, and paid for.
@@ -53,6 +54,7 @@ class SubmitViewModel(
     private val getCategories: GetCategories,
     categoryList: CategoryRepository,
     private val analytics: Analytics,
+    private val devicePush: DevicePush,
 ) : ViewModel(),
     SubmitActions {
     private val _state = MutableStateFlow(SubmitState(categoryOptions = categoryList.categories.value))
@@ -110,6 +112,9 @@ class SubmitViewModel(
                     ),
                 )
                 _state.update { it.copy(optionA = "", optionB = "", categories = emptySet(), sent = true) }
+                // The least obstructive moment to ask for notifications, which tell of its decision: the
+                // platform asks once, ever, after the first (CLAUDE.md §8a, *Push tokens*).
+                devicePush.askPermissionOnce()
             } catch (failure: WyrException) {
                 analytics.track(AnalyticsEvent.SUBMIT_REFUSED, mapOf(AnalyticsProperty.CODE to failure.error.name))
                 reportShown(failure.error, ACTION_SUBMIT)
@@ -156,14 +161,17 @@ class SubmitViewModel(
     }
 
     /**
-     * Reads the player's points, and whether they are registered, minting a guest where there is none.
+     * Reads the player's points, and whether they are registered, by a username or by Play Games,
+     * minting a guest where there is none.
      * A failed read keeps what was shown and says so under Send, whatever the action before it ended in,
      * so points never read are never left waiting on nothing.
      */
     private suspend fun load() {
         try {
             val stats = getPlayerStats()
-            _state.update { it.copy(points = stats.totalPoints, registered = stats.username != null) }
+            _state.update {
+                it.copy(points = stats.totalPoints, cost = stats.submissionCost, registered = stats.registered)
+            }
         } catch (failure: WyrException) {
             reportShown(failure.error, ACTION_POINTS)
             _state.update { it.copy(pointsFailure = failure.toSubmitFailure()) }

@@ -2,6 +2,7 @@ package io.ntole.wyr.core.data.mapper
 
 import io.ntole.wyr.core.domain.submission.Submission
 import io.ntole.wyr.core.domain.submission.SubmissionStatus
+import io.ntole.wyr.core.domain.vote.Tally
 import io.ntole.wyr.core.question.QuestionStatus
 import io.ntole.wyr.core.question.SubmissionDto
 import io.ntole.wyr.core.question.SubmitQuestionRequest
@@ -24,6 +25,8 @@ internal fun SubmissionDto.toDomain(): Submission =
         likeCount = likeCount,
         dislikeCount = dislikeCount,
         answerCount = answerCount,
+        // Never below none, whatever is sent: a Tally refuses a negative count.
+        tally = Tally(votesA = votesA.coerceAtLeast(0).toLong(), votesB = votesB.coerceAtLeast(0).toLong()),
     )
 
 internal fun QuestionStatus.toDomain(): SubmissionStatus =

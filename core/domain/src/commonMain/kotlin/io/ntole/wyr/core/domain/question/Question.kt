@@ -20,6 +20,10 @@ import io.ntole.wyr.core.domain.reaction.Reaction
  * the numbers it was fetched with, so the answer to a reaction of the player's own, a
  * [io.ntole.wyr.core.domain.reaction.QuestionReactions], is newer than they are, and anyone else's
  * shows only when the feed next serves the question.
+ *
+ * [answeredBefore] is true when the player has answered the question already, in this cycle or one
+ * before, as the feed said when it served it (CLAUDE.md §8d, *Endless feed*): the Play screen says so,
+ * quietly (§8d, *The Play screen*).
  */
 public data class Question(
     public val id: String,
@@ -29,4 +33,5 @@ public data class Question(
     public val likeCount: Int = 0,
     public val dislikeCount: Int = 0,
     public val myReaction: Reaction = Reaction.NONE,
+    public val answeredBefore: Boolean = false,
 )

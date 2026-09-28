@@ -43,12 +43,26 @@ class ApiFailure(
         fun submissionLimit(limit: Int) =
             ApiFailure(HttpStatusCode.Conflict, ErrorCode.SUBMISSION_LIMIT, "already $limit submissions pending")
 
-        fun notEnoughPoints(cost: Int) =
-            ApiFailure(HttpStatusCode.Conflict, ErrorCode.NOT_ENOUGH_POINTS, "submitting costs $cost points")
+        /** Fewer points than [what] costs: submitting a question (CLAUDE.md §8c), or an item of the shop's. */
+        fun notEnoughPoints(
+            cost: Int,
+            what: String = "submitting",
+        ) = ApiFailure(HttpStatusCode.Conflict, ErrorCode.NOT_ENOUGH_POINTS, "$what costs $cost points")
 
-        /** A guest's submission: only a registered player may submit (CLAUDE.md §8d, *Submitting*). */
-        fun accountRequired() =
-            ApiFailure(HttpStatusCode.Forbidden, ErrorCode.ACCOUNT_REQUIRED, "only a registered player may submit")
+        /**
+         * A guest's submission or purchase: only a registered player may [what] (CLAUDE.md §8d,
+         * *Submitting*, *The shop*).
+         */
+        fun accountRequired(what: String = "submit") =
+            ApiFailure(HttpStatusCode.Forbidden, ErrorCode.ACCOUNT_REQUIRED, "only a registered player may $what")
+
+        /** A purchase of an item the player owns already (CLAUDE.md §8d, *The shop*). */
+        fun alreadyOwned(itemId: String) =
+            ApiFailure(HttpStatusCode.Conflict, ErrorCode.ALREADY_OWNED, "$itemId is owned already")
+
+        /** A purchase of an id the shop does not sell. */
+        fun itemNotFound(itemId: String) =
+            ApiFailure(HttpStatusCode.NotFound, ErrorCode.ITEM_NOT_FOUND, "the shop sells no $itemId")
 
         /** A submission by an author a moderator has blocked (CLAUDE.md §8d, *Moderation*). */
         fun submissionsBlocked() =
@@ -57,6 +71,12 @@ class ApiFailure(
         /** A block or an unblock of an author no player is. */
         fun authorNotFound(id: String) =
             ApiFailure(HttpStatusCode.NotFound, ErrorCode.AUTHOR_NOT_FOUND, "no author $id")
+
+        /**
+         * An account a moderator asked to delete that no player has. The message names neither the
+         * username nor the id asked for.
+         */
+        fun playerNotFound() = ApiFailure(HttpStatusCode.NotFound, ErrorCode.PLAYER_NOT_FOUND, "no such account")
 
         /** A moderator's decision on a question that is no longer, or never was, pending. */
         fun alreadyDecided(id: String) =

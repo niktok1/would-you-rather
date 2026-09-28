@@ -8,6 +8,7 @@ import io.ktor.client.request.setBody
 import io.ntole.wyr.core.api.WyrApi
 import io.ntole.wyr.core.auth.AccountDto
 import io.ntole.wyr.core.auth.LoginRequest
+import io.ntole.wyr.core.auth.PlayGamesSignInRequest
 import io.ntole.wyr.core.auth.RefreshRequest
 import io.ntole.wyr.core.auth.RegisterRequest
 import io.ntole.wyr.core.auth.SessionDto
@@ -15,8 +16,8 @@ import io.ntole.wyr.core.network.refreshTimeout
 
 /**
  * Session and account endpoints (CLAUDE.md §8a). [guest], [refresh] and [logIn] need no session:
- * [guest] has no credential yet, and [refresh] and [logIn] carry theirs in the body. [register] and
- * [logOut] go with the session's bearer, as any other call does.
+ * [guest] has no credential yet, and [refresh] and [logIn] carry theirs in the body. [register],
+ * [playGames], [logOut] and [deleteAccount] go with the session's bearer, as any other call does.
  */
 public class AuthApi(
     private val client: HttpClient,
@@ -61,10 +62,29 @@ public class AuthApi(
             }.body()
 
     /**
+     * Signs in with Google Play Games Services, [request] carrying the one-time server auth code Play
+     * Games gave the app, answered with a new session, this device's own, of the player Play Games names
+     * (CLAUDE.md §8a, *Play Games sign-in*): the session player, now linked, or the one it was linked to
+     * already. Sent with the session's bearer, as any call is: an expired access token is a 401 before
+     * the code goes anywhere, so the plugin's refresh and retry send it still unspent.
+     */
+    public suspend fun playGames(request: PlayGamesSignInRequest): SessionDto =
+        client.post(WyrApi.Paths.AUTH_PLAY_GAMES) { setBody(request) }.body()
+
+    /**
      * Ends the session the bearer names, this device's, and no other. Answered 204, as it is for a
      * session already ended. An expired access token is refreshed first, as for any call.
      */
     public suspend fun logOut() {
         client.post(WyrApi.Paths.AUTH_LOGOUT)
+    }
+
+    /**
+     * Deletes the account of the player the bearer names, for good (CLAUDE.md §8a, *Deleting an
+     * account*), answered 204. An expired access token is refreshed first, as for any call, and a player
+     * deleted already is 401, their refresh refused.
+     */
+    public suspend fun deleteAccount() {
+        client.post(WyrApi.Paths.ME_DELETION)
     }
 }

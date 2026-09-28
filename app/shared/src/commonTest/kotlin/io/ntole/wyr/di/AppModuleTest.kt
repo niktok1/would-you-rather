@@ -1,17 +1,22 @@
 package io.ntole.wyr.di
 
+import io.ntole.wyr.about.AppVersion
 import io.ntole.wyr.account.AccountViewModel
 import io.ntole.wyr.analytics.AnalyticsSettings
 import io.ntole.wyr.categories.CategoriesViewModel
 import io.ntole.wyr.core.auth.SessionDto
 import io.ntole.wyr.core.domain.analytics.Analytics
+import io.ntole.wyr.core.domain.playgames.LinkPlayGames
+import io.ntole.wyr.core.domain.update.AppUpdate
 import io.ntole.wyr.core.network.InMemoryTokenStorage
 import io.ntole.wyr.core.network.SessionStore
 import io.ntole.wyr.core.network.TokenStorage
 import io.ntole.wyr.core.network.environment.WyrEnvironment
+import io.ntole.wyr.home.HomeViewModel
 import io.ntole.wyr.language.Language
 import io.ntole.wyr.language.LanguageViewModel
 import io.ntole.wyr.play.PlayViewModel
+import io.ntole.wyr.services.AppServices
 import io.ntole.wyr.submit.SubmitViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -29,6 +34,7 @@ import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -57,10 +63,24 @@ class AppModuleTest {
         val koin = koinFor(WyrEnvironment.LOCAL)
 
         koin.get<PlayViewModel>()
+        koin.get<HomeViewModel>()
         koin.get<AccountViewModel>()
         koin.get<SubmitViewModel>()
         koin.get<LanguageViewModel>()
         koin.get<CategoriesViewModel>()
+        // What App asks for before any screen: whether the server refused this build; and the About
+        // screen's version.
+        koin.get<AppUpdate>()
+        koin.get<AppVersion>()
+    }
+
+    /** What runs by itself, and a build with no Play Games has it all the same, doing nothing. */
+    @Test
+    fun `what the app does by itself resolves from the real modules`() {
+        val koin = koinFor(WyrEnvironment.LOCAL)
+
+        koin.get<AppServices>()
+        assertFalse(koin.get<LinkPlayGames>().available, "no platform services: no Play Games")
     }
 
     @Test
@@ -129,7 +149,7 @@ class AppModuleTest {
         ).forEach { (name, environment) ->
             // Only the environment is resolved: the platform's own storage is never built, so nothing
             // of this machine's is read or written.
-            initKoin(environmentName = name, analytics = NO_ANALYTICS)
+            initKoin(environmentName = name, analytics = NO_ANALYTICS, build = 10000)
 
             assertEquals(environment, KoinPlatform.getKoin().get<WyrEnvironment>(), "\"$name\"")
             stopKoin()
@@ -143,6 +163,7 @@ class AppModuleTest {
                 initKoin(
                     environmentName = "staging",
                     analytics = NO_ANALYTICS,
+                    build = 10000,
                 )
             }
 
@@ -154,7 +175,8 @@ class AppModuleTest {
     fun `a PostHog host that is none stops the app before Koin starts`() {
         val analytics = AnalyticsSettings(key = "phc_key", host = "eu posthog com", appVersion = "1.0")
 
-        val failure = assertFailsWith<IllegalArgumentException> { initKoin(environmentName = "dev", analytics) }
+        val failure =
+            assertFailsWith<IllegalArgumentException> { initKoin(environmentName = "dev", analytics, build = 10000) }
 
         assertTrue("eu posthog com" in failure.message.orEmpty(), failure.message)
         assertNull(KoinPlatform.getKoinOrNull())
@@ -178,7 +200,12 @@ class AppModuleTest {
         storage: TokenStorage = InMemoryTokenStorage(),
     ): Koin {
         val platform = module { single<TokenStorage> { storage } }
-        return koinApplication { modules(listOf(platform) + appModules(environment, analytics = null)) }.koin
+        return koinApplication {
+            modules(
+                listOf(platform) +
+                    appModules(environment, analytics = null, version = AppVersion("1.0.0", number = null)),
+            )
+        }.koin
     }
 
     private companion object {

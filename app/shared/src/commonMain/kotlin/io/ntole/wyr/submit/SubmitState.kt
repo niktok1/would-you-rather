@@ -9,8 +9,8 @@ import kotlin.time.Duration
 /**
  * What the Submit screen's form shows (CLAUDE.md §8d, *Submitting*): the question being written, the
  * categories it can be filed under, as the server lists them, and the player's points, since sending
- * it costs [SubmissionRules.SUBMISSION_COST]. The player's own submissions are on the Account screen,
- * My questions, which opens the form.
+ * it costs [submissionCost]. The player's own submissions are on the Account screen, My questions,
+ * which opens the form.
  *
  * What is typed lives here, in memory, as typed: trimming is the server's, and [SubmissionRules]
  * says what it would refuse.
@@ -29,6 +29,11 @@ data class SubmitState(
     val categoriesFailure: SubmitFailure? = null,
     /** The player's points as last read, or null until a read works. */
     val points: Int? = null,
+    /**
+     * What submitting costs on the server, as last read with the points (CLAUDE.md §8c), or null until
+     * a read works, when [submissionCost] is the client's default.
+     */
+    val cost: Int? = null,
     /**
      * Whether the player is registered, as last read with the points, or null until a read works. Only
      * a registered player submits (CLAUDE.md §8d, *Submitting*): a guest is told to register first.
@@ -51,6 +56,9 @@ data class SubmitState(
 ) {
     val isBusy: Boolean get() = running != null
 
+    /** What sending costs: the server's, once read, and until then the default a server with none charges. */
+    val submissionCost: Int get() = cost ?: SubmissionRules.SUBMISSION_COST
+
     /** While a question is being sent, the form is not to change: it is cleared once it is stored. */
     val isSubmitting: Boolean get() = running == SubmitAction.SUBMIT
 
@@ -67,7 +75,7 @@ data class SubmitState(
                 SubmissionRules.sameOptions(optionA, optionB)
 
     /** Whether the points last read are fewer than a question costs, which the form says: not while none are read. */
-    val tooFewPoints: Boolean get() = points != null && points < SubmissionRules.SUBMISSION_COST
+    val tooFewPoints: Boolean get() = points != null && points < submissionCost
 
     /** Whether the player last read is a guest, who may not submit, which the form says: not while none is read. */
     val isGuest: Boolean get() = registered == false

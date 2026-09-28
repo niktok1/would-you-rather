@@ -76,6 +76,16 @@ services:
         sync: false
       - key: PLAY_GAMES_CLIENT_SECRET
         sync: false
+      # What submitting a question costs, in points (CLAUDE.md §8c). Unset is 1, which it stays until
+      # the release; the release sets 50 on this service, and on this service only (the user's
+      # decision, 2026-09-26). Declared as a comment until then, so no deploy changes it by itself:
+      # - key: SUBMISSION_COST
+      #   value: "50"
+      # How many days a guest nobody can reach any more is kept: no username, no Play Games link, no
+      # session that can still refresh, and idle this long (CLAUDE.md §8b, Guest clean-up). The server
+      # deletes such guests at boot and every 24 hours. 90 is also the default; 0 turns it off.
+      - key: GUEST_RETENTION_DAYS
+        value: "90"
 
   - type: web
     name: wyr-server-dev
@@ -112,6 +122,12 @@ services:
         sync: false
       - key: PLAY_GAMES_CLIENT_SECRET
         sync: false
+      # GUEST_RETENTION_DAYS is unset, so the default, 90, applies: dev's H2 forgets every guest long
+      # before that anyway.
+      # What each theme in the shop costs, in points (CLAUDE.md §8d, The shop): 1 on dev, so a tester
+      # can buy every theme after a few answers. Unset on wyr-server, whose price is the default, 220.
+      - key: THEME_PRICE
+        value: "1"
 
   # The public site Google Play links to (CLAUDE.md §8): the privacy policy, the terms and question
   # rules, account deletion and contact, in Serbian and English. Plain HTML and one CSS file under

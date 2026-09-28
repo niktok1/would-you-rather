@@ -14,10 +14,8 @@ import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.minimumInteractiveComponentSize
@@ -25,8 +23,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
@@ -38,6 +34,8 @@ import io.ntole.wyr.language.LocalStrings
 import io.ntole.wyr.language.Strings
 import io.ntole.wyr.language.categoryName
 import io.ntole.wyr.language.fill
+import io.ntole.wyr.loading.LoadingSpinner
+import io.ntole.wyr.theme.PageSurface
 import io.ntole.wyr.theme.WyrThemeAccessors
 import io.ntole.wyr.theme.WyrTypeScale
 import io.ntole.wyr.theme.contentWidth
@@ -63,7 +61,7 @@ fun CategoriesScreen(
     val strings = shared.categoriesScreen
     val language = LocalLanguage.current
 
-    Surface(color = colors.pageBackground, contentColor = colors.primaryText, modifier = modifier.fillMaxSize()) {
+    PageSurface(modifier = modifier.fillMaxSize()) {
         Column(
             modifier =
                 Modifier
@@ -173,14 +171,10 @@ private fun Note(content: @Composable () -> Unit) {
     Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxWidth().padding(dimens.spaceMd)) { content() }
 }
 
-/** The spinner while the categories are read, named for a screen reader. */
+/** The spinner while the categories are read, named for a screen reader, and a slow read's line. */
 @Composable
 private fun Spinner() {
-    val name = LocalStrings.current.loading
-    CircularProgressIndicator(
-        color = WyrThemeAccessors.colors.headingAccent,
-        modifier = Modifier.semantics { contentDescription = name },
-    )
+    LoadingSpinner(name = LocalStrings.current.loading)
 }
 
 /**

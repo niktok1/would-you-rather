@@ -1,9 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
     Android 11 and earlier, which takes these rules for its cloud backup and its device-to-device
-    transfer alike: the session stays on this phone, as data_extraction_rules.xml keeps it on later
-    ones (CLAUDE.md §8a).
+    transfer alike: what the app keeps stays on this phone, as data_extraction_rules.xml keeps it on
+    later ones (CLAUDE.md §8a).
 -->
 <full-backup-content>
     <exclude domain="sharedpref" path="wyr.auth.xml" />
+    <exclude domain="sharedpref" path="wyr.device.xml" />
 </full-backup-content>

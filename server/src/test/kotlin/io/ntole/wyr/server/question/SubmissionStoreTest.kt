@@ -92,6 +92,8 @@ class SubmissionStoreTest {
 
         assertEquals(Triple(2, 1, 2), listed.getValue(approved).counts(), "likes, dislikes and players who answered")
         assertEquals(Triple(0, 0, 0), listed.getValue(pending).counts(), "never served")
+        assertEquals(0 to 2, listed.getValue(approved).sides(), "each player's latest pick, the re-answer moved")
+        assertEquals(0 to 0, listed.getValue(pending).sides(), "nobody's pick on a question never served")
     }
 
     @Test
@@ -99,7 +101,7 @@ class SubmissionStoreTest {
         val author = newPlayer()
         repeat(WyrApi.Limits.MAX_PENDING_SUBMISSIONS - 1) { index -> submit(author, question(index)) }
         // Enough for both, so only the pending cap can refuse one.
-        transaction(database) { PlayerStore.addPoints(author, points = 2 * Scoring.SUBMISSION_COST) }
+        transaction(database) { PlayerStore.addPoints(author, points = 2 * Scoring.DEFAULT_SUBMISSION_COST) }
 
         // The second counts while the first holds its insert of the last place uncommitted. Counted
         // without waiting for it, the second would find a place free too, and both would get in.
@@ -203,9 +205,9 @@ class SubmissionStoreTest {
 
         val submission = transaction(database) { SubmissionStore.submit(author, question(0)) }
 
-        assertEquals(3 - Scoring.SUBMISSION_COST, totalOf(author))
+        assertEquals(3 - Scoring.DEFAULT_SUBMISSION_COST, totalOf(author))
         val cost = transaction(database) { Questions.selectAll().where { Questions.id eq submission.id }.single() }
-        assertEquals(Scoring.SUBMISSION_COST, cost[Questions.submissionCost])
+        assertEquals(Scoring.DEFAULT_SUBMISSION_COST, cost[Questions.submissionCost])
     }
 
     @Test
@@ -224,7 +226,7 @@ class SubmissionStoreTest {
     @Test
     fun `two submissions racing for an author's last point let only one in`() {
         val author = newPlayer()
-        transaction(database) { PlayerStore.addPoints(author, points = Scoring.SUBMISSION_COST) }
+        transaction(database) { PlayerStore.addPoints(author, points = Scoring.DEFAULT_SUBMISSION_COST) }
 
         // The second waits on the author's row lock the first holds, then finds the point spent: taken
         // without the WHERE on the total, it would be paid a second time, from a total of none.
@@ -272,6 +274,9 @@ class SubmissionStoreTest {
 
     /** A listed submission's like count, dislike count and how many players answered it. */
     private fun SubmissionDto.counts(): Triple<Int, Int, Int> = Triple(likeCount, dislikeCount, answerCount)
+
+    /** How many of the players who answered a listed submission picked each side. */
+    private fun SubmissionDto.sides(): Pair<Int, Int> = votesA to votesB
 
     private fun assertLimitReached(author: String) {
         val refused = assertFailsWith<ApiFailure> { submit(author, question(REFUSED)) }

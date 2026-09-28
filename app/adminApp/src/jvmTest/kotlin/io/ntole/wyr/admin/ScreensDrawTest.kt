@@ -2,7 +2,9 @@ package io.ntole.wyr.admin
 
 import androidx.compose.ui.ImageComposeScene
 import androidx.compose.ui.unit.Density
+import io.ntole.wyr.admin.moderation.AccountDeletions
 import io.ntole.wyr.admin.moderation.Action
+import io.ntole.wyr.admin.moderation.BlockDraft
 import io.ntole.wyr.admin.moderation.CategoryDraft
 import io.ntole.wyr.admin.moderation.CategoryList
 import io.ntole.wyr.admin.moderation.DecisionDraft
@@ -15,16 +17,22 @@ import io.ntole.wyr.admin.moderation.NoActions
 import io.ntole.wyr.admin.moderation.Outcomes
 import io.ntole.wyr.admin.moderation.PendingQueue
 import io.ntole.wyr.admin.moderation.QuestionList
+import io.ntole.wyr.admin.moderation.ReportList
+import io.ntole.wyr.admin.moderation.Retiring
 import io.ntole.wyr.admin.moderation.Running
 import io.ntole.wyr.admin.moderation.Screen
 import io.ntole.wyr.admin.moderation.SecretText
+import io.ntole.wyr.admin.moderation.deleteWarningOf
 import io.ntole.wyr.core.domain.error.DomainError
+import io.ntole.wyr.core.domain.moderation.AccountRef
 import io.ntole.wyr.core.domain.moderation.QuestionCursor
 import io.ntole.wyr.core.domain.moderation.QuestionFilter
+import io.ntole.wyr.core.domain.moderation.ReportReason
 import io.ntole.wyr.core.domain.submission.SubmissionStatus
 import io.ntole.wyr.core.network.environment.WyrEnvironment
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.seconds
 
 /**
@@ -85,7 +93,87 @@ class ScreensDrawTest {
 
         draw(WyrEnvironment.DEV, list, Screen.QUESTIONS)
         // Retire waiting to be confirmed, its dialog over the list.
-        draw(WyrEnvironment.PROD, list.copy(running = null, retiring = "seed-1"), Screen.QUESTIONS)
+        draw(
+            WyrEnvironment.PROD,
+            list.copy(running = null, retiring = Retiring("seed-1", Screen.QUESTIONS)),
+            Screen.QUESTIONS,
+        )
+    }
+
+    @Test
+    fun `the app draws the reported questions with everything a report can show`() {
+        val retired = FakeModeration.reported("q3", mapOf(ReportReason.UNKNOWN to 2, ReportReason.OTHER to 1))
+        val failures =
+            mapOf(
+                "q5" to ItemFailure("\"Early\" or \"Late\"", Failure.Refused(DomainError.QUESTION_NOT_FOUND)),
+                "gone" to ItemFailure("\"Cats\" or \"Dogs\"", Failure.Refused(DomainError.NETWORK, detail = "lost")),
+            )
+        val reports =
+            ModerationState(
+                adminToken = SecretText("typed"),
+                reports =
+                    ReportList(
+                        reports = FakeModeration.REPORTED + retired + FakeModeration.reported("q4", emptyMap()),
+                        failure = Failure.Refused(DomainError.RATE_LIMITED, 12.seconds),
+                        outcomes = Outcomes(failures, notice = "Dismissed the reports of \"Tea\" or \"Tea\"."),
+                    ),
+                categories = CategoryList(FakeCategories.LISTED),
+                running = Running(Action.DISMISS_REPORTS, "q5"),
+            )
+
+        WyrEnvironment.entries.forEach { environment -> draw(environment, reports, Screen.REPORTS) }
+        val texts = draw(WyrEnvironment.LOCAL, reports, Screen.REPORTS, height = TALL)
+        listOf(
+            "Reports (4)",
+            "Reported by 4 players",
+            "Offensive 3 · Private person 1",
+            "A reason this build cannot name 2 · Other 1",
+            "No reason counted.",
+            "Dismissing...",
+            "Dismiss reports",
+            "Retire...",
+            "Restore",
+            "Seed",
+            "Block author...",
+        ).forEach { text -> assertTrue(text in texts, "\"$text\" is not in $texts") }
+        // Retire waiting to be confirmed from the reports, its dialog over them.
+        draw(
+            WyrEnvironment.PROD,
+            reports.copy(running = null, retiring = Retiring("q5", Screen.REPORTS)),
+            Screen.REPORTS,
+        )
+    }
+
+    @Test
+    fun `the app draws every author action and the block's dialog on every tab that shows authors`() {
+        val shown =
+            ModerationState(
+                adminToken = SecretText("typed"),
+                pending = PendingQueue(submissions = FakeModeration.QUEUE),
+                reports = ReportList(reports = FakeModeration.REPORTED),
+                questions = QuestionList(questions = FakeModeration.LISTED),
+                categories = CategoryList(FakeCategories.LISTED),
+                // One author blocked, one not, and the rest as nothing has said.
+                authors = mapOf("author-1" to true, "author-of-q5" to false),
+                running = Running(Action.UNBLOCK_AUTHOR, "q2"),
+            )
+        val blocking =
+            shown.copy(
+                running = null,
+                blocking = BlockDraft("author-2", "q2", Screen.PENDING, "not\none line"),
+            )
+
+        listOf(Screen.PENDING, Screen.REPORTS, Screen.QUESTIONS).forEach { screen ->
+            val texts = draw(WyrEnvironment.DEV, shown, screen, height = TALL)
+            assertTrue(texts.any { it.startsWith("Author ") }, "$screen names its authors: $texts")
+            draw(WyrEnvironment.PROD, blocking, screen)
+        }
+        val pending = draw(WyrEnvironment.DEV, shown, Screen.PENDING, height = TALL)
+        assertTrue("Author author-1 · blocked" in pending, "$pending")
+        assertTrue("Unblocking..." in pending, "$pending")
+        val questions = draw(WyrEnvironment.DEV, shown, Screen.QUESTIONS, height = TALL)
+        assertTrue("Seed" in questions, "$questions")
+        assertTrue("Block author..." in questions, "$questions")
     }
 
     @Test
@@ -109,22 +197,69 @@ class ScreensDrawTest {
         WyrEnvironment.entries.forEach { environment -> draw(environment, categories, Screen.CATEGORIES) }
     }
 
+    @Test
+    fun `the app draws an account to delete with its dialog and every outcome`() {
+        val typed =
+            ModerationState(
+                adminToken = SecretText("typed"),
+                accounts =
+                    AccountDeletions(
+                        typed = "Leaving_1",
+                        failure = Failure.Refused(DomainError.PLAYER_NOT_FOUND, detail = "no such account"),
+                        outcomes = Outcomes(notice = "Deleted the account of username gone_1. It cannot be undone."),
+                    ),
+                running = Running(Action.DELETE_ACCOUNT),
+            )
+
+        WyrEnvironment.entries.forEach { environment -> draw(environment, typed, Screen.ACCOUNTS) }
+        val texts = draw(WyrEnvironment.LOCAL, typed, Screen.ACCOUNTS)
+        listOf(
+            "Accounts",
+            "Delete an account on request",
+            "Username or account id",
+            "Sent as a username: leaving_1.",
+            "Deleting...",
+            "No such account on this server (404): check the username or the account id. It may be deleted already.",
+            "server: no such account",
+            "Deleted the account of username gone_1. It cannot be undone.",
+        ).forEach { text -> assertTrue(text in texts, "\"$text\" is not in $texts") }
+
+        // Delete account waiting to be confirmed, its dialog over the tab, naming what goes.
+        val id = AccountRef.Id("0f8fad5b-d9cb-469f-a165-70867728950e")
+        val asking = typed.copy(running = null, deleting = id)
+        val dialog = draw(WyrEnvironment.PROD, asking, Screen.ACCOUNTS)
+        listOf("Delete this account?", deleteWarningOf(id), "Delete account", "Cancel").forEach { text ->
+            assertTrue(text in dialog, "\"$text\" is not in $dialog")
+        }
+    }
+
+    /**
+     * Draws [screen] in each theme and answers the texts it shows, from the top down: only what fits in
+     * [height], since a list composes only the rows on screen.
+     */
     private fun draw(
         environment: WyrEnvironment,
         state: ModerationState,
         screen: Screen,
-    ) {
-        listOf(false, true).forEach { dark ->
-            val scene =
-                ImageComposeScene(width = 1100, height = 1400, density = Density(1f)) {
-                    ModerationApp(environment, state, NoActions, screen, onScreenChange = {}, darkTheme = dark)
+        height: Int = 1400,
+    ): List<String> =
+        listOf(false, true)
+            .map { dark ->
+                val scene =
+                    ImageComposeScene(width = 1100, height = height, density = Density(1f)) {
+                        ModerationApp(environment, state, NoActions, screen, onScreenChange = {}, darkTheme = dark)
+                    }
+                try {
+                    val image = scene.render()
+                    assertEquals(1100, image.width)
+                    scene.texts()
+                } finally {
+                    scene.close()
                 }
-            try {
-                val image = scene.render()
-                assertEquals(1100, image.width)
-            } finally {
-                scene.close()
-            }
-        }
+            }.last()
+
+    private companion object {
+        /** Tall enough for every row these states list to be composed, and so read. */
+        const val TALL = 4000
     }
 }

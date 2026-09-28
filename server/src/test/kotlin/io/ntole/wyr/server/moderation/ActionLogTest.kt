@@ -18,6 +18,7 @@ import io.ntole.wyr.core.author.BlockAuthorRequest
 import io.ntole.wyr.core.author.UnblockAuthorRequest
 import io.ntole.wyr.core.category.CreateCategoryRequest
 import io.ntole.wyr.core.category.RenameCategoryRequest
+import io.ntole.wyr.core.player.DeleteAccountRequest
 import io.ntole.wyr.core.question.ApproveSubmissionRequest
 import io.ntole.wyr.core.question.RejectSubmissionRequest
 import io.ntole.wyr.core.question.RestoreQuestionRequest
@@ -47,7 +48,7 @@ class ActionLogTest {
     fun `a stored submission and each admin action log one line of ids and nothing typed`() =
         withLogCapture { logged ->
             runTestServer("action-log") { client, _ ->
-                val author = client.registered()
+                val author = client.registered(AUTHOR_NAME)
                 val first = client.submit(author, "Secret option one")
                 val second = client.submit(author, "Secret option two")
                 val third = client.submit(author, "Secret option three")
@@ -87,6 +88,13 @@ class ActionLogTest {
                             },
                         "admin unblocked author ${author.playerId}" to
                             { client.admin(WyrApi.Paths.ADMIN_AUTHOR_UNBLOCKS, UnblockAuthorRequest(author.playerId)) },
+                        "admin deleted the account of player ${author.playerId}" to
+                            {
+                                client.admin(
+                                    WyrApi.Paths.ADMIN_ACCOUNT_DELETIONS,
+                                    DeleteAccountRequest(username = AUTHOR_NAME),
+                                )
+                            },
                     )
                 actions.forEach { (line, act) -> assertEquals(true, act().status.isSuccess(), line) }
 
@@ -100,7 +108,8 @@ class ActionLogTest {
                 }
                 actions.forEach { (line, _) -> assertEquals(1, info.count { it == line }, line) }
                 val printed = logged.printed()
-                listOf("Secret option", REASON, SECRET_NAME, FLOW_ADMIN_TOKEN, PASSWORD).forEach { secret ->
+                val secrets = listOf("Secret option", REASON, SECRET_NAME, FLOW_ADMIN_TOKEN, PASSWORD, AUTHOR_NAME)
+                secrets.forEach { secret ->
                     assertFalse(printed.any { secret in it }, "no line holds \"$secret\"")
                 }
             }
@@ -117,15 +126,8 @@ class ActionLogTest {
         }
 
     /** A guest registered through the API, with three answers' points to spend. */
-    private suspend fun HttpClient.registered(): SessionDto {
+    private suspend fun HttpClient.registered(name: String): SessionDto {
         val session = mintGuest()
-        val name =
-            "p" +
-                UUID
-                    .randomUUID()
-                    .toString()
-                    .replace("-", "")
-                    .take(12)
         post(WyrApi.Paths.AUTH_REGISTER) {
             bearerAuth(session.accessToken)
             contentType(ContentType.Application.Json)
@@ -159,5 +161,8 @@ class ActionLogTest {
         const val REASON = "A reason only the author should read"
         const val SECRET_NAME = "Pets typed by the moderator"
         const val PASSWORD = "a password nobody logs"
+
+        /** The author's username, which the moderator types to delete their account, and no line holds. */
+        const val AUTHOR_NAME = "secret_author_name"
     }
 }

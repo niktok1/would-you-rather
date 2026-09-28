@@ -1,14 +1,20 @@
 package io.ntole.wyr.di
 
+import io.ntole.wyr.about.AppVersion
 import io.ntole.wyr.account.AccountViewModel
 import io.ntole.wyr.analytics.AnalyticsSettings
 import io.ntole.wyr.analytics.UsageTracker
 import io.ntole.wyr.categories.CategoriesViewModel
 import io.ntole.wyr.core.data.di.dataModule
+import io.ntole.wyr.core.network.ClientBuild
 import io.ntole.wyr.core.network.analytics.PostHogConfig
 import io.ntole.wyr.core.network.environment.WyrEnvironment
+import io.ntole.wyr.home.HomeViewModel
 import io.ntole.wyr.language.LanguageViewModel
 import io.ntole.wyr.play.PlayViewModel
+import io.ntole.wyr.services.AppServices
+import io.ntole.wyr.shop.ShopViewModel
+import io.ntole.wyr.shop.ThemeViewModel
 import io.ntole.wyr.submit.SubmitViewModel
 import org.koin.core.context.startKoin
 import org.koin.core.module.Module
@@ -21,28 +27,47 @@ import kotlin.time.TimeSource
 internal val uiModule =
     module {
         viewModelOf(::PlayViewModel)
+        viewModelOf(::HomeViewModel)
         viewModelOf(::AccountViewModel)
         viewModelOf(::SubmitViewModel)
         viewModelOf(::LanguageViewModel)
         viewModelOf(::CategoriesViewModel)
+        viewModelOf(::ShopViewModel)
+        viewModelOf(::ThemeViewModel)
         // What the analytics time with (CLAUDE.md §8g): how long a question, a screen or the app was shown.
         single<TimeSource.WithComparableMarks> { TimeSource.Monotonic }
         // One for the app's life, as the analytics are: a rotation's new activity finds it.
         single { UsageTracker(analytics = get(), timeSource = get()) }
+        // What the app does by itself, as long as it runs: one for its life too.
+        single {
+            AppServices(
+                linkPlayGames = get(),
+                keepPushTokenRegistered = get(),
+                notices = get(),
+                session = get(),
+                devicePush = get(),
+                analytics = get(),
+            )
+        }
     }
 
 /**
  * Starts Koin for the server environment [environmentName] names (CLAUDE.md §8e), by
  * [WyrEnvironment.parse]: no name is [WyrEnvironment.LOCAL], and one it does not know stops the app
  * here, before anything has started. [analytics] is the PostHog project the build sends to (§8g), by
- * [PostHogConfig.of]: no key is none, and a host that is none stops the app here too.
+ * [PostHogConfig.of]: no key is none, and a host that is none stops the app here too. [build] is the
+ * build number every request names (§8b, *Minimum client version*; §8g, *The build number*), or null
+ * for a build that could not read its own, whose requests then name none.
  *
  * Called once per process from each platform's entry point, which names the environment it was
  * built or started for: Android's product flavor, the web build's `-Pwyr.env`, desktop's `WYR_ENV`
- * variable, the iOS app's Info.plist; and the analytics each reads from the same place. Neither has a
- * default, so no entry point can leave one out by accident and end up on LOCAL, or send nowhere;
+ * variable, the iOS app's Info.plist; and the analytics and the build number each reads from the same
+ * place. None has a default, so no entry point can leave one out by accident and end up on LOCAL, or send nowhere;
  * `null` is for a build that set none. They are plain strings so that `:core:network` stays off the
  * entry points' classpaths.
+ *
+ * [device] is what only the platform's own services can do (§8a, *Play Games sign-in*): an Android
+ * build's, and [DeviceServices.None] everywhere else.
  *
  * [appDeclaration] is how Android hands in its `Context`, which the shared code otherwise has no
  * way to obtain — which is also why Koin is an `api` dependency of this module rather than an
@@ -54,6 +79,8 @@ internal val uiModule =
 fun initKoin(
     environmentName: String?,
     analytics: AnalyticsSettings,
+    build: Int?,
+    device: DeviceServices = DeviceServices.None,
     appDeclaration: KoinAppDeclaration = {},
 ) {
     val environment = WyrEnvironment.parse(environmentName)
@@ -61,7 +88,9 @@ fun initKoin(
     startKoin {
         appDeclaration()
         modules(platformModule())
-        modules(appModules(environment, posthog))
+        modules(
+            appModules(environment, posthog, AppVersion(name = analytics.appVersion, number = build), device),
+        )
     }
 }
 
@@ -69,15 +98,27 @@ fun initKoin(
  * Every module but the platform's, for [environment]: the data module sends every request to its
  * URL, and the environment is bound for the screens that show it. Nothing can put another URL in its
  * place, so the server the Account screen names is where requests go. [analytics] is where the
- * analytics go, none sending nothing (§8g). Internal, not private, so a test can load them as
- * [initKoin] does.
+ * analytics go, none sending nothing (§8g), [version] the app's, whose build number every request
+ * names (none naming nothing) and the About screen shows, and [device] the platform's own services,
+ * none by default. Internal, not private, so a test can load them as [initKoin] does.
  */
 internal fun appModules(
     environment: WyrEnvironment,
     analytics: PostHogConfig?,
+    version: AppVersion,
+    device: DeviceServices = DeviceServices.None,
 ): List<Module> =
     listOf(
-        module { single { environment } },
-        dataModule(environment, analytics),
+        module {
+            single { environment }
+            single { version }
+        },
+        dataModule(
+            environment,
+            analytics,
+            ClientBuild.of(version.number),
+            playGames = device.playGames,
+            push = device.push,
+        ),
         uiModule,
     )

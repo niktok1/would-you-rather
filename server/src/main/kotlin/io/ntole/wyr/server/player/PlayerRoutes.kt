@@ -15,15 +15,23 @@ import io.ntole.wyr.server.plugins.ApiFailure
 import io.ntole.wyr.server.plugins.RouteLimit
 import io.ntole.wyr.server.plugins.rateLimit
 
-/** "Me" is whoever the bearer token names, so the stats and deleting the account need a session. */
-fun Route.playerRoutes(db: Db) {
+/**
+ * "Me" is whoever the bearer token names, so the stats and deleting the account need a session. The
+ * stats name [submissionCost], what submitting costs on this server (CLAUDE.md §8c), so the game says it.
+ */
+fun Route.playerRoutes(
+    db: Db,
+    submissionCost: Int,
+) {
     authenticate(JWT_AUTH) {
         rateLimit(RouteLimit.STATS) {
             get(WyrApi.Paths.ME) {
                 val playerId = call.authenticatedPlayerId()
 
                 // As for the feed and a vote: a validly signed token can outlive its player.
-                val stats = db.query { StatsStore.of(playerId) } ?: throw ApiFailure.unauthorized("unknown player")
+                val stats =
+                    db.query { StatsStore.of(playerId, submissionCost) }
+                        ?: throw ApiFailure.unauthorized("unknown player")
 
                 call.respond(stats)
             }

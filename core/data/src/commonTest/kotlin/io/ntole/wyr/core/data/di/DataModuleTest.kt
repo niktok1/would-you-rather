@@ -1,8 +1,13 @@
 package io.ntole.wyr.core.data.di
 
 import io.ktor.client.HttpClient
+import io.ktor.client.engine.mock.MockEngine
+import io.ktor.client.engine.mock.respond
+import io.ktor.client.plugins.ClientRequestException
 import io.ktor.client.plugins.HttpSend
 import io.ktor.client.plugins.plugin
+import io.ktor.client.request.get
+import io.ktor.http.HttpStatusCode
 import io.ntole.wyr.core.api.WyrApi
 import io.ntole.wyr.core.domain.account.LogIn
 import io.ntole.wyr.core.domain.account.LogOut
@@ -11,14 +16,27 @@ import io.ntole.wyr.core.domain.analytics.Analytics
 import io.ntole.wyr.core.domain.category.GetCategories
 import io.ntole.wyr.core.domain.moderation.AddCategory
 import io.ntole.wyr.core.domain.moderation.ApproveSubmission
+import io.ntole.wyr.core.domain.moderation.BlockAuthor
+import io.ntole.wyr.core.domain.moderation.DeletePlayerAccount
+import io.ntole.wyr.core.domain.moderation.DismissReports
 import io.ntole.wyr.core.domain.moderation.GetPendingSubmissions
 import io.ntole.wyr.core.domain.moderation.GetQuestions
+import io.ntole.wyr.core.domain.moderation.GetReportedQuestions
 import io.ntole.wyr.core.domain.moderation.ModerationRepository
 import io.ntole.wyr.core.domain.moderation.RejectSubmission
 import io.ntole.wyr.core.domain.moderation.RenameCategory
 import io.ntole.wyr.core.domain.moderation.RestoreQuestion
 import io.ntole.wyr.core.domain.moderation.RetireQuestion
+import io.ntole.wyr.core.domain.moderation.UnblockAuthor
+import io.ntole.wyr.core.domain.playgames.LinkPlayGames
+import io.ntole.wyr.core.domain.playgames.PlayGamesRepository
+import io.ntole.wyr.core.domain.push.DevicePush
+import io.ntole.wyr.core.domain.push.KeepPushTokenRegistered
+import io.ntole.wyr.core.domain.session.CurrentSession
 import io.ntole.wyr.core.domain.session.SessionRepository
+import io.ntole.wyr.core.domain.update.AppUpdate
+import io.ntole.wyr.core.network.ApiException
+import io.ntole.wyr.core.network.ClientBuild
 import io.ntole.wyr.core.network.InMemoryTokenStorage
 import io.ntole.wyr.core.network.TokenStorage
 import io.ntole.wyr.core.network.api.AuthApi
@@ -31,8 +49,11 @@ import org.koin.dsl.module
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
+import kotlin.test.assertSame
+import kotlin.test.assertTrue
 
 /**
  * Where the data module's requests go, read off a request as it leaves, after every plugin has had
@@ -48,7 +69,7 @@ class DataModuleTest {
                     koinApplication {
                         modules(
                             module { single<TokenStorage> { InMemoryTokenStorage() } },
-                            dataModule(environment, analytics = null),
+                            dataModule(environment, analytics = null, build = null),
                         )
                     }.koin
                 val client = koin.get<HttpClient>()
@@ -62,13 +83,76 @@ class DataModuleTest {
             }
         }
 
+    /**
+     * The game's every request names its build, and an answer that it is too old raises the update the
+     * app shows; the moderator's names none (CLAUDE.md §8b, *Minimum client version*).
+     */
+    @Test
+    fun `the game's requests name its build and a client that only moderates names none`() =
+        runTest {
+            val build = ClientBuild(WyrApi.ClientPlatform.WEB, 10000)
+            val game =
+                koinApplication {
+                    modules(
+                        module { single<TokenStorage> { InMemoryTokenStorage() } },
+                        dataModule(WyrEnvironment.LOCAL, analytics = null, build = build),
+                    )
+                }.koin
+            val moderator = koinApplication { modules(moderationDataModule(WyrEnvironment.LOCAL)) }.koin
+            val expected = listOf(game to (WyrApi.ClientPlatform.WEB to "10000"), moderator to (null to null))
+            expected.forEach { (koin, named) ->
+                val client = koin.get<HttpClient>()
+                client.plugin(HttpSend).intercept { request ->
+                    throw NotSent(
+                        request.url.buildString(),
+                        platform = request.headers[WyrApi.Headers.CLIENT_PLATFORM],
+                        version = request.headers[WyrApi.Headers.CLIENT_VERSION],
+                    )
+                }
+
+                val request = assertFailsWith<NotSent> { koin.get<CategoryApi>().all() }
+
+                assertEquals(named, request.platform to request.version)
+                client.close()
+                koin.close()
+            }
+        }
+
+    /**
+     * The client the game's calls go through is the one that raises the update the app shows. The
+     * answer is made by a client of the test's own, since the module's reaches no engine a test can
+     * stand in for, and thrown where the engine would answer.
+     */
+    @Test
+    fun `an answer that the game's build is too old raises the update it shows`() =
+        runTest {
+            val koin =
+                koinApplication {
+                    modules(
+                        module { single<TokenStorage> { InMemoryTokenStorage() } },
+                        dataModule(WyrEnvironment.LOCAL, analytics = null, build = ClientBuild.of(10000)),
+                    )
+                }.koin
+            val update = koin.get<AppUpdate>()
+            val answerer = HttpClient(MockEngine { respond("", HttpStatusCode.UpgradeRequired) })
+            val tooOld = answerer.get("https://wyr.test/")
+            koin.get<HttpClient>().plugin(HttpSend).intercept { throw ClientRequestException(tooOld, "") }
+
+            assertFalse(update.required.value)
+            assertFailsWith<ApiException> { koin.get<CategoryApi>().all() }
+
+            assertTrue(update.required.value)
+            answerer.close()
+            koin.close()
+        }
+
     @Test
     fun `the game's data module binds nothing of the moderator's`() {
         val koin =
             koinApplication {
                 modules(
                     module { single<TokenStorage> { InMemoryTokenStorage() } },
-                    dataModule(WyrEnvironment.LOCAL, analytics = null),
+                    dataModule(WyrEnvironment.LOCAL, analytics = null, build = null),
                 )
             }.koin
 
@@ -83,6 +167,11 @@ class DataModuleTest {
         assertNull(koin.getOrNull<RestoreQuestion>())
         assertNull(koin.getOrNull<AddCategory>())
         assertNull(koin.getOrNull<RenameCategory>())
+        assertNull(koin.getOrNull<GetReportedQuestions>())
+        assertNull(koin.getOrNull<DismissReports>())
+        assertNull(koin.getOrNull<BlockAuthor>())
+        assertNull(koin.getOrNull<UnblockAuthor>())
+        assertNull(koin.getOrNull<DeletePlayerAccount>())
         koin.close()
     }
 
@@ -92,13 +181,38 @@ class DataModuleTest {
             koinApplication {
                 modules(
                     module { single<TokenStorage> { InMemoryTokenStorage() } },
-                    dataModule(WyrEnvironment.LOCAL, analytics = null),
+                    dataModule(WyrEnvironment.LOCAL, analytics = null, build = null),
                 )
             }.koin
 
         assertNotNull(koin.get<RegisterAccount>())
         assertNotNull(koin.get<LogIn>())
         assertNotNull(koin.get<LogOut>())
+        koin.close()
+    }
+
+    /**
+     * The Play Games sign-in and the pushes the platform hands in, [PlayGames.None] and
+     * [DevicePush.None] unless one does, and the session watched without minting: nothing is stored,
+     * and nothing sent (CLAUDE.md §8a).
+     */
+    @Test
+    fun `the game's data module binds the Play Games sign-in and the pushes and the session watched`() {
+        val storage = InMemoryTokenStorage()
+        val koin =
+            koinApplication {
+                modules(
+                    module { single<TokenStorage> { storage } },
+                    dataModule(WyrEnvironment.DEV, analytics = null, build = null),
+                )
+            }.koin
+
+        assertFalse(koin.get<LinkPlayGames>().available)
+        assertFalse(koin.get<DevicePush>().available)
+        assertNotNull(koin.get<KeepPushTokenRegistered>())
+        assertFalse(koin.get<PlayGamesRepository>().isSettled())
+        assertNull(koin.get<CurrentSession>().current())
+        assertSame<Any>(koin.get<SessionRepository>(), koin.get<CurrentSession>(), "one session for both")
         koin.close()
     }
 
@@ -111,7 +225,7 @@ class DataModuleTest {
                 koinApplication {
                     modules(
                         module { single<TokenStorage> { storage } },
-                        dataModule(WyrEnvironment.LOCAL, analytics = null),
+                        dataModule(WyrEnvironment.LOCAL, analytics = null, build = null),
                     )
                 }.koin
 
@@ -141,7 +255,7 @@ class DataModuleTest {
                 val game =
                     listOf(
                         module { single<TokenStorage> { InMemoryTokenStorage() } },
-                        dataModule(environment, analytics = null),
+                        dataModule(environment, analytics = null, build = null),
                     )
                 listOf(game, listOf(moderationDataModule(environment))).forEach { modules ->
                     val koin = koinApplication { modules(modules) }.koin
@@ -178,6 +292,11 @@ class DataModuleTest {
                     koin.get<RestoreQuestion>(),
                     koin.get<AddCategory>(),
                     koin.get<RenameCategory>(),
+                    koin.get<GetReportedQuestions>(),
+                    koin.get<DismissReports>(),
+                    koin.get<BlockAuthor>(),
+                    koin.get<UnblockAuthor>(),
+                    koin.get<DeletePlayerAccount>(),
                 ).forEach { useCase -> assertNotNull(useCase, environment.name) }
                 assertNull(koin.getOrNull<SessionRepository>(), "nothing can mint a guest")
                 assertNull(koin.getOrNull<TokenStorage>())
@@ -192,10 +311,15 @@ class DataModuleTest {
             }
         }
 
-    /** Stops a request at the engine's door, carrying the URL it was about to go to and its admin token. */
+    /**
+     * Stops a request at the engine's door, carrying the URL it was about to go to, its admin token and
+     * the build it names.
+     */
     private class NotSent(
         val url: String,
         val adminToken: String? = null,
+        val platform: String? = null,
+        val version: String? = null,
     ) : Exception(url)
 
     private companion object {

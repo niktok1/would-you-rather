@@ -11,6 +11,9 @@ import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.headersOf
 import io.ntole.wyr.core.api.WyrApi
+import io.ntole.wyr.core.author.AuthorBlockDto
+import io.ntole.wyr.core.author.BlockAuthorRequest
+import io.ntole.wyr.core.author.UnblockAuthorRequest
 import io.ntole.wyr.core.category.CategoryDto
 import io.ntole.wyr.core.category.CreateCategoryRequest
 import io.ntole.wyr.core.category.RenameCategoryRequest
@@ -21,13 +24,17 @@ import io.ntole.wyr.core.data.storeHolding
 import io.ntole.wyr.core.domain.category.Category
 import io.ntole.wyr.core.domain.error.DomainError
 import io.ntole.wyr.core.domain.error.WyrException
+import io.ntole.wyr.core.domain.moderation.AccountRef
 import io.ntole.wyr.core.domain.moderation.AdminToken
+import io.ntole.wyr.core.domain.moderation.AuthorBlock
 import io.ntole.wyr.core.domain.moderation.ModeratedQuestion
 import io.ntole.wyr.core.domain.moderation.ModeratedQuestionPage
 import io.ntole.wyr.core.domain.moderation.ModerationRepository
 import io.ntole.wyr.core.domain.moderation.QuestionCursor
 import io.ntole.wyr.core.domain.moderation.QuestionFilter
 import io.ntole.wyr.core.domain.moderation.RejectionReason
+import io.ntole.wyr.core.domain.moderation.ReportReason
+import io.ntole.wyr.core.domain.moderation.ReportedQuestion
 import io.ntole.wyr.core.domain.submission.Submission
 import io.ntole.wyr.core.domain.submission.SubmissionStatus
 import io.ntole.wyr.core.domain.vote.Tally
@@ -37,6 +44,7 @@ import io.ntole.wyr.core.network.SessionStore
 import io.ntole.wyr.core.network.WyrHttpClient
 import io.ntole.wyr.core.network.WyrJson
 import io.ntole.wyr.core.network.api.ModerationApi
+import io.ntole.wyr.core.player.DeleteAccountRequest
 import io.ntole.wyr.core.question.AdminQuestionDto
 import io.ntole.wyr.core.question.ApproveSubmissionRequest
 import io.ntole.wyr.core.question.QuestionStatus
@@ -44,6 +52,7 @@ import io.ntole.wyr.core.question.RejectSubmissionRequest
 import io.ntole.wyr.core.question.RestoreQuestionRequest
 import io.ntole.wyr.core.question.RetireQuestionRequest
 import io.ntole.wyr.core.question.SubmissionDto
+import io.ntole.wyr.core.report.DismissReportsRequest
 import io.ntole.wyr.core.vote.VoteTallyDto
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
@@ -62,7 +71,7 @@ class DefaultModerationRepositoryTest {
     private val engine = MockEngine { request -> answer(request) }
 
     @Test
-    fun `the pending queue is read with the token and listed as each author sees their submission`() =
+    fun `the pending queue is read with the token and listed as each author sees it with the author's id`() =
         runTest {
             val pending = repositoryOver(storeHolding(session("a"))).pending(token)
 
@@ -76,6 +85,7 @@ class DefaultModerationRepositoryTest {
                         status = SubmissionStatus.PENDING,
                         rejectionReason = null,
                         submittedAt = Instant.fromEpochMilliseconds(SUBMITTED_AT),
+                        authorId = "p1",
                     ),
                     // A category added after this build, kept by its id, as for the author's own list.
                     Submission(
@@ -86,6 +96,7 @@ class DefaultModerationRepositoryTest {
                         status = SubmissionStatus.PENDING,
                         rejectionReason = null,
                         submittedAt = Instant.fromEpochMilliseconds(SUBMITTED_AT + 1),
+                        authorId = "p2",
                     ),
                 ),
                 pending,
@@ -109,6 +120,7 @@ class DefaultModerationRepositoryTest {
 
             assertEquals(SubmissionStatus.APPROVED, approved.status)
             assertEquals(setOf("ABSURD", "FOOD"), approved.categories)
+            assertEquals("p1", approved.authorId, "the moderator's, as the queue's are")
             assertEquals(
                 ApproveSubmissionRequest("q1", listOf("ABSURD", "FOOD")),
                 decode<ApproveSubmissionRequest>(engine.requestHistory.single()),
@@ -135,6 +147,7 @@ class DefaultModerationRepositoryTest {
 
             assertEquals(SubmissionStatus.REJECTED, rejected.status)
             assertEquals("Too close to a seed", rejected.rejectionReason)
+            assertEquals("p1", rejected.authorId)
             assertEquals(
                 RejectSubmissionRequest("q1", "Too close to a seed"),
                 decode<RejectSubmissionRequest>(engine.requestHistory.single()),
@@ -166,6 +179,10 @@ class DefaultModerationRepositoryTest {
                         { moderation.questions(token, QuestionFilter(), after = null) },
                         { moderation.retire(token, "q1") },
                         { moderation.restore(token, "q1") },
+                        { moderation.reports(token) },
+                        { moderation.dismissReports(token, "q1") },
+                        { moderation.blockAuthor(token, "p1", reason) },
+                        { moderation.unblockAuthor(token, "p1") },
                     )
 
                 decisions.forEach { decision ->
@@ -278,6 +295,7 @@ class DefaultModerationRepositoryTest {
                                 isSeed = true,
                                 reviewedAt = null,
                                 retiredAt = null,
+                                authorId = null,
                             ),
                         ),
                     next = QuestionCursor("next-page"),
@@ -382,6 +400,103 @@ class DefaultModerationRepositoryTest {
             assertEquals(DomainError.CATEGORY_NOT_FOUND, missing.error)
         }
 
+    @Test
+    fun `the reported questions are read with the token and each lists its question and its reasons`() =
+        runTest {
+            val reports = repositoryOver(storeHolding(null)).reports(token)
+
+            assertEquals(
+                listOf(
+                    ReportedQuestion(
+                        question = LISTED_RETIRED,
+                        reportCount = 6,
+                        // Two reasons this build cannot name, one UNKNOWN between them, counted together
+                        // and in their place by count, so the counts still add up to the reports.
+                        reasons =
+                            mapOf(ReportReason.OFFENSIVE to 3, ReportReason.UNKNOWN to 2, ReportReason.SPAM to 1),
+                        lastReportedAt = Instant.fromEpochMilliseconds(SUBMITTED_AT + 3_000),
+                    ),
+                ),
+                reports,
+            )
+            val sent = engine.requestHistory.single()
+            assertEquals(WyrApi.Paths.ADMIN_REPORTS, sent.url.encodedPath)
+            assertEquals("${ModerationRepository.PAGE_SIZE}", sent.url.parameters[WyrApi.Query.LIMIT])
+            assertEquals(listOf(token.value), adminTokensSent())
+        }
+
+    @Test
+    fun `a dismissal sends the question's id with the token and needs no answer`() =
+        runTest {
+            repositoryOver(storeHolding(null)).dismissReports(token, "q1")
+
+            val sent = engine.requestHistory.single()
+            assertEquals(WyrApi.Paths.ADMIN_REPORT_DISMISSALS, sent.url.encodedPath)
+            assertEquals(DismissReportsRequest("q1"), decode<DismissReportsRequest>(sent))
+            assertEquals(listOf(token.value), adminTokensSent())
+        }
+
+    @Test
+    fun `a block sends its reason trimmed and an unblock the author alone and each says where they stand`() =
+        runTest {
+            val moderation = repositoryOver(storeHolding(null))
+            val reason = assertNotNull(RejectionReason.of("  Увредљиво "))
+
+            val blocked = moderation.blockAuthor(token, "p1", reason)
+            val unblocked = moderation.unblockAuthor(token, "p1")
+
+            assertEquals(AuthorBlock("p1", isBlocked = true, rejectedSubmissions = 2), blocked)
+            assertEquals(AuthorBlock("p1", isBlocked = false, rejectedSubmissions = 0), unblocked)
+
+            assertEquals(BlockAuthorRequest("p1", "Увредљиво"), decode<BlockAuthorRequest>(engine.requestHistory[0]))
+            assertEquals(UnblockAuthorRequest("p1"), decode<UnblockAuthorRequest>(engine.requestHistory[1]))
+            assertEquals(listOf(token.value, token.value), adminTokensSent())
+        }
+
+    @Test
+    fun `an author no player is reads as AUTHOR_NOT_FOUND`() =
+        runTest {
+            val moderation = repositoryOver(storeHolding(null))
+            val reason = assertNotNull(RejectionReason.of("a duplicate"))
+            refuseWith = { respondError(HttpStatusCode.NotFound, ErrorDto("no p9", ErrorCode.AUTHOR_NOT_FOUND)) }
+
+            val calls: List<suspend () -> Unit> =
+                listOf({ moderation.blockAuthor(token, "p9", reason) }, { moderation.unblockAuthor(token, "p9") })
+            calls.forEach { call ->
+                val failure = assertFailsWith<WyrException> { call() }
+                assertEquals(DomainError.AUTHOR_NOT_FOUND, failure.error)
+                assertEquals("no p9", failure.message)
+            }
+        }
+
+    @Test
+    fun `an account's deletion names it by username or by id with the token and needs no answer`() =
+        runTest {
+            val moderation = repositoryOver(storeHolding(null))
+
+            moderation.deleteAccount(token, AccountRef.Username("leaving"))
+            moderation.deleteAccount(token, AccountRef.Id("p1"))
+
+            assertEquals(
+                listOf(DeleteAccountRequest(username = "leaving"), DeleteAccountRequest(accountId = "p1")),
+                engine.requestHistory.map { decode<DeleteAccountRequest>(it) },
+            )
+            assertEquals(listOf(token.value, token.value), adminTokensSent())
+            assertEquals(0, engine.requestHistory.count { it.url.encodedPath == WyrApi.Paths.AUTH_GUEST })
+        }
+
+    @Test
+    fun `an account no player has reads as PLAYER_NOT_FOUND`() =
+        runTest {
+            val moderation = repositoryOver(storeHolding(null))
+            refuseWith =
+                { respondError(HttpStatusCode.NotFound, ErrorDto("no such account", ErrorCode.PLAYER_NOT_FOUND)) }
+
+            val failure = assertFailsWith<WyrException> { moderation.deleteAccount(token, AccountRef.Id("p9")) }
+
+            assertEquals(DomainError.PLAYER_NOT_FOUND, failure.error)
+        }
+
     private suspend fun MockRequestHandleScope.answer(request: HttpRequestData): HttpResponseData {
         val refusal = refuseWith
         return when {
@@ -431,6 +546,29 @@ class DefaultModerationRepositoryTest {
             request.url.encodedPath == WyrApi.Paths.ADMIN_CATEGORY_RENAMES -> {
                 val renaming = decode<RenameCategoryRequest>(request)
                 respondJson(WyrJson.encodeToString(CategoryDto(renaming.id, renaming.nameSr, renaming.nameEn)))
+            }
+
+            request.url.encodedPath == WyrApi.Paths.ADMIN_REPORTS -> {
+                respondJson(REPORTS_JSON)
+            }
+
+            request.url.encodedPath == WyrApi.Paths.ADMIN_REPORT_DISMISSALS -> {
+                respond("", HttpStatusCode.NoContent)
+            }
+
+            request.url.encodedPath == WyrApi.Paths.ADMIN_AUTHOR_BLOCKS -> {
+                val block = decode<BlockAuthorRequest>(request)
+                val blocked = AuthorBlockDto(block.authorId, blocked = true, rejectedSubmissions = 2)
+                respondJson(WyrJson.encodeToString(blocked))
+            }
+
+            request.url.encodedPath == WyrApi.Paths.ADMIN_AUTHOR_UNBLOCKS -> {
+                val unblock = decode<UnblockAuthorRequest>(request)
+                respondJson(WyrJson.encodeToString(AuthorBlockDto(unblock.authorId, blocked = false)))
+            }
+
+            request.url.encodedPath == WyrApi.Paths.ADMIN_ACCOUNT_DELETIONS -> {
+                respond("", HttpStatusCode.NoContent)
             }
 
             request.url.encodedPath == WyrApi.Paths.ADMIN_REJECTIONS -> {
@@ -483,6 +621,7 @@ class DefaultModerationRepositoryTest {
                 categories = listOf("SUPERPOWERS"),
                 status = QuestionStatus.PENDING,
                 submittedAt = SUBMITTED_AT,
+                authorId = "p1",
             )
 
         val RETIRED =
@@ -498,6 +637,7 @@ class DefaultModerationRepositoryTest {
                 retiredAt = SUBMITTED_AT + 2_000,
                 tally = VoteTallyDto(votesA = 3, votesB = 1),
                 likeCount = 2,
+                authorId = "p1",
             )
 
         /** [RETIRED], as the domain holds it. */
@@ -515,6 +655,7 @@ class DefaultModerationRepositoryTest {
                 rejectionReason = null,
                 tally = Tally(votesA = 3, votesB = 1),
                 likeCount = 2,
+                authorId = "p1",
             )
 
         // A literal, so a category and a status this build has never heard of can be in it.
@@ -530,9 +671,17 @@ class DefaultModerationRepositoryTest {
         val QUEUE_JSON =
             """{"submissions":[""" +
                 """{"id":"q1","optionA":"Fly","optionB":"Swim","categories":["SUPERPOWERS"],""" +
-                """"status":"PENDING","submittedAt":$SUBMITTED_AT},""" +
+                """"status":"PENDING","submittedAt":$SUBMITTED_AT,"authorId":"p1"},""" +
                 """{"id":"q2","optionA":"Tea","optionB":"Coffee","categories":["CATEGORY_FROM_THE_FUTURE","FOOD"],""" +
-                """"status":"PENDING","submittedAt":${SUBMITTED_AT + 1}}""" +
+                """"status":"PENDING","submittedAt":${SUBMITTED_AT + 1},"authorId":"p2"}""" +
                 """]}"""
+
+        // A literal, so reasons this build has never heard of can be in it, most given first.
+        val REPORTS_JSON =
+            """{"reports":[{"question":""" + WyrJson.encodeToString(RETIRED) + "," +
+                """"reportCount":6,"reasons":[{"reason":"OFFENSIVE","count":3},""" +
+                """{"reason":"REASON_FROM_THE_FUTURE","count":1},{"reason":"SPAM","count":1},""" +
+                """{"reason":"ANOTHER_FROM_THE_FUTURE","count":1}],""" +
+                """"lastReportedAt":${SUBMITTED_AT + 3_000}}]}"""
     }
 }

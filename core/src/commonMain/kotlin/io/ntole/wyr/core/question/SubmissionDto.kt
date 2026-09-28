@@ -27,8 +27,10 @@ import kotlinx.serialization.Serializable
  * [likeCount] is how many players like the question, [dislikeCount] how many dislike it, and
  * [answerCount] how many players have answered it, each counted once however often they answered
  * (CLAUDE.md §8d, *The Account screen*). The server reads them with the question, in one statement,
- * so they are one moment's numbers. A question never served, pending or rejected, has none; a retired
- * one keeps what it had. They default to none.
+ * so they are one moment's numbers. [votesA] and [votesB] are how many of those players picked
+ * [optionA] and [optionB], each by their latest pick, so the two add up to [answerCount] (CLAUDE.md §8d,
+ * *Question details*). A question never served, pending or rejected, has none; a retired one keeps
+ * what it had. They default to none, so a server from before the two sides reads as none on either.
  */
 @Serializable
 public data class SubmissionDto(
@@ -42,5 +44,7 @@ public data class SubmissionDto(
     public val likeCount: Int = 0,
     public val dislikeCount: Int = 0,
     public val answerCount: Int = 0,
+    public val votesA: Int = 0,
+    public val votesB: Int = 0,
     public val authorId: String? = null,
 )

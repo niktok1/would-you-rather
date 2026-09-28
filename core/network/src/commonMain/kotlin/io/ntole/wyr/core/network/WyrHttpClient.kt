@@ -15,6 +15,7 @@ import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.client.plugins.defaultRequest
 import io.ktor.client.plugins.timeout
 import io.ktor.client.request.HttpRequestBuilder
+import io.ktor.client.request.header
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
 import io.ktor.client.request.url
@@ -87,11 +88,18 @@ public object WyrHttpClient {
     /**
      * @param engine for tests, which pass a `MockEngine`. Production leaves it null so Ktor
      *   discovers the platform's engine as described above.
+     * @param build the game's build, which every request names (CLAUDE.md §8b, *Minimum client
+     *   version*), or null for a client that names none: the moderation app's, or a build that could
+     *   not read its own number.
+     * @param upgrade raised the first time an answer is `UPGRADE_REQUIRED`, the server refusing this
+     *   build as too old, so the game can say a new version is available; null where nobody listens.
      */
     public fun create(
         baseUrl: String,
         sessionStore: SessionStore,
         engine: HttpClientEngine? = null,
+        build: ClientBuild? = null,
+        upgrade: UpgradeSignal? = null,
     ): HttpClient {
         val config: HttpClientConfig<*>.() -> Unit = {
             expectSuccess = true
@@ -113,6 +121,11 @@ public object WyrHttpClient {
             defaultRequest {
                 url(baseUrl)
                 contentType(ContentType.Application.Json)
+                // Every request, a refresh included: the server checks every path but /health.
+                if (build != null) {
+                    header(WyrApi.Headers.CLIENT_PLATFORM, build.platform)
+                    header(WyrApi.Headers.CLIENT_VERSION, build.number.toString())
+                }
             }
 
             install(Auth) {
@@ -159,9 +172,18 @@ public object WyrHttpClient {
             // cancellation (CLAUDE.md §5), and a transport failure is runApi's to call NETWORK.
             // Wrapping those too is what made offline, a dead refresh token and a cancelled call
             // all look like the same UNKNOWN.
+            //
+            // An answer that this build is too old raises [upgrade] on its way: whichever call it was,
+            // the game can serve nothing more until it is updated.
             HttpResponseValidator {
                 handleResponseExceptionWithRequest { cause, _ ->
-                    if (cause is ResponseException) throw cause.toApiException()
+                    if (cause is ResponseException) {
+                        val failure = cause.toApiException()
+                        if (failure.code == ErrorCode.UPGRADE_REQUIRED || failure.status == HTTP_UPGRADE_REQUIRED) {
+                            upgrade?.raise()
+                        }
+                        throw failure
+                    }
                 }
             }
         }
@@ -245,6 +267,9 @@ private suspend fun RefreshTokensParams.refreshAs(
     }
     return stored?.toBearerTokens()
 }
+
+/** What the server answers a build older than its minimum (CLAUDE.md §8b, *Minimum client version*). */
+internal const val HTTP_UPGRADE_REQUIRED: Int = 426
 
 private fun SessionDto.toBearerTokens(): BearerTokens = BearerTokens(accessToken, refreshToken)
 

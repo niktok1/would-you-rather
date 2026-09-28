@@ -4,6 +4,8 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.saveable.LocalSaveableStateRegistry
 import androidx.compose.runtime.saveable.SaveableStateRegistry
 import androidx.compose.ui.ImageComposeScene
+import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.state.ToggleableState
@@ -15,8 +17,10 @@ import androidx.lifecycle.ViewModelStore
 import androidx.lifecycle.ViewModelStoreOwner
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
+import io.ntole.wyr.about.AppVersion
 import io.ntole.wyr.analytics.RecordingAnalytics
 import io.ntole.wyr.core.domain.account.AccountRepository
+import io.ntole.wyr.core.domain.account.DeleteAccount
 import io.ntole.wyr.core.domain.account.LogIn
 import io.ntole.wyr.core.domain.account.LogOut
 import io.ntole.wyr.core.domain.account.RegisterAccount
@@ -28,9 +32,22 @@ import io.ntole.wyr.core.domain.category.CategoryRepository
 import io.ntole.wyr.core.domain.category.GetCategories
 import io.ntole.wyr.core.domain.error.DomainError
 import io.ntole.wyr.core.domain.error.WyrException
+import io.ntole.wyr.core.domain.home.GetHomePicks
+import io.ntole.wyr.core.domain.home.HomePickRepository
+import io.ntole.wyr.core.domain.home.PickOnHome
+import io.ntole.wyr.core.domain.notice.DecisionNotices
+import io.ntole.wyr.core.domain.notice.SeenDecisions
+import io.ntole.wyr.core.domain.notice.SeenDecisionsStore
 import io.ntole.wyr.core.domain.player.GetPlayerStats
 import io.ntole.wyr.core.domain.player.PlayerRepository
 import io.ntole.wyr.core.domain.player.PlayerStats
+import io.ntole.wyr.core.domain.playgames.LinkPlayGames
+import io.ntole.wyr.core.domain.playgames.PlayGames
+import io.ntole.wyr.core.domain.playgames.PlayGamesRepository
+import io.ntole.wyr.core.domain.push.DevicePush
+import io.ntole.wyr.core.domain.push.KeepPushTokenRegistered
+import io.ntole.wyr.core.domain.push.PushPlatform
+import io.ntole.wyr.core.domain.push.PushTokenRepository
 import io.ntole.wyr.core.domain.question.GetNextQuestion
 import io.ntole.wyr.core.domain.question.Question
 import io.ntole.wyr.core.domain.question.QuestionRepository
@@ -39,32 +56,56 @@ import io.ntole.wyr.core.domain.reaction.QuestionReactions
 import io.ntole.wyr.core.domain.reaction.Reaction
 import io.ntole.wyr.core.domain.reaction.ReactionRepository
 import io.ntole.wyr.core.domain.reaction.SetReaction
+import io.ntole.wyr.core.domain.report.HideAuthor
+import io.ntole.wyr.core.domain.report.HideQuestion
+import io.ntole.wyr.core.domain.report.ReportQuestion
+import io.ntole.wyr.core.domain.report.ReportReason
+import io.ntole.wyr.core.domain.report.ReportRepository
+import io.ntole.wyr.core.domain.session.CurrentSession
 import io.ntole.wyr.core.domain.session.SessionRepository
+import io.ntole.wyr.core.domain.shop.BuyTheme
+import io.ntole.wyr.core.domain.shop.GetShop
+import io.ntole.wyr.core.domain.shop.Shop
+import io.ntole.wyr.core.domain.shop.ShopRepository
+import io.ntole.wyr.core.domain.shop.ShopTheme
 import io.ntole.wyr.core.domain.submission.GetMySubmissions
 import io.ntole.wyr.core.domain.submission.Submission
 import io.ntole.wyr.core.domain.submission.SubmissionRepository
 import io.ntole.wyr.core.domain.submission.SubmissionStatus
 import io.ntole.wyr.core.domain.submission.SubmitQuestion
+import io.ntole.wyr.core.domain.update.AppUpdate
 import io.ntole.wyr.core.domain.vote.AttemptId
 import io.ntole.wyr.core.domain.vote.CastVote
 import io.ntole.wyr.core.domain.vote.Side
+import io.ntole.wyr.core.domain.vote.Tally
 import io.ntole.wyr.core.domain.vote.VoteOutcome
 import io.ntole.wyr.core.domain.vote.VoteRepository
 import io.ntole.wyr.core.network.InMemoryTokenStorage
 import io.ntole.wyr.core.network.TokenStorage
 import io.ntole.wyr.core.network.environment.WyrEnvironment
 import io.ntole.wyr.di.uiModule
+import io.ntole.wyr.home.HOME_COUNT_UP_MILLIS
+import io.ntole.wyr.home.HOME_REVEAL_MILLIS
+import io.ntole.wyr.home.PLAY_ENTRANCE_MILLIS
 import io.ntole.wyr.language.EnglishStrings
 import io.ntole.wyr.language.Language
 import io.ntole.wyr.language.LanguageViewModel
 import io.ntole.wyr.language.SerbianCyrillicStrings
+import io.ntole.wyr.language.SerbianLatinStrings
+import io.ntole.wyr.language.Strings
 import io.ntole.wyr.language.categoryName
 import io.ntole.wyr.language.fill
+import io.ntole.wyr.play.COUNT_UP_MILLIS
+import io.ntole.wyr.play.REVEAL_HOLD_MILLIS
+import io.ntole.wyr.services.AppServices
 import io.ntole.wyr.submit.sendText
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
@@ -72,11 +113,14 @@ import kotlinx.coroutines.test.setMain
 import org.koin.core.context.startKoin
 import org.koin.core.context.stopKoin
 import org.koin.dsl.module
+import org.koin.mp.KoinPlatform
+import kotlin.coroutines.CoroutineContext
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.milliseconds
@@ -94,20 +138,39 @@ import kotlin.time.TimeSource
 @OptIn(ExperimentalCoroutinesApi::class)
 class AppNavigationTest {
     private val game = FakeGame()
+    private val shops = FakeShop()
     private val categories = FakeCategories()
+    private val update = FakeUpdate()
+    private val uris = RecordingUris()
     private val analytics = RecordingAnalytics()
     private val storage = InMemoryTokenStorage()
     private val owner = TestOwner()
     private val clock = TestTimeSource()
+    private val seen = KeptSeenDecisions()
     private var restored: Map<String, List<Any?>>? = null
     private var saved: Map<String, List<Any?>>? = null
 
+    // viewModelScope runs on Dispatchers.Main, which the JVM has none of under test: this, whose delays
+    // wait for a test to move its clock.
+    private val main = UnconfinedTestDispatcher()
+
     @BeforeTest
     fun setUp() {
-        // viewModelScope runs on Dispatchers.Main, which the JVM has none of under test.
-        Dispatchers.setMain(UnconfinedTestDispatcher())
+        Dispatchers.setMain(main)
         // The clock the analytics time with, which a test moves by hand.
-        startKoin { modules(fakes(), uiModule, module { single<TimeSource.WithComparableMarks> { clock } }) }
+        startKoin {
+            modules(
+                fakes(),
+                uiModule,
+                module {
+                    single<TimeSource.WithComparableMarks> { clock }
+                    // What runs by itself runs here and now, on the test's Main, so a test sees what it did.
+                    single {
+                        AppServices(get(), get(), get(), get(), get(), get(), scope = CoroutineScope(Dispatchers.Main))
+                    }
+                },
+            )
+        }
     }
 
     @AfterTest
@@ -120,7 +183,7 @@ class AppNavigationTest {
     @Test
     fun `the app opens on Home in Serbian Cyrillic`() =
         withApp { scene ->
-            assertEquals(listOf(CYRILLIC.gameName, CYRILLIC.play), scene.texts())
+            assertEquals(homeTexts(CYRILLIC), scene.texts())
             assertEquals(listOf(CYRILLIC.account), scene.descriptions())
             assertEquals(0, game.questionsAsked)
         }
@@ -129,25 +192,31 @@ class AppNavigationTest {
     @Test
     fun `every screen shown is reported and each left named`() =
         withApp { scene ->
-            scene.tap(CYRILLIC.play)
+            scene.tapPlay()
+            scene.tap(CYRILLIC.home)
             scene.tap(CYRILLIC.account)
             scene.tap(CYRILLIC.back)
 
             val shown = analytics.named(RecordingAnalytics.SCREEN).map { it.properties[RecordingAnalytics.SCREEN_NAME] }
-            assertEquals(listOf("home", "play", "account", "play"), shown)
+            assertEquals(listOf("home", "play", "home", "account", "home"), shown)
             val left = analytics.named(AnalyticsEvent.SCREEN_LEFT).map { it.properties[AnalyticsProperty.SCREEN] }
-            assertEquals(listOf("home", "play", "account"), left)
+            assertEquals(listOf("home", "play", "home", "account"), left)
             val opened = analytics.named(AnalyticsEvent.APP_OPENED).single()
             assertEquals(false, opened.properties[AnalyticsProperty.FROM_BACKGROUND])
             assertEquals(Language.SERBIAN_CYRILLIC.tag, opened.properties[AnalyticsProperty.LANGUAGE])
         }
 
-    /** The player's choice is the analytics' own, which keep it for the device (CLAUDE.md §8g). */
+    /**
+     * The player's choice is the analytics' own, which keep it for the device (CLAUDE.md §8g); the switch
+     * is on the About screen, opened from the Account screen's top bar.
+     */
     @Test
-    fun `the Statistics switch on Account turns the analytics off and on again`() =
+    fun `the Statistics switch on About turns the analytics off and on again`() =
         withApp { scene ->
             val statistics = CYRILLIC.accountScreens.statistics
             scene.tap(CYRILLIC.account)
+            assertFalse(statistics in scene.texts(), "not on the Account screen")
+            scene.tap(CYRILLIC.aboutScreen.title)
             assertEquals(ToggleableState.On, scene.toggleOf(statistics))
 
             scene.tap(statistics)
@@ -160,6 +229,62 @@ class AppNavigationTest {
         }
 
     /**
+     * The shop opens from the points on Play, from the Account card's points and from the Account bar's
+     * bag, each back where it was opened from (CLAUDE.md §8d, *The shop*).
+     */
+    @Test
+    fun `the shop opens from the points and from the Account bar`() {
+        game.serving = QUESTION
+        withApp { scene ->
+            val shop = CYRILLIC.shopScreen
+            val points = CYRILLIC.points.fill(5)
+            scene.tapPlay()
+            scene.tap(points)
+            assertTrue(shop.comingSoon in scene.everyText(), "the shop is not shown: ${scene.texts()}")
+            scene.tap(CYRILLIC.back)
+            assertTrue(CYRILLIC.playScreen.skip in scene.descriptions(), "back on Play: ${scene.texts()}")
+
+            // Account is reached from Home: Play's bar has no account icon.
+            scene.tap(CYRILLIC.home)
+            scene.tap(CYRILLIC.account)
+            scene.tap(points)
+            assertTrue(shop.comingSoon in scene.everyText(), "the shop from the card: ${scene.texts()}")
+            scene.tap(CYRILLIC.back)
+            scene.tap(shop.title)
+            assertTrue(shop.comingSoon in scene.everyText(), "the shop from the bar: ${scene.texts()}")
+            scene.tap(CYRILLIC.back)
+            assertTrue(CYRILLIC.accountScreens.myQuestions in scene.texts(), "back on Account: ${scene.texts()}")
+        }
+    }
+
+    /** A theme bought, once the dialog confirms it, is put on at once and says so on its card. */
+    @Test
+    fun `a theme bought is worn at once`() =
+        withApp { scene ->
+            val shop = CYRILLIC.shopScreen
+            scene.tap(CYRILLIC.account)
+            scene.tap(shop.title)
+            assertEquals(1, scene.everyText().count { it == shop.active }, "the game's own is worn")
+
+            scene.tap(shop.buy.fill(CYRILLIC.points.fill(PRICE)))
+            assertTrue(shop.confirmBuy.fill(shop.neonNight) in scene.texts(), "the dialog: ${scene.texts()}")
+            // The dialog's Buy and the card's under it say the same: a tap on the card's only asks again, and
+            // once the dialog's has bought the theme, nothing.
+            val buys = scene.nodes().filter { shop.buy.fill(CYRILLIC.points.fill(PRICE)) in it.descriptions }
+            assertEquals(2, buys.size, "the card's and the dialog's")
+            buys.forEach { buy ->
+                assertNotNull(buy.config.getOrNull(SemanticsActions.OnClick)?.action).invoke()
+                scene.settle()
+            }
+
+            assertEquals(listOf("NEON_NIGHT"), shops.bought)
+            assertEquals("player\nNEON_NIGHT", storage.read("wyr.theme.prod"))
+            assertEquals(1, scene.everyText().count { it == shop.active }, "Neon night is worn: ${scene.everyText()}")
+            // It moved up into the picker: nothing is on sale any more.
+            assertFalse(shop.onSale in scene.everyText(), "${scene.everyText()}")
+        }
+
+    /**
      * An Android rotation makes the composition anew, its saved state restored, while the ViewModels
      * and the analytics live on: the screen it shows is the visit it showed, not opened again, and
      * leaving it and coming back is a visit of its own (CLAUDE.md §8g).
@@ -169,13 +294,13 @@ class AppNavigationTest {
         game.username = "bob"
         withApp { scene -> scene.tap(CYRILLIC.account) }
         afterRotation { scene ->
-            assertTrue(CYRILLIC.accountScreens.newQuestion in scene.texts(), "the Account screen is not shown")
+            assertTrue(CYRILLIC.accountScreens.myQuestions in scene.texts(), "the Account screen is not shown")
             scene.tap(CYRILLIC.accountScreens.newQuestion)
         }
         assertEquals(1, analytics.named(AnalyticsEvent.ACCOUNT_OPENED).size)
 
         afterRotation { scene ->
-            assertTrue(sendText(CYRILLIC) in scene.descriptions(), "the form is not shown")
+            assertTrue(sendText(CYRILLIC, 1) in scene.descriptions(), "the form is not shown")
             scene.tap(CYRILLIC.back)
         }
 
@@ -185,18 +310,251 @@ class AppNavigationTest {
         assertEquals(5, game.statsRead)
     }
 
+    /**
+     * An Android rotation mid-reveal resumes it (CLAUDE.md §8d, *The Play screen*): the Play screen made
+     * anew draws, from its first frame, exactly what it drew as its state was saved, the pick lifted and
+     * both counts where they had come to, and the half second before a card goes on, the ViewModel's,
+     * neither starts again nor ends with it. Once the count is done, a rotation draws its last frame.
+     */
     @Test
-    fun `Play opens under a bar with home and the account icon`() =
+    fun `a rotation mid-reveal resumes the reveal where it was`() {
+        game.serving = QUESTION
+        game.outcome = VoteOutcome(Side.A, Tally(votesA = 3, votesB = 1), pointsAwarded = 1, totalPoints = 5)
+        lateinit var asSaved: IntArray
         withApp { scene ->
-            scene.tap(CYRILLIC.play)
+            scene.tapPlay()
+            scene.tap(QUESTION.optionA)
+            scene.passTime(COUNT_UP_MILLIS * 2L / 5)
+            asSaved = scene.pixels()
+        }
+        main.scheduler.advanceTimeBy(REVEAL_HOLD_MILLIS - 1)
 
-            assertEquals(listOf(CYRILLIC.home, CYRILLIC.account), scene.descriptions().take(2))
+        lateinit var done: IntArray
+        afterRotation { scene ->
+            assertTrue(scene.pixels().contentEquals(asSaved), "the reveal is not where it was")
+            scene.tap(QUESTION.optionA)
+            assertEquals(1, game.questionsAsked, "a card went on within the reveal's first half second")
+            scene.passTime(COUNT_UP_MILLIS.toLong())
+            done = scene.pixels()
+        }
+
+        afterRotation { scene ->
+            assertTrue(scene.pixels().contentEquals(done), "the reveal done is not drawn at once")
+            // What is due at the very end of the time moved runs only once asked to.
+            main.scheduler.advanceTimeBy(1)
+            main.scheduler.runCurrent()
+            scene.tap(QUESTION.optionA)
+            assertEquals(2, game.questionsAsked, "a card goes on once the half second is over")
+        }
+    }
+
+    /**
+     * A moderator decided a question of the player's after the launch's read: a dot on Home's account
+     * icon, named for a screen reader, until the Account screen shows the list, where its row is marked;
+     * then the dot is gone (CLAUDE.md §8d, *The notice of a decision*). Play's bar has no account icon,
+     * so no dot either.
+     */
+    @Test
+    fun `a decision not seen dots the account icon until the Account screen shows it`() {
+        game.username = "bob"
+        game.sent += submission("n1", SubmissionStatus.PENDING)
+        val dotted = CYRILLIC.notice.accountWithNews.fill(CYRILLIC.account)
+        withApp { scene ->
+            assertEquals(listOf(CYRILLIC.account), scene.descriptions(), "what the launch read is not news")
+
+            game.sent[0] = submission("n1", SubmissionStatus.APPROVED)
+            // As the app coming back to the foreground, or a push while it is open, reads it again.
+            KoinPlatform.getKoin().get<AppServices>().foreground()
+            scene.settle()
+
+            assertEquals(listOf(dotted), scene.descriptions(), "on Home")
+            scene.tapPlay()
+            assertEquals(PLAY_BAR, scene.descriptions().take(PLAY_BAR.size), "on Play, no account icon")
+            assertFalse(dotted in scene.descriptions(), "no dot on Play")
+
+            scene.tap(CYRILLIC.home)
+            scene.tap(dotted)
+            // The list is read as the screen is shown, and its rows marked a frame after.
+            scene.settle()
+            assertTrue(CYRILLIC.notice.newMark in scene.descriptions(), "its row is marked")
+            scene.tap(CYRILLIC.back)
+
+            assertFalse(dotted in scene.descriptions(), "seen: no dot")
+            assertTrue(CYRILLIC.account in scene.descriptions())
+        }
+    }
+
+    /** A notification of a decision tapped: the app opens on the Account screen, back to Home below it. */
+    @Test
+    fun `a tapped notification opens the Account screen`() {
+        game.username = "bob"
+        KoinPlatform.getKoin().get<AppServices>().notificationOpened()
+
+        withApp { scene ->
+            assertTrue(CYRILLIC.accountScreens.myQuestions in scene.texts(), "the Account screen is shown")
+            assertEquals(1, analytics.named(AnalyticsEvent.NOTIFICATION_OPENED).size)
+
+            scene.tap(CYRILLIC.back)
+            assertEquals(homeTexts(CYRILLIC), scene.texts())
+        }
+    }
+
+    /**
+     * Once any call is answered that this build is too old, the one screen shown says a new version is
+     * available, whatever was shown before (CLAUDE.md §8e, *The build on every request*). The desktop
+     * has no store to open, so no button.
+     */
+    @Test
+    fun `once the server refuses the build the app shows only that a new version is available`() =
+        withApp { scene ->
+            scene.tapPlay()
+
+            update.required.value = true
+            scene.settle()
+
+            assertEquals(listOf(CYRILLIC.updateScreen.newVersion), scene.texts())
+            assertEquals(emptyList(), scene.descriptions())
+        }
+
+    /**
+     * Delete account, on the About screen, asks first, then deletes, and goes back to the Account screen,
+     * which shows the fresh guest the device plays on as (CLAUDE.md §8a, *Deleting an account*); Cancel
+     * deletes nothing.
+     */
+    @Test
+    fun `an account deleted from the About screen plays on as a guest on Account`() {
+        game.username = "bob"
+        withApp { scene ->
+            val strings = CYRILLIC.accountScreens
+            scene.tap(CYRILLIC.account)
+            assertFalse(strings.deleteAccount.button in scene.texts(), "not on the Account screen")
+            scene.tap(CYRILLIC.aboutScreen.title)
+
+            scene.tap(strings.deleteAccount.button)
+            assertTrue(strings.deleteAccount.warning in scene.texts(), "${scene.texts()}")
+            scene.tap(CYRILLIC.cancel)
+            assertEquals(emptyList(), game.deleted)
+
+            scene.tap(strings.deleteAccount.button)
+            scene.tap(strings.deleteAccount.confirm)
+
+            assertEquals(listOf<String?>("bob"), game.deleted)
+            assertTrue(strings.myQuestions in scene.texts(), "back on Account: ${scene.texts()}")
+            assertTrue(strings.guest in scene.texts(), "${scene.texts()}")
+            assertTrue(strings.openAuth in scene.texts(), "a guest's one button")
+            assertEquals(1, analytics.named(AnalyticsEvent.ACCOUNT_DELETED).size)
+        }
+    }
+
+    /** The Account screen's info icon opens the About screen, with the app's version, and back returns. */
+    @Test
+    fun `the About screen opens from the Account screen's top bar and shows the version`() =
+        withApp { scene ->
+            scene.tap(CYRILLIC.account)
+            scene.tap(CYRILLIC.aboutScreen.title)
+
+            assertTrue(CYRILLIC.aboutScreen.version.fill("1.0.0 (10000)") in scene.texts(), "${scene.texts()}")
+            assertTrue("player" in scene.texts(), "the stored session's account id: ${scene.texts()}")
+            val shown = analytics.named(RecordingAnalytics.SCREEN).map { it.properties[RecordingAnalytics.SCREEN_NAME] }
+            assertEquals("about", shown.last())
+
+            scene.tap(CYRILLIC.back)
+            assertTrue(CYRILLIC.accountScreens.myQuestions in scene.texts(), "back on Account: ${scene.texts()}")
+        }
+
+    /**
+     * The menu on Play's top bar hides the question for good (CLAUDE.md §8d, *Reports*): a report, for
+     * the reason tapped, goes to the server, and the next question shows.
+     */
+    @Test
+    fun `a report from Play's menu sends it and moves on`() {
+        game.serving = QUESTION
+        withApp { scene ->
+            scene.tapPlay()
+            val menu = CYRILLIC.playScreen.menu
+
+            scene.tap(menu.name)
+            scene.tap(menu.report)
+            scene.tap(menu.spam)
+
+            assertEquals(listOf("report ${QUESTION.id} SPAM"), game.reported)
+            assertEquals(2, game.questionsAsked)
+            assertEquals(1, analytics.named(AnalyticsEvent.QUESTION_REPORTED).size)
+        }
+    }
+
+    /** Home's picks move with every player's taps, so Home reads them each time it is shown (§8d, *Home picks*). */
+    @Test
+    fun `Home reads the picks each time it is shown`() =
+        withApp { scene ->
+            assertEquals(1, game.picksRead)
+
+            scene.tap(CYRILLIC.account)
+            scene.tap(CYRILLIC.back)
+
+            assertEquals(homeTexts(CYRILLIC), scene.texts())
+            assertEquals(2, game.picksRead)
+        }
+
+    /**
+     * A tap on either Play button reveals both shares, the tap counted on the device, while the server
+     * hears of it in the background and the question loads; Play opens once the reveal is over, whether
+     * or not the tap was counted by then.
+     */
+    @Test
+    fun `a tap on Home's Play reveals the shares then opens Play and is counted by its side`() {
+        val counted = CompletableDeferred<Unit>()
+        game.pickWaitsFor = counted
+        // Home's reveal runs on the frame clock, so the platform's animations stay on; Home to Play has
+        // no screen transition of its own to wait for.
+        withApp(motion = Dispatchers.Unconfined) { scene ->
+            val (_, cardB) = scene.nodes().filter { CYRILLIC.play in it.texts }
+            assertTrue(
+                cardB.config
+                    .getOrNull(SemanticsActions.OnClick)
+                    ?.action
+                    ?.invoke() == true,
+            )
+            scene.settle()
+
+            // Three taps on card A's colour, and one on card B's before this one.
+            assertEquals(
+                listOf(
+                    CYRILLIC.gameName,
+                    CYRILLIC.play,
+                    CYRILLIC.playScreen.percent(60),
+                    CYRILLIC.play,
+                    CYRILLIC.playScreen.percent(40),
+                    ALL_PLAYED,
+                ),
+                scene.texts(),
+            )
+            assertEquals(1, game.questionsAsked, "the question loads during the reveal")
+
+            scene.passTime(HOME_REVEAL_MILLIS + PLAY_ENTRANCE_MILLIS.toLong())
+            assertEquals(PLAY_BAR, scene.descriptions().take(PLAY_BAR.size))
+            assertEquals(1, game.questionsAsked)
+            assertEquals(emptyList(), game.picked, "not counted yet")
+            counted.complete(Unit)
+            scene.settle()
+            assertEquals(listOf(Side.B), game.picked)
+        }
+    }
+
+    /** Home, the categories played in the bar's middle, and the question's menu: no account icon. */
+    @Test
+    fun `Play opens under a bar with home the categories and the menu`() =
+        withApp { scene ->
+            scene.tapPlay()
+
+            assertEquals(PLAY_BAR, scene.descriptions().take(PLAY_BAR.size))
+            assertFalse(CYRILLIC.account in scene.descriptions(), "Account is reached from Home")
             assertEquals(1, game.questionsAsked)
         }
 
     /**
-     * Skip is in the row between the cards while a question is asked, after the thumbs, and not on the
-     * top bar, which holds home, the categories played and the account icon; it goes past the question
+     * Skip is in the row between the cards while a question is asked, after the thumbs and Share, and not on the
+     * top bar, which holds home, the categories played and the question's menu; it goes past the question
      * to the next. The points, a coin and the number, a screen reader hears in words, last, a little
      * lower in the row than the thumbs' touch targets.
      */
@@ -204,10 +562,11 @@ class AppNavigationTest {
     fun `Skip between the cards skips the question asked`() {
         game.serving = QUESTION
         withApp { scene ->
-            scene.tap(CYRILLIC.play)
+            scene.tapPlay()
             assertEquals(
-                listOf(CYRILLIC.home, CYRILLIC.account) +
-                    listOf(CYRILLIC.playScreen.like, CYRILLIC.playScreen.dislike, CYRILLIC.playScreen.skip) +
+                PLAY_BAR +
+                    listOf(CYRILLIC.playScreen.like, CYRILLIC.playScreen.dislike, CYRILLIC.playScreen.share.share) +
+                    CYRILLIC.playScreen.skip +
                     CYRILLIC.points.fill(5),
                 scene.descriptions(),
             )
@@ -222,15 +581,17 @@ class AppNavigationTest {
 
     /** The Play screen's ViewModel is the app's, not the back stack's: its question is still there. */
     @Test
-    fun `Play keeps its question through Account and back`() =
+    fun `Play keeps its question through Home and Account and back`() =
         withApp { scene ->
-            scene.tap(CYRILLIC.play)
+            scene.tapPlay()
+            scene.tap(CYRILLIC.home)
             scene.tap(CYRILLIC.account)
-            assertTrue(CYRILLIC.accountScreens.newQuestion in scene.texts(), "the Account screen is not shown")
+            assertTrue(CYRILLIC.accountScreens.myQuestions in scene.texts(), "the Account screen is not shown")
 
             scene.tap(CYRILLIC.back)
+            scene.tapPlay()
 
-            assertEquals(listOf(CYRILLIC.home, CYRILLIC.account), scene.descriptions().take(2))
+            assertEquals(PLAY_BAR, scene.descriptions().take(PLAY_BAR.size))
             assertEquals(1, game.questionsAsked)
         }
 
@@ -238,11 +599,13 @@ class AppNavigationTest {
     @Test
     fun `Play reads the points each time it is shown`() =
         withApp { scene ->
-            scene.tap(CYRILLIC.play)
+            scene.tapPlay()
             assertEquals(1, game.statsRead)
 
+            scene.tap(CYRILLIC.home)
             scene.tap(CYRILLIC.account)
             scene.tap(CYRILLIC.back)
+            scene.tapPlay()
 
             // Once for the Account screen, and once more for Play shown again.
             assertEquals(3, game.statsRead)
@@ -250,17 +613,19 @@ class AppNavigationTest {
 
     /**
      * The time a question was on screen, which a skip reports, counts while Play is shown and the app
-     * in the foreground: not the time on Account, nor in the background (CLAUDE.md §8g).
+     * in the foreground: not the time on Home or Account, nor in the background (CLAUDE.md §8g).
      */
     @Test
     fun `a question's time counts only while Play is shown`() {
         game.serving = QUESTION
         withApp { scene ->
-            scene.tap(CYRILLIC.play)
+            scene.tapPlay()
             clock += 2.seconds
+            scene.tap(CYRILLIC.home)
             scene.tap(CYRILLIC.account)
             clock += 10.minutes
             scene.tap(CYRILLIC.back)
+            scene.tapPlay()
             clock += 1.seconds
             owner.lifecycle.currentState = Lifecycle.State.CREATED
             clock += 1.hours
@@ -277,11 +642,11 @@ class AppNavigationTest {
     @Test
     fun `Play keeps its question through Home and back`() =
         withApp { scene ->
-            scene.tap(CYRILLIC.play)
+            scene.tapPlay()
             scene.tap(CYRILLIC.home)
-            assertEquals(listOf(CYRILLIC.gameName, CYRILLIC.play), scene.texts())
+            assertEquals(homeTexts(CYRILLIC), scene.texts())
 
-            scene.tap(CYRILLIC.play)
+            scene.tapPlay()
 
             assertEquals(1, game.questionsAsked)
         }
@@ -294,7 +659,7 @@ class AppNavigationTest {
 
             scene.tap(CYRILLIC.back)
 
-            assertEquals(listOf(CYRILLIC.gameName, CYRILLIC.play), scene.texts())
+            assertEquals(homeTexts(CYRILLIC), scene.texts())
         }
 
     /** The Account screen reads the player and My questions each time it is shown; the form reads the points. */
@@ -309,13 +674,13 @@ class AppNavigationTest {
 
             scene.tap(CYRILLIC.accountScreens.newQuestion)
             // Its cost is a coin and the number, which a screen reader hears in words.
-            assertTrue(sendText(CYRILLIC) in scene.descriptions(), "the form is not shown")
+            assertTrue(sendText(CYRILLIC, 1) in scene.descriptions(), "the form is not shown")
             assertEquals(listOf(CYRILLIC.back), scene.descriptions().take(1))
             assertEquals(2, game.statsRead)
 
             scene.tap(CYRILLIC.back)
 
-            assertTrue(CYRILLIC.accountScreens.newQuestion in scene.texts(), "the Account screen is not shown")
+            assertTrue(CYRILLIC.accountScreens.myQuestions in scene.texts(), "the Account screen is not shown")
             assertEquals(2, game.submissionsRead)
         }
 
@@ -330,12 +695,12 @@ class AppNavigationTest {
             scene.type(1, "Swim")
             scene.tap(categoryName(FOOD, Language.SERBIAN_CYRILLIC))
 
-            scene.tap(sendText(CYRILLIC))
+            scene.tap(sendText(CYRILLIC, 1))
             scene.settle()
 
             assertEquals(listOf("Fly"), game.sent.map { it.optionA })
             val shown = scene.everyText()
-            assertTrue(CYRILLIC.accountScreens.newQuestion in shown, "the Account screen is not shown: $shown")
+            assertTrue(CYRILLIC.accountScreens.myQuestions in shown, "the Account screen is not shown: $shown")
             val listed = "Fly ${CYRILLIC.accountScreens.or} Swim"
             assertTrue(
                 listed in shown && CYRILLIC.accountScreens.pending in shown,
@@ -356,7 +721,7 @@ class AppNavigationTest {
             scene.type(0, "Fly")
             scene.type(1, "Swim")
             scene.tap(categoryName(FOOD, Language.SERBIAN_CYRILLIC))
-            scene.tap(sendText(CYRILLIC))
+            scene.tap(sendText(CYRILLIC, 1))
 
             scene.tap(CYRILLIC.back)
             assertEquals(2, game.submissionsRead, "read as the Account screen is shown again")
@@ -364,7 +729,7 @@ class AppNavigationTest {
             scene.settle()
 
             val shown = scene.everyText()
-            assertTrue(CYRILLIC.accountScreens.newQuestion in shown, "the Account screen is not shown: $shown")
+            assertTrue(CYRILLIC.accountScreens.myQuestions in shown, "the Account screen is not shown: $shown")
             val listed = "Fly ${CYRILLIC.accountScreens.or} Swim"
             assertTrue(
                 listed in shown && CYRILLIC.accountScreens.pending in shown,
@@ -437,37 +802,102 @@ class AppNavigationTest {
             scene.tap(CYRILLIC.back)
             scene.tap(CYRILLIC.back)
 
-            assertEquals(listOf(CYRILLIC.gameName, CYRILLIC.play), scene.texts())
+            assertEquals(homeTexts(CYRILLIC), scene.texts())
         }
 
     @Test
     fun `the categories open from Play and Play plays what is picked there`() =
         withApp { scene ->
-            scene.tap(CYRILLIC.play)
+            scene.tapPlay()
             scene.tap(ALL_PLAYED)
             assertEquals(listOf(CYRILLIC.back), scene.descriptions().take(1))
             assertEquals(1, categories.reads, "read as the screen opens")
 
             scene.tap("Храна")
             scene.tap("Етика")
-            scene.tap(CYRILLIC.play)
+            scene.tapPlay()
 
-            assertEquals(listOf(CYRILLIC.home, CYRILLIC.account), scene.descriptions().take(2))
+            assertEquals(PLAY_BAR, scene.descriptions().take(PLAY_BAR.size))
             assertEquals(listOf(setOf("FOOD", "ETHICS")), game.categoryChanges)
             assertEquals(2, game.questionsAsked, "a question from them")
             assertTrue("Храна, Етика" in scene.texts(), "${scene.texts()}")
+
+            // Home names them too, under its Play buttons, which play them.
+            scene.tap(CYRILLIC.home)
+            assertEquals(homeTexts(CYRILLIC, played = "Храна, Етика"), scene.texts())
+        }
+
+    /**
+     * Home's categories open the Categories screen, whose Play then opens Play in its place: Home, then
+     * Play, on the back stack. Play's own categories then open over Play and go back to it, which they
+     * would not were the Categories screen still under Play (CLAUDE.md §8d, *The Categories screen*).
+     */
+    @Test
+    fun `the categories open from Home and their Play opens Play over Home`() =
+        withApp { scene ->
+            scene.tap(ALL_PLAYED)
+            assertEquals(listOf(CYRILLIC.back), scene.descriptions().take(1))
+            assertEquals(1, categories.reads, "read as the screen opens")
+
+            scene.tap("Храна")
+            scene.tapPlay()
+
+            assertEquals(PLAY_BAR, scene.descriptions().take(PLAY_BAR.size))
+            assertEquals(listOf(setOf("FOOD")), game.categoryChanges)
+            assertEquals(1, game.questionsAsked, "a question from them")
+            assertTrue("Храна" in scene.texts(), "${scene.texts()}")
+            val shown = analytics.named(RecordingAnalytics.SCREEN).map { it.properties[RecordingAnalytics.SCREEN_NAME] }
+            assertEquals(listOf("home", "categories", "play"), shown)
+            val tapped = analytics.named(AnalyticsEvent.TAP).map { it.properties[AnalyticsProperty.ELEMENT] }
+            assertEquals(1, tapped.count { it == "home.categories" })
+
+            scene.tap("Храна")
+            scene.tap(CYRILLIC.back)
+            assertEquals(PLAY_BAR, scene.descriptions().take(PLAY_BAR.size), "back from the categories to Play")
+            scene.tap(CYRILLIC.home)
+            assertEquals(homeTexts(CYRILLIC, played = "Храна"), scene.texts())
         }
 
     @Test
-    fun `back from the categories plays nothing picked there`() =
+    fun `back from the categories opened from Home returns to Home and plays nothing`() =
         withApp { scene ->
-            scene.tap(CYRILLIC.play)
             scene.tap(ALL_PLAYED)
             scene.tap("Храна")
 
             scene.tap(CYRILLIC.back)
 
-            assertEquals(listOf(CYRILLIC.home, CYRILLIC.account), scene.descriptions().take(2))
+            assertEquals(homeTexts(CYRILLIC), scene.texts())
+            assertEquals(emptyList(), game.categoryChanges)
+            assertEquals(0, game.questionsAsked)
+        }
+
+    /** Where the Categories screen was opened from is kept through a rotation, with the back stack. */
+    @Test
+    fun `the categories opened from Home still open Play over Home after a rotation`() {
+        withApp { scene -> scene.tap(ALL_PLAYED) }
+        afterRotation { scene ->
+            assertEquals(listOf(CYRILLIC.back), scene.descriptions().take(1), "the Categories screen is not shown")
+            scene.tap("Етика")
+            scene.tapPlay()
+
+            assertEquals(PLAY_BAR, scene.descriptions().take(PLAY_BAR.size))
+            assertEquals(listOf(setOf("ETHICS")), game.categoryChanges)
+            scene.tap("Етика")
+            scene.tap(CYRILLIC.back)
+            assertEquals(PLAY_BAR, scene.descriptions().take(PLAY_BAR.size), "Play is over Home, not the categories")
+        }
+    }
+
+    @Test
+    fun `back from the categories plays nothing picked there`() =
+        withApp { scene ->
+            scene.tapPlay()
+            scene.tap(ALL_PLAYED)
+            scene.tap("Храна")
+
+            scene.tap(CYRILLIC.back)
+
+            assertEquals(PLAY_BAR, scene.descriptions().take(PLAY_BAR.size))
             assertEquals(emptyList(), game.categoryChanges)
             assertEquals(1, game.questionsAsked)
             scene.tap(ALL_PLAYED)
@@ -475,27 +905,63 @@ class AppNavigationTest {
             assertEquals(ToggleableState.On, scene.toggleOf(CYRILLIC.allCategories))
         }
 
-    /** The menu changes the screen it is on at once, and every screen after it, and is kept. */
+    /** The language menu is off the Account screen for now (CLAUDE.md §8f): no language is offered there. */
     @Test
-    fun `the language menu changes every screen at once and is kept`() =
+    fun `the Account screen offers no language`() =
         withApp { scene ->
             scene.tap(CYRILLIC.account)
 
-            scene.tap("${CYRILLIC.language}: ${Language.SERBIAN_CYRILLIC.ownName}")
-            scene.tap(Language.ENGLISH.ownName)
+            val shown = scene.everyText() + scene.descriptions()
+            Language.entries.forEach { language -> assertFalse(language.ownName in shown, "$language in $shown") }
+            assertFalse(shown.any { it.startsWith(CYRILLIC.language) }, "$shown")
+        }
 
-            assertTrue(ENGLISH.accountScreens.newQuestion in scene.texts(), "${scene.texts()}")
-            assertEquals(listOf(ENGLISH.back), scene.descriptions().take(1))
-            scene.tap(ENGLISH.back)
-            assertEquals(listOf(ENGLISH.gameName, ENGLISH.play), scene.texts())
-            assertEquals("en", storage.read(LanguageViewModel.KEY))
+    /**
+     * A question's row in My questions opens its details, each option whole with its share, and back
+     * returns to the Account screen (CLAUDE.md §8d, *Question details*).
+     */
+    @Test
+    fun `a question of My questions opens whole and back returns to Account`() =
+        withApp { scene ->
+            game.username = "bob"
+            game.sent +=
+                Submission(
+                    id = "mine",
+                    optionA = "Fly",
+                    optionB = "Swim",
+                    categories = setOf(FOOD.id),
+                    status = SubmissionStatus.APPROVED,
+                    rejectionReason = null,
+                    submittedAt = Instant.parse("2026-09-25T12:00:00Z"),
+                    answerCount = 4,
+                    tally = Tally(votesA = 3, votesB = 1),
+                )
+            scene.tap(CYRILLIC.account)
+
+            scene.tap("Fly ${CYRILLIC.accountScreens.or} Swim")
+            scene.passTime(HOME_COUNT_UP_MILLIS.toLong())
+
+            val shown = scene.texts()
+            listOf("Fly", "Swim", "75%", "25%", CYRILLIC.accountScreens.approved).forEach { text ->
+                assertTrue(text in shown, "\"$text\" is not in $shown")
+            }
+            assertTrue(categoryName(FOOD, Language.SERBIAN_CYRILLIC) in shown, "its category: $shown")
+            val screens =
+                analytics
+                    .named(
+                        RecordingAnalytics.SCREEN,
+                    ).map { it.properties[RecordingAnalytics.SCREEN_NAME] }
+            assertEquals("question", screens.last())
+
+            scene.tap(CYRILLIC.back)
+            assertTrue(CYRILLIC.accountScreens.myQuestions in scene.texts(), "back on Account: ${scene.texts()}")
         }
 
     @Test
     fun `the app opens in the language kept on the device`() {
         runBlocking { storage.write(LanguageViewModel.KEY, Language.ENGLISH.tag) }
 
-        withApp { scene -> assertEquals(listOf(ENGLISH.gameName, ENGLISH.play), scene.texts()) }
+        withApp { scene -> assertEquals(homeTexts(ENGLISH), scene.texts()) }
     }
 
     /**
@@ -503,14 +969,21 @@ class AppNavigationTest {
      * its saved state restored from [restored], none unless a test sets it. What it saved as the test
      * ended is in [saved].
      */
-    private fun withApp(test: (ImageComposeScene) -> Unit) {
+    private fun withApp(
+        motion: CoroutineContext = MotionOff,
+        test: (ImageComposeScene) -> Unit,
+    ) {
         val registry = SaveableStateRegistry(restored) { true }
         val scene =
-            ImageComposeScene(width = 375, height = 599, density = Density(1f)) {
+            // Every screen change ends at once, unless a test asks for [motion]: these are tests of where the
+            // buttons go, not of how screens move (CLAUDE.md §5b, *Motion*).
+            ImageComposeScene(width = 375, height = 599, density = Density(1f), coroutineContext = motion) {
                 CompositionLocalProvider(
                     LocalLifecycleOwner provides owner,
                     LocalViewModelStoreOwner provides owner,
                     LocalSaveableStateRegistry provides registry,
+                    // A link opens through the test's own handler, never the machine's browser.
+                    LocalUriHandler provides uris,
                 ) { App() }
             }
         try {
@@ -529,7 +1002,7 @@ class AppNavigationTest {
      */
     private fun afterRotation(test: (ImageComposeScene) -> Unit) {
         restored = saved
-        withApp(test)
+        withApp(test = test)
     }
 
     private fun fakes() =
@@ -540,23 +1013,65 @@ class AppNavigationTest {
             single<SessionRepository> { game }
             single<VoteRepository> { game }
             single<ReactionRepository> { game }
+            single<ReportRepository> { game }
+            single<HomePickRepository> { game }
             single<PlayerRepository> { game }
             single<AccountRepository> { game }
             single<SubmissionRepository> { game }
             single<CategoryRepository> { categories }
+            single<ShopRepository> { shops }
+            factory { GetShop(shop = get(), session = get()) }
+            factory { BuyTheme(shop = get(), session = get()) }
             single<Analytics> { analytics }
+            single<AppUpdate> { update }
+            single { AppVersion(name = "1.0.0", number = 10000) }
             factory { GetNextQuestion(questions = get(), session = get()) }
             factory { SkipQuestion(questions = get(), session = get()) }
             factory { CastVote(votes = get(), session = get()) }
             factory { SetReaction(reactions = get(), session = get()) }
+            factory { ReportQuestion(reports = get(), session = get()) }
+            factory { HideQuestion(reports = get(), session = get()) }
+            factory { HideAuthor(reports = get(), questions = get(), session = get()) }
+            factory { GetHomePicks(picks = get()) }
+            factory { PickOnHome(picks = get(), session = get()) }
             factory { GetPlayerStats(players = get(), session = get()) }
             factory { RegisterAccount(accounts = get(), session = get(), analytics = get()) }
             factory { LogIn(accounts = get(), questions = get(), session = get(), analytics = get()) }
             factory { LogOut(accounts = get(), questions = get(), analytics = get()) }
+            factory { DeleteAccount(accounts = get(), questions = get(), analytics = get()) }
             factory { SubmitQuestion(submissions = get(), session = get()) }
             factory { GetMySubmissions(submissions = get(), session = get()) }
             factory { GetCategories(categories = get()) }
+            single<CurrentSession> { game }
+            single { LinkPlayGames(PlayGames.None, NoPlayGamesLink, get(), get(), get()) }
+            single<DevicePush> { DevicePush.None }
+            // The questions the notice reads, the game's own list, read without counting a read of it.
+            single { DecisionNotices(ListedWithoutCounting(game), get(), seen) }
+            factory { KeepPushTokenRegistered(get(), NoPushTokens, get()) }
         }
+
+    /**
+     * Taps the first node showing Play: on Home, the button in card A's colour, one of two that start
+     * the game alike; on the Categories screen, its one Play.
+     */
+    private fun ImageComposeScene.tapPlay() {
+        val node = nodes().firstOrNull { CYRILLIC.play in it.texts || ENGLISH.play in it.texts }
+        val tap = node?.config?.getOrNull(SemanticsActions.OnClick)?.action
+        assertTrue(tap != null, "nothing to tap shows Play: ${texts()}")
+        tap()
+        settle()
+        // Home's reveal, then its fade into Play; nothing on the Categories screen waits for it.
+        passTime(HOME_REVEAL_MILLIS + PLAY_ENTRANCE_MILLIS.toLong())
+    }
+
+    /**
+     * What Home shows in [strings]' words before a tap: the name, two Play buttons, no share yet, and the
+     * categories [played] under them, All while none is.
+     */
+    private fun homeTexts(
+        strings: Strings,
+        played: String = strings.allCategories,
+    ): List<String> = listOf(strings.gameName, strings.play, strings.play, played)
 
     /** Whether the line showing [text] is ticked. */
     private fun ImageComposeScene.toggleOf(text: String): ToggleableState? =
@@ -578,6 +1093,11 @@ class AppNavigationTest {
         }
     }
 
+    /** Whether the server has refused this build as too old, which a test raises by hand. */
+    private class FakeUpdate : AppUpdate {
+        override val required = MutableStateFlow(false)
+    }
+
     /** A resumed lifecycle and a ViewModel store, as an activity or a window gives the app. */
     private class TestOwner :
         LifecycleOwner,
@@ -586,6 +1106,57 @@ class AppNavigationTest {
             LifecycleRegistry.createUnsafe(this).apply { currentState = Lifecycle.State.RESUMED }
 
         override val viewModelStore: ViewModelStore = ViewModelStore()
+    }
+
+    /** Play Games is never there in these builds, so nothing asks this. */
+    private object NoPlayGamesLink : PlayGamesRepository {
+        override fun isSettled(): Boolean = error("no Play Games here")
+
+        override suspend fun signIn(serverAuthCode: String): String? = error("no Play Games here")
+    }
+
+    /** The game's questions for the notice, read without counting a read of them, which the screens' are. */
+    private class ListedWithoutCounting(
+        private val game: FakeGame,
+    ) : SubmissionRepository by game {
+        override suspend fun mine(): List<Submission> = game.sent.toList()
+    }
+
+    private class KeptSeenDecisions : SeenDecisionsStore {
+        private var kept: SeenDecisions? = null
+
+        override fun read(): SeenDecisions? = kept
+
+        override suspend fun write(seen: SeenDecisions) {
+            kept = seen
+        }
+    }
+
+    /** Pushes are never there in these builds, so nothing registers a token. */
+    private object NoPushTokens : PushTokenRepository {
+        override suspend fun register(
+            token: String,
+            platform: PushPlatform,
+        ): Unit = error("no pushes here")
+    }
+
+    /** The shop: Neon night on sale, the player registered with enough points; a purchase owns it. */
+    private class FakeShop : ShopRepository {
+        val bought = mutableListOf<String>()
+        private var shop = Shop(listOf(ShopTheme("NEON_NIGHT", PRICE, owned = false)), points = 500, registered = true)
+
+        override suspend fun shop(): Shop = shop
+
+        override suspend fun buy(themeId: String): Shop {
+            bought += themeId
+            shop =
+                shop.copy(
+                    themes = shop.themes.map { it.copy(owned = it.owned || it.id == themeId) },
+                    points =
+                        500 - PRICE,
+                )
+            return shop
+        }
     }
 
     /**
@@ -598,11 +1169,17 @@ class AppNavigationTest {
         SessionRepository,
         VoteRepository,
         ReactionRepository,
+        ReportRepository,
+        HomePickRepository,
         PlayerRepository,
         AccountRepository,
-        SubmissionRepository {
+        SubmissionRepository,
+        CurrentSession {
         var questionsAsked = 0
         var statsRead = 0
+
+        /** What a vote answers, as the side voted for; none votes unless a test sets it. */
+        var outcome: VoteOutcome? = null
         var submissionsRead = 0
 
         /** The question every fetch serves, or none: out of questions, which needs none made. */
@@ -647,16 +1224,59 @@ class AppNavigationTest {
 
         override suspend fun ensure(): String = "player"
 
+        override fun current(): String = "player"
+
+        override val sessions: Flow<String> = flowOf("player")
+
         override suspend fun cast(
             questionId: String,
             side: Side,
             attempt: AttemptId,
-        ): VoteOutcome = error("nothing votes here")
+            answerMillis: Long?,
+        ): VoteOutcome = outcome?.copy(yourSide = side) ?: error("nothing votes here")
 
         override suspend fun setReaction(
             questionId: String,
             reaction: Reaction,
         ): QuestionReactions = error("nothing reacts here")
+
+        /** Every read of Home's picks. */
+        var picksRead = 0
+
+        /** Every tap on Home's Play buttons, by side, in order. */
+        val picked = mutableListOf<Side>()
+
+        /** When set, a tap on Home's Play waits for it before it is counted. */
+        var pickWaitsFor: CompletableDeferred<Unit>? = null
+
+        override suspend fun counts(): Tally {
+            picksRead++
+            return HOME_PICKS
+        }
+
+        override suspend fun pick(side: Side): Tally {
+            pickWaitsFor?.await()
+            picked += side
+            return HOME_PICKS
+        }
+
+        /** Every report and hide, in order. */
+        val reported = mutableListOf<String>()
+
+        override suspend fun report(
+            questionId: String,
+            reason: ReportReason,
+        ) {
+            reported += "report $questionId $reason"
+        }
+
+        override suspend fun hideQuestion(questionId: String) {
+            reported += "hide question $questionId"
+        }
+
+        override suspend fun hideAuthor(questionId: String) {
+            reported += "hide author $questionId"
+        }
 
         override suspend fun stats(): PlayerStats {
             statsRead++
@@ -678,6 +1298,14 @@ class AppNavigationTest {
         ) = error("nothing logs in here")
 
         override suspend fun logOut() = error("nothing logs out here")
+
+        /** Every account deleted, in order: the player playing, by the username they had. */
+        val deleted = mutableListOf<String?>()
+
+        override suspend fun deleteAccount() {
+            deleted += username
+            username = null
+        }
 
         override suspend fun submit(
             optionA: String,
@@ -702,9 +1330,23 @@ class AppNavigationTest {
         }
     }
 
+    private fun submission(
+        id: String,
+        status: SubmissionStatus,
+    ) = Submission(
+        id = id,
+        optionA = "$id-a",
+        optionB = "$id-b",
+        categories = setOf(FOOD.id),
+        status = status,
+        rejectionReason = null,
+        submittedAt = Instant.fromEpochMilliseconds(1_790_000_000_000L),
+    )
+
     private companion object {
         val CYRILLIC = SerbianCyrillicStrings
         val ENGLISH = EnglishStrings
+        val LATIN = SerbianLatinStrings
 
         val FOOD = Category(id = "FOOD", nameSr = "Храна", nameEn = "Food")
 
@@ -712,7 +1354,19 @@ class AppNavigationTest {
 
         val QUESTION = Question(id = "q1", optionA = "Fly", optionB = "Swim", categories = setOf(FOOD.id))
 
-        /** The Play screen's categories, All while none is played: a tap on them opens the Categories screen. */
+        /** Every player's taps on Home's two Play buttons: three on card A's colour to every one on card B's. */
+        val HOME_PICKS = Tally(votesA = 3, votesB = 1)
+
+        /** What a screen reader hears first on Play: its top bar's two icons, home and the question's menu. */
+        val PLAY_BAR = listOf(CYRILLIC.home, CYRILLIC.playScreen.menu.name)
+
+        /**
+         * The categories played, on Play's bar and under Home's buttons, All while none is played: a tap on
+         * them opens the Categories screen.
+         */
         val ALL_PLAYED = CYRILLIC.allCategories
+
+        /** What a theme costs in the fake shop. */
+        const val PRICE = 220
     }
 }

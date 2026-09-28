@@ -21,17 +21,34 @@ public enum class DomainError {
     SUBMISSION_LIMIT,
 
     /**
-     * The player has fewer points than submitting a question costs (CLAUDE.md §8c). Nothing was
-     * stored or taken; answering earns the points.
+     * The player has fewer points than submitting a question costs (CLAUDE.md §8c), or than a theme of
+     * the shop's. Nothing was stored or taken; answering earns the points.
      */
     NOT_ENOUGH_POINTS,
 
     /**
-     * A guest tried to submit a question: only a registered player may (CLAUDE.md §8d, *Submitting*).
+     * A guest tried to submit a question or to buy in the shop: only a registered player may (CLAUDE.md
+     * §8d, *Submitting*, *The shop*).
      * Nothing was stored or taken; registering, which keeps everything the guest has, is the way on.
      * Never [UNAUTHORIZED]: the session is fine.
      */
     ACCOUNT_REQUIRED,
+
+    /**
+     * A moderator has blocked the player from submitting (CLAUDE.md §8d, *Authors*). Nothing was stored
+     * or taken, and nothing the player can do puts it right. Never [UNAUTHORIZED]: it comes with a 403,
+     * and the session is fine.
+     */
+    SUBMISSIONS_BLOCKED,
+
+    /**
+     * The player tried to buy a theme they own already (CLAUDE.md §8d, *The shop*), a purchase whose
+     * answer was lost included. Nothing was taken.
+     */
+    ALREADY_OWNED,
+
+    /** The player tried to buy something the shop does not sell. Nothing was taken. */
+    ITEM_NOT_FOUND,
 
     /** A moderator tried to decide a submission that a moderator has already approved or rejected. */
     ALREADY_DECIDED,
@@ -50,6 +67,12 @@ public enum class DomainError {
 
     /** A moderator tried to rename a category no category's id names. Nothing changed. */
     CATEGORY_NOT_FOUND,
+
+    /** A moderator tried to block or unblock an author no player's id names. Nothing changed. */
+    AUTHOR_NOT_FOUND,
+
+    /** A moderator tried to delete an account, by username or by id, that no player has. Nothing changed. */
+    PLAYER_NOT_FOUND,
 
     /**
      * A moderator's request did not carry the server's admin token. Nothing to do with the player's
@@ -81,6 +104,25 @@ public enum class DomainError {
      * stays as it was.
      */
     INVALID_LOGIN,
+
+    /**
+     * Google refused the server auth code a Play Games sign-in sent: spent, expired, or another app's.
+     * Nothing changed; a new code from Play Games may work. Never [UNAUTHORIZED]: the session is fine.
+     */
+    PLAY_GAMES_CODE_REFUSED,
+
+    /**
+     * A Play Games sign-in could not be made: the server could not ask Google who the code names, or
+     * Play Games on this device gave no code. Nothing changed.
+     */
+    PLAY_GAMES_UNAVAILABLE,
+
+    /**
+     * The server serves this build nothing more: it is older than the platform's minimum (CLAUDE.md
+     * §8b, *Minimum client version*). Only an update puts it right, which the game says on a screen of
+     * its own (`AppUpdate`). Never [UNAUTHORIZED]: the session is fine.
+     */
+    UPGRADE_REQUIRED,
 
     /** Request never reached the server, or its answer did not arrive whole. */
     NETWORK,

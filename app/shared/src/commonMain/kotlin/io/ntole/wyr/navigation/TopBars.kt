@@ -7,6 +7,8 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.runtime.Composable
@@ -15,6 +17,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import io.ntole.wyr.analytics.tapped
 import io.ntole.wyr.language.LocalStrings
+import io.ntole.wyr.language.fill
 import io.ntole.wyr.theme.WyrIcons
 import io.ntole.wyr.theme.WyrThemeAccessors
 
@@ -22,38 +25,68 @@ import io.ntole.wyr.theme.WyrThemeAccessors
 // to the others, since only Android has a back of its own. Each is WyrDimens.topBarHeight high, the
 // tab row's height before them, so the screen under one keeps the height it had under the tabs.
 
-/** Home's: the account icon, top right. */
+/**
+ * Home's: the account icon, top right, with a dot while [news] waits there: a moderator decided a
+ * question of the player's (CLAUDE.md §8d, *Submitting*).
+ */
 @Composable
-fun HomeTopBar(onAccount: () -> Unit) {
-    TopBar(end = { AccountButton(onAccount) })
+fun HomeTopBar(
+    onAccount: () -> Unit,
+    news: Boolean = false,
+) {
+    TopBar(end = { AccountButton(onAccount, news) })
 }
 
 /**
- * Play's: home on the left, back to Home, the account icon on the right, and between them, in the
- * middle, [categories]: the categories played, which open the Categories screen (CLAUDE.md §8d,
- * *The Play screen*).
+ * Play's: home on the left, back to Home, [menu] on the right, the menu about the question on screen,
+ * and between them, in the bar's exact middle, [categories]: the categories played, which open the
+ * Categories screen (CLAUDE.md §8d, *The Play screen*). One icon on each side, as wide as each other, so
+ * the categories stand in the middle of the screen with the width the two leave them. No account icon:
+ * the Account screen is reached from Home, whose bar carries the notice's dot.
  */
 @Composable
 fun PlayTopBar(
     onHome: () -> Unit,
-    onAccount: () -> Unit,
+    menu: @Composable () -> Unit = {},
     categories: @Composable () -> Unit,
 ) {
     TopBar(
         start = { IconAction(WyrIcons.Home, LocalStrings.current.home, "top_bar.home", onHome) },
         middle = categories,
-        end = { AccountButton(onAccount) },
+        end = { menu() },
     )
 }
 
 /**
- * Account's, the Auth page's, Submit's and the Categories screen's: the back arrow, to the screen each
- * was opened from. The way to the Submit screen is on the Account screen itself, in My questions (§8d,
- * *The Account screen*).
+ * The Auth page's, Submit's, the Categories screen's and the About screen's: the back arrow, to the
+ * screen each was opened from. The Account screen's has the About screen's icon besides
+ * ([AccountTopBar]); the way to the Submit screen is on the Account screen itself, in My questions
+ * (§8d, *The Account screen*).
  */
 @Composable
 fun BackTopBar(onBack: () -> Unit) {
     TopBar(start = { BackButton(onBack) })
+}
+
+/**
+ * The Account screen's: the back arrow, and on the right the shop's bag, to the shop (CLAUDE.md §8d,
+ * *The shop*), and the info icon, to the About screen (§8d, *About*), so the way to either adds no text
+ * to the screen.
+ */
+@Composable
+fun AccountTopBar(
+    onBack: () -> Unit,
+    onAbout: () -> Unit,
+    onShop: () -> Unit = {},
+) {
+    val strings = LocalStrings.current
+    TopBar(
+        start = { BackButton(onBack) },
+        end = {
+            IconAction(WyrIcons.Shop, strings.shopScreen.title, "top_bar.shop", onShop)
+            IconAction(WyrIcons.Info, strings.aboutScreen.title, "top_bar.about", onAbout)
+        },
+    )
 }
 
 /**
@@ -86,9 +119,18 @@ private fun TopBar(
     }
 }
 
+/**
+ * The account icon, with a dot in its corner while [news] waits on the Account screen, which a screen
+ * reader hears in its name: *Налог: ново*.
+ */
 @Composable
-private fun AccountButton(onClick: () -> Unit) {
-    IconAction(WyrIcons.Account, LocalStrings.current.account, "top_bar.account", onClick)
+private fun AccountButton(
+    onClick: () -> Unit,
+    news: Boolean,
+) {
+    val strings = LocalStrings.current
+    val name = if (news) strings.notice.accountWithNews.fill(strings.account) else strings.account
+    IconAction(WyrIcons.Account, name, "top_bar.account", onClick, news)
 }
 
 @Composable
@@ -98,7 +140,8 @@ private fun BackButton(onClick: () -> Unit) {
 
 /**
  * An icon button, named for a screen reader in the language shown, in the heading's accent, whose
- * taps the analytics count as [element]'s (CLAUDE.md §8g).
+ * taps the analytics count as [element]'s (CLAUDE.md §8g), with a [dot] in its corner, in the brand's
+ * pink, when something new waits behind it.
  */
 @Composable
 private fun IconAction(
@@ -106,8 +149,12 @@ private fun IconAction(
     name: String,
     element: String,
     onClick: () -> Unit,
+    dot: Boolean = false,
 ) {
+    val colors = WyrThemeAccessors.colors
     IconButton(onClick = tapped(element, onClick = onClick)) {
-        Icon(imageVector = icon, contentDescription = name, tint = WyrThemeAccessors.colors.headingAccent)
+        BadgedBox(badge = { if (dot) Badge(containerColor = colors.optionA) }) {
+            Icon(imageVector = icon, contentDescription = name, tint = colors.headingAccent)
+        }
     }
 }

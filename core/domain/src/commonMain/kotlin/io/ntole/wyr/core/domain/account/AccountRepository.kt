@@ -50,4 +50,15 @@ public interface AccountRepository {
      * @throws io.ntole.wyr.core.domain.error.WyrException only when the session could not be dropped.
      */
     public suspend fun logOut()
+
+    /**
+     * Deletes the account of the player this device plays as, a guest's or a registered player's, for
+     * good (CLAUDE.md §8a, *Deleting an account*), then drops the stored session, so the next call plays
+     * as a fresh guest. A server that no longer knows the session, the account gone already, counts as
+     * deleted. With no session stored there is nothing to delete, and nothing is sent.
+     *
+     * @throws io.ntole.wyr.core.domain.error.WyrException on any other failure, offline included, the
+     *   stored session left as it was: nothing is forgotten until the server has said the account is gone.
+     */
+    public suspend fun deleteAccount()
 }

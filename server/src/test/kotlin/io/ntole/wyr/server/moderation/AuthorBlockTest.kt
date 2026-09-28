@@ -60,7 +60,7 @@ class AuthorBlockTest {
             )
         }
         assertEquals(QuestionStatus.APPROVED, listed.getValue(approved.id).status, "an approved one stays")
-        assertEquals(2 * Scoring.SUBMISSION_COST, pointsOf(author), "each rejection paid its cost back")
+        assertEquals(2 * Scoring.DEFAULT_SUBMISSION_COST, pointsOf(author), "each rejection paid its cost back")
     }
 
     @Test
@@ -123,7 +123,7 @@ class AuthorBlockTest {
         assertEquals(AuthorBlockDto(author, blocked = true, rejectedSubmissions = 1), block)
         val listed = transaction(database) { SubmissionStore.byAuthor(author) }.single()
         assertEquals(submission.id to QuestionStatus.REJECTED, listed.id to listed.status)
-        assertEquals(Scoring.SUBMISSION_COST, pointsOf(author), "and paid back")
+        assertEquals(Scoring.DEFAULT_SUBMISSION_COST, pointsOf(author), "and paid back")
     }
 
     @Test

@@ -71,11 +71,13 @@ internal fun ApiException.toDomainError(): DomainError =
     when {
         code != ErrorCode.UNKNOWN -> code.toDomain()
         status == HTTP_TOO_MANY_REQUESTS -> DomainError.RATE_LIMITED
+        status == HTTP_UPGRADE_REQUIRED -> DomainError.UPGRADE_REQUIRED
         status in HTTP_SERVER_ERRORS -> DomainError.SERVER
         else -> DomainError.UNKNOWN
     }
 
 private const val HTTP_TOO_MANY_REQUESTS = 429
+private const val HTTP_UPGRADE_REQUIRED = 426
 private val HTTP_SERVER_ERRORS = 500..599
 
 internal fun ErrorCode.toDomain(): DomainError =
@@ -92,9 +94,9 @@ internal fun ErrorCode.toDomain(): DomainError =
 
         ErrorCode.RATE_LIMITED -> DomainError.RATE_LIMITED
 
-        // Sent only to a build that names itself, which none does yet: the client that sends the
-        // headers gives it a DomainError of its own, asking the player to update.
-        ErrorCode.UPGRADE_REQUIRED -> DomainError.UNKNOWN
+        // This build is older than the server serves: only an update puts it right, which the game says
+        // on a screen of its own. Never UNAUTHORIZED: it comes with a 426, and the session is fine.
+        ErrorCode.UPGRADE_REQUIRED -> DomainError.UPGRADE_REQUIRED
 
         ErrorCode.INTERNAL -> DomainError.SERVER
 
@@ -115,8 +117,13 @@ internal fun ErrorCode.toDomain(): DomainError =
         ErrorCode.ACCOUNT_REQUIRED -> DomainError.ACCOUNT_REQUIRED
 
         // A blocked author's submission, with a 403: never UNAUTHORIZED, which would throw the session
-        // away. UNKNOWN until the Submit form's branch gives it a DomainError and words of its own.
-        ErrorCode.SUBMISSIONS_BLOCKED -> DomainError.UNKNOWN
+        // away. The Submit form says so in a few words.
+        ErrorCode.SUBMISSIONS_BLOCKED -> DomainError.SUBMISSIONS_BLOCKED
+
+        // A purchase in the shop, each the player's to see in words: bought already, or sold no more.
+        ErrorCode.ALREADY_OWNED -> DomainError.ALREADY_OWNED
+
+        ErrorCode.ITEM_NOT_FOUND -> DomainError.ITEM_NOT_FOUND
 
         ErrorCode.ALREADY_DECIDED -> DomainError.ALREADY_DECIDED
 
@@ -128,8 +135,12 @@ internal fun ErrorCode.toDomain(): DomainError =
 
         ErrorCode.CATEGORY_NOT_FOUND -> DomainError.CATEGORY_NOT_FOUND
 
-        // A moderator's block of an author no player is, which the moderation app never sends yet.
-        ErrorCode.AUTHOR_NOT_FOUND -> DomainError.UNKNOWN
+        // A moderator's block or unblock of an author no player is: a DomainError of its own, so the
+        // moderation app says which.
+        ErrorCode.AUTHOR_NOT_FOUND -> DomainError.AUTHOR_NOT_FOUND
+
+        // A moderator's deletion of an account no player has, which the moderation app says in words.
+        ErrorCode.PLAYER_NOT_FOUND -> DomainError.PLAYER_NOT_FOUND
 
         // Never UNAUTHORIZED: that would throw the player's session away over a moderator's token.
         ErrorCode.FORBIDDEN -> DomainError.FORBIDDEN
@@ -146,11 +157,11 @@ internal fun ErrorCode.toDomain(): DomainError =
 
         ErrorCode.INVALID_LOGIN -> DomainError.INVALID_LOGIN
 
-        // Answered only to a Play Games sign-in, which no client sends yet. Never UNAUTHORIZED, which would
-        // throw the session away: a refused code comes with a 422, and Google not answering with a 502.
-        ErrorCode.PLAY_GAMES_CODE_REFUSED -> DomainError.UNKNOWN
+        // Answered only to a Play Games sign-in. Never UNAUTHORIZED, which would throw the session away: a
+        // refused code comes with a 422, and Google not answering with a 502.
+        ErrorCode.PLAY_GAMES_CODE_REFUSED -> DomainError.PLAY_GAMES_CODE_REFUSED
 
-        ErrorCode.PLAY_GAMES_UNAVAILABLE -> DomainError.SERVER
+        ErrorCode.PLAY_GAMES_UNAVAILABLE -> DomainError.PLAY_GAMES_UNAVAILABLE
 
         ErrorCode.UNKNOWN -> DomainError.UNKNOWN
     }

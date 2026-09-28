@@ -38,13 +38,14 @@ class LanguageMenuTest {
         }
     }
 
+    /** English is hidden for the launch (CLAUDE.md §8b, *The launch*): Serbian is offered, in both scripts. */
     @Test
-    fun `opened it names every language in itself whatever language is shown`() {
+    fun `opened it names every language offered in itself whatever language is shown`() {
         Language.entries.forEach { shown ->
             val scene = opened(shown, selected = shown)
             try {
                 val names = options(scene).map { it.name }
-                assertEquals(listOf("Ћирилица", "Latinica", "English"), names, "shown in $shown")
+                assertEquals(listOf("Ћирилица", "Latinica"), names, "shown in $shown")
             } finally {
                 scene.close()
             }
@@ -53,7 +54,7 @@ class LanguageMenuTest {
 
     @Test
     fun `the language shown is the one selected and no other`() {
-        Language.entries.forEach { selected ->
+        Language.OFFERED.forEach { selected ->
             val scene = opened(selected, selected = selected)
             try {
                 assertEquals(listOf(selected.ownName), options(scene).filter { it.selected }.map { it.name })
@@ -63,9 +64,21 @@ class LanguageMenuTest {
         }
     }
 
+    /** A device that kept English shows it, named, and none of the languages offered is marked picked. */
+    @Test
+    fun `a language kept that is no longer offered is still shown and none offered is picked`() {
+        val scene = opened(Language.ENGLISH, selected = Language.ENGLISH)
+        try {
+            assertEquals("Language: English", descriptionOf(menuNode(scene)))
+            assertEquals(emptyList(), options(scene).filter { it.selected })
+        } finally {
+            scene.close()
+        }
+    }
+
     @Test
     fun `a tap on a language picks it and closes the menu`() {
-        Language.entries.forEach { tapped ->
+        Language.OFFERED.forEach { tapped ->
             val picked = mutableListOf<Language>()
             val scene = opened(Language.DEFAULT, selected = Language.DEFAULT, onSelect = picked::add)
             try {

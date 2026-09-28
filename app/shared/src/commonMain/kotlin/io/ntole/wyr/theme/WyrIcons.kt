@@ -8,6 +8,9 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.PathBuilder
 import androidx.compose.ui.graphics.vector.path
 import androidx.compose.ui.unit.dp
+import kotlin.math.PI
+import kotlin.math.cos
+import kotlin.math.sin
 
 /**
  * Every icon in the app, drawn here by hand, so no icon library is needed (CLAUDE.md §5b): a few
@@ -118,13 +121,17 @@ object WyrIcons {
         icon("CoinFace") { path(fill = SolidColor(Color.Black)) { circle(COIN_RADIUS) } }
     }
 
-    /** A coin's rim and the ring stamped in its face, drawn over [CoinFace]. */
+    /** A coin's rim and the star stamped in its face, drawn over [CoinFace]. */
     val CoinMark: ImageVector by lazy {
         icon("CoinMark") {
-            outline {
-                circle(COIN_RADIUS)
-                circle(COIN_RING_RADIUS)
-            }
+            outline { circle(COIN_RADIUS) }
+            // The star, filled, its points softened by a thin round stroke of its own.
+            path(
+                fill = SolidColor(Color.Black),
+                stroke = SolidColor(Color.Black),
+                strokeLineWidth = STAR_STROKE,
+                strokeLineJoin = StrokeJoin.Round,
+            ) { star() }
         }
     }
 
@@ -166,6 +173,96 @@ object WyrIcons {
         }
     }
 
+    /** Info: an i in a circle, for the About screen, opened from the Account screen's top bar. */
+    val Info: ImageVector by lazy {
+        icon("Info") {
+            outline {
+                circle(COIN_RADIUS)
+                // The i's dot, a stroke so short its round ends make it a dot, and its stem.
+                moveTo(12f, 7.6f)
+                lineTo(12f, 8f)
+                moveTo(12f, 11f)
+                verticalLineTo(16.5f)
+            }
+        }
+    }
+
+    /**
+     * More: three dots one over the other, for the Play screen's menu about the question on screen
+     * (CLAUDE.md §8d, *The Play screen*, *Reports*): report it, or hide it or its author.
+     */
+    val More: ImageVector by lazy {
+        icon("More") {
+            path(fill = SolidColor(Color.Black)) {
+                listOf(5f, 12f, 19f).forEach { y -> dot(x = SIZE / 2, y = y) }
+            }
+        }
+    }
+
+    /**
+     * Copy: two sheets, one over the other, for copying the player's account id (CLAUDE.md §8d,
+     * *About*).
+     */
+    val Copy: ImageVector by lazy {
+        icon("Copy") {
+            outline {
+                // The sheet on top, then the edges of the one under it that show.
+                moveTo(9f, 9f)
+                horizontalLineTo(20f)
+                verticalLineTo(20f)
+                horizontalLineTo(9f)
+                close()
+                moveTo(15f, 9f)
+                verticalLineTo(4f)
+                horizontalLineTo(4f)
+                verticalLineTo(15f)
+                horizontalLineTo(9f)
+            }
+        }
+    }
+
+    /** Plus: a cross of two strokes, for adding a question to My questions (CLAUDE.md §8d, *The Account screen*). */
+    val Plus: ImageVector by lazy {
+        icon("Plus") {
+            outline {
+                moveTo(12f, 5f)
+                verticalLineTo(19f)
+                moveTo(5f, 12f)
+                horizontalLineTo(19f)
+            }
+        }
+    }
+
+    /** A small chevron pointing right, on a row that opens more of itself: a question of My questions. */
+    val ChevronRight: ImageVector by lazy {
+        icon("ChevronRight") {
+            outline {
+                moveTo(10f, 8f)
+                lineTo(14f, 12f)
+                lineTo(10f, 16f)
+            }
+        }
+    }
+
+    /**
+     * Share: three rings joined by two strokes, one on the left linked to two on the right, for sharing a
+     * question (CLAUDE.md §8d, *Sharing*).
+     */
+    val Share: ImageVector by lazy {
+        icon("Share") {
+            outline {
+                ring(x = 18f, y = 5f)
+                ring(x = 6f, y = 12f)
+                ring(x = 18f, y = 19f)
+                // From the ring on the left to each on the right, their edges only.
+                moveTo(8.6f, 10.5f)
+                lineTo(15.4f, 6.5f)
+                moveTo(8.6f, 13.5f)
+                lineTo(15.4f, 17.5f)
+            }
+        }
+    }
+
     /**
      * A thumb up, or turned over top to bottom for a thumb down: the cuff on the left, and the hand
      * beside it, its thumb pointing up out of it, or down.
@@ -202,6 +299,44 @@ object WyrIcons {
         close()
     }
 
+    /**
+     * A five-pointed star about the grid's middle, one point straight up: its points [STAR_OUTER]
+     * from the middle and the corners between them [STAR_INNER].
+     */
+    private fun PathBuilder.star() {
+        val middle = SIZE / 2
+        repeat(STAR_CORNERS) { corner ->
+            val radius = if (corner % 2 == 0) STAR_OUTER else STAR_INNER
+            val angle = (corner * 180.0 / 5 - 90) * PI / 180
+            val x = middle + radius * cos(angle).toFloat()
+            val y = middle + radius * sin(angle).toFloat()
+            if (corner == 0) moveTo(x, y) else lineTo(x, y)
+        }
+        close()
+    }
+
+    /** A ring of [RING_RADIUS] about ([x], [y]), in two half turns, for [Share]. */
+    private fun PathBuilder.ring(
+        x: Float,
+        y: Float,
+    ) {
+        moveTo(x - RING_RADIUS, y)
+        arcTo(RING_RADIUS, RING_RADIUS, 0f, isMoreThanHalf = true, isPositiveArc = true, x1 = x + RING_RADIUS, y1 = y)
+        arcTo(RING_RADIUS, RING_RADIUS, 0f, isMoreThanHalf = true, isPositiveArc = true, x1 = x - RING_RADIUS, y1 = y)
+        close()
+    }
+
+    /** A dot of [DOT_RADIUS] about ([x], [y]), in two half turns. */
+    private fun PathBuilder.dot(
+        x: Float,
+        y: Float,
+    ) {
+        moveTo(x - DOT_RADIUS, y)
+        arcTo(DOT_RADIUS, DOT_RADIUS, 0f, isMoreThanHalf = true, isPositiveArc = true, x1 = x + DOT_RADIUS, y1 = y)
+        arcTo(DOT_RADIUS, DOT_RADIUS, 0f, isMoreThanHalf = true, isPositiveArc = true, x1 = x - DOT_RADIUS, y1 = y)
+        close()
+    }
+
     /** [draw]'s figure filled and outlined, the outline's size exactly. */
     private fun filled(
         name: String,
@@ -211,6 +346,27 @@ object WyrIcons {
             path(fill = SolidColor(Color.Black), pathBuilder = draw)
             outline(draw)
         }
+
+    /**
+     * Shop: a bag with a handle, for the way to the shop (CLAUDE.md §8d, *The shop*), on the Account
+     * screen's top bar.
+     */
+    val Shop: ImageVector by lazy {
+        icon("Shop") {
+            outline {
+                // The bag, a little wider at the bottom, then its handle over the opening.
+                moveTo(5f, 8f)
+                horizontalLineTo(19f)
+                lineTo(20f, 20f)
+                horizontalLineTo(4f)
+                close()
+                moveTo(9f, 8f)
+                verticalLineTo(6.5f)
+                arcTo(3f, 3f, 0f, isMoreThanHalf = false, isPositiveArc = true, x1 = 15f, y1 = 6.5f)
+                verticalLineTo(8f)
+            }
+        }
+    }
 
     private fun icon(
         name: String,
@@ -245,6 +401,19 @@ object WyrIcons {
     /** A coin's rim, and the globe's outline, about the grid's middle. */
     private const val COIN_RADIUS = 9f
 
-    /** The ring stamped in a coin's face. */
-    private const val COIN_RING_RADIUS = 5f
+    /** How far the star stamped in a coin's face reaches, to its points and to the corners between. */
+    private const val STAR_OUTER = 4.8f
+    private const val STAR_INNER = 2f
+
+    /** The star's points and the corners between them. */
+    private const val STAR_CORNERS = 10
+
+    /** The thin stroke round the star, which rounds its points. */
+    private const val STAR_STROKE = 1f
+
+    /** Each of [More]'s dots, a little wider than a stroke. */
+    private const val DOT_RADIUS = 2f
+
+    /** Each of [Share]'s rings. */
+    private const val RING_RADIUS = 3f
 }

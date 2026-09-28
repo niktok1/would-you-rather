@@ -15,8 +15,8 @@ import io.ntole.wyr.core.vote.VoteRequest
  * Casts votes, recovering once from a session the server has stopped accepting (see
  * [withSessionRecovery]).
  *
- * The retry after a recovered session resends the same request, the caller's attempt id included:
- * it is still the same answer, now sent as the new guest.
+ * The retry after a recovered session resends the same request, the caller's attempt id and the
+ * answer's time included: it is still the same answer, now sent as the new guest.
  */
 public class DefaultVoteRepository(
     private val api: VoteApi,
@@ -26,8 +26,15 @@ public class DefaultVoteRepository(
         questionId: String,
         side: Side,
         attempt: AttemptId,
+        answerMillis: Long?,
     ): VoteOutcome {
-        val request = VoteRequest(questionId = questionId, choice = side.toWire(), attemptId = attempt.value)
+        val request =
+            VoteRequest(
+                questionId = questionId,
+                choice = side.toWire(),
+                attemptId = attempt.value,
+                answerMillis = answerMillis,
+            )
 
         return session.withSessionRecovery { api.cast(request) }.toDomain()
     }

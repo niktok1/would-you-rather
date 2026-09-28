@@ -63,9 +63,20 @@ kotlin {
             implementation(libs.compose.uiTooling)
             // BackHandler, which binds Android's back to the back stack (SystemBack.android.kt).
             implementation(libs.androidx.activity.compose)
+            // FileProvider, which hands a shared question's image to the app the player picks
+            // (ShareSheet.android.kt), and WindowCompat, which sets the system bars' icons to read on
+            // the theme's page (SystemBarsOn.android.kt).
+            implementation(libs.androidx.core.ktx)
             // api, not implementation: WyrApplication calls androidContext() when starting DI, so
             // this is part of what the Android entry point compiles against.
             api(libs.koin.android)
+            // Google Play Games Services v2, the no-click sign-in (CLAUDE.md §8a): Android's own, the §2
+            // platform exception, behind the PlayGames port of :core:domain.
+            implementation(libs.play.services.gamesV2)
+            // Firebase Cloud Messaging, a moderator's decision pushed (CLAUDE.md §8a): Android's own too,
+            // behind the DevicePush port, started from FirebaseOptions of the build's ids, with no
+            // google-services plugin.
+            implementation(libs.firebase.messaging)
         }
         commonMain.dependencies {
             // UI works in domain types only; :core:data is here purely to register DI bindings.
@@ -86,6 +97,11 @@ kotlin {
             api(libs.koin.core)
             implementation(libs.koin.compose)
             implementation(libs.koin.composeViewmodel)
+        }
+        webMain.dependencies {
+            // The page's own location, which the update screen's Reload loads again (UpdateButton.web.kt):
+            // the browser API wrappers :core:network's web storage already reads through.
+            implementation(libs.wrappers.browser)
         }
         commonTest.dependencies {
             implementation(libs.kotlin.test)

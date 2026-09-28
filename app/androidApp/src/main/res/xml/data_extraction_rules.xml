@@ -1,15 +1,19 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-    Android 12 and later (CLAUDE.md §8a): the session stays on this phone. Its refresh token must never
-    reach a second phone, from the cloud or by a device-to-device transfer, where the two would share
-    one token family and whichever refreshed less would be refused and become a fresh guest. A new
-    phone starts as a guest of its own. wyr.auth is AndroidTokenStorage's preferences file.
+    Android 12 and later (CLAUDE.md §8a): what the app keeps stays on this phone. The session's refresh
+    token must never reach a second phone, from the cloud or by a device-to-device transfer, where the
+    two would share one token family and whichever refreshed less would be refused and become a fresh
+    guest. A new phone starts as a guest of its own. wyr.auth is AndroidTokenStorage's preferences file;
+    wyr.device is the device's own (AndroidPush's), whether the notifications permission was asked for,
+    which a new phone asks again, at most once.
 -->
 <data-extraction-rules>
     <cloud-backup>
         <exclude domain="sharedpref" path="wyr.auth.xml" />
+        <exclude domain="sharedpref" path="wyr.device.xml" />
     </cloud-backup>
     <device-transfer>
         <exclude domain="sharedpref" path="wyr.auth.xml" />
+        <exclude domain="sharedpref" path="wyr.device.xml" />
     </device-transfer>
 </data-extraction-rules>

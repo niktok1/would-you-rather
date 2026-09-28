@@ -103,8 +103,9 @@ public object WyrApi {
          * [io.ntole.wyr.core.question.SubmitQuestionRequest], answered 201 with its
          * [io.ntole.wyr.core.question.SubmissionDto]. Requires the session of a registered player: a
          * guest's submission is refused with 403 [io.ntole.wyr.core.error.ErrorCode.ACCOUNT_REQUIRED]
-         * before anything it holds is checked. It earns nothing, and costs its author
-         * [Limits.SUBMISSION_COST] (CLAUDE.md §8c), which a rejection pays back. The question is stored
+         * before anything it holds is checked. It earns nothing, and costs its author the server's
+         * submission cost ([io.ntole.wyr.core.player.PlayerStatsDto.submissionCost], CLAUDE.md §8c),
+         * which a rejection pays back. The question is stored
          * pending and served to nobody until a moderator approves it, and then to every player, its
          * author included (CLAUDE.md §8d). A player may have at most
          * [Limits.MAX_PENDING_SUBMISSIONS] pending at once, and one more is refused with 409
@@ -246,6 +247,25 @@ public object WyrApi {
          * [MY_PUSH_TOKEN_REMOVALS].
          */
         public const val MY_PUSH_TOKENS: String = "/$VERSION/me/push-tokens"
+
+        /**
+         * GET: the shop (CLAUDE.md §8d, *The shop*), as a [io.ntole.wyr.core.shop.ShopDto]: every theme on
+         * sale with its price and whether the player the bearer token names owns it, and their points.
+         * Requires a session, since what is owned is the player's. Limited per player.
+         */
+        public const val SHOP: String = "/$VERSION/shop"
+
+        /**
+         * POST: buys an item of the shop's for the player the bearer token names, with a
+         * [io.ntole.wyr.core.shop.PurchaseRequest], answered with the shop as it stands after it, a
+         * [io.ntole.wyr.core.shop.ShopDto]. Requires a registered player's session: a guest is 403
+         * [io.ntole.wyr.core.error.ErrorCode.ACCOUNT_REQUIRED]. The item's price is taken from the
+         * player's points in the purchase's own transaction: fewer points is 409
+         * [io.ntole.wyr.core.error.ErrorCode.NOT_ENOUGH_POINTS], an item owned already 409
+         * [io.ntole.wyr.core.error.ErrorCode.ALREADY_OWNED], and an id the shop does not sell 404
+         * [io.ntole.wyr.core.error.ErrorCode.ITEM_NOT_FOUND]; each takes nothing. Limited per player.
+         */
+        public const val MY_PURCHASES: String = "/$VERSION/me/purchases"
 
         /**
          * POST: removes a push token the player the bearer token names registered, with a
@@ -390,6 +410,16 @@ public object WyrApi {
          * [ADMIN_AUTHOR_BLOCKS] refuses. An admin route: needs [Headers.ADMIN_TOKEN].
          */
         public const val ADMIN_AUTHOR_UNBLOCKS: String = "/$VERSION/admin/author-unblocks"
+
+        /**
+         * Deletes a player's account on their request, with an
+         * [io.ntole.wyr.core.player.DeleteAccountRequest] naming them by username or by account id,
+         * answered 204 (CLAUDE.md §8a, *Deleting an account*): the same deletion as [ME_DELETION], for a
+         * player who asked for it by email. Their sessions die with it, so their next request is 401. A
+         * name or an id no player has is 404 [io.ntole.wyr.core.error.ErrorCode.PLAYER_NOT_FOUND];
+         * neither or both named, or a malformed body, 400. An admin route: needs [Headers.ADMIN_TOKEN].
+         */
+        public const val ADMIN_ACCOUNT_DELETIONS: String = "/$VERSION/admin/account-deletions"
     }
 
     public object Headers {
@@ -518,11 +548,19 @@ public object WyrApi {
         public const val MAX_PENDING_SUBMISSIONS: Int = 20
 
         /**
-         * What submitting a question costs its author, in points, and so the fewest a player needs to
-         * submit (CLAUDE.md §8c): 1 until the game is released. The server charges this number; it is
-         * here rather than on the server so a client can say what submitting costs.
+         * What submitting a question costs its author, in points, when the server's `SUBMISSION_COST`
+         * is unset (CLAUDE.md §8c): 1, until the release sets 50. Only the default: the server charges
+         * its own setting and names it in [io.ntole.wyr.core.player.PlayerStatsDto.submissionCost], which
+         * defaults to this, and a client falls back to it until it has read that.
          */
         public const val SUBMISSION_COST: Int = 1
+
+        /**
+         * Longest id an item of the shop's can have ([io.ntole.wyr.core.shop.ShopThemeDto.id]): 1 to this
+         * many of `A`-`Z`, `0`-`9` and `_`, as a category's id. Here so the server's column and a client's
+         * check share one number.
+         */
+        public const val MAX_SHOP_ITEM_ID_LENGTH: Int = 32
 
         /**
          * Shortest username an account can have, once lower-cased

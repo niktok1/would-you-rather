@@ -2,6 +2,10 @@ package io.ntole.wyr.account
 
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.ImageComposeScene
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.graphics.toComposeImageBitmap
+import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
@@ -19,6 +23,7 @@ import io.ntole.wyr.core.network.environment.WyrEnvironment
 import io.ntole.wyr.descriptions
 import io.ntole.wyr.everyNode
 import io.ntole.wyr.everyText
+import io.ntole.wyr.language.GOOGLE_PLAY
 import io.ntole.wyr.language.Language
 import io.ntole.wyr.language.WyrStrings
 import io.ntole.wyr.language.fill
@@ -27,7 +32,10 @@ import io.ntole.wyr.nodes
 import io.ntole.wyr.sizeNeeded
 import io.ntole.wyr.tap
 import io.ntole.wyr.texts
+import io.ntole.wyr.theme.WyrDarkColors
+import io.ntole.wyr.theme.WyrLightColors
 import io.ntole.wyr.theme.WyrTheme
+import kotlin.math.abs
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -71,16 +79,34 @@ class AccountScreenDrawTest {
     fun `the screen shows who is playing and their points and every stat`() {
         Language.entries.forEach { language ->
             val strings = stringsOf(language).accountScreens
-            listOf(GUEST, REGISTERED).forEach { stats ->
+            listOf(GUEST, REGISTERED, PLAY_GAMES).forEach { stats ->
                 val state = AccountState(stats = stats, submissions = emptyList())
                 val shown = textsOf(state, language)
                 val expected =
-                    listOf(nameOf(stats, strings)) + statCells(stats, strings).flatMap { listOf(it.value, it.label) }
+                    listOf(nameOf(stats, stringsOf(language))) +
+                        statCells(stats, strings).flatMap { listOf(it.value, it.label) }
                 expected.forEach { text -> assertTrue(text in shown, "$language: \"$text\" is not in $shown") }
                 val said = descriptionsOf(state, language)
                 val points = stringsOf(language).points.fill(stats.totalPoints)
                 assertTrue(points in said, "$language: \"$points\" is not in $said")
             }
+        }
+    }
+
+    /**
+     * A player registered by Play Games alone is named on the card as they are in Play Games, and by the
+     * service while the device's Play Games gave no name.
+     */
+    @Test
+    fun `a Play Games player is named as in Play Games`() {
+        Language.entries.forEach { language ->
+            val named =
+                textsOf(AccountState(stats = PLAY_GAMES, playGamesName = "nikola", submissions = emptyList()), language)
+            assertTrue("nikola" in named, "$language: the Play Games name is not in $named")
+            val service = stringsOf(language).playGames.name.fill(GOOGLE_PLAY)
+            assertFalse(service in named, "$language: the service's name shows beside the player's")
+            val unnamed = textsOf(AccountState(stats = PLAY_GAMES, submissions = emptyList()), language)
+            assertTrue(service in unnamed, "$language: \"$service\" is not in $unnamed")
         }
     }
 
@@ -99,21 +125,20 @@ class AccountScreenDrawTest {
 
     /**
      * The user's order: who is playing and the stats, a guest's button to the Auth page, My
-     * questions, a guest told to register first, the table, the language menu, Log out, and the
-     * server line last.
+     * questions, a guest told to register first, the table, Log out, and the
+     * server line last. No language menu, for now (CLAUDE.md §8f).
      */
     @Test
     fun `the screen is in the user's order`() {
         Language.entries.forEach { language ->
             val strings = stringsOf(language).accountScreens
-            val menu = language.ownName
             val question = optionsOf(QUESTION, language)
 
             val guest = textsOf(AccountState(stats = GUEST, submissions = listOf(QUESTION)), language)
             assertInOrder(
                 guest,
                 listOf(strings.guest, strings.questionsAnswered, strings.openAuth, strings.myQuestions) +
-                    listOf(strings.registerToSubmit, strings.question, question, strings.total, menu) +
+                    listOf(strings.registerToSubmit, strings.question, question, strings.total) +
                     listOf(serverLine(DEV, strings)),
                 "$language, a guest",
             )
@@ -121,11 +146,19 @@ class AccountScreenDrawTest {
             val registered = textsOf(AccountState(stats = REGISTERED, submissions = listOf(QUESTION)), language)
             assertInOrder(
                 registered,
-                listOf(nameOf(REGISTERED, strings), strings.questionsAnswered, strings.myQuestions, question) +
-                    listOf(menu, strings.logOut, serverLine(DEV, strings)),
+                listOf(
+                    nameOf(REGISTERED, stringsOf(language)),
+                    strings.questionsAnswered,
+                    strings.myQuestions,
+                    question,
+                ) +
+                    listOf(strings.logOut, serverLine(DEV, strings)),
                 "$language, a registered player",
             )
             assertFalse(strings.registerToSubmit in registered, "$language: a registered player submits")
+            Language.entries.forEach { other ->
+                assertFalse(other.ownName in guest + registered, "$language: no language menu, for now")
+            }
         }
     }
 
@@ -153,9 +186,9 @@ class AccountScreenDrawTest {
 
     /**
      * With no question listed yet, every state needs no scrolling: the card of the player's stats with
-     * a guest's button, My questions' heading and its table, the language menu, Log out and the server
-     * line all show at an iPhone SE's height, in every language. A list scrolls, under New question
-     * (below).
+     * a guest's button, My questions' heading and its table, the Statistics switch, Log out and the
+     * server line all show at an iPhone SE's height, in every language. A list scrolls, under New
+     * question (below).
      *
      * Measured at the width drawn above, not 375, since CI's Linux fonts wrap wider than a phone's
      * (as `PlayScreenDrawTest` explains), and for DEV, whose server line is the longest.
@@ -166,7 +199,7 @@ class AccountScreenDrawTest {
             (GUEST_STATES + NOT_A_GUEST).filter { it.submissions.isNullOrEmpty() }.forEach { state ->
                 val (_, height) =
                     sizeNeeded(WIDTH, SHORT_PHONE_HEIGHT) {
-                        WyrTheme { WyrStrings(language) { Screen(state, language) } }
+                        WyrTheme { WyrStrings(language) { Screen(state) } }
                     }
                 assertTrue(height <= SHORT_PHONE_HEIGHT, "$language: $state needs $height of $SHORT_PHONE_HEIGHT")
             }
@@ -174,17 +207,17 @@ class AccountScreenDrawTest {
     }
 
     /**
-     * However long the list, the player's stats and My questions' heading with New question show at an
-     * iPhone SE's height before any scrolling, in every language.
+     * However long the list, the player's stats and My questions' heading with its plus, New question,
+     * show at an iPhone SE's height before any scrolling, in every language, for a registered player.
      */
     @Test
     fun `New question shows before any scrolling`() {
         Language.entries.forEach { language ->
             val newQuestion = stringsOf(language).accountScreens.newQuestion
-            (GUEST_STATES + NOT_A_GUEST).filter { it.stats != null }.forEach { state ->
+            NOT_A_GUEST.filter { it.stats != null }.forEach { state ->
                 val scene = scene(state, language)
                 try {
-                    val button = scene.nodes().single { newQuestion in it.texts }
+                    val button = scene.nodes().single { newQuestion in it.descriptions }
                     val bottom = button.boundsInRoot.bottom
                     assertTrue(bottom <= SHORT_PHONE_HEIGHT, "$language: $state ends New question at $bottom")
                 } finally {
@@ -216,9 +249,12 @@ class AccountScreenDrawTest {
         }
     }
 
-    /** A registered player logs out with one button, and a guest, who has nothing to log out of, has none. */
+    /**
+     * A player with a username logs out with one button; a guest, who has nothing to log out of, has
+     * none, nor has a player registered by Play Games alone, whom a logout would only make a guest.
+     */
     @Test
-    fun `a registered player has Log out and a guest none`() {
+    fun `a player with a username has Log out and a guest and a Play Games player none`() {
         Language.entries.forEach { language ->
             val logOut = stringsOf(language).accountScreens.logOut
             val actions = Recorder()
@@ -230,6 +266,227 @@ class AccountScreenDrawTest {
             }
             assertEquals(listOf("log out"), actions.calls, "$language")
             GUEST_STATES.forEach { state -> assertFalse(logOut in textsOf(state, language), "$language: $state") }
+            NOT_A_GUEST.filter { it.stats?.username == null }.forEach { state ->
+                assertFalse(logOut in textsOf(state, language), "$language: $state")
+            }
+        }
+    }
+
+    /**
+     * A player registered by Play Games alone is named for it where a guest is Гост, has no button to
+     * register or log in and no way to add a username, which is only for iOS and the web, neither
+     * launched, and no Log out, but may ask a question (CLAUDE.md §8a, *Play Games sign-in*; §8d, *The
+     * Account screen*).
+     */
+    @Test
+    fun `a player registered by Play Games alone is named for it with no way to the Auth page`() {
+        Language.entries.forEach { language ->
+            val all = stringsOf(language)
+            val strings = all.accountScreens
+            val state = AccountState(stats = PLAY_GAMES, submissions = emptyList())
+            val scene = scene(state, language)
+            try {
+                val shown = scene.everyText()
+                assertTrue(all.playGames.name.fill(GOOGLE_PLAY) in shown, "$language: $shown")
+                assertFalse(strings.guest in shown, "$language: not a guest")
+                assertFalse(strings.openAuth in shown, "$language: no button to register or log in")
+                assertFalse(strings.logOut in shown, "$language: no Log out")
+                assertTrue(strings.firstQuestion in shown, "$language: a question to ask")
+                assertFalse(strings.registerToSubmit in shown, "$language: registered already")
+                val taps = scene.everyNode().count { SemanticsActions.OnClick in it.config }
+                // The plus, the first question and the points, to the shop, and nothing else.
+                assertEquals(3, taps, "$language: ${scene.everyText()}")
+            } finally {
+                scene.close()
+            }
+            // Once there is a username, the card names it.
+            val named =
+                textsOf(AccountState(stats = PLAY_GAMES.copy(username = "bob_1"), submissions = emptyList()), language)
+            assertTrue("bob_1" in named, "$language: $named")
+        }
+    }
+
+    /**
+     * A decision the player had not seen has a dot on its row, which a screen reader hears as a word
+     * with the row, in every theme and language; the rest have none (CLAUDE.md §8d, *Submitting*).
+     */
+    @Test
+    fun `a decision not seen is marked on its row and the rest are not`() {
+        Language.entries.forEach { language ->
+            val word = stringsOf(language).notice.newMark
+            val state = AccountState(stats = REGISTERED, submissions = EVERY_STATUS)
+            listOf(false, true).forEach { dark ->
+                val scene = scene(state, language, dark = dark, newDecisions = setOf("q2", "q4"))
+                try {
+                    val marked = scene.nodes().filter { word in it.descriptions }
+                    assertEquals(2, marked.size, "$language")
+                    val options = marked.map { row -> row.texts.first() }
+                    assertEquals(
+                        listOf(optionsOf(EVERY_STATUS[1], language), optionsOf(EVERY_STATUS[3], language)),
+                        options,
+                    )
+                } finally {
+                    scene.close()
+                }
+            }
+            assertFalse(word in descriptionsOf(state, language), "$language: nothing new, nothing marked")
+        }
+    }
+
+    /** Deleting the account is on the About screen now: the Account screen offers it in no state. */
+    @Test
+    fun `the Account screen offers no deletion`() {
+        Language.entries.forEach { language ->
+            val delete = stringsOf(language).accountScreens.deleteAccount.button
+            (GUEST_STATES + NOT_A_GUEST).forEach { state ->
+                assertFalse(delete in textsOf(state, language), "$language: $state")
+            }
+        }
+    }
+
+    /**
+     * Anyone read, a guest or a registered player, by a username or by Play Games, is offered a quiet
+     * Delete account, which asks in one line first: Cancel deletes nothing, and Delete deletes
+     * (CLAUDE.md §8a).
+     */
+    @Test
+    fun `Delete account asks first and then deletes for a guest and a registered player alike`() {
+        Language.entries.forEach { language ->
+            val strings = stringsOf(language)
+            val delete = strings.accountScreens.deleteAccount
+            listOf(GUEST, REGISTERED, PLAY_GAMES).forEach { stats ->
+                val actions = Recorder()
+                val scene = deletionScene(AccountState(stats = stats, submissions = emptyList()), language, actions)
+                try {
+                    assertFalse(delete.warning in scene.texts(), "$language: asked before it is tapped")
+
+                    scene.tap(delete.button)
+                    assertTrue(delete.warning in scene.texts(), "$language: ${scene.texts()}")
+                    scene.tap(strings.cancel)
+                    assertFalse(delete.warning in scene.texts(), "$language: the dialog is gone")
+                    assertEquals(emptyList(), actions.calls, "$language: Cancel deletes nothing")
+
+                    scene.tap(delete.button)
+                    scene.tap(delete.confirm)
+                } finally {
+                    scene.close()
+                }
+                assertEquals(listOf("delete account"), actions.calls, "$language")
+            }
+        }
+    }
+
+    /**
+     * The dialog Delete account asks in is the theme's (CLAUDE.md §5b), never Material's own: the
+     * surface behind its line, and its line in the primary text colour, in both themes.
+     */
+    @Test
+    fun `the deletion's dialog is drawn in the theme's colours`() {
+        listOf(WyrLightColors, WyrDarkColors).forEach { colors ->
+            val delete = stringsOf(Language.DEFAULT).accountScreens.deleteAccount
+            val state = AccountState(stats = GUEST, submissions = emptyList())
+            val scene = deletionScene(state, Language.DEFAULT, dark = colors.isDark)
+            try {
+                scene.tap(delete.button)
+                assertDialogInThemeColours(scene, delete.warning, colors)
+            } finally {
+                scene.close()
+            }
+        }
+    }
+
+    /**
+     * A dialog showing [line] is drawn on the theme's surface, its line in the primary text colour: inside
+     * its padding just before the line starts, the surface, and the line's most inked pixel, the one
+     * farthest from the surface, the primary text's.
+     */
+    private fun assertDialogInThemeColours(
+        scene: ImageComposeScene,
+        line: String,
+        colors: io.ntole.wyr.theme.WyrColors,
+    ) {
+        val bounds = scene.nodes().single { line in it.texts }.boundsInRoot
+        // The dialog fades in: draw it frame by frame until it has.
+        (1..FRAMES_TO_SHOW).forEach { frame -> scene.render(frame * FRAME) }
+        val pixels = scene.render(FRAMES_TO_SHOW * FRAME).toComposeImageBitmap().toPixelMap()
+
+        val behind = pixels[bounds.left.toInt() - DIALOG_INSET, bounds.center.y.toInt()]
+        assertEquals(colors.surface.toArgb(), behind.toArgb(), "dark: ${colors.isDark}")
+        val ink =
+            (bounds.top.toInt() until bounds.bottom.toInt())
+                .flatMap { y -> (bounds.left.toInt() until bounds.right.toInt()).map { x -> pixels[x, y] } }
+                .maxBy { distance(it, colors.surface) }
+        assertTrue(
+            distance(ink, colors.primaryText) < distance(ink, colors.orPillText),
+            "dark: ${colors.isDark}: the line is drawn in $ink",
+        )
+    }
+
+    /** How far apart two colours are, channel by channel. */
+    private fun distance(
+        one: Color,
+        other: Color,
+    ): Float = abs(one.red - other.red) + abs(one.green - other.green) + abs(one.blue - other.blue)
+
+    /** A deletion that failed says so, over the row, in the screen's words; offline as offline. */
+    @Test
+    fun `a deletion that failed says so`() {
+        Language.entries.forEach { language ->
+            val strings = stringsOf(language).accountScreens
+            val failed = AccountFailure(AccountAction.DELETE, DomainError.NETWORK)
+            val scene =
+                deletionScene(AccountState(stats = GUEST, submissions = emptyList(), failure = failed), language)
+            val shown =
+                try {
+                    scene.everyText()
+                } finally {
+                    scene.close()
+                }
+
+            assertInOrder(shown, listOf(strings.offline, strings.deleteAccount.button), "$language")
+        }
+    }
+
+    /**
+     * While an action runs a bar under the card says so, and not once its failure shows: the read
+     * after it runs on a moment, and its row goes to the failure, so the screen still fits.
+     */
+    @Test
+    fun `the bar shows while an action runs and not once it failed`() {
+        val failed = AccountFailure(AccountAction.DELETE, DomainError.NETWORK)
+        val deleting = AccountState(stats = GUEST, submissions = emptyList(), running = AccountAction.DELETE)
+        listOf(
+            deleting to true,
+            deleting.copy(failure = failed) to false,
+            deleting.copy(running = null, failure = failed) to false,
+        ).forEach { (state, shown) ->
+            val scene = scene(state, Language.DEFAULT)
+            try {
+                val bars = scene.everyNode().filter { SemanticsProperties.ProgressBarRangeInfo in it.config }
+                assertEquals(shown, bars.isNotEmpty(), "$state")
+            } finally {
+                scene.close()
+            }
+        }
+    }
+
+    /** A player who could not be read again is not offered a deletion, which would only fail too. */
+    @Test
+    fun `no deletion is offered while the player could not be read again or at all`() {
+        val delete = stringsOf(Language.DEFAULT).accountScreens.deleteAccount.button
+        val failed = AccountFailure(AccountAction.LOAD, DomainError.NETWORK)
+        listOf(
+            AccountState(),
+            AccountState(failure = failed),
+            AccountState(stats = GUEST, submissions = emptyList(), failure = failed),
+            AccountState(stats = REGISTERED, submissions = emptyList(), failure = failed),
+        ).forEach { state ->
+            val scene = deletionScene(state, Language.DEFAULT)
+            try {
+                assertFalse(delete in scene.everyText(), "$state")
+            } finally {
+                scene.close()
+            }
         }
     }
 
@@ -258,6 +515,23 @@ class AccountScreenDrawTest {
             val shown = textsOf(AccountState(stats = REGISTERED, submissions = EVERY_STATUS), language)
             val expected = EVERY_STATUS.flatMap { listOf(optionsOf(it, language), statusText(it, strings)) }
             assertEquals(expected, shown.filter { it in expected.toSet() }, "$language")
+        }
+    }
+
+    /** A question's options as the Play screen shows them: made Latin in Serbian Latin, as written otherwise. */
+    @Test
+    fun `My questions shows a question's options in Latin in Serbian Latin`() {
+        val cyrillic = QUESTION.copy(optionA = "Јести пљескавицу", optionB = "Пити бозу")
+        Language.entries.forEach { language ->
+            val or = stringsOf(language).accountScreens.or
+            val shown = textsOf(AccountState(stats = REGISTERED, submissions = listOf(cyrillic)), language)
+            val expected =
+                if (language == Language.SERBIAN_LATIN) {
+                    "Jesti pljeskavicu $or Piti bozu"
+                } else {
+                    "${cyrillic.optionA} $or ${cyrillic.optionB}"
+                }
+            assertTrue(expected in shown, "$language: $shown")
         }
     }
 
@@ -298,6 +572,7 @@ class AccountScreenDrawTest {
     fun `an empty table invites the first question and New question opens the form`() {
         Language.entries.forEach { language ->
             val strings = stringsOf(language).accountScreens
+            // The plus is named New question for a screen reader; the first question is a text.
             listOf(strings.newQuestion, strings.firstQuestion).forEach { button ->
                 var opened = 0
                 val none = AccountState(stats = REGISTERED, submissions = emptyList())
@@ -326,8 +601,7 @@ class AccountScreenDrawTest {
                 assertEquals(1, shown.count { it == strings.registerToSubmit }, "$language: in the empty table: $shown")
                 assertTrue(strings.question in shown, "$language: the table stays, empty")
                 assertFalse(strings.firstQuestion in shown, "$language: no way to the form in the table")
-                val newQuestion = scene.nodes().single { strings.newQuestion in it.texts }
-                assertTrue(newQuestion.config.contains(SemanticsProperties.Disabled), "$language: New question is off")
+                assertFalse(strings.newQuestion in scene.descriptions(), "$language: no plus to the form")
             } finally {
                 scene.close()
             }
@@ -422,10 +696,6 @@ class AccountScreenDrawTest {
      */
     @Test
     fun `on a wide screen the content is a column down the middle`() {
-        // Nothing spans the column alone: the language menu shares its row with the Statistics switch,
-        // and the two, from the menu's left to the switch's right, show the column is as wide as it
-        // should be.
-        val strings = stringsOf(Language.DEFAULT)
         listOf(
             AccountState(stats = GUEST, submissions = listOf(QUESTION)),
             AccountState(stats = REGISTERED, submissions = listOf(QUESTION)),
@@ -433,11 +703,6 @@ class AccountScreenDrawTest {
             val scene = scene(state, Language.DEFAULT, width = WINDOW_WIDTH, height = WINDOW_HEIGHT)
             try {
                 scene.assertInCentredColumn(WINDOW_WIDTH, CONTENT_MAX_WIDTH, "$state", spanned = false)
-                val menu = scene.nodes().single { node -> node.descriptions.any { it.startsWith(strings.language) } }
-                val switch = scene.nodes().single { strings.accountScreens.statistics in it.texts }
-                val left = (WINDOW_WIDTH - CONTENT_MAX_WIDTH) / 2f
-                assertEquals(left, menu.boundsInRoot.left, 0.5f, "$state: the menu starts the column")
-                assertEquals(left + CONTENT_MAX_WIDTH, switch.boundsInRoot.right, 0.5f, "$state: the switch ends it")
             } finally {
                 scene.close()
             }
@@ -445,64 +710,59 @@ class AccountScreenDrawTest {
     }
 
     /**
-     * The Statistics switch (CLAUDE.md §8g): on or off as the player left it, a switch to a screen
-     * reader, its word and all one control, and a tap on it turns it the other way.
+     * Log out, quiet, is under everything the player sees but the server line, for a player with a
+     * username alone; the Statistics switch is on the About screen now, in no state here.
      */
     @Test
-    fun `the Statistics switch shows the player's choice and a tap turns it the other way`() {
+    fun `Log out is for a player with a username and the switch is not here`() {
         Language.entries.forEach { language ->
-            val word = stringsOf(language).accountScreens.statistics
-            listOf(true, false).forEach { on ->
-                val changes = mutableListOf<Boolean>()
-                val state = AccountState(stats = REGISTERED, submissions = emptyList())
-                val scene = scene(state, language, statisticsOn = on, onStatisticsChange = { changes += it })
-                try {
-                    val switch = scene.nodes().single { word in it.texts }
-                    val shown = switch.config.getOrNull(SemanticsProperties.ToggleableState)
-                    assertEquals(if (on) ToggleableState.On else ToggleableState.Off, shown, "$language")
-                    assertEquals(Role.Switch, switch.config.getOrNull(SemanticsProperties.Role), "$language")
-
-                    scene.tap(word)
-
-                    assertEquals(listOf(!on), changes, "$language")
-                } finally {
-                    scene.close()
-                }
+            val strings = stringsOf(language).accountScreens
+            (GUEST_STATES + NOT_A_GUEST).forEach { state ->
+                val shown = textsOf(state, language)
+                assertFalse(strings.statistics in shown, "$language: $state shows the switch")
+                assertEquals(state.stats?.username != null, strings.logOut in shown, "$language: $state")
             }
         }
     }
 
+    /** The coin and the number on the card open the shop (CLAUDE.md §8d, *The shop*). */
+    @Test
+    fun `the points on the card open the shop`() {
+        Language.entries.forEach { language ->
+            var opened = 0
+            val state = AccountState(stats = REGISTERED, submissions = emptyList())
+            val scene = scene(state, language, onOpenShop = { opened++ })
+            try {
+                scene.tap(stringsOf(language).points.fill(REGISTERED.totalPoints))
+            } finally {
+                scene.close()
+            }
+            assertEquals(1, opened, "$language")
+        }
+    }
+
     /**
-     * In every state and language the language menu and the Statistics switch share one row, neither
-     * cut short, and a registered player's Log out is under them. Measured 400 wide, as the heights are.
+     * A question's row shows its options on two lines at most, the longest cut short there, and a tap on
+     * the row opens that question by its id.
      */
     @Test
-    fun `the language menu and the switch share a row and Log out is under them`() {
+    fun `a question's row takes two lines at most and opens the question`() {
         Language.entries.forEach { language ->
-            val strings = stringsOf(language)
-            (GUEST_STATES + NOT_A_GUEST).forEach { state ->
-                val scene = scene(state, language)
-                try {
-                    val menu =
-                        scene.nodes().single { node ->
-                            node.descriptions.any { it.startsWith(strings.language) }
-                        }
-                    val switch = scene.nodes().single { strings.accountScreens.statistics in it.texts }
-                    assertEquals(menu.boundsInRoot.center.y, switch.boundsInRoot.center.y, 0.5f, "$language: $state")
-                    listOf(language.ownName, strings.accountScreens.statistics).forEach { text ->
-                        assertFalse(scene.isCutShort(text), "$language: $state cuts \"$text\" short")
-                    }
-                    val logOut = scene.nodes().singleOrNull { strings.accountScreens.logOut in it.texts }
-                    if (state.stats?.username != null) {
-                        assertTrue(
-                            assertNotNull(logOut).boundsInRoot.top >= switch.boundsInRoot.bottom,
-                            "$language: $state",
-                        )
-                    }
-                } finally {
-                    scene.close()
-                }
+            val opened = mutableListOf<String>()
+            val state = AccountState(stats = REGISTERED, submissions = EVERY_STATUS)
+            val scene = scene(state, language, onOpenQuestion = { opened += it })
+            try {
+                val longest = optionsOf(EVERY_STATUS[2], language)
+                val node = scene.everyNode().single { longest in it.texts }
+                val layouts = mutableListOf<TextLayoutResult>()
+                assertNotNull(node.config.getOrNull(SemanticsActions.GetTextLayoutResult)?.action).invoke(layouts)
+                assertTrue(layouts.single().lineCount <= 2, "$language: ${layouts.single().lineCount} lines")
+                assertTrue(scene.isCutShort(longest), "$language: the longest options are cut short")
+                scene.tap(optionsOf(EVERY_STATUS[1], language))
+            } finally {
+                scene.close()
             }
+            assertEquals(listOf("q2"), opened, "$language")
         }
     }
 
@@ -523,49 +783,60 @@ class AccountScreenDrawTest {
         onNewQuestion: () -> Unit = {},
         actions: AccountActions = Recorder(),
         dark: Boolean = false,
+        onOpenQuestion: (String) -> Unit = {},
         width: Int = WIDTH,
         height: Int = HEIGHT,
-        statisticsOn: Boolean = true,
-        onStatisticsChange: (Boolean) -> Unit = {},
+        newDecisions: Set<String> = emptySet(),
+        onOpenShop: () -> Unit = {},
     ): ImageComposeScene =
         ImageComposeScene(width = width, height = height, density = Density(1f)) {
             WyrTheme(darkTheme = dark) {
                 WyrStrings(language) {
                     Screen(
                         state,
-                        language,
                         environment,
                         onOpenAuth,
                         onNewQuestion,
                         actions,
-                        statisticsOn,
-                        onStatisticsChange,
+                        newDecisions,
+                        onOpenQuestion,
+                        onOpenShop,
                     )
                 }
             }
         }.also { it.render() }
 
+    /** [DeleteAccount] alone, as the About screen shows it, for [state]. */
+    private fun deletionScene(
+        state: AccountState,
+        language: Language,
+        actions: AccountActions = Recorder(),
+        dark: Boolean = false,
+    ): ImageComposeScene =
+        ImageComposeScene(width = WIDTH, height = HEIGHT, density = Density(1f)) {
+            WyrTheme(darkTheme = dark) { WyrStrings(language) { DeleteAccount(state = state, actions = actions) } }
+        }.also { it.render() }
+
     @Composable
     private fun Screen(
         state: AccountState,
-        language: Language,
         environment: WyrEnvironment = DEV,
         onOpenAuth: () -> Unit = {},
         onNewQuestion: () -> Unit = {},
         actions: AccountActions = Recorder(),
-        statisticsOn: Boolean = true,
-        onStatisticsChange: (Boolean) -> Unit = {},
+        newDecisions: Set<String> = emptySet(),
+        onOpenQuestion: (String) -> Unit = {},
+        onOpenShop: () -> Unit = {},
     ) {
         AccountScreen(
             state = state,
             actions = actions,
             environment = environment,
-            language = language,
-            onSelectLanguage = {},
-            statisticsOn = statisticsOn,
-            onStatisticsChange = onStatisticsChange,
             onOpenAuth = onOpenAuth,
             onNewQuestion = onNewQuestion,
+            onOpenQuestion = onOpenQuestion,
+            newDecisions = newDecisions,
+            onOpenShop = onOpenShop,
         )
     }
 
@@ -602,6 +873,10 @@ class AccountScreenDrawTest {
         override fun logOut() {
             calls += "log out"
         }
+
+        override fun deleteAccount() {
+            calls += "delete account"
+        }
     }
 
     private companion object {
@@ -619,9 +894,19 @@ class AccountScreenDrawTest {
         const val SHORT_PHONE_WIDTH = 375
         const val SHORT_PHONE_HEIGHT = 599
 
+        /** How far before a dialog's line its background is read, well inside its padding of 24. */
+        const val DIALOG_INSET = 8
+
+        /** A frame at 60 a second, in nanoseconds, and a second of them, which a dialog's fade takes less than. */
+        const val FRAME = 16_666_667L
+        const val FRAMES_TO_SHOW = 60
+
         val DEV = WyrEnvironment.DEV
 
         val GUEST = PlayerStats(totalPoints = 12, questionsAnswered = 10)
+
+        /** Registered by Play Games alone: no username, and numbers long enough to widen every stat. */
+        val PLAY_GAMES = PlayerStats(totalPoints = 123_456, questionsAnswered = 12_345, playGamesLinked = true)
 
         /** The longest name there can be, and numbers long enough to widen every stat. */
         val REGISTERED =
@@ -706,6 +991,19 @@ class AccountScreenDrawTest {
                     submissions = emptyList(),
                     failure = AccountFailure(AccountAction.LOAD, DomainError.NETWORK),
                 ),
+                AccountState(
+                    stats = GUEST,
+                    submissions = emptyList(),
+                    failure = AccountFailure(AccountAction.DELETE, DomainError.NETWORK),
+                ),
+                AccountState(stats = GUEST, submissions = emptyList(), running = AccountAction.DELETE),
+                // The deletion failed, and the read after it runs.
+                AccountState(
+                    stats = GUEST,
+                    submissions = emptyList(),
+                    failure = AccountFailure(AccountAction.DELETE, DomainError.NETWORK),
+                    running = AccountAction.DELETE,
+                ),
             )
 
         /** Every state with no button to the Auth page: no player read yet, and a registered player. */
@@ -716,6 +1014,38 @@ class AccountScreenDrawTest {
                 AccountState(failure = AccountFailure(AccountAction.LOAD, DomainError.NETWORK)),
                 AccountState(stats = REGISTERED),
                 AccountState(stats = REGISTERED, submissions = emptyList()),
+                AccountState(stats = PLAY_GAMES, submissions = emptyList()),
+                AccountState(stats = PLAY_GAMES, submissions = EVERY_STATUS),
+                // Every failure a Play Games player's screen can show.
+                AccountState(
+                    stats = PLAY_GAMES,
+                    submissions = emptyList(),
+                    failure = AccountFailure(AccountAction.LOAD, DomainError.NETWORK),
+                ),
+                // The read of the player failed, and the read of the list after it runs.
+                AccountState(
+                    stats = PLAY_GAMES,
+                    submissions = emptyList(),
+                    failure = AccountFailure(AccountAction.LOAD, DomainError.NETWORK),
+                    running = AccountAction.LOAD,
+                ),
+                AccountState(
+                    stats = PLAY_GAMES,
+                    submissions = emptyList(),
+                    failure = AccountFailure(AccountAction.LOG_OUT, DomainError.NETWORK),
+                ),
+                AccountState(
+                    stats = PLAY_GAMES,
+                    submissions = emptyList(),
+                    failure = AccountFailure(AccountAction.DELETE, DomainError.NETWORK),
+                ),
+                // The deletion failed, and the read after it runs.
+                AccountState(
+                    stats = PLAY_GAMES,
+                    submissions = emptyList(),
+                    failure = AccountFailure(AccountAction.DELETE, DomainError.NETWORK),
+                    running = AccountAction.DELETE,
+                ),
                 AccountState(stats = REGISTERED, submissions = EVERY_STATUS),
                 AccountState(stats = REGISTERED, submissions = emptyList(), running = AccountAction.LOAD),
                 AccountState(stats = REGISTERED, submissions = emptyList(), running = AccountAction.LOG_OUT),
@@ -733,6 +1063,11 @@ class AccountScreenDrawTest {
                     stats = REGISTERED,
                     failure = AccountFailure(AccountAction.LOAD, DomainError.NETWORK),
                     listFailure = AccountFailure(AccountAction.LOAD, DomainError.NETWORK),
+                ),
+                AccountState(
+                    stats = REGISTERED,
+                    submissions = emptyList(),
+                    failure = AccountFailure(AccountAction.DELETE, DomainError.SERVER),
                 ),
             )
     }

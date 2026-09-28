@@ -33,6 +33,21 @@ public object AnalyticsEvent {
     /** A like, a dislike or neither, [AnalyticsProperty.REACTION], was set on a question. */
     public const val REACTION_SET: String = "reaction_set"
 
+    /** A question was reported to the moderator, for [AnalyticsProperty.REASON], from the Play screen's menu. */
+    public const val QUESTION_REPORTED: String = "question_reported"
+
+    /** A question was hidden from the player, from the Play screen's menu. */
+    public const val QUESTION_HIDDEN: String = "question_hidden"
+
+    /** A question's author was hidden from the player, from the Play screen's menu. */
+    public const val AUTHOR_HIDDEN: String = "author_hidden"
+
+    /**
+     * A question was shared, [AnalyticsProperty.WITH_RESULTS] or not, as [AnalyticsProperty.OUTCOME] says:
+     * from the Play screen or the Question details screen, which `$screen_name` tells apart.
+     */
+    public const val QUESTION_SHARED: String = "question_shared"
+
     /** Categories were played from the Categories screen, none being every category. */
     public const val CATEGORIES_CHANGED: String = "categories_changed"
 
@@ -48,8 +63,21 @@ public object AnalyticsEvent {
     /** A login worked. */
     public const val LOGIN_COMPLETED: String = "login_completed"
 
+    /**
+     * The player signed in with Google Play Games Services (CLAUDE.md §8a, *Play Games sign-in*):
+     * [AnalyticsProperty.AUTOMATIC] whether at launch with no tap, and [AnalyticsProperty.SWITCHED]
+     * whether it made this device another player's.
+     */
+    public const val PLAY_GAMES_SIGNED_IN: String = "play_games_signed_in"
+
+    /** The player tapped a notification of a moderator's decision, which opens the Account screen. */
+    public const val NOTIFICATION_OPENED: String = "notification_opened"
+
     /** The player logged out, and plays on as a fresh guest. */
     public const val LOGOUT: String = "logout"
+
+    /** The player deleted their account, and plays on as a fresh guest. */
+    public const val ACCOUNT_DELETED: String = "account_deleted"
 
     /** The Submit screen's form was shown. */
     public const val SUBMIT_OPENED: String = "submit_opened"
@@ -65,4 +93,13 @@ public object AnalyticsEvent {
 
     /** The player picked a language to play in, [AnalyticsProperty.LANGUAGE]. */
     public const val LANGUAGE_CHANGED: String = "language_changed"
+
+    /** The player opened the shop, once a visit (CLAUDE.md §8d, *The shop*). */
+    public const val SHOP_OPENED: String = "shop_opened"
+
+    /** A theme was bought, [AnalyticsProperty.THEME] for [AnalyticsProperty.PRICE] points. */
+    public const val THEME_BOUGHT: String = "theme_bought"
+
+    /** The player put on a theme they own, [AnalyticsProperty.THEME], the default's included. */
+    public const val THEME_APPLIED: String = "theme_applied"
 }

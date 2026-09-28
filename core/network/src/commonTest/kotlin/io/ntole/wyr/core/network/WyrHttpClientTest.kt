@@ -32,6 +32,73 @@ import kotlin.time.Duration.Companion.seconds
  * its code and status, and nothing else is disguised as one.
  */
 class WyrHttpClientTest {
+    /** Every request of the game's names its build, a refresh's included (CLAUDE.md §8b, *Minimum client version*). */
+    @Test
+    fun `every request names the build it comes from`() =
+        runTest {
+            val named = mutableListOf<Pair<String?, String?>>()
+            var calls = 0
+            val engine =
+                MockEngine { request ->
+                    named +=
+                        request.headers[WyrApi.Headers.CLIENT_PLATFORM] to
+                        request.headers[WyrApi.Headers.CLIENT_VERSION]
+                    calls++
+                    when {
+                        // The first call's access token has expired: the refresh goes out and the call again.
+                        calls == 1 -> respondErrorDto(HttpStatusCode.Unauthorized, ErrorCode.UNAUTHORIZED)
+
+                        request.url.encodedPath == WyrApi.Paths.AUTH_REFRESH -> respondSession(session("a"))
+
+                        else -> respondEmptyPage()
+                    }
+                }
+            val build = ClientBuild(WyrApi.ClientPlatform.ANDROID, 10203)
+
+            QuestionApi(WyrHttpClient.create(BASE_URL, storeHolding(session("a")), engine, build = build)).page()
+
+            assertEquals(List<Pair<String?, String?>>(3) { WyrApi.ClientPlatform.ANDROID to "10203" }, named)
+        }
+
+    /** The moderation app's client, and one whose build could not read its number, names none. */
+    @Test
+    fun `a client with no build names none`() =
+        runTest {
+            val engine =
+                MockEngine { request ->
+                    assertNull(request.headers[WyrApi.Headers.CLIENT_PLATFORM])
+                    assertNull(request.headers[WyrApi.Headers.CLIENT_VERSION])
+                    respondEmptyPage()
+                }
+
+            QuestionApi(WyrHttpClient.create(BASE_URL, storeHolding(session("a")), engine)).page()
+        }
+
+    @Test
+    fun `an answer that the build is too old raises the upgrade signal`() =
+        runTest {
+            val upgrade = UpgradeSignal()
+            val engine = MockEngine { respondErrorDto(HttpStatusCode.UpgradeRequired, ErrorCode.UPGRADE_REQUIRED) }
+            val api = QuestionApi(WyrHttpClient.create(BASE_URL, storeHolding(session("a")), engine, upgrade = upgrade))
+
+            val failure = assertFailsWith<ApiException> { api.page() }
+
+            assertEquals(ErrorCode.UPGRADE_REQUIRED, failure.code)
+            assertEquals(true, upgrade.required.value)
+        }
+
+    @Test
+    fun `no other failure raises the upgrade signal`() =
+        runTest {
+            val upgrade = UpgradeSignal()
+            val engine = MockEngine { respondErrorDto(HttpStatusCode.Conflict, ErrorCode.ALREADY_VOTED) }
+            val api = QuestionApi(WyrHttpClient.create(BASE_URL, storeHolding(session("a")), engine, upgrade = upgrade))
+
+            assertFailsWith<ApiException> { api.page() }
+
+            assertEquals(false, upgrade.required.value)
+        }
+
     @Test
     fun `an error response carries the server's code and status`() =
         runTest {

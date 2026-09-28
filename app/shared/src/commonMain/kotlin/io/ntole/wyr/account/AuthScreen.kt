@@ -14,7 +14,6 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -26,23 +25,29 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
+import io.ntole.wyr.about.SiteLink
+import io.ntole.wyr.about.SiteLinksLine
+import io.ntole.wyr.about.SitePage
 import io.ntole.wyr.analytics.tapped
 import io.ntole.wyr.core.domain.account.AccountRules
 import io.ntole.wyr.core.domain.error.DomainError
 import io.ntole.wyr.language.AccountStrings
+import io.ntole.wyr.language.GOOGLE_PLAY
 import io.ntole.wyr.language.LocalStrings
 import io.ntole.wyr.language.USERNAME_CHARACTERS
 import io.ntole.wyr.language.fill
 import io.ntole.wyr.points.PointsText
+import io.ntole.wyr.theme.PageSurface
 import io.ntole.wyr.theme.WyrThemeAccessors
 import io.ntole.wyr.theme.contentWidth
 
 /**
  * The Auth page (CLAUDE.md §8d, *The Account screen*), opened by a guest's one button on the Account
  * screen: Register, which keeps the guest's points, and a link that switches the same page to Log in,
- * with a link back ([AccountState.authMode]). A register or a login that worked raises
- * [AccountState.signedIn], on which the app goes back to the Account screen. Shown before any player
- * is read, a read that failed says so on top, with Try again.
+ * with a link back ([AccountState.authMode]); where Play Games is set up and the player is not linked
+ * to it, a button above them signs in with it ([AccountState.offersPlayGames]). A register, a login or
+ * a Play Games sign-in that worked raises [AccountState.signedIn], on which the app goes back to the
+ * Account screen. Shown before any player is read, a read that failed says so on top, with Try again.
  *
  * Plain on purpose, every colour, space and size from the theme (§5b), and every word from
  * [LocalStrings] (§8f). Each field names its autofill content type, so the platform's password manager
@@ -57,7 +62,7 @@ fun AuthScreen(
     val colors = WyrThemeAccessors.colors
     val dimens = WyrThemeAccessors.dimens
 
-    Surface(color = colors.pageBackground, modifier = modifier.fillMaxSize()) {
+    PageSurface(modifier = modifier.fillMaxSize()) {
         Column(
             modifier =
                 Modifier
@@ -68,6 +73,7 @@ fun AuthScreen(
             verticalArrangement = Arrangement.spacedBy(dimens.spaceSm),
         ) {
             ReadFailure(state, actions)
+            if (state.offersPlayGames) PlayGamesButton(state, actions)
             when (state.authMode) {
                 AuthMode.REGISTER -> RegisterForm(state, actions)
                 AuthMode.LOG_IN -> LogInForm(state, actions)
@@ -77,6 +83,28 @@ fun AuthScreen(
             }
         }
     }
+}
+
+/**
+ * Sign in with Google Play Games Services (CLAUDE.md §8a, *Play Games sign-in*), first on the page,
+ * the no-click way the forms are the fallback to; its failure under it.
+ */
+@Composable
+private fun PlayGamesButton(
+    state: AccountState,
+    actions: AccountActions,
+) {
+    OutlinedButton(
+        onClick = tapped("auth.play_games", onClick = actions::signInWithPlayGames),
+        enabled = !state.isBusy,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Text(
+            LocalStrings.current.playGames.signIn
+                .fill(GOOGLE_PLAY),
+        )
+    }
+    FailureOf(state, AccountAction.PLAY_GAMES)
 }
 
 @Composable
@@ -126,6 +154,7 @@ private fun RegisterForm(
     ) {
         Text(strings.register)
     }
+    TermsLine()
     TextButton(onClick = tapped("auth.to_log_in") { actions.setAuthMode(AuthMode.LOG_IN) }, enabled = !state.isBusy) {
         Text(strings.toLogIn)
     }
@@ -195,6 +224,23 @@ private fun LogInForm(
     ) {
         Text(strings.toRegister)
     }
+}
+
+/**
+ * The one short line under Register (CLAUDE.md §8d, *The Account screen*): registering accepts the
+ * terms and the privacy policy, each noun a link to its page on the site ([SiteLinksLine]).
+ */
+@Composable
+private fun TermsLine() {
+    val strings = LocalStrings.current.accountScreens.termsLine
+    SiteLinksLine(
+        line = strings.line,
+        links =
+            listOf(
+                SiteLink(strings.terms, SitePage.TERMS, "auth.terms"),
+                SiteLink(strings.privacyPolicy, SitePage.PRIVACY, "auth.privacy"),
+            ),
+    )
 }
 
 /**
