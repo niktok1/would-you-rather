@@ -83,6 +83,10 @@ data class WyrDimens(
     val themePreviewLargeHeight: Dp = 280.dp,
     val radiusPreview: Dp = 16.dp,
     val previewIconSize: Dp = 14.dp,
+    /** A tile of the shop's picker of the player's own themes, its preview's height, and the worn one's outline. */
+    val themeTileWidth: Dp = 108.dp,
+    val themeTileHeight: Dp = 150.dp,
+    val tileOutline: Dp = 3.dp,
 )
 
 val WyrDefaultDimens: WyrDimens = WyrDimens()
@@ -124,6 +128,7 @@ object WyrTypeScale {
     /** An answer on a theme's preview in the shop, and the numbers on its row (CLAUDE.md §8d, *The shop*). */
     val previewOption = 13.sp
     val previewOptionLarge = 18.sp
+    val previewOptionSmall = 11.sp
     val previewRow = 10.sp
 
     /** An id shown for the player to copy, the About screen's account id: fixed width, so it reads as a value. */

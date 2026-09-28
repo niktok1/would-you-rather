@@ -9,8 +9,10 @@ package io.ntole.wyr.language
 data class ShopStrings(
     /** The shop, as its heading and as the Account bar's shop icon is named for a screen reader. */
     val title: String,
-    /** The heading of the themes on sale. */
-    val themes: String,
+    /** The heading of the themes the player owns, the picker at the top. */
+    val yourThemes: String,
+    /** The heading of the themes still on sale to the player. */
+    val onSale: String,
     /** The game's own theme, free, which every player has. */
     val classic: String,
     val neonNight: String,
@@ -19,9 +21,7 @@ data class ShopStrings(
     val sunset: String,
     /** A theme's button while it is not the player's: *Купи ·*, then the coin and its price, `{0}`. */
     val buy: String,
-    /** A theme's button once it is the player's, and not worn. */
-    val apply: String,
-    /** A theme's button while it is worn: off, since there is nothing to do. */
+    /** Under the theme worn, in the picker. */
     val active: String,
     /** The question the dialog before a purchase asks, the theme's name, `{0}`, in it. */
     val confirmBuy: String,
@@ -43,14 +43,14 @@ data class ShopStrings(
     internal fun map(transform: (String) -> String): ShopStrings =
         ShopStrings(
             title = transform(title),
-            themes = transform(themes),
+            yourThemes = transform(yourThemes),
+            onSale = transform(onSale),
             classic = transform(classic),
             neonNight = transform(neonNight),
             ocean = transform(ocean),
             forest = transform(forest),
             sunset = transform(sunset),
             buy = transform(buy),
-            apply = transform(apply),
             active = transform(active),
             confirmBuy = transform(confirmBuy),
             registerToBuy = transform(registerToBuy),
@@ -67,14 +67,14 @@ data class ShopStrings(
 internal val SerbianCyrillicShopStrings: ShopStrings =
     ShopStrings(
         title = "Продавница",
-        themes = "Теме",
+        yourThemes = "Твоје теме",
+        onSale = "У понуди",
         classic = "Класична",
         neonNight = "Неонска ноћ",
         ocean = "Океан",
         forest = "Шума",
         sunset = "Залазак",
         buy = "Купи · {0}",
-        apply = "Примени",
         active = "Активна",
         confirmBuy = "Купи тему {0}?",
         registerToBuy = "Региструј се да купујеш у продавници.",
@@ -89,14 +89,14 @@ internal val SerbianCyrillicShopStrings: ShopStrings =
 internal val EnglishShopStrings: ShopStrings =
     ShopStrings(
         title = "Shop",
-        themes = "Themes",
+        yourThemes = "Your themes",
+        onSale = "On sale",
         classic = "Classic",
         neonNight = "Neon night",
         ocean = "Ocean",
         forest = "Forest",
         sunset = "Sunset",
         buy = "Buy · {0}",
-        apply = "Apply",
         active = "Active",
         confirmBuy = "Buy the {0} theme?",
         registerToBuy = "Register to buy in the shop.",

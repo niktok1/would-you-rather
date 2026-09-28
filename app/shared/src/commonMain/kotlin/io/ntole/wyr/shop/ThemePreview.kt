@@ -41,7 +41,7 @@ import io.ntole.wyr.theme.drawThemeArt
  * A small Play screen in [theme] (CLAUDE.md §8d, *The shop*), so a player sees what a theme is before
  * they buy it: its page and its art, its two cards with a question on them, and the row between them,
  * the points and the thumbs. Drawn in the theme's own tokens, whatever the game wears, [height] high,
- * [large] in the dialog before a purchase. A screen reader hears it as one picture, named for the theme.
+ * [large] in the dialog before a purchase, [compact] on a tile of the player's own themes. A screen reader hears it as one picture, named for the theme.
  */
 @Composable
 fun ThemePreview(
@@ -49,6 +49,7 @@ fun ThemePreview(
     height: Dp,
     modifier: Modifier = Modifier,
     large: Boolean = false,
+    compact: Boolean = false,
 ) {
     val strings = LocalStrings.current.shopScreen
     val name = strings.preview.fill(themeName(theme.id, strings))
@@ -57,7 +58,14 @@ fun ThemePreview(
         val colors = WyrThemeAccessors.colors
         val dimens = WyrThemeAccessors.dimens
         val art = theme.art
-        val optionSize = if (large) WyrTypeScale.previewOptionLarge else WyrTypeScale.previewOption
+        val optionSize =
+            when {
+                large -> WyrTypeScale.previewOptionLarge
+                compact -> WyrTypeScale.previewOptionSmall
+                else -> WyrTypeScale.previewOption
+            }
+        // A tile is narrow, so its cards keep less off the sides; a card and the dialog show more art.
+        val side = if (compact) dimens.spaceSm else dimens.spaceXl
 
         Box(
             modifier =
@@ -74,12 +82,13 @@ fun ThemePreview(
                 modifier =
                     Modifier
                         .fillMaxSize()
-                        .padding(start = dimens.spaceXl, end = dimens.spaceXl, top = dimens.spaceSm)
-                        .padding(bottom = height * ART_SHOWN),
+                        .padding(start = side, end = side, top = dimens.spaceSm)
+                        .padding(bottom = height * if (compact) ART_SHOWN_ON_TILE else ART_SHOWN),
                 verticalArrangement = Arrangement.spacedBy(dimens.spaceXs),
             ) {
                 PreviewCard(strings.previewOptionA, colors.optionA, colors.onOptionA, optionSize)
-                PreviewRow()
+                // A tile is too small for the row: its cards alone.
+                if (!compact) PreviewRow()
                 PreviewCard(strings.previewOptionB, colors.optionB, colors.onOptionB, optionSize)
             }
         }
@@ -137,6 +146,9 @@ private fun PreviewRow() {
 
 /** How much of the preview's height, at its bottom, is left to the theme's art alone. */
 private const val ART_SHOWN = 0.24f
+
+/** The same on a tile, whose cards need more of its little height. */
+private const val ART_SHOWN_ON_TILE = 0.16f
 
 /** The points the preview's row shows: a number, the same in every language. */
 private const val PREVIEW_POINTS = "220"

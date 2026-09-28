@@ -271,7 +271,8 @@ class AppNavigationTest {
             assertEquals(listOf("NEON_NIGHT"), shops.bought)
             assertEquals("player\nNEON_NIGHT", storage.read("wyr.theme.prod"))
             assertEquals(1, scene.everyText().count { it == shop.active }, "Neon night is worn: ${scene.everyText()}")
-            assertTrue(shop.apply in scene.everyText(), "the game's own can be put on again")
+            // It moved up into the picker: nothing is on sale any more.
+            assertFalse(shop.onSale in scene.everyText(), "${scene.everyText()}")
         }
 
     /**

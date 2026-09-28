@@ -36,7 +36,7 @@ import kotlin.test.assertTrue
  */
 class ShopScreenDrawTest {
     @Test
-    fun `every theme shows on its card with a preview and its one button`() {
+    fun `the player's themes are a picker over the themes on sale`() {
         listOf(false, true).forEach { dark ->
             Language.entries.forEach { language ->
                 val all = stringsOf(language)
@@ -54,9 +54,13 @@ class ShopScreenDrawTest {
                             "$language: ${theme.id}'s preview",
                         )
                     }
-                    // The game's own worn, Neon night owned, the rest on sale at their price.
+                    // The game's own worn and Neon night owned, in the picker over the heading of the rest, each
+                    // of those on sale at its price.
                     assertEquals(1, texts.count { it == strings.active }, "$language")
-                    assertEquals(1, texts.count { it == strings.apply }, "$language")
+                    val onSale = texts.indexOf(strings.onSale)
+                    assertTrue(texts.indexOf(strings.yourThemes) < texts.indexOf(strings.classic), "$language")
+                    assertTrue(texts.indexOf(strings.neonNight) < onSale, "$language: Neon night is owned")
+                    assertTrue(texts.indexOf(strings.ocean) > onSale, "$language: Ocean is on sale")
                     val price = strings.buy.fill(all.points.fill(PRICE))
                     assertEquals(3, scene.descriptions().count { it == price }, "$language")
                     assertFalse(strings.registerToBuy in texts, "$language: registered")
@@ -66,6 +70,36 @@ class ShopScreenDrawTest {
                 }
             }
         }
+    }
+
+    /** Every theme owned, nothing is on sale: no heading for it, and the line that more is coming. */
+    @Test
+    fun `with every theme owned only the picker and what is coming show`() {
+        val strings = stringsOf(Language.DEFAULT).shopScreen
+        val all = REGISTERED.copy(themes = REGISTERED.themes.map { it.copy(owned = true) })
+        val scene = scene(ShopState(shop = all), Language.DEFAULT, width = WIDE)
+        try {
+            val texts = scene.everyText()
+            assertFalse(strings.onSale in texts, "$texts")
+            GameThemes.ALL.forEach { assertTrue(themeName(it.id, strings) in texts, "${it.id}: $texts") }
+            assertEquals(strings.comingSoon, texts.last())
+        } finally {
+            scene.close()
+        }
+    }
+
+    /** A tap on a tile of the picker puts that theme on. */
+    @Test
+    fun `a tap on a tile puts the theme on`() {
+        val strings = stringsOf(Language.DEFAULT).shopScreen
+        val worn = mutableListOf<String>()
+        val scene = scene(ShopState(shop = REGISTERED), Language.DEFAULT, onWear = { worn += it })
+        try {
+            scene.tap(strings.neonNight)
+        } finally {
+            scene.close()
+        }
+        assertEquals(listOf("NEON_NIGHT"), worn)
     }
 
     @Test
@@ -160,15 +194,17 @@ class ShopScreenDrawTest {
         language: Language,
         dark: Boolean = false,
         actions: ShopActions = RecordingActions(),
+        onWear: (String) -> Unit = {},
+        width: Int = WIDTH,
     ): ImageComposeScene =
-        ImageComposeScene(width = WIDTH, height = HEIGHT, density = Density(1f)) {
+        ImageComposeScene(width = width, height = HEIGHT, density = Density(1f)) {
             WyrTheme(darkTheme = dark) {
                 WyrStrings(language) {
                     ShopScreen(
                         state = state,
                         actions = actions,
                         worn = GameThemes.Default,
-                        onWear = {},
+                        onWear = onWear,
                         onOpenAuth = {},
                     )
                 }
@@ -204,6 +240,9 @@ class ShopScreenDrawTest {
         /** An iPhone SE (667 high) less its status bar (20) and the top bar above the screen (48). */
         const val WIDTH = 375
         const val HEIGHT = 599
+
+        /** Wide enough for the picker to show all five themes at once, a desktop window's. */
+        const val WIDE = 800
         const val PRICE = 220
         const val POINTS = 500
 

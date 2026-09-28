@@ -1351,7 +1351,8 @@ EncryptedSharedPreferences: enough for a game that stores no sensitive personal 
   (220, and 1 on dev), registered players only, the theme worn kept on the device and the bag on the
   Account bar; the rest is this build's: each theme one palette whatever the device's mode, where a
   light and a dark variant of each is the other option; a theme bought put on at once; an owned theme
-  showing the current price; the four themes' look and names; the preview a small Play screen of *Пица*
+  showing the current price; the owned themes a picker on the shop screen until a second kind of item
+  comes, then a collection screen of their own; the four themes' look and names; the preview a small Play screen of *Пица*
   and *Бурек*; and a theme worn that the server says is no longer owned taken off. The options: keep
   them; or change any, each in one place (`ShopThemes.kt`, `ShopStrings`, `ThemePreview`).
 - **A Play Games player's name on the card** — *decided 2026-09-28* (the user: "it should be name from
@@ -2858,20 +2859,23 @@ listed on the Account screen.
     session's retry is the fresh guest's, refused as a guest), over `ShopApi`. `ALREADY_OWNED` and
     `ITEM_NOT_FOUND` are `DomainError`s of their own. `ShopUseCasesTest`, `DefaultShopRepositoryTest`.
   - *The Shop screen* (`io.ntole.wyr.shop`, `Screen.Shop`), under a back arrow, read each time it is
-    shown (`ShopViewModel.shown`), scrolling: *Продавница* and the points; for a guest *Региструј се да
-    купујеш у продавници.* and the Auth page's button, every Buy off; for a registered player short of
-    points *Немаш довољно поена.*; *Теме*, then a card for each theme, the game's own first and each of
-    the server's this build has colours for, a theme the server sells that it has none for left out:
-    its preview (`ThemePreview`: a small Play screen in the theme's own tokens, page, art, two cards of
-    *Пица* and *Бурек* and the row's coin and thumbs, heard as *Преглед: Океан*), its name and one
-    button: *Активна*, off, for the one worn; *Примени* for one owned, the game's own always; *Купи ·*
-    the coin and the price for the rest, which opens a dialog, *Купи тему Океан?*, of the preview larger,
-    *Купи ·* the price and *Откажи*, and only its Buy buys. A theme bought is put on at once. Under the
-    cards, muted, *Ускоро још ствари у продавници.* A purchase refused says why over the themes
-    (bought already, a rate limit, offline) and reads the shop again; a read that fails with nothing
-    shown says so, with *Покушај поново*. `ShopViewModelTest`, `ShopScreenDrawTest`, `TapsTest`,
-    `AppNavigationTest` (the points on Play and the Account card and the bag open it; a theme bought is
-    worn).
+    shown (`ShopViewModel.shown`), scrolling: *Продавница* and the points; then **Твоје теме**, the themes
+    the player owns, the game's own first, a horizontal picker (*decided 2026-09-28*, the user: owned
+    themes looked odd left among those on sale, and "horizontal picker"): a tile each, a small preview
+    and the name, a tap putting it on, the one worn outlined in the accent and marked *Активна*, the
+    picker opened scrolled to it; then **У понуди**, the themes not owned, and none when every one is,
+    over which a guest is told *Региструј се да купујеш у продавници.*, with the Auth page's button, and a
+    registered player short of points *Немаш довољно поена.*: a card each, its preview (`ThemePreview`: a
+    small Play screen in the theme's own tokens, page, art, two cards of *Пица* and *Бурек* and, but on a
+    tile, the row's coin and thumbs, heard as *Преглед: Океан*), its name and *Купи ·* the coin and the
+    price, which opens a dialog, *Купи тему Океан?*, of the preview larger, *Купи ·* the price and
+    *Откажи*, and only its Buy buys. A theme this build has no colours for is left out. A theme bought is
+    put on at once and moves up into the picker. Under them, muted, *Ускоро још ствари у продавници.* A
+    purchase refused says why (bought already, a rate limit, offline) and reads the shop again; a read
+    that fails with nothing shown says so, with *Покушај поново*. When the shop sells a second kind of
+    item, the picker becomes a collection screen of its own (*provisional*, §8b). `ShopViewModelTest`,
+    `ShopScreenDrawTest`, `TapsTest`, `AppNavigationTest` (the points on Play and the Account card and the
+    bag open it; a theme bought is worn and leaves what is on sale).
   - *The theme worn* (`ThemeViewModel`, which `App` asks for once and wears through `WyrTheme(theme)`):
     kept in the session's storage under `wyr.theme.local`, `.dev` or `.prod`, the player's id over the
     theme's, and worn only while the session stored names that player, so a logout, a login to another
