@@ -34,7 +34,7 @@ class WyrEnvironmentTest {
     }
 
     @Test
-    fun `the deployed environments are dev on Render's name and prod on its own domain, over https`() {
+    fun `the deployed environments are dev on Render's name and prod on its own domain over https`() {
         assertEquals("https://wyr-server-dev.onrender.com", WyrEnvironment.DEV.apiBaseUrl)
         assertEquals("https://wyr-api.ntole.com", WyrEnvironment.PROD.apiBaseUrl)
     }
