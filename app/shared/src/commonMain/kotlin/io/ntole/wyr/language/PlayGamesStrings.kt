@@ -13,12 +13,6 @@ data class PlayGamesStrings(
      */
     val name: String,
     /**
-     * The quiet link, on the card of a player registered by Play Games alone, to the Auth page's
-     * Register form: a username and a password log them in where there is no Play Games, on iOS and
-     * the web.
-     */
-    val addUsername: String,
-    /**
      * The Auth page's button that signs in with Play Games, where Play Games is set up and the player is
      * not linked to it yet: *Пријави се преко Google Play Игара*.
      */
@@ -28,7 +22,6 @@ data class PlayGamesStrings(
     internal fun map(transform: (String) -> String): PlayGamesStrings =
         PlayGamesStrings(
             name = transform(name),
-            addUsername = transform(addUsername),
             signIn = transform(signIn),
         )
 }
@@ -43,13 +36,11 @@ const val GOOGLE_PLAY: String = "Google Play"
 internal val SerbianCyrillicPlayGamesStrings: PlayGamesStrings =
     PlayGamesStrings(
         name = "{0} Игре",
-        addUsername = "Додај корисничко име",
         signIn = "Пријави се преко {0} Игара",
     )
 
 internal val EnglishPlayGamesStrings: PlayGamesStrings =
     PlayGamesStrings(
         name = "{0} Games",
-        addUsername = "Add a username",
         signIn = "Sign in with {0} Games",
     )

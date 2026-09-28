@@ -44,7 +44,8 @@ import io.ntole.wyr.theme.contentWidth
  * privacy policy, terms and question rules, deleting an account and contact ([Site], in the language
  * shown), the player's [accountId], to copy and send when asking by email for their account to be
  * deleted (§8a, *Deleting an account*, *By a moderator*), none while no session is stored, and the
- * libraries the game ships with, each with its licence ([OPEN_SOURCE_LIBRARIES]). It scrolls. Every
+ * libraries the game ships with, each with its licence ([OPEN_SOURCE_LIBRARIES]), and last, quiet,
+ * [deletion], the way to delete the account (`DeleteAccount`, CLAUDE.md §8a). It scrolls. Every
  * colour, space and size from the theme (§5b), every word from [LocalStrings] (§8f).
  */
 @Composable
@@ -52,6 +53,7 @@ fun AboutScreen(
     version: AppVersion,
     accountId: String?,
     modifier: Modifier = Modifier,
+    deletion: @Composable () -> Unit = {},
 ) {
     val colors = WyrThemeAccessors.colors
     val dimens = WyrThemeAccessors.dimens
@@ -100,6 +102,9 @@ fun AboutScreen(
                 fontWeight = FontWeight.Bold,
             )
             OPEN_SOURCE_LIBRARIES.forEach { library -> Library(library) }
+
+            HorizontalDivider(color = colors.orPillBackground)
+            deletion()
         }
     }
 }

@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -20,11 +21,12 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.minimumInteractiveComponentSize
@@ -39,15 +41,12 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import io.ntole.wyr.analytics.tapped
 import io.ntole.wyr.core.domain.player.PlayerStats
 import io.ntole.wyr.core.network.environment.WyrEnvironment
 import io.ntole.wyr.language.AccountStrings
 import io.ntole.wyr.language.GOOGLE_PLAY
-import io.ntole.wyr.language.Language
-import io.ntole.wyr.language.LanguageMenu
 import io.ntole.wyr.language.LocalStrings
 import io.ntole.wyr.language.PlayGamesStrings
 import io.ntole.wyr.language.Strings
@@ -62,15 +61,18 @@ import io.ntole.wyr.theme.contentWidth
 /**
  * The Account screen (CLAUDE.md §8d, *The Account screen*), in the user's order: who is playing on
  * this device, their points and their stats, and for a guest one button to the Auth page, which
- * [onOpenAuth] opens, to register or log in; then My questions, a table of them, whose New question
- * [onNewQuestion] answers with the Submit screen's form, for a registered player; then the language
- * menu, [language] the one the game is shown in, which [onSelectLanguage] changes (§8f), and beside
- * it the Statistics switch, [statisticsOn] whether the player lets the game send analytics, which
- * [onStatisticsChange] changes (§8g); under them Log out for a registered player; and at the bottom a
- * quiet Delete account, for anyone read, which asks first (§8a, *Deleting an account*).
- * A build for any server but production's names that server last ([serverLine]), [environment] being
- * the one the build talks to. The questions in [newDecisions] a moderator decided since the player last
- * saw them, and My questions marks each (CLAUDE.md §8d, *Submitting*).
+ * [onOpenAuth] opens, to register or log in; then My questions, a table of them, whose plus
+ * [onNewQuestion] answers with the Submit screen's form, for a registered player, and whose rows
+ * [onOpenQuestion] opens, each by its id, on a screen of its details; then, quiet and together, the
+ * Statistics switch, [statisticsOn] whether the player lets the game send analytics, which
+ * [onStatisticsChange] changes (§8g), with an info icon that says what it sends, and under it Log
+ * out, for a player with a username. A build for any server but production's names that server last
+ * ([serverLine]), [environment] being the one the build talks to. The questions in [newDecisions] a
+ * moderator decided since the player last saw them, and My questions marks each (CLAUDE.md §8d,
+ * *Submitting*).
+ *
+ * The language menu is not here for now (CLAUDE.md §8f), and deleting the account is on the About
+ * screen ([DeleteAccount]).
  *
  * Plain on purpose, and short, the user asking for less text: every colour, space and size from the
  * theme (§5b), every word from [LocalStrings] (§8f).
@@ -80,13 +82,12 @@ fun AccountScreen(
     state: AccountState,
     actions: AccountActions,
     environment: WyrEnvironment,
-    language: Language,
-    onSelectLanguage: (Language) -> Unit,
     statisticsOn: Boolean,
     onStatisticsChange: (Boolean) -> Unit,
     onOpenAuth: () -> Unit,
     onNewQuestion: () -> Unit,
     modifier: Modifier = Modifier,
+    onOpenQuestion: (String) -> Unit = {},
     newDecisions: Set<String> = emptySet(),
 ) {
     val colors = WyrThemeAccessors.colors
@@ -107,21 +108,9 @@ fun AccountScreen(
             Player(state, actions, onOpenAuth)
 
             // The player's own questions, once there is a player to read them for.
-            if (stats != null) MyQuestions(state, actions, onNewQuestion, newDecisions)
+            if (stats != null) MyQuestions(state, actions, onNewQuestion, onOpenQuestion, newDecisions)
 
-            // The language menu and beside it the Statistics switch, one row of the two, and under them
-            // Log out for a registered player (provisional, CLAUDE.md §8b: Log out was beside the menu),
-            // with a quiet Delete account at the start of its row, for a guest too (provisional, §8b).
-            Column(verticalArrangement = Arrangement.spacedBy(dimens.spaceSm)) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(dimens.spaceSm),
-                ) {
-                    LanguageMenu(selected = language, onSelect = onSelectLanguage, modifier = Modifier.weight(1f))
-                    StatisticsSwitch(on = statisticsOn, onChange = onStatisticsChange)
-                }
-                if (stats != null) LogOutAndDelete(state, actions, registered = stats.registered)
-            }
+            Settings(state, actions, statisticsOn, onStatisticsChange)
 
             serverLine(environment, strings)?.let { line ->
                 Text(text = line, color = colors.muted, fontSize = WyrTypeScale.statLabel)
@@ -131,28 +120,31 @@ fun AccountScreen(
 }
 
 /**
- * The last row, once a player is read: a quiet Delete account at its start, for a guest and a
- * [registered] player alike, and a registered player's Log out at its end; why either failed, above
- * it. Delete account is not offered while the player could not be read again: the screen shows that
- * failure then, and the deletion, which needs the server as the read did, would only fail too.
+ * The options, quiet and together, the user asking for them dimmed: the Statistics switch, and under
+ * it Log out for a player with a username, once one is read, and why it failed. A player registered by
+ * Play Games alone has no Log out: it would only make the device a fresh guest, and the Auth page's
+ * Play Games button the one way back to their account.
  */
 @Composable
-private fun LogOutAndDelete(
+private fun Settings(
     state: AccountState,
     actions: AccountActions,
-    registered: Boolean,
+    statisticsOn: Boolean,
+    onStatisticsChange: (Boolean) -> Unit,
 ) {
-    val offerDeletion = state.failure?.action != AccountAction.LOAD
-    FailureOf(state, AccountAction.LOG_OUT)
-    FailureOf(state, AccountAction.DELETE)
-    if (!registered && !offerDeletion) return
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        if (offerDeletion) DeleteAccount(state, actions)
-        Spacer(Modifier.weight(1f))
-        if (registered) {
-            OutlinedButton(
+    val colors = WyrThemeAccessors.colors
+    val dimens = WyrThemeAccessors.dimens
+
+    Column(verticalArrangement = Arrangement.spacedBy(dimens.spaceXs)) {
+        HorizontalDivider(color = colors.orPillBackground)
+        StatisticsSwitch(on = statisticsOn, onChange = onStatisticsChange)
+        FailureOf(state, AccountAction.LOG_OUT)
+        if (state.stats?.username != null) {
+            TextButton(
                 onClick = tapped("account.log_out", onClick = actions::logOut),
                 enabled = !state.isBusy,
+                contentPadding = PaddingValues(),
+                colors = ButtonDefaults.textButtonColors(contentColor = colors.muted),
             ) {
                 Text(LocalStrings.current.accountScreens.logOut)
             }
@@ -161,57 +153,10 @@ private fun LogOutAndDelete(
 }
 
 /**
- * Deleting the account (CLAUDE.md §8d, *The Account screen*): a quiet button, which asks in a dialog of
- * one line whether everything is to go for good, and only then deletes.
- */
-@Composable
-private fun DeleteAccount(
-    state: AccountState,
-    actions: AccountActions,
-) {
-    val colors = WyrThemeAccessors.colors
-    val strings = LocalStrings.current.accountScreens.deleteAccount
-    var confirming by rememberSaveable { mutableStateOf(false) }
-
-    TextButton(
-        onClick = tapped("account.delete") { confirming = true },
-        enabled = !state.isBusy,
-        colors = ButtonDefaults.textButtonColors(contentColor = colors.muted),
-    ) {
-        Text(strings.button)
-    }
-    if (confirming) {
-        AlertDialog(
-            onDismissRequest = { confirming = false },
-            text = { Text(strings.warning) },
-            // The theme's, not Material's own container and text colours (CLAUDE.md §5b).
-            containerColor = colors.surface,
-            textContentColor = colors.primaryText,
-            confirmButton = {
-                TextButton(
-                    onClick =
-                        tapped("account.delete_confirm") {
-                            confirming = false
-                            actions.deleteAccount()
-                        },
-                    colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error),
-                ) {
-                    Text(strings.confirm)
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = tapped("account.delete_cancel") { confirming = false }) {
-                    Text(LocalStrings.current.cancel)
-                }
-            },
-        )
-    }
-}
-
-/**
- * The Statistics switch (CLAUDE.md §8g): whether the player lets the game send analytics, [on], which
- * a tap anywhere on it turns the other way, [onChange]. Its word and the switch are one control, which
- * a screen reader hears as the word, a switch, and on or off.
+ * The Statistics switch (CLAUDE.md §8g), dimmed: whether the player lets the game send analytics,
+ * [on], which a tap anywhere on it turns the other way, [onChange]. Its word and the switch are one
+ * control, which a screen reader hears as the word, a switch, and on or off; the info icon beside the
+ * word is a button of its own, which opens a dialog saying what is sent and what never is.
  */
 @Composable
 private fun StatisticsSwitch(
@@ -219,26 +164,62 @@ private fun StatisticsSwitch(
     onChange: (Boolean) -> Unit,
 ) {
     val colors = WyrThemeAccessors.colors
-    val dimens = WyrThemeAccessors.dimens
+    val strings = LocalStrings.current.accountScreens
     val toggle = tapped("account.statistics") { onChange(!on) }
+    var explaining by rememberSaveable { mutableStateOf(false) }
 
     Row(
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(dimens.spaceSm),
         modifier =
             Modifier
+                .fillMaxWidth()
                 .toggleable(value = on, role = Role.Switch, onValueChange = { toggle() })
                 .minimumInteractiveComponentSize(),
     ) {
-        Text(text = LocalStrings.current.accountScreens.statistics, color = colors.primaryText, maxLines = 1)
-        // No click of its own: the row's toggleable is the one.
-        Switch(checked = on, onCheckedChange = null)
+        Text(text = strings.statistics, color = colors.muted, maxLines = 1)
+        IconButton(onClick = tapped("account.statistics_info") { explaining = true }) {
+            Icon(
+                imageVector = WyrIcons.Info,
+                contentDescription = strings.aboutStatistics,
+                tint = colors.muted,
+                modifier = Modifier.size(WyrThemeAccessors.dimens.tableIconSize),
+            )
+        }
+        Spacer(Modifier.weight(1f))
+        // No click of its own: the row's toggleable is the one. Muted, as the rest of the options are.
+        Switch(
+            checked = on,
+            onCheckedChange = null,
+            colors =
+                SwitchDefaults.colors(
+                    checkedThumbColor = colors.surface,
+                    checkedTrackColor = colors.muted,
+                    checkedBorderColor = colors.muted,
+                    uncheckedThumbColor = colors.muted,
+                    uncheckedTrackColor = colors.pageBackground,
+                    uncheckedBorderColor = colors.muted,
+                ),
+        )
+    }
+    if (explaining) {
+        AlertDialog(
+            onDismissRequest = { explaining = false },
+            text = { Text(strings.statisticsInfo) },
+            // The theme's, not Material's own container and text colours (CLAUDE.md §5b).
+            containerColor = colors.surface,
+            textContentColor = colors.primaryText,
+            confirmButton = {
+                TextButton(onClick = tapped("account.statistics_info_ok") { explaining = false }) {
+                    Text(strings.ok)
+                }
+            },
+        )
     }
 }
 
 /**
- * Who is playing, their points and their stats, on a card, and a guest's one button to the Auth page,
- * or for a player registered by Play Games alone a quiet link there, to add a username; before the
+ * Who is playing, their points and their stats, on a card, and a guest's one button to the Auth page;
+ * before the
  * first read works, a spinner, or why it failed with Try again; and while an action runs, a bar under
  * the card, unless a failure shows.
  */
@@ -291,9 +272,9 @@ private fun Player(
 /**
  * The card (CLAUDE.md §8d, *The Account screen*): the player's initial in a circle, a guest's figure
  * for a guest, their name and their points, a coin and the number; under a line, their stats, two to a
- * row, so more fit as they come, and after them, the grid's next cell, for a player registered by Play
- * Games alone, named for it, the quiet link to the Auth page to add a username; and for a guest the
- * one button there.
+ * row, so more fit as they come; and for a guest the one button to the Auth page. A player registered
+ * by Play Games alone, named for it, gets no way there: a username is only for logging in where there
+ * is no Play Games, on iOS and the web, neither launched yet.
  */
 @Composable
 private fun PlayerCard(
@@ -305,7 +286,6 @@ private fun PlayerCard(
     val colors = WyrThemeAccessors.colors
     val dimens = WyrThemeAccessors.dimens
     val strings = LocalStrings.current.accountScreens
-    val playGames = LocalStrings.current.playGames
 
     Surface(
         color = colors.surface,
@@ -338,28 +318,7 @@ private fun PlayerCard(
                 )
             }
             HorizontalDivider(color = colors.orPillBackground)
-            // Registered by Play Games alone, as the name above says: a username is only for where there
-            // is no Play Games, so the way to one is quiet, the grid's next cell after the stats, a cell a
-            // row leaves free rather than a row of its own, so every state still fits an iPhone SE whole
-            // (CLAUDE.md §8d, *The Account screen*).
-            val addUsername: (@Composable (Modifier) -> Unit)? =
-                if (stats.registered && stats.username == null) {
-                    { modifier ->
-                        Box(contentAlignment = Alignment.CenterEnd, modifier = modifier) {
-                            TextButton(
-                                onClick = tapped("account.add_username", onClick = onOpenAuth),
-                                enabled = !busy,
-                            ) {
-                                // Half the card is narrow, so in Serbian the link takes two lines, set to
-                                // the end as the points above are.
-                                Text(playGames.addUsername, textAlign = TextAlign.End)
-                            }
-                        }
-                    }
-                } else {
-                    null
-                }
-            val cells = statCells(stats, strings).map { cell -> statSlot(cell) } + listOfNotNull(addUsername)
+            val cells = statCells(stats, strings).map { cell -> statSlot(cell) }
             cells.chunked(STATS_PER_ROW).forEach { row ->
                 Row(
                     verticalAlignment = Alignment.CenterVertically,

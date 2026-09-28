@@ -60,6 +60,9 @@ interface AccountActions {
 
     /** Deletes the account, once the player has confirmed it, and plays on as a fresh guest. */
     fun deleteAccount()
+
+    /** The About screen went back to the Account screen for [AccountState.deleted]: takes it down. */
+    fun leftAfterDeletion() = Unit
 }
 
 /**
@@ -215,8 +218,10 @@ class AccountViewModel(
         perform(AccountAction.DELETE) {
             deleteTheAccount()
             // Nobody's any more: what was read was the deleted player's.
-            _state.update { it.copy(stats = null, submissions = null) }
+            _state.update { it.copy(stats = null, submissions = null, deleted = true) }
         }
+
+    override fun leftAfterDeletion() = _state.update { it.copy(deleted = false) }
 
     /**
      * Runs [block] as the one action in flight, then reads the player again, a failed action's too.
@@ -227,7 +232,9 @@ class AccountViewModel(
         block: suspend () -> Unit,
     ) {
         if (_state.value.isBusy) return
-        _state.update { it.copy(running = action, failure = null, listFailure = null, signedIn = false) }
+        _state.update {
+            it.copy(running = action, failure = null, listFailure = null, signedIn = false, deleted = false)
+        }
 
         viewModelScope.launch {
             try {

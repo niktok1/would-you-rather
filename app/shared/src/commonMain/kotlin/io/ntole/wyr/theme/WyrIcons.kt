@@ -214,6 +214,29 @@ object WyrIcons {
         }
     }
 
+    /** Plus: a cross of two strokes, for adding a question to My questions (CLAUDE.md §8d, *The Account screen*). */
+    val Plus: ImageVector by lazy {
+        icon("Plus") {
+            outline {
+                moveTo(12f, 5f)
+                verticalLineTo(19f)
+                moveTo(5f, 12f)
+                horizontalLineTo(19f)
+            }
+        }
+    }
+
+    /** A small chevron pointing right, on a row that opens more of itself: a question of My questions. */
+    val ChevronRight: ImageVector by lazy {
+        icon("ChevronRight") {
+            outline {
+                moveTo(10f, 8f)
+                lineTo(14f, 12f)
+                lineTo(10f, 16f)
+            }
+        }
+    }
+
     /**
      * A thumb up, or turned over top to bottom for a thumb down: the cuff on the left, and the hand
      * beside it, its thumb pointing up out of it, or down.

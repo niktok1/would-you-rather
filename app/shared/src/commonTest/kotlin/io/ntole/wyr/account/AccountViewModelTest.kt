@@ -650,6 +650,24 @@ class AccountViewModelTest {
             assertEquals("guest2", game.player)
             assertEquals(emptyList(), state.submissions, "the fresh guest's none")
             assertNull(state.failure)
+            assertTrue(state.deleted, "for the About screen to go back on")
+
+            viewModel.leftAfterDeletion()
+            assertFalse(viewModel.state.value.deleted)
+        }
+
+    /** A deletion raised for the About screen is taken down by the next action too, never left over. */
+    @Test
+    fun `the next action takes a deletion's flag down`() =
+        runTest(dispatcher) {
+            val viewModel = open()
+            viewModel.deleteAccount()
+            testScheduler.advanceUntilIdle()
+            assertTrue(viewModel.state.value.deleted)
+
+            viewModel.refresh()
+
+            assertFalse(viewModel.state.value.deleted)
         }
 
     /** Offline, or anything else: said so, and the player shown is the one still here. */
@@ -665,6 +683,8 @@ class AccountViewModelTest {
 
             val state = viewModel.state.value
             assertEquals(AccountFailure(AccountAction.DELETE, DomainError.NETWORK), state.failure)
+            assertFalse(state.deleted, "the About screen stays, saying why")
+            assertTrue(state.offersDeletion, "and offers it again")
             assertEquals("bob_1", nameOf(state.shown(), EnglishStrings))
             assertEquals("guest1", game.player)
             assertEquals(

@@ -79,6 +79,7 @@ import io.ntole.wyr.core.network.InMemoryTokenStorage
 import io.ntole.wyr.core.network.TokenStorage
 import io.ntole.wyr.core.network.environment.WyrEnvironment
 import io.ntole.wyr.di.uiModule
+import io.ntole.wyr.home.HOME_COUNT_UP_MILLIS
 import io.ntole.wyr.home.HOME_REVEAL_MILLIS
 import io.ntole.wyr.home.PLAY_ENTRANCE_MILLIS
 import io.ntole.wyr.language.EnglishStrings
@@ -218,7 +219,7 @@ class AppNavigationTest {
         game.username = "bob"
         withApp { scene -> scene.tap(CYRILLIC.account) }
         afterRotation { scene ->
-            assertTrue(CYRILLIC.accountScreens.newQuestion in scene.texts(), "the Account screen is not shown")
+            assertTrue(CYRILLIC.accountScreens.statistics in scene.texts(), "the Account screen is not shown")
             scene.tap(CYRILLIC.accountScreens.newQuestion)
         }
         assertEquals(1, analytics.named(AnalyticsEvent.ACCOUNT_OPENED).size)
@@ -304,15 +305,18 @@ class AppNavigationTest {
         }
 
     /**
-     * Delete account asks first, then deletes, and the Account screen shows the fresh guest the device
-     * plays on as (CLAUDE.md §8a, *Deleting an account*); Cancel deletes nothing.
+     * Delete account, on the About screen, asks first, then deletes, and goes back to the Account screen,
+     * which shows the fresh guest the device plays on as (CLAUDE.md §8a, *Deleting an account*); Cancel
+     * deletes nothing.
      */
     @Test
-    fun `an account deleted from the Account screen plays on as a guest there`() {
+    fun `an account deleted from the About screen plays on as a guest on Account`() {
         game.username = "bob"
         withApp { scene ->
             val strings = CYRILLIC.accountScreens
             scene.tap(CYRILLIC.account)
+            assertFalse(strings.deleteAccount.button in scene.texts(), "not on the Account screen")
+            scene.tap(CYRILLIC.aboutScreen.title)
 
             scene.tap(strings.deleteAccount.button)
             assertTrue(strings.deleteAccount.warning in scene.texts(), "${scene.texts()}")
@@ -323,6 +327,7 @@ class AppNavigationTest {
             scene.tap(strings.deleteAccount.confirm)
 
             assertEquals(listOf<String?>("bob"), game.deleted)
+            assertTrue(strings.statistics in scene.texts(), "back on Account: ${scene.texts()}")
             assertTrue(strings.guest in scene.texts(), "${scene.texts()}")
             assertTrue(strings.openAuth in scene.texts(), "a guest's one button")
             assertEquals(1, analytics.named(AnalyticsEvent.ACCOUNT_DELETED).size)
@@ -462,7 +467,7 @@ class AppNavigationTest {
         withApp { scene ->
             scene.tapPlay()
             scene.tap(CYRILLIC.account)
-            assertTrue(CYRILLIC.accountScreens.newQuestion in scene.texts(), "the Account screen is not shown")
+            assertTrue(CYRILLIC.accountScreens.statistics in scene.texts(), "the Account screen is not shown")
 
             scene.tap(CYRILLIC.back)
 
@@ -551,7 +556,7 @@ class AppNavigationTest {
 
             scene.tap(CYRILLIC.back)
 
-            assertTrue(CYRILLIC.accountScreens.newQuestion in scene.texts(), "the Account screen is not shown")
+            assertTrue(CYRILLIC.accountScreens.statistics in scene.texts(), "the Account screen is not shown")
             assertEquals(2, game.submissionsRead)
         }
 
@@ -571,7 +576,7 @@ class AppNavigationTest {
 
             assertEquals(listOf("Fly"), game.sent.map { it.optionA })
             val shown = scene.everyText()
-            assertTrue(CYRILLIC.accountScreens.newQuestion in shown, "the Account screen is not shown: $shown")
+            assertTrue(CYRILLIC.accountScreens.statistics in shown, "the Account screen is not shown: $shown")
             val listed = "Fly ${CYRILLIC.accountScreens.or} Swim"
             assertTrue(
                 listed in shown && CYRILLIC.accountScreens.pending in shown,
@@ -600,7 +605,7 @@ class AppNavigationTest {
             scene.settle()
 
             val shown = scene.everyText()
-            assertTrue(CYRILLIC.accountScreens.newQuestion in shown, "the Account screen is not shown: $shown")
+            assertTrue(CYRILLIC.accountScreens.statistics in shown, "the Account screen is not shown: $shown")
             val listed = "Fly ${CYRILLIC.accountScreens.or} Swim"
             assertTrue(
                 listed in shown && CYRILLIC.accountScreens.pending in shown,
@@ -711,20 +716,56 @@ class AppNavigationTest {
             assertEquals(ToggleableState.On, scene.toggleOf(CYRILLIC.allCategories))
         }
 
-    /** The menu changes the screen it is on at once, and every screen after it, and is kept. */
+    /** The language menu is off the Account screen for now (CLAUDE.md §8f): no language is offered there. */
     @Test
-    fun `the language menu changes every screen at once and is kept`() =
+    fun `the Account screen offers no language`() =
         withApp { scene ->
             scene.tap(CYRILLIC.account)
 
-            scene.tap("${CYRILLIC.language}: ${Language.SERBIAN_CYRILLIC.ownName}")
-            scene.tap(Language.SERBIAN_LATIN.ownName)
+            val shown = scene.everyText() + scene.descriptions()
+            Language.entries.forEach { language -> assertFalse(language.ownName in shown, "$language in $shown") }
+            assertFalse(shown.any { it.startsWith(CYRILLIC.language) }, "$shown")
+        }
 
-            assertTrue(LATIN.accountScreens.newQuestion in scene.texts(), "${scene.texts()}")
-            assertEquals(listOf(LATIN.back), scene.descriptions().take(1))
-            scene.tap(LATIN.back)
-            assertEquals(homeTexts(LATIN), scene.texts())
-            assertEquals("sr-Latn", storage.read(LanguageViewModel.KEY))
+    /**
+     * A question's row in My questions opens its details, each option whole with its share, and back
+     * returns to the Account screen (CLAUDE.md §8d, *Question details*).
+     */
+    @Test
+    fun `a question of My questions opens whole and back returns to Account`() =
+        withApp { scene ->
+            game.username = "bob"
+            game.sent +=
+                Submission(
+                    id = "mine",
+                    optionA = "Fly",
+                    optionB = "Swim",
+                    categories = setOf(FOOD.id),
+                    status = SubmissionStatus.APPROVED,
+                    rejectionReason = null,
+                    submittedAt = Instant.parse("2026-09-25T12:00:00Z"),
+                    answerCount = 4,
+                    tally = Tally(votesA = 3, votesB = 1),
+                )
+            scene.tap(CYRILLIC.account)
+
+            scene.tap("Fly ${CYRILLIC.accountScreens.or} Swim")
+            scene.passTime(HOME_COUNT_UP_MILLIS.toLong())
+
+            val shown = scene.texts()
+            listOf("Fly", "Swim", "75%", "25%", CYRILLIC.accountScreens.approved).forEach { text ->
+                assertTrue(text in shown, "\"$text\" is not in $shown")
+            }
+            assertTrue(categoryName(FOOD, Language.SERBIAN_CYRILLIC) in shown, "its category: $shown")
+            val screens =
+                analytics
+                    .named(
+                        RecordingAnalytics.SCREEN,
+                    ).map { it.properties[RecordingAnalytics.SCREEN_NAME] }
+            assertEquals("question", screens.last())
+
+            scene.tap(CYRILLIC.back)
+            assertTrue(CYRILLIC.accountScreens.statistics in scene.texts(), "back on Account: ${scene.texts()}")
         }
 
     @Test

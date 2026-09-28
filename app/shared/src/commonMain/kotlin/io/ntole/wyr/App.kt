@@ -33,12 +33,17 @@ import io.ntole.wyr.about.AboutScreen
 import io.ntole.wyr.account.AccountScreen
 import io.ntole.wyr.account.AccountViewModel
 import io.ntole.wyr.account.AuthScreen
+import io.ntole.wyr.account.DeleteAccount
+import io.ntole.wyr.account.QuestionDetailsScreen
 import io.ntole.wyr.analytics.LocalAnalytics
 import io.ntole.wyr.analytics.ShownEffect
 import io.ntole.wyr.analytics.UsageTracker
 import io.ntole.wyr.analytics.rememberConfigurationChanging
 import io.ntole.wyr.categories.CategoriesScreen
 import io.ntole.wyr.categories.CategoriesViewModel
+import io.ntole.wyr.core.domain.category.CategoryRepository
+import io.ntole.wyr.core.domain.category.GetCategories
+import io.ntole.wyr.core.domain.error.WyrException
 import io.ntole.wyr.core.domain.notice.DecisionNotices
 import io.ntole.wyr.core.domain.session.CurrentSession
 import io.ntole.wyr.core.domain.update.AppUpdate
@@ -51,6 +56,7 @@ import io.ntole.wyr.language.LanguageViewModel
 import io.ntole.wyr.language.LocalLanguage
 import io.ntole.wyr.language.LocalStrings
 import io.ntole.wyr.language.WyrStrings
+import io.ntole.wyr.loading.LoadingSpinner
 import io.ntole.wyr.navigation.AccountTopBar
 import io.ntole.wyr.navigation.BackTopBar
 import io.ntole.wyr.navigation.Navigator
@@ -83,8 +89,8 @@ import org.koin.compose.viewmodel.koinViewModel
  *
  * The screens are the game's, in every build whatever server it talks to (CLAUDE.md §8d,
  * *Navigation*): Home first, and the rest opened from it through a [Navigator], a back stack made by
- * hand, no tabs and no navigation library. They are shown in the language picked on the Account
- * screen, Serbian Cyrillic until one is (§8f). The app's comings and goings and every screen shown
+ * hand, no tabs and no navigation library. They are shown in the language kept on the device, Serbian
+ * Cyrillic until one is picked; the language menu is off the Account screen for now (§8f). The app's comings and goings and every screen shown
  * are reported to the analytics (§8g, [UsageTracker]). Once the server serves this build nothing more,
  * the one screen shown says a new version is available ([AppUpdate], §8e), whatever was shown before.
  */
@@ -102,7 +108,7 @@ fun App() {
                 if (updateRequired) {
                     UpdateRequired()
                 } else {
-                    Screens(language, onSelectLanguage = languages::select)
+                    Screens()
                 }
             }
         }
@@ -123,11 +129,10 @@ private fun UpdateRequired() {
  * screen left and come back to, Play above all, shows what it showed, its question included.
  */
 @Composable
-private fun Screens(
-    language: Language,
-    onSelectLanguage: (Language) -> Unit,
-) {
+private fun Screens() {
     val navigator = rememberSaveable(saver = Navigator.Saver) { Navigator() }
+    // The question My questions opened, by its id, which saved state keeps with the back stack.
+    var openedQuestion by rememberSaveable { mutableStateOf<String?>(null) }
     SystemBack(enabled = navigator.canGoBack, onBack = { navigator.back() })
     val usage = koinInject<UsageTracker>()
     LaunchedEffect(navigator.current) { usage.show(navigator.current.key) }
@@ -192,10 +197,12 @@ private fun Screens(
                     AccountTopBar(onBack = { navigator.back() }, onAbout = { navigator.open(Screen.About) })
                     Below {
                         Account(
-                            language = language,
-                            onSelectLanguage = onSelectLanguage,
                             onOpenAuth = { navigator.open(Screen.Auth) },
                             onNewQuestion = { navigator.open(Screen.Submit) },
+                            onOpenQuestion = { id ->
+                                openedQuestion = id
+                                navigator.open(Screen.Question)
+                            },
                             notices = notices,
                         )
                     }
@@ -218,7 +225,12 @@ private fun Screens(
 
                 Screen.About -> {
                     BackTopBar(onBack = { navigator.back() })
-                    Below { About() }
+                    Below { About(onDeleted = { navigator.back() }) }
+                }
+
+                Screen.Question -> {
+                    BackTopBar(onBack = { navigator.back() })
+                    Below { QuestionDetails(openedQuestion, onGone = { navigator.back() }) }
                 }
             }
         }
@@ -232,11 +244,65 @@ private fun Screens(
  * should the device become another player while it is shown.
  */
 @Composable
-private fun About() {
+private fun About(onDeleted: () -> Unit) {
     val session = koinInject<CurrentSession>()
     val accountId by remember(session) { session.sessions }.collectAsStateWithLifecycle(session.current())
+    // Deleting the account is here, on the Account screen's ViewModel (CLAUDE.md §8d, *About*): the
+    // player read, so it is offered, and once deleted, back to the Account screen, which shows the fresh guest.
+    val account = koinViewModel<AccountViewModel>()
+    val state by account.state.collectAsStateWithLifecycle()
 
-    AboutScreen(version = koinInject(), accountId = accountId)
+    LaunchedEffect(account) { account.authShown() }
+    LaunchedEffect(state.deleted) {
+        if (state.deleted) {
+            account.leftAfterDeletion()
+            onDeleted()
+        }
+    }
+
+    AboutScreen(
+        version = koinInject(),
+        accountId = accountId,
+        deletion = { DeleteAccount(state = state, actions = account) },
+    )
+}
+
+/**
+ * One of the player's own questions, whole ([QuestionDetailsScreen]), [id] the one My questions opened,
+ * found in the list the Account screen's ViewModel read, which it reads first if none is read yet (an
+ * Android process brought back on this screen). A question the list no longer holds, or none, goes back
+ * to the Account screen, [onGone]. The categories are named from those read, and read once if none are.
+ */
+@Composable
+private fun QuestionDetails(
+    id: String?,
+    onGone: () -> Unit,
+) {
+    val account = koinViewModel<AccountViewModel>()
+    val state by account.state.collectAsStateWithLifecycle()
+    val categoryList = koinInject<CategoryRepository>()
+    val getCategories = koinInject<GetCategories>()
+    val categories by categoryList.categories.collectAsStateWithLifecycle()
+    val submission = state.submissions?.firstOrNull { it.id == id }
+
+    LaunchedEffect(account) { account.authShown() }
+    LaunchedEffect(getCategories) {
+        if (categoryList.categories.value.isEmpty()) {
+            try {
+                getCategories()
+            } catch (_: WyrException) {
+                // Named by their ids until a read works.
+            }
+        }
+    }
+    val settled = !state.isBusy && (state.submissions != null || state.failure != null || state.listFailure != null)
+    LaunchedEffect(submission == null && settled) { if (submission == null && settled) onGone() }
+
+    if (submission != null) {
+        QuestionDetailsScreen(submission = submission, categories = categories)
+    } else {
+        LoadingSpinner()
+    }
 }
 
 /**
@@ -316,10 +382,9 @@ private fun ColumnScope.Below(screen: @Composable () -> Unit) {
 
 @Composable
 private fun Account(
-    language: Language,
-    onSelectLanguage: (Language) -> Unit,
     onOpenAuth: () -> Unit,
     onNewQuestion: () -> Unit,
+    onOpenQuestion: (String) -> Unit,
     notices: DecisionNotices,
 ) {
     val viewModel = koinViewModel<AccountViewModel>()
@@ -357,12 +422,11 @@ private fun Account(
         state = state,
         actions = viewModel,
         environment = koinInject(),
-        language = language,
-        onSelectLanguage = onSelectLanguage,
         statisticsOn = statisticsOn,
         onStatisticsChange = analytics::setEnabled,
         onOpenAuth = onOpenAuth,
         onNewQuestion = onNewQuestion,
+        onOpenQuestion = onOpenQuestion,
         newDecisions = newDecisions,
     )
 }

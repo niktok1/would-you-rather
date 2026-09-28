@@ -21,6 +21,7 @@ import io.ntole.wyr.account.AccountScreen
 import io.ntole.wyr.account.AccountState
 import io.ntole.wyr.account.AuthMode
 import io.ntole.wyr.account.AuthScreen
+import io.ntole.wyr.account.DeleteAccount
 import io.ntole.wyr.categories.CategoriesActions
 import io.ntole.wyr.categories.CategoriesScreen
 import io.ntole.wyr.categories.CategoriesState
@@ -40,6 +41,7 @@ import io.ntole.wyr.core.network.environment.WyrEnvironment
 import io.ntole.wyr.descriptions
 import io.ntole.wyr.home.HomeScreen
 import io.ntole.wyr.language.Language
+import io.ntole.wyr.language.LanguageMenu
 import io.ntole.wyr.language.SerbianCyrillicStrings
 import io.ntole.wyr.language.WyrStrings
 import io.ntole.wyr.navigation.AccountTopBar
@@ -130,11 +132,17 @@ class TapsTest {
                 "about.contact",
                 "about.copy_account_id",
                 "about.licence",
+                // Deleting the account, then its dialog's two buttons, for anyone read (CLAUDE.md §8a).
+                "account.delete",
+                "account.delete_confirm",
+                "account.delete_cancel",
             ),
             elementsTapped {
                 @Suppress("DEPRECATION")
                 CompositionLocalProvider(LocalClipboardManager provides RecordingClipboard()) {
-                    AboutScreen(AppVersion("1.0.0", 10000), accountId = "p1")
+                    AboutScreen(AppVersion("1.0.0", 10000), accountId = "p1") {
+                        DeleteAccount(AccountState(stats = GUEST, submissions = emptyList()), NoAccountActions)
+                    }
                 }
             },
         )
@@ -219,31 +227,31 @@ class TapsTest {
                 )
             }
 
-        val settings = setOf("language.menu", "language.option", "account.statistics")
-        // Delete account, then its dialog's two buttons, for anyone read (CLAUDE.md §8a).
-        val delete = setOf("account.delete", "account.delete_confirm", "account.delete_cancel")
-        assertEquals(setOf("account.open_auth") + settings + delete, guest)
-        assertEquals(
-            setOf("my_questions.new_question", "my_questions.first_question", "account.log_out") + settings + delete,
-            registered,
-        )
-        assertEquals(
-            setOf("account.add_username", "my_questions.new_question", "my_questions.first_question") +
-                setOf("account.log_out") + settings + delete,
-            playGames,
-        )
-        assertEquals(setOf("my_questions.new_question", "account.log_out") + settings + delete, listed)
+        // The Statistics switch, and its info icon and the dialog's OK.
+        val settings = setOf("account.statistics", "account.statistics_info", "account.statistics_info_ok")
+        val ask = setOf("my_questions.new_question", "my_questions.first_question")
+        assertEquals(setOf("account.open_auth") + settings, guest)
+        assertEquals(ask + "account.log_out" + settings, registered)
+        // No Log out for a player registered by Play Games alone, nor a way to add a username.
+        assertEquals(ask + settings, playGames)
+        assertEquals(setOf("my_questions.new_question", "my_questions.question", "account.log_out") + settings, listed)
         assertEquals(setOf("account.try_again") + settings, unread)
         assertEquals(
-            setOf("my_questions.new_question", "my_questions.try_again", "account.log_out") + settings + delete,
+            setOf("my_questions.new_question", "my_questions.try_again", "account.log_out") + settings,
             listUnread,
         )
     }
 
-    /** Each language in the menu is its own tap, named by its tag. */
+    /**
+     * Each language in the menu is its own tap, named by its tag. The menu is off the Account screen for
+     * now (CLAUDE.md §8f), drawn alone, so its names stay.
+     */
     @Test
     fun `the language menu's every language is reported by its tag`() {
-        elementsTapped { Account(AccountState(stats = GUEST, submissions = emptyList())) }
+        assertEquals(
+            setOf("language.menu", "language.option"),
+            elementsTapped { LanguageMenu(selected = Language.DEFAULT, onSelect = {}) },
+        )
 
         val picked =
             analytics
@@ -415,8 +423,6 @@ class TapsTest {
             state = state,
             actions = NoAccountActions,
             environment = WyrEnvironment.PROD,
-            language = Language.DEFAULT,
-            onSelectLanguage = {},
             statisticsOn = true,
             onStatisticsChange = {},
             onOpenAuth = {},

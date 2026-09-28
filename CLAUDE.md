@@ -303,7 +303,9 @@ wherever they show (§8f, *Numbers and symbols*); `Globe` for the language menu;
 players, heading My questions' answers (§8d, *The Account screen*); `Info`, an i in a circle, the
 Account screen's way to the About screen (§8d, *About*); `More`, three dots one over the
 other, the Play screen's menu about the question (§8d, *The Play screen*, *Reports*); and `Copy`, two
-sheets one over the other, beside the About screen's account id (§8d, *About*). They carry no colour of their
+sheets one over the other, beside the About screen's account id (§8d, *About*); `Plus`, two strokes
+crossed, My questions' way to a new question, and `ChevronRight`, on each of its rows, which opens the
+question whole (§8d, *The Account screen*, *Question details*). They carry no colour of their
 own: `Icon` tints each from `WyrColors`, so they follow the light and dark themes as text does. The
 coin is two icons drawn one on the other, the face in `WyrColors.coin` and the mark in
 `WyrColors.onCoin`, the brand's amber and its dark brown, the same in both themes as the cards are
@@ -666,7 +668,7 @@ decided in §8b).
   can fail as a 500.
   `AccountDeletionTest`, `AccountDeletionFlowTest`.
   - *The client* is `AccountRepository.deleteAccount`, behind `DeleteAccount` (`:core:domain`), from
-    the Account screen's **Обриши налог** (§8d, *The Account screen*). `AuthApi.deleteAccount` posts
+    the About screen's **Обриши налог** (§8d, *About*). `AuthApi.deleteAccount` posts
     it through `runApi` alone, never `withSessionRecovery`, whose retry would delete the fresh guest
     minted for a dead session. A 204, or a 401 (`UNAUTHORIZED`, the refresh refused too: the player is
     gone already, from another device or by an answer lost on the way), and the device forgets its
@@ -820,8 +822,9 @@ decided in §8b).
     and `GET /v1/me` says so (`PlayerStatsDto.playGamesLinked`). They may still register a username and
     password, to log in where there is no Play Games: on iOS and the web. The game's client reads it
     with the username (`PlayerStats.playGamesLinked`, and `registered`, either of the two): such a
-    player may submit and log out, and their card on the Account screen names them for Play Games when
-    they have no username (§8d, *The Account screen*).
+    player may submit, and their card on the Account screen names them for Play Games when they have no
+    username (§8d, *The Account screen*). One with no username has no Log out (*decided 2026-09-28*): it
+    would only make the device a fresh guest, the Auth page's Play Games button the one way back.
   - *Refusals*: a code Google refuses (`invalid_grant`: spent, expired, another app's) is 422
     `PLAY_GAMES_CODE_REFUSED`, answered by asking Play Games for a new one; Google not answering,
     refusing the server itself (`invalid_client`), or Play Games answering 403, the server's setup and
@@ -1024,14 +1027,9 @@ EncryptedSharedPreferences: enough for a game that stores no sensitive personal 
   (§8d, *The Play screen*).
 - **The Play row's arrangement** — *resolved 2026-09-26*: the user's, the points on the left, the
   thumbs in the middle and Skip on the right (§8d, *The Play screen*).
-- **Delete account beside Log out** — *provisional — user decision.* The launch's scope asked for a
-  quiet **Обриши налог** at the bottom of the Account screen, under Log out's row; a row of its own
-  there takes a registered player's screen, whose read again failed, to 638, past an iPhone SE's 599.
-  Built beside Log out instead, at the start of Log out's row (a guest, who has no Log out, gets the
-  row to itself), and not offered while a read of the player shows its failure, where a guest's screen
-  would reach 622: the deletion would fail then too. Every failure state then fits, 598 at the tallest
-  (§8d, *The Account screen*). The options: keep it; a row of its own under Log out, the failure
-  states then scrolling to reach it; or Delete account on the About screen alone.
+- **Delete account beside Log out** — *resolved 2026-09-28*: the user moved **Обриши налог** off
+  the Account screen to the bottom of the About screen, after the licences (§8d, *About*), the other
+  option this item listed.
 - **Licence notices** — *provisional — user decision.* SLF4J's MIT licence and Skia's BSD 3-Clause
   ask for their copyright and permission notice to ship with the app; the About screen shows each one's
   copyright line and opens its licence's full text in the browser, as it does Apache 2.0's (§8d,
@@ -1040,13 +1038,9 @@ EncryptedSharedPreferences: enough for a game that stores no sensitive personal 
   brings on Android) are under Google's own terms, not open source, and the list leaves them out: the
   options are that, or a line for them under their terms, or Google's `oss-licenses` plugin, a new
   dependency (§2), which lists what Play services bundle.
-- **Log out under the language row** — *provisional — user decision.* The user's Account redesign put
-  Log out beside the language menu, one row of the two; the Statistics switch (§8g) now shares that
-  row, since a row of all three does not fit a phone's width, and a row of its own would take a
-  guest's screen past the 599 of an iPhone SE (566 with the switch beside the menu, 630 under it).
-  So Log out stands under the row, at its end, for a registered player (582 at the tallest, one
-  registered by Play Games alone whose read failed). The options: keep it; Log out on the card, where
-  a guest's button to the Auth page is; or the switch elsewhere, off the Account screen's first view.
+- **Log out under the language row** — *resolved 2026-09-28*: the user hid the language menu for now
+  (§8f) and grouped what was left, dimmed: the Statistics switch with an info icon, and under it Log
+  out, for a player with a username (§8d, *The Account screen*).
 - **Where players are, in analytics** — *decided 2026-09-27: PostHog keeps it* (the user: "I would
   leave IP capture"). PostHog keeps the address each event's request came from and adds a country, a
   city and coordinates from it, so the dashboards can show players by country (§8g, *Where the
@@ -1602,10 +1596,10 @@ game's, or a place on one, theme tokens only (§5b), and its words in `Strings` 
   Play's the account icon has a dot while a decision waits there (*The notice of a decision*). The
   account icon, from Home or Play, opens the **Account** screen under a top bar of a back arrow and, on the right, an info icon
   to the **About** screen (*About*, below). On it, a guest's one button
-  opens the **Auth** page, to register or log in, and My questions' *Ново питање* the **Submit**
-  screen's form. On Play, the categories played open the **Categories** screen (*Categories*, *The
-  Categories screen*), whose **Играј** goes back to Play. The Auth, Submit, Categories and About
-  bars hold a back arrow alone (`BackTopBar`), Account's the info icon besides (`AccountTopBar`); the Submit button the Account bar held before is
+  opens the **Auth** page, to register or log in, My questions' plus the **Submit** screen's form,
+  and a question's row the **Question** screen, that question whole (*Question details*). On Play, the categories played open the **Categories** screen (*Categories*, *The
+  Categories screen*), whose **Играј** goes back to Play. The Auth, Submit, Categories, About and
+  Question bars hold a back arrow alone (`BackTopBar`), Account's the info icon besides (`AccountTopBar`); the Submit button the Account bar held before is
   gone. The icons are the theme's (§5b), each named for a screen reader in the language shown (§8f).
 - *The back stack* is made by hand, no navigation library: a sealed `Screen` and a `Navigator` of
   the screens opened, Home at the bottom. `open` shows a screen over the one shown, or goes back to
@@ -1666,23 +1660,27 @@ orientation, in common code alone:
   and field in a column of 600 down the middle of a desktop window's 800, and something spanning it.
 
 **The Account screen** (`io.ntole.wyr.account`; §8a *Accounts*, *Stats* below):
-- *Its order* (*decided 2026-09-25*, the user's redesign, with less text overall): the player on a
-  card, with a guest's one button to the Auth page; **My questions**, a table; the **language menu**
-  (§8f, `LanguageMenu`) and beside it the **Statistics** switch (§8g), one row of the two, and under
-  them **Log out**, for a registered player (*provisional — user decision*, §8b: Log out was beside
-  the menu until the switch took its place), with a quiet **Обриши налог** at the start of Log out's
-  row, for a guest and a registered player alike (*Deleting*, below); and the server line, outside PROD.
-- *Deleting* (*built 2026-09-26*, §8a *Deleting an account*): **Обриши налог**, muted
+- *Its order* (*decided 2026-09-25*, the user's redesign, with less text overall; the options
+  grouped 2026-09-28): the player on a card, with a guest's one button to the Auth page; **My
+  questions**, a table; then the options, together and dimmed (`Settings`, `WyrColors.muted`, under a
+  line): the **Statistics** switch (§8g), with an info icon, *О статистици* to a screen reader, whose
+  dialog says what it sends (*Шаљемо податке о томе како се игра користи, да бисмо је побољшали. Без
+  твог имена и текста питања.*, `AccountStrings.statisticsInfo`, and *У реду*), and under it **Log
+  out**, for a player with a username; and the server line, outside PROD. No language menu, for now
+  (§8f), and no Delete account, which is on the About screen (*Deleting*, below).
+- *Deleting* (*built 2026-09-26*, on the About screen since 2026-09-28, §8a *Deleting an account*):
+  **Обриши налог** (`DeleteAccount`, in `io.ntole.wyr.account`), muted
   (`WyrColors.muted`), opens a dialog of one line, *Налог и све у њему нестаће заувек.*, on the
   theme's surface in its primary text colour, given it by name since the `ColorScheme` mirrors no
   `surfaceContainerHigh` (§5b), with **Обриши** (in the error colour) and *Откажи*
   (`Strings.cancel`); only Обриши deletes
-  (`AccountViewModel.deleteAccount`, `AccountAction.DELETE`). Deleted, the screen reads the player
-  again and shows the fresh guest, on the same screen; a failure says so over the row, in the
-  screen's words (offline, a rate limit, or anything else), and forgets nothing. It is offered once a
-  player is read, and not while the screen shows that a read of the player failed, when a deletion
-  would only fail too (*provisional*, §8b). Words: `AccountStrings.deleteAccount`, a
-  `DeleteAccountStrings`.
+  (`AccountViewModel.deleteAccount`, `AccountAction.DELETE`, on the Account screen's ViewModel, which
+  the About screen reads the player on if none is read yet). Deleted, the ViewModel reads the player
+  again and raises `AccountState.deleted`, on which the About screen goes back to the Account screen,
+  showing the fresh guest; a failure says so over the button, in the Account screen's words (offline,
+  a rate limit, or anything else), and forgets nothing. It is offered once a player is read, and not
+  while a read of the player has just failed, when a deletion would only fail too
+  (`AccountState.offersDeletion`). Words: `AccountStrings.deleteAccount`, a `DeleteAccountStrings`.
 - *The card* (*redesigned 2026-09-26*, the user: "a bit nicer... later more things will be added to
   it"): the player's initial in a circle, the first letter of the username in capitals, or a guest's
   figure (`Avatar`); the username, or *Гост*; and on the right the points, the coin and the number
@@ -1693,26 +1691,27 @@ orientation, in common code alone:
   need for two fields saying the same", "Likes can go to questions table"); not what the player's
   questions cost either (`pointsSpent`, *Stats*, provisional). A screen reader reads each number with
   its word. A guest gets **one button** on the card, *Региструј се или се пријави*, to the Auth page
-  (below), instead of the forms; a registered player, by a username or by Play Games (§8a), gets
-  **Log out** under the language menu, after which the device plays on as a fresh guest. A player
+  (below), instead of the forms; a player with a username gets **Log out** under the Statistics switch,
+  after which the device plays on as a fresh guest. A player
   registered by Play Games alone, with no username, is named on the card by their Play Games name, the
   device's Play Games' (`AccountState.playGamesName`, read with the stats through
   `LinkPlayGames.playerName`; nothing kept by the server), its first letter in the circle, and *Google
   Play Игре* when that gives none, where a guest is *Гост* (`nameOf`; the brand is `GOOGLE_PLAY`, the same in every language, as
-  `USERNAME_CHARACTERS` is, since a Serbian text holds no Latin letter), and has in place of the button
-  a quiet link, *Додај корисничко име*, to the Auth page's Register form: a username and a password
-  are for logging in where there is no Play Games, on iOS and the web (`PlayGamesStrings`). The link
-  is the stats' grid's next cell, beside the one stat, set to the card's end, two lines in Serbian: on
-  a row of its own it took the screen past 599 whenever a failure showed. A read that fails says so
+  `USERNAME_CHARACTERS` is, since a Serbian text holds no Latin letter), and has no way to the Auth
+  page and no Log out (*decided 2026-09-28*, the user: registering again is "redundant"): a username
+  and a password are only for logging in where there is no Play Games, on iOS and the web, neither
+  launched, and a logout would only make the device a guest. A read that fails says so
   under the card, beside its *Покушај поново*, or in the card's place before any read worked; a read
   that failed whole, the list's too, says so once. While an action runs a bar under the card says so,
   and not once a failure shows, while the read after a failed action runs on.
 - `AccountScreenDrawTest` holds every state with no question listed to 599 high in every language,
   measured 400 wide as `PlayScreenDrawTest` measures and for DEV, whose server line is the longest
   (598 on this Mac at the tallest, a guest whose deletion failed offline, the read after it running
-  or done; 582 for a player registered by Play Games alone whose read failed), and New question
-  above 599 however long the list; a list scrolls with the screen. It finds the language menu and the
-  switch on one row, neither cut short, and Log out under them, in every state and language.
+  or done), and a registered player's plus above 599 however long the list; a list scrolls with the
+  screen. It finds the switch and its info icon on one row, the word not cut short, and Log out under
+  them for a player with a username alone, in every state and language; no language menu and no
+  Delete account in any state; a question's options on two lines at most, the longest cut short; and
+  the info icon's dialog in the theme's colours.
 - **The Auth page** (`AuthScreen`, *decided 2026-09-25*), on the Account screen's ViewModel, shows
   **Register** only (username, and password with a show/hide toggle), which keeps the points, and a
   link, *Већ имаш налог? Пријави се*, that switches the same page to **Log in** (username, password),
@@ -1774,10 +1773,31 @@ orientation, in common code alone:
   columns up (`totalOf`), the author's likes and answers received. A screen reader hears a row as
   one, each number after its column's name, *Лајкови: 5*. With no question the table stays, with one
   row: **Постави прво питање**, to the form, for a registered player, or for a guest *Региструј се да
-  додаш питање.* Its heading holds **Ново питање**, which opens the Submit screen's form
-  (*Submitting*), a registered player's alone: for a guest it is off, and a guest with questions from
-  before the rule is told under it to register first. A list that cannot be read says so under it,
-  with Try again, apart from the stats (`AccountState.listFailure`).
+  додаш питање.* Its heading, *Моја питања*, is inside the table's card (*decided 2026-09-28*), with a
+  **plus** (`WyrIcons.Plus`, *Ново питање* to a screen reader), which opens the Submit screen's form
+  (*Submitting*), a registered player's alone: a guest has none, and a guest with questions from
+  before the rule is told under the heading to register first. A question's options take **two lines
+  at most**, cut short with an ellipsis, and its status one, with a chevron at the column's end; a tap
+  anywhere on the row opens the question whole (*Question details*, below). A list that cannot be read
+  says so under it, with Try again, apart from the stats (`AccountState.listFailure`).
+- **Question details** (`QuestionDetailsScreen`, *built 2026-09-28*, the user: a question "opened in
+  new screen where all the details could be seen, with more statistics"): `Screen.Question`, opened
+  from a row of My questions under a back arrow, the question's id kept in saved state beside the back
+  stack, and found in the list the Account screen's ViewModel read (read first when none is, an
+  Android process brought back on it; a question the list no longer holds goes back to Account).
+  Top down, scrolling: each option whole on a card of its colour (§5b), at the Play screen's option
+  size; for a question served, approved or retired, each side's **share** of the players who answered
+  it, counted up with its bar along the card's bottom as the Play screen's reveal races them
+  (`rememberCountUp`, over the Home screen's 1.2 s), and how many picked it after two players; where
+  it stands, a rejection's reason whole; *Послато 25. 9. 2026.*, the day it was sent on this device
+  (`dateText`, numbers only, so no `Strings`: *25/9/2026* in English; UTC's day where the platform names
+  no zone); its categories, named in the language shown from those read, read once if none are; and,
+  once served, its likes, dislikes and answers, each after its icon, heard with its name. The shares
+  are `SubmissionDto.votesA` and `votesB` (*built 2026-09-28*), how many of the players who answered it
+  picked each side, each by their latest pick, read in `SubmissionStore.byAuthor`'s one statement and
+  adding up to `answerCount`; defaults of 0, so a server from before them reads as none, and the
+  domain's `Submission.tally`. `QuestionDetailsDrawTest`, `AppNavigationTest`, `SubmissionStoreTest`,
+  `SubmissionMapperTest`.
 - **The notice of a decision** (*built 2026-09-26*, the user: a notification when their question is
   approved, and the game saying so too): common code, every platform, pushes or none
   (`DecisionNotices`, `io.ntole.wyr.core.domain.notice`). `AppServices` reads the player's questions
@@ -1848,11 +1868,13 @@ annotations and javax.inject, which Android's pushes bring, are Apache 2.0 too; 
 game's client is added there in the same change, under its own licence). Google Play services, which
 Play Games and Firebase bring on Android (`play-services-games-v2`, `-base`, `-basement`, `-tasks`,
 `-stats`, `-cloud-messaging`), are under Google's own terms, not an open-source licence, so the list
-does not name them (*provisional — user decision*, §8b *Licence notices*). Words: `Strings.aboutScreen`.
+does not name them (*provisional — user decision*, §8b *Licence notices*); and last, after a line,
+quiet, **Обриши налог**, deleting the account (*The Account screen*, *Deleting*; the user, 2026-09-28:
+"hide delete account in maybe info screen"). Words: `Strings.aboutScreen`.
 `AboutScreenDrawTest` (every text in both themes and every language, each link's URL through a handler
 of the test's own, one that opens nothing, the links and the account id's copy button above 599
 before any scrolling, the id copied whole through a clipboard of the test's own and nothing moved
-for it, none with no session), `LicencesTest`,
+for it, none with no session, and the deletion last, after every licence), `LicencesTest`,
 `LinksTest`, `SiteTest`, `TapsTest`,
 `AppNavigationTest`, `TopBarsDrawTest`, `NavigatorTest`.
 
@@ -2865,7 +2887,10 @@ hand, so the two cannot say different things; and **English** stands beside them
   nothing reads the device's locale (`Language.DEFAULT`; `LanguageMenuTest` sets an English, a
   German and a Serbian Latin locale on the JVM and still opens in Cyrillic).
 - **The language menu** *(built; a menu since 2026-09-26, the user: "there will be more languages
-  segmented buttons wont fit everything")*: on the Account screen, under My questions (§8d), a row of
+  segmented buttons wont fit everything"; **hidden** since 2026-09-28, the user: "for now hide
+  language, we will introduce it later")*: on no screen for now, so the game shows the language kept on
+  the device, Cyrillic unless one was picked before (a tester's phone that picked Latinica stays in
+  it); the code and its tests are kept, to put back under My questions (§8d). When shown, a row of
   a globe, the language shown named in itself and a chevron (`LanguageMenu`); a tap opens a menu of
   every language offered, **Ћирилица** and **Latinica** (`Language.OFFERED`, the one list that
   decides it: **English is hidden** for the launch, §8b *The launch*, its words and tests kept, and a
@@ -2875,7 +2900,7 @@ hand, so the two cannot say different things; and **English** stands beside them
   A screen reader hears the row as *Језик: Ћирилица*, in the language shown (`Strings.language`). A
   tap on a language changes every screen at once and is then kept (`LanguageViewModel`, bound in
   `uiModule` and asked for once by `App`). `LanguageMenuTest` opens it and picks each offered.
-- **The Statistics switch** *(built)*: beside the language menu, *Статистика*, *Statistika*,
+- **The Statistics switch** *(built)*: on the Account screen's options, *Статистика*, *Statistika*,
   *Statistics* (`AccountStrings.statistics`), the word and the switch one control, which a screen
   reader hears as the word, a switch, and on or off (§8g).
 - **Kept on the device** *(built)*: under `wyr.language` in the storage the session is kept in (the
@@ -3023,7 +3048,7 @@ the same events. The moderation app sends none.
   the `visibilitychange` handler itself, with events the sender only queues a step later, and PostHog
   taking a beacon's `text/plain` body, unchecked; a tab only hidden sends as any platform does. Every screen the navigator
   shows is PostHog's `$screen`, named by its key (`home`, `play`, `account`, `auth`, `submit`,
-  `categories`, `about`), and the one left is `screen_left`, with `screen` and `duration_ms`, for another screen
+  `categories`, `about`, `question`), and the one left is `screen_left`, with `screen` and `duration_ms`, for another screen
   or for the background, back from which it is shown again. An Android rotation, whose activity stops
   only to start again, reports neither (`rememberConfigurationChanging`, over the activity's
   `isChangingConfigurations`: the one piece of it per platform), nor a second `account_opened` or
@@ -3039,12 +3064,13 @@ the same events. The moderation app sends none.
   `.delete_account`, `.contact`, `.copy_account_id` and `.licence`; `play.card_a` and `.card_b` (with `answered`,
   whether the tap went on from the reveal), `.like`, `.dislike`, `.skip`, `.try_again`;
   `question_menu.open`, `.report`, `.reason` (with its `reason`), `.hide_question`, `.hide_author`;
-  `account.open_auth`, `.add_username`, `.log_out`, `.try_again`; `my_questions.new_question`, `.first_question`,
-  `.try_again`; `language.menu` and `language.option` (with its `language` tag); `auth.register`,
+  `account.open_auth`, `.log_out`, `.statistics`, `.statistics_info`, `.statistics_info_ok`, `.try_again`;
+  `my_questions.new_question`, `.first_question`, `.question`, `.try_again`; `language.menu` and `language.option` (with its `language` tag); `auth.register`,
   `.show_password`, `.to_log_in`, `.terms`, `.privacy`, `.log_in`, `.log_in_anyway`, `.cancel`, `.to_register`,
   `.play_games`, `.try_again`; `submit.category` (with its `category` id), `.send`, `.rules`, `.categories_try_again`,
   `.try_again`; `categories.all`, `.category` (with its id), `.play`, `.try_again`; `update.store` and
-  `.reload`; `account.delete`, `.delete_confirm` and `.delete_cancel`. A text field is no
+  `.reload`; `account.delete`, `.delete_confirm` and `.delete_cancel`, on the About screen.
+  (`account.add_username` was sent until 2026-09-28, when its link went.) A text field is no
   tap. `TapsTest` draws every screen in the states that show all it can be tapped on, taps everything a
   screen reader could, and fails on anything that reports no tap, or a name not in its lists: a new
   button gets its name by being written with `tapped`, and a name once sent never changes.
@@ -3085,7 +3111,7 @@ the same events. The moderation app sends none.
     `submit`, `points`, `categories`), but a vote already counted, which moves on and shows nothing,
     and a skip, which says nothing.
   - The ViewModel tests hold each, and that nothing typed is ever in one.
-- **The switch** *(built)*: **Статистика** on the Account screen, beside the language menu (§8d,
+- **The switch** *(built)*: **Статистика** on the Account screen, among its options (§8d,
   *The Account screen*; §8f), `analytics.enabled` and `setEnabled` through `LocalAnalytics`. On by
   default, and off is kept for the device, under `wyr.analytics.enabled` (`on` or `off`), whatever the
   environment, as the language is (§8f): the choice is the person's. Off sends nothing more and drops

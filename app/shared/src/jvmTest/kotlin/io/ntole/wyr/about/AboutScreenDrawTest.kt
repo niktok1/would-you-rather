@@ -1,5 +1,7 @@
 package io.ntole.wyr.about
 
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.ImageComposeScene
 import androidx.compose.ui.platform.ClipboardManager
@@ -149,6 +151,21 @@ class AboutScreenDrawTest {
         }
     }
 
+    /** Deleting the account is the screen's last thing, after every licence (CLAUDE.md §8d, *About*). */
+    @Test
+    fun `the deletion comes last after every licence`() {
+        Language.entries.forEach { language ->
+            val scene = scene(language, deletion = { Text(DELETION) })
+            try {
+                val shown = scene.everyText()
+                assertEquals(DELETION, shown.last(), "$language: $shown")
+                assertTrue(OPEN_SOURCE_LIBRARIES.last().name in shown, "$language: $shown")
+            } finally {
+                scene.close()
+            }
+        }
+    }
+
     @Suppress("DEPRECATION")
     private fun scene(
         language: Language,
@@ -156,11 +173,14 @@ class AboutScreenDrawTest {
         uris: UriHandler = RecordingUris(),
         accountId: String? = ACCOUNT_ID,
         clipboard: ClipboardManager = RecordingClipboard(),
+        deletion: @Composable () -> Unit = {},
     ): ImageComposeScene =
         ImageComposeScene(width = SHORT_PHONE_WIDTH, height = SHORT_PHONE_HEIGHT, density = Density(1f)) {
             CompositionLocalProvider(LocalUriHandler provides uris, LocalClipboardManager provides clipboard) {
                 WyrTheme(darkTheme = dark) {
-                    WyrStrings(language) { AboutScreen(AppVersion("1.0.0", 10000), accountId = accountId) }
+                    WyrStrings(language) {
+                        AboutScreen(AppVersion("1.0.0", 10000), accountId = accountId, deletion = deletion)
+                    }
                 }
             }
         }.also { it.render() }
@@ -172,5 +192,8 @@ class AboutScreenDrawTest {
 
         /** A player id as the server makes one, a UUID: the longest an account id is. */
         const val ACCOUNT_ID = "0f8fad5b-d9cb-469f-a165-70867728950e"
+
+        /** What the test puts where the deletion goes. */
+        const val DELETION = "the deletion"
     }
 }

@@ -67,12 +67,25 @@ data class AccountState(
      */
     val signedIn: Boolean = false,
     /**
+     * The account was deleted, and the About screen, where it is deleted, has not gone back to the
+     * Account screen for it yet ([AccountActions.leftAfterDeletion]), which shows the fresh guest. The
+     * next action takes it down too.
+     */
+    val deleted: Boolean = false,
+    /**
      * Whether this build has Google Play Games Services, so the Auth page offers to sign in with it
      * (CLAUDE.md §8a, *Play Games sign-in*): an Android build that has it set up, and none elsewhere.
      */
     val playGamesAvailable: Boolean = false,
 ) {
     val isBusy: Boolean get() = running != null
+
+    /**
+     * Whether the About screen offers to delete the account: a player is read, and a read of them has
+     * not just failed, when the deletion, which needs the server as the read did, would only fail too.
+     */
+    val offersDeletion: Boolean
+        get() = stats != null && failure?.action != AccountAction.LOAD
 
     /** What the rules refuse in the username typed to register, or null while nothing is typed. */
     val usernameProblem: UsernameProblem?

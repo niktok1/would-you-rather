@@ -130,6 +130,8 @@ class WyrIconsDrawTest {
                 "Info" to WyrIcons.Info,
                 "More" to WyrIcons.More,
                 "Copy" to WyrIcons.Copy,
+                "Plus" to WyrIcons.Plus,
+                "ChevronRight" to WyrIcons.ChevronRight,
             )
     }
 }

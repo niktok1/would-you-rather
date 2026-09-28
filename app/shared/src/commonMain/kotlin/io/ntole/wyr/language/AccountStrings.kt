@@ -20,6 +20,12 @@ data class AccountStrings(
      * player turns it off.
      */
     val statistics: String,
+    /** The Statistics switch's info icon, for a screen reader: it explains what the switch sends. */
+    val aboutStatistics: String,
+    /** The dialog the info icon opens: what the Statistics switch sends, and what never. */
+    val statisticsInfo: String,
+    /** The button that closes a dialog that only tells. */
+    val ok: String,
     /** A LOCAL or DEV build's server: its name, `{0}`, and its URL, `{1}`. */
     val serverLine: String,
     /** A guest's one way to register or log in, on the Account screen. */
@@ -75,6 +81,8 @@ data class AccountStrings(
     val total: String,
     /** Between a question's two options. */
     val or: String,
+    /** On a question's details: when it was sent, `{0}`, a date in numbers. */
+    val sentOn: String,
     val pending: String,
     val approved: String,
     /** A rejection with no reason given. */
@@ -106,7 +114,7 @@ data class AccountStrings(
     val submissionLimit: String,
     /** A moderator has blocked the player from submitting (CLAUDE.md §8d, *Authors*). */
     val submissionsBlocked: String,
-    /** Deleting the account, at the bottom of the Account screen. */
+    /** Deleting the account, at the bottom of the About screen. */
     val deleteAccount: DeleteAccountStrings,
     /** The Register form's line under its button: registering accepts the terms and the privacy policy. */
     val termsLine: TermsLineStrings,
@@ -120,6 +128,9 @@ data class AccountStrings(
             questionsAnswered = transform(questionsAnswered),
             logOut = transform(logOut),
             statistics = transform(statistics),
+            aboutStatistics = transform(aboutStatistics),
+            statisticsInfo = transform(statisticsInfo),
+            ok = transform(ok),
             serverLine = transform(serverLine),
             openAuth = transform(openAuth),
             username = transform(username),
@@ -153,6 +164,7 @@ data class AccountStrings(
             answers = transform(answers),
             total = transform(total),
             or = transform(or),
+            sentOn = transform(sentOn),
             pending = transform(pending),
             approved = transform(approved),
             rejected = transform(rejected),
@@ -187,6 +199,10 @@ internal val SerbianCyrillicAccountStrings: AccountStrings =
         questionsAnswered = "Одговорена питања",
         logOut = "Одјави се",
         statistics = "Статистика",
+        aboutStatistics = "О статистици",
+        statisticsInfo =
+            "Шаљемо податке о томе како се игра користи, да бисмо је побољшали. Без твог имена и текста питања.",
+        ok = "У реду",
         serverLine = "Сервер: {0} ({1})",
         openAuth = "Региструј се или се пријави",
         username = "Корисничко име",
@@ -220,6 +236,7 @@ internal val SerbianCyrillicAccountStrings: AccountStrings =
         answers = "Одговори",
         total = "Укупно",
         or = "или",
+        sentOn = "Послато {0}",
         pending = "На чекању",
         approved = "Одобрено",
         rejected = "Одбијено",
@@ -252,6 +269,10 @@ internal val EnglishAccountStrings: AccountStrings =
         questionsAnswered = "Questions answered",
         logOut = "Log out",
         statistics = "Statistics",
+        aboutStatistics = "About statistics",
+        statisticsInfo =
+            "We send how the game is used, so we can make it better. Never your name or any question's text.",
+        ok = "OK",
         serverLine = "Server: {0} ({1})",
         openAuth = "Register or log in",
         username = "Username",
@@ -285,6 +306,7 @@ internal val EnglishAccountStrings: AccountStrings =
         answers = "Answers",
         total = "Total",
         or = "or",
+        sentOn = "Sent {0}",
         pending = "Pending",
         approved = "Approved",
         rejected = "Rejected",
