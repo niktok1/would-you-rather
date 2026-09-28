@@ -78,8 +78,21 @@ fun QuestionDetailsScreen(
     val counts = countsOf(submission)
     val tally = submission.tally
     // Counted up together, as a race, as the Play screen's reveal is, and as quick as the Home screen's.
-    val countedA = rememberCountUp(tally.percentA, rival = tally.percentB, durationMillis = HOME_COUNT_UP_MILLIS)
-    val countedB = rememberCountUp(tally.percentB, rival = tally.percentA, durationMillis = HOME_COUNT_UP_MILLIS)
+    // Each resumed where it was in a composition made anew, an Android rotation's, as the Play screen's is.
+    val countedA =
+        rememberCountUp(
+            tally.percentA,
+            rival = tally.percentB,
+            durationMillis = HOME_COUNT_UP_MILLIS,
+            saveKey = submission.id,
+        )
+    val countedB =
+        rememberCountUp(
+            tally.percentB,
+            rival = tally.percentA,
+            durationMillis = HOME_COUNT_UP_MILLIS,
+            saveKey = submission.id,
+        )
     var sharing by remember { mutableStateOf<SharedQuestion?>(null) }
 
     PageSurface(modifier = modifier.fillMaxSize()) {

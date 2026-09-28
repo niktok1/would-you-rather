@@ -95,6 +95,8 @@ import io.ntole.wyr.language.SerbianLatinStrings
 import io.ntole.wyr.language.Strings
 import io.ntole.wyr.language.categoryName
 import io.ntole.wyr.language.fill
+import io.ntole.wyr.play.COUNT_UP_MILLIS
+import io.ntole.wyr.play.REVEAL_HOLD_MILLIS
 import io.ntole.wyr.services.AppServices
 import io.ntole.wyr.submit.sendText
 import kotlinx.coroutines.CompletableDeferred
@@ -147,10 +149,13 @@ class AppNavigationTest {
     private var restored: Map<String, List<Any?>>? = null
     private var saved: Map<String, List<Any?>>? = null
 
+    // viewModelScope runs on Dispatchers.Main, which the JVM has none of under test: this, whose delays
+    // wait for a test to move its clock.
+    private val main = UnconfinedTestDispatcher()
+
     @BeforeTest
     fun setUp() {
-        // viewModelScope runs on Dispatchers.Main, which the JVM has none of under test.
-        Dispatchers.setMain(UnconfinedTestDispatcher())
+        Dispatchers.setMain(main)
         // The clock the analytics time with, which a test moves by hand.
         startKoin {
             modules(
@@ -299,6 +304,44 @@ class AppNavigationTest {
         assertEquals(2, analytics.named(AnalyticsEvent.ACCOUNT_OPENED).size, "back on Account is a visit of its own")
         // Account, Account rotated, the form, the form rotated, and Account again: each reads the points.
         assertEquals(5, game.statsRead)
+    }
+
+    /**
+     * An Android rotation mid-reveal resumes it (CLAUDE.md §8d, *The Play screen*): the Play screen made
+     * anew draws, from its first frame, exactly what it drew as its state was saved, the pick lifted and
+     * both counts where they had come to, and the half second before a card goes on, the ViewModel's,
+     * neither starts again nor ends with it. Once the count is done, a rotation draws its last frame.
+     */
+    @Test
+    fun `a rotation mid-reveal resumes the reveal where it was`() {
+        game.serving = QUESTION
+        game.outcome = VoteOutcome(Side.A, Tally(votesA = 3, votesB = 1), pointsAwarded = 1, totalPoints = 5)
+        lateinit var asSaved: IntArray
+        withApp { scene ->
+            scene.tapPlay()
+            scene.tap(QUESTION.optionA)
+            scene.passTime(COUNT_UP_MILLIS * 2L / 5)
+            asSaved = scene.pixels()
+        }
+        main.scheduler.advanceTimeBy(REVEAL_HOLD_MILLIS - 1)
+
+        lateinit var done: IntArray
+        afterRotation { scene ->
+            assertTrue(scene.pixels().contentEquals(asSaved), "the reveal is not where it was")
+            scene.tap(QUESTION.optionA)
+            assertEquals(1, game.questionsAsked, "a card went on within the reveal's first half second")
+            scene.passTime(COUNT_UP_MILLIS.toLong())
+            done = scene.pixels()
+        }
+
+        afterRotation { scene ->
+            assertTrue(scene.pixels().contentEquals(done), "the reveal done is not drawn at once")
+            // What is due at the very end of the time moved runs only once asked to.
+            main.scheduler.advanceTimeBy(1)
+            main.scheduler.runCurrent()
+            scene.tap(QUESTION.optionA)
+            assertEquals(2, game.questionsAsked, "a card goes on once the half second is over")
+        }
     }
 
     /**
@@ -1044,6 +1087,9 @@ class AppNavigationTest {
         CurrentSession {
         var questionsAsked = 0
         var statsRead = 0
+
+        /** What a vote answers, as the side voted for; none votes unless a test sets it. */
+        var outcome: VoteOutcome? = null
         var submissionsRead = 0
 
         /** The question every fetch serves, or none: out of questions, which needs none made. */
@@ -1097,7 +1143,7 @@ class AppNavigationTest {
             side: Side,
             attempt: AttemptId,
             answerMillis: Long?,
-        ): VoteOutcome = error("nothing votes here")
+        ): VoteOutcome = outcome?.copy(yourSide = side) ?: error("nothing votes here")
 
         override suspend fun setReaction(
             questionId: String,

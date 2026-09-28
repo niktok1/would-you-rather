@@ -917,6 +917,21 @@ whose log said `guest clean-up deleted 0 guests idle 90 days or more`. **Not ver
 PostgreSQL (CI's `server-postgres` job runs its tests), a deletion of a real idle guest on a deployed
 server, the rules line on a device, CI's `ios` job, and the *Release signing* step.
 
+**On `feat/reveal-resume`** (from f7b5576; not merged, not pushed), the user's "resume": an Android
+activity made anew mid-reveal (a rotation, dark mode, font size, locale) no longer replays the Play
+screen's reveal (CLAUDE.md §8d, *The Play screen*, *A reveal resumes*). `rememberCountUp` takes a
+`saveKey`, the question's id, and keeps how far its count had come in saved state, a plain field the
+animation writes each frame, so a frame still composes nothing; a restored count goes on for the time
+it had left, a finished one draws its final values at once. The card motion and the face's slide
+already started at their end state in a new composition, and the half second's hold is the
+ViewModel's, so neither needed a change. The Question details screen's count resumes too; **Home's
+reveal still replays** after a rotation mid-reveal (its timeline would need the same, about ten lines).
+**Verified on this Mac**: `ktlintCheck`, `:app:shared:jvmTest` (554), `:app:shared:testAndroidHostTest`
+(331), the iOS compiles of `:app:shared` main and test, none failing; each new restore test fails
+with the saving taken out. **Not verified**: a rotation on a phone. To check: answer a question in a
+DEV build, rotate while the percentages count, and while they stand; they go on, or stand, rather
+than count from 0.
+
 ### Verified working
 
 - **`feat/android-release`**, on this machine: `ktlintCheck`; the verify job's tests (server 480,

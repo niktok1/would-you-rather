@@ -14,6 +14,8 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.Saver
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
@@ -48,19 +50,54 @@ internal const val COUNT_UP_MILLIS = 3_000
  * draws the number and the bar again and does nothing else. Nothing is composed or laid out again, and
  * no semantics change reaches an accessibility service; a debug build, whose Compose runs several
  * times slower than a release build's, has no time for more at 60 frames a second.
+ *
+ * With a [saveKey], the question's id, how far the count has come is kept in saved state, so a
+ * composition made anew, as an Android activity is on a rotation, a switch to dark mode or a new font
+ * size, resumes it where it was rather than counting from 0 again: part way, it goes on at the same
+ * speed for the time it had left, and done, it draws the final values with no count at all. The
+ * animation writes it on every frame into a plain field, no state, which only saving reads, so a frame
+ * still composes nothing. Without one, the count starts from 0 in every composition that shows it.
  */
 @Composable
 internal fun rememberCountUp(
     target: Int,
     rival: Int = target,
     durationMillis: Int = COUNT_UP_MILLIS,
+    saveKey: String? = null,
 ): State<Float> {
-    val progress = remember { Animatable(0f) }
-    LaunchedEffect(target, rival) {
-        progress.animateTo(1f, animationSpec = tween(durationMillis = durationMillis, easing = LinearEasing))
+    // Keyed by the question, so another question's count starts afresh wherever it is composed.
+    val reached =
+        if (saveKey != null) {
+            rememberSaveable(saveKey, saver = CountUpProgress.Saver) { CountUpProgress() }
+        } else {
+            remember { CountUpProgress() }
+        }
+    // Read once, as the count starts: the plain field is no state, so nothing composes on its writes.
+    val progress = remember(reached) { Animatable(reached.fraction) }
+    LaunchedEffect(progress, target, rival) {
+        val left = 1f - progress.value
+        if (left <= 0f) return@LaunchedEffect
+        // The time left at the count's own speed, so a resumed count ends as the whole one would have.
+        progress.animateTo(
+            1f,
+            animationSpec = tween(durationMillis = (durationMillis * left).roundToInt(), easing = LinearEasing),
+        ) { reached.fraction = value }
     }
     // Not a derived state: each read reads the animation itself, so whatever draws it is told of every frame.
     return remember(progress, target, rival) { RaceState(progress, target, rival) }
+}
+
+/**
+ * How far a count up has come, from 0 to 1 of its time: written by the animation on every frame and read
+ * only when the composition's state is saved and as a restored count starts, never in composition, so
+ * it is a plain field rather than state.
+ */
+private class CountUpProgress(
+    var fraction: Float = 0f,
+) {
+    companion object {
+        val Saver: Saver<CountUpProgress, Float> = Saver(save = { it.fraction }, restore = { CountUpProgress(it) })
+    }
 }
 
 /** [raceAt] of [progress]'s value, read afresh on every read. */

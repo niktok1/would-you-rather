@@ -2,6 +2,9 @@ package io.ntole.wyr.play
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.saveable.LocalSaveableStateRegistry
+import androidx.compose.runtime.saveable.SaveableStateRegistry
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.ImageComposeScene
 import androidx.compose.ui.Modifier
@@ -76,6 +79,11 @@ class CountedUpTextDrawTest {
      */
     @Test
     fun `a frame of the count up is neither composed nor laid out`() {
+        // Kept in saved state or not: keeping it writes a plain field on each frame, which composes nothing.
+        listOf(null, SAVE_KEY).forEach { saveKey -> assertOnlyDrawn(saveKey) }
+    }
+
+    private fun assertOnlyDrawn(saveKey: String?) {
         val recompositions = Recompositions()
         var measured = 0
         var placed = 0
@@ -88,7 +96,13 @@ class CountedUpTextDrawTest {
                     placeable.place(0, 0)
                 }
             }
-        withCount(70, modifier = counting, recompositions = recompositions) { scene ->
+        withCount(
+            70,
+            modifier = counting,
+            recompositions = recompositions,
+            saveKey = saveKey,
+            registry = SaveableStateRegistry(null) { true },
+        ) { scene ->
             scene.renderAt(FRAME)
             val before = Triple(recompositions.scopesEntered, measured, placed)
             FRAMES.drop(2).forEach { time ->
@@ -96,12 +110,83 @@ class CountedUpTextDrawTest {
                 assertEquals(
                     before,
                     Triple(recompositions.scopesEntered, measured, placed),
-                    "composed, measured and placed by ${time / 1_000_000} ms",
+                    "composed, measured and placed by ${time / 1_000_000} ms, kept as $saveKey",
                 )
             }
             recompositions.assertCounting(scene, FRAMES.last())
         }
     }
+
+    /**
+     * A composition made anew mid-count, as an Android activity is on a rotation, its saved state
+     * restored, goes on from the number the count had reached, never from 0, and reaches its target
+     * in the time the count had left (CLAUDE.md §8d, *The Play screen*).
+     */
+    @Test
+    fun `a count restored part way goes on from where it was`() {
+        val first = mutableListOf<Int>()
+        val saved = countedAndSaved(until = RESUMED_AT, worded = first)
+        val before = first.last()
+        assertTrue(before in 1 until 70, "part way when saved: $before")
+
+        val again = mutableListOf<Int>()
+        val drawn = mutableMapOf<Long, Int>()
+        val left = COUNTED_UP - RESUMED_AT
+        val text = { number: Int -> "$number%".also { again += number } }
+        withCount(70, text = text, saveKey = SAVE_KEY, registry = registry(saved)) { scene ->
+            drawn[0] = again.last()
+            framesUntil(left + FRAME).forEach { time ->
+                scene.renderAt(time)
+                drawn[time] = again.last()
+            }
+        }
+        assertEquals(before, drawn.getValue(0), "the first frame after the restore")
+        val counted = again.drop(1)
+        assertEquals(counted.distinct().sorted(), counted, "the numbers drawn after the restore")
+        val frames = framesUntil(left + FRAME)
+        assertTrue(drawn.getValue(frames[frames.size / 2]) in before + 1 until 70, "on the way: $drawn")
+        assertEquals(70, drawn.getValue(frames.last()), "in the time it had left")
+    }
+
+    /**
+     * A composition made anew once the count is done draws the target from its first frame and counts
+     * nothing: every number drawn is the target.
+     */
+    @Test
+    fun `a count restored once done draws its target at once`() {
+        val saved = countedAndSaved(until = COUNTED_UP + FRAME)
+        val again = mutableListOf<Int>()
+        val text = { number: Int -> "$number%".also { again += number } }
+        withCount(70, text = text, saveKey = SAVE_KEY, registry = registry(saved)) { scene ->
+            FRAMES.forEach { time -> scene.renderAt(time) }
+        }
+        assertEquals(setOf(70), again.toSet(), "the numbers drawn after the restore")
+    }
+
+    /**
+     * A count up to 70, kept under [SAVE_KEY], drawn a frame at a time until [until], every number worded
+     * added to [worded]; what its composition saved, as an activity saves before it is destroyed.
+     */
+    private fun countedAndSaved(
+        until: Long,
+        worded: MutableList<Int> = mutableListOf(),
+    ): Map<String, List<Any?>> {
+        val registry = registry(null)
+        var saved: Map<String, List<Any?>> = emptyMap()
+        val text = { number: Int -> "$number%".also { worded += number } }
+        withCount(70, text = text, saveKey = SAVE_KEY, registry = registry) { scene ->
+            framesUntil(until).forEach { time -> scene.renderAt(time) }
+            // Before the composition goes, as an activity saves its state before it is destroyed.
+            saved = registry.performSave()
+        }
+        return saved
+    }
+
+    /** A registry of saved state, restoring [restored], taking anything. */
+    private fun registry(restored: Map<String, List<Any?>>?) = SaveableStateRegistry(restored) { true }
+
+    /** Every frame at 60 a second from the first after 0 to [until]. */
+    private fun framesUntil(until: Long): List<Long> = (1..until / FRAME).map { it * FRAME }
 
     /**
      * The number drawn last by each of [FRAMES] and by one long after, of a count up to [target],
@@ -130,20 +215,24 @@ class CountedUpTextDrawTest {
         text: (Int) -> String = { "$it%" },
         modifier: Modifier = Modifier,
         recompositions: Recompositions = Recompositions(),
+        saveKey: String? = null,
+        registry: SaveableStateRegistry? = null,
         test: (ImageComposeScene) -> Unit,
     ) {
         val scene =
             ImageComposeScene(width = WIDTH, height = HEIGHT, density = Density(1f)) {
-                CountedBy(recompositions) {
-                    WyrTheme(darkTheme = false) {
-                        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                            CountedUpText(
-                                counted = rememberCountUp(target),
-                                target = target,
-                                text = text,
-                                style = STYLE,
-                                modifier = modifier,
-                            )
+                CompositionLocalProvider(LocalSaveableStateRegistry provides registry) {
+                    CountedBy(recompositions) {
+                        WyrTheme(darkTheme = false) {
+                            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                CountedUpText(
+                                    counted = rememberCountUp(target, saveKey = saveKey),
+                                    target = target,
+                                    text = text,
+                                    style = STYLE,
+                                    modifier = modifier,
+                                )
+                            }
                         }
                     }
                 }
@@ -165,6 +254,12 @@ class CountedUpTextDrawTest {
 
         /** One frame of a phone drawing 60 a second, in nanoseconds. */
         const val FRAME = 1_000_000_000L / 60
+
+        /** The question a kept count is kept for. */
+        const val SAVE_KEY = "q1"
+
+        /** Where a restored count was, in nanoseconds: 40% of the way through. */
+        const val RESUMED_AT = COUNTED_UP * 2 / 5
 
         /**
          * Every frame of the count up at 60 a second, from the first, at 0, to the one at 3 seconds,
