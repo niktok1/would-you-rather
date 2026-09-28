@@ -41,6 +41,7 @@ import io.ntole.wyr.core.domain.vote.Side
 import io.ntole.wyr.core.domain.vote.Tally
 import io.ntole.wyr.language.LocalStrings
 import io.ntole.wyr.navigation.HomeTopBar
+import io.ntole.wyr.play.CategoriesPlayed
 import io.ntole.wyr.play.CountedUpText
 import io.ntole.wyr.play.RevealBar
 import io.ntole.wyr.play.cardMotion
@@ -70,9 +71,10 @@ internal const val FADE_THROUGH_SCALE = 0.04f
 
 /**
  * The Home screen, the one the app opens on (CLAUDE.md §8d, *Navigation*, *Home picks*): the game's
- * name and, under it, two small Play buttons side by side in the answer cards' colours (§5b), and the
- * account icon, top right, [onAccount], with a dot while [news] waits there. Nothing else, the user
- * asking for less text.
+ * name and, under it, two small Play buttons side by side in the answer cards' colours (§5b), under them
+ * the categories played, [categories], as Play's top bar names them ([CategoriesPlayed]), which open the
+ * Categories screen, [onCategories], and the account icon, top right, [onAccount], with a dot while
+ * [news] waits there. Nothing else, the user asking for less text.
  *
  * A tap on a button is [onPick], told which, at once; then both buttons count up their share of every
  * player's taps, [picks] and this tap with them, as a reveal counts ([CountedUpText]), stay a moment, and
@@ -85,6 +87,8 @@ fun HomeScreen(
     onPick: (Side) -> Unit,
     onPlay: () -> Unit,
     onAccount: () -> Unit,
+    categories: String,
+    onCategories: () -> Unit,
     modifier: Modifier = Modifier,
     news: Boolean = false,
 ) {
@@ -137,29 +141,44 @@ fun HomeScreen(
                     fontWeight = FontWeight.ExtraBold,
                     textAlign = TextAlign.Center,
                 )
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(dimens.spaceMd),
+                // The pair and, just under it, what they play: the categories, which a tap opens.
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(dimens.spaceSm),
                     modifier = Modifier.widthIn(max = dimens.homeButtonsMaxWidth).fillMaxWidth(),
                 ) {
-                    listOf(Side.A, Side.B).forEach { side ->
-                        PlayButton(
-                            side = side,
-                            share = revealed?.percentOf(side),
-                            rival = revealed?.percentOf(if (side == Side.A) Side.B else Side.A),
-                            isPicked = picked == side,
-                            isDimmed = picked != null && picked != side,
-                            enabled = picked == null,
-                            onClick = {
-                                // Once: a screen reader's tap reaches a button that is off as well.
-                                if (picked == null) {
-                                    haptics.performHapticFeedback(HapticFeedbackType.Confirm)
-                                    picked = side
-                                    onPick(side)
-                                }
-                            },
-                            modifier = Modifier.weight(1f),
-                        )
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(dimens.spaceMd),
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        listOf(Side.A, Side.B).forEach { side ->
+                            PlayButton(
+                                side = side,
+                                share = revealed?.percentOf(side),
+                                rival = revealed?.percentOf(if (side == Side.A) Side.B else Side.A),
+                                isPicked = picked == side,
+                                isDimmed = picked != null && picked != side,
+                                enabled = picked == null,
+                                onClick = {
+                                    // Once: a screen reader's tap reaches a button that is off as well.
+                                    if (picked == null) {
+                                        haptics.performHapticFeedback(HapticFeedbackType.Confirm)
+                                        picked = side
+                                        onPick(side)
+                                    }
+                                },
+                                modifier = Modifier.weight(1f),
+                            )
+                        }
                     }
+                    // Off once a Play button is tapped, as it looks the same: the reveal moves nothing.
+                    CategoriesPlayed(
+                        text = categories,
+                        enabled = picked == null,
+                        // Guarded as the buttons are: a screen reader's tap reaches one that is off as well.
+                        onClick = { if (picked == null) onCategories() },
+                        element = "home.categories",
+                    )
                 }
             }
         }

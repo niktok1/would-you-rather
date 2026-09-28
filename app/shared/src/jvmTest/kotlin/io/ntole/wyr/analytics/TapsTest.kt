@@ -95,12 +95,20 @@ class TapsTest {
     @Test
     fun `every tap on Home and the top bars is reported`() {
         // A tap on either Play button holds the other still through the reveal, so each is a Home of its own,
-        // the other left untapped: from the top, the account icon, then card A's colour and card B's.
+        // the other left untapped: from the top, the account icon, then card A's colour and card B's, and
+        // under them the categories played, which open the Categories screen.
         listOf(2, 1).forEach { other ->
             assertEquals(
-                setOf("home.play", "top_bar.account"),
+                setOf("home.play", "top_bar.account", "home.categories"),
                 elementsTapped(skipping = other) {
-                    HomeScreen(picks = Tally(votesA = 3, votesB = 1), onPick = {}, onPlay = {}, onAccount = {})
+                    HomeScreen(
+                        picks = Tally(votesA = 3, votesB = 1),
+                        onPick = {},
+                        onPlay = {},
+                        onAccount = {},
+                        categories = "Све",
+                        onCategories = {},
+                    )
                 },
             )
         }
@@ -113,11 +121,11 @@ class TapsTest {
         assertEquals(listOf("A", "B"), sides)
         // The question's menu too, and what it lists once open (CLAUDE.md §8d, *Reports*).
         assertEquals(
-            setOf("top_bar.home", "top_bar.categories", "top_bar.account") +
+            setOf("top_bar.home", "top_bar.categories") +
                 setOf("question_menu.open", "question_menu.report", "question_menu.hide_question") +
                 "question_menu.hide_author",
             elementsTapped {
-                PlayTopBar(onHome = {}, onAccount = {}, menu = { QuestionMenu(enabled = true, onPick = {}) }) {
+                PlayTopBar(onHome = {}, menu = { QuestionMenu(enabled = true, onPick = {}) }) {
                     CategoriesPlayed(text = "Све", enabled = true, onClick = {})
                 }
             },

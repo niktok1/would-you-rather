@@ -34,10 +34,26 @@ class Navigator internal constructor(
     /** Whether there is a screen to go back to: everywhere but Home. */
     val canGoBack: Boolean get() = screens.size > 1
 
+    /**
+     * The screen [current] was opened from, the one under it, which [back] goes to; none at Home. Kept
+     * with the back stack, so it survives saved state: the Categories screen plays as it was opened.
+     */
+    val previous: Screen? get() = screens.getOrNull(screens.size - 2)
+
     /** Shows [screen] over the one shown, or goes back to it, dropping all above, if it is on the stack. */
     fun open(screen: Screen) {
         val at = screens.indexOf(screen)
         screens = if (at < 0) screens + screen else screens.subList(0, at + 1).toList()
+    }
+
+    /**
+     * Shows [screen] in place of the one shown, which leaves the stack: back from [screen] then goes to
+     * the screen the one shown was opened from. As [open] does, it goes back to [screen] instead when
+     * that is on the stack below. At Home, which never leaves the stack, it is [open].
+     */
+    fun replace(screen: Screen) {
+        if (canGoBack) screens = screens.dropLast(1)
+        open(screen)
     }
 
     /**
