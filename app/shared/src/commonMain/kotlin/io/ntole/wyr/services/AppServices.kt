@@ -55,7 +55,7 @@ class AppServices(
             return
         }
         started = true
-        scope.launch { linkPlayGames.automatically() }
+        scope.launch { linkPlayGames.run() }
         scope.launch { keepPushTokenRegistered.run() }
         // The session stored at launch, and every one after it: a login's player has a list of their own.
         scope.launch { session.sessions.collect { notices.check() } }

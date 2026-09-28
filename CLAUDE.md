@@ -916,8 +916,10 @@ decided in §8b).
     `PlayGamesFlowTest` takes every path with Google answered by a MockEngine.
   - *The client* (common code; the platform's Play Games behind the `PlayGames` port in
     `:core:domain`, `PlayGames.None` but on an Android build that has it): `LinkPlayGames`, bound once
-    for the app. **At launch** (`automatically`, which `AppServices` starts on the app's first coming
-    to the foreground), once a session exists (`CurrentSession.sessions`, which never mints: the first
+    for the app. **At launch** (`run`, which `AppServices` starts on the app's first coming to the
+    foreground, and which tries again for every session stored after the launch's, *fixed
+    2026-09-29*: a dead session found only after the launch's try, a DEV server's data reset, left the
+    phone a guest until the next launch), once a session exists (`CurrentSession.sessions`, which never mints: the first
     launch mints its guest only as the player starts to play), while who plays on the device is
     **unsettled**, and when Play Games says the player is signed in to it (v2 signs a player with a
     profile in by itself), it asks Play Games for a server auth code and sends it
@@ -930,12 +932,12 @@ decided in §8b).
     out as all the same (rare, and accepted). When it is another player's, the question queue is dropped; the analytics identify the player
     either way (§8g). A refusal (`PLAY_GAMES_CODE_REFUSED`, `PLAY_GAMES_UNAVAILABLE`, each a
     `DomainError` of its own now, offline, no code) leaves the player as they are, shows nothing, and
-    is tried again at the next launch. **Settled** (`PlayGamesSettled`, `wyr.playgames.settled.local`,
+    is tried again with the next session stored or at the next launch. **Settled** (`PlayGamesSettled`, `wyr.playgames.settled.local`,
     `.dev` or `.prod` in the session's storage, one per environment as the session is, §8e) is set by a
     Play Games sign-in, a login, a logout and an account's deletion, each the player's own doing, and
     forgotten when a dead
     session is replaced by a fresh guest (`resetIfStill`), so that device signs in with Play Games at
-    its next launch, which may bring back the player the dead session was; a fresh install has none
+    once, the fresh guest's session being one more for `run`, which may bring back the player the dead session was; a fresh install has none
     (*provisional — user decision*, §8b *When a launch signs in with Play Games*). `LinkPlayGamesTest`,
     `DefaultPlayGamesRepositoryTest`, `CurrentSessionTest`, `AppServicesTest`.
   - *On Android* (`AndroidPlayGames` in `:app:shared`'s androidMain, over `play-services-games-v2`,

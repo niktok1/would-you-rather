@@ -15,9 +15,9 @@ import kotlinx.coroutines.sync.withLock
  * Signs this device in with Google Play Games Services (CLAUDE.md §8a, *Play Games sign-in*): the
  * user's no-click register, the Auth page's forms staying as the fallback.
  *
- * [automatically] is the launch's: once there is a session, and while who plays here is unsettled
- * ([PlayGamesRepository.isSettled]), a player Play Games signed in by itself is signed in to the
- * server, with no tap. [manually] is the Auth page's button. Either way the server's answer is stored
+ * [run] is the launch's: for the session stored then and every one after it, while who plays here is
+ * unsettled ([PlayGamesRepository.isSettled]), a player Play Games signed in by itself is signed in to
+ * the server, with no tap; [automatically] is one such try. [manually] is the Auth page's button. Either way the server's answer is stored
  * in place of the device's session, as a login's is; when that is another player, the question queue,
  * filled from the one before's feed, is dropped, and [analytics] hear who plays now (§8g).
  *
@@ -49,7 +49,24 @@ public class LinkPlayGames(
         if (!playGames.available) return false
         // Once a session exists: the first launch mints one only as the player starts to play.
         session.sessions.first()
-        return mutex.withLock {
+        return tryUnsettled()
+    }
+
+    /**
+     * From launch on, never returning but by the caller's cancellation: [automatically]'s try for the
+     * session stored then, and again for every session stored after it. A dead session found after the
+     * launch's try (a DEV server's data reset, a refresh token expired) is replaced by a fresh guest
+     * and unsettles the device, so that guest is signed in with Play Games at once, not at the next
+     * launch. A session the player chose (a login, a logout, a sign-in) settles it, so its try asks
+     * Play Games nothing.
+     */
+    public suspend fun run() {
+        if (!playGames.available) return
+        session.sessions.collect { tryUnsettled() }
+    }
+
+    private suspend fun tryUnsettled(): Boolean =
+        mutex.withLock {
             if (link.isSettled() || !playGames.isAuthenticated()) return@withLock false
             try {
                 signIn(automatic = true)
@@ -57,7 +74,6 @@ public class LinkPlayGames(
                 false
             }
         }
-    }
 
     /**
      * The Auth page's button: asks the player to sign in to Play Games unless they are, then signs in to

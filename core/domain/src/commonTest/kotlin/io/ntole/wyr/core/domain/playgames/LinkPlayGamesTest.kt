@@ -13,6 +13,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -79,6 +80,39 @@ class LinkPlayGamesTest {
 
             assertFalse(linking.automatically())
             assertEquals(emptyList(), calls)
+        }
+
+    /**
+     * The launch's try found the device settled, then its stored session dead (a DEV server's data
+     * reset): the fresh guest that replaced it unsettled the device, and is signed in at once.
+     */
+    @Test
+    fun `a dead session replaced after the launch's try signs its fresh guest in`() =
+        runTest {
+            session.player.value = "p1"
+            link.settled = true
+            backgroundScope.launch { linking.run() }
+            testScheduler.runCurrent()
+            assertEquals(emptyList(), calls, "settled at launch")
+
+            link.settled = false
+            session.player.value = "guest2"
+            testScheduler.runCurrent()
+
+            assertEquals(listOf("isAuthenticated", "serverAuthCode", "signIn code-1", "identify guest2"), calls)
+        }
+
+    /** The session a sign-in stores settles the device: its own session asks Play Games nothing more. */
+    @Test
+    fun `the session a sign-in stores asks for no second sign-in`() =
+        runTest {
+            session.player.value = "guest1"
+            link.answer = "linked-player"
+            backgroundScope.launch { linking.run() }
+            testScheduler.runCurrent()
+
+            assertEquals(1, calls.count { it == "serverAuthCode" })
+            assertEquals("linked-player", session.current())
         }
 
     @Test
