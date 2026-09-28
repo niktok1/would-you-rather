@@ -10,8 +10,8 @@
   What the game does not do yet carries a "у изради" pill (class "soon") and is written as coming;
   when the feature ships, drop the pill and put the text in the present tense, in both languages.
   This page and en/terms.html say the same; the question rules follow CLAUDE.md §8d (Submitting,
-  Moderation, Reports, Seeds), §8b (Personalization: the four banned topics) and §8f (How an option
-  is phrased), so change them together.
+  Moderation, Reports, Seeds, The shop, Sharing), §8b (Personalization: the four banned topics) and
+  §8f (How an option is phrased), so change them together.
 -->
 <html lang="sr-Cyrl">
 <head>
@@ -48,8 +48,8 @@
     <section class="card" aria-labelledby="summary">
       <h2 id="summary">Укратко</h2>
       <ul>
-        <li>Игра је бесплатна, без реклама, за особе од 16 година и старије.</li>
-        <li>Поени су само за игру: немају новчану вредност.</li>
+        <li>Игра је бесплатна, без реклама, за особе од 13 година и старије.</li>
+        <li>Поени су само за игру: немају новчану вредност, а у продавници за њих купујеш теме.</li>
         <li>Питање које пошаљеш мора да буде права дилема, без мржње, без стварних приватних особа и без спама, а за сада не сме да буде о вери, политици, здрављу ни сексуалности.</li>
         <li>Свако питање прегледа модератор пре него што уђе у игру.</li>
       </ul>
@@ -61,10 +61,11 @@
         <li><a href="#about">О игри</a></li>
         <li><a href="#age">Узраст</a></li>
         <li><a href="#account">Налог</a></li>
-        <li><a href="#points">Поени</a></li>
+        <li><a href="#points">Поени и продавница</a></li>
         <li><a href="#rules">Правила питања</a></li>
         <li><a href="#moderation">Модерација</a></li>
         <li><a href="#reports">Пријаве и сакривање</a></li>
+        <li><a href="#sharing">Дељење</a></li>
         <li><a href="#starter">Почетна питања и узорак гласова</a></li>
         <li><a href="#fair-play">Поштена игра</a></li>
         <li><a href="#deletion">Брисање налога</a></li>
@@ -76,18 +77,18 @@
 
     <section id="about">
       <h2>1. О игри</h2>
-      <p>„Шта би радије?“ је игра у којој бираш једну од две могућности, видиш како су изабрали други играчи и скупљаш поене. Игру води <span class="ph">[ИМЕ И ПРЕЗИМЕ / NAME]</span>, <span class="ph">[АДРЕСА / ADDRESS]</span> („ми“).</p>
-      <p>Игра је на српском, ћирилицом и латиницом, и доступна је у Србији, Босни и Херцеговини, Црној Гори и Северној Македонији. Делови ових услова означени са <span class="soon">у изради</span> описују оно што игра тек добија.</p>
+      <p>„Шта би радије?“ је игра у којој бираш једну од две могућности, видиш како су изабрали други играчи и скупљаш поене. Игру води <span class="ph">[ИМЕ И ПРЕЗИМЕ / NAME]</span> (toleapps), <span class="ph">[АДРЕСА / ADDRESS]</span> („ми“).</p>
+      <p>Игра је на српском и доступна је у Србији, Босни и Херцеговини, Црној Гори и Северној Македонији.</p>
       <p>Кад користиш игру, прихваташ ове услове и <a href="privacy.html">политику приватности</a>. Ако се са њима не слажеш, немој да користиш игру.</p>
       <p>Питања шаљу само регистровани играчи. Регистрацијом прихваташ ове услове и политику приватности, а слањем питања прихваташ <a href="#rules">правила питања</a>; игра те на њих упућује испод дугмета за регистрацију и испод дугмета за слање питања.</p>
-      <!-- CHECK: Google Play's User Generated Content policy asks that players accept the terms before they can create or upload content, and its User Data policy asks for a privacy policy link inside the app as well as in Play Console. The app has them now (CLAUDE.md §8d): the About screen links privacy.html and terms.html; under Register a line links the terms and the privacy policy („Регистрацијом прихваташ услове и политику приватности.“); and under the Submit form's Send a line links terms.html („Слањем прихваташ правила питања.“), which covers a player registered by Play Games alone, who never sees Register. The links open terms.html, not #rules: point the Submit line at the anchor if the rules should open first. Whether a line is enough or it needs a checkbox is for the policies' current text and the lawyer. -->
-      <!-- CHECK: the countries and languages are CLAUDE.md §8b, The launch; English is hidden in the app at launch (not built yet). -->
+      <!-- CHECK: Google Play's User Generated Content policy asks that players accept the terms before they can create or upload content, and its User Data policy asks for a privacy policy link inside the app as well as in Play Console. The app has them (CLAUDE.md §8d): the About screen links privacy.html and terms.html; under Register a line links the terms and the privacy policy („Регистрацијом прихваташ услове и политику приватности.“); and under the Submit form's Send a line links terms.html („Слањем прихваташ правила питања.“), which covers a player registered by Play Games alone, who never sees Register. The links open terms.html, not #rules: point the Submit line at the anchor if the rules should open first. Whether a line is enough or it needs a checkbox is for the policies' current text and the lawyer. -->
+      <!-- CHECK: the countries are CLAUDE.md §8b, The launch. The language menu is hidden for now (§8f), so the game shows Serbian Cyrillic; say "ћирилицом и латиницом" again when it comes back. -->
     </section>
 
     <section id="age">
       <h2>2. Узраст</h2>
-      <p>Игру смеју да користе само особе од 16 година и старије. Налог за који сазнамо да припада млађој особи можемо да обришемо.</p>
-      <!-- CHECK: why 16 is in privacy.html's section 9 comment. -->
+      <p>Игру смеју да користе само особе од 13 година и старије. Налог за који сазнамо да припада млађој особи можемо да обришемо.</p>
+      <!-- CHECK: 13 and over since 2026-09-29; what 13 to 15 needs is privacy.html's section 9 comment. -->
     </section>
 
     <section id="account">
@@ -95,29 +96,29 @@
       <ul>
         <li>Играш одмах, као гост. Гост је везан за уређај: ако пре регистрације обришеш апликацију или њене податке, или 30 дана не играш, губиш га заједно са поенима. Регистровани налог се тако не губи: после 30 дана без играња само се поново пријавиш.</li>
         <li>Регистрација је необавезна: изабереш корисничко име и лозинку и задржиш све што имаш као гост.</li>
+        <li>У Андроид верзији налог добијаш и преко Google Play игара, Google-ове услуге за игре: ако си на телефону пријављен у њих, игра те сама пријави. Тако повезан налог је регистрован, као и налог са корисничким именом. Веза између твог профила у Google Play играма и налога у игри је трајна: за сада не може да се раскине, осим брисањем налога. Ако је профил већ повезан са другим налогом у игри, пријава те пребацује на тај налог, а поени госта остају иза. Пријављуј се само својим профилом: ко се пријави твојим профилом, игра као ти.</li>
         <li>Ако се на уређају на ком играш као гост пријавиш на налог који већ имаш, поени госта не прелазе на налог. Игра те на то упозори пре пријаве.</li>
         <li>Корисничко име не сме да вређа нити да представља неког другог. Лозинку чувај за себе: одговараш за оно што се ради преко твог налога.</li>
         <li>Имејл не тражимо, па заборављену лозинку не можемо да повратимо: у том случају направи нови налог.</li>
-        <li><span class="soon">у изради</span> У Андроид верзији моћи ћеш да се пријавиш и преко Google Play игара, Google-ове услуге за игре. Тако повезан налог је регистрован, као и налог са корисничким именом. Веза између твог профила у Google Play играма и налога у игри је трајна: за сада не може да се раскине, осим брисањем налога. Ако је профил већ повезан са другим налогом у игри, пријава те пребацује на тај налог, а поени госта остају иза. Пријављуј се само својим профилом: ко се пријави твојим профилом, игра као ти.</li>
       </ul>
-      <!-- CHECK: the 30 days are the refresh token's lifetime from its last use (REFRESH_TTL_SECONDS in ServerConfig; CLAUDE.md §8a): past them the app plays on as a fresh guest. If it changes, change it here, in privacy.html (sections 2 and 6) and in delete.html, both languages. -->
-      <!-- CHECK: Play Games sign-in is built on the server only (CLAUDE.md §8a, Play Games sign-in); the permanent link is the user's decision (§8b, Linking Play Games to an account). Match the wording to the Android client when it ships. -->
+      <!-- CHECK: the 30 days are the refresh token's lifetime from its last use (REFRESH_TTL_SECONDS in ServerConfig; CLAUDE.md §8a): past them the app plays on as a fresh guest. If it changes, change it here, in privacy.html (sections 2 and 6) and in delete.html, both languages. The permanent Play Games link is the user's decision (§8b, Linking Play Games to an account). -->
     </section>
 
     <section id="points">
-      <h2>4. Поени</h2>
+      <h2>4. Поени и продавница</h2>
       <ul>
         <li>Поен добијаш за сваки одговор и за сваки лајк на својим питањима, а губиш га кад се лајк повуче. Дислајк не доноси и не односи поене.</li>
         <li>Слање питања кошта поене, онолико колико пише на дугмету за слање, и враћају ти се ако питање буде одбијено.</li>
-        <li>Поени немају новчану вредност. Не могу да се купе, продају, замене за новац или робу, нити да се пренесу на другог играча.</li>
-        <li>Правила бодовања и цену слања питања можемо да променимо. Поене стечене кршењем ових услова можемо да поништимо.</li>
+        <li>У продавници регистровани играчи за поене купују теме, нови изглед игре. Цена пише уз сваку тему. Поени потрошени на тему не враћају се, а купљена тема остаје твоја док постоји налог. Изглед тема и понуду у продавници можемо да мењамо.</li>
+        <li>Поени немају новчану вредност. Не могу да се купе, продају, замене за новац или робу, нити да се пренесу на другог играча, а ни теме се не купују новцем.</li>
+        <li>Правила бодовања, цену слања питања и цене у продавници можемо да променимо. Поене стечене кршењем ових услова, и оно што је за њих купљено, можемо да поништимо.</li>
       </ul>
-      <!-- CHECK: sending costs 1 point until the release and 50 from it (CLAUDE.md §8b, The launch); the text names no number, since the button shows it. -->
+      <!-- CHECK: sending costs 1 point until the release and 50 from it (CLAUDE.md §8b, The launch); a theme costs 220 (§8d, The shop; THEME_PRICE). The text names no number, since the buttons show it. If the shop ever takes money (IDEAS.md: rewarded ads), this section needs the lawyer again (consumer law, refunds). -->
     </section>
 
     <section id="rules">
       <h2>5. Правила питања</h2>
-      <p>Питања могу да шаљу регистровани играчи: са корисничким именом или, кад то стигне, пријављени преко Google Play игара. Слање кошта поене, а на чекању истовремено можеш имати највише 20 питања.</p>
+      <p>Питања могу да шаљу регистровани играчи: са корисничким именом или пријављени преко Google Play игара. Слање кошта поене, а на чекању истовремено можеш имати највише 20 питања.</p>
 
       <h3>Питање мора да:</h3>
       <ul>
@@ -141,43 +142,47 @@
       </ul>
 
       <h3>Права на питање</h3>
-      <p>Питање остаје твоје. Кад га пошаљеш, дајеш нам бесплатно и неискључиво право, без временског и територијалног ограничења, да га чувамо, приказујемо у игри, сврставамо у категорије, преводимо на језике игре и задржимо у игри и после брисања твог налога, без твог имена.</p>
-      <!-- CHECK: have the lawyer word the licence; decide whether it also covers showing a question in the store listing or its screenshots. Translating player questions is not built (CLAUDE.md §8f, Not translated yet). -->
+      <p>Питање остаје твоје. Кад га пошаљеш, дајеш нам бесплатно и неискључиво право, без временског и територијалног ограничења, да га чувамо, приказујемо у игри, сврставамо у категорије, преводимо на језике игре, допустимо играчима да га поделе као слику из игре и задржимо у игри и после брисања твог налога, без твог имена.</p>
+      <!-- CHECK: have the lawyer word the licence; decide whether it also covers showing a question in the store listing or its screenshots. Translating player questions is not built (CLAUDE.md §8f, Not translated yet). Sharing is §8d, Sharing. -->
     </section>
 
     <section id="moderation">
       <h2>6. Модерација</h2>
       <ul>
-        <li>Свако питање пре уласка у игру прегледа модератор и одобрава га или одбија. Кад га одбије, наводи кратак разлог. Шта је са твојим питањима видиш у апликацији, под <strong>Моја питања</strong>, а <span class="soon">у изради</span> и у обавештењу на телефону.</li>
+        <li>Свако питање пре уласка у игру прегледа модератор и одобрава га или одбија. Кад га одбије, наводи кратак разлог. Шта је са твојим питањима видиш у апликацији, под <strong>Моја питања</strong> на екрану налога, а на Андроиду и у обавештењу на телефону.</li>
         <li>Модератор види твоја питања без твог корисничког имена, али зна која питања имају истог аутора.</li>
         <li>Модератор може да промени категорије питања, али не и његов текст. Питање које не испуњава правила зато се одбија, а исправљено можеш да пошаљеш поново.</li>
         <li>Одобрено питање касније можемо да повучемо из игре, на пример после пријава. Тад се цена слања не враћа, а поени које је питање већ донело остају.</li>
         <li>Ономе ко шаље питања која крше правила можемо да забранимо слање нових. Тада се његова питања на чекању одбијају, а цена слања за њих се враћа.</li>
         <li>Одлуке о питањима доносимо по сопственој процени. Ако мислиш да смо погрешили, <a href="contact.html">пиши нам</a>.</li>
       </ul>
-      <!-- CHECK: blocking an author, and the opaque author id it works by, are built on the server; the moderation app does not use them yet (CLAUDE.md §8d, Moderation, Authors). -->
     </section>
 
     <section id="reports">
-      <h2>7. Пријаве и сакривање <span class="soon">у изради</span></h2>
-      <p>Уз питање на екрану игре биће мени у ком ћеш моћи да:</p>
+      <h2>7. Пријаве и сакривање</h2>
+      <p>Уз питање на екрану игре, у менију горе (⋮), можеш да:</p>
       <ul>
-        <li><strong>пријавиш питање</strong> модератору, уз разлог са листе: увредљиво је, говори о стварној приватној особи, спам је, није права дилема, или нешто друго. Пријава питање и сакрива од тебе;</li>
+        <li><strong>пријавиш питање</strong> модератору, уз разлог са листе: увредљиво је, помиње приватну особу, реклама или спам, нема шта да се бира, или нешто друго. Пријава питање и сакрива од тебе;</li>
         <li><strong>сакријеш питање</strong>: више ти се не приказује;</li>
         <li><strong>сакријеш аутора</strong>: више ти се не приказује ниједно његово питање, ни она која буду одобрена касније.</li>
       </ul>
       <p>Свака од ових радњи важи само за тебе, и трајно: за сада се сакривено не може вратити. Аутор остаје анониман: не сазнајеш ко је, а он не сазнаје да си га пријавио или сакрио. Почетна питања немају аутора, па сакривање аутора таквог питања сакрива само то питање. Модератор прегледа пријављена питања и одлучује да ли ће питање повући из игре. Пријаве и сакривање не доносе и не односе поене. Не злоупотребљавај пријаве.</p>
-      <p>Док пријаве не стигну у игру, или ако питање не можеш да пријавиш у игри, <a href="contact.html">пиши нам</a>.</p>
-      <!-- CHECK: reports and hides are built on the server only (CLAUDE.md §8d, Reports); the client will offer them in a list on the Play screen that stays out of the way. Match the reason labels to the app's (the wire's are OFFENSIVE, REAL_PERSON, SPAM, NOT_A_CHOICE, OTHER); the app's label for REAL_PERSON should say a private person too, since section 5 allows well-known public figures. -->
+      <p>Ако питање не можеш да пријавиш у игри, <a href="contact.html">пиши нам</a>.</p>
+      <!-- CHECK: the reasons follow the app's labels (QuestionMenuStrings: Увредљиво је, Помиње приватну особу, Реклама или спам, Нема шта да се бира, Нешто друго); change them together. -->
+    </section>
+
+    <section id="sharing">
+      <h2>8. Дељење</h2>
+      <p>Питање из игре можеш да поделиш као слику, са резултатима или без њих, преко апликације коју сам изабереш. Тада важе и правила те апликације. Не мењај слику тако да изгледа као да игра или неко други каже нешто што не каже.</p>
     </section>
 
     <section id="starter">
-      <h2>8. Почетна питања и узорак гласова</h2>
+      <h2>9. Почетна питања и узорак гласова</h2>
       <p>Игра почиње са питањима која смо сами написали. Да први одговори не би показивали 100 %, свако почетно питање добило је измишљен почетни број гласова за обе стране, различит за свако питање. Проценти на тим питањима рачунају и те почетне гласове, уз гласове играча. Питања која шаљу играчи немају почетне гласове.</p>
     </section>
 
     <section id="fair-play">
-      <h2>9. Поштена игра</h2>
+      <h2>10. Поштена игра</h2>
       <p>Није дозвољено:</p>
       <ul>
         <li>играти помоћу ботова, скрипти или на неки други аутоматски начин;</li>
@@ -190,22 +195,22 @@
     </section>
 
     <section id="deletion">
-      <h2>10. Брисање налога</h2>
-      <p>Налог можеш да обришеш кад год хоћеш, имејлом, а кад брисање стигне у апликацију, и тамо (<a href="delete.html">како</a>). Налог који крши ове услове можемо да обришемо и ми.</p>
+      <h2>11. Брисање налога</h2>
+      <p>Налог можеш да обришеш кад год хоћеш, у апликацији или имејлом (<a href="delete.html">како</a>). Налог који крши ове услове можемо да обришемо и ми.</p>
     </section>
 
     <section id="changes">
-      <h2>11. Измене игре и услова</h2>
+      <h2>12. Измене игре и услова</h2>
       <p>Игра је бесплатна и може да се мења, да привремено не ради или да се угаси. Ако променимо ове услове, нову верзију објављујемо на овој страници и мењамо датум на врху; о важним изменама можемо да обавестимо и у игри. Ако наставиш да играш после измене, прихваташ нове услове.</p>
     </section>
 
     <section id="warranty">
-      <h2>12. Без гаранције</h2>
-      <p>Игру пружамо бесплатно и онакву каква јесте, без гаранције да ће увек радити, да неће имати грешака или да се подаци о игри, као што су поени, никад неће изгубити. У мери у којој закон дозвољава, не одговарамо за посредну штету насталу коришћењем игре. Ништа у овим условима не ограничава права која имаш по закону, нити нашу одговорност за штету проузроковану намерно или из крајње непажње.</p>
+      <h2>13. Без гаранције</h2>
+      <p>Игру пружамо бесплатно и онакву каква јесте, без гаранције да ће увек радити, да неће имати грешака или да се подаци о игри, као што су поени и купљене теме, никад неће изгубити. У мери у којој закон дозвољава, не одговарамо за посредну штету насталу коришћењем игре. Ништа у овим условима не ограничава права која имаш по закону, нити нашу одговорност за штету проузроковану намерно или из крајње непажње.</p>
     </section>
 
     <section id="law">
-      <h2>13. Меродавно право</h2>
+      <h2>14. Меродавно право</h2>
       <p>На ове услове примењује се право Републике Србије. За спорове је надлежан суд у <span class="ph">[МЕСТО / PLACE]</span>, осим ако закон за потрошаче одређује другачије.</p>
       <!-- CHECK: governing law and court are the owner's choice; confirm with the lawyer, including for players in BA, ME and MK. -->
       <p>Питања? <a href="contact.html">Пиши нам</a>.</p>
@@ -214,7 +219,7 @@
 
   <footer class="site">
     <div class="wrap">
-      <p>© <span class="ph">[ГОДИНА / YEAR]</span> <span class="ph">[ИМЕ И ПРЕЗИМЕ / NAME]</span> · Без реклама, без продаје података.</p>
+      <p>© 2026 <span class="ph">[ИМЕ И ПРЕЗИМЕ / NAME]</span> · Без реклама, без продаје података.</p>
       <p><a href="en/terms.html" hreflang="en" lang="en">Read in English</a></p>
     </div>
   </footer>

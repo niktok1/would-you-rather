@@ -14,50 +14,41 @@ Postgres, promoted by hand with *Manual Deploy*, runs `d4a9dbf` since 2026-09-25
 applied; **dev** `wyr-server-dev` on in-memory H2, deployed automatically from every green commit on
 `main` (its URL is on its Render page).
 
-**On `docs/site`** (from e603694; nothing pushed or merged): the **public site** Google Play's
-listing and Data safety form link to, `site/`, served by a new Render static site, `wyr-site`
-(CLAUDE.md §8). Five pages, `index`, `privacy`, `terms`, `delete` and `contact`, in Serbian Cyrillic
-(`site/*.html`) and English (`site/en/*.html`), plain HTML and `site/style.css`, no script, nothing
-loaded from another host. Preview: `python3 -m http.server 8123 -d site`, then
-http://localhost:8123. **All drafts, not legal advice.** Brought up to `main` at 2a4f96e: the
-launch's decisions (16 and over; RS, BA, ME and MK; Serbian in both scripts; the four banned topics;
-PostHog EU with the IP discarded and no location, off by the Статистика switch; FCM and Play Games
-named as the Google services they are), and every claim checked against the server's tables and
-`AccountDeletion`. What `main`'s clients do not do yet is written as coming and carries a
-`у изради` / `coming` pill (`.soon`): deleting an account in the app (Налог → Обриши налог; the
-server's route is built), reports and hides, push tokens, Play Games sign-in, the answer time on the
-vote, and personalization (planned). Each also has a `CHECK` comment on the Serbian page. When one
-ships, drop its pill and put its text in the present tense, both languages. An unreachable guest
-is deleted after 90 days of inactivity (the user, 2026-09-27; `feat/guest-cleanup`, CLAUDE.md §8b
-*Guest clean-up*), which `privacy.html` section 6 and `delete.html` now say, both languages. Before
-Google Play links to it:
-1. Fill the placeholders, `grep -rn 'class="ph"' site/`: name, address, email, date, year, the
-   retention periods (the logs', the analytics' and the email's), the court's
-   town and the store link.
-2. Settle every `grep -rn 'CHECK' site/` against what ships, in both languages. Three need building
-   before the email routes (`delete.html`, and `privacy.html` section 8's requests) are true: a way
-   for the owner to delete an account by username or player id (no admin route does; one that runs
-   `AccountDeletion.delete` beats a manual step on the database, which would have to repeat all it
-   does); a way to find and export one player's rows for an access or portability request (a
-   documented read-only query by player id would do); and a way for a guest or a Play-Games-only
-   player, who has no username, to name their account (an account id on the Account screen, to
-   copy, was suggested: the user's decision). Then both pages ask for the username or that id.
-3. What Google Play asks of the app itself (the terms' section 1 and its `CHECK`) is built on
-   `main` and `feat/guest-cleanup`: the About screen links `privacy.html` and `terms.html`, Register
-   has a line linking the terms and the privacy policy, and the Submit form has *Слањем прихваташ
-   правила питања.* under Send, linking `terms.html`, which covers a Play-Games-only player too; the
-   terms' section 1 says so now, both languages, its pill dropped. Whether a line is enough or it
-   needs a checkbox is still for the policies and the lawyer.
-4. Have a lawyer who knows the ZZPL, and the laws of BA, ME and MK, read both languages, and say
+**On `docs/site`** (not merged): the **public site**, `site/`, served by a new Render static site,
+`ntole-site`, at `https://ntole.com` (CLAUDE.md §8, *The public site*). `site/index.html` is the
+developer's page (toleapps); the game's five pages, `index`, `privacy`, `terms`, `delete` and
+`contact`, are in Serbian Cyrillic under `site/wyr/` and in English under `site/wyr/en/`, plain HTML and
+`site/wyr/style.css`, no script, nothing loaded from another host. Preview: `python3 -m http.server
+8123 -d site`, then http://localhost:8123/wyr/. **All drafts, not legal advice.** Brought up to
+`main` on 2026-09-29 (after `b8e7560b`): everything the game does now is in the present tense
+(deleting in the app, on the About screen; deleting by email with a username or the About screen's
+account id, which the moderator's Accounts tab takes; reports and hides from the Play screen's ⋮;
+pushes, and the token sent whatever the permission; Play Games sign-in, at launch too, and its name
+read on the phone and never stored; the answer time; the shop's purchases, and themes bought with
+points only; sharing an image through the phone's share sheet, sent nowhere of ours; Home's taps as
+two totals; the platform and build number on every request, not kept), the Statistics switch on the
+About screen, 13 and over (the lawyer's question left in a `CHECK`), PostHog keeping the address and a
+location, the report reasons as the app words them, and the store link filled. Only personalization
+still carries a `у изради` / `coming` pill. Before Google Play links to it:
+1. Fill the placeholders, `grep -rn 'class="ph"' site/`: name, address, email, date, the retention
+   periods (the logs', the analytics' and the email's) and the court's town. The year is 2026 and the
+   developer is toleapps, as on the Play listing.
+2. Settle every `grep -rn 'CHECK' site/` in both languages. Still open: a way to find and export one
+   player's rows for an access or portability request (a documented read-only query by player id
+   would do); whether 13 to 15 need a parent's consent (LAUNCH.md); whether an emailed deletion needs
+   more than a username or an id.
+3. Have a lawyer who knows the ZZPL, and the laws of BA, ME and MK, read both languages, and say
    whether the GDPR applies.
-5. From every page remove the draft comment, every `CHECK` comment (they hold internal notes, which
-   the live pages' source would show), `<meta name="robots" content="noindex">` and the `.draft`
-   banner. Then `grep -rn 'CHECK\|noindex\|class="draft"\|class="ph"' site/` must print nothing
-   before the merge to `main`.
-6. Merge to `main`, and the Blueprint creates `wyr-site` (sync it in the dashboard if not). Its URL
-   is `https://wyr-site.onrender.com` unless a custom domain comes first: Play Console takes
-   `/privacy.html` as the privacy policy and `/delete.html` as the account deletion URL, and the
-   Data safety answers must match the policy.
+4. From every game page remove the draft comment, every `CHECK` comment (they hold internal notes,
+   which the live pages' source would show), `<meta name="robots" content="noindex">` and the
+   `.draft` banner. Then `grep -rn 'CHECK\|noindex\|class="draft"\|class="ph"' site/` must print
+   nothing before the merge to `main`.
+5. Merge to `main`, and the Blueprint creates `ntole-site` (sync it in the dashboard if not). In
+   Cloudflare's DNS for `ntole.com`: a CNAME `@` to `ntole-site.onrender.com` and one `www` to the
+   same, both *DNS only*, then verify both domains on the service's *Custom Domains*. Play Console
+   takes `https://ntole.com/wyr/privacy.html` as the privacy policy and
+   `https://ntole.com/wyr/delete.html` as the account deletion URL, and the Data safety answers must
+   match the policy.
 
 **`feat/simple-accounts` is on `main`**, and on `origin/main`, at b175247: stage 1 took the recovery
 secret, Block Store, the Keychain, the rollback mirror and the question's row lock out (CLAUDE.md

@@ -7,8 +7,6 @@
   must print nothing.
   Placeholders are in [BRACKETS] (class "ph"); CHECK comments mark what depends on a feature not
   built yet, or on a fact to confirm. NEXT-SESSION.md has the list.
-  What the game does not do yet carries a "у изради" pill (class "soon") and is written as coming;
-  when the feature ships, drop the pill and put the text in the present tense, in both languages.
   Google Play's "Delete account URL": it must name the app and its developer as on the listing, say
   how to ask for deletion without the app, and what is deleted and kept, and for how long. The lists
   below follow the server's deletion (AccountDeletion, CLAUDE.md §8a, Deleting an account).
@@ -19,7 +17,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex">
   <meta name="color-scheme" content="light dark">
-  <meta name="description" content="Како да обришеш налог у игри Шта би радије?, имејлом или у апликацији, и шта се брише.">
+  <meta name="description" content="Како да обришеш налог у игри Шта би радије?, у апликацији или имејлом, и шта се брише.">
   <title>Брисање налога — Шта би радије?</title>
   <link rel="stylesheet" href="style.css">
 </head>
@@ -42,26 +40,26 @@
 
   <main id="main" class="wrap">
     <h1>Брисање налога</h1>
-    <p class="lead">Налог у игри „Шта би радије?“ (програмер: <span class="ph">[ИМЕ И ПРЕЗИМЕ / NAME]</span>) можеш да обришеш имејлом, а ускоро и у апликацији. Брисање је трајно и не може да се поништи.</p>
-
-    <section aria-labelledby="by-email">
-      <h2 id="by-email">Имејлом, без апликације</h2>
-      <p>Пошаљи имејл на <span class="ph">[EMAIL]</span> са насловом „Брисање налога“ и корисничким именом налога. Обрисаћемо га најкасније у року од 30 дана и јавити ти кад то урадимо. Можда ћемо те замолити да потврдиш да је налог твој, на пример тако што наведеш једно од својих питања. Лозинку никад нећемо тражити.</p>
-      <p>Гост нема корисничко име, па његов налог имејлом не можемо да пронађемо: обриши га у апликацији. Ако је апликација већ обрисана, или 30 дана није коришћена, до госта више не води ниједан уређај, а сервер га брише после 90 дана неактивности.</p>
-      <!-- CHECK: no admin tool deletes an account by username or player id yet (the server's deletion is the player's own call, POST /v1/me/deletion, and no /v1/admin route deletes one), so nothing yet keeps this page's 30 days, and Google Play wants deletion to be requestable through this route. Before launch: an admin route that runs AccountDeletion.delete for a username or a player id, in one transaction, logged as the other admin actions are; a manual step on the database would have to repeat everything AccountDeletion does (each like's point taken back from its author, the approved questions kept with no author), so it is the weaker choice. A guest, and a player signed in with Play Games alone, has no username: to use this route they need a way to name their account, such as an account id the Account screen shows them to copy. That is a product decision, not made; once made, ask here and in privacy.html section 8 for the username or that id, both languages. -->
-    </section>
+    <p class="lead">Налог у игри „Шта би радије?“ (програмер: toleapps) можеш да обришеш у апликацији или имејлом. Брисање је трајно и не може да се поништи.</p>
+    <!-- CHECK: the developer's name must be as on the Play listing: toleapps. -->
 
     <section aria-labelledby="in-app">
-      <h2 id="in-app">У апликацији <span class="soon">у изради</span></h2>
-      <p>Брисање у апликацији се прави. Кад стигне, ићи ће овако:</p>
+      <h2 id="in-app">У апликацији</h2>
       <ol class="steps">
-        <li>Отвори игру и додирни икону налога горе десно.</li>
-        <li>На екрану <strong>Налог</strong> додирни <strong>Обриши налог</strong>.</li>
-        <li>Потврди брисање.</li>
+        <li>Отвори игру и на почетном екрану додирни икону налога горе десно.</li>
+        <li>На екрану <strong>Налог</strong> додирни икону „i“ горе.</li>
+        <li>На дну екрана <strong>О игри</strong> додирни <strong>Обриши налог</strong> и потврди са <strong>Обриши</strong>.</li>
       </ol>
       <p>Налог се брише одмах, на свим уређајима, а на уређају са ког га обришеш игра се наставља као нови гост. Тако се брише и гост и налог, са корисничким именом или повезан са Google Play играма.</p>
       <p>Гост са ког се на неком уређају пријавиш на други налог остаје засебан играч и не брише се са тим налогом. Ако не желиш да остане, обриши га у апликацији пре пријаве.</p>
-      <!-- CHECK: the server's deletion is built (CLAUDE.md §8a, Deleting an account: at once, for a guest and a registered player alike, then the device plays on as a fresh guest); the Account screen's button is being built. Match the steps to the screen that ships: the button's place and whether it asks for the password. -->
+      <!-- CHECK: the steps follow CLAUDE.md §8d (Navigation; About: the deletion is last on the About screen, after the licences; The Account screen, Deleting). Match them to the screen that ships. -->
+    </section>
+
+    <section aria-labelledby="by-email">
+      <h2 id="by-email">Имејлом, без апликације</h2>
+      <p>Пошаљи имејл на <span class="ph">[EMAIL]</span> са насловом „Брисање налога“ и корисничким именом налога или његовим ИД-ом. ИД налога има и гост, и налог пријављен само преко Google Play игара: у игри га налазиш на екрану <strong>О игри</strong> (екран налога, па икона „i“ горе), под <strong>ИД налога</strong>, где га копираш једним додиром. Обрисаћемо налог најкасније у року од 30 дана и јавити ти кад то урадимо. Лозинку никад нећемо тражити.</p>
+      <p>Ако апликацију више немаш, а налог нема корисничко име, можда нећемо моћи да га пронађемо. Такав гост се ипак не чува заувек: до њега више не води ниједан уређај, па га сервер брише после 90 дана неактивности.</p>
+      <!-- CHECK: the moderator deletes the account named by username or account id in the moderation app's Accounts tab (CLAUDE.md §8a, Deleting an account, By a moderator). Nothing proves the email comes from the account's player: a username or an id is all it names. Whether to ask for anything more (one of the player's questions, say) is for the user and the lawyer. -->
     </section>
 
     <section aria-labelledby="deleted">
@@ -71,7 +69,9 @@
         <li>све сесије, па се одјављујеш на свим уређајима;</li>
         <li>одговори, са временима, прескочена питања и реакције, па их бројеви на питањима више не рачунају; сваки лајк који си дао повлачи се, заједно са поеном који је донео аутору питања;</li>
         <li>питања која чекају одобрење и одбијена питања, са разлозима;</li>
-        <li><span class="soon">у изради</span> пријаве питања, сакривена питања и аутори, токени за обавештења и веза са Google Play играма.</li>
+        <li>пријаве питања, сакривена питања и аутори;</li>
+        <li>куповине у продавници;</li>
+        <li>токени за обавештења и веза са Google Play играма.</li>
       </ul>
     </section>
 
@@ -91,7 +91,7 @@
 
   <footer class="site">
     <div class="wrap">
-      <p>© <span class="ph">[ГОДИНА / YEAR]</span> <span class="ph">[ИМЕ И ПРЕЗИМЕ / NAME]</span> · Без реклама, без продаје података.</p>
+      <p>© 2026 <span class="ph">[ИМЕ И ПРЕЗИМЕ / NAME]</span> · Без реклама, без продаје података.</p>
       <p><a href="en/delete.html" hreflang="en" lang="en">Read in English</a></p>
     </div>
   </footer>

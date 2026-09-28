@@ -8,8 +8,6 @@
   Placeholders are in [BRACKETS] (class "ph"); CHECK comments mark what depends on a feature not
   built yet, or on a fact to confirm. NEXT-SESSION.md has the list. The CHECK comments are on the
   Serbian page.
-  What the game does not do yet carries a "coming" pill (class "soon") and is written as coming;
-  when the feature ships, drop the pill and put the text in the present tense, in both languages.
   Google Play's "Delete account URL": it must name the app and its developer as on the listing, say
   how to ask for deletion without the app, and what is deleted and kept, and for how long.
 -->
@@ -19,7 +17,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex">
   <meta name="color-scheme" content="light dark">
-  <meta name="description" content="How to delete your Would You Rather? (Шта би радије?) account, by email or in the app, and what is deleted.">
+  <meta name="description" content="How to delete your Would You Rather? (Шта би радије?) account, in the app or by email, and what is deleted.">
   <title>Account deletion — Would You Rather?</title>
   <link rel="stylesheet" href="../style.css">
 </head>
@@ -42,24 +40,23 @@
 
   <main id="main" class="wrap">
     <h1>Account deletion</h1>
-    <p class="lead">You can delete your account in Would You Rather? (<span lang="sr-Cyrl">Шта би радије?</span>; developer: <span class="ph">[ИМЕ И ПРЕЗИМЕ / NAME]</span>) by email, and soon in the app. Deletion is permanent and cannot be undone.</p>
-
-    <section aria-labelledby="by-email">
-      <h2 id="by-email">By email, without the app</h2>
-      <p>Email <span class="ph">[EMAIL]</span> with the subject "Account deletion" and the account's username. We will delete it within 30 days at the latest and let you know when we have. We may ask you to confirm the account is yours, for example by naming one of your questions. We will never ask for your password.</p>
-      <p>A guest has no username, so we cannot find a guest account by email: delete it in the app. If the app is already gone, or has not been used for 30 days, no device leads to the guest any more, and the server deletes it after 90 days of inactivity.</p>
-    </section>
+    <p class="lead">You can delete your account in Would You Rather? (<span lang="sr-Cyrl">Шта би радије?</span>; developer: toleapps) in the app or by email. Deletion is permanent and cannot be undone.</p>
 
     <section aria-labelledby="in-app">
-      <h2 id="in-app">In the app <span class="soon">coming</span></h2>
-      <p>Deleting in the app is being built. Once it arrives, it will go like this:</p>
+      <h2 id="in-app">In the app</h2>
       <ol class="steps">
-        <li>Open the game and tap the account icon at the top right.</li>
-        <li>On the <strong>Account</strong> screen (<span lang="sr-Cyrl">Налог</span>), tap <strong>Delete account</strong> (<span lang="sr-Cyrl">Обриши налог</span>).</li>
-        <li>Confirm.</li>
+        <li>Open the game and, on the Home screen, tap the account icon at the top right.</li>
+        <li>On the <strong>Account</strong> screen (<span lang="sr-Cyrl">Налог</span>), tap the "i" icon at the top.</li>
+        <li>At the bottom of the <strong>About</strong> screen (<span lang="sr-Cyrl">О игри</span>), tap <strong>Delete account</strong> (<span lang="sr-Cyrl">Обриши налог</span>) and confirm with <strong>Delete</strong> (<span lang="sr-Cyrl">Обриши</span>).</li>
       </ol>
       <p>The account is deleted at once, on every device, and on the device you delete it from the game carries on as a new guest. This deletes a guest and an account alike, whether it has a username or is linked to Google Play Games.</p>
       <p>A guest you log in to another account from, on some device, stays a player of its own and is not deleted with that account. If you do not want it to stay, delete it in the app before you log in.</p>
+    </section>
+
+    <section aria-labelledby="by-email">
+      <h2 id="by-email">By email, without the app</h2>
+      <p>Email <span class="ph">[EMAIL]</span> with the subject "Account deletion" and the account's username or its account id. A guest has an account id too, as does an account signed in only with Google Play Games: in the game it is on the <strong>About</strong> screen (the Account screen, then the "i" icon at the top), under <strong>Account ID</strong> (<span lang="sr-Cyrl">ИД налога</span>), where one tap copies it. We will delete the account within 30 days at the latest and let you know when we have. We will never ask for your password.</p>
+      <p>If you no longer have the app and the account has no username, we may not be able to find it. Such a guest is not kept for ever, though: no device leads to it any more, so the server deletes it after 90 days of inactivity.</p>
     </section>
 
     <section aria-labelledby="deleted">
@@ -69,7 +66,9 @@
         <li>every session, so you are logged out on every device;</li>
         <li>answers, with their times, skipped questions and reactions, so the counts on questions no longer include them; every like you gave is taken back, along with the point it earned the question's author;</li>
         <li>questions waiting for review and rejected questions, with their reasons;</li>
-        <li><span class="soon">coming</span> reports of questions, hidden questions and authors, notification tokens, and the link to Google Play Games.</li>
+        <li>reports of questions, and hidden questions and authors;</li>
+        <li>purchases in the shop;</li>
+        <li>notification tokens and the link to Google Play Games.</li>
       </ul>
     </section>
 
@@ -88,7 +87,7 @@
 
   <footer class="site">
     <div class="wrap">
-      <p>© <span class="ph">[ГОДИНА / YEAR]</span> <span class="ph">[ИМЕ И ПРЕЗИМЕ / NAME]</span> · No ads, no sale of data.</p>
+      <p>© 2026 <span class="ph">[ИМЕ И ПРЕЗИМЕ / NAME]</span> · No ads, no sale of data.</p>
       <p><a href="../delete.html" hreflang="sr-Cyrl" lang="sr-Cyrl">Прочитај на српском</a></p>
     </div>
   </footer>
