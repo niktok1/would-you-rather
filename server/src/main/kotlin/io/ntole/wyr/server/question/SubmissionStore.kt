@@ -5,6 +5,7 @@ import io.ntole.wyr.core.question.QuestionStatus
 import io.ntole.wyr.core.question.SubmissionDto
 import io.ntole.wyr.core.question.SubmitQuestionRequest
 import io.ntole.wyr.core.reaction.Reaction
+import io.ntole.wyr.core.vote.OptionSide
 import io.ntole.wyr.server.db.Players
 import io.ntole.wyr.server.db.QuestionCategories
 import io.ntole.wyr.server.db.Questions
@@ -100,7 +101,8 @@ object SubmissionStore {
      * Must run inside a transaction. Two submitted in the same millisecond come in id order, which is
      * fixed but says nothing about which came first. Seeds have no author, so they never appear.
      *
-     * Each comes with how many players like it, dislike it and have answered it, read in the one
+     * Each comes with how many players like it, dislike it and have answered it, and how many of those
+     * answers pick each side, read in the one
      * statement that reads the questions, so a question's numbers are one moment's (CLAUDE.md §4). The
      * categories come from one more statement for all of them ([QuestionStore.categoriesOf]), picked
      * by author rather than by id, since nothing bounds how many there are. A submission committed
@@ -144,7 +146,9 @@ object SubmissionStore {
             submittedAt = row[Questions.submittedAt],
             likeCount = row.countOf(likeCount),
             dislikeCount = row.countOf(dislikeCount),
-            answerCount = row.countOf(answerCount),
+            answerCount = row.countOf(votesA) + row.countOf(votesB),
+            votesA = row.countOf(votesA),
+            votesB = row.countOf(votesB),
             authorId = row[Questions.authorPlayerId].takeIf { forModerator },
         )
     }
@@ -154,15 +158,24 @@ object SubmissionStore {
         checkNotNull(this[expression]) { "a COUNT subquery came back null" }.toInt()
 
     /**
-     * How many players like the row's question, dislike it, and have answered it, each counted once:
-     * subqueries on its id, found through `reactions (question_id, player_id)` and the votes key. A
-     * question never served has none. Its made-up votes are left out of the answers, since only a seed
-     * has any and no author has a seed.
+     * How many players like the row's question and dislike it, and how many answered it with each
+     * side, each player counted once, by their latest pick: subqueries on its id, found through
+     * `reactions (question_id, player_id)` and the votes key. The players who answered it are the two
+     * sides together, a player holding one vote per question (CLAUDE.md §8d, *Re-answering*). A
+     * question never served has none. Its made-up votes are left out, since only a seed has any and no
+     * author has a seed.
      */
     private val likeCount = ReactionStore.countOn(Reaction.LIKE)
     private val dislikeCount = ReactionStore.countOn(Reaction.DISLIKE)
-    private val answerCount: Expression<Long?> =
-        wrapAsExpression(Votes.select(Votes.playerId.count()).where { Votes.questionId eq Questions.id })
+    private val votesA = votesOn(OptionSide.A)
+    private val votesB = votesOn(OptionSide.B)
+
+    private fun votesOn(side: OptionSide): Expression<Long?> =
+        wrapAsExpression(
+            Votes
+                .select(Votes.playerId.count())
+                .where { (Votes.questionId eq Questions.id) and (Votes.side eq side.name) },
+        )
 
     /** What [toSubmission] reads, and no more. */
     internal val SUBMISSION_COLUMNS: List<Expression<*>> =
@@ -177,7 +190,8 @@ object SubmissionStore {
             Questions.submittedAt,
             likeCount,
             dislikeCount,
-            answerCount,
+            votesA,
+            votesB,
         )
 
     /**

@@ -92,6 +92,8 @@ class SubmissionStoreTest {
 
         assertEquals(Triple(2, 1, 2), listed.getValue(approved).counts(), "likes, dislikes and players who answered")
         assertEquals(Triple(0, 0, 0), listed.getValue(pending).counts(), "never served")
+        assertEquals(0 to 2, listed.getValue(approved).sides(), "each player's latest pick, the re-answer moved")
+        assertEquals(0 to 0, listed.getValue(pending).sides(), "nobody's pick on a question never served")
     }
 
     @Test
@@ -272,6 +274,9 @@ class SubmissionStoreTest {
 
     /** A listed submission's like count, dislike count and how many players answered it. */
     private fun SubmissionDto.counts(): Triple<Int, Int, Int> = Triple(likeCount, dislikeCount, answerCount)
+
+    /** How many of the players who answered a listed submission picked each side. */
+    private fun SubmissionDto.sides(): Pair<Int, Int> = votesA to votesB
 
     private fun assertLimitReached(author: String) {
         val refused = assertFailsWith<ApiFailure> { submit(author, question(REFUSED)) }

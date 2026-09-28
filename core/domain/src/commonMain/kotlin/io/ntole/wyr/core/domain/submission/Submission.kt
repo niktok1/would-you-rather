@@ -1,5 +1,6 @@
 package io.ntole.wyr.core.domain.submission
 
+import io.ntole.wyr.core.domain.vote.Tally
 import kotlin.time.Instant
 
 /**
@@ -19,7 +20,9 @@ import kotlin.time.Instant
  * [likeCount] is how many players like the question, [dislikeCount] how many dislike it, and
  * [answerCount] how many players have answered it, each once however often they answered, as the
  * server counted them with the question, one moment's numbers (CLAUDE.md §8d, *The Account screen*).
- * A question never served, pending or rejected, has none; a retired one keeps what it had.
+ * [tally] is how those players' answers split between the two options, each by their latest pick,
+ * so its total is [answerCount] (CLAUDE.md §8d, *Question details*). A question never served,
+ * pending or rejected, has none; a retired one keeps what it had.
  *
  * [authorId] is the moderator's alone: the author's opaque id, which the moderator's queue and
  * decisions carry so an author can be blocked
@@ -37,6 +40,7 @@ public data class Submission(
     public val likeCount: Int = 0,
     public val dislikeCount: Int = 0,
     public val answerCount: Int = 0,
+    public val tally: Tally = Tally(votesA = 0, votesB = 0),
     public val authorId: String? = null,
 )
 

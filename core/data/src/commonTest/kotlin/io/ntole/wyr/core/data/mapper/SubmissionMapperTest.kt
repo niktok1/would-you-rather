@@ -2,6 +2,7 @@ package io.ntole.wyr.core.data.mapper
 
 import io.ntole.wyr.core.domain.submission.Submission
 import io.ntole.wyr.core.domain.submission.SubmissionStatus
+import io.ntole.wyr.core.domain.vote.Tally
 import io.ntole.wyr.core.network.WyrJson
 import io.ntole.wyr.core.question.QuestionStatus
 import io.ntole.wyr.core.question.SubmissionDto
@@ -27,6 +28,8 @@ class SubmissionMapperTest {
                 likeCount = 5,
                 dislikeCount = 2,
                 answerCount = 34,
+                votesA = 21,
+                votesB = 13,
             )
 
         assertEquals(
@@ -41,9 +44,17 @@ class SubmissionMapperTest {
                 likeCount = 5,
                 dislikeCount = 2,
                 answerCount = 34,
+                tally = Tally(votesA = 21, votesB = 13),
             ),
             dto.toDomain(),
         )
+    }
+
+    @Test
+    fun `a negative count of either side maps to none`() {
+        val sent = SubmissionDto("q1", "Fly", "Swim", listOf("FOOD"), submittedAt = 1L, votesA = -1, votesB = 3)
+
+        assertEquals(Tally(votesA = 0, votesB = 3), sent.toDomain().tally)
     }
 
     @Test

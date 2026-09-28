@@ -164,6 +164,7 @@ class WyrJsonTest {
             )
 
         assertEquals(Triple(0, 0, 0), Triple(submission.likeCount, submission.dislikeCount, submission.answerCount))
+        assertEquals(0 to 0, submission.votesA to submission.votesB)
     }
 
     @Test

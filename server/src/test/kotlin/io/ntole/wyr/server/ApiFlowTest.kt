@@ -1307,6 +1307,8 @@ class ApiFlowTest {
                     "likeCount",
                     "dislikeCount",
                     "answerCount",
+                    "votesA",
+                    "votesB",
                     "authorId",
                 ),
                 response
@@ -1438,7 +1440,7 @@ class ApiFlowTest {
             )
             assertEquals(emptyList(), client.queue(), "out of the queue")
             assertEquals(
-                listOf(approved.copy(answerCount = 1)),
+                listOf(approved.copy(answerCount = 1, votesB = 1)),
                 client.queue("?${WyrApi.Query.STATUS}=APPROVED"),
                 "its author's answer counted",
             )
