@@ -2,7 +2,6 @@ package io.ntole.wyr
 
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
@@ -23,7 +22,6 @@ import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.lifecycle.Lifecycle
@@ -65,6 +63,7 @@ import io.ntole.wyr.navigation.BackTopBar
 import io.ntole.wyr.navigation.Navigator
 import io.ntole.wyr.navigation.PlayTopBar
 import io.ntole.wyr.navigation.Screen
+import io.ntole.wyr.navigation.ScreenTransitions
 import io.ntole.wyr.navigation.SystemBack
 import io.ntole.wyr.play.CategoriesPlayed
 import io.ntole.wyr.play.PlayScreen
@@ -83,11 +82,10 @@ import io.ntole.wyr.shop.ThemeViewModel
 import io.ntole.wyr.submit.SubmitScreen
 import io.ntole.wyr.submit.SubmitViewModel
 import io.ntole.wyr.theme.LocalPageDrawn
-import io.ntole.wyr.theme.LocalThemeArt
 import io.ntole.wyr.theme.SystemBarsOn
+import io.ntole.wyr.theme.WholePageArt
 import io.ntole.wyr.theme.WyrTheme
 import io.ntole.wyr.theme.WyrThemeAccessors
-import io.ntole.wyr.theme.drawThemeArt
 import io.ntole.wyr.update.UpdateScreen
 import io.ntole.wyr.update.rememberUpdateButton
 import kotlinx.coroutines.launch
@@ -134,16 +132,17 @@ fun App() {
 
 /**
  * The page under every screen, the whole window, the system bars' strips included: the theme's page
- * colour and its art (CLAUDE.md §8d, *The shop*), drawn once here, so a screen's own [PageSurface]
+ * colour and its art (CLAUDE.md §5b, *Backgrounds*; §8d, *The shop*), drawn once here, in a layer of its
+ * own that a screen's change moves over without drawing it again ([WholePageArt]), so a screen's own [PageSurface]
  * draws neither ([LocalPageDrawn]) and the art spans the window whatever the screen and its insets.
  * The system bars' icons are set to read on the page (`SystemBarsOn`).
  */
 @Composable
 private fun WholePage(content: @Composable () -> Unit) {
     val colors = WyrThemeAccessors.colors
-    val art = LocalThemeArt.current
     SystemBarsOn(darkPage = colors.isDark)
-    Box(modifier = Modifier.fillMaxSize().background(colors.pageBackground).drawBehind { drawThemeArt(art) }) {
+    Box(modifier = Modifier.fillMaxSize()) {
+        WholePageArt(Modifier.matchParentSize())
         CompositionLocalProvider(LocalPageDrawn provides true) {
             Surface(color = Color.Transparent, contentColor = colors.primaryText, modifier = Modifier.fillMaxSize()) {
                 content()
@@ -203,100 +202,106 @@ private fun Screens() {
                     scaleY = scaleX
                 },
         ) {
-            when (navigator.current) {
-                Screen.Home -> {
-                    val picker = koinViewModel<CategoriesViewModel>()
-                    Home(
-                        onPlay = {
-                            scope.launch {
-                                entrance.snapTo(0f)
-                                navigator.open(Screen.Play)
-                                entrance.animateTo(1f, tween(PLAY_ENTRANCE_MILLIS))
+            // A quick fade and a slight slide from one screen to the next (CLAUDE.md §5b, *Motion*), but
+            // from Home to Play, which fade through by themselves.
+            ScreenTransitions(navigator, modifier = Modifier.fillMaxSize()) { screen ->
+                Column(modifier = Modifier.fillMaxSize()) {
+                    when (screen) {
+                        Screen.Home -> {
+                            val picker = koinViewModel<CategoriesViewModel>()
+                            Home(
+                                onPlay = {
+                                    scope.launch {
+                                        entrance.snapTo(0f)
+                                        navigator.open(Screen.Play)
+                                        entrance.animateTo(1f, tween(PLAY_ENTRANCE_MILLIS))
+                                    }
+                                },
+                                onAccount = { navigator.open(Screen.Account) },
+                                onOpenCategories = {
+                                    // A visit of its own, as from Play: what is played now ticked, and nothing searched.
+                                    picker.open()
+                                    navigator.open(Screen.Categories)
+                                },
+                                news = news,
+                            )
+                        }
+
+                        Screen.Play -> {
+                            val picker = koinViewModel<CategoriesViewModel>()
+                            Play(
+                                onHome = { navigator.open(Screen.Home) },
+                                onShop = { navigator.open(Screen.Shop) },
+                                onOpenCategories = {
+                                    // A visit of its own: what is played now ticked, and nothing searched.
+                                    picker.open()
+                                    navigator.open(Screen.Categories)
+                                },
+                            )
+                        }
+
+                        Screen.Account -> {
+                            AccountTopBar(
+                                onBack = { navigator.back() },
+                                onAbout = { navigator.open(Screen.About) },
+                                onShop = { navigator.open(Screen.Shop) },
+                            )
+                            Below {
+                                Account(
+                                    onOpenShop = { navigator.open(Screen.Shop) },
+                                    onOpenAuth = { navigator.open(Screen.Auth) },
+                                    onNewQuestion = { navigator.open(Screen.Submit) },
+                                    onOpenQuestion = { id ->
+                                        openedQuestion = id
+                                        navigator.open(Screen.Question)
+                                    },
+                                    notices = notices,
+                                )
                             }
-                        },
-                        onAccount = { navigator.open(Screen.Account) },
-                        onOpenCategories = {
-                            // A visit of its own, as from Play: what is played now ticked, and nothing searched.
-                            picker.open()
-                            navigator.open(Screen.Categories)
-                        },
-                        news = news,
-                    )
-                }
+                        }
 
-                Screen.Play -> {
-                    val picker = koinViewModel<CategoriesViewModel>()
-                    Play(
-                        onHome = { navigator.open(Screen.Home) },
-                        onShop = { navigator.open(Screen.Shop) },
-                        onOpenCategories = {
-                            // A visit of its own: what is played now ticked, and nothing searched.
-                            picker.open()
-                            navigator.open(Screen.Categories)
-                        },
-                    )
-                }
+                        Screen.Auth -> {
+                            BackTopBar(onBack = { navigator.back() })
+                            Below { Auth(onSignedIn = { navigator.back() }) }
+                        }
 
-                Screen.Account -> {
-                    AccountTopBar(
-                        onBack = { navigator.back() },
-                        onAbout = { navigator.open(Screen.About) },
-                        onShop = { navigator.open(Screen.Shop) },
-                    )
-                    Below {
-                        Account(
-                            onOpenShop = { navigator.open(Screen.Shop) },
-                            onOpenAuth = { navigator.open(Screen.Auth) },
-                            onNewQuestion = { navigator.open(Screen.Submit) },
-                            onOpenQuestion = { id ->
-                                openedQuestion = id
-                                navigator.open(Screen.Question)
-                            },
-                            notices = notices,
-                        )
+                        Screen.Submit -> {
+                            BackTopBar(onBack = { navigator.back() })
+                            Below { Submit(onSent = { navigator.back() }) }
+                        }
+
+                        Screen.Categories -> {
+                            BackTopBar(onBack = { navigator.back() })
+                            Below {
+                                Categories(
+                                    onPlayed = {
+                                        // Opened from Home, Play takes its place, so back from Play is Home;
+                                        // from Play, back to it. Read off the back stack, which saved state keeps.
+                                        if (navigator.previous == Screen.Home) {
+                                            navigator.replace(Screen.Play)
+                                        } else {
+                                            navigator.back()
+                                        }
+                                    },
+                                )
+                            }
+                        }
+
+                        Screen.About -> {
+                            BackTopBar(onBack = { navigator.back() })
+                            Below { About(onDeleted = { navigator.back() }) }
+                        }
+
+                        Screen.Question -> {
+                            BackTopBar(onBack = { navigator.back() })
+                            Below { QuestionDetails(openedQuestion, onGone = { navigator.back() }) }
+                        }
+
+                        Screen.Shop -> {
+                            BackTopBar(onBack = { navigator.back() })
+                            Below { Shop(onOpenAuth = { navigator.open(Screen.Auth) }) }
+                        }
                     }
-                }
-
-                Screen.Auth -> {
-                    BackTopBar(onBack = { navigator.back() })
-                    Below { Auth(onSignedIn = { navigator.back() }) }
-                }
-
-                Screen.Submit -> {
-                    BackTopBar(onBack = { navigator.back() })
-                    Below { Submit(onSent = { navigator.back() }) }
-                }
-
-                Screen.Categories -> {
-                    BackTopBar(onBack = { navigator.back() })
-                    Below {
-                        Categories(
-                            onPlayed = {
-                                // Opened from Home, Play takes its place, so back from Play is Home;
-                                // from Play, back to it. Read off the back stack, which saved state keeps.
-                                if (navigator.previous == Screen.Home) {
-                                    navigator.replace(Screen.Play)
-                                } else {
-                                    navigator.back()
-                                }
-                            },
-                        )
-                    }
-                }
-
-                Screen.About -> {
-                    BackTopBar(onBack = { navigator.back() })
-                    Below { About(onDeleted = { navigator.back() }) }
-                }
-
-                Screen.Question -> {
-                    BackTopBar(onBack = { navigator.back() })
-                    Below { QuestionDetails(openedQuestion, onGone = { navigator.back() }) }
-                }
-
-                Screen.Shop -> {
-                    BackTopBar(onBack = { navigator.back() })
-                    Below { Shop(onOpenAuth = { navigator.open(Screen.Auth) }) }
                 }
             }
         }

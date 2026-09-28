@@ -2,10 +2,17 @@ package io.ntole.wyr.theme
 
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.rotate
+import androidx.compose.ui.graphics.drawscope.scale
+import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.unit.dp
 import kotlin.math.PI
 import kotlin.math.pow
@@ -17,11 +24,11 @@ import kotlin.math.sin
  * is drawn on, so it fits a phone, a tablet and a preview alike, and is the same every time it is drawn:
  * the stars and bubbles stand where a fixed sequence puts them, never at random.
  *
- * Its colours are the theme's, opaque, and each keeps the page's text at AA on it (`WyrContrastTest`),
- * so it never has to stay out of a text's way.
+ * Its colours are the theme's, and each keeps the page's text at AA on it (`WyrContrastTest`), so it
+ * never has to stay out of a text's way.
  */
 sealed interface ThemeArt {
-    /** Every colour the art is drawn in. */
+    /** Every colour the art shows on the page, as it shows there, one drawn over another included. */
     val colors: List<Color>
 
     /** Draws the art over the whole of this scope, its page already drawn. */
@@ -32,6 +39,68 @@ sealed interface ThemeArt {
         override val colors: List<Color> = emptyList()
 
         override fun DrawScope.draw() = Unit
+    }
+
+    /**
+     * The game's own theme (CLAUDE.md §5b, *Backgrounds*): a faint wash of card A's pink toward the top
+     * and of card B's amber toward the bottom, the plain [page] across the middle, echoing the two cards,
+     * and a few faint question marks by the edges. Where the window is wide enough for the Play screen to
+     * stand its cards side by side ([WyrDimens.wideLayoutMinWidth], and wider than tall) the wash runs
+     * from left to right with them, and the marks follow it.
+     *
+     * [washA] and [washB] are opaque, the wash at its strongest, at the window's edge; [mark] is
+     * translucent, drawn over whatever is under it, so its strongest is over a wash.
+     */
+    data class QuestionMarks(
+        val page: Color,
+        val washA: Color,
+        val washB: Color,
+        val mark: Color,
+    ) : ThemeArt {
+        override val colors: List<Color> =
+            listOf(washA, washB, mark.compositeOver(washA), mark.compositeOver(washB), mark.compositeOver(page))
+
+        override fun DrawScope.draw() {
+            val wide = size.width > size.height && size.width >= WyrDefaultDimens.wideLayoutMinWidth.toPx()
+            val stops =
+                arrayOf(0f to washA, WASH_CLEAR_FROM to page, WASH_CLEAR_TO to page, 1f to washB)
+            val wash =
+                if (wide) {
+                    Brush.horizontalGradient(colorStops = stops, startX = 0f, endX = size.width)
+                } else {
+                    Brush.verticalGradient(colorStops = stops, startY = 0f, endY = size.height)
+                }
+            drawRect(wash)
+
+            val markSize = WyrDefaultDimens.backgroundMarkSize.toPx()
+            QUESTION_MARKS.forEach { place ->
+                // On a wide window the fractions swap, so the marks follow the wash.
+                val (x, y) = if (wide) place.y to place.x else place.x to place.y
+                translate(x * size.width, y * size.height) {
+                    rotate(place.degrees, pivot = Offset.Zero) {
+                        scale(place.scale * markSize / MARK_GRID, pivot = Offset.Zero) {
+                            translate(-MARK_GRID / 2, -MARK_GRID / 2) { questionMark(mark) }
+                        }
+                    }
+                }
+            }
+        }
+
+        /**
+         * A question mark on a grid of [MARK_GRID] each way, as an icon is drawn: the hook, one stroke
+         * with round ends, from its left end over the top and down into the stem, and the dot under it.
+         */
+        private fun DrawScope.questionMark(color: Color) {
+            val hook =
+                Path().apply {
+                    moveTo(8.5f, 9f)
+                    cubicTo(8.5f, 6.8f, 10.1f, 5f, 12f, 5f)
+                    cubicTo(13.9f, 5f, 15.5f, 6.5f, 15.5f, 8.5f)
+                    cubicTo(15.5f, 10.8f, 12f, 11.4f, 12f, 14.5f)
+                }
+            drawPath(hook, color, style = Stroke(width = MARK_STROKE, cap = StrokeCap.Round, join = StrokeJoin.Round))
+            drawCircle(color, radius = MARK_DOT, center = Offset(MARK_GRID / 2, MARK_DOT_AT))
+        }
     }
 
     /** A grid running to the horizon, a half sun on it, and stars above. */
@@ -315,6 +384,38 @@ private class Sequence(
         return (state shr LCG_SHIFT).toFloat() / (1L shl LCG_BITS).toFloat()
     }
 }
+
+/**
+ * Where one of the game's own question marks stands, as fractions of the window across ([x]) and down
+ * ([y]) held upright, turned by [degrees], at [scale] of [WyrDimens.backgroundMarkSize].
+ */
+private data class Place(
+    val x: Float,
+    val y: Float,
+    val scale: Float,
+    val degrees: Float,
+)
+
+/** The game's own question marks, a few, by the edges more than in the middle, where the cards are. */
+private val QUESTION_MARKS =
+    listOf(
+        Place(x = 0.1f, y = 0.14f, scale = 1f, degrees = -14f),
+        Place(x = 0.88f, y = 0.2f, scale = 0.7f, degrees = 12f),
+        Place(x = 0.07f, y = 0.47f, scale = 0.55f, degrees = 8f),
+        Place(x = 0.9f, y = 0.6f, scale = 1.1f, degrees = -10f),
+        Place(x = 0.16f, y = 0.86f, scale = 0.8f, degrees = 16f),
+        Place(x = 0.84f, y = 0.94f, scale = 0.6f, degrees = -6f),
+    )
+
+/** Where the wash of card A's colour has faded out, and where card B's starts. */
+private const val WASH_CLEAR_FROM = 0.42f
+private const val WASH_CLEAR_TO = 0.58f
+
+/** A question mark's grid, its stroke's width, its dot's radius and how far down the dot is, as an icon's. */
+private const val MARK_GRID = 24f
+private const val MARK_STROKE = 2f
+private const val MARK_DOT = 2f
+private const val MARK_DOT_AT = 19f
 
 private const val LINE_WIDTH = 1.5f
 private const val HALF_TURN = 180f

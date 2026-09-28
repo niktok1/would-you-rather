@@ -157,21 +157,17 @@ class ShopScreenDrawTest {
     }
 
     /**
-     * Each theme draws its page in its own colour, and every one but the game's own draws its art over
-     * it: some pixel of a page the size of a phone's is one of the art's colours.
+     * Each theme draws its page in its own colour and its art over it: some pixel of a page the size of a
+     * phone's is the page's colour, and some one of the art's colours.
      */
     @Test
     fun `each theme draws its page and its art`() {
         GameThemes.ALL.forEach { theme ->
             val pixels = pageOf(theme)
             val colors = theme.colors(darkMode = false)
-            assertEquals(colors.pageBackground, pixels.first(), "${theme.id}: the page's top left")
-            val art = theme.art.colors.toSet()
-            if (art.isEmpty()) {
-                assertTrue(pixels.all { it == colors.pageBackground }, "${theme.id}: the game's own page is plain")
-            } else {
-                assertTrue(pixels.any { it in art }, "${theme.id}: no pixel of its art")
-            }
+            assertTrue(colors.pageBackground in pixels, "${theme.id}: no pixel of the page")
+            val art = theme.art(darkMode = false).colors.toSet()
+            assertTrue(pixels.any { it in art }, "${theme.id}: no pixel of its art")
         }
     }
 

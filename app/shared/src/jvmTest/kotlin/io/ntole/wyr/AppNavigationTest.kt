@@ -114,6 +114,7 @@ import org.koin.core.context.startKoin
 import org.koin.core.context.stopKoin
 import org.koin.dsl.module
 import org.koin.mp.KoinPlatform
+import kotlin.coroutines.CoroutineContext
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
@@ -504,7 +505,9 @@ class AppNavigationTest {
     fun `a tap on Home's Play reveals the shares then opens Play and is counted by its side`() {
         val counted = CompletableDeferred<Unit>()
         game.pickWaitsFor = counted
-        withApp { scene ->
+        // Home's reveal runs on the frame clock, so the platform's animations stay on; Home to Play has
+        // no screen transition of its own to wait for.
+        withApp(motion = Dispatchers.Unconfined) { scene ->
             val (_, cardB) = scene.nodes().filter { CYRILLIC.play in it.texts }
             assertTrue(
                 cardB.config
@@ -966,10 +969,15 @@ class AppNavigationTest {
      * its saved state restored from [restored], none unless a test sets it. What it saved as the test
      * ended is in [saved].
      */
-    private fun withApp(test: (ImageComposeScene) -> Unit) {
+    private fun withApp(
+        motion: CoroutineContext = MotionOff,
+        test: (ImageComposeScene) -> Unit,
+    ) {
         val registry = SaveableStateRegistry(restored) { true }
         val scene =
-            ImageComposeScene(width = 375, height = 599, density = Density(1f)) {
+            // Every screen change ends at once, unless a test asks for [motion]: these are tests of where the
+            // buttons go, not of how screens move (CLAUDE.md §5b, *Motion*).
+            ImageComposeScene(width = 375, height = 599, density = Density(1f), coroutineContext = motion) {
                 CompositionLocalProvider(
                     LocalLifecycleOwner provides owner,
                     LocalViewModelStoreOwner provides owner,
@@ -994,7 +1002,7 @@ class AppNavigationTest {
      */
     private fun afterRotation(test: (ImageComposeScene) -> Unit) {
         restored = saved
-        withApp(test)
+        withApp(test = test)
     }
 
     private fun fakes() =

@@ -1,12 +1,14 @@
 package io.ntole.wyr.theme
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 
 /**
  * Whether the page is drawn already, under the whole window, by `App`: then a screen's [PageSurface]
@@ -34,4 +36,27 @@ fun PageSurface(
             modifier.background(colors.pageBackground).drawBehind { drawThemeArt(art) }
         }
     Surface(color = Color.Transparent, contentColor = colors.primaryText, modifier = page, content = content)
+}
+
+/**
+ * The page under the whole window, as `App` draws it once under every screen: the theme's page colour
+ * and its art ([LocalThemeArt]), in a layer of its own, so it is recorded once and drawn again from that
+ * record whatever moves over it, a screen's change above all, until its size or the theme changes. It
+ * says nothing to a screen reader. [drawn], for a test, is told each time it is recorded anew.
+ */
+@Composable
+internal fun WholePageArt(
+    modifier: Modifier = Modifier,
+    drawn: () -> Unit = {},
+) {
+    val page = WyrThemeAccessors.colors.pageBackground
+    val art = LocalThemeArt.current
+    Spacer(
+        modifier =
+            modifier.graphicsLayer().drawBehind {
+                drawn()
+                drawRect(page)
+                drawThemeArt(art)
+            },
+    )
 }

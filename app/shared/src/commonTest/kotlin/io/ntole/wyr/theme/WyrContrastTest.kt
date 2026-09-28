@@ -2,6 +2,7 @@ package io.ntole.wyr.theme
 
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
+import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.test.Test
@@ -73,19 +74,21 @@ class WyrContrastTest {
     }
 
     /**
-     * A theme's art is drawn behind every screen, so text may stand on any of its colours: each keeps the
-     * page's text, muted text, the heading accent and a failure at 4.5 to 1 on it, as on the page itself.
+     * A theme's art is drawn behind every screen, so text may stand on any of its colours, the game's own
+     * wash under a question mark included: each keeps the page's text, muted text, the heading accent, a
+     * failure and a field's label at 4.5 to 1 on it, as on the page itself.
      */
     @Test
     fun `text on a theme's art reads as it does on the page`() {
         GameThemes.ALL.forEach { theme ->
-            theme.palettes.forEach { colors ->
-                theme.art.colors.forEach { art ->
+            theme.looks.forEach { (colors, drawn) ->
+                drawn.colors.forEach { art ->
                     listOf(
                         "primary text" to colors.primaryText,
                         "muted text" to colors.muted,
                         "the heading accent" to colors.headingAccent,
                         "a failure" to colors.error,
+                        "a field's label" to materialSchemeOf(colors).onSurfaceVariant,
                     ).forEach { (what, text) ->
                         val ratio = contrast(text, art)
                         assertTrue(ratio >= TEXT, "${theme.id}: $what on the art's $art reads at $ratio to 1")
@@ -95,9 +98,9 @@ class WyrContrastTest {
         }
     }
 
-    /** Every theme has an id of its own, and the game's own draws no art. */
+    /** Every theme has an id of its own, and draws art in each of its modes. */
     @Test
-    fun `every theme is its own and the game's own is plain`() {
+    fun `every theme is its own and draws its art`() {
         assertEquals(
             GameThemes.ALL.size,
             GameThemes.ALL
@@ -105,8 +108,28 @@ class WyrContrastTest {
                 .toSet()
                 .size,
         )
-        assertEquals(ThemeArt.None, GameThemes.Default.art)
-        GameThemes.ALL.drop(1).forEach { theme -> assertTrue(theme.art.colors.isNotEmpty(), theme.id) }
+        GameThemes.ALL.forEach { theme ->
+            theme.looks.forEach { (_, art) -> assertTrue(art.colors.isNotEmpty(), theme.id) }
+        }
+    }
+
+    /**
+     * The game's own art is faint (CLAUDE.md §5b, *Backgrounds*): each of its colours, a wash under a
+     * question mark included, is within an eighth of the page, channel by channel, so the page stays the page.
+     */
+    @Test
+    fun `the game's own art is faint`() {
+        GameThemes.Default.looks.forEach { (colors, art) ->
+            art.colors.forEach { tint ->
+                val apart =
+                    maxOf(
+                        abs(tint.red - colors.pageBackground.red),
+                        abs(tint.green - colors.pageBackground.green),
+                        abs(tint.blue - colors.pageBackground.blue),
+                    )
+                assertTrue(apart in 0.005f..0.125f, "$tint on the ${themeOf(colors)} page is $apart apart")
+            }
+        }
     }
 
     private fun assertAtLeast(

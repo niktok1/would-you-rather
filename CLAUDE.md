@@ -294,7 +294,8 @@ Implemented as `WyrTheme` in `:app:shared` (`io.ntole.wyr.theme`): `WyrColors` +
 Material components inherit it instead of falling back to Material defaults. It mirrors none of the
 `surfaceContainer` slots, so a component drawn on one, a dialog or a menu, is given `WyrColors.surface`
 by name (the deletion's dialog; the language menu's `DropdownMenu` not yet). The game's own look is
-`WyrLightColors` and `WyrDarkColors`; each theme the shop sells (§8d, *The shop*) is a `GameTheme`
+`WyrLightColors` and `WyrDarkColors`, with an art for each mode (`WyrLightArt`, `WyrDarkArt`, *Backgrounds*,
+below; `GameTheme.art(darkMode)`); each theme the shop sells (§8d, *The shop*) is a `GameTheme`
 (`GameThemes`), one `WyrColors` for both modes (`ShopThemes.kt`) and a `ThemeArt`, drawn by hand on
 the page behind every screen: once, under the whole window, the system bars' strips included (`App`'s
 `WholePage`, `LocalThemeArt`), so a screen's own `PageSurface` draws nothing there (`LocalPageDrawn`)
@@ -358,7 +359,7 @@ a theme bought in the shop gives the cards colours of its own, *decided 2026-09-
 | primary text     | `#412402`  | `#F3EDEF`  |
 | heading accent   | `#993556`  | `#ED93B1`  |
 | OR pill text/bg  | `#993556` on `#FBEAF0` | `#F4C0D1` on `#3A2330` |
-| muted (pts)      | `#6F6E68`  | `#888780`  |
+| muted (pts)      | `#5E5D57`  | `#9C9B94`  |
 | error (failures) | `#B83A65`  | `#EC7AA0`  |
 
 **Contrast** (*checked 2026-09-26*): every pair the theme puts text or an icon on meets WCAG AA in
@@ -366,15 +367,66 @@ both themes, 4.5 to 1 for text, and 3 to 1 for large text (18.66 bold, 24 otherw
 and a graphic's edge, computed from the tokens and from the Material scheme they are mirrored into
 (`materialSchemeOf`) by `WyrContrastTest`, which holds every palette of the shop's themes to the same
 pairs, card A's text included (every one reads at 4.5 to 1 there), and every colour of a theme's art
-to the page's text, muted text, heading accent and error at 4.5 to 1, so text over the art reads as on
-the plain page. Two tokens changed for it: `muted` in the light theme,
-`#888780` before, 3.4 to 1 on the page (now 4.9), and `error`, a token of its own, where Material's
+to the page's text, muted text, heading accent, error and a field's label at 4.5 to 1, so text over the
+art reads as on the plain page. Two tokens changed for it: `muted` in the light theme,
+`#888780` before, 3.4 to 1 on the page (then 4.9, and 6.3 since the game's own art, *Backgrounds*,
+below), and `error`, a token of its own, where Material's
 error was card A's pink, 3.7 to 1 on the light page and 4.1 on the dark surface (now 5.2 and 6.1).
 The amber block, `#412402` on `#EF9F27`, reads at 6.5. The coin's face on the light page is 2.1, but
 its rim, drawn round it, is 13.5. One pair is left to the user: white on card A's pink is 3.9 to 1,
 enough for its large text but not for an option shrunk below large text (§8d, *The Play screen*), and
 the brand's colours stay unless the user changes them (§8b, *Card A's contrast*). The Material
 defaults the scheme does not set (secondary, tertiary, outline and the rest) are Material's own.
+
+**Backgrounds** (*built 2026-09-29*, the user's, ported from `feat/visuals` onto the shop's themes): the
+game's own theme, the free *Класична*, draws art too, `ThemeArt.QuestionMarks` (`ThemeArt.kt`), drawn in
+code and, as every theme's art, once under the whole window (`WholePageArt`, a layer of its own, so a
+screen's change moves over it without drawing it again; `ClassicArtDrawTest`): a faint wash of card A's
+pink toward the top and card B's amber toward the bottom, the plain page across the middle, echoing the
+two cards, and six faint question marks, drawn as the icons are, scattered by the edges; on a window
+wider than tall and at least `wideLayoutMinWidth` across, where the Play screen stands its cards side by
+side (§8d, *Wide screens*), the wash runs left to right and the marks follow it. The same under every
+screen, the shop's art being so: `feat/visuals` had it under Home and Play alone and a few faint dots
+under the rest, which the art drawn once for the whole window does not allow without a variant per
+screen (*provisional — user decision*, §8b, *The visuals' details*). Its colours are in `WyrColors.kt`:
+each wash its colour at 5 to 8 percent over the page, opaque, and the marks the heading accent at 4 to
+5 percent, translucent, drawn over the wash; `WyrDimens.backgroundMarkSize`; the places and turns are
+fractions in `ThemeArt.kt`. Bought themes' art is unchanged. Every text the page holds still reads at
+AA on the strongest tint, a mark over a wash (`WyrContrastTest`, which lists each composite as an art
+colour): the least is 4.6 to 1 in the light theme, a failure on the pink wash under a mark, and 5.3 in
+the dark, muted text on the amber wash under a mark. For it `muted` moved again, to `#5E5D57` in the
+light theme (4.9 to 1 on the page before, 6.3 now) and `#9C9B94` in the dark (5.1 before, 6.6), since
+it fell under AA on the tints (4.3 and 4.5) and a wash any fainter would not show. `WyrContrastTest` also
+holds the game's own art within an eighth of the page, channel by channel.
+
+**Motion** (*built 2026-09-29*, the user's): the timing and size of the motion shared across screens is
+a token, the durations and scales in `WyrMotion` (`io.ntole.wyr.theme`) and the distances in `WyrDimens`
+(`screenSlide`); a screen's own motion (the Play cards' sink, lift and slide, Home's reveal and fade
+through) keeps its timing beside it, as it did. None loops forever, and each ends exactly where the
+screen stood before there was motion. **The rule** (the user's phone runs an accessibility service,
+§8d *The Play screen*): an animation moves a thing where it is drawn or placed, a `graphicsLayer { }`
+lambda, a placement's offset or a draw, reading its value there and nowhere else, so a frame of it
+composes nothing and changes no semantics property; the tests step the scene's clock through each and
+count what a frame composes. Compose scales every duration by the platform's animator duration scale
+by itself, so Android's *Remove animations* ends each at once. A test of what the app does rather than
+how it moves draws with that scale at 0 (`MotionOff`, `AppNavigationTest`, but for its Home reveal
+test, which needs the reveal's frame clock), since its scene draws every frame at one time, where a
+transition left running would never end. What moves, besides what §8d describes:
+- *Screens* (`ScreenTransitions`, `io.ntole.wyr.navigation`): each change of the navigator's top
+  screen fades and slides, `SCREEN_MILLIS` (250) over `screenSlide` (24): a screen opened comes in from
+  the end, the right in a left-to-right language, and the one it covers goes the other way; going
+  back, to a screen lower on the stack, the home icon's `open(Screen.Home)` included, runs the other way
+  round. An `AnimatedContent` over the back stack, keyed by its top screen, with no size animation; the
+  old screen stays composed until the change ends. The first screen and the update screen (§8e) just
+  appear, and Play opened from Home is a cut, left to Home's own fade through (§8d, *Home picks*),
+  exactly as before (`isFadeThrough`). `ScreenTransitionsDrawTest`.
+- *The coin* (`PointsAmount`): when the points go up, on the Play screen's row, the Account card or the
+  shop, the coin bumps to `COIN_BUMP_SCALE` (1.3) and back, `COIN_BUMP_MILLIS` (250), and the number
+  beside it stays; the first amount shown, and one that falls or stays, bump nothing. No "+1" is shown
+  (the user). `CoinBumpDrawTest`.
+`ScreenshotsTest` draws Home, Play asked and revealed (and on its side), Account and Categories on the
+page in the game's own theme light and dark and in Ocean, and writes PNGs where `WYR_SCREENSHOTS_DIR`
+says.
 
 ---
 
@@ -1366,6 +1418,22 @@ EncryptedSharedPreferences: enough for a game that stores no sensitive personal 
   Play Игре* only when the device's Play Games gives no name (§8d, *The Account screen*). Rejected: the
   server storing the name from its sign-in, which would show it on every platform but keep more
   personal data and go stale on a rename.
+- **The visuals' details** — *provisional — user decision.* The user asked for backgrounds and
+  animations (`feat/visuals`, 2026-09-27); main built the Play and Home motion and the shop's art
+  meanwhile, and what main lacked was ported onto them (§5b, *Backgrounds*, *Motion*); the details are
+  this build's. The game's own art is the same wash and question marks under every screen, where
+  `feat/visuals` had them under Home and Play and a few faint dots elsewhere: the art is drawn once
+  under the whole window, as the shop's is, and a variant per screen would need the page to know the
+  screen and fade between the two. The wash is 5 to 8 percent and the marks 4 to 5, and `muted` moved
+  for them (light `#5E5D57`, dark `#9C9B94`). On a wide window the wash runs left to right. A screen's
+  change is 250 ms over 24, and back from the home icon runs as back does; Home to Play keeps its own
+  fade through. The coin bumps wherever the points go up, 1.3 over 250 ms. Not ported, being built on
+  main already or in its place: the new question's cards rising in (main slides the next question onto
+  the cards), the reveal's pick pop and the other card's dim (main lifts the pick and stands the other at
+  85%), Home's buttons sliding in (main's Home has its reveal and fade through), and the thumb's bounce
+  (main sinks it under the finger and ticks the phone). The options: keep them; per-screen art (the
+  question marks under Home and Play only, dots elsewhere); `muted` as before and the washes at 2
+  percent, which do not show; top to bottom always; or change any duration or size, each a token.
 - **The notice's look** — *provisional — user decision.* A dot in the brand's pink on the account
   icon, and on each new row of My questions for the visit that first shows it (§8d, *The notice of a
   decision*); no banner and no text on screen (the user: less text). The options: keep it; a number of
@@ -1671,6 +1739,9 @@ game's, or a place on one, theme tokens only (§5b), and its words in `Strings` 
   Home), and `previous` names the screen under the one shown, which it was opened from. The stack is saved
   state (`Navigator.Saver`), so an Android activity made anew, on a rotation say, shows the screen it
   showed. `NavigatorTest` pins it.
+- *Between screens* a quick fade and a slight slide, forward from the end and back from the start
+  (§5b, *Motion*, `ScreenTransitions`), over the page and its art, which the app draws once under the
+  whole window (§5b, *Backgrounds*); Home to Play is Home's own fade through (*Home picks*).
 - *Android's back*, button or gesture, goes back through the navigator (`SystemBack`, over
   `BackHandler` from the catalog's `androidx.activity:activity-compose`, in `:app:shared`'s
   androidMain); at Home it is left to the system, so it leaves the app. Desktop, the web and iOS bind
@@ -2853,8 +2924,8 @@ listed on the Account screen.
     and the tap opens Play at once. The counts are read each time Home is shown (`HomeViewModel.shown`),
     and nothing is said when a read fails. The tap is counted in the background, best effort
     (`HomeViewModel.pick`), its answer not shown, and it makes the Play screen's ViewModel, so its
-    question loads during the reveal, the question's time not counted until Play is shown (§8g). Only
-    Home to Play fades; every other change of screen is instant.
+    question loads during the reveal, the question's time not counted until Play is shown (§8g). Home to
+    Play is that fade through alone; every other change of screen fades and slides (§5b, *Motion*).
   - *The client* is `HomePickRepository` in `:core:domain` (`io.ntole.wyr.core.domain.home`), the
     counts as a `Tally`, one tap a vote: `GetHomePicks`, which ensures no session, and `PickOnHome`,
     which ensures one first, as a vote does, so a first launch's tap and the game it opens mint one
@@ -2877,7 +2948,7 @@ listed on the Account screen.
   may submit; the theme worn is kept on the device; and the shop opens from a bag on the Account bar
   besides the points.
   - *The themes* (`GameThemes`, §5b): the game's own, free, *Класична*, in the device's light or dark
-    mode; and four on sale, each one palette whatever the mode (*provisional — user decision*: a
+    mode, its art a faint pink and amber wash and question marks (§5b, *Backgrounds*); and four on sale, each one palette whatever the mode (*provisional — user decision*: a
     light and a dark variant of each is the other option): **Неонска ноћ** (`NEON_NIGHT`: magenta and
     cyan on near-black, a grid to the horizon, a half sun and stars), **Океан** (`OCEAN`: coral and sea
     foam on deep teal, two waves and bubbles), **Шума** (`FOREST`: moss and terracotta on cream, two
