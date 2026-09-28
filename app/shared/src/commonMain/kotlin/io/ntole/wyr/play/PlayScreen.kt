@@ -97,8 +97,8 @@ import kotlin.time.Duration.Companion.milliseconds
  * The game (CLAUDE.md §8d, *The Play screen*): two answer cards and, between them, one row of the
  * player's points, the like and the dislike, Share and Skip; on a wide screen the cards stand side by
  * side over the row (§8d, *Wide screens*). Tapping a card answers ([onChoose]); Skip ([onSkip]) goes past
- * a question not answered yet; once the answer is revealed, tapping either card goes on to the next
- * question ([onNext]). The thumbs ask for a reaction ([onReact]): the one tapped, or none when it is
+ * a question not answered yet; once the answer is revealed, tapping either card, or Skip, goes on to the
+ * next question ([onNext]). The thumbs ask for a reaction ([onReact]): the one tapped, or none when it is
  * the one the player holds. Share opens the dialog that shares the question on screen, with its results
  * once it is answered (§8d, *Sharing*), and [onShared] hears what was shared.
  *
@@ -250,7 +250,7 @@ private fun RepeatNotice(shown: Boolean) {
 /**
  * The two cards and the row between them, or under them side by side on a wide screen
  * ([QuestionLayout]). Before the answer a card answers for its side, and Skip goes past it; once it
- * is revealed, either card is the way on, and Skip is gone. Off while anything is in flight, one
+ * is revealed, either card is the way on, and so is Skip. Off while anything is in flight, one
  * action at a time.
  */
 @Composable
@@ -320,8 +320,9 @@ private fun ColumnScope.QuestionBody(
             idle = idle,
             onReact = onReact,
             onPoints = onPoints,
-            // Only before answering (CLAUDE.md §8d, *Skipping*): once revealed, a card is the way on.
-            onSkip = if (state is PlayUiState.Asking) onSkip else null,
+            // Before answering it skips (CLAUDE.md §8d, *Skipping*); once revealed it goes on, as a card does.
+            answered = outcome != null,
+            onSkip = if (outcome == null) onSkip else onNext,
             onShare = {
                 onShare(
                     SharedQuestion(
@@ -367,8 +368,8 @@ private fun ColumnScope.QuestionBody(
  * player's points, a coin and the number, or how the last reaction failed, and right beside them the
  * thumbs, the like and the dislike, each filled while the player holds it and beside how many hold it,
  * as the server counted them (CLAUDE.md §8d, *Reactions*), before answering and after; and on the right
- * Share ([onShare]), always, and Skip ([onSkip]) while the question is not answered yet, `null` once it
- * is. Skip's place is kept once it is gone, so the reveal moves nothing in the row. The thumbs, Share and
+ * Share ([onShare]) and Skip ([onSkip]), always: Skip skips a question not answered yet, and once it is
+ * [answered] goes on to the next, as a card does, so the reveal moves nothing in the row. The thumbs, Share and
  * Skip are on only while the screen is [idle], and Share and Skip are drawn muted while they are off.
  *
  * A thumb asks for its reaction, or for none when the player holds it already ([onReact]). The row is
@@ -384,8 +385,9 @@ internal fun MiddleRow(
     rowError: DomainError?,
     idle: Boolean,
     onReact: (Reaction) -> Unit,
-    onSkip: (() -> Unit)?,
+    onSkip: () -> Unit,
     onShare: () -> Unit,
+    answered: Boolean = false,
     onPoints: () -> Unit = {},
 ) {
     val colors = WyrThemeAccessors.colors
@@ -459,23 +461,19 @@ internal fun MiddleRow(
         end = {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 ShareButton(element = "play.share", enabled = idle, onClick = onShare)
-                if (onSkip != null) {
-                    val interaction = remember { MutableInteractionSource() }
-                    IconButton(
-                        onClick = tapped("play.skip", onClick = onSkip),
-                        enabled = idle,
-                        interactionSource = interaction,
-                        modifier = Modifier.pressScale(interaction),
-                    ) {
-                        // Muted while off: a tint of its own hides the button's off colour.
-                        Icon(
-                            imageVector = WyrIcons.Skip,
-                            contentDescription = strings.skip,
-                            tint = if (idle) colors.headingAccent else colors.muted,
-                        )
-                    }
-                } else {
-                    Spacer(Modifier.size(touchTarget))
+                val interaction = remember { MutableInteractionSource() }
+                IconButton(
+                    onClick = tapped("play.skip", mapOf(AnalyticsProperty.ANSWERED to answered), onClick = onSkip),
+                    enabled = idle,
+                    interactionSource = interaction,
+                    modifier = Modifier.pressScale(interaction),
+                ) {
+                    // Muted while off: a tint of its own hides the button's off colour.
+                    Icon(
+                        imageVector = WyrIcons.Skip,
+                        contentDescription = strings.skip,
+                        tint = if (idle) colors.headingAccent else colors.muted,
+                    )
                 }
             }
         },

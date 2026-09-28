@@ -1943,8 +1943,10 @@ Categories screen and the question's menu from its top bar (*Skipping*, *Reactio
   middle right, while likes and dislikes move next to coins"): on the left the player's points, the
   coin and the number (`PointsAmount`, §8f), and right beside them the **thumbs**, a thumb up and a
   thumb down, each filled while the player holds it and beside how many hold it, before answering and
-  after; and on the right **Share** (*Sharing*), always, and **Skip** after it while the question is not
-  answered yet (*Skipping*), Skip's place kept empty in the reveal so nothing in the row moves. The
+  after; and on the right **Share** (*Sharing*), always, and **Skip** after it, always too (the user,
+  2026-09-28): before the answer it skips (*Skipping*), and in the reveal it goes on to the next
+  question as a tap on a card does (`PlayViewModel.next`, its half-second hold included), so nothing in
+  the row moves. The
   **categories played**, *Све* or their names, cut to one line, with a small chevron, are in the middle
   of the **top bar** (the user: "category goes to top bar in middle"), between home and the question's
   **menu**, a ⋮ before the account icon, which has the notice's dot inside its 48 while a decision
@@ -2008,7 +2010,7 @@ Categories screen and the question's menu from its top bar (*Skipping*, *Reactio
   the next question then slides onto the same cards (`AnimatedContent` keyed on the question, the old
   face fading up and away in 0.12 s, its share and bar with it, the new one rising in over 0.22 s),
   the face going heard by no screen reader. Tapping either card
-  again is the next
+  again, or Skip, is the next
   question (`PlayViewModel.next`, from the reveal only), once the reveal has shown for half a second
   (`REVEAL_HOLD_MILLIS`), so a double tap cannot answer and skip the reveal: *provisional — user
   decision*, the other option being no hold. Nothing else shows: no verdict, no points of the vote,
@@ -2062,9 +2064,9 @@ Categories screen and the question's menu from its top bar (*Skipping*, *Reactio
   cards before and after the reveal and each thumb, asking for its reaction or none; steps the
   scene's clock through the count up, reading the numbers and each bar by their pixels and finding a
   frame of them composing and moving nothing (`CountedUpTextDrawTest`: each number drawn once, in
-  order); holds the row to 335 wide with nothing cut short, asked with Skip and answered with its
-  place kept, and to one height with a reaction's failure or without at font scales 1, 1.3 and 2;
-  finds Skip after the thumbs and Share only while a question is asked, off and drawn muted while
+  order); holds the row to 335 wide with nothing cut short, asked and answered, and to one height with a reaction's failure or without at font scales 1, 1.3 and 2;
+  finds Skip after the thumbs and Share, skipping while a question is asked and going on from the
+  reveal, off and drawn muted while
   anything is in flight (by its pixels' colours, in both themes and every language), the thumbs beside
   the points, Share, and nothing in the row moved by the reveal; and holds `PlayRow` to its rule on
   boxes of known widths, which no font changes. `AppNavigationTest` skips through it, under a bar of home, the categories
@@ -2315,12 +2317,12 @@ listed on the Account screen.
   with nothing due in it (*Categories* above; provisional, §8b). A player is therefore never
   stuck at the end of a cycle on a question they keep skipping. Built as `POST /v1/skips` in
   `SkipStore.skip`, on `skips.skipped_in_cycle`, which the feed's due predicate compares with the
-  cycle as it does the vote's. The Play screen's Skip, in the row between the cards while a question
-  is not answered yet, sends it through `SkipQuestion` and then shows the next question
+  cycle as it does the vote's. The Play screen's Skip, in the row between the cards, on a question
+  not answered yet sends it through `SkipQuestion` and then shows the next question
   (`PlayViewModel.skip`), even when the skip failed, and says nothing of it: the player asked not to
   answer that question, and an unrecorded skip only leaves it due, so the feed may serve it again
-  this cycle, where Skip works on it again. Nothing else goes while a skip is in flight, and an
-  answered question goes on with a tap on a card instead.
+  this cycle, where Skip works on it again. Nothing else goes while a skip is in flight, and on an
+  answered question Skip goes on as a tap on a card does, recording no skip.
 - **Own questions** *(built; decided 2026-09-24)*: an author is served their own questions
   **like any other player** and may answer, skip and react to them; the user chose the simpler logic.
   `QuestionStore.servable` is the one predicate the feed, the due count and votes, skips and reactions
@@ -3216,7 +3218,7 @@ the same events. The moderation app sends none.
   its `side`, `A` or `B`, since Home's two buttons are one element);
   `top_bar.home`, `.account`, `.back`, `.categories`, `.about`, `.shop`; `about.privacy`, `.terms`,
   `.delete_account`, `.contact`, `.copy_account_id` and `.licence`; `play.card_a` and `.card_b` (with `answered`,
-  whether the tap went on from the reveal), `.like`, `.dislike`, `.skip`, `.points`, `.try_again`;
+  whether the tap went on from the reveal), `.like`, `.dislike`, `.skip` (with `answered`, as the cards'), `.points`, `.try_again`;
   `question_menu.open`, `.report`, `.reason` (with its `reason`), `.hide_question`, `.hide_author`;
   `account.open_auth`, `.log_out`, `.points`, `.try_again`, and `.statistics`, `.statistics_info` and
   `.statistics_info_ok`, on the About screen since 2026-09-28, their names kept;

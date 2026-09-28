@@ -347,18 +347,17 @@ class PlayScreenDrawTest {
     @Test
     fun `the cards and the thumbs and Share and Skip are off while anything is in flight`() {
         val strings = stringsOf(Language.DEFAULT).playScreen
-        val parts = listOf(QUESTION.optionA, QUESTION.optionB, strings.like, strings.dislike, strings.share.share)
+        val parts =
+            listOf(QUESTION.optionA, QUESTION.optionB, strings.like, strings.dislike, strings.share.share, strings.skip)
         listOf(
             PlayUiState.Asking(QUESTION, isSubmitting = true),
             PlayUiState.Asking(QUESTION, isReacting = true),
             PlayUiState.Revealed(QUESTION, OUTCOME, isReacting = true),
         ).forEach { state ->
-            val off = if (state is PlayUiState.Asking) parts + strings.skip else parts
-            withScreen(state) { scene, _ -> off.forEach { assertTrue(scene.node(it).isOff, "$it in $state") } }
+            withScreen(state) { scene, _ -> parts.forEach { assertTrue(scene.node(it).isOff, "$it in $state") } }
         }
         listOf(PlayUiState.Asking(QUESTION), PlayUiState.Revealed(QUESTION, OUTCOME)).forEach { state ->
-            val on = if (state is PlayUiState.Asking) parts + strings.skip else parts
-            withScreen(state) { scene, _ -> on.forEach { assertFalse(scene.node(it).isOff, "$it in $state") } }
+            withScreen(state) { scene, _ -> parts.forEach { assertFalse(scene.node(it).isOff, "$it in $state") } }
         }
     }
 
@@ -380,6 +379,7 @@ class PlayScreenDrawTest {
                 listOf(
                     PlayUiState.Asking(QUESTION, isSubmitting = true),
                     PlayUiState.Asking(QUESTION, isReacting = true),
+                    PlayUiState.Revealed(QUESTION, OUTCOME, isReacting = true),
                 ).forEach { state ->
                     val off = skipColours(state, colors.isDark, language)
                     assertTrue(muted in off && accent !in off, "Skip on $state $at")
@@ -389,12 +389,12 @@ class PlayScreenDrawTest {
     }
 
     /**
-     * Skip is in the row between the cards (CLAUDE.md §8d, *Skipping*), after the thumbs, while a
-     * question is asked, in every language, and a tap on it skips; once the answer is revealed it is
-     * gone, since a card is then the way on.
+     * Skip is in the row between the cards (CLAUDE.md §8d, *Skipping*), after the thumbs, in every
+     * language: while a question is asked a tap on it skips, and once the answer is revealed it goes on
+     * to the next question, as a card does.
      */
     @Test
-    fun `Skip is in the row while a question is asked and gone once it is answered`() {
+    fun `Skip skips a question asked and goes on from one answered`() {
         Language.entries.forEach { language ->
             val strings = stringsOf(language).playScreen
             withScreen(PlayUiState.Asking(QUESTION), language = language) { scene, actions ->
@@ -408,21 +408,23 @@ class PlayScreenDrawTest {
 
                 assertEquals(listOf("skip"), actions.tapped, "in $language")
             }
-            withScreen(PlayUiState.Revealed(QUESTION, OUTCOME), language = language) { scene, _ ->
-                assertFalse(strings.skip in scene.descriptions(), "Skip on the reveal in $language")
+            withScreen(PlayUiState.Revealed(QUESTION, OUTCOME), language = language) { scene, actions ->
+                scene.tap(strings.skip)
+
+                assertEquals(listOf("next"), actions.tapped, "on the reveal in $language")
             }
         }
     }
 
     /**
-     * Skip's place is kept once it is gone, so the reveal moves nothing in the row: not the points, not
-     * the thumbs the player may tap next, nor their counts.
+     * The reveal moves nothing in the row: not the points, not the thumbs the player may tap next, nor
+     * their counts, nor Skip.
      */
     @Test
     fun `the row does not move when the answer is revealed`() {
         val strings = stringsOf(Language.DEFAULT).playScreen
         val question = REACTED_TO
-        val parts = listOf(POINTS_SHOWN, strings.like, "$LIKES", strings.dislike, "$DISLIKES")
+        val parts = listOf(POINTS_SHOWN, strings.like, "$LIKES", strings.dislike, "$DISLIKES", strings.skip)
         listOf(
             SHORT_PHONE_WIDTH to SHORT_PHONE_HEIGHT,
             PHONE_ON_ITS_SIDE_WIDTH to PHONE_ON_ITS_SIDE_HEIGHT,
@@ -840,9 +842,9 @@ class PlayScreenDrawTest {
         val question = QUESTION.copy(likeCount = 1234, dislikeCount = 567, myReaction = Reaction.LIKE)
         Language.entries.forEach { language ->
             (REACTION_FAILURES + null).forEach { error ->
-                // Asked, with Skip, and answered, with its place kept.
-                listOf<(() -> Unit)?>({}, null).forEach { onSkip ->
-                    val at = "with $error in $language ${if (onSkip == null) "answered" else "asked"}"
+                // Asked and answered.
+                listOf(false, true).forEach { answered ->
+                    val at = "with $error in $language ${if (answered) "answered" else "asked"}"
                     val (width, height) =
                         sizeNeeded(ROW_WIDTH, SHORT_PHONE_HEIGHT) {
                             WyrTheme {
@@ -853,8 +855,9 @@ class PlayScreenDrawTest {
                                         rowError = error,
                                         idle = true,
                                         onReact = {},
-                                        onSkip = onSkip,
+                                        onSkip = {},
                                         onShare = {},
+                                        answered = answered,
                                     )
                                 }
                             }
@@ -1338,8 +1341,8 @@ class PlayScreenDrawTest {
 
         /**
          * What some states show in [shown]'s words, each its texts in any order, and then the names it
-         * gives a screen reader for what has no text, from the top down: the thumbs, Share and, while a
-         * question is asked, Skip, and then [points], as it hears the points, which sit a little lower,
+         * gives a screen reader for what has no text, from the top down: the thumbs, Share and Skip, and
+         * then [points], as it hears the points, which sit a little lower,
          * in the middle of the row's height, as the thumbs' touch targets fill it.
          */
         fun expectedOf(
@@ -1352,21 +1355,20 @@ class PlayScreenDrawTest {
             val b = QUESTION.optionB
             val revealedA = strings.percent(70)
             val revealedB = strings.percent(30)
-            val thumbs = listOf(strings.like, strings.dislike, strings.share.share)
-            val thumbsAndSkip = thumbs + strings.skip
+            val thumbs = listOf(strings.like, strings.dislike, strings.share.share, strings.skip)
             return listOf(
                 PlayUiState.Loading to (emptyList<String>() to listOf(shown.loading)),
                 PlayUiState.Failed(DomainError.NETWORK) to (listOf(strings.cannotReach, tryAgain) to emptyList()),
                 PlayUiState.Failed(DomainError.OUT_OF_QUESTIONS) to
                     (listOf(strings.outOfQuestions, tryAgain) to emptyList()),
                 PlayUiState.Failed(DomainError.SERVER) to (listOf(strings.somethingWrong, tryAgain) to emptyList()),
-                PlayUiState.Asking(QUESTION) to (listOf(a, "0", "0", b) to thumbsAndSkip + points),
+                PlayUiState.Asking(QUESTION) to (listOf(a, "0", "0", b) to thumbs + points),
                 PlayUiState.Asking(QUESTION.copy(likeCount = 12), rowError = DomainError.NETWORK) to
-                    (listOf(a, strings.cannotReach, "12", "0", b) to thumbsAndSkip),
+                    (listOf(a, strings.cannotReach, "12", "0", b) to thumbs),
                 PlayUiState.Revealed(QUESTION, OUTCOME) to
                     (listOf(a, revealedA, "0", "0", b, revealedB) to thumbs + points),
                 PlayUiState.Asking(QUESTION.copy(answeredBefore = true)) to
-                    (listOf(strings.answeredBefore, a, "0", "0", b) to thumbsAndSkip + points),
+                    (listOf(strings.answeredBefore, a, "0", "0", b) to thumbs + points),
                 PlayUiState.Revealed(QUESTION.copy(answeredBefore = true), OUTCOME) to
                     (listOf(strings.answeredBefore, a, revealedA, "0", "0", b, revealedB) to thumbs + points),
                 PlayUiState.Revealed(QUESTION, OUTCOME.copy(pointsAwarded = 0, replayed = true)) to

@@ -179,7 +179,7 @@ class TapsTest {
         val share = setOf("play.share", "share.send", "share.cancel", "play.points")
         assertEquals(setOf("play.card_a", "play.card_b", "play.like", "play.dislike", "play.skip") + share, asked)
         assertEquals(
-            setOf("play.card_a", "play.card_b", "play.like", "play.dislike", "share.results") + share,
+            setOf("play.card_a", "play.card_b", "play.like", "play.dislike", "play.skip", "share.results") + share,
             revealed,
         )
         assertEquals(setOf("play.try_again"), failed)
@@ -416,14 +416,14 @@ class TapsTest {
         val registered = ShopState(shop = Shop(themes, points = 500, registered = true))
         val guest = ShopState(shop = Shop(themes.map { it.copy(owned = false) }, points = 500, registered = false))
 
-        // The game's own theme worn: Neon night's Apply and Ocean's Buy; the dialog is its state's.
+        // The picker's tiles, the game's own and Neon night, and Ocean's Buy; the dialog is its state's.
         assertEquals(setOf("shop.apply", "shop.buy"), elementsTapped { Shop(registered) })
         assertEquals(
             setOf("shop.apply", "shop.buy", "shop.buy_confirm", "shop.buy_cancel"),
             elementsTapped { Shop(registered.copy(confirming = "OCEAN")) },
         )
-        // A guest's every Buy is off, and the way to register is on; the game's own theme is worn.
-        assertEquals(setOf("shop.open_auth"), elementsTapped { Shop(guest) })
+        // A guest's every Buy is off, and the way to register is on; the game's own is theirs to put on.
+        assertEquals(setOf("shop.apply", "shop.open_auth"), elementsTapped { Shop(guest) })
         assertEquals(
             setOf("shop.try_again"),
             elementsTapped { Shop(ShopState(readFailure = ShopFailure(DomainError.NETWORK))) },
