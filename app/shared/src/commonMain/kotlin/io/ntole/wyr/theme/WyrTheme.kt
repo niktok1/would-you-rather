@@ -12,22 +12,30 @@ import androidx.compose.runtime.staticCompositionLocalOf
 val LocalWyrColors = staticCompositionLocalOf { WyrLightColors }
 val LocalWyrDimens = staticCompositionLocalOf { WyrDefaultDimens }
 
+/** The art the theme worn draws behind every screen ([PageSurface]); none for the game's own. */
+val LocalThemeArt = staticCompositionLocalOf<ThemeArt> { ThemeArt.None }
+
 /**
  * The app's theme.
  *
  * Provides the custom token sets *and* mirrors them into a Material [MaterialTheme.colorScheme],
  * so stock Material components inherit the palette instead of falling back to purple defaults.
+ *
+ * [theme] is the one worn, the game's own unless the player put on one of the shop's (CLAUDE.md §8d,
+ * *The shop*), in the device's [darkTheme] mode where it has two.
  */
 @Composable
 fun WyrTheme(
+    theme: GameTheme = GameThemes.Default,
     darkTheme: Boolean = isSystemInDarkTheme(),
     content: @Composable () -> Unit,
 ) {
-    val colors = if (darkTheme) WyrDarkColors else WyrLightColors
+    val colors = theme.colors(darkTheme)
 
     CompositionLocalProvider(
         LocalWyrColors provides colors,
         LocalWyrDimens provides WyrDefaultDimens,
+        LocalThemeArt provides theme.art,
     ) {
         MaterialTheme(colorScheme = materialSchemeOf(colors), content = content)
     }

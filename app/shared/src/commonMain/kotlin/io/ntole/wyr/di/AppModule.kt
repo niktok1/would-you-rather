@@ -13,6 +13,8 @@ import io.ntole.wyr.home.HomeViewModel
 import io.ntole.wyr.language.LanguageViewModel
 import io.ntole.wyr.play.PlayViewModel
 import io.ntole.wyr.services.AppServices
+import io.ntole.wyr.shop.ShopViewModel
+import io.ntole.wyr.shop.ThemeViewModel
 import io.ntole.wyr.submit.SubmitViewModel
 import org.koin.core.context.startKoin
 import org.koin.core.module.Module
@@ -30,6 +32,8 @@ internal val uiModule =
         viewModelOf(::SubmitViewModel)
         viewModelOf(::LanguageViewModel)
         viewModelOf(::CategoriesViewModel)
+        viewModelOf(::ShopViewModel)
+        viewModelOf(::ThemeViewModel)
         // What the analytics time with (CLAUDE.md §8g): how long a question, a screen or the app was shown.
         single<TimeSource.WithComparableMarks> { TimeSource.Monotonic }
         // One for the app's life, as the analytics are: a rotation's new activity finds it.

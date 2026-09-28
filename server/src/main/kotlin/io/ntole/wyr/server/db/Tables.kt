@@ -493,7 +493,7 @@ object HomePicks : Table("home_picks") {
  * registered again, by its player or another, moves to whoever sent it last (`PushTokenStore.register`),
  * the primary key deciding two registrations racing.
  *
- * Both foreign keys cascade, as `identities`' does, the schema's only cascading keys: the logout that
+ * Both foreign keys cascade, as `identities`' and `purchases`' do, and no other table's: the logout that
  * deletes a session (`SessionStore.close`) deletes its device's tokens with it, and deleting a player
  * deletes theirs, with no store having to know this table is there.
  */
@@ -531,8 +531,9 @@ object PushTokens : Table("push_tokens") {
  * (V18). Two constraints decide every race (CLAUDE.md §4): a service's player is linked to one player
  * here (the primary key), and a player here to one of each service's (the unique index).
  *
- * The foreign key cascades, as `push_tokens`' do: deleting a player deletes their links, with no store
- * having to know this table is there. Nothing else deletes one: a link, once made, stands.
+ * The foreign key cascades, as `push_tokens`' and `purchases`' do: deleting a player deletes their
+ * links, with no store having to know this table is there. Nothing else deletes one: a link, once
+ * made, stands.
  */
 object Identities : Table("identities") {
     val provider = enumerationByName<IdentityProvider>("provider", 16)
@@ -558,6 +559,33 @@ object Identities : Table("identities") {
 }
 
 /**
+ * What each player bought in the shop (CLAUDE.md §8d, *The shop*): one row per player and item, which
+ * the primary key holds them to, and what they paid for it (V19). Only `ShopStore.buy` writes a row,
+ * and nothing but the cascade deletes one: a purchase, once made, stands.
+ *
+ * The foreign key cascades, as `push_tokens`' and `identities`' do: deleting a player deletes their
+ * purchases, with no store having to know this table is there. Only a registered player buys, so the
+ * guest clean-up, which deletes guests alone, never finds one.
+ */
+object Purchases : Table("purchases") {
+    val playerId = varchar("player_id", 36).references(Players.id, onDelete = ReferenceOption.CASCADE)
+
+    /** An item of `ShopCatalog`'s, by id. */
+    val itemId = varchar("item_id", WyrApi.Limits.MAX_SHOP_ITEM_ID_LENGTH)
+
+    /**
+     * The points the player paid, the server's `THEME_PRICE` then (CLAUDE.md §8c): what the player's
+     * stats count as spent (`StatsStore`), whatever the price is by now.
+     */
+    val price = integer("price")
+
+    val purchasedAt = long("purchased_at")
+
+    /** A player buys an item once. The key, leading with the player, also finds what they own, and the cascade. */
+    override val primaryKey = PrimaryKey(playerId, itemId)
+}
+
+/**
  * Every table the server owns. The migrations build the schema (`Migrations`), and SchemaDriftTest
  * holds them to this list: a new table belongs here and in a migration, or the build fails. The store
  * tests build their tables straight from it with `SchemaUtils.create`, which that same test shows
@@ -579,4 +607,5 @@ val appTables: Array<Table> =
         HomePicks,
         PushTokens,
         Identities,
+        Purchases,
     )

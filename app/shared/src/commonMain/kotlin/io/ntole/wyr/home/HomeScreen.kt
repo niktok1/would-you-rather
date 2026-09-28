@@ -46,6 +46,7 @@ import io.ntole.wyr.play.RevealBar
 import io.ntole.wyr.play.cardMotion
 import io.ntole.wyr.play.percentStyle
 import io.ntole.wyr.play.rememberCountUp
+import io.ntole.wyr.theme.PageSurface
 import io.ntole.wyr.theme.WyrThemeAccessors
 import io.ntole.wyr.theme.WyrTypeScale
 
@@ -109,7 +110,7 @@ fun HomeScreen(
         play()
     }
 
-    Surface(color = colors.pageBackground, modifier = modifier.fillMaxSize()) {
+    PageSurface(modifier = modifier.fillMaxSize()) {
         Column(
             // Read only as it is drawn: the fade composes nothing.
             modifier =

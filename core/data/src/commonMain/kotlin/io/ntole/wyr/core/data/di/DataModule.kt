@@ -15,6 +15,7 @@ import io.ntole.wyr.core.data.reaction.DefaultReactionRepository
 import io.ntole.wyr.core.data.report.DefaultReportRepository
 import io.ntole.wyr.core.data.session.DefaultSessionRepository
 import io.ntole.wyr.core.data.session.PlayGamesSettled
+import io.ntole.wyr.core.data.shop.DefaultShopRepository
 import io.ntole.wyr.core.data.submission.DefaultSubmissionRepository
 import io.ntole.wyr.core.data.vote.DefaultVoteRepository
 import io.ntole.wyr.core.domain.account.AccountRepository
@@ -64,6 +65,9 @@ import io.ntole.wyr.core.domain.report.ReportQuestion
 import io.ntole.wyr.core.domain.report.ReportRepository
 import io.ntole.wyr.core.domain.session.CurrentSession
 import io.ntole.wyr.core.domain.session.SessionRepository
+import io.ntole.wyr.core.domain.shop.BuyTheme
+import io.ntole.wyr.core.domain.shop.GetShop
+import io.ntole.wyr.core.domain.shop.ShopRepository
 import io.ntole.wyr.core.domain.submission.GetMySubmissions
 import io.ntole.wyr.core.domain.submission.SubmissionRepository
 import io.ntole.wyr.core.domain.submission.SubmitQuestion
@@ -87,6 +91,7 @@ import io.ntole.wyr.core.network.api.PushApi
 import io.ntole.wyr.core.network.api.QuestionApi
 import io.ntole.wyr.core.network.api.ReactionApi
 import io.ntole.wyr.core.network.api.ReportApi
+import io.ntole.wyr.core.network.api.ShopApi
 import io.ntole.wyr.core.network.api.SubmissionApi
 import io.ntole.wyr.core.network.api.VoteApi
 import io.ntole.wyr.core.network.environment.WyrEnvironment
@@ -142,6 +147,7 @@ public fun dataModule(
         single { ReactionApi(get()) }
         single { ReportApi(get()) }
         single { HomePickApi(get()) }
+        single { ShopApi(get()) }
         single { CategoryApi(get()) }
         single { PushApi(get()) }
 
@@ -167,6 +173,7 @@ public fun dataModule(
         single<ReactionRepository> { DefaultReactionRepository(api = get(), session = get()) }
         single<ReportRepository> { DefaultReportRepository(api = get(), session = get()) }
         single<HomePickRepository> { DefaultHomePickRepository(api = get(), session = get()) }
+        single<ShopRepository> { DefaultShopRepository(api = get(), session = get()) }
         single<AccountRepository> { DefaultAccountRepository(api = get(), session = get()) }
         single<CategoryRepository> { DefaultCategoryRepository(api = get()) }
         single<PlayGamesRepository> { DefaultPlayGamesRepository(api = get(), session = get()) }
@@ -185,6 +192,8 @@ public fun dataModule(
         factory { HideAuthor(reports = get(), questions = get(), session = get()) }
         factory { GetHomePicks(picks = get()) }
         factory { PickOnHome(picks = get(), session = get()) }
+        factory { GetShop(shop = get(), session = get()) }
+        factory { BuyTheme(shop = get(), session = get()) }
         factory { RegisterAccount(accounts = get(), session = get(), analytics = get()) }
         factory { LogIn(accounts = get(), questions = get(), session = get(), analytics = get()) }
         factory { LogOut(accounts = get(), questions = get(), analytics = get()) }

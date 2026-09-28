@@ -196,11 +196,14 @@ failing:
   every such writer locks first (`SubmissionStore.submit` counts an author's pending questions
   under the author's `players` row, and `ModerationStore.blockAuthor` reads them under it too, so a
   submission either lands before a block and is rejected by it or waits and is refused).
+  `ShopStore.buy` locks the buyer's `players` row before it reads what they own, so of a double tap
+  on one theme the second waits and finds it owned, `ALREADY_OWNED`, rather than too few points, and
+  the price is still a compare-and-set, `PlayerStore.spend` (§8d, *The shop*).
   The one exception is a value copied from another row, which may be a plain read where a stale
   copy is provably harmless, with the proof at the read (`VoteStore.currentCycle`: the feed moves
   the cycle on only once the answer's question is already answered or skipped in the one read).
 - Uniqueness is a constraint (the `Votes`, `Skips`, `Reactions`, `Reports`, `HiddenQuestions`,
-  `HiddenAuthors`, `Categories`, `PushTokens` and `Identities` primary keys, `players.username`'s
+  `HiddenAuthors`, `Categories`, `PushTokens`, `Identities` and `Purchases` primary keys, `players.username`'s
   unique constraint and `identities`' on a player and a provider), never a prior `SELECT`. A violation
   is never caught and
   carried on from: PostgreSQL aborts a transaction at its first error. It propagates, and Exposed
@@ -290,8 +293,12 @@ Implemented as `WyrTheme` in `:app:shared` (`io.ntole.wyr.theme`): `WyrColors` +
 `WyrThemeAccessors`. The theme also mirrors its palette into a Material 3 `ColorScheme` so stock
 Material components inherit it instead of falling back to Material defaults. It mirrors none of the
 `surfaceContainer` slots, so a component drawn on one, a dialog or a menu, is given `WyrColors.surface`
-by name (the deletion's dialog; the language menu's `DropdownMenu` not yet). Adding a theme =
-adding another `WyrColors` value.
+by name (the deletion's dialog; the language menu's `DropdownMenu` not yet). The game's own look is
+`WyrLightColors` and `WyrDarkColors`; each theme the shop sells (§8d, *The shop*) is a `GameTheme`
+(`GameThemes`), one `WyrColors` for both modes (`ShopThemes.kt`) and a `ThemeArt`, drawn by hand on
+the page behind every screen (`PageSurface`, which every screen stands on, and `LocalThemeArt`). Adding
+a theme = adding a `WyrColors` value and a `ThemeArt` there, a `GameTheme` in `GameThemes.ALL`, its id in
+the server's `ShopCatalog`, and its name in `ShopStrings`.
 
 **Icons** are drawn by hand in the theme too, as `ImageVector`s in `WyrIcons`, a few strokes each on
 a 24 by 24 grid, so no icon library is needed (§2): `Home`, `Account` and `Back` (an arrow pointing
@@ -303,7 +310,8 @@ wherever they show (§8f, *Numbers and symbols*); `Globe` for the language menu;
 players, heading My questions' answers (§8d, *The Account screen*); `Info`, an i in a circle, the
 Account screen's way to the About screen (§8d, *About*); `More`, three dots one over the
 other, the Play screen's menu about the question (§8d, *The Play screen*, *Reports*); and `Copy`, two
-sheets one over the other, beside the About screen's account id (§8d, *About*); `Plus`, two strokes
+sheets one over the other, beside the About screen's account id (§8d, *About*); `Shop`, a bag, the
+Account screen's way to the shop (§8d, *The shop*); `Plus`, two strokes
 crossed, My questions' way to a new question, and `ChevronRight`, on each of its rows, which opens the
 question whole (§8d, *The Account screen*, *Question details*). They carry no colour of their
 own: `Icon` tints each from `WyrColors`, so they follow the light and dark themes as text does. The
@@ -328,7 +336,8 @@ or sp literal outside that file.
 
 **Visual direction:** playful & bold, theme-aware (full light + dark support).
 
-**Brand option colors — constant across all modes** (these are the identity):
+**Brand option colors — constant across all modes of the game's own theme** (these are the identity;
+a theme bought in the shop gives the cards colours of its own, *decided 2026-09-28*, the user):
 - `optionA` = `#D4537E` (pink), text-on = `#FFFFFF`
 - `optionB` = `#EF9F27` (amber), text-on = `#412402`
 - The two answer choices always use these, and side is positional — `optionA` is whichever
@@ -349,7 +358,10 @@ or sp literal outside that file.
 **Contrast** (*checked 2026-09-26*): every pair the theme puts text or an icon on meets WCAG AA in
 both themes, 4.5 to 1 for text, and 3 to 1 for large text (18.66 bold, 24 otherwise) and for icons
 and a graphic's edge, computed from the tokens and from the Material scheme they are mirrored into
-(`materialSchemeOf`) by `WyrContrastTest`. Two tokens changed for it: `muted` in the light theme,
+(`materialSchemeOf`) by `WyrContrastTest`, which holds every palette of the shop's themes to the same
+pairs, card A's text included (every one reads at 4.5 to 1 there), and every colour of a theme's art
+to the page's text, muted text, heading accent and error at 4.5 to 1, so text over the art reads as on
+the plain page. Two tokens changed for it: `muted` in the light theme,
 `#888780` before, 3.4 to 1 on the page (now 4.9), and `error`, a token of its own, where Material's
 error was card A's pink, 3.7 to 1 on the light page and 4.1 on the dark surface (now 5.2 and 6.1).
 The amber block, `#412402` on `#EF9F27`, reads at 6.5. The coin's face on the light page is 2.1, but
@@ -437,6 +449,11 @@ This project must never be attributed to any employer identity.
   stays unset until the release, which sets 50 on `wyr-server` alone (the user's decision; declared
   in `render.yaml` as a comment until then). Read at boot: changing it is changing the variable and
   restarting the service. `GET /v1/me` names it, so the game says what the server charges.
+- `THEME_PRICE` is what each theme in the shop costs, in points (§8d, *The shop*): a whole number, 0 or
+  more; unset or blank is 220 (`ShopCatalog.DEFAULT_THEME_PRICE`), and anything else fails the boot,
+  naming it (`ServerConfig.themePrice`). `render.yaml` sets 1 on `wyr-server-dev` alone (the user's
+  decision), so a tester can buy every theme after a few answers. Read at boot; a purchase keeps what it
+  paid.
 - `GUEST_RETENTION_DAYS` is how many days a guest nobody can reach any more is kept before the server
   deletes them (§8b, *Guest clean-up*): a whole number of at least 1; unset or blank is 90, and `0`
   turns the clean-up off; anything else fails the boot, naming it (`ServerConfig.guestRetentionDays`).
@@ -650,7 +667,7 @@ decided in §8b).
   (`WyrApi.Paths.ME_DELETION`), bearer required, no body, answered 204, for a guest and a registered
   player alike. It deletes, in one transaction (`AccountDeletion.delete`), the player's row with its
   username and password hash, their sessions on every device, their votes, skips, reactions, reports
-  and hides, their push tokens and Play Games link (their keys cascade, below), and their
+  and hides, their push tokens, Play Games link and purchases in the shop (their keys cascade, below), and their
   questions no player was ever served, pending and rejected; their **approved
   questions stay**, retired ones included, with nobody as their author, as a seed has: served as
   before, their votes and reactions kept, their likes from then on paying nobody. Each like the
@@ -723,8 +740,8 @@ decided in §8b).
   - *Removing* one, a device turning notifications off, is `POST /v1/me/push-token-removals` with a
     `RemovePushTokenRequest`, 204, the caller's own token alone. A **logout needs no call**: the
     session's row going takes its device's tokens with it, and deleting a player takes theirs, by
-    `ON DELETE CASCADE` on both of the table's foreign keys (`push_tokens`' and `identities`' keys
-    cascade, the schema's only cascading keys), so no store has to know the table is there.
+    `ON DELETE CASCADE` on both of the table's foreign keys (`push_tokens`', `identities`' and
+    `purchases`' keys cascade, the schema's only cascading keys), so no store has to know the table is there.
   - *A decision's push*: launched once a moderator's approval or rejection has committed, and not
     waited for, `DecisionNotifier` pushes the author's every device, off the request, in a background
     scope the server cancels at stop. Best effort: a failure is logged and dropped, never failing or
@@ -1040,7 +1057,8 @@ EncryptedSharedPreferences: enough for a game that stores no sensitive personal 
   dependency (§2), which lists what Play services bundle.
 - **Log out under the language row** — *resolved 2026-09-28*: the user hid the language menu for now
   (§8f) and grouped what was left, dimmed: the Statistics switch with an info icon, and under it Log
-  out, for a player with a username (§8d, *The Account screen*).
+  out, for a player with a username (§8d, *The Account screen*); the switch moved to the About screen
+  since (2026-09-28).
 - **Where players are, in analytics** — *decided 2026-09-27: PostHog keeps it* (the user: "I would
   leave IP capture"). PostHog keeps the address each event's request came from and adds a country, a
   city and coordinates from it, so the dashboards can show players by country (§8g, *Where the
@@ -1105,7 +1123,9 @@ EncryptedSharedPreferences: enough for a game that stores no sensitive personal 
     120 a minute each, reactions 60 a minute, submissions 30 an hour (the 20-pending cap still applies),
     reports 30 an hour, hiding a question or an author 60 an hour together, account deletions 10 an
     hour, `GET /v1/me` and `GET /v1/me/questions` 120 a minute each, a tap on a Home button
-    (`POST /v1/home-picks`) 30 a minute, push token registrations and removals 60 an hour together. The key is the player id in the
+    (`POST /v1/home-picks`) 30 a minute, push token registrations and removals 60 an hour together,
+    reading the shop 120 a minute and buying in it 30 an hour (`RATE_LIMIT_SHOP_PER_MINUTE`,
+    `RATE_LIMIT_PURCHASES_PER_HOUR`). The key is the player id in the
     bearer token, which the limiter verifies itself (`verifiedPlayerId`): it runs before
     authentication, so no principal is there yet. A request without a token this server signed
     spends its address's budget of the group instead, and then gets its 401, so a forged token
@@ -1161,7 +1181,8 @@ EncryptedSharedPreferences: enough for a game that stores no sensitive personal 
   game's `AppUpdate` (§8e). `ClientVersionTest`, `CorsTest`, `ServerConfigTest`.
 - **Logging** *(built 2026-09-26)* — beside Ktor's line per call and the rate limiter's per refusal,
   one INFO line for each stored submission, naming the question and its author by id
-  (`submission <id> stored, by player <id>`), and one for each admin action that went through, a
+  (`submission <id> stored, by player <id>`), one for each purchase in the shop (`player <id> bought
+  <itemId>`), and one for each admin action that went through, a
   repeat that changed nothing included (a dismissal of no reports, a block or an unblock of an author
   standing so already), naming the action and the id it was done to (`admin approved question
   <id>`, `logAdmin`): approvals, rejections, retirements and restorations, categories added and
@@ -1308,6 +1329,13 @@ EncryptedSharedPreferences: enough for a game that stores no sensitive personal 
   who logged out of a Play Games account, and whose device then signs in with Play Games by itself no
   more (*When a launch signs in with Play Games*), gets back in with one tap. The options: keep it; or
   only while not signed in to Play Games, as asked, which leaves that player the username form alone.
+- **The shop's details** — *provisional — user decision* (§8d, *The shop*). The user decided the price
+  (220, and 1 on dev), registered players only, the theme worn kept on the device and the bag on the
+  Account bar; the rest is this build's: each theme one palette whatever the device's mode, where a
+  light and a dark variant of each is the other option; a theme bought put on at once; an owned theme
+  showing the current price; the four themes' look and names; the preview a small Play screen of *Пица*
+  and *Бурек*; and a theme worn that the server says is no longer owned taken off. The options: keep
+  them; or change any, each in one place (`ShopThemes.kt`, `ShopStrings`, `ThemePreview`).
 - **A Play Games player's name on the card** — *decided 2026-09-28* (the user: "it should be name from
   google play services account"): a player registered by Play Games alone, who has no username, is
   named by their Play Games name, which the device's Play Games gives (`PlayGames.playerName`, over
@@ -1408,7 +1436,7 @@ seed (`Migrations`, `DatabaseFactory.init`). Nothing builds a table any other wa
   *Reports*), V12 (an author's block, §8d *Moderation*), V13 (sessions indexed by player, for an
   account's deletion, §8a), V14 (skips and hidden questions indexed by question, for the same), V15
   (the Home screen's two counts, §8d *Home picks*), V16 (an answer's time, *Personalization*, above),
-  V17 (push tokens, §8a) and V18 (Play Games links, §8a).
+  V17 (push tokens, §8a), V18 (Play Games links, §8a) and V19 (purchases in the shop, §8d *The shop*).
   `Migrations.migrate` takes the baseline itself (`baselineVersion` 1), and only for a database
   holding every table V1 builds (`TABLES_BEFORE_MIGRATIONS`) and no history table; Flyway's
   `baselineOnMigrate` is off. Any other database with tables and no history fails the boot, rather
@@ -1496,7 +1524,9 @@ seed (`Migrations`, `DatabaseFactory.init`). Nothing builds a table any other wa
   and leaves the answer time the answer before it left. V17 adds a table no build before names; a
   logout there still deletes its session, and the cascade still takes its tokens. V18 adds a table no
   build before names: a player signed in with Play Games plays on there as a guest, through their
-  sessions, and submits only with a username too, until the roll forward. `MigrationsTest` reads a
+  sessions, and submits only with a username too, until the roll forward. V19 adds a table no build
+  before names: a buyer's themes are gone there, and their stats do not add up (the price is out of
+  their total but not in `pointsSpent`) until the roll forward. `MigrationsTest` reads a
   table a later script dropped by name (`DROPPED_TABLES`), since `Tables.kt` no longer names it.
 - *Several instances booting at once* (Render starts a deploy's new instance before it stops the old
   one): on PostgreSQL each script runs under Flyway's advisory lock, so one boot migrates while the
@@ -1539,8 +1569,12 @@ returns and never recomputes points, so the two cannot disagree.
   rejection pays back that, not the constant, so a question submitted before submitting cost
   anything (V7 gave every question there 0) pays back nothing, and one submitted at 1 pays back 1
   whatever the cost is by then. A seed costs nothing and pays nobody.
+- A theme bought in the shop **costs** the server's `THEME_PRICE` (§8; 220, and 1 on dev), taken in the
+  purchase's own transaction and kept on the purchase (`purchases.price`, V19), never paid back (§8d,
+  *The shop*).
 - So a player's total is always what their answers earned, plus a point for each like their
-  questions hold, less what their questions not rejected cost them (`PlayerStatsDto.pointsSpent`),
+  questions hold, less what their questions not rejected cost them and what they paid in the shop
+  (`PlayerStatsDto.pointsSpent`),
   which `GET /v1/me` reports in one read. Retiring a question takes nothing back (§8d,
   *Moderation*): its answers' points stay, and so do its likes, held and paid and counted in its
   author's likes received, so the sum holds over every question, retired or not. Two edge cases,
@@ -1577,8 +1611,8 @@ answer what they think is popular instead of what they actually prefer. A mode t
 rewards reading the crowd may come later as a separate, opt-in mode, never as the default.
 
 **Current focus.** UI polish is paused. The game's own screens are the app: **Home**, **Play**,
-**Account**, **Submit**, the **Auth** page and the **About** screen opened from Account, and the
-**Categories** screen opened from Play, besides the update screen that takes their place once the
+**Account**, **Submit**, the **Auth** page, the **About** screen and the **Shop** opened from Account,
+and the **Categories** screen opened from Play, besides the update screen that takes their place once the
 server refuses the build (§8e), reached from one another by buttons (*Navigation*, below), in every build, LOCAL,
 DEV and PROD alike, opening on Home. The engineering dev console functionality was first built
 behind is gone since `chore/remove-console` (*decided 2026-09-25*: the console is not needed), and
@@ -1594,12 +1628,13 @@ game's, or a place on one, theme tokens only (§5b), and its words in `Strings` 
   the home icon, left, back to Home, the categories played in its middle, which open the
   **Categories** screen, and the question's menu and the account icon, right. On Home's bar and
   Play's the account icon has a dot while a decision waits there (*The notice of a decision*). The
-  account icon, from Home or Play, opens the **Account** screen under a top bar of a back arrow and, on the right, an info icon
-  to the **About** screen (*About*, below). On it, a guest's one button
+  account icon, from Home or Play, opens the **Account** screen under a top bar of a back arrow and, on the right, a bag
+  to the **Shop** (*The shop*, below) and an info icon to the **About** screen (*About*, below). The
+  points, the coin and the number, on Play's row and on the Account card, open the Shop too. On it, a guest's one button
   opens the **Auth** page, to register or log in, My questions' plus the **Submit** screen's form,
   and a question's row the **Question** screen, that question whole (*Question details*). On Play, the categories played open the **Categories** screen (*Categories*, *The
   Categories screen*), whose **Играј** goes back to Play. The Auth, Submit, Categories, About and
-  Question bars hold a back arrow alone (`BackTopBar`), Account's the info icon besides (`AccountTopBar`); the Submit button the Account bar held before is
+  Question and Shop bars hold a back arrow alone (`BackTopBar`), Account's the bag and the info icon besides (`AccountTopBar`); the Submit button the Account bar held before is
   gone. The icons are the theme's (§5b), each named for a screen reader in the language shown (§8f).
 - *The back stack* is made by hand, no navigation library: a sealed `Screen` and a `Navigator` of
   the screens opened, Home at the bottom. `open` shows a screen over the one shown, or goes back to
@@ -1662,12 +1697,11 @@ orientation, in common code alone:
 **The Account screen** (`io.ntole.wyr.account`; §8a *Accounts*, *Stats* below):
 - *Its order* (*decided 2026-09-25*, the user's redesign, with less text overall; the options
   grouped 2026-09-28): the player on a card, with a guest's one button to the Auth page; **My
-  questions**, a table; then the options, together and dimmed (`Settings`, `WyrColors.muted`, under a
-  line): the **Statistics** switch (§8g), with an info icon, *О статистици* to a screen reader, whose
-  dialog says what it sends (*Шаљемо податке о томе како се игра користи, да бисмо је побољшали. Без
-  твог имена и текста питања.*, `AccountStrings.statisticsInfo`, and *У реду*), and under it **Log
-  out**, for a player with a username; and the server line, outside PROD. No language menu, for now
-  (§8f), and no Delete account, which is on the About screen (*Deleting*, below).
+  questions**, a table; then, dimmed under a line (`Settings`, `WyrColors.muted`), **Log out**, for a
+  player with a username, and nothing, line included, for anyone else; and the server line, outside
+  PROD. No language menu, for now (§8f); no Delete account, which is on the About screen (*Deleting*,
+  below); and no Statistics switch, which moved to the About screen too (*decided 2026-09-28*, the
+  user: "move statistics toggle into info section").
 - *Deleting* (*built 2026-09-26*, on the About screen since 2026-09-28, §8a *Deleting an account*):
   **Обриши налог** (`DeleteAccount`, in `io.ntole.wyr.account`), muted
   (`WyrColors.muted`), opens a dialog of one line, *Налог и све у њему нестаће заувек.*, on the
@@ -1684,14 +1718,14 @@ orientation, in common code alone:
 - *The card* (*redesigned 2026-09-26*, the user: "a bit nicer... later more things will be added to
   it"): the player's initial in a circle, the first letter of the username in capitals, or a guest's
   figure (`Avatar`); the username, or *Гост*; and on the right the points, the coin and the number
-  (`PointsAmount`, §8f), read through `GetPlayerStats` each time the screen is shown, since the points
+  (`PointsAmount`, §8f), a tap on which opens the shop (`account.points`), read through `GetPlayerStats` each time the screen is shown, since the points
   move on Play meanwhile. Under a line, the stats, two to a row so more fit as they come
   (`statCells`): one for now, *Одговорена питања*, the distinct questions the player has answered.
   The answers given, the cycle and the likes received left the card (the user: "Remove cycles", "no
   need for two fields saying the same", "Likes can go to questions table"); not what the player's
   questions cost either (`pointsSpent`, *Stats*, provisional). A screen reader reads each number with
   its word. A guest gets **one button** on the card, *Региструј се или се пријави*, to the Auth page
-  (below), instead of the forms; a player with a username gets **Log out** under the Statistics switch,
+  (below), instead of the forms; a player with a username gets **Log out** under My questions,
   after which the device plays on as a fresh guest. A player
   registered by Play Games alone, with no username, is named on the card by their Play Games name, the
   device's Play Games' (`AccountState.playGamesName`, read with the stats through
@@ -1708,9 +1742,8 @@ orientation, in common code alone:
   measured 400 wide as `PlayScreenDrawTest` measures and for DEV, whose server line is the longest
   (598 on this Mac at the tallest, a guest whose deletion failed offline, the read after it running
   or done), and a registered player's plus above 599 however long the list; a list scrolls with the
-  screen. It finds the switch and its info icon on one row, the word not cut short, and Log out under
-  them for a player with a username alone, in every state and language; no language menu and no
-  Delete account in any state; a question's options on two lines at most, the longest cut short; and
+  screen. It finds Log out for a player with a username alone, and no Statistics switch, in every
+  state and language; the points opening the shop; no language menu and no Delete account in any state; a question's options on two lines at most, the longest cut short; and
   the info icon's dialog in the theme's colours.
 - **The Auth page** (`AuthScreen`, *decided 2026-09-25*), on the Account screen's ViewModel, shows
   **Register** only (username, and password with a show/hide toggle), which keeps the points, and a
@@ -1858,7 +1891,12 @@ on the clipboard and says *Копирано* beside the label, on the same line,
 `LocalClipboardManager`, deprecated but the one clipboard call common code has on every platform: its
 replacement's `ClipEntry` has no common constructor). The id is the stored session's player id
 (`CurrentSession`, the same id `GET /v1/me` names), read from the device, never the server: it
-shows offline, mints no session, and none shows while no session is stored; and **Лиценце отвореног кода**, the libraries the game ships with on any platform, each
+shows offline, mints no session, and none shows while no session is stored; under a line, the
+**Statistics** switch (§8g, `StatisticsSwitch`, here since 2026-09-28), dimmed, its word and the switch
+one control, with an info icon, *О статистици* to a screen reader, whose dialog says what it sends
+(*Шаљемо податке о томе како се игра користи, да бисмо је побољшали. Без твог имена и текста
+питања.*, `AccountStrings.statisticsInfo`, and *У реду*); its taps keep their Account names,
+`account.statistics` and the rest (§8g); and **Лиценце отвореног кода**, the libraries the game ships with on any platform, each
 with its licence, a tap opening the licence's text (`OPEN_SOURCE_LIBRARIES`, written by hand, no
 library for it, from the Android and desktop dependency reports, NEXT-SESSION's *Releasing to
 production*: Apache 2.0 but for SLF4J's API, MIT, which Ktor brings, and Skia, BSD 3-Clause, which
@@ -1871,7 +1909,8 @@ Play Games and Firebase bring on Android (`play-services-games-v2`, `-base`, `-b
 does not name them (*provisional — user decision*, §8b *Licence notices*); and last, after a line,
 quiet, **Обриши налог**, deleting the account (*The Account screen*, *Deleting*; the user, 2026-09-28:
 "hide delete account in maybe info screen"). Words: `Strings.aboutScreen`.
-`AboutScreenDrawTest` (every text in both themes and every language, each link's URL through a handler
+`AboutScreenDrawTest` (every text in both themes and every language, the Statistics switch under the
+account id and before the licences, on or off as left and turned by a tap, its info dialog, each link's URL through a handler
 of the test's own, one that opens nothing, the links and the account id's copy button above 599
 before any scrolling, the id copied whole through a clipboard of the test's own and nothing moved
 for it, none with no session, and the deletion last, after every licence), `LicencesTest`,
@@ -2728,6 +2767,61 @@ listed on the Account screen.
     counts), `AppNavigationTest` (read each time Home is shown; the question asked during the reveal;
     Play opens after it, whether or not the tap was counted by then).
 
+- **The shop** *(decided 2026-09-28; built on the server and the game)*: the user's, from `IDEAS.md`:
+  themes players buy with their points, each unlike the game's own, with art behind every screen and a
+  preview before buying; for now only themes, and a line that more is coming. The price is 220 points,
+  and 1 on dev (the user: "hardcode price to 220, and on dev it should be 1"), the server's
+  `THEME_PRICE` (§8); remote config for themes and prices comes later (`IDEAS.md`). The user's choices
+  (2026-09-28): themes recolour the cards too (§5b); **only a registered player may buy**, as only one
+  may submit; the theme worn is kept on the device; and the shop opens from a bag on the Account bar
+  besides the points.
+  - *The themes* (`GameThemes`, §5b): the game's own, free, *Класична*, in the device's light or dark
+    mode; and four on sale, each one palette whatever the mode (*provisional — user decision*: a
+    light and a dark variant of each is the other option): **Неонска ноћ** (`NEON_NIGHT`: magenta and
+    cyan on near-black, a grid to the horizon, a half sun and stars), **Океан** (`OCEAN`: coral and sea
+    foam on deep teal, two waves and bubbles), **Шума** (`FOREST`: moss and terracotta on cream, two
+    hills and leaves) and **Залазак** (`SUNSET`: violet and gold on dusk, a low sun behind two dunes).
+    Their names are `ShopStrings`, their ids the server's `ShopCatalog`, in that order.
+  - *The server* (`io.ntole.wyr.server.shop`): `GET /v1/shop` (`WyrApi.Paths.SHOP`), bearer required,
+    answers a `ShopDto`, every theme of `ShopCatalog` as a `ShopThemeDto` (`id`, a plain string, never
+    an enum, §5; `price`, the current one; `owned`), the player's `totalPoints` and whether they are
+    `registered` (a username or a Play Games link), in one statement (`ShopStore.shopOf`, §4). `POST
+    /v1/me/purchases` (`MY_PURCHASES`) with a `PurchaseRequest` (`itemId`) buys one, answered with the
+    shop after it: a guest is 403 `ACCOUNT_REQUIRED` before anything else is checked; an id not 1 to
+    `WyrApi.Limits.MAX_SHOP_ITEM_ID_LENGTH` (32) of `A`-`Z`, `0`-`9` and `_` is 400, one the catalog
+    lacks 404 `ITEM_NOT_FOUND`, one owned 409 `ALREADY_OWNED`, too few points 409 `NOT_ENOUGH_POINTS`,
+    each taking nothing. `ShopStore.buy` locks the buyer's row, reads what they own, takes the price by
+    `PlayerStore.spend` and writes the purchase (`purchases`, V19: the player, the item, what it paid
+    and when, under a primary key on the player and the item, its foreign key cascading), so a double
+    tap buys once (§4). A purchase is never paid back, and counts in `pointsSpent` (§8c). An owned
+    theme shows the current price, not what it paid. `ShopStoreTest`, `ShopFlowTest`.
+  - *The client* is `ShopRepository` (`:core:domain`, `io.ntole.wyr.core.domain.shop`), behind `GetShop`
+    and `BuyTheme`, each ensuring a session first, over a `Shop` of `ShopTheme`s;
+    `DefaultShopRepository` sends both through `withSessionRecovery`, as a submission goes (a dead
+    session's retry is the fresh guest's, refused as a guest), over `ShopApi`. `ALREADY_OWNED` and
+    `ITEM_NOT_FOUND` are `DomainError`s of their own. `ShopUseCasesTest`, `DefaultShopRepositoryTest`.
+  - *The Shop screen* (`io.ntole.wyr.shop`, `Screen.Shop`), under a back arrow, read each time it is
+    shown (`ShopViewModel.shown`), scrolling: *Продавница* and the points; for a guest *Региструј се да
+    купујеш у продавници.* and the Auth page's button, every Buy off; for a registered player short of
+    points *Немаш довољно поена.*; *Теме*, then a card for each theme, the game's own first and each of
+    the server's this build has colours for, a theme the server sells that it has none for left out:
+    its preview (`ThemePreview`: a small Play screen in the theme's own tokens, page, art, two cards of
+    *Пица* and *Бурек* and the row's coin and thumbs, heard as *Преглед: Океан*), its name and one
+    button: *Активна*, off, for the one worn; *Примени* for one owned, the game's own always; *Купи ·*
+    the coin and the price for the rest, which opens a dialog, *Купи тему Океан?*, of the preview larger,
+    *Купи ·* the price and *Откажи*, and only its Buy buys. A theme bought is put on at once. Under the
+    cards, muted, *Ускоро још ствари у продавници.* A purchase refused says why over the themes
+    (bought already, a rate limit, offline) and reads the shop again; a read that fails with nothing
+    shown says so, with *Покушај поново*. `ShopViewModelTest`, `ShopScreenDrawTest`, `TapsTest`,
+    `AppNavigationTest` (the points on Play and the Account card and the bag open it; a theme bought is
+    worn).
+  - *The theme worn* (`ThemeViewModel`, which `App` asks for once and wears through `WyrTheme(theme)`):
+    kept in the session's storage under `wyr.theme.local`, `.dev` or `.prod`, the player's id over the
+    theme's, and worn only while the session stored names that player, so a logout, a login to another
+    account or a dead session's fresh guest takes it off with no network, and the player back puts it
+    on again; the game's own for anyone else. A shop read that says the player no longer owns the theme
+    worn (a dev server's data reset) takes it off (`ThemeViewModel.owned`). `ThemeViewModelTest`.
+
 ## 8e. Client environments — decided 2026-09-24
 
 Every client build targets one of three server environments, chosen **when it is built**, so a phone
@@ -2849,7 +2943,9 @@ hand, so the two cannot say different things; and **English** stands beside them
   питања* as its link, in `RulesLineStrings`); the update screen
   (`Strings.updateScreen`, *Нова верзија је доступна*, *Ажурирај*, *Освежи*); and the About screen
   (`Strings.aboutScreen`: *О игри*, the name its icon is given, *Верзија {0}*, the four links' names
-  and *Лиценце отвореног кода*, and *ИД налога*, *Копирај ИД налога* and *Копирано*). What is the same in every language is no `Strings`: *16+*, the
+  and *Лиценце отвореног кода*, and *ИД налога*, *Копирај ИД налога* and *Копирано*); and the shop
+  (`Strings.shopScreen`, a `ShopStrings`: *Продавница*, *Теме*, the themes' names, *Купи · {0}*,
+  *Примени*, *Активна*, *Купи тему {0}?*, *Ускоро још ствари у продавници.* and the rest). What is the same in every language is no `Strings`: *16+*, the
   libraries' and licences' names. **Try again** is one text of `Strings`, `tryAgain`, *Покушај поново*
   (*provisional*, §8b), under a failure on Play, the Categories screen, the Account screen, My
   questions, the Auth page and the Submit form, so the game says it one way; the Account screens'
@@ -2900,7 +2996,8 @@ hand, so the two cannot say different things; and **English** stands beside them
   A screen reader hears the row as *Језик: Ћирилица*, in the language shown (`Strings.language`). A
   tap on a language changes every screen at once and is then kept (`LanguageViewModel`, bound in
   `uiModule` and asked for once by `App`). `LanguageMenuTest` opens it and picks each offered.
-- **The Statistics switch** *(built)*: on the Account screen's options, *Статистика*, *Statistika*,
+- **The Statistics switch** *(built)*: on the About screen (the Account screen's options before
+  2026-09-28), *Статистика*, *Statistika*,
   *Statistics* (`AccountStrings.statistics`), the word and the switch one control, which a screen
   reader hears as the word, a switch, and on or off (§8g).
 - **Kept on the device** *(built)*: under `wyr.language` in the storage the session is kept in (the
@@ -3048,7 +3145,7 @@ the same events. The moderation app sends none.
   the `visibilitychange` handler itself, with events the sender only queues a step later, and PostHog
   taking a beacon's `text/plain` body, unchecked; a tab only hidden sends as any platform does. Every screen the navigator
   shows is PostHog's `$screen`, named by its key (`home`, `play`, `account`, `auth`, `submit`,
-  `categories`, `about`, `question`), and the one left is `screen_left`, with `screen` and `duration_ms`, for another screen
+  `categories`, `about`, `question`, `shop`), and the one left is `screen_left`, with `screen` and `duration_ms`, for another screen
   or for the background, back from which it is shown again. An Android rotation, whose activity stops
   only to start again, reports neither (`rememberConfigurationChanging`, over the activity's
   `isChangingConfigurations`: the one piece of it per platform), nor a second `account_opened` or
@@ -3060,16 +3157,18 @@ the same events. The moderation app sends none.
   before it acts, so a tap is counted by a name that never changes with the language or the text, and
   `$screen_name` says where. An element is `screen.what`, lower case and underscores: `home.play` (with
   its `side`, `A` or `B`, since Home's two buttons are one element);
-  `top_bar.home`, `.account`, `.back`, `.categories`, `.about`; `about.privacy`, `.terms`,
+  `top_bar.home`, `.account`, `.back`, `.categories`, `.about`, `.shop`; `about.privacy`, `.terms`,
   `.delete_account`, `.contact`, `.copy_account_id` and `.licence`; `play.card_a` and `.card_b` (with `answered`,
-  whether the tap went on from the reveal), `.like`, `.dislike`, `.skip`, `.try_again`;
+  whether the tap went on from the reveal), `.like`, `.dislike`, `.skip`, `.points`, `.try_again`;
   `question_menu.open`, `.report`, `.reason` (with its `reason`), `.hide_question`, `.hide_author`;
-  `account.open_auth`, `.log_out`, `.statistics`, `.statistics_info`, `.statistics_info_ok`, `.try_again`;
+  `account.open_auth`, `.log_out`, `.points`, `.try_again`, and `.statistics`, `.statistics_info` and
+  `.statistics_info_ok`, on the About screen since 2026-09-28, their names kept;
   `my_questions.new_question`, `.first_question`, `.question`, `.try_again`; `language.menu` and `language.option` (with its `language` tag); `auth.register`,
   `.show_password`, `.to_log_in`, `.terms`, `.privacy`, `.log_in`, `.log_in_anyway`, `.cancel`, `.to_register`,
   `.play_games`, `.try_again`; `submit.category` (with its `category` id), `.send`, `.rules`, `.categories_try_again`,
   `.try_again`; `categories.all`, `.category` (with its id), `.play`, `.try_again`; `update.store` and
-  `.reload`; `account.delete`, `.delete_confirm` and `.delete_cancel`, on the About screen.
+  `.reload`; `account.delete`, `.delete_confirm` and `.delete_cancel`, on the About screen; `shop.buy`,
+  `.buy_confirm` and `.apply` (each with its `theme` id), `.buy_cancel`, `.open_auth` and `.try_again`.
   (`account.add_username` was sent until 2026-09-28, when its link went.) A text field is no
   tap. `TapsTest` draws every screen in the states that show all it can be tapped on, taps everything a
   screen reader could, and fails on anything that reports no tap, or a name not in its lists: a new
@@ -3105,22 +3204,24 @@ the same events. The moderation app sends none.
   - *Categories* (`CategoriesViewModel`): `categories_changed` when Play sends a new selection
     (`categories`, `count`, none being every category); what is played already sends nothing.
   - *Language* (`LanguageViewModel`): `language_changed` (`language`, its tag).
+  - *Shop* (`ShopViewModel`, `ThemeViewModel`): `shop_opened` for each visit, as Account's;
+    `theme_bought` once the server took it (`theme`, its id, and `price`); `theme_applied` for a theme
+    put on, a purchase's included (`theme`).
   - `error_shown` for every failure a screen shows (`code`, the `DomainError`'s name, and `action`:
     `question`, `vote`, `reaction`, `report`, `hide_question`, `hide_author`, `account`,
     `my_questions`, `register`, `log_in`, `play_games`, `log_out`, `delete_account`,
-    `submit`, `points`, `categories`), but a vote already counted, which moves on and shows nothing,
+    `submit`, `points`, `categories`, `shop`, `buy_theme`), but a vote already counted, which moves on and shows nothing,
     and a skip, which says nothing.
   - The ViewModel tests hold each, and that nothing typed is ever in one.
-- **The switch** *(built)*: **Статистика** on the Account screen, among its options (§8d,
-  *The Account screen*; §8f), `analytics.enabled` and `setEnabled` through `LocalAnalytics`. On by
+- **The switch** *(built)*: **Статистика** on the About screen (§8d, *About*; §8f), `analytics.enabled` and `setEnabled` through `LocalAnalytics`. On by
   default, and off is kept for the device, under `wyr.analytics.enabled` (`on` or `off`), whatever the
   environment, as the language is (§8f): the choice is the person's. Off sends nothing more and drops
   what waited, the tap on the switch included; on sends from the next event. A build with no key keeps
-  the choice all the same, since a player cannot tell one build from another. `AccountScreenDrawTest`
+  the choice all the same, since a player cannot tell one build from another. `AboutScreenDrawTest`
   draws it on and off and taps it, and `AppNavigationTest` turns the app's analytics off and on.
 - **Consent** (*the user's, 2026-09-26*): on by default, under legitimate interest, for a game for
   16 and over; the privacy policy says what is sent, that it is on, and how to turn it off (the
-  Statistics switch), and that PostHog sees the address each request comes from, keeps it and
+  Statistics switch, on the About screen), and that PostHog sees the address each request comes from, keeps it and
   derives an approximate location from it (*Where the player is*). *To check before an EU launch*: whether the install id kept on the device (the
   browser's in `localStorage`) is itself a storing the ePrivacy rules want consent for, whatever the
   basis for the rest.

@@ -32,6 +32,8 @@ import io.ntole.wyr.core.domain.error.DomainError
 import io.ntole.wyr.core.domain.player.PlayerStats
 import io.ntole.wyr.core.domain.question.Question
 import io.ntole.wyr.core.domain.report.ReportReason
+import io.ntole.wyr.core.domain.shop.Shop
+import io.ntole.wyr.core.domain.shop.ShopTheme
 import io.ntole.wyr.core.domain.submission.Submission
 import io.ntole.wyr.core.domain.submission.SubmissionStatus
 import io.ntole.wyr.core.domain.vote.Side
@@ -53,12 +55,17 @@ import io.ntole.wyr.play.PlayScreen
 import io.ntole.wyr.play.PlayUiState
 import io.ntole.wyr.play.QuestionMenu
 import io.ntole.wyr.settle
+import io.ntole.wyr.shop.ShopActions
+import io.ntole.wyr.shop.ShopFailure
+import io.ntole.wyr.shop.ShopScreen
+import io.ntole.wyr.shop.ShopState
 import io.ntole.wyr.submit.SubmitActions
 import io.ntole.wyr.submit.SubmitFailure
 import io.ntole.wyr.submit.SubmitScreen
 import io.ntole.wyr.submit.SubmitState
 import io.ntole.wyr.tap
 import io.ntole.wyr.texts
+import io.ntole.wyr.theme.GameThemes
 import io.ntole.wyr.theme.WyrTheme
 import io.ntole.wyr.update.UpdateButton
 import io.ntole.wyr.update.UpdateScreen
@@ -116,8 +123,8 @@ class TapsTest {
         )
         assertEquals(setOf("top_bar.back"), elementsTapped { BackTopBar(onBack = {}) })
         assertEquals(
-            setOf("top_bar.back", "top_bar.about"),
-            elementsTapped { AccountTopBar(onBack = {}, onAbout = {}) },
+            setOf("top_bar.back", "top_bar.shop", "top_bar.about"),
+            elementsTapped { AccountTopBar(onBack = {}, onAbout = {}, onShop = {}) },
         )
     }
 
@@ -132,6 +139,11 @@ class TapsTest {
                 "about.contact",
                 "about.copy_account_id",
                 "about.licence",
+                // The Statistics switch, and its info icon and the dialog's OK, named as on the Account screen
+                // they left (CLAUDE.md §8g): a name once sent never changes.
+                "account.statistics",
+                "account.statistics_info",
+                "account.statistics_info_ok",
                 // Deleting the account, then its dialog's two buttons, for anyone read (CLAUDE.md §8a).
                 "account.delete",
                 "account.delete_confirm",
@@ -161,8 +173,12 @@ class TapsTest {
         val revealed = elementsTapped { Play(PlayUiState.Revealed(QUESTION, OUTCOME)) }
         val failed = elementsTapped { Play(PlayUiState.Failed(DomainError.NETWORK)) }
 
-        assertEquals(setOf("play.card_a", "play.card_b", "play.like", "play.dislike", "play.skip"), asked)
-        assertEquals(setOf("play.card_a", "play.card_b", "play.like", "play.dislike"), revealed)
+        // The points too, the way to the shop (CLAUDE.md §8d, *The shop*).
+        assertEquals(
+            setOf("play.card_a", "play.card_b", "play.like", "play.dislike", "play.skip", "play.points"),
+            asked,
+        )
+        assertEquals(setOf("play.card_a", "play.card_b", "play.like", "play.dislike", "play.points"), revealed)
         assertEquals(setOf("play.try_again"), failed)
     }
 
@@ -227,17 +243,17 @@ class TapsTest {
                 )
             }
 
-        // The Statistics switch, and its info icon and the dialog's OK.
-        val settings = setOf("account.statistics", "account.statistics_info", "account.statistics_info_ok")
+        // The points on the card, the way to the shop (CLAUDE.md §8d, *The shop*), once a player is read.
+        val points = setOf("account.points")
         val ask = setOf("my_questions.new_question", "my_questions.first_question")
-        assertEquals(setOf("account.open_auth") + settings, guest)
-        assertEquals(ask + "account.log_out" + settings, registered)
+        assertEquals(setOf("account.open_auth") + points, guest)
+        assertEquals(ask + "account.log_out" + points, registered)
         // No Log out for a player registered by Play Games alone, nor a way to add a username.
-        assertEquals(ask + settings, playGames)
-        assertEquals(setOf("my_questions.new_question", "my_questions.question", "account.log_out") + settings, listed)
-        assertEquals(setOf("account.try_again") + settings, unread)
+        assertEquals(ask + points, playGames)
+        assertEquals(setOf("my_questions.new_question", "my_questions.question", "account.log_out") + points, listed)
+        assertEquals(setOf("account.try_again"), unread)
         assertEquals(
-            setOf("my_questions.new_question", "my_questions.try_again", "account.log_out") + settings,
+            setOf("my_questions.new_question", "my_questions.try_again", "account.log_out") + points,
             listUnread,
         )
     }
@@ -361,6 +377,26 @@ class TapsTest {
         assertEquals(setOf("categories.try_again", "categories.all", "categories.category", "categories.play"), unread)
     }
 
+    @Test
+    fun `every tap in the shop is reported`() {
+        val themes = listOf(ShopTheme("NEON_NIGHT", 220, owned = true), ShopTheme("OCEAN", 220, owned = false))
+        val registered = ShopState(shop = Shop(themes, points = 500, registered = true))
+        val guest = ShopState(shop = Shop(themes.map { it.copy(owned = false) }, points = 500, registered = false))
+
+        // The game's own theme worn: Neon night's Apply and Ocean's Buy; the dialog is its state's.
+        assertEquals(setOf("shop.apply", "shop.buy"), elementsTapped { Shop(registered) })
+        assertEquals(
+            setOf("shop.apply", "shop.buy", "shop.buy_confirm", "shop.buy_cancel"),
+            elementsTapped { Shop(registered.copy(confirming = "OCEAN")) },
+        )
+        // A guest's every Buy is off, and the way to register is on; the game's own theme is worn.
+        assertEquals(setOf("shop.open_auth"), elementsTapped { Shop(guest) })
+        assertEquals(
+            setOf("shop.try_again"),
+            elementsTapped { Shop(ShopState(readFailure = ShopFailure(DomainError.NETWORK))) },
+        )
+    }
+
     /**
      * Draws [content] and taps everything that can be tapped on it, and then on what the taps
      * brought up (the language menu's list), and returns the elements the taps reported.
@@ -413,6 +449,23 @@ class TapsTest {
     private fun signatureOf(node: SemanticsNode): String = "${node.texts}${node.descriptions}@${node.positionInRoot}"
 
     @Composable
+    private fun Shop(state: ShopState) {
+        ShopScreen(state = state, actions = NoShopActions, worn = GameThemes.Default, onWear = {}, onOpenAuth = {})
+    }
+
+    private object NoShopActions : ShopActions {
+        override fun refresh() = Unit
+
+        override fun askToBuy(themeId: String) = Unit
+
+        override fun cancelBuy() = Unit
+
+        override fun buy() = Unit
+
+        override fun boughtWorn() = Unit
+    }
+
+    @Composable
     private fun Play(state: PlayUiState) {
         PlayScreen(state = state, points = 5, onChoose = {}, onSkip = {}, onNext = {}, onReact = {}, onRetry = {})
     }
@@ -423,8 +476,6 @@ class TapsTest {
             state = state,
             actions = NoAccountActions,
             environment = WyrEnvironment.PROD,
-            statisticsOn = true,
-            onStatisticsChange = {},
             onOpenAuth = {},
             onNewQuestion = {},
         )

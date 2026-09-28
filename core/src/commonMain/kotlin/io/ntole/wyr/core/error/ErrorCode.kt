@@ -47,13 +47,14 @@ public enum class ErrorCode {
 
     /**
      * The player has fewer points than submitting a question costs
-     * ([io.ntole.wyr.core.api.WyrApi.Limits.SUBMISSION_COST], CLAUDE.md §8c), so it is refused and
-     * costs nothing. Answering questions earns more. Sent with 409.
+     * ([io.ntole.wyr.core.api.WyrApi.Limits.SUBMISSION_COST], CLAUDE.md §8c), or than an item of the
+     * shop's costs, so it is refused and costs nothing. Answering questions earns more. Sent with 409.
      */
     NOT_ENOUGH_POINTS,
 
     /**
-     * A guest tried to submit a question: only a registered player may (CLAUDE.md §8d, *Submitting*).
+     * A guest tried to submit a question or to buy in the shop: only a registered player may (CLAUDE.md
+     * §8d, *Submitting*, *The shop*).
      * Registering, which keeps everything the guest has, is the way on. Sent with 403, never 401: the
      * session is fine, so a client must not refresh it or replace it.
      */
@@ -144,6 +145,15 @@ public enum class ErrorCode {
      * refused the server itself. Nothing changed, and the code may be spent. Sent with 502.
      */
     PLAY_GAMES_UNAVAILABLE,
+
+    /**
+     * The player tried to buy an item of the shop's they own already (CLAUDE.md §8d, *The shop*), a
+     * purchase sent again after its answer was lost included. Nothing was taken. Sent with 409.
+     */
+    ALREADY_OWNED,
+
+    /** The player tried to buy an item the shop does not sell: an id no item has. Sent with 404. */
+    ITEM_NOT_FOUND,
 
     /** Caller is not authenticated, or the credential is expired. */
     UNAUTHORIZED,

@@ -35,7 +35,8 @@ import org.jetbrains.exposed.v1.jdbc.update
 object AccountDeletion {
     /**
      * Deletes [playerId], in one transaction, which it must run inside: their username and password
-     * hash with their row, their sessions, votes, skips, reactions, reports and what they hid, and their
+     * hash with their row, their sessions, votes, skips, reactions, reports and what they hid, their
+     * push tokens, Play Games links and purchases, which their keys' cascade takes with the row, and their
      * questions that no player is served, pending and rejected. Their approved questions stay, retired
      * ones included, with nobody as their author, as a seed has: served as before, their votes and
      * reactions kept, their likes from then on paying nobody. A player who is gone already is 401, as

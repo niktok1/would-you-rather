@@ -36,6 +36,7 @@ import io.ntole.wyr.language.optionText
 import io.ntole.wyr.play.CountedUpText
 import io.ntole.wyr.play.RevealBar
 import io.ntole.wyr.play.rememberCountUp
+import io.ntole.wyr.theme.PageSurface
 import io.ntole.wyr.theme.WyrIcons
 import io.ntole.wyr.theme.WyrThemeAccessors
 import io.ntole.wyr.theme.WyrTypeScale
@@ -69,7 +70,7 @@ fun QuestionDetailsScreen(
     val countedA = rememberCountUp(tally.percentA, rival = tally.percentB, durationMillis = HOME_COUNT_UP_MILLIS)
     val countedB = rememberCountUp(tally.percentB, rival = tally.percentA, durationMillis = HOME_COUNT_UP_MILLIS)
 
-    Surface(color = colors.pageBackground, modifier = modifier.fillMaxSize()) {
+    PageSurface(modifier = modifier.fillMaxSize()) {
         Column(
             modifier =
                 Modifier

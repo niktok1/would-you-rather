@@ -77,6 +77,8 @@ data class Strings(
     val updateScreen: UpdateStrings,
     /** The About screen's words, opened from the Account screen. */
     val aboutScreen: AboutStrings,
+    /** The shop's words (CLAUDE.md §8d, *The shop*). */
+    val shopScreen: ShopStrings,
     /**
      * The one line under a loading spinner that has turned for a while (CLAUDE.md §8d, *A slow first
      * load*): on the Play screen, the Categories screen and the Account screen alike.
@@ -109,6 +111,7 @@ data class Strings(
             notice = notice.map(transform),
             updateScreen = updateScreen.map(transform),
             aboutScreen = aboutScreen.map(transform),
+            shopScreen = shopScreen.map(transform),
             stillLoading = transform(stillLoading),
         )
 }
@@ -135,6 +138,7 @@ val SerbianCyrillicStrings: Strings =
         notice = SerbianCyrillicNoticeStrings,
         updateScreen = SerbianCyrillicUpdateStrings,
         aboutScreen = SerbianCyrillicAboutStrings,
+        shopScreen = SerbianCyrillicShopStrings,
         stillLoading = "Још мало…",
     )
 
@@ -162,6 +166,7 @@ val EnglishStrings: Strings =
         notice = EnglishNoticeStrings,
         updateScreen = EnglishUpdateStrings,
         aboutScreen = EnglishAboutStrings,
+        shopScreen = EnglishShopStrings,
         stillLoading = "Just a moment…",
     )
 

@@ -303,10 +303,16 @@ class TopBarsDrawTest {
                 ),
                 Bar(
                     name = "Account's",
-                    icons = { listOf(it.back, it.aboutScreen.title) },
+                    icons = { listOf(it.back, it.shopScreen.title, it.aboutScreen.title) },
                     texts = { emptyList() },
-                    taps = listOf("back", "about"),
-                    draw = { AccountTopBar(onBack = it.record("back"), onAbout = it.record("about")) },
+                    taps = listOf("back", "shop", "about"),
+                    draw = {
+                        AccountTopBar(
+                            onBack = it.record("back"),
+                            onAbout = it.record("about"),
+                            onShop = it.record("shop"),
+                        )
+                    },
                 ),
                 Bar(
                     name = "the Auth page's, Submit's, the Categories screen's and the About screen's",

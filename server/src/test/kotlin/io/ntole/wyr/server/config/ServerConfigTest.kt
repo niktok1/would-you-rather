@@ -1,5 +1,6 @@
 package io.ntole.wyr.server.config
 
+import io.ntole.wyr.server.shop.ShopCatalog
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
@@ -70,6 +71,32 @@ class ServerConfigTest {
                     ServerConfig.fromEnvironment(mapOf("SUBMISSION_COST" to raw)::get)
                 }
             assertContains(failure.message.orEmpty(), "SUBMISSION_COST", message = raw)
+        }
+    }
+
+    @Test
+    fun `the theme price comes from THEME_PRICE and unset or blank is 220`() {
+        mapOf("1" to 1, "0" to 0, " 300 " to 300).forEach { (raw, price) ->
+            assertEquals(price, ServerConfig.fromEnvironment(mapOf("THEME_PRICE" to raw)::get).themePrice, raw)
+        }
+        listOf(null, "", "  ").forEach { unset ->
+            assertEquals(
+                ShopCatalog.DEFAULT_THEME_PRICE,
+                ServerConfig.fromEnvironment(mapOf("THEME_PRICE" to unset)::get).themePrice,
+                "$unset",
+            )
+        }
+        assertEquals(220, ShopCatalog.DEFAULT_THEME_PRICE)
+    }
+
+    @Test
+    fun `a theme price that is no whole number of 0 or more fails at boot naming the variable`() {
+        listOf("-1", "cheap", "2.5", "220 points").forEach { raw ->
+            val failure =
+                assertFailsWith<IllegalArgumentException>(raw) {
+                    ServerConfig.fromEnvironment(mapOf("THEME_PRICE" to raw)::get)
+                }
+            assertContains(failure.message.orEmpty(), "THEME_PRICE", message = raw)
         }
     }
 
@@ -213,6 +240,8 @@ class ServerConfigTest {
         assertEquals(RequestBudget(120, 1.minutes), limits.homePickCounts)
         assertEquals(RequestBudget(30, 1.minutes), limits.homePicks)
         assertEquals(RequestBudget(60, 1.hours), limits.pushTokens)
+        assertEquals(RequestBudget(120, 1.minutes), limits.shop)
+        assertEquals(RequestBudget(30, 1.hours), limits.purchases)
         assertEquals(RequestBudget(60, 1.minutes), limits.admin)
         assertEquals(RequestBudget(10, 1.minutes), limits.adminTokenFailures)
     }
@@ -241,6 +270,8 @@ class ServerConfigTest {
                 Triple("RATE_LIMIT_HOME_PICK_COUNTS_PER_MINUTE", RateLimits::homePickCounts, 1.minutes),
                 Triple("RATE_LIMIT_HOME_PICKS_PER_MINUTE", RateLimits::homePicks, 1.minutes),
                 Triple("RATE_LIMIT_PUSH_TOKENS_PER_HOUR", RateLimits::pushTokens, 1.hours),
+                Triple("RATE_LIMIT_SHOP_PER_MINUTE", RateLimits::shop, 1.minutes),
+                Triple("RATE_LIMIT_PURCHASES_PER_HOUR", RateLimits::purchases, 1.hours),
                 Triple("RATE_LIMIT_ADMIN_PER_MINUTE", RateLimits::admin, 1.minutes),
                 Triple("RATE_LIMIT_ADMIN_TOKEN_FAILURES_PER_MINUTE", RateLimits::adminTokenFailures, 1.minutes),
             )

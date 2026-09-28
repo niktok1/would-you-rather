@@ -249,6 +249,25 @@ public object WyrApi {
         public const val MY_PUSH_TOKENS: String = "/$VERSION/me/push-tokens"
 
         /**
+         * GET: the shop (CLAUDE.md §8d, *The shop*), as a [io.ntole.wyr.core.shop.ShopDto]: every theme on
+         * sale with its price and whether the player the bearer token names owns it, and their points.
+         * Requires a session, since what is owned is the player's. Limited per player.
+         */
+        public const val SHOP: String = "/$VERSION/shop"
+
+        /**
+         * POST: buys an item of the shop's for the player the bearer token names, with a
+         * [io.ntole.wyr.core.shop.PurchaseRequest], answered with the shop as it stands after it, a
+         * [io.ntole.wyr.core.shop.ShopDto]. Requires a registered player's session: a guest is 403
+         * [io.ntole.wyr.core.error.ErrorCode.ACCOUNT_REQUIRED]. The item's price is taken from the
+         * player's points in the purchase's own transaction: fewer points is 409
+         * [io.ntole.wyr.core.error.ErrorCode.NOT_ENOUGH_POINTS], an item owned already 409
+         * [io.ntole.wyr.core.error.ErrorCode.ALREADY_OWNED], and an id the shop does not sell 404
+         * [io.ntole.wyr.core.error.ErrorCode.ITEM_NOT_FOUND]; each takes nothing. Limited per player.
+         */
+        public const val MY_PURCHASES: String = "/$VERSION/me/purchases"
+
+        /**
          * POST: removes a push token the player the bearer token names registered, with a
          * [io.ntole.wyr.core.push.RemovePushTokenRequest], answered 204 (CLAUDE.md §8a, *Push tokens*),
          * so their pushes no longer reach that device. A token that is not theirs, another player's or
@@ -535,6 +554,13 @@ public object WyrApi {
          * defaults to this, and a client falls back to it until it has read that.
          */
         public const val SUBMISSION_COST: Int = 1
+
+        /**
+         * Longest id an item of the shop's can have ([io.ntole.wyr.core.shop.ShopThemeDto.id]): 1 to this
+         * many of `A`-`Z`, `0`-`9` and `_`, as a category's id. Here so the server's column and a client's
+         * check share one number.
+         */
+        public const val MAX_SHOP_ITEM_ID_LENGTH: Int = 32
 
         /**
          * Shortest username an account can have, once lower-cased

@@ -110,6 +110,8 @@ private fun describe(
         DomainError.INVALID_LOGIN,
         DomainError.PLAY_GAMES_CODE_REFUSED,
         DomainError.PLAY_GAMES_UNAVAILABLE,
+        DomainError.ALREADY_OWNED,
+        DomainError.ITEM_NOT_FOUND,
         // The moderation app names no build, which the server never refuses as too old.
         DomainError.UPGRADE_REQUIRED,
         -> {

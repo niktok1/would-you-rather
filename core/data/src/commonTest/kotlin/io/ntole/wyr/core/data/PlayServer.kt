@@ -15,15 +15,17 @@ import io.ntole.wyr.core.error.ErrorCode
 import io.ntole.wyr.core.home.HomePickRequest
 import io.ntole.wyr.core.home.HomePicksDto
 import io.ntole.wyr.core.network.WyrJson
+import io.ntole.wyr.core.shop.PurchaseRequest
+import io.ntole.wyr.core.shop.ShopDto
 import io.ntole.wyr.core.vote.OptionSide
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
 /**
- * Just enough of the server, behind a [MockEngine], for the Play screen's menu and the Home screen's
- * picks (CLAUDE.md §8d, *Reports*, *Home picks*): it mints guests, refuses every refresh, as for a
- * player the server has never heard of, and answers a report, a hide and a pick from a player it
- * minted, 401 from any other. The picks' counts it reads to anybody. Apart from [FakeServer], whose
+ * Just enough of the server, behind a [MockEngine], for the Play screen's menu, the Home screen's
+ * picks and the shop (CLAUDE.md §8d, *Reports*, *Home picks*, *The shop*): it mints guests, refuses
+ * every refresh, as for a player the server has never heard of, and answers a report, a hide, a pick,
+ * a read of the shop and a purchase from a player it minted, 401 from any other. The picks' counts it reads to anybody. Apart from [FakeServer], whose
  * routes are the rest of the game's.
  */
 internal class PlayServer {
@@ -50,6 +52,15 @@ internal class PlayServer {
 
     /** The `Authorization` header and side of every pick, in arrival order. */
     val picksSentAs = mutableListOf<Pair<String?, OptionSide>>()
+
+    /** What the shop answers with, a read and a purchase alike. */
+    var shop = ShopDto()
+
+    /** When set, every purchase is refused with this status and code, whoever sends it. */
+    var refusePurchasesWith: Pair<HttpStatusCode, ErrorCode>? = null
+
+    /** The `Authorization` header and item of every purchase, in arrival order. */
+    val purchasesSentAs = mutableListOf<Pair<String?, String>>()
 
     val engine = MockEngine { request -> lock.withLock { handle(request) } }
 
@@ -80,6 +91,21 @@ internal class PlayServer {
 
             WyrApi.Paths.HOME_PICKS -> {
                 if (request.method == HttpMethod.Post) pick(request, authorization, known) else readPicks(authorization)
+            }
+
+            WyrApi.Paths.SHOP -> {
+                if (known) respondJson(WyrJson.encodeToString(shop)) else unknown()
+            }
+
+            WyrApi.Paths.MY_PURCHASES -> {
+                val item = WyrJson.decodeFromString<PurchaseRequest>(request.body.toByteArray().decodeToString()).itemId
+                purchasesSentAs += authorization to item
+                val refusal = refusePurchasesWith
+                when {
+                    !known -> unknown()
+                    refusal != null -> respondErrorDto(refusal.first, refusal.second)
+                    else -> respondJson(WyrJson.encodeToString(shop))
+                }
             }
 
             else -> {
@@ -113,6 +139,9 @@ internal class PlayServer {
             }
         return respondJson(WyrJson.encodeToString(picks))
     }
+
+    private fun MockRequestHandleScope.unknown(): HttpResponseData =
+        respondErrorDto(HttpStatusCode.Unauthorized, ErrorCode.UNAUTHORIZED)
 
     private fun sessionOf(player: String): SessionDto =
         SessionDto(

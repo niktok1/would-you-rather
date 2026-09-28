@@ -63,6 +63,11 @@ import io.ntole.wyr.core.domain.report.ReportReason
 import io.ntole.wyr.core.domain.report.ReportRepository
 import io.ntole.wyr.core.domain.session.CurrentSession
 import io.ntole.wyr.core.domain.session.SessionRepository
+import io.ntole.wyr.core.domain.shop.BuyTheme
+import io.ntole.wyr.core.domain.shop.GetShop
+import io.ntole.wyr.core.domain.shop.Shop
+import io.ntole.wyr.core.domain.shop.ShopRepository
+import io.ntole.wyr.core.domain.shop.ShopTheme
 import io.ntole.wyr.core.domain.submission.GetMySubmissions
 import io.ntole.wyr.core.domain.submission.Submission
 import io.ntole.wyr.core.domain.submission.SubmissionRepository
@@ -112,6 +117,7 @@ import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.milliseconds
@@ -129,6 +135,7 @@ import kotlin.time.TimeSource
 @OptIn(ExperimentalCoroutinesApi::class)
 class AppNavigationTest {
     private val game = FakeGame()
+    private val shops = FakeShop()
     private val categories = FakeCategories()
     private val update = FakeUpdate()
     private val uris = RecordingUris()
@@ -192,12 +199,17 @@ class AppNavigationTest {
             assertEquals(Language.SERBIAN_CYRILLIC.tag, opened.properties[AnalyticsProperty.LANGUAGE])
         }
 
-    /** The player's choice is the analytics' own, which keep it for the device (CLAUDE.md §8g). */
+    /**
+     * The player's choice is the analytics' own, which keep it for the device (CLAUDE.md §8g); the switch
+     * is on the About screen, opened from the Account screen's top bar.
+     */
     @Test
-    fun `the Statistics switch on Account turns the analytics off and on again`() =
+    fun `the Statistics switch on About turns the analytics off and on again`() =
         withApp { scene ->
             val statistics = CYRILLIC.accountScreens.statistics
             scene.tap(CYRILLIC.account)
+            assertFalse(statistics in scene.texts(), "not on the Account screen")
+            scene.tap(CYRILLIC.aboutScreen.title)
             assertEquals(ToggleableState.On, scene.toggleOf(statistics))
 
             scene.tap(statistics)
@@ -210,6 +222,59 @@ class AppNavigationTest {
         }
 
     /**
+     * The shop opens from the points on Play, from the Account card's points and from the Account bar's
+     * bag, each back where it was opened from (CLAUDE.md §8d, *The shop*).
+     */
+    @Test
+    fun `the shop opens from the points and from the Account bar`() {
+        game.serving = QUESTION
+        withApp { scene ->
+            val shop = CYRILLIC.shopScreen
+            val points = CYRILLIC.points.fill(5)
+            scene.tapPlay()
+            scene.tap(points)
+            assertTrue(shop.comingSoon in scene.everyText(), "the shop is not shown: ${scene.texts()}")
+            scene.tap(CYRILLIC.back)
+            assertTrue(CYRILLIC.playScreen.skip in scene.descriptions(), "back on Play: ${scene.texts()}")
+
+            scene.tap(CYRILLIC.account)
+            scene.tap(points)
+            assertTrue(shop.comingSoon in scene.everyText(), "the shop from the card: ${scene.texts()}")
+            scene.tap(CYRILLIC.back)
+            scene.tap(shop.title)
+            assertTrue(shop.comingSoon in scene.everyText(), "the shop from the bar: ${scene.texts()}")
+            scene.tap(CYRILLIC.back)
+            assertTrue(CYRILLIC.accountScreens.myQuestions in scene.texts(), "back on Account: ${scene.texts()}")
+        }
+    }
+
+    /** A theme bought, once the dialog confirms it, is put on at once and says so on its card. */
+    @Test
+    fun `a theme bought is worn at once`() =
+        withApp { scene ->
+            val shop = CYRILLIC.shopScreen
+            scene.tap(CYRILLIC.account)
+            scene.tap(shop.title)
+            assertEquals(1, scene.everyText().count { it == shop.active }, "the game's own is worn")
+
+            scene.tap(shop.buy.fill(CYRILLIC.points.fill(PRICE)))
+            assertTrue(shop.confirmBuy.fill(shop.neonNight) in scene.texts(), "the dialog: ${scene.texts()}")
+            // The dialog's Buy and the card's under it say the same: a tap on the card's only asks again, and
+            // once the dialog's has bought the theme, nothing.
+            val buys = scene.nodes().filter { shop.buy.fill(CYRILLIC.points.fill(PRICE)) in it.descriptions }
+            assertEquals(2, buys.size, "the card's and the dialog's")
+            buys.forEach { buy ->
+                assertNotNull(buy.config.getOrNull(SemanticsActions.OnClick)?.action).invoke()
+                scene.settle()
+            }
+
+            assertEquals(listOf("NEON_NIGHT"), shops.bought)
+            assertEquals("player\nNEON_NIGHT", storage.read("wyr.theme.prod"))
+            assertEquals(1, scene.everyText().count { it == shop.active }, "Neon night is worn: ${scene.everyText()}")
+            assertTrue(shop.apply in scene.everyText(), "the game's own can be put on again")
+        }
+
+    /**
      * An Android rotation makes the composition anew, its saved state restored, while the ViewModels
      * and the analytics live on: the screen it shows is the visit it showed, not opened again, and
      * leaving it and coming back is a visit of its own (CLAUDE.md §8g).
@@ -219,7 +284,7 @@ class AppNavigationTest {
         game.username = "bob"
         withApp { scene -> scene.tap(CYRILLIC.account) }
         afterRotation { scene ->
-            assertTrue(CYRILLIC.accountScreens.statistics in scene.texts(), "the Account screen is not shown")
+            assertTrue(CYRILLIC.accountScreens.myQuestions in scene.texts(), "the Account screen is not shown")
             scene.tap(CYRILLIC.accountScreens.newQuestion)
         }
         assertEquals(1, analytics.named(AnalyticsEvent.ACCOUNT_OPENED).size)
@@ -327,7 +392,7 @@ class AppNavigationTest {
             scene.tap(strings.deleteAccount.confirm)
 
             assertEquals(listOf<String?>("bob"), game.deleted)
-            assertTrue(strings.statistics in scene.texts(), "back on Account: ${scene.texts()}")
+            assertTrue(strings.myQuestions in scene.texts(), "back on Account: ${scene.texts()}")
             assertTrue(strings.guest in scene.texts(), "${scene.texts()}")
             assertTrue(strings.openAuth in scene.texts(), "a guest's one button")
             assertEquals(1, analytics.named(AnalyticsEvent.ACCOUNT_DELETED).size)
@@ -347,7 +412,7 @@ class AppNavigationTest {
             assertEquals("about", shown.last())
 
             scene.tap(CYRILLIC.back)
-            assertTrue(CYRILLIC.accountScreens.statistics in scene.texts(), "back on Account: ${scene.texts()}")
+            assertTrue(CYRILLIC.accountScreens.myQuestions in scene.texts(), "back on Account: ${scene.texts()}")
         }
 
     /**
@@ -467,7 +532,7 @@ class AppNavigationTest {
         withApp { scene ->
             scene.tapPlay()
             scene.tap(CYRILLIC.account)
-            assertTrue(CYRILLIC.accountScreens.statistics in scene.texts(), "the Account screen is not shown")
+            assertTrue(CYRILLIC.accountScreens.myQuestions in scene.texts(), "the Account screen is not shown")
 
             scene.tap(CYRILLIC.back)
 
@@ -556,7 +621,7 @@ class AppNavigationTest {
 
             scene.tap(CYRILLIC.back)
 
-            assertTrue(CYRILLIC.accountScreens.statistics in scene.texts(), "the Account screen is not shown")
+            assertTrue(CYRILLIC.accountScreens.myQuestions in scene.texts(), "the Account screen is not shown")
             assertEquals(2, game.submissionsRead)
         }
 
@@ -576,7 +641,7 @@ class AppNavigationTest {
 
             assertEquals(listOf("Fly"), game.sent.map { it.optionA })
             val shown = scene.everyText()
-            assertTrue(CYRILLIC.accountScreens.statistics in shown, "the Account screen is not shown: $shown")
+            assertTrue(CYRILLIC.accountScreens.myQuestions in shown, "the Account screen is not shown: $shown")
             val listed = "Fly ${CYRILLIC.accountScreens.or} Swim"
             assertTrue(
                 listed in shown && CYRILLIC.accountScreens.pending in shown,
@@ -605,7 +670,7 @@ class AppNavigationTest {
             scene.settle()
 
             val shown = scene.everyText()
-            assertTrue(CYRILLIC.accountScreens.statistics in shown, "the Account screen is not shown: $shown")
+            assertTrue(CYRILLIC.accountScreens.myQuestions in shown, "the Account screen is not shown: $shown")
             val listed = "Fly ${CYRILLIC.accountScreens.or} Swim"
             assertTrue(
                 listed in shown && CYRILLIC.accountScreens.pending in shown,
@@ -765,7 +830,7 @@ class AppNavigationTest {
             assertEquals("question", screens.last())
 
             scene.tap(CYRILLIC.back)
-            assertTrue(CYRILLIC.accountScreens.statistics in scene.texts(), "back on Account: ${scene.texts()}")
+            assertTrue(CYRILLIC.accountScreens.myQuestions in scene.texts(), "back on Account: ${scene.texts()}")
         }
 
     @Test
@@ -825,6 +890,9 @@ class AppNavigationTest {
             single<AccountRepository> { game }
             single<SubmissionRepository> { game }
             single<CategoryRepository> { categories }
+            single<ShopRepository> { shops }
+            factory { GetShop(shop = get(), session = get()) }
+            factory { BuyTheme(shop = get(), session = get()) }
             single<Analytics> { analytics }
             single<AppUpdate> { update }
             single { AppVersion(name = "1.0.0", number = 10000) }
@@ -935,6 +1003,25 @@ class AppNavigationTest {
             token: String,
             platform: PushPlatform,
         ): Unit = error("no pushes here")
+    }
+
+    /** The shop: Neon night on sale, the player registered with enough points; a purchase owns it. */
+    private class FakeShop : ShopRepository {
+        val bought = mutableListOf<String>()
+        private var shop = Shop(listOf(ShopTheme("NEON_NIGHT", PRICE, owned = false)), points = 500, registered = true)
+
+        override suspend fun shop(): Shop = shop
+
+        override suspend fun buy(themeId: String): Shop {
+            bought += themeId
+            shop =
+                shop.copy(
+                    themes = shop.themes.map { it.copy(owned = it.owned || it.id == themeId) },
+                    points =
+                        500 - PRICE,
+                )
+            return shop
+        }
     }
 
     /**
@@ -1137,5 +1224,8 @@ class AppNavigationTest {
 
         /** The Play screen's categories, All while none is played: a tap on them opens the Categories screen. */
         val ALL_PLAYED = CYRILLIC.allCategories
+
+        /** What a theme costs in the fake shop. */
+        const val PRICE = 220
     }
 }

@@ -14,9 +14,10 @@ import kotlinx.serialization.Serializable
  * [likesReceived] is how many likes the questions the player submitted hold now, the player's own
  * likes of them included (CLAUDE.md §8d). Each is a point in [totalPoints] for as long as it is held.
  *
- * [pointsSpent] is what the player's questions not rejected cost them to submit (CLAUDE.md §8c): a
- * rejection pays its cost back, and an approval keeps it. So [totalPoints] is what [answersGiven]
- * earned, plus what [likesReceived] earn, less [pointsSpent].
+ * [pointsSpent] is what the player's questions not rejected cost them to submit (CLAUDE.md §8c), a
+ * rejection paying its cost back and an approval keeping it, and what they paid in the shop (§8d, *The
+ * shop*). So [totalPoints] is what [answersGiven] earned, plus what [likesReceived] earn, less
+ * [pointsSpent].
  *
  * [cycle] is the player's current pass over the questions, counted from 1, and [dueThisCycle] how
  * many are still due in it, over every category. A cycle ends when nothing is due, but the next one

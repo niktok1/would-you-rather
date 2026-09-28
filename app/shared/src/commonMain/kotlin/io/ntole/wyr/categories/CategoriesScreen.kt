@@ -16,7 +16,6 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.minimumInteractiveComponentSize
@@ -36,6 +35,7 @@ import io.ntole.wyr.language.Strings
 import io.ntole.wyr.language.categoryName
 import io.ntole.wyr.language.fill
 import io.ntole.wyr.loading.LoadingSpinner
+import io.ntole.wyr.theme.PageSurface
 import io.ntole.wyr.theme.WyrThemeAccessors
 import io.ntole.wyr.theme.WyrTypeScale
 import io.ntole.wyr.theme.contentWidth
@@ -61,7 +61,7 @@ fun CategoriesScreen(
     val strings = shared.categoriesScreen
     val language = LocalLanguage.current
 
-    Surface(color = colors.pageBackground, contentColor = colors.primaryText, modifier = modifier.fillMaxSize()) {
+    PageSurface(modifier = modifier.fillMaxSize()) {
         Column(
             modifier =
                 Modifier

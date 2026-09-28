@@ -87,4 +87,13 @@ public object AnalyticsEvent {
 
     /** The player picked a language to play in, [AnalyticsProperty.LANGUAGE]. */
     public const val LANGUAGE_CHANGED: String = "language_changed"
+
+    /** The player opened the shop, once a visit (CLAUDE.md §8d, *The shop*). */
+    public const val SHOP_OPENED: String = "shop_opened"
+
+    /** A theme was bought, [AnalyticsProperty.THEME] for [AnalyticsProperty.PRICE] points. */
+    public const val THEME_BOUGHT: String = "theme_bought"
+
+    /** The player put on a theme they own, [AnalyticsProperty.THEME], the default's included. */
+    public const val THEME_APPLIED: String = "theme_applied"
 }

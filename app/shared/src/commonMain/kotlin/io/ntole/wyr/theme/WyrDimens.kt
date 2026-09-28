@@ -62,6 +62,14 @@ data class WyrDimens(
      * side or a desktop window.
      */
     val contentMaxWidth: Dp = 600.dp,
+    /**
+     * A theme's preview in the shop (CLAUDE.md §8d, *The shop*): on its card, and larger in the dialog
+     * before a purchase; its corners, and the coin on its row.
+     */
+    val themePreviewHeight: Dp = 150.dp,
+    val themePreviewLargeHeight: Dp = 280.dp,
+    val radiusPreview: Dp = 16.dp,
+    val previewIconSize: Dp = 14.dp,
 )
 
 val WyrDefaultDimens: WyrDimens = WyrDimens()
@@ -99,6 +107,11 @@ object WyrTypeScale {
     /** The game's name's line, set with it: it takes two lines on a phone, and the text style's own is for body text. */
     val gameNameLineHeight = 46.sp
     val playButton = 24.sp
+
+    /** An answer on a theme's preview in the shop, and the numbers on its row (CLAUDE.md §8d, *The shop*). */
+    val previewOption = 13.sp
+    val previewOptionLarge = 18.sp
+    val previewRow = 10.sp
 
     /** An id shown for the player to copy, the About screen's account id: fixed width, so it reads as a value. */
     val code = FontFamily.Monospace

@@ -8,6 +8,10 @@ import androidx.compose.ui.platform.ClipboardManager
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.UriHandler
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.semantics.getOrNull
+import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.unit.Density
 import io.ntole.wyr.RecordingClipboard
 import io.ntole.wyr.RecordingUris
@@ -166,6 +170,59 @@ class AboutScreenDrawTest {
         }
     }
 
+    /**
+     * The Statistics switch (CLAUDE.md §8g), here since it left the Account screen: under the account
+     * id and before the licences, on or off as the player left it, a switch to a screen reader, its word
+     * and all one control, and a tap on it turns it the other way.
+     */
+    @Test
+    fun `the Statistics switch shows the player's choice and a tap turns it the other way`() {
+        Language.entries.forEach { language ->
+            val all = stringsOf(language)
+            val word = all.accountScreens.statistics
+            listOf(true, false).forEach { on ->
+                val changes = mutableListOf<Boolean>()
+                val scene = scene(language, statisticsOn = on, onStatisticsChange = { changes += it })
+                try {
+                    val texts = scene.everyText()
+                    val at = texts.indexOf(word)
+                    assertTrue(at > texts.indexOf(all.aboutScreen.accountId), "$language: under the account id")
+                    assertTrue(at < texts.indexOf(all.aboutScreen.licences), "$language: before the licences")
+                    val switch = scene.nodes().single { word in it.texts }
+                    val shown = switch.config.getOrNull(SemanticsProperties.ToggleableState)
+                    assertEquals(if (on) ToggleableState.On else ToggleableState.Off, shown, "$language")
+                    assertEquals(Role.Switch, switch.config.getOrNull(SemanticsProperties.Role), "$language")
+
+                    scene.tap(word)
+
+                    assertEquals(listOf(!on), changes, "$language")
+                } finally {
+                    scene.close()
+                }
+            }
+        }
+    }
+
+    /** The info icon beside Statistics opens a dialog of what the switch sends, and its OK closes it. */
+    @Test
+    fun `the Statistics info icon explains the switch`() {
+        Language.entries.forEach { language ->
+            val strings = stringsOf(language).accountScreens
+            val changes = mutableListOf<Boolean>()
+            val scene = scene(language, onStatisticsChange = { changes += it })
+            try {
+                assertFalse(strings.statisticsInfo in scene.texts(), "$language: explained before it is tapped")
+                scene.tap(strings.aboutStatistics)
+                assertTrue(strings.statisticsInfo in scene.texts(), "$language: ${scene.texts()}")
+                scene.tap(strings.ok)
+                assertFalse(strings.statisticsInfo in scene.texts(), "$language: the dialog is gone")
+            } finally {
+                scene.close()
+            }
+            assertEquals(emptyList(), changes, "$language: the switch is left as it was")
+        }
+    }
+
     @Suppress("DEPRECATION")
     private fun scene(
         language: Language,
@@ -174,12 +231,20 @@ class AboutScreenDrawTest {
         accountId: String? = ACCOUNT_ID,
         clipboard: ClipboardManager = RecordingClipboard(),
         deletion: @Composable () -> Unit = {},
+        statisticsOn: Boolean = true,
+        onStatisticsChange: (Boolean) -> Unit = {},
     ): ImageComposeScene =
         ImageComposeScene(width = SHORT_PHONE_WIDTH, height = SHORT_PHONE_HEIGHT, density = Density(1f)) {
             CompositionLocalProvider(LocalUriHandler provides uris, LocalClipboardManager provides clipboard) {
                 WyrTheme(darkTheme = dark) {
                     WyrStrings(language) {
-                        AboutScreen(AppVersion("1.0.0", 10000), accountId = accountId, deletion = deletion)
+                        AboutScreen(
+                            AppVersion("1.0.0", 10000),
+                            accountId = accountId,
+                            statisticsOn = statisticsOn,
+                            onStatisticsChange = onStatisticsChange,
+                            deletion = deletion,
+                        )
                     }
                 }
             }

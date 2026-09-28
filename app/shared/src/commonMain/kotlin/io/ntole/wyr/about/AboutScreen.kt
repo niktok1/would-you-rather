@@ -33,6 +33,7 @@ import io.ntole.wyr.analytics.tapped
 import io.ntole.wyr.language.LocalLanguage
 import io.ntole.wyr.language.LocalStrings
 import io.ntole.wyr.language.fill
+import io.ntole.wyr.theme.PageSurface
 import io.ntole.wyr.theme.WyrIcons
 import io.ntole.wyr.theme.WyrThemeAccessors
 import io.ntole.wyr.theme.WyrTypeScale
@@ -43,7 +44,9 @@ import io.ntole.wyr.theme.contentWidth
  * its [version] and build number, the age it is for, links that open in the browser to the site's
  * privacy policy, terms and question rules, deleting an account and contact ([Site], in the language
  * shown), the player's [accountId], to copy and send when asking by email for their account to be
- * deleted (§8a, *Deleting an account*, *By a moderator*), none while no session is stored, and the
+ * deleted (§8a, *Deleting an account*, *By a moderator*), none while no session is stored, the
+ * Statistics switch, [statisticsOn] whether the player lets the game send analytics, which
+ * [onStatisticsChange] changes (§8g, [StatisticsSwitch]), the
  * libraries the game ships with, each with its licence ([OPEN_SOURCE_LIBRARIES]), and last, quiet,
  * [deletion], the way to delete the account (`DeleteAccount`, CLAUDE.md §8a). It scrolls. Every
  * colour, space and size from the theme (§5b), every word from [LocalStrings] (§8f).
@@ -53,6 +56,8 @@ fun AboutScreen(
     version: AppVersion,
     accountId: String?,
     modifier: Modifier = Modifier,
+    statisticsOn: Boolean = true,
+    onStatisticsChange: (Boolean) -> Unit = {},
     deletion: @Composable () -> Unit = {},
 ) {
     val colors = WyrThemeAccessors.colors
@@ -61,7 +66,7 @@ fun AboutScreen(
     val strings = shared.aboutScreen
     val language = LocalLanguage.current
 
-    Surface(color = colors.pageBackground, modifier = modifier.fillMaxSize()) {
+    PageSurface(modifier = modifier.fillMaxSize()) {
         Column(
             modifier =
                 Modifier
@@ -93,6 +98,9 @@ fun AboutScreen(
                 Triple(strings.contact, SitePage.CONTACT, "about.contact"),
             ).forEach { (label, page, element) -> Link(label, Site.url(page, language), element) }
             accountId?.let { id -> AccountId(id) }
+
+            HorizontalDivider(color = colors.orPillBackground)
+            StatisticsSwitch(on = statisticsOn, onChange = onStatisticsChange)
 
             HorizontalDivider(color = colors.orPillBackground)
             Text(

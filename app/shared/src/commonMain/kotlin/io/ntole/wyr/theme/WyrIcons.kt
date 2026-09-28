@@ -294,6 +294,27 @@ object WyrIcons {
             outline(draw)
         }
 
+    /**
+     * Shop: a bag with a handle, for the way to the shop (CLAUDE.md §8d, *The shop*), on the Account
+     * screen's top bar.
+     */
+    val Shop: ImageVector by lazy {
+        icon("Shop") {
+            outline {
+                // The bag, a little wider at the bottom, then its handle over the opening.
+                moveTo(5f, 8f)
+                horizontalLineTo(19f)
+                lineTo(20f, 20f)
+                horizontalLineTo(4f)
+                close()
+                moveTo(9f, 8f)
+                verticalLineTo(6.5f)
+                arcTo(3f, 3f, 0f, isMoreThanHalf = false, isPositiveArc = true, x1 = 15f, y1 = 6.5f)
+                verticalLineTo(8f)
+            }
+        }
+    }
+
     private fun icon(
         name: String,
         draw: ImageVector.Builder.() -> Unit,

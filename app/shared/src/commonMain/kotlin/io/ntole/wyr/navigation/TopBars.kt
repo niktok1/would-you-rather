@@ -73,17 +73,23 @@ fun BackTopBar(onBack: () -> Unit) {
 }
 
 /**
- * The Account screen's: the back arrow, and on the right the info icon, to the About screen (CLAUDE.md
- * §8d, *About*), so the way there adds no text to the screen.
+ * The Account screen's: the back arrow, and on the right the shop's bag, to the shop (CLAUDE.md §8d,
+ * *The shop*), and the info icon, to the About screen (§8d, *About*), so the way to either adds no text
+ * to the screen.
  */
 @Composable
 fun AccountTopBar(
     onBack: () -> Unit,
     onAbout: () -> Unit,
+    onShop: () -> Unit = {},
 ) {
+    val strings = LocalStrings.current
     TopBar(
         start = { BackButton(onBack) },
-        end = { IconAction(WyrIcons.Info, LocalStrings.current.aboutScreen.title, "top_bar.about", onAbout) },
+        end = {
+            IconAction(WyrIcons.Shop, strings.shopScreen.title, "top_bar.shop", onShop)
+            IconAction(WyrIcons.Info, strings.aboutScreen.title, "top_bar.about", onAbout)
+        },
     )
 }
 
