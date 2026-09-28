@@ -6,7 +6,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.unit.dp
 import kotlin.math.PI
 import kotlin.math.pow
@@ -117,15 +116,25 @@ sealed interface ThemeArt {
         }
     }
 
-    /** Two rolling hills along the bottom, and leaves falling in the top corner. */
-    data class Hills(
+    /** A line of pines behind two rolling hills along the bottom. */
+    data class Forest(
         val far: Color,
         val near: Color,
-        val leaves: Color,
+        val trees: Color,
     ) : ThemeArt {
-        override val colors: List<Color> = listOf(far, near, leaves)
+        override val colors: List<Color> = listOf(far, near, trees)
 
         override fun DrawScope.draw() {
+            // The pines first, standing on the far hill's ridge, their feet just behind it, which is
+            // drawn over them.
+            val sequence = Sequence(FOREST_SEED)
+            var x = 0f
+            while (x < size.width) {
+                val height = size.height * (PINE_MIN + sequence.next() * (PINE_MAX - PINE_MIN))
+                val foot = size.height * (farRidgeAt(x / size.width) + PINE_SINK + sequence.next() * PINE_SINK)
+                pine(x, foot, height, trees)
+                x += height * (PINE_GAP_MIN + sequence.next() * (PINE_GAP_MAX - PINE_GAP_MIN))
+            }
             hill(
                 start = FAR_HILL_START,
                 peak = FAR_HILL_PEAK,
@@ -140,22 +149,47 @@ sealed interface ThemeArt {
                 end = NEAR_HILL_END,
                 color = near,
             )
-            val sequence = Sequence(FOREST_SEED)
-            val leaf = size.minDimension * LEAF_SIZE
-            repeat(LEAVES) {
-                val centre =
-                    Offset(
-                        size.width * (LEAF_LEFT + sequence.next() * (1 - LEAF_LEFT)),
-                        size.height * sequence.next() * LEAF_ZONE,
-                    )
-                rotate(degrees = sequence.next() * FULL_TURN, pivot = centre) {
-                    drawOval(
-                        leaves,
-                        topLeft = Offset(centre.x - leaf, centre.y - leaf * LEAF_ROUNDNESS),
-                        size = Size(leaf * 2, leaf * 2 * LEAF_ROUNDNESS),
-                    )
-                }
+        }
+
+        /**
+         * How far down the far hill's ridge is, in the height, at [across] of the width: the two curves
+         * [hill] draws it with, each of whose points moves evenly across, so the one at [across] is found
+         * directly.
+         */
+        private fun farRidgeAt(across: Float): Float =
+            if (across <= FAR_HILL_PEAK_AT) {
+                val t = across / FAR_HILL_PEAK_AT
+                val before = (1 - t) * (1 - t)
+                before * FAR_HILL_START + (1 - before) * FAR_HILL_PEAK
+            } else {
+                val t = (across - FAR_HILL_PEAK_AT) / (1 - FAR_HILL_PEAK_AT)
+                (1 - t * t) * FAR_HILL_PEAK + t * t * FAR_HILL_END
             }
+
+        /** A pine of [height], centred on [x], standing at [foot]: three tiers, each wider than the one above. */
+        private fun DrawScope.pine(
+            x: Float,
+            foot: Float,
+            height: Float,
+            color: Color,
+        ) {
+            val half = height * PINE_WIDTH / 2
+            val path = Path()
+            repeat(PINE_TIERS) { tier ->
+                val top = foot - height + tier * height * PINE_TIER_STEP
+                val bottom = top + height * PINE_TIER_HEIGHT
+                val reach = half * (PINE_TOP_REACH + tier * (1 - PINE_TOP_REACH) / (PINE_TIERS - 1))
+                path.moveTo(x, top)
+                path.lineTo(x + reach, bottom)
+                path.lineTo(x - reach, bottom)
+                path.close()
+            }
+            drawPath(path, color)
+            drawRect(
+                color,
+                topLeft = Offset(x - half * PINE_TRUNK, foot - height * PINE_TRUNK_HEIGHT),
+                size = Size(half * PINE_TRUNK * 2, height * PINE_TRUNK_HEIGHT),
+            )
         }
 
         /** A hill from [start] at the left edge over [peak] at [peakAt] across to [end] at the right. */
@@ -284,7 +318,6 @@ private class Sequence(
 
 private const val LINE_WIDTH = 1.5f
 private const val HALF_TURN = 180f
-private const val FULL_TURN = 360f
 
 private const val HORIZON = 0.7f
 private const val STAR_ZONE = 0.9f
@@ -319,11 +352,18 @@ private const val NEAR_HILL_START = 0.82f
 private const val NEAR_HILL_PEAK = 0.8f
 private const val NEAR_HILL_PEAK_AT = 0.25f
 private const val NEAR_HILL_END = 0.9f
-private const val LEAVES = 7
-private const val LEAF_SIZE = 0.035f
-private const val LEAF_ROUNDNESS = 0.45f
-private const val LEAF_LEFT = 0.55f
-private const val LEAF_ZONE = 0.3f
+private const val PINE_MIN = 0.05f
+private const val PINE_MAX = 0.09f
+private const val PINE_SINK = 0.012f
+private const val PINE_GAP_MIN = 0.3f
+private const val PINE_GAP_MAX = 0.75f
+private const val PINE_WIDTH = 0.6f
+private const val PINE_TIERS = 3
+private const val PINE_TIER_STEP = 0.26f
+private const val PINE_TIER_HEIGHT = 0.46f
+private const val PINE_TOP_REACH = 0.55f
+private const val PINE_TRUNK = 0.14f
+private const val PINE_TRUNK_HEIGHT = 0.2f
 private const val FOREST_SEED = 23
 
 private const val DUNE_SUN_AT = 0.68f

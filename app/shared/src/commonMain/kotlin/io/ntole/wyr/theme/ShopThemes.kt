@@ -57,7 +57,7 @@ internal val OceanColors: WyrColors =
 internal val OceanArt: ThemeArt =
     ThemeArt.Waves(far = Color(0xFF133E44), near = Color(0xFF1A4C4F), bubbles = Color(0xFF2B4A53))
 
-/** Forest: moss and terracotta on cream, hills along the bottom and leaves in the corner. */
+/** Forest: moss and terracotta on cream, a line of pines behind two hills along the bottom. */
 internal val ForestColors: WyrColors =
     WyrColors(
         pageBackground = Color(0xFFF4F0E2),
@@ -80,7 +80,7 @@ internal val ForestColors: WyrColors =
     )
 
 internal val ForestArt: ThemeArt =
-    ThemeArt.Hills(far = Color(0xFFE1E4CC), near = Color(0xFFD9DCC4), leaves = Color(0xFFE8D6C4))
+    ThemeArt.Forest(far = Color(0xFFE6E7D2), near = Color(0xFFDFE1CA), trees = Color(0xFFD9DCC4))
 
 /** Sunset: violet and gold on a warm dusk, a low sun behind the dunes. */
 internal val SunsetColors: WyrColors =

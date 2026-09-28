@@ -2,12 +2,12 @@ package io.ntole.wyr
 
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.safeContentPadding
-import androidx.compose.material3.MaterialTheme
+import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -23,6 +23,8 @@ import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -78,7 +80,12 @@ import io.ntole.wyr.shop.ShopViewModel
 import io.ntole.wyr.shop.ThemeViewModel
 import io.ntole.wyr.submit.SubmitScreen
 import io.ntole.wyr.submit.SubmitViewModel
+import io.ntole.wyr.theme.LocalPageDrawn
+import io.ntole.wyr.theme.LocalThemeArt
+import io.ntole.wyr.theme.SystemBarsOn
 import io.ntole.wyr.theme.WyrTheme
+import io.ntole.wyr.theme.WyrThemeAccessors
+import io.ntole.wyr.theme.drawThemeArt
 import io.ntole.wyr.update.UpdateScreen
 import io.ntole.wyr.update.rememberUpdateButton
 import kotlinx.coroutines.launch
@@ -123,11 +130,31 @@ fun App() {
     }
 }
 
+/**
+ * The page under every screen, the whole window, the system bars' strips included: the theme's page
+ * colour and its art (CLAUDE.md §8d, *The shop*), drawn once here, so a screen's own [PageSurface]
+ * draws neither ([LocalPageDrawn]) and the art spans the window whatever the screen and its insets.
+ * The system bars' icons are set to read on the page (`SystemBarsOn`).
+ */
+@Composable
+private fun WholePage(content: @Composable () -> Unit) {
+    val colors = WyrThemeAccessors.colors
+    val art = LocalThemeArt.current
+    SystemBarsOn(darkPage = colors.isDark)
+    Box(modifier = Modifier.fillMaxSize().background(colors.pageBackground).drawBehind { drawThemeArt(art) }) {
+        CompositionLocalProvider(LocalPageDrawn provides true) {
+            Surface(color = Color.Transparent, contentColor = colors.primaryText, modifier = Modifier.fillMaxSize()) {
+                content()
+            }
+        }
+    }
+}
+
 /** The update screen, where the screens were, inside the same insets. */
 @Composable
 private fun UpdateRequired() {
-    Surface(color = MaterialTheme.colorScheme.background, modifier = Modifier.fillMaxSize()) {
-        Box(modifier = Modifier.fillMaxSize().safeContentPadding()) { UpdateScreen(button = rememberUpdateButton()) }
+    WholePage {
+        Box(modifier = Modifier.fillMaxSize().safeDrawingPadding()) { UpdateScreen(button = rememberUpdateButton()) }
     }
 }
 
@@ -162,11 +189,13 @@ private fun Screens() {
     val entrance = remember { Animatable(1f) }
     val scope = rememberCoroutineScope()
 
-    Surface(color = MaterialTheme.colorScheme.background, modifier = Modifier.fillMaxSize()) {
-        // The insets are applied once here, so the screens below find them already consumed.
+    WholePage {
+        // The insets are applied once here, so the screens below find them already consumed: the system
+        // bars and a display cutout, the safe drawing area, never the gesture areas besides, which on a
+        // phone with gesture navigation would take some 30 more on each side for nothing.
         Column(
             modifier =
-                Modifier.fillMaxSize().safeContentPadding().graphicsLayer {
+                Modifier.fillMaxSize().safeDrawingPadding().graphicsLayer {
                     alpha = entrance.value
                     scaleX = 1f - FADE_THROUGH_SCALE * (1f - entrance.value)
                     scaleY = scaleX

@@ -296,7 +296,12 @@ Material components inherit it instead of falling back to Material defaults. It 
 by name (the deletion's dialog; the language menu's `DropdownMenu` not yet). The game's own look is
 `WyrLightColors` and `WyrDarkColors`; each theme the shop sells (§8d, *The shop*) is a `GameTheme`
 (`GameThemes`), one `WyrColors` for both modes (`ShopThemes.kt`) and a `ThemeArt`, drawn by hand on
-the page behind every screen (`PageSurface`, which every screen stands on, and `LocalThemeArt`). Adding
+the page behind every screen: once, under the whole window, the system bars' strips included (`App`'s
+`WholePage`, `LocalThemeArt`), so a screen's own `PageSurface` draws nothing there (`LocalPageDrawn`)
+and draws its page only when drawn alone, as a test draws one. On Android the system bars' icons follow
+the theme's page, light on a dark one (`SystemBarsOn`). The screens are inset by the safe drawing area,
+the system bars and a cutout (`safeDrawingPadding`), never the gesture areas besides, which with gesture
+navigation added some 30 on each side. Adding
 a theme = adding a `WyrColors` value and a `ThemeArt` there, a `GameTheme` in `GameThemes.ALL`, its id in
 the server's `ShopCatalog`, and its name in `ShopStrings`.
 
@@ -2830,7 +2835,7 @@ listed on the Account screen.
     light and a dark variant of each is the other option): **Неонска ноћ** (`NEON_NIGHT`: magenta and
     cyan on near-black, a grid to the horizon, a half sun and stars), **Океан** (`OCEAN`: coral and sea
     foam on deep teal, two waves and bubbles), **Шума** (`FOREST`: moss and terracotta on cream, two
-    hills and leaves) and **Залазак** (`SUNSET`: violet and gold on dusk, a low sun behind two dunes).
+    a line of pines behind two hills) and **Залазак** (`SUNSET`: violet and gold on dusk, a low sun behind two dunes).
     Their names are `ShopStrings`, their ids the server's `ShopCatalog`, in that order.
   - *The server* (`io.ntole.wyr.server.shop`): `GET /v1/shop` (`WyrApi.Paths.SHOP`), bearer required,
     answers a `ShopDto`, every theme of `ShopCatalog` as a `ShopThemeDto` (`id`, a plain string, never

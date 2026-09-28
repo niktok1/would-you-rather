@@ -64,7 +64,8 @@ kotlin {
             // BackHandler, which binds Android's back to the back stack (SystemBack.android.kt).
             implementation(libs.androidx.activity.compose)
             // FileProvider, which hands a shared question's image to the app the player picks
-            // (ShareSheet.android.kt).
+            // (ShareSheet.android.kt), and WindowCompat, which sets the system bars' icons to read on
+            // the theme's page (SystemBarsOn.android.kt).
             implementation(libs.androidx.core.ktx)
             // api, not implementation: WyrApplication calls androidContext() when starting DI, so
             // this is part of what the Android entry point compiles against.
