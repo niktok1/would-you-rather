@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <meta name="description" content="Privacy policy of Would You Rather? (Шта би радије?): what data we process, why, for how long, and your rights.">
+  <title>Privacy policy — Would You Rather?</title>
+  <link rel="stylesheet" href="../style.css">
+</head>
+<body>
+  <a class="skip" href="#main">Skip to content</a>
+
+  <header class="site">
+    <div class="wrap bar">
+      <a class="brand" href="index.html"><span class="mark" aria-hidden="true"></span>Would You Rather?</a>
+      <a class="lang" href="../privacy.html" hreflang="sr-Cyrl" lang="sr-Cyrl">Српски</a>
+    </div>
+    <nav class="wrap links" aria-label="Pages">
+      <a href="privacy.html" aria-current="page">Privacy</a>
+      <a href="terms.html">Terms</a>
+      <a href="delete.html">Account deletion</a>
+      <a href="contact.html">Contact</a>
+    </nav>
+  </header>
+
+  <main id="main" class="wrap">
+    <h1>Privacy policy</h1>
+    <p class="meta">Would You Rather? (<span lang="sr-Cyrl">Шта би радије?</span>) · Last updated: 29 September 2026</p>
+    <p>The Serbian version of this policy is the original; if the two differ, the Serbian one applies.</p>
+
+    <section class="card" aria-labelledby="summary">
+      <h2 id="summary">In short</h2>
+      <ul>
+        <li>You play at once, without signing up: the server gives you a random guest id. We do not ask for your name, email or phone number.</li>
+        <li>An account is optional: a username and password, or signing in with Google Play Games. We keep the password only as a hash.</li>
+        <li>No ads. We never sell your data or give it to advertisers, or to anyone for advertising or marketing.</li>
+        <li>You turn analytics off with the <strong>Statistics</strong> switch (<span lang="sr-Cyrl">Статистика</span>) on the <strong>About</strong> screen.</li>
+        <li>You delete your account yourself, in the app, or by email (<a href="delete.html">Account deletion</a>).</li>
+      </ul>
+    </section>
+
+    <nav class="toc" aria-labelledby="toc">
+      <h2 id="toc">Contents</h2>
+      <ol>
+        <li><a href="#controller">Who the controller is</a></li>
+        <li><a href="#data">What data we process and why</a></li>
+        <li><a href="#legal-basis">Legal bases</a></li>
+        <li><a href="#recipients">Who else sees the data</a></li>
+        <li><a href="#transfers">Transfers to other countries</a></li>
+        <li><a href="#retention">How long we keep data</a></li>
+        <li><a href="#security">Security</a></li>
+        <li><a href="#rights">Your rights</a></li>
+        <li><a href="#age">Age</a></li>
+        <li><a href="#changes">Changes to this policy</a></li>
+      </ol>
+    </nav>
+
+    <section id="controller">
+      <h2>1. Who the controller is</h2>
+      <p>The controller responsible for the data processed in Would You Rather?, within the meaning of Serbia's Law on Personal Data Protection, is:</p>
+      <p class="card address">Nikola Tokić (toleapps)<br>Slavka Rodića, 11000 Belgrade, Serbia<br>Email: <a href="mailto:application.eili@gmail.com">application.eili@gmail.com</a></p>
+      <p>Here "we" means the controller and "you" the player. The game is available in Serbia, Bosnia and Herzegovina, Montenegro and North Macedonia, on Android, from Google Play; versions for iPhone and the browser come later. This policy covers every version of the game and this website.</p>
+    </section>
+
+    <section id="data">
+      <h2>2. What data we process and why</h2>
+
+      <h3>Playing as a guest</h3>
+      <p>When you first start playing, the server creates a player and gives it a random id. With it your device gets two session tokens: an access token, valid for 15 minutes, and a refresh token, valid for 30 days and replaced every time it is used. The tokens are kept in the app's storage on the device (in a browser, in its <code>localStorage</code>).</p>
+      <p>The server opens a new session each time a device gets new tokens: when you first start playing, at every sign-in, and when you carry on as a new guest after logging out or after a session expired. For each session it keeps hashes of the current and the previous refresh token (never the tokens themselves), when the session was opened, when its tokens expire and when it was last refreshed. Logging out deletes the session you log out of; a session a newer sign-in replaced stays in the database, as an expired one does. With the session it keeps nothing else about the device, neither its model nor its operating system.</p>
+      <p>Kept on the device only, never on the server: the game's language, your analytics choice, the theme you wear, and which notices of a moderator's decisions you have already seen.</p>
+      <p>With every request the app also sends its platform (Android, iOS, web or desktop) and its version number, so the server can ask an outdated version to update. The server does not keep them.</p>
+      <p><strong>Why:</strong> so the game knows it is you, without signing up, and keeps your points.</p>
+
+      <h3>An account (optional)</h3>
+      <p>If you register, we keep with the same player the username you choose (3 to 20 characters) and your password, but only as a hash (PBKDF2-HMAC-SHA256, with a random salt of its own for each password). We cannot read your password, it is never written to any log, and we never send it to anyone. We do not ask for an email address, so we cannot recover a forgotten password.</p>
+      <p>If you log in to an account you already have on a device where you play as a guest, the guest's points and other data do not move to the account. The guest stays on the server, but no device leads to it any more (see <a href="#retention">how long we keep data</a>). The game warns you before you log in, if the guest has points.</p>
+      <p><strong>Why:</strong> so you can log in on another device with the same points, send in your own questions and buy in the shop.</p>
+
+      <h3>Signing in with Google Play Games</h3>
+      <p>Google Play Games (Google Play Games Services) is Google's gaming service on Android. If your phone is signed in to Google Play Games, the game signs you in with it by itself, without a username and password; you can also use the button on the sign-in screen. The app then gets a one-time code from Google Play Games, and the server exchanges it with Google and learns your Play Games player id. We keep only that id and when it was linked to your player in the game; we do not keep the tokens Google issues along the way.</p>
+      <p>The app reads your Google Play Games profile name on the phone, to show it on the Account screen; it does not send it to the server, and we do not keep it.</p>
+      <p>The link is permanent: the profile is linked to the player you sign in from, a guest or an account, and for now only deleting the account undoes it. If the profile is already linked to another account in the game, signing in switches you to that account, and the guest's points stay behind.</p>
+      <p><strong>Why:</strong> so you get an account without typing a username and password.</p>
+
+      <h3>Gameplay data</h3>
+      <p>While you play, the server keeps:</p>
+      <ul>
+        <li><strong>your player:</strong> its id and when it was created; your points, how many answers you have given and which round of questions you are in; for an account, the username and the password hash; if a moderator stops you sending in questions, since when;</li>
+        <li><strong>your answers:</strong> for each question, the side you last picked, when you first and last answered, in which round, how long you took to answer (up to 10 minutes), and a random key for the last send, so one answer is never counted twice;</li>
+        <li><strong>skipped questions:</strong> which question and in which round, with no time;</li>
+        <li><strong>reactions:</strong> whether you hold a thumbs up or down on a question, with no time;</li>
+        <li><strong>the questions you send in:</strong> both answers, categories, status, when you sent it, when the moderator decided, when it was taken out of the game, the reason for a rejection, and what sending it cost;</li>
+        <li><strong>reports and hidden items:</strong> the questions you report, with the reason and when, and the questions and authors you hide from yourself, with no time;</li>
+        <li><strong>purchases in the shop:</strong> which themes you bought, how many points each cost, and when.</li>
+      </ul>
+      <p>Taps on the Home screen's two Play buttons are counted only as totals, per button, without who tapped.</p>
+      <p><strong>Why:</strong> for the game to work. The server picks the questions not yet shown to you in this round, counts your points and shows how players answered. Other players see only totals, never who chose what, and questions are shown without their author's name. We use reports to remove questions that break the <a href="terms.html#rules">rules</a>. We keep the answer time for personalization (below); for now nothing uses it.</p>
+
+      <h3>Sharing a question</h3>
+      <p>When you share a question, the app makes a picture of it on your device, with the results if you choose, and hands it to the system's share sheet and then to the app you pick (Instagram or Viber, for example). The picture holds neither your name nor your points. It is not sent to us; analytics records only that a question was shared (below). What the app you share to does with the picture is up to its own rules.</p>
+
+      <h3>IP address and server logs</h3>
+      <p>The game's server runs at Render, in Frankfurt. Render puts Cloudflare's network in front of its services, so every request from the game passes through it: Render and Cloudflare see your device's IP address and technical details of the request (time, the address requested, the app or browser version). Cloudflare is engaged by Render, as Render's own service provider, not by us.</p>
+      <p>We use the IP address only to limit how many requests one address can send, against abuse and password guessing. Those counters are kept only in the server's memory, for an hour at most, and disappear every time the server restarts. We write the IP address neither to the database nor to our logs.</p>
+      <p>Server logs record, for each request, its method, the address requested, the response and how long it took, and technical errors. Where an event needs following, they name only ids: a player's, for example when we refuse a request for going over a limit, when a player sends in a question, buys a theme or deletes their account, and a question's, when a moderator decides it. We never log tokens, passwords, their hashes, question text or rejection reasons.</p>
+      <p><strong>Why:</strong> security, and keeping the game running.</p>
+
+      <h3>Analytics (PostHog, EU)</h3>
+      <p>To see what works in the game and what confuses people, the app sends events about how it is used to PostHog, on its servers in the European Union: when you open and leave the app and how long a visit lasted, screens opened and left and how long you spent on them, taps on buttons, questions shown, answered and skipped (the question's id, its categories, the side you picked, how long the answer took and whether your pick matched the majority), reactions, reports and hides, shared questions, changes of language and categories, registering, logging in (with Google Play Games too), logging out and deleting the account, questions sent in, the shop, themes bought and put on, notifications opened, and errors. With them go the app version, the platform, the operating system and its version, the device type and the game's language.</p>
+      <p>Events are tied to a random id made on the device. Once you register or log in, they are also tied to your player's id in the game, which is random too, and never to your username. They hold no name, email, password, question text or anything you type. Requests reach PostHog from your device's IP address: PostHog keeps it with the events and derives an approximate location from it (country and city), so we can see where players come from.</p>
+      <p>Analytics is on by default. You turn it off with the <strong>Statistics</strong> switch (<span lang="sr-Cyrl">Статистика</span>) on the <strong>About</strong> screen (the "i" icon at the top of the Account screen): while it is off, the app sends no events at all, and your choice is kept on the device.</p>
+      <p><strong>Why:</strong> to fix bugs and make the game better.</p>
+
+      <h3>Notifications (Firebase Cloud Messaging)</h3>
+      <p>The Android version lets you know when a moderator approves or rejects your question. For that, your phone gets a notification token from Google's Firebase Cloud Messaging, and the app sends it to our server. With the token we keep the platform (Android, iOS or web), the device's session that sent it and when it was last sent. When a moderator decides one of your questions, the server sends a notification through Firebase Cloud Messaging to your devices, the ten newest at most, holding the question's text and, for a rejection, the reason. We use the token for nothing else.</p>
+      <p>The app sends the token to the server as soon as the phone has it, even if you have not allowed notifications: the phone then simply does not show them. The app asks for the permission once, when you send in your first question, and you can withdraw it in the phone's settings at any time.</p>
+      <p>We delete the token when you log out on that device, when you delete your account, and when Firebase reports that the device no longer takes notifications.</p>
+      <p><strong>Why:</strong> so you learn what became of your question.</p>
+
+      <h3>Personalization <span class="soon">coming</span></h3>
+      <p>Later we want to pick questions for you by what you enjoy, based on what the server already keeps as you play: your answers, skips, reactions and answer times. That is profiling only to choose which question to show you: never for ads, never sold, and nobody else sees it. It makes no decision with legal effects on you or a similarly significant effect.</p>
+      <p>Questions about religion, politics, health and sexuality are not allowed in the game for now (<a href="terms.html#rules">question rules</a>), so the moderator rejects them. Should one get through anyway, its answers are never used for personalization, and we do not try to infer anything about those topics from your answers.</p>
+      <p>Before we introduce personalization, this policy will describe how it works and how to object to it.</p>
+
+      <h3>When you write to us</h3>
+      <p>If you email us, we use your address and message only to answer you and deal with your request. We receive email through Google's Gmail.</p>
+
+      <h3>This website</h3>
+      <p>This website uses no cookies and no analytics, and loads nothing from other services. Render hosts it, and may record visitors' IP addresses in its technical logs.</p>
+
+      <h3>What we do not collect</h3>
+      <p>We do not ask for your full name, email, phone number, contacts or photos. We never work out where you are precisely and do not use GPS; only the analytics (PostHog) derives an approximate location from your IP address, as described above. The game has no ads and no advertising ids. Themes in the shop are bought only with the game's points: nothing is paid with money, and we process no payment data.</p>
+    </section>
+
+    <section id="legal-basis">
+      <h2>3. Legal bases</h2>
+      <ul>
+        <li><strong>Performance of a contract</strong> (Article 12(1)(2) of Serbia's Law on Personal Data Protection; Article 6(1)(b) GDPR): playing as a guest and with an account, sessions, signing in with Google Play Games, gameplay data, the questions you send in, purchases in the shop and the notifications about your questions. Without them the game cannot work the way you use it.</li>
+        <li><strong>Legitimate interests</strong> (Article 12(1)(6); Article 6(1)(f) GDPR): security and request limits, server logs, moderation, reporting and hiding questions, analytics to improve the game and, once it is introduced, personalization. You can object to this processing, and you can turn analytics off yourself, with the <strong>Statistics</strong> switch.</li>
+        <li><strong>Legal obligation</strong> (Article 12(1)(3); Article 6(1)(c) GDPR): when the law requires us to keep data or hand it to an authority.</li>
+      </ul>
+    </section>
+
+    <section id="recipients">
+      <h2>4. Who else sees the data</h2>
+      <p>We never sell or rent your data or give it to advertisers, and we do not share it for advertising or marketing. Only these service providers have access:</p>
+      <dl class="providers">
+        <dt>Render</dt>
+        <dd>hosts the server, the database and this website; the server and the database are in Frankfurt, Germany. Render puts Cloudflare's network in front of its services, so Cloudflare sees IP addresses and requests. <a href="https://render.com/privacy">Render's privacy policy</a> · <a href="https://www.cloudflare.com/privacypolicy/">Cloudflare's</a></dd>
+        <dt>PostHog</dt>
+        <dd>analytics, on servers in the European Union. <a href="https://posthog.com/privacy">Privacy policy</a></dd>
+        <dt>Google</dt>
+        <dd>Google Play, from which you download the game, Firebase Cloud Messaging, which delivers notifications, and Google Play Games, for signing in, as well as Gmail, where we receive email. <a href="https://policies.google.com/privacy">Privacy policy</a></dd>
+      </dl>
+      <p>Render, with the Cloudflare it engages, PostHog, and Google for Firebase Cloud Messaging process data on our behalf, as processors. Google Play and Google Play Games are Google's own services: the data Google processes in them, it processes under its own terms and privacy policy. Once the iPhone version is out, Apple's services (the App Store, notifications on the iPhone, Game Center) will be listed here too.</p>
+      <p>The moderator sees the text, categories and counts of questions sent in, without the author's username: only a random id, from which they know which questions share an author, so they can stop that author sending more. They see reports as totals, by reason, without who sent them. Other players see only totals and the text of approved questions, without the author's name. We give data to public authorities only when the law requires it.</p>
+    </section>
+
+    <section id="transfers">
+      <h2>5. Transfers to other countries</h2>
+      <p>The server and the database are in the European Union. Render, PostHog and Google are based outside Serbia and the EU, and some of their networks, like Cloudflare's, run worldwide, so data may be transferred to other countries, above all the United States. We base such transfers on the safeguards the law provides for, such as standard contractual clauses or a decision that a country's protection is adequate.</p>
+    </section>
+
+    <section id="retention">
+      <h2>6. How long we keep data</h2>
+      <ul>
+        <li><strong>An account</strong>, with a username or linked to Google Play Games: until you delete it.</li>
+        <li><strong>A guest:</strong> until you delete it. A guest no device leads to any more (the app was removed, or not used for 30 days so that its session expired, or you logged in to another account on that device): we delete it, with all its data, after 90 days of inactivity.</li>
+        <li><strong>A session:</strong> until you log out of it or delete your account. The refresh token stops working after 30 days unused; the session can then no longer be used, but stays in the database until the player it belongs to is deleted, as does a session a newer sign-in replaced on the device.</li>
+        <li><strong>Answers, skipped questions, reactions, hidden questions and authors, points and purchases:</strong> as long as the account exists.</li>
+        <li><strong>Your questions:</strong> approved ones, including those taken out of the game, stay in the game after your account is deleted, without an author; questions waiting for review and rejected ones are deleted with the account.</li>
+        <li><strong>Reports of questions:</strong> until the moderator dismisses them, which deletes them, or you delete your account.</li>
+        <li><strong>Notification token:</strong> until you log out on that device, delete your account, or Firebase reports that the device no longer takes notifications.</li>
+        <li><strong>The link to Google Play Games:</strong> until you delete your account.</li>
+        <li><strong>Request-limit counters:</strong> in the server's memory, an hour at most.</li>
+        <li><strong>Server logs:</strong> as long as Render keeps them, 30 days at most.</li>
+        <li><strong>Analytics:</strong> two years at most from when an event was sent, then deleted.</li>
+        <li><strong>Email correspondence:</strong> until the request is resolved, then three years at most, the time limit for claims for damages.</li>
+      </ul>
+      <p>Removing the app from a device does not by itself delete the account.</p>
+    </section>
+
+    <section id="security">
+      <h2>7. Security</h2>
+      <p>The connection to the server uses HTTPS. We keep passwords only as salted hashes and refresh tokens only as SHA-256 hashes, so even someone who got hold of the database could not read passwords or use tokens from it. On the device, tokens are kept in the app's ordinary storage, not in a separate vault of the operating system, since the game keeps nothing sensitive: anyone with your unlocked device can play as you. Password guesses are limited per IP address. No measure is perfect, so if you notice anything suspicious, write to us.</p>
+    </section>
+
+    <section id="rights">
+      <h2>8. Your rights</h2>
+      <p>Under Serbia's Law on Personal Data Protection (Official Gazette of the Republic of Serbia, No. 87/2018) and, if you live in Bosnia and Herzegovina, Montenegro, North Macedonia or the European Union, under your own country's rules, you have the right:</p>
+      <ul>
+        <li>of access: to learn what data about you we process and get a copy;</li>
+        <li>to rectification of inaccurate data;</li>
+        <li>to erasure: you delete your account yourself, in the app, or by email (<a href="delete.html">how</a>);</li>
+        <li>to restriction of processing;</li>
+        <li>to data portability: to get the data about your play in a machine-readable form;</li>
+        <li>to object to processing based on legitimate interests, analytics and personalization included;</li>
+        <li>to withdraw consent, where any processing rests on it;</li>
+        <li>to lodge a complaint with Serbia's Commissioner for Information of Public Importance and Personal Data Protection (<a href="https://www.poverenik.rs">www.poverenik.rs</a>) and, if you live in another country, with its supervisory authority.</li>
+      </ul>
+      <p>Send your request to <a href="mailto:application.eili@gmail.com">application.eili@gmail.com</a>, with your username or account id. A guest has an account id too: in the game, open the Account screen, then the "i" icon at the top, and copy it under <strong>Account ID</strong> (<span lang="sr-Cyrl">ИД налога</span>). We answer without undue delay, within 30 days at the latest. We will never ask for your password.</p>
+    </section>
+
+    <section id="age">
+      <h2>9. Age</h2>
+      <p>The game is meant for people aged 13 and over. If you are under 13, please do not use it. If we learn that an account belongs to someone younger, we may delete it. A parent or guardian can write to us at <a href="mailto:application.eili@gmail.com">application.eili@gmail.com</a>.</p>
+    </section>
+
+    <section id="changes">
+      <h2>10. Changes to this policy</h2>
+      <p>If we change this policy, we publish the new version on this page and update the date at the top. We may also tell you about important changes in the game.</p>
+      <p>Questions? <a href="contact.html">Write to us</a>.</p>
+    </section>
+  </main>
+
+  <footer class="site">
+    <div class="wrap">
+      <p>© 2026 Nikola Tokić · No ads, no sale of data.</p>
+      <p><a href="../privacy.html" hreflang="sr-Cyrl" lang="sr-Cyrl">Прочитај на српском</a></p>
+    </div>
+  </footer>
+</body>
+</html>

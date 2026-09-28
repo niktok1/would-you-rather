@@ -14,6 +14,31 @@ Postgres, promoted by hand with *Manual Deploy*, runs `d4a9dbf` since 2026-09-25
 applied; **dev** `wyr-server-dev` on in-memory H2, deployed automatically from every green commit on
 `main` (its URL is on its Render page).
 
+**The public site** (CLAUDE.md §8, *The public site*), published 2026-09-29 from `site/`: the
+developer's page at `https://ntole.com` and the game's pages under `/wyr` (Serbian) and `/wyr/en/`
+(English), served by Render's static site `ntole-site`. Preview: `python3 -m http.server 8123 -d
+site`, then http://localhost:8123/wyr/. **No lawyer has read it.** What the drafts' notes left open:
+- **Access and portability requests**: nothing finds and exports one player's rows; answer one by
+  hand (a documented read-only query by player id would do). Nothing proves an emailed request, a
+  deletion's included, comes from the account's player: a username or an account id is all it names.
+- **Age**: 13 and over; the user decided players of 13 to 15 need no parent's consent (2026-09-29),
+  unchecked (the ZZPL lets a minor consent alone from 15). Whether the GDPR applies, and naming the
+  laws and authorities of BA, ME and MK, is unchecked too, as is the analytics id under ePrivacy.
+- **Providers**: accept Render's, PostHog's and Firebase's data processing terms; confirm each
+  transfer's basis (the EU–US Data Privacy Framework or standard contractual clauses).
+- **Retention**: analytics two years at most, so a PostHog plan that keeps longer needs deleting by
+  hand; a deleted player's analytics stay in PostHog (a person can be deleted there by id; nothing
+  does it); database backups, once the paid Postgres keeps any, need a line and a period; an
+  account's expired sessions stay until its player is deleted.
+- **When the game changes**: the privacy policy's lists follow CLAUDE.md §8g (events), §8a and §8d; the
+  terms' question rules follow §8d, §8b (*Personalization*) and §8f; the report reasons follow
+  `QuestionMenuStrings`; the deletion steps the About screen. Personalization needs a way to object
+  before it starts; Latin script goes back into the terms and the home page when the language menu
+  does; iOS, the web and Apple's services when they launch; the shop taking money would need the
+  terms reread.
+- **Play Console**: privacy policy `https://ntole.com/wyr/privacy.html`, account deletion
+  `https://ntole.com/wyr/delete.html`, developer website `https://ntole.com`.
+
 **`feat/simple-accounts` is on `main`**, and on `origin/main`, at b175247: stage 1 took the recovery
 secret, Block Store, the Keychain, the rollback mirror and the question's row lock out (CLAUDE.md
 §8a, §8b). Stage 2 built simple accounts on the server (§8a, *Accounts*): V5, register, log in, log

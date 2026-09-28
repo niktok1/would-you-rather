@@ -129,6 +129,27 @@ services:
       - key: THEME_PRICE
         value: "1"
 
+  # The developer's site, https://ntole.com (CLAUDE.md §8, The public site): its root page, and the
+  # game's pages Google Play links to under /wyr (the privacy policy, the terms and question rules,
+  # account deletion and contact, in Serbian and English). Plain HTML and one CSS file under site/,
+  # so the build command only has to exist. A static site takes no plan or region: Render serves it
+  # free, from its CDN. It redeploys only for a commit on main that changes site/ and passes CI.
+  # Every game page is a draft until its owner completes it (NEXT-SESSION.md), and says so. The two
+  # domains are verified in the dashboard once Cloudflare's DNS points them here.
+  - type: web
+    name: ntole-site
+    runtime: static
+    domains:
+      - ntole.com
+      - www.ntole.com
+    branch: main
+    buildCommand: echo "site/ is plain HTML and CSS, nothing to build"
+    staticPublishPath: ./site
+    autoDeployTrigger: checksPass
+    buildFilter:
+      paths:
+        - site/**
+
 databases:
   - name: wyr-postgres
     plan: free

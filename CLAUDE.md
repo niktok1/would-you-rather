@@ -586,13 +586,23 @@ This project must never be attributed to any employer identity.
     have every LOAD segment 16 KB aligned and are stored uncompressed on a 16 KB boundary for all four
     ABIs; a native library added later is checked the same way (NEXT-SESSION.md). What the app
     collects, for the Data safety form, is listed there too.
-
-## 8a. Authentication — resolved
-
-**Guests first: zero-click, server-issued guest sessions with a custom Kotlin implementation.** No
-third-party auth SDK, satisfying §2. A guest may then register as an account (*Accounts*, below;
-decided in §8b).
-
+- **The public site**, `ntole-site` in `render.yaml` (*drafted 2026-09-26*, moved under `/wyr` on
+  2026-09-29, `docs/site`): a Render static site, free, with no plan or region, published from
+  `site/`, plain HTML and one CSS file (`site/wyr/style.css`), with no build step and no script, at
+  `https://ntole.com` and `www.ntole.com` (the developer's domain, §8b *The launch*; Cloudflare DNS,
+  proxy off, as the API's). `site/index.html` is the developer's page, toleapps, one for every app; the
+  game's pages are under `site/wyr/`: its home page, the privacy policy, the terms and question rules,
+  account deletion and contact that Google Play's listing and Data safety form link to and the About
+  screen opens (`Site`, `https://ntole.com/wyr`), in Serbian Cyrillic there and English under
+  `site/wyr/en/`, each page linking the other, in §5b's colours, light and dark. It deploys for a
+  commit on `main` that changes `site/` and passes CI. **Published 2026-09-29** (the user: Nikola
+  Tokić, Belgrade, `application.eili@gmail.com`, a Gmail inbox the policy names; logs 30 days,
+  analytics two years, email three years at most; disputes in Belgrade), **with no lawyer's review**:
+  the drafts' `CHECK` notes and markers are gone, and what they left open is in NEXT-SESSION.md (*The
+  public site*). A feature the game does not have yet is written as coming under a `у изради` /
+  `coming` pill (`.soon`: personalization alone). The privacy policy and the deletion page describe
+  what the game processes, so a change that makes either untrue changes them, both languages, in the
+  same commit, the date at the top with them, and a feature that ships drops its pill there.
 - `POST /v1/auth/guest` mints the player server-side and answers a `SessionDto`: a signed access JWT
   and an opaque refresh token. Nothing is asked of the player. Identity is **server-issued**, which
   is the whole point: a client-supplied device id would be forgeable and would let one device stuff
@@ -997,7 +1007,7 @@ EncryptedSharedPreferences: enough for a game that stores no sensitive personal 
     DNS only (Cloudflare's proxy off, so the rate limits keep keying by Render's `CF-Connecting-IP`,
     §8), a Render custom domain with Render's certificate; `WyrEnvironment.PROD` names it, so the
     service can leave Render without stranding a build. Its site is under `ntole.com/wyr` (`Site`,
-    §8d *About*), not written yet. Dev stays on Render's own name.
+    §8d *About*; §8, *The public site*), drafted, not published. Dev stays on Render's own name.
 - **Accounts** — *decided 2026-09-25; built (§8a, *Accounts*; the Account screen, §8d).* This
   is a simple game that stores no sensitive personal data, and most players stay a day or a few, so the
   simplest design that is correct enough wins over maximum security. A new player plays at once as a
@@ -1988,8 +1998,8 @@ entry point's version and build number, §8g) beside **13+** on a pill (`AGE_RAT
 open in the browser (`LocalUriHandler`), *Политика приватности*, *Услови и правила питања*,
 *Брисање налога* and *Контакт*, the site's `/privacy.html`, `/terms.html`, `/delete.html` and
 `/contact.html`, under `/en/` in English, the Serbian pages for either script (`Site`, whose one
-`BASE_URL` is `https://ntole.com/wyr`, not live yet, no page being written, §8b *The
-launch*); a link nothing on the device opens, on a phone with no browser, does nothing
+`BASE_URL` is `https://ntole.com/wyr`, the pages drafted in `site/wyr/` and not live yet, §8
+*The public site*); a link nothing on the device opens, on a phone with no browser, does nothing
 (`openIfAble`, here, on a licence and in Register's terms line alike); under them the player's
 **account id** (*built 2026-09-27*, the user: "a copyable account ID"), which a guest or a player
 signed in with Play Games alone, who has no username, sends to have their account deleted by email
