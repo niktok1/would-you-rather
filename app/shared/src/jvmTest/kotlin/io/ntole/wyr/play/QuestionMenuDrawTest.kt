@@ -1,16 +1,21 @@
 package io.ntole.wyr.play
 
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
 import androidx.compose.ui.ImageComposeScene
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.dp
+import io.ntole.wyr.core.domain.question.Question
 import io.ntole.wyr.core.domain.report.ReportReason
 import io.ntole.wyr.descriptions
 import io.ntole.wyr.language.Language
-import io.ntole.wyr.language.LocalStrings
 import io.ntole.wyr.language.WyrStrings
+import io.ntole.wyr.language.fill
 import io.ntole.wyr.language.stringsOf
-import io.ntole.wyr.navigation.PlayTopBar
 import io.ntole.wyr.nodes
 import io.ntole.wyr.tap
 import io.ntole.wyr.texts
@@ -21,9 +26,10 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
 /**
- * The menu about the question on screen, on the Play screen's top bar (CLAUDE.md §8d, *The Play
- * screen*, *Reports*), drawn off screen under the bar at a short phone's size, in each theme and each
- * language, read and tapped through its semantics.
+ * The menu about the question on screen, an exclamation mark in the Play screen's row right after the
+ * thumbs (CLAUDE.md §8d, *The Play screen*, *Reports*), drawn off screen in the row at a short phone's
+ * size, with room under it for the menu, in each theme and each language, read and tapped through its
+ * semantics.
  */
 class QuestionMenuDrawTest {
     @Test
@@ -41,13 +47,29 @@ class QuestionMenuDrawTest {
         }
     }
 
-    /** Last on the bar, across from home, and named for a screen reader in the language shown. */
+    /**
+     * In the row right after the thumbs, before Share and Skip, one feedback group with the thumbs, and
+     * named for a screen reader in the language shown.
+     */
     @Test
-    fun `the menu stands last on the bar across from home`() {
+    fun `the menu stands in the row right after the thumbs`() {
         Language.entries.forEach { language ->
             val strings = stringsOf(language)
+            val play = strings.playScreen
             withMenu(language) { scene, _ ->
-                assertEquals(listOf(strings.home, strings.playScreen.menu.name), scene.descriptions())
+                assertEquals(
+                    // The points last, as a screen reader hears them on the Play screen.
+                    listOf(
+                        play.like,
+                        play.dislike,
+                        play.menu.name,
+                        play.share.share,
+                        play.skip,
+                        strings.points.fill(POINTS),
+                    ),
+                    scene.descriptions(),
+                    "in $language",
+                )
             }
         }
     }
@@ -88,7 +110,7 @@ class QuestionMenuDrawTest {
         }
     }
 
-    /** Off, it opens nothing: with no question on screen, or while anything is in flight. */
+    /** Off, it opens nothing: while anything is in flight, or while a question is held as the next loads. */
     @Test
     fun `the menu is off while it may not be used`() {
         val menu = stringsOf(Language.DEFAULT).playScreen.menu
@@ -99,7 +121,7 @@ class QuestionMenuDrawTest {
         }
     }
 
-    /** [test] on Play's top bar with the menu, in [language], and every choice picked from it. */
+    /** [test] on the Play screen's row with the menu, in [language], and every choice picked from it. */
     private fun withMenu(
         language: Language,
         dark: Boolean = false,
@@ -111,11 +133,17 @@ class QuestionMenuDrawTest {
             ImageComposeScene(width = WIDTH, height = HEIGHT, density = Density(1f)) {
                 WyrTheme(darkTheme = dark) {
                     WyrStrings(language) {
-                        PlayTopBar(
-                            onHome = {},
-                            menu = { QuestionMenu(enabled = enabled, onPick = { picked += it }) },
-                        ) {
-                            CategoriesPlayed(text = LocalStrings.current.allCategories, enabled = true, onClick = {})
+                        Box(Modifier.fillMaxSize().padding(horizontal = PADDING.dp)) {
+                            MiddleRow(
+                                question = QUESTION,
+                                points = POINTS,
+                                rowError = null,
+                                idle = enabled,
+                                onReact = {},
+                                onSkip = {},
+                                onShare = {},
+                                onMenuPick = { picked += it },
+                            )
                         }
                     }
                 }
@@ -132,5 +160,12 @@ class QuestionMenuDrawTest {
         /** An iPhone SE's width, and its height less the status bar: room for the menu under the bar. */
         const val WIDTH = 375
         const val HEIGHT = 647
+
+        /** The Play screen's padding on each side (`WyrDimens.screenPadding`). */
+        const val PADDING = 20
+
+        const val POINTS = 42
+
+        val QUESTION = Question(id = "q1", optionA = "Fly", optionB = "Swim", categories = setOf("SUPERPOWERS"))
     }
 }

@@ -976,6 +976,19 @@ commits, left unmerged) built that main lacked, ported onto main's shop themes a
   (332), the iOS Kotlin compiles (`:app:shared` main and test). **Not verified**: on a phone (the feel,
   the accessibility service's load, a rotation mid-transition), iOS and the web at run time, CI.
 
+**On `feat/report-in-row`** (not merged, not pushed), the user's 2026-09-29 decision (CLAUDE.md §8b
+*The question's menu on the top bar*; §8d *The Play screen*, *Navigation*): Play's bar is home, the
+categories in its exact middle and the **account icon** with the notice's dot again; the question's menu
+is a muted **!** (`WyrIcons.Report`, `More` gone) in the row right after the thumbs, same menu, name
+and taps. To fit five icons, `PlayRow` now narrows the icons' slots (48 down to 28) and the gaps before
+it cuts the points, each icon keeping its 48 touch reach (Compose's own), and the row's text stops
+growing at font scale 1.3 (`WyrTypeScale.PLAY_ROW_MAX_FONT_SCALE`, *provisional*, §8b *The Play row at
+large font sizes*). The row fit test, which CI's Linux fonts failed at 330 of 335 before this branch,
+now measures the least width: 315 on this Mac for 999/999/9999 at 1.3. **Verified on this Mac**:
+`ktlintCheck`, `:app:shared:jvmTest` (579), `:app:shared:testAndroidHostTest` (336), the iOS Kotlin
+compiles. **Not verified**: CI's fonts, on a phone (the narrowed row at a large font size, taps between
+two close icons).
+
 ### Verified working
 
 - **`feat/android-release`**, on this machine: `ktlintCheck`; the verify job's tests (server 480,

@@ -314,8 +314,9 @@ left) for the top bars (§8d, *Navigation*); for the Play screen `Skip` (a trian
 screen*, *Reactions*); `CoinFace` and `CoinMark`, a disc and the rim and star on it, the points' coin
 wherever they show (§8f, *Numbers and symbols*); `Globe` for the language menu; `Players`, two
 players, heading My questions' answers (§8d, *The Account screen*); `Info`, an i in a circle, the
-Account screen's way to the About screen (§8d, *About*); `More`, three dots one over the
-other, the Play screen's menu about the question (§8d, *The Play screen*, *Reports*); and `Copy`, two
+Account screen's way to the About screen (§8d, *About*); `Report`, an exclamation mark in the
+same circle, the i turned over, the Play screen's menu about the question, in its row after the thumbs
+(§8d, *The Play screen*, *Reports*; `More`, the three dots it replaced on the top bar, is gone); and `Copy`, two
 sheets one over the other, beside the About screen's account id (§8d, *About*); `Shop`, a bag, the
 Account screen's way to the shop (§8d, *The shop*); `Plus`, two strokes
 crossed, My questions' way to a new question, and `ChevronRight`, on each of its rows, which opens the
@@ -1169,10 +1170,22 @@ EncryptedSharedPreferences: enough for a game that stores no sensitive personal 
   said, as a skip does: the question going is the acknowledgement, the least in the way. The options:
   keep it; or a brief line in the row's slot on the next question, *Пријављено.* or *Скривено.*, until
   the next action.
-- **The question's menu on the top bar** — *resolved 2026-09-29*: the account icon left Play's bar,
-  which is home, the categories played in its exact middle, and the ⋮, one icon on each side, so the
-  categories have the 271 of 375 the two leave them (§8d, *The Play screen*). The Account screen is
-  reached from Home, whose account icon carries the notice's dot (§8d, *Navigation*).
+- **The question's menu on the top bar** — *resolved 2026-09-29*, the user's: the menu is an **!**
+  (`WyrIcons.Report`) in the row between the cards, right after the thumbs, muted, and Play's bar is
+  home, the categories played in its exact middle, and the account icon with the notice's dot, one icon
+  on each side, so the categories have the 271 of 375 the two leave them (§8d, *The Play screen*,
+  *Navigation*). The account icon had left Play's bar for a day (the user: "Account is important"), and
+  the ⋮ is gone.
+- **The Play row at large font sizes** — *provisional — user decision.* With the menu the row holds five
+  icons, the points and two counts, and at 335 wide (an iPhone SE less the screen's padding) three-digit
+  counts and four-digit points did not fit even at the phone's normal font size with every icon a touch
+  target wide, nor at font scale 2 with no space between any of them: the text alone, 270 there, and the
+  five icons' 24 each come to 390. Built (§8d, *The Play screen*, *The row's arrangement*): the icons'
+  slots narrow from 48 to `WyrDimens.playRowSlotMinWidth` (28) and the gaps to none before anything is
+  cut, each icon keeping a touch target's reach for taps (Compose's own), and the row's text grows with
+  the phone's font size up to `WyrTypeScale.PLAY_ROW_MAX_FONT_SCALE`, 1.3, and no further. The options:
+  keep it; a lower cap, which leaves more room, the icons narrowing less; or the row on two lines at a
+  large font size, which grows the screen.
 - **The report reasons' wording** — *provisional — user decision.* The menu's five reasons (§8d, *The
   Play screen*; `QuestionMenuStrings`) are *Увредљиво је*, *Помиње приватну особу*, *Реклама или спам*,
   *Нема шта да се бира* and *Нешто друго* (*a private person* since 2026-09-29, the legal review:
@@ -1736,10 +1749,10 @@ game's, or a place on one, theme tokens only (§5b), and its words in `Strings` 
   for less text. Either Play, after its reveal, opens the
   **Play** screen, fading into it, under a top bar of
   the home icon, left, back to Home, the categories played in its exact middle, which open the
-  **Categories** screen, and the question's menu, right; no account icon (*resolved 2026-09-29*, §8b
-  *The question's menu on the top bar*). On Home's bar the account icon has a dot while a decision
-  waits there (*The notice of a decision*). The
-  account icon, on Home, opens the **Account** screen under a top bar of a back arrow and, on the right, a bag
+  **Categories** screen, and the account icon, right (*resolved 2026-09-29*, §8b *The question's menu on
+  the top bar*; the question's menu is in Play's row, *The Play screen*). On Home's bar and Play's the
+  account icon has a dot while a decision waits there (*The notice of a decision*). The
+  account icon, from Home or Play, opens the **Account** screen under a top bar of a back arrow and, on the right, a bag
   to the **Shop** (*The shop*, below) and an info icon to the **About** screen (*About*, below). The
   points, the coin and the number, on Play's row and on the Account card, open the Shop too. On it, a guest's one button
   opens the **Auth** page, to register or log in, My questions' plus the **Submit** screen's form,
@@ -1765,7 +1778,7 @@ game's, or a place on one, theme tokens only (§5b), and its words in `Strings` 
   nothing: their on-screen buttons are the way back.
 - *ViewModels* belong to the platform's owner, the activity's or the window's, as under the tabs,
   never to the back stack: each screen's lives as long as the app, so Play keeps its question
-  through Home and Account and back, and Account, Submit and Categories read the server
+  through Account and back, or Home and back, and Account, Submit and Categories read the server
   again each time they are shown; the Auth page is on the Account screen's, and the Categories
   screen starts each visit afresh from what is played (`CategoriesViewModel.open`, which Play's tap
   and Home's call before they open the screen). `AppNavigationTest` drives the whole `App` over fakes by
@@ -1806,8 +1819,8 @@ orientation, in common code alone:
   the height it needs by the same rule. `PlayScreenDrawTest` draws every state on two phones on their
   side and in a desktop window, holds each state to the room a 360-by-780 phone on its side (720 by
   256) and an iPhone SE on its side (667 by 327) give, measured wider for CI's fonts as the portrait
-  test is, finds the row under the cards, the points and the thumbs beside them under card A, Share
-  and Skip under card B, card B's bar along its bottom, and nothing in the row moved by the reveal. The Account, Auth, Submit and Categories draw tests find every text, button
+  test is, finds the row under the cards, the points, the thumbs beside them and the menu under card A,
+  Share and Skip under card B, card B's bar along its bottom, and nothing in the row moved by the reveal. The Account, Auth, Submit and Categories draw tests find every text, button
   and field in a column of 600 down the middle of a desktop window's 800, and something spanning it.
 
 **The Account screen** (`io.ntole.wyr.account`; §8a *Accounts*, *Stats* below):
@@ -1956,8 +1969,7 @@ orientation, in common code alone:
   stored and for every session after it, each time the app comes back to the foreground, and when a
   push arrives while it is open (§8a, *Push tokens*). A question decided, approved or rejected (a
   retired one was approved, and a status this build cannot name is none), that this device has not
-  shown the player yet is **news**: a **dot** on the account icon of Home's top bar (Play's has none
-  since 2026-09-29, §8d *Navigation*), in
+  shown the player yet is **news**: a **dot** on the account icon of the Home and Play top bars, in
   the brand's pink (`WyrColors.optionA`, Material's `Badge`), which a screen reader hears in the
   icon's name, *Налог: ново* (`NoticeStrings`); and, once the Account screen reads the list, a dot on
   each of those rows of My questions, *Ново* to a screen reader, for that visit (a rotation's
@@ -1972,11 +1984,11 @@ orientation, in common code alone:
   returning player, would otherwise mark that player's old decisions as news). What is seen is only
   ever added to, since a decision stays one, so no list read before another can make one news again.
   `DecisionNoticesTest`,
-  `StoredSeenDecisionsTest`, `AppServicesTest`, `TopBarsDrawTest` (Home's bar with the dot, 48 high at
-  375 wide, in both themes and every language, the dot drawn inside the account icon's 48, and on no
-  bar without news, Play's among them), `AccountScreenDrawTest`,
-  and `AppNavigationTest`, which dots the icon on Home, finds none on Play, and takes the dot down on
-  Account.
+  `StoredSeenDecisionsTest`, `AppServicesTest`, `TopBarsDrawTest` (Home's bar and Play's with the dot,
+  48 high at 375 wide, in both themes and every language, the dot drawn inside the account icon's 48
+  and on no bar without news, and Play's categories in its exact middle with the dot or without, a long
+  selection cut where it is without it), `AccountScreenDrawTest`,
+  and `AppNavigationTest`, which dots the icon on Home and Play and takes the dot down on Account.
 - Its last line, in a LOCAL or DEV build, names the server the build talks to and its URL, in the
   language shown, *Сервер: Dev (https://wyr-server-dev.onrender.com)* (`serverLine`, §8e); a PROD
   build shows none. `AccountScreenDrawTest` finds it under everything else in every state and
@@ -2036,52 +2048,69 @@ for it, none with no session, and the deletion last, after every licence), `Lice
 `AppNavigationTest`, `TopBarsDrawTest`, `NavigatorTest`.
 
 **The Play screen** (`io.ntole.wyr.play`; the user's layout, *decided 2026-09-25*, rearranged
-2026-09-26) asks a question and reveals its tally, holds Skip and the reactions, and opens the
-Categories screen and the question's menu from its top bar (*Skipping*, *Reactions*, *Reports* and
-*Categories*, below):
+2026-09-26) asks a question and reveals its tally, holds Skip, the reactions and the question's menu,
+and opens the Categories screen and the Account screen from its top bar (*Skipping*, *Reactions*,
+*Reports* and *Categories*, below):
 - Two answer cards in the brand colours (§5b) and, between them, **one row** (on a wide screen the
   cards side by side over it, *Wide screens*; the user, 2026-09-28: share "always visible in the
   middle right, while likes and dislikes move next to coins"): on the left the player's points, the
   coin and the number (`PointsAmount`, §8f), and right beside them the **thumbs**, a thumb up and a
   thumb down, each filled while the player holds it and beside how many hold it, before answering and
-  after; and on the right **Share** (*Sharing*), always, and **Skip** after it, always too (the user,
+  after, and right after them the question's **menu**, a muted **!**, one feedback group with the
+  thumbs (*resolved 2026-09-29*, §8b *The question's menu on the top bar*); and on the right **Share**
+  (*Sharing*), always, and **Skip** after it, always too (the user,
   2026-09-28): before the answer it skips (*Skipping*), and in the reveal it goes on to the next
   question as a tap on a card does (`PlayViewModel.next`, its half-second hold included), so nothing in
   the row moves. The
   **categories played**, *Све* or their names, cut to one line, with a small chevron, are in the exact
   middle of the **top bar** (the user: "category goes to top bar in middle"), between home and the
-  question's **menu**, a ⋮, one icon on each side (*resolved 2026-09-29*, §8b *The question's menu on
-  the top bar*: the account icon left the bar, reached from Home; `PlayTopBar`, `CategoriesPlayed`,
-  `QuestionMenu`), and open the Categories screen. No title and no *OR*.
-- *The question's menu* (*built 2026-09-26*; the user: report "in the least obstructive way"): the ⋮
-  (`WyrIcons.More`, named *Опције питања* for a screen reader) opens a small menu about the question on
-  screen, asked or revealed: **Пријави питање**, which lists in its place the five reasons, one tap
+  **account icon**, with the notice's dot inside its 48 while a decision waits (*The notice of a
+  decision*), one icon on each side (*resolved 2026-09-29*, §8b *The question's menu on the top bar*;
+  `PlayTopBar`, `CategoriesPlayed`), and open the Categories screen. No title and no *OR*.
+- *The question's menu* (*built 2026-09-26*, in the row since 2026-09-29; the user: report "in the
+  least obstructive way"): the **!** (`WyrIcons.Report`, an exclamation mark in a circle, since
+  everything in it reports or hides; `QuestionMenu`, named *Опције питања* for a screen reader, its tap
+  `question_menu.open` as before), drawn muted (`WyrColors.muted`) whether on or off, opens a small
+  menu, dropping down from it, about the question on screen, asked or revealed: **Пријави питање**, which lists in its place the five reasons, one tap
   each (*Увредљиво је*, *Помиње приватну особу*, *Реклама или спам*, *Нема шта да се бира*, *Нешто
   друго*: `QuestionMenuStrings`, `ReportReason`'s five; the wording provisional, §8b); **Не приказуј ми ово питање**; and **Не
   приказуј питања овог аутора** (*Reports*). A choice closes the menu and goes to
   `PlayViewModel.pickFromMenu`, and once the server has it the next question shows, with nothing more
   said, as after a skip: each hides the question for good (*provisional — user decision*, §8b). One
   that failed leaves the question on screen and says why in the row's failure slot, as a reaction's
-  does (`OnQuestion.rowError`, which a reaction's failure shares). Off, and drawn muted, with no
-  question on screen and while anything is in flight (`canUseMenu`; `isHiding` while its own request
-  is). The categories played take what width the bar's two icon buttons leave, 271 of 375, cut on their one
-  line, in the bar's exact middle, home and the ⋮ as wide as each other.
-  `QuestionMenuDrawTest` opens it in both themes and every language and taps each choice and reason;
-  `TopBarsDrawTest` holds Play's bar to 48 and 375 wide with it, and the categories to its exact
-  middle, *Све* or a long selection cut short, in both themes and every language; `PlayViewModelTest` drives each
+  does (`OnQuestion.rowError`, which a reaction's failure shares). Off, as the rest of the row is,
+  while anything is in flight and on a question held on screen while the next one loads (`canUseMenu`;
+  `isHiding` while its own request is). The categories played take what width the bar's two icon
+  buttons leave, 271 of 375, cut on their one line, in the bar's exact middle, home and the account icon
+  as wide as each other.
+  `QuestionMenuDrawTest` opens it in the row in both themes and every language, finds it right after
+  the thumbs and before Share and Skip, and taps each choice and reason; `PlayScreenDrawTest` finds it
+  muted, on or off, by its pixels; `TopBarsDrawTest` holds Play's bar to 48 and 375 wide, and the
+  categories to its exact middle, within half a pixel, *Све* or a long selection cut short, with the
+  dot and without, in both themes and every language; `PlayViewModelTest` drives each
   choice, from the reveal too, its failure and the one action at a time; `AppNavigationTest` reports a
   question through it and moves on.
 - *The categories' names* are the server's, in the language shown (`categoryName` in
   `io.ntole.wyr.language`, §8f), in the order the server lists them, and one not read yet by its id,
-  after the rest (`categoriesPlayed`). On the top bar they have the width home and the menu leave
-  them, 271 of 375, where the row gave them 115.
-- *The row's arrangement* (`PlayRow`): Share and Skip get their whole width first, then the thumbs,
-  and the points what they leave, no wider than `WyrDimens.playRowStartMaxWidth` (80), the thumbs
-  right after them, `WyrDimens.spaceXs` apart, each count standing `reactionCountInset` (10) into its
-  thumb's touch target, so the row fits 375 wide with four-digit counts and a failure. A reaction's
-  failure, in the points' place, moves the thumbs over while it shows (*provisional*, §8b *Sharing*).
-  *Decided 2026-09-28*, replacing the thumbs in the middle (2026-09-26), which replaced the
-  provisional arrangement of the categories, the points in the middle, and the heart.
+  after the rest (`categoriesPlayed`). On the top bar they have the width home and the account icon
+  leave them, 271 of 375, where the row gave them 115.
+- *The row's arrangement* (`PlayRow`, *redone 2026-09-29* for the menu): the points on the left, no
+  wider than `WyrDimens.playRowStartMaxWidth` (100, four digits at the largest font scale), the thumbs
+  right after them, `WyrDimens.spaceXs` apart, each count `WyrDimens.reactionCountGap` (2) past its
+  thumb's icon, and the menu right after the thumbs; Share and Skip at the right. Each icon has a slot
+  a touch target wide, 48, where there is room, as at the phone's normal font size with counts of two
+  digits. What does not fit is taken first from the space: every slot narrows evenly down to
+  `WyrDimens.playRowSlotMinWidth` (28) and the gaps to none, each icon then laid out no wider than its
+  slot and square, and keeping a touch target's reach for a finger all the same, Compose's own for a
+  pointer target smaller than 48, the nearest one's where two such reaches meet; only then is the
+  start cut, which only a reaction's failure, on its two lines, ever is; a count never. The row's text,
+  the points, the counts and a failure, grows with the phone's font size up to
+  `WyrTypeScale.PLAY_ROW_MAX_FONT_SCALE` (1.3) and no further (*provisional — user decision*, §8b *The
+  Play row at large font sizes*), so three-digit counts and four-digit points fit 335 whole at any font
+  size. A reaction's failure, in the points' place, moves the thumbs over while it shows
+  (*provisional*, §8b *Sharing*). *Decided 2026-09-28*, replacing the thumbs in the middle
+  (2026-09-26), which replaced the provisional arrangement of the categories, the points in the
+  middle, and the heart.
 - A thumb asks for its reaction, or for none when the player holds it already, so a second tap takes
   it back (`reactionAfterTap`; *Reactions*).
 - The points are the server's (`PlayViewModel.points`, §8c): read through `GetPlayerStats` each time
@@ -2164,8 +2193,8 @@ Categories screen and the question's menu from its top bar (*Skipping*, *Reactio
   nothing; `AppNavigationTest` rotates the whole app mid-reveal and once it is done, and holds the
   half second across the rotation.
 - One action at a time (`isBusy`, `canChangeCategories`): while a vote, a skip, a reaction or a menu
-  choice is in flight, the cards, the thumbs, Share, Skip, the categories and the menu are off, and
-  Share, Skip and the menu are drawn muted (`WyrColors.muted`). A reaction that failed says why in the points' place, in two short lines at
+  choice is in flight, the cards, the thumbs, the menu, Share, Skip and the categories are off, and
+  Share and Skip are drawn muted (`WyrColors.muted`), as the menu always is. A reaction that failed says why in the points' place, in two short lines at
   most, in a slot as high as a thumb's touch target at any font size, so it moves nothing; a skip that
   failed moves on all the same.
 - Loading is a spinner, with *Још мало…* under it after 5 seconds (*A slow first load*); a failure is one short sentence and *Покушај поново* (`Strings.tryAgain`,
@@ -2187,13 +2216,18 @@ Categories screen and the question's menu from its top bar (*Skipping*, *Reactio
   cards before and after the reveal and each thumb, asking for its reaction or none; steps the
   scene's clock through the count up, reading the numbers and each bar by their pixels and finding a
   frame of them composing and moving nothing (`CountedUpTextDrawTest`: each number drawn once, in
-  order); holds the row to 335 wide with nothing cut short, asked and answered, and to one height with a reaction's failure or without at font scales 1, 1.3 and 2;
-  finds Skip after the thumbs and Share, skipping while a question is asked and going on from the
+  order); holds the row to 335 wide with nothing cut short, asked and answered, in every language, with
+  a reaction's failure or without, with three-digit counts and four-digit points at font scales 1, 1.3
+  and 2 and with four-digit likes and five-digit points at 1, by its least width, the slots and gaps at
+  their narrowest, and to one height at each;
+  finds Skip after the thumbs, the menu and Share, skipping while a question is asked and going on from the
   reveal, off and drawn muted while
   anything is in flight (by its pixels' colours, in both themes and every language), the thumbs beside
-  the points, Share, and nothing in the row moved by the reveal; and holds `PlayRow` to its rule on
-  boxes of known widths, which no font changes. `AppNavigationTest` skips through it, under a bar of home, the categories
-  played and the question's menu, and plays categories picked on the Categories screen.
+  the points, the menu right after them, Share, and nothing in the row moved by the reveal; taps a
+  narrowed icon with a finger outside its bounds, inside its touch target; and holds `PlayRow` to its
+  rule on boxes of known widths, which no font changes: the slots and gaps narrowing first, then the
+  start cut. `AppNavigationTest` skips through it, under a bar of home, the categories
+  played and the account icon, and plays categories picked on the Categories screen.
 
 **Sharing** (`io.ntole.wyr.share`, *built 2026-09-28*, the user: share a question "with or without
 results, to their social media"; §8b *Sharing*): a question the player finds interesting goes out as
@@ -2543,8 +2577,8 @@ listed on the Account screen.
 - **Reports** *(decided 2026-09-26, what Google Play asks of a game with players' questions: a way to
   report one and to block its author; built on the server and the game)*: a player may **report** a
   question to the moderator, **hide** it, or **hide its author**, and each hides from that player
-  alone, for good. The game offers them in the menu on the Play screen's top bar, which stays out of
-  the way (the user; *The Play screen*, the question's menu). Comments on questions are not built:
+  alone, for good. The game offers them in the menu in the Play screen's row, a muted **!** after the
+  thumbs, which stays out of the way (the user; *The Play screen*, the question's menu). Comments on questions are not built:
   later, if at all.
   - *The client* is `ReportRepository` in `:core:domain` (`io.ntole.wyr.core.domain.report`), behind
     `ReportQuestion`, `HideQuestion` and `HideAuthor`, each ensuring a session first, over a domain
@@ -3354,7 +3388,8 @@ the same events. The moderation app sends none.
   `top_bar.home`, `.account`, `.back`, `.categories`, `.about`, `.shop`; `about.privacy`, `.terms`,
   `.delete_account`, `.contact`, `.copy_account_id` and `.licence`; `play.card_a` and `.card_b` (with `answered`,
   whether the tap went on from the reveal), `.like`, `.dislike`, `.skip` (with `answered`, as the cards'), `.points`, `.try_again`;
-  `question_menu.open`, `.report`, `.reason` (with its `reason`), `.hide_question`, `.hide_author`;
+  `question_menu.open`, `.report`, `.reason` (with its `reason`), `.hide_question`, `.hide_author` (the
+  menu in Play's row since 2026-09-29, off the top bar, its names kept);
   `account.open_auth`, `.log_out`, `.points`, `.try_again`, and `.statistics`, `.statistics_info` and
   `.statistics_info_ok`, on the About screen since 2026-09-28, their names kept;
   `my_questions.new_question`, `.first_question`, `.question`, `.try_again`; `language.menu` and `language.option` (with its `language` tag); `auth.register`,

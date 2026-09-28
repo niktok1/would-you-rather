@@ -69,9 +69,7 @@ import io.ntole.wyr.play.CategoriesPlayed
 import io.ntole.wyr.play.PlayScreen
 import io.ntole.wyr.play.PlayViewModel
 import io.ntole.wyr.play.PlayedCategories
-import io.ntole.wyr.play.QuestionMenu
 import io.ntole.wyr.play.canChangeCategories
-import io.ntole.wyr.play.canUseMenu
 import io.ntole.wyr.play.categoriesPlayed
 import io.ntole.wyr.services.AppServices
 import io.ntole.wyr.share.LocalShareSheet
@@ -172,7 +170,7 @@ private fun Screens() {
     SystemBack(enabled = navigator.canGoBack, onBack = { navigator.back() })
     val usage = koinInject<UsageTracker>()
     LaunchedEffect(navigator.current) { usage.show(navigator.current.key) }
-    // A moderator decided a question of the player's, which they have not seen: a dot on Home's account icon.
+    // A moderator decided a question of the player's, which they have not seen: a dot on the account icon.
     val notices = koinInject<DecisionNotices>()
     val unseen by notices.unseen.collectAsStateWithLifecycle()
     val news = unseen.isNotEmpty()
@@ -231,7 +229,9 @@ private fun Screens() {
                             val picker = koinViewModel<CategoriesViewModel>()
                             Play(
                                 onHome = { navigator.open(Screen.Home) },
+                                onAccount = { navigator.open(Screen.Account) },
                                 onShop = { navigator.open(Screen.Shop) },
+                                news = news,
                                 onOpenCategories = {
                                     // A visit of its own: what is played now ticked, and nothing searched.
                                     picker.open()
@@ -592,7 +592,9 @@ private fun Categories(onPlayed: () -> Unit) {
 @Composable
 private fun ColumnScope.Play(
     onHome: () -> Unit,
+    onAccount: () -> Unit,
     onShop: () -> Unit,
+    news: Boolean,
     onOpenCategories: () -> Unit,
 ) {
     val viewModel = koinViewModel<PlayViewModel>()
@@ -609,11 +611,7 @@ private fun ColumnScope.Play(
         onStopOrDispose { viewModel.screenHidden() }
     }
 
-    PlayTopBar(
-        onHome = onHome,
-        // The menu about the question on screen: report it, or hide it or its author (CLAUDE.md §8d).
-        menu = { QuestionMenu(enabled = state.canUseMenu, onPick = viewModel::pickFromMenu) },
-    ) {
+    PlayTopBar(onHome = onHome, onAccount = onAccount, news = news) {
         CategoriesPlayed(
             text =
                 categoriesPlayed(
@@ -636,6 +634,8 @@ private fun ColumnScope.Play(
             onRetry = viewModel::retry,
             onShared = viewModel::shared,
             onPoints = onShop,
+            // The menu about the question on screen, in the row: report it, or hide it or its author (§8d).
+            onMenuPick = viewModel::pickFromMenu,
         )
     }
 }

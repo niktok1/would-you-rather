@@ -16,7 +16,6 @@ import io.ntole.wyr.language.fill
 import io.ntole.wyr.language.stringsOf
 import io.ntole.wyr.nodes
 import io.ntole.wyr.play.CategoriesPlayed
-import io.ntole.wyr.play.QuestionMenu
 import io.ntole.wyr.sizeNeeded
 import io.ntole.wyr.tap
 import io.ntole.wyr.texts
@@ -110,9 +109,8 @@ class TopBarsDrawTest {
     }
 
     /**
-     * The notice's dot is drawn inside the account icon's touch target, 48 square, on Home's bar, in
-     * both themes, and nowhere else on the bar: a bar with no news draws none, Play's among them, which
-     * has no account icon.
+     * The notice's dot is drawn inside the account icon's touch target, 48 square, on Home's bar and
+     * Play's, in both themes, and nowhere else on the bar: a bar with no news draws none.
      */
     @Test
     fun `the dot is drawn inside the account icon's touch target and only with news`() {
@@ -148,14 +146,14 @@ class TopBarsDrawTest {
     }
 
     /**
-     * Play's bar is one icon on each side, home and the question's menu, so the categories played stand
-     * in its exact middle, in both themes and every language, whether they fit or are cut short in the
-     * width the two icons leave them (CLAUDE.md §8d, *The Play screen*).
+     * Play's bar is one icon on each side, home and the account icon, so the categories played stand
+     * in its exact middle, in both themes and every language, with the dot or without, whether they fit
+     * or are cut short in the width the two icons leave them (CLAUDE.md §8d, *The Play screen*).
      */
     @Test
     fun `the categories played stand in the exact middle of Play's bar`() {
         val bars = BARS.filter { it.name.startsWith("Play's") }
-        assertEquals(2, bars.size)
+        assertEquals(4, bars.size)
         bars.forEach { bar ->
             listOf(false, true).forEach { dark ->
                 Language.entries.forEach { language ->
@@ -171,6 +169,30 @@ class TopBarsDrawTest {
                     }
                 }
             }
+        }
+    }
+
+    /**
+     * The dot takes no room from the categories played: on Play's bar a long selection has the same
+     * room with news as without, in every language, so it is cut short where it is without the dot.
+     */
+    @Test
+    fun `the dot leaves a long selection its room`() {
+        val (plain, withNews) =
+            listOf("Play's, with a long selection", "Play's, with news and a long selection").map { name ->
+                BARS.single { it.name == name }
+            }
+        Language.entries.forEach { language ->
+            val (without, with) =
+                listOf(plain, withNews).map { bar ->
+                    val scene = scene(bar, language)
+                    try {
+                        scene.nodes().single { LONG_SELECTION in it.texts }.boundsInRoot
+                    } finally {
+                        scene.close()
+                    }
+                }
+            assertEquals(without, with, "$language")
         }
     }
 
@@ -222,47 +244,56 @@ class TopBarsDrawTest {
         /** The server's first five categories, every one played, as the Play screen names them in Cyrillic. */
         const val LONG_SELECTION = "Храна, Начин живота, Етика, Супермоћи, Апсурдно"
 
+        /** Play's bar with [categories] played, and a dot on the account icon while [news]. */
+        @Composable
+        private fun PlayBar(
+            actions: Actions,
+            categories: String,
+            news: Boolean,
+        ) {
+            PlayTopBar(onHome = actions.record("home"), onAccount = actions.record("account"), news = news) {
+                CategoriesPlayed(text = categories, enabled = true, onClick = actions.record("categories"))
+            }
+        }
+
         val BARS =
             listOf(
-                // Home, the categories and the question's menu, whose tap only opens it: no account icon.
+                // Home, the categories and the account icon, one icon on each side.
                 Bar(
                     name = "Play's",
-                    icons = { listOf(it.home, it.playScreen.menu.name) },
+                    icons = { listOf(it.home, it.account) },
                     texts = { listOf(it.allCategories) },
-                    taps = listOf("home", "categories"),
-                    draw = { actions ->
-                        PlayTopBar(
-                            onHome = actions.record("home"),
-                            menu = { QuestionMenu(enabled = true, onPick = { actions.tapped += "pick $it" }) },
-                        ) {
-                            CategoriesPlayed(
-                                text = LocalStrings.current.allCategories,
-                                enabled = true,
-                                onClick = actions.record("categories"),
-                            )
-                        }
-                    },
+                    taps = listOf("home", "account", "categories"),
+                    draw = { actions -> PlayBar(actions, LocalStrings.current.allCategories, news = false) },
                 ),
                 // Every category played, as long a line as five names make: cut short in the middle,
                 // never the icons, and never a second line.
                 Bar(
                     name = "Play's, with a long selection",
-                    icons = { listOf(it.home, it.playScreen.menu.name) },
+                    icons = { listOf(it.home, it.account) },
                     texts = { listOf(LONG_SELECTION) },
-                    taps = listOf("home", "categories"),
+                    taps = listOf("home", "account", "categories"),
                     cutShort = true,
-                    draw = { actions ->
-                        PlayTopBar(
-                            onHome = actions.record("home"),
-                            menu = { QuestionMenu(enabled = true, onPick = { actions.tapped += "pick $it" }) },
-                        ) {
-                            CategoriesPlayed(
-                                text = LONG_SELECTION,
-                                enabled = true,
-                                onClick = actions.record("categories"),
-                            )
-                        }
-                    },
+                    draw = { actions -> PlayBar(actions, LONG_SELECTION, news = false) },
+                ),
+                // A moderator decided a question of the player's: a dot on the account icon, which a
+                // screen reader hears in its name, and nothing else changes.
+                Bar(
+                    name = "Play's, with news",
+                    icons = { listOf(it.home, it.notice.accountWithNews.fill(it.account)) },
+                    texts = { listOf(it.allCategories) },
+                    taps = listOf("home", "account", "categories"),
+                    draw = { actions -> PlayBar(actions, LocalStrings.current.allCategories, news = true) },
+                ),
+                // The dot takes no width of the categories': a long selection is cut as it is without it
+                // (`the dot leaves a long selection its room`).
+                Bar(
+                    name = "Play's, with news and a long selection",
+                    icons = { listOf(it.home, it.notice.accountWithNews.fill(it.account)) },
+                    texts = { listOf(LONG_SELECTION) },
+                    taps = listOf("home", "account", "categories"),
+                    cutShort = true,
+                    draw = { actions -> PlayBar(actions, LONG_SELECTION, news = true) },
                 ),
                 Bar(
                     name = "Home's, with news",

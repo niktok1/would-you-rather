@@ -119,13 +119,10 @@ class TapsTest {
                 .filter { it.properties[AnalyticsProperty.ELEMENT] == "home.play" }
                 .map { it.properties[AnalyticsProperty.SIDE] }
         assertEquals(listOf("A", "B"), sides)
-        // The question's menu too, and what it lists once open (CLAUDE.md §8d, *Reports*).
         assertEquals(
-            setOf("top_bar.home", "top_bar.categories") +
-                setOf("question_menu.open", "question_menu.report", "question_menu.hide_question") +
-                "question_menu.hide_author",
+            setOf("top_bar.home", "top_bar.categories", "top_bar.account"),
             elementsTapped {
-                PlayTopBar(onHome = {}, menu = { QuestionMenu(enabled = true, onPick = {}) }) {
+                PlayTopBar(onHome = {}, onAccount = {}, news = true) {
                     CategoriesPlayed(text = "Све", enabled = true, onClick = {})
                 }
             },
@@ -185,9 +182,17 @@ class TapsTest {
         // Share opens its dialog, whose switch for the results shows only once there are results; and the
         // points are the way to the shop (CLAUDE.md §8d, *Sharing*, *The shop*).
         val share = setOf("play.share", "share.send", "share.cancel", "play.points")
-        assertEquals(setOf("play.card_a", "play.card_b", "play.like", "play.dislike", "play.skip") + share, asked)
+        // The question's menu in the row, and what it lists once open (CLAUDE.md §8d, *Reports*).
+        val menu =
+            setOf("question_menu.open", "question_menu.report", "question_menu.hide_question") +
+                "question_menu.hide_author"
         assertEquals(
-            setOf("play.card_a", "play.card_b", "play.like", "play.dislike", "play.skip", "share.results") + share,
+            setOf("play.card_a", "play.card_b", "play.like", "play.dislike", "play.skip") + share + menu,
+            asked,
+        )
+        assertEquals(
+            setOf("play.card_a", "play.card_b", "play.like", "play.dislike", "play.skip", "share.results") +
+                share + menu,
             revealed,
         )
         assertEquals(setOf("play.try_again"), failed)

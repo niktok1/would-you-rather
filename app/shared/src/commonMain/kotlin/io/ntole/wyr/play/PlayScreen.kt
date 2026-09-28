@@ -40,6 +40,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -53,7 +54,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.takeOrElse
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
-import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -66,7 +66,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.IntOffset
 import io.ntole.wyr.analytics.tapped
 import io.ntole.wyr.core.domain.analytics.AnalyticsProperty
@@ -118,6 +118,7 @@ fun PlayScreen(
     modifier: Modifier = Modifier,
     onShared: (question: SharedQuestion, withResults: Boolean, outcome: ShareOutcome) -> Unit = { _, _, _ -> },
     onPoints: () -> Unit = {},
+    onMenuPick: (MenuChoice) -> Unit = {},
 ) {
     val colors = WyrThemeAccessors.colors
     val dimens = WyrThemeAccessors.dimens
@@ -174,6 +175,7 @@ fun PlayScreen(
                     onReact = onReact,
                     onShare = { sharing = it },
                     onPoints = onPoints,
+                    onMenuPick = onMenuPick,
                 )
             } else if (state is PlayUiState.Failed) {
                 Spacer(Modifier.height(dimens.screenPadding))
@@ -264,6 +266,7 @@ private fun ColumnScope.QuestionBody(
     onReact: (Reaction) -> Unit,
     onShare: (SharedQuestion) -> Unit,
     onPoints: () -> Unit,
+    onMenuPick: (MenuChoice) -> Unit,
 ) {
     val colors = WyrThemeAccessors.colors
     val dimens = WyrThemeAccessors.dimens
@@ -320,6 +323,7 @@ private fun ColumnScope.QuestionBody(
             idle = idle,
             onReact = onReact,
             onPoints = onPoints,
+            onMenuPick = onMenuPick,
             // Before answering it skips (CLAUDE.md §8d, *Skipping*); once revealed it goes on, as a card does.
             answered = outcome != null,
             onSkip = if (outcome == null) onSkip else onNext,
@@ -367,16 +371,19 @@ private fun ColumnScope.QuestionBody(
  * The one row between the cards ([PlayRow], CLAUDE.md §8d, *The Play screen*): on the left the
  * player's points, a coin and the number, or how the last reaction failed, and right beside them the
  * thumbs, the like and the dislike, each filled while the player holds it and beside how many hold it,
- * as the server counted them (CLAUDE.md §8d, *Reactions*), before answering and after; and on the right
- * Share ([onShare]) and Skip ([onSkip]), always: Skip skips a question not answered yet, and once it is
- * [answered] goes on to the next, as a card does, so the reveal moves nothing in the row. The thumbs, Share and
- * Skip are on only while the screen is [idle], and Share and Skip are drawn muted while they are off.
+ * as the server counted them (CLAUDE.md §8d, *Reactions*), before answering and after, and after them
+ * the question's menu, a muted exclamation mark ([QuestionMenu], whose choice goes to [onMenuPick]); and
+ * on the right Share ([onShare]) and Skip ([onSkip]), always: Skip skips a question not answered yet, and
+ * once it is [answered] goes on to the next, as a card does, so the reveal moves nothing in the row. The
+ * thumbs, the menu, Share and Skip are on only while the screen is [idle], and the menu, Share and Skip
+ * are drawn muted while they are off.
  *
  * A thumb asks for its reaction, or for none when the player holds it already ([onReact]). The row is
- * the thumbs' height whatever it shows, at any font size, so a failed reaction never grows it: it shows
- * in the points' place, no wider than `WyrDimens.playRowStartMaxWidth`, cut short on two lines there,
- * never the counts, Share or Skip, and the thumbs move over for it. Internal, not private, so a test can
- * measure it.
+ * a touch target's height whatever it shows, at any font size, so a failed reaction never grows it: it
+ * shows in the points' place, no wider than `WyrDimens.playRowStartMaxWidth`, cut short on two lines
+ * there, never the counts, Share or Skip, and the thumbs move over for it. Its text grows with the
+ * phone's font size up to [WyrTypeScale.PLAY_ROW_MAX_FONT_SCALE] and no further, so that nothing in it
+ * is cut short at 375 wide. Internal, not private, so a test can measure it.
  */
 @Composable
 internal fun MiddleRow(
@@ -389,95 +396,119 @@ internal fun MiddleRow(
     onShare: () -> Unit,
     answered: Boolean = false,
     onPoints: () -> Unit = {},
+    onMenuPick: (MenuChoice) -> Unit = {},
 ) {
     val colors = WyrThemeAccessors.colors
     val dimens = WyrThemeAccessors.dimens
     val strings = LocalStrings.current.playScreen
     val touchTarget = LocalMinimumInteractiveComponentSize.current
+    val density = LocalDensity.current
 
-    PlayRow(
-        gap = dimens.spaceXs,
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .padding(vertical = dimens.spaceXs),
-        start = {
-            // Exactly as high as a thumb's touch target, which does not grow with the phone's font size
-            // as text does. How a reaction failed shows in the points' place, until the next reaction
-            // or the next question, in two short lines at most, set close enough to fit up to half again
-            // the font size and cut short inside it past that, never growing the row.
-            Box(
-                contentAlignment = Alignment.CenterStart,
-                modifier = Modifier.widthIn(max = dimens.playRowStartMaxWidth).height(touchTarget),
-            ) {
-                if (rowError != null) {
-                    Text(
-                        text = failureText(rowError, strings),
-                        color = MaterialTheme.colorScheme.error,
-                        fontSize = WyrTypeScale.statLabel,
-                        lineHeight = WyrTypeScale.statLabelLineHeight,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                } else if (points != null) {
-                    // The way to the shop, where the points are spent (CLAUDE.md §8d, *The shop*).
-                    PointsAmount(
-                        points = points,
-                        fontWeight = FontWeight.Bold,
-                        color = colors.primaryText,
-                        onClick = tapped("play.points", onClick = onPoints),
-                    )
-                }
-            }
-        },
-        middle = {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                ReactionToggle(
-                    held = question.myReaction == Reaction.LIKE,
-                    count = question.likeCount,
-                    icon = WyrIcons.ThumbUp,
-                    heldIcon = WyrIcons.ThumbUpFilled,
-                    name = strings.like,
-                    enabled = idle,
-                    onClick =
-                        tapped(
-                            "play.like",
-                        ) { onReact(reactionAfterTap(Reaction.LIKE, held = question.myReaction)) },
-                )
-                ReactionToggle(
-                    held = question.myReaction == Reaction.DISLIKE,
-                    count = question.dislikeCount,
-                    icon = WyrIcons.ThumbDown,
-                    heldIcon = WyrIcons.ThumbDownFilled,
-                    name = strings.dislike,
-                    enabled = idle,
-                    onClick =
-                        tapped(
-                            "play.dislike",
-                        ) { onReact(reactionAfterTap(Reaction.DISLIKE, held = question.myReaction)) },
-                )
-            }
-        },
-        end = {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                ShareButton(element = "play.share", enabled = idle, onClick = onShare)
-                val interaction = remember { MutableInteractionSource() }
-                IconButton(
-                    onClick = tapped("play.skip", mapOf(AnalyticsProperty.ANSWERED to answered), onClick = onSkip),
-                    enabled = idle,
-                    interactionSource = interaction,
-                    modifier = Modifier.pressScale(interaction),
+    CompositionLocalProvider(
+        LocalDensity provides
+            Density(density.density, density.fontScale.coerceAtMost(WyrTypeScale.PLAY_ROW_MAX_FONT_SCALE)),
+    ) {
+        PlayRow(
+            spacing =
+                RowSpacing(
+                    gap = dimens.spaceXs,
+                    slotWidth = touchTarget,
+                    slotMinWidth = dimens.playRowSlotMinWidth,
+                    iconSize = dimens.iconSize,
+                    labelGap = dimens.reactionCountGap,
+                ),
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = dimens.spaceXs),
+            start = {
+                // Exactly as high as a thumb's touch target, which does not grow with the phone's font size
+                // as text does. How a reaction failed shows in the points' place, until the next reaction
+                // or the next question, in two short lines at most, set close enough to fit up to half again
+                // the font size and cut short inside it past that, never growing the row.
+                Box(
+                    contentAlignment = Alignment.CenterStart,
+                    modifier = Modifier.widthIn(max = dimens.playRowStartMaxWidth).height(touchTarget),
                 ) {
-                    // Muted while off: a tint of its own hides the button's off colour.
-                    Icon(
-                        imageVector = WyrIcons.Skip,
-                        contentDescription = strings.skip,
-                        tint = if (idle) colors.headingAccent else colors.muted,
-                    )
+                    if (rowError != null) {
+                        Text(
+                            text = failureText(rowError, strings),
+                            color = MaterialTheme.colorScheme.error,
+                            fontSize = WyrTypeScale.statLabel,
+                            lineHeight = WyrTypeScale.statLabelLineHeight,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    } else if (points != null) {
+                        // The way to the shop, where the points are spent (CLAUDE.md §8d, *The shop*).
+                        PointsAmount(
+                            points = points,
+                            fontWeight = FontWeight.Bold,
+                            color = colors.primaryText,
+                            onClick = tapped("play.points", onClick = onPoints),
+                        )
+                    }
                 }
-            }
-        },
-    )
+            },
+            middle =
+                listOf(
+                    reactionSlot(
+                        held = question.myReaction == Reaction.LIKE,
+                        count = question.likeCount,
+                        icon = WyrIcons.ThumbUp,
+                        heldIcon = WyrIcons.ThumbUpFilled,
+                        name = strings.like,
+                        enabled = idle,
+                        onClick =
+                            tapped(
+                                "play.like",
+                            ) { onReact(reactionAfterTap(Reaction.LIKE, held = question.myReaction)) },
+                    ),
+                    reactionSlot(
+                        held = question.myReaction == Reaction.DISLIKE,
+                        count = question.dislikeCount,
+                        icon = WyrIcons.ThumbDown,
+                        heldIcon = WyrIcons.ThumbDownFilled,
+                        name = strings.dislike,
+                        enabled = idle,
+                        onClick =
+                            tapped(
+                                "play.dislike",
+                            ) { onReact(reactionAfterTap(Reaction.DISLIKE, held = question.myReaction)) },
+                    ),
+                    // Right after the thumbs, the rest of what the player may say of the question: report it,
+                    // or hide it or its author (CLAUDE.md §8d, *Reports*), off with them.
+                    RowSlot(icon = { QuestionMenu(enabled = idle, onPick = onMenuPick) }),
+                ),
+            end =
+                listOf(
+                    RowSlot(icon = { ShareButton(element = "play.share", enabled = idle, onClick = onShare) }),
+                    RowSlot(
+                        icon = {
+                            val interaction = remember { MutableInteractionSource() }
+                            IconButton(
+                                onClick =
+                                    tapped(
+                                        "play.skip",
+                                        mapOf(AnalyticsProperty.ANSWERED to answered),
+                                        onClick = onSkip,
+                                    ),
+                                enabled = idle,
+                                interactionSource = interaction,
+                                modifier = Modifier.pressScale(interaction),
+                            ) {
+                                // Muted while off: a tint of its own hides the button's off colour.
+                                Icon(
+                                    imageVector = WyrIcons.Skip,
+                                    contentDescription = strings.skip,
+                                    tint = if (idle) colors.headingAccent else colors.muted,
+                                )
+                            }
+                        },
+                    ),
+                ),
+        )
+    }
 }
 
 /**
@@ -489,9 +520,8 @@ internal fun reactionAfterTap(
     held: Reaction,
 ): Reaction = if (tapped == held) Reaction.NONE else tapped
 
-/** One thumb, [heldIcon] while the player holds its reaction and [icon] while not, and its [count]. */
-@Composable
-private fun ReactionToggle(
+/** One thumb's slot in the row: [heldIcon] while the player holds its reaction and [icon] while not, and its [count]. */
+private fun reactionSlot(
     held: Boolean,
     count: Int,
     icon: ImageVector,
@@ -499,44 +529,36 @@ private fun ReactionToggle(
     name: String,
     enabled: Boolean,
     onClick: () -> Unit,
-) {
-    val colors = WyrThemeAccessors.colors
-    val haptics = LocalHapticFeedback.current
-    val interaction = remember { MutableInteractionSource() }
-
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        IconToggleButton(
-            checked = held,
-            onCheckedChange = {
-                haptics.performHapticFeedback(if (held) HapticFeedbackType.ToggleOff else HapticFeedbackType.ToggleOn)
-                onClick()
-            },
-            enabled = enabled,
-            interactionSource = interaction,
-            modifier = Modifier.pressScale(interaction),
-        ) {
-            Icon(imageVector = if (held) heldIcon else icon, contentDescription = name, tint = colors.headingAccent)
-        }
-        Text(
-            text = count.toString(),
-            color = colors.primaryText,
-            fontWeight = FontWeight.Medium,
-            maxLines = 1,
-            modifier = Modifier.pulledIn(WyrThemeAccessors.dimens.reactionCountInset),
-        )
-    }
-}
-
-/**
- * Laid out [by] less wide and placed that far back, into the empty edge of the touch target before it,
- * which still takes the taps there: the thumb's count, beside its icon (`WyrDimens.reactionCountInset`).
- */
-private fun Modifier.pulledIn(by: Dp): Modifier =
-    layout { measurable, constraints ->
-        val pull = by.roundToPx()
-        val placeable = measurable.measure(constraints)
-        layout((placeable.width - pull).coerceAtLeast(0), placeable.height) { placeable.placeRelative(-pull, 0) }
-    }
+): RowSlot =
+    RowSlot(
+        icon = {
+            val colors = WyrThemeAccessors.colors
+            val haptics = LocalHapticFeedback.current
+            val interaction = remember { MutableInteractionSource() }
+            IconToggleButton(
+                checked = held,
+                onCheckedChange = {
+                    haptics.performHapticFeedback(
+                        if (held) HapticFeedbackType.ToggleOff else HapticFeedbackType.ToggleOn,
+                    )
+                    onClick()
+                },
+                enabled = enabled,
+                interactionSource = interaction,
+                modifier = Modifier.pressScale(interaction),
+            ) {
+                Icon(imageVector = if (held) heldIcon else icon, contentDescription = name, tint = colors.headingAccent)
+            }
+        },
+        label = {
+            Text(
+                text = count.toString(),
+                color = WyrThemeAccessors.colors.primaryText,
+                fontWeight = FontWeight.Medium,
+                maxLines = 1,
+            )
+        },
+    )
 
 /**
  * The categories played, *All* while none is picked, with a small chevron, in the middle of the Play

@@ -27,15 +27,20 @@ data class WyrDimens(
     /** The reveal's bar, flush along each card's edge by the row between them (CLAUDE.md §8d, *The Play screen*). */
     val revealBarHeight: Dp = 8.dp,
     /**
-     * The widest the start of the Play screen's row may be, the points or how a reaction failed, so the
-     * thumbs' counts, Share and Skip are never cut short at 375 wide.
+     * The widest the start of the Play screen's row may be, the points or how a reaction failed: four
+     * digits of points at the row's largest font scale ([WyrTypeScale.PLAY_ROW_MAX_FONT_SCALE]).
      */
-    val playRowStartMaxWidth: Dp = 80.dp,
+    val playRowStartMaxWidth: Dp = 100.dp,
     /**
-     * How far a thumb's count stands into the thumb's own touch target, past the icon's edge, so a
-     * thumb and its count take less of the row than a button and a text side by side.
+     * The least an icon's slot in the Play screen's row narrows to, from a touch target's width, when the
+     * row is tight (CLAUDE.md §8d, *The Play screen*): the icon's 24 and a little either side. The icon
+     * button keeps a touch target's reach for taps all the same.
      */
-    val reactionCountInset: Dp = 10.dp,
+    val playRowSlotMinWidth: Dp = 28.dp,
+    /** An icon as Material draws it in an icon button, 24 square: where a thumb's count stands past it. */
+    val iconSize: Dp = 24.dp,
+    /** How far a thumb's count stands past the thumb's icon, inside the thumb's slot. */
+    val reactionCountGap: Dp = 2.dp,
     /**
      * A shared question's image (CLAUDE.md §8d, *Sharing*), laid out at this size whatever the screen, 4
      * to 5, as a feed's post takes it, and drawn at `SHARE_IMAGE_WIDTH_PX` across; and the widest the
@@ -116,6 +121,14 @@ object WyrTypeScale {
     val heading = 28.sp
     val sectionTitle = 16.sp
     val statLabel = 13.sp
+
+    /**
+     * The most the Play screen's row's text grows with the phone's font size (CLAUDE.md §8d, *The Play
+     * screen*): the points, the thumbs' counts and a reaction's failure, beside five icons that do not
+     * grow at all. Past it, three-digit counts and four-digit points no longer fit 375 wide whatever the
+     * spacing, so the row's text stays at this scale.
+     */
+    const val PLAY_ROW_MAX_FONT_SCALE = 1.3f
 
     /**
      * The line of [statLabel] where it takes two lines, a failed like's on the Play screen: close

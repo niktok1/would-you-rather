@@ -19,11 +19,12 @@ import io.ntole.wyr.theme.WyrIcons
 import io.ntole.wyr.theme.WyrThemeAccessors
 
 /**
- * The menu about the question on screen, a ⋮ on the Play screen's top bar beside the account icon
- * (CLAUDE.md §8d, *The Play screen*, *Reports*), out of the way until it is wanted: *Report question*,
- * which then lists the five reasons, one tap each, *Don't show me this question* and *Don't show this
- * author's questions*. A choice closes it and goes to [onPick]. Off while [enabled] is not, drawn
- * muted then, as Skip is: with no question on screen, or while anything is in flight.
+ * The menu about the question on screen, an exclamation mark in the Play screen's row right after the
+ * thumbs (CLAUDE.md §8d, *The Play screen*, *Reports*), muted so it stays quiet until it is wanted:
+ * *Report question*, which then lists the five reasons, one tap each, *Don't show me this question* and
+ * *Don't show this author's questions*, dropping down from the mark. A choice closes it and goes to
+ * [onPick]. Off while [enabled] is not, muted still: while anything is in flight, or while a question
+ * held as the next one loads is on screen.
  */
 @Composable
 internal fun QuestionMenu(
@@ -44,9 +45,10 @@ internal fun QuestionMenu(
     Box {
         IconButton(onClick = tapped("question_menu.open") { open = true }, enabled = enabled) {
             Icon(
-                imageVector = WyrIcons.More,
+                imageVector = WyrIcons.Report,
                 contentDescription = strings.name,
-                tint = if (enabled) colors.headingAccent else colors.muted,
+                // Muted, on or off: the row's quiet control, beside the thumbs in the heading's accent.
+                tint = colors.muted,
             )
         }
         DropdownMenu(expanded = open && enabled, onDismissRequest = ::close) {

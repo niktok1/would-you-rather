@@ -204,7 +204,8 @@ class ScreenshotsTest {
 
         @Composable
         fun ColumnScope.Play(state: PlayUiState) {
-            PlayTopBar(onHome = {}) {
+            // The bar as the app draws it with a decision not seen yet: home, the categories, the account icon's dot.
+            PlayTopBar(onHome = {}, onAccount = {}, news = true) {
                 CategoriesPlayed(text = "Храна", enabled = true, onClick = {})
             }
             Box(Modifier.weight(1f)) {

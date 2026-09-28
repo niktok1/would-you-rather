@@ -21,7 +21,7 @@ sealed interface PlayUiState {
      * (CLAUDE.md §8d, *Reactions*): the feed's, until the answer to a reaction of the player's own.
      *
      * [isReacting] while the player's reaction to it is in flight, and [isHiding] while a report or a
-     * hide of it, from the menu on the top bar, is (§8d, *Reports*): each hides it. [rowError] is how
+     * hide of it, from the menu in the row, is (§8d, *Reports*): each hides it. [rowError] is how
      * the last of those failed, in the row's failure slot, shown until the next is asked for or the
      * question is answered.
      */
@@ -84,8 +84,9 @@ val PlayUiState.canChangeCategories: Boolean
         }
 
 /**
- * Whether the menu about the question on the top bar is on (CLAUDE.md §8d, *The Play screen*): while a
- * question is on screen, asked or revealed, and nothing is in flight, one action at a time.
+ * Whether the menu about the question, in the row between the cards, is on (CLAUDE.md §8d, *The Play
+ * screen*): while a question is on screen, asked or revealed, and nothing is in flight, one action at a
+ * time, as the rest of the row is; and not on a question held on screen while the next one loads.
  */
 val PlayUiState.canUseMenu: Boolean
     get() = this is PlayUiState.OnQuestion && !isBusy

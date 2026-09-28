@@ -24,6 +24,8 @@ import androidx.compose.ui.graphics.PixelMap
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.toComposeImageBitmap
 import androidx.compose.ui.graphics.toPixelMap
+import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.PointerType
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsNode
@@ -58,7 +60,6 @@ import io.ntole.wyr.language.optionText
 import io.ntole.wyr.language.stringsOf
 import io.ntole.wyr.nodes
 import io.ntole.wyr.renderAt
-import io.ntole.wyr.sizeNeeded
 import io.ntole.wyr.tap
 import io.ntole.wyr.texts
 import io.ntole.wyr.theme.WyrColors
@@ -187,8 +188,8 @@ class PlayScreenDrawTest {
 
     /**
      * On a phone on its side the cards stand side by side, card A first, sharing the width, and the
-     * row runs under them across it, the points and the thumbs right after them under card A, Share and
-     * Skip under card B.
+     * row runs under them across it, the points, the thumbs and the question's menu right after them
+     * under card A, Share and Skip under card B.
      */
     @Test
     fun `on a phone on its side the cards stand side by side over the row`() {
@@ -201,13 +202,13 @@ class PlayScreenDrawTest {
             assertTrue(cardA.right < cardB.left && abs(cardA.width - cardB.width) <= 1f, "$cardA beside $cardB")
 
             val row =
-                listOf(POINTS_SHOWN, strings.like, "$DISLIKES", strings.share.share, strings.skip).map {
-                    scene.node(it).boundsInRoot
-                }
+                listOf(POINTS_SHOWN, strings.like, "$DISLIKES", strings.menu.name, strings.share.share, strings.skip)
+                    .map { scene.node(it).boundsInRoot }
             row.forEach { part -> assertTrue(part.top >= cardA.bottom, "$part is not under the cards") }
-            val (points, like, dislikes, share, skip) = row
+            val (points, like, dislikes, menu, share) = row
+            val skip = row.last()
             assertTrue(points.left >= cardA.left && points.right < like.left, "the points at $points")
-            assertTrue(dislikes.right < cardA.right, "the thumbs at $like to $dislikes")
+            assertTrue(dislikes.right < menu.left && menu.right < cardA.right, "the thumbs and menu at $like to $menu")
             assertTrue(share.left > cardB.left && share.right < skip.left, "Share at $share")
             assertTrue(skip.right <= cardB.right, "Skip at $skip")
         }
@@ -298,7 +299,7 @@ class PlayScreenDrawTest {
                 assertEquals(listOf(QUESTION.optionA, "0", "0", QUESTION.optionB).sorted(), scene.texts().sorted())
                 val strings = shown.playScreen
                 assertEquals(
-                    listOf(strings.like, strings.dislike, strings.share.share, strings.skip),
+                    listOf(strings.like, strings.dislike, strings.menu.name, strings.share.share, strings.skip),
                     scene.descriptions(),
                     "in $language",
                 )
@@ -344,14 +345,15 @@ class PlayScreenDrawTest {
     }
 
     /**
-     * One action at a time: while a vote or a reaction is in flight, the cards, the thumbs, Share and
-     * Skip are off.
+     * One action at a time: while a vote or a reaction is in flight, the cards, the thumbs, the question's
+     * menu, Share and Skip are off.
      */
     @Test
-    fun `the cards and the thumbs and Share and Skip are off while anything is in flight`() {
+    fun `the cards and the thumbs and the menu and Share and Skip are off while anything is in flight`() {
         val strings = stringsOf(Language.DEFAULT).playScreen
         val parts =
-            listOf(QUESTION.optionA, QUESTION.optionB, strings.like, strings.dislike, strings.share.share, strings.skip)
+            listOf(QUESTION.optionA, QUESTION.optionB, strings.like, strings.dislike, strings.menu.name) +
+                listOf(strings.share.share, strings.skip)
         listOf(
             PlayUiState.Asking(QUESTION, isSubmitting = true),
             PlayUiState.Asking(QUESTION, isReacting = true),
@@ -386,6 +388,26 @@ class PlayScreenDrawTest {
                 ).forEach { state ->
                     val off = skipColours(state, colors.isDark, language)
                     assertTrue(muted in off && accent !in off, "Skip on $state $at")
+                }
+            }
+        }
+    }
+
+    /**
+     * The question's menu is quiet: drawn muted, never in the heading's accent, whether it may be used or
+     * not, in both themes and every language (CLAUDE.md §8d, *The Play screen*).
+     */
+    @Test
+    fun `the question's menu is drawn muted on or off`() {
+        listOf(WyrLightColors, WyrDarkColors).forEach { colors ->
+            val accent = colors.headingAccent.toArgb()
+            val muted = colors.muted.toArgb()
+            Language.entries.forEach { language ->
+                val menu = stringsOf(language).playScreen.menu.name
+                listOf(PlayUiState.Asking(QUESTION), PlayUiState.Asking(QUESTION, isReacting = true)).forEach { state ->
+                    val colours = coloursOf(menu, state, colors.isDark, language)
+                    val at = "on $state in $language in the ${if (colors.isDark) "dark" else "light"} theme"
+                    assertTrue(muted in colours && accent !in colours, "the menu $at")
                 }
             }
         }
@@ -540,27 +562,31 @@ class PlayScreenDrawTest {
     }
 
     /**
-     * The points, the thumbs, Share and Skip sit in one row between the two cards, in that order: the
-     * thumbs right after the points (CLAUDE.md §8d, *The Play screen*), Share and Skip at the row's end.
+     * The points, the thumbs, the question's menu, Share and Skip sit in one row between the two cards,
+     * in that order: the thumbs right after the points and the menu right after the thumbs (CLAUDE.md
+     * §8d, *The Play screen*), Share and Skip at the row's end.
      */
     @Test
-    fun `the row sits between the cards with the thumbs beside the points`() {
+    fun `the row sits between the cards with the thumbs beside the points and the menu after them`() {
         val strings = stringsOf(Language.DEFAULT).playScreen
         withScreen(PlayUiState.Asking(REACTED_TO)) { scene, _ ->
             val cardA = scene.node(REACTED_TO.optionA).boundsInRoot
             val cardB = scene.node(REACTED_TO.optionB).boundsInRoot
             val row =
-                listOf(POINTS_SHOWN, strings.like, strings.dislike, "$DISLIKES", strings.share.share, strings.skip)
-                    .map { scene.node(it).boundsInRoot }
-            row.forEach { part -> assertTrue(part.center.y > cardA.bottom && part.center.y < cardB.top, "$part") }
+                listOf(POINTS_SHOWN, strings.like, strings.dislike, "$DISLIKES", strings.menu.name) +
+                    listOf(strings.share.share, strings.skip)
+            val bounds = row.map { scene.node(it).boundsInRoot }
+            bounds.forEach { part -> assertTrue(part.center.y > cardA.bottom && part.center.y < cardB.top, "$part") }
 
-            val (points, like, dislike, dislikes, share) = row
-            val skip = row.last()
+            val (points, like, dislike, dislikes, menu) = bounds
+            val (share, skip) = bounds.takeLast(2)
             // A thumb's bounds are its icon button's, inside its touch target, which the row sets from.
             assertTrue(like.left - TOUCH_INSET - points.right <= THUMBS_AFTER_POINTS, "the thumbs at $like")
-            assertTrue(points.right < like.left && like.right < dislike.left && share.left > dislikes.right, "$row")
-            assertTrue(share.right < skip.left, "$row")
-            assertTrue(points.left >= cardA.left && skip.right <= cardA.right, "the row is wider than a card: $row")
+            assertTrue(points.right < like.left && like.right < dislike.left && menu.left > dislikes.right, "$bounds")
+            // The menu's touch target right after the dislikes', as the dislike's is after the like's.
+            assertTrue(menu.left - dislikes.right <= TOUCH_INSET + HALF_PIXEL, "the menu at $menu")
+            assertTrue(share.left > menu.right && share.right < skip.left, "$bounds")
+            assertTrue(points.left >= cardA.left && skip.right <= cardA.right, "the row is wider than a card: $bounds")
             assertEquals(cardA.right - TOUCH_INSET, skip.right, "Skip at the row's end: $skip")
         }
     }
@@ -587,44 +613,132 @@ class PlayScreenDrawTest {
 
     /**
      * The row's own rule, measured on boxes of known widths rather than text, which differs from one
-     * font to another: the middle right after the start, the end at the right, and the start cut to what
-     * is left once it needs more than the row has.
+     * font to another: the middle right after the start, the end at the right, and what does not fit
+     * taken from the space first, every slot narrowing evenly from 48 to 28 and the gaps from 8 to none,
+     * and from the start only once all of it is gone; a label never.
      */
     @Test
-    fun `the row puts the thumbs right after the points and cuts the points short`() {
-        // In 335, an end 100 wide starts at 235, and a middle 50 wide leaves the start 169, each 8 apart.
+    fun `the row narrows its slots and gaps before it cuts the points short`() {
+        // Two labelled slots, 20-wide labels, and one plain in the middle, two plain at the end, in 335:
+        // at their narrowest, 28 each and no gaps, they take 2 * (14 + 12 + 2 + 20) + 3 * 28 = 180.
+        // Each icon 24 wide in the middle of its slot, and each label 2 past its icon.
+        data class Laid(
+            val start: Int,
+            val like: Int,
+            val likes: Int,
+            val menu: Int,
+            val skip: Int,
+        )
         mapOf(
-            60 to Triple(60, 68, 235),
-            134 to Triple(134, 142, 235),
-            169 to Triple(169, 177, 235),
-            300 to Triple(169, 177, 235),
+            // Room to spare: 48 slots, 8 gaps, and the rest between the middle and the end.
+            59 to Laid(start = 59, like = 79, likes = 105, menu = 195, skip = 299),
+            // Tight: 16 left over the narrowest widens each slot by 4, to 32, and leaves no gap.
+            139 to Laid(start = 139, like = 143, likes = 169, menu = 243, skip = 307),
+            // Too wide: every slot at 28, no gap, and the start cut to the 155 left.
+            300 to Laid(start = 155, like = 157, likes = 183, menu = 253, skip = 309),
         ).forEach { (startWidth, expected) ->
             val scene =
                 ImageComposeScene(width = ROW_WIDTH, height = ROW_HEIGHT, density = Density(1f)) {
                     PlayRow(
-                        gap = 8.dp,
+                        spacing =
+                            RowSpacing(
+                                gap = 8.dp,
+                                slotWidth = 48.dp,
+                                slotMinWidth = 28.dp,
+                                iconSize = 24.dp,
+                                labelGap = 2.dp,
+                            ),
                         start = { Probe("start", startWidth) },
-                        middle = { Probe("middle", 50) },
-                        end = { Probe("end", 100) },
+                        middle =
+                            listOf(
+                                RowSlot(icon = { Probe("like", ICON) }, label = { Probe("likes", 20) }),
+                                RowSlot(icon = { Probe("dislike", ICON) }, label = { Probe("dislikes", 20) }),
+                                RowSlot(icon = { Probe("menu", ICON) }),
+                            ),
+                        end = listOf(RowSlot(icon = { Probe("share", ICON) }), RowSlot(icon = { Probe("skip", ICON) })),
                         modifier = Modifier.fillMaxWidth(),
                     )
                 }
             try {
                 scene.render()
-                val (start, middle, end) =
-                    listOf("start", "middle", "end").map { name ->
-                        scene.nodes().single { name in it.descriptions }.boundsInRoot
-                    }
+                val names = listOf("start", "like", "likes", "dislike", "dislikes", "menu", "share", "skip")
+                val bounds = names.associateWith { scene.boundsOf(it) }
+                val at = "a start $startWidth wide: $bounds"
                 assertEquals(
                     expected,
-                    Triple(start.width.toInt(), middle.left.toInt(), end.left.toInt()),
-                    "a start $startWidth wide",
+                    Laid(
+                        start = bounds.getValue("start").width.toInt(),
+                        like = bounds.getValue("like").left.toInt(),
+                        likes = bounds.getValue("likes").left.toInt(),
+                        menu = bounds.getValue("menu").left.toInt(),
+                        skip = bounds.getValue("skip").left.toInt(),
+                    ),
+                    at,
                 )
-                assertEquals(0f, start.left)
-                assertEquals(ROW_WIDTH.toFloat(), end.right)
+                assertEquals(0f, bounds.getValue("start").left, at)
+                // Every label whole, and each part after the one before it, none over another.
+                listOf("likes", "dislikes").forEach { assertEquals(20f, bounds.getValue(it).width, at) }
+                bounds.values.zipWithNext().forEach { (before, after) -> assertTrue(before.right <= after.left, at) }
+                assertTrue(bounds.getValue("skip").right <= ROW_WIDTH, at)
             } finally {
                 scene.close()
             }
+        }
+    }
+
+    /**
+     * An icon narrowed in a tight row still takes a finger's tap a touch target's reach around it, outside
+     * its own bounds: above and below it, and over the count before it, which takes no tap of its own:
+     * Compose's own touch target for a pointer target smaller than 48, the nearest one's where two such
+     * reaches meet (CLAUDE.md §8d, *The Play screen*). Three-digit counts and four-digit points at font
+     * scale 1.3 narrow every slot.
+     */
+    @Test
+    fun `a narrowed icon takes a tap in its touch target`() {
+        val strings = stringsOf(Language.DEFAULT).playScreen
+        val question = QUESTION.copy(likeCount = 999, dislikeCount = 999)
+        val tapped = mutableListOf<String>()
+        val scene =
+            ImageComposeScene(width = ROW_WIDTH, height = ROW_HEIGHT, density = Density(1f, 1.3f)) {
+                WyrTheme {
+                    WyrStrings(Language.DEFAULT) {
+                        MiddleRow(
+                            question = question,
+                            points = 9999,
+                            rowError = null,
+                            idle = true,
+                            onReact = { tapped += "react $it" },
+                            onSkip = { tapped += "skip" },
+                            onShare = { tapped += "share" },
+                        )
+                    }
+                }
+            }
+        try {
+            scene.render()
+            // Each icon, and whether a count stands just before it.
+            val icons =
+                listOf(
+                    Triple(strings.like, "react LIKE", false),
+                    Triple(strings.dislike, "react DISLIKE", true),
+                    Triple(strings.share.share, "share", false),
+                    Triple(strings.skip, "skip", false),
+                )
+            icons.forEach { (name, action, afterCount) ->
+                val bounds = scene.boundsOf(name)
+                assertTrue(bounds.width < TOUCH_TARGET, "$name is not narrowed: $bounds")
+                // Above it, below it, and over the count just before it: outside its bounds, inside its reach.
+                val around = listOf(Offset(bounds.center.x, bounds.top - 2), Offset(bounds.center.x, bounds.bottom + 2))
+                (around + listOfNotNull(Offset(bounds.left - 2, bounds.center.y).takeIf { afterCount })).forEach { at ->
+                    tapped.clear()
+                    scene.sendPointerEvent(PointerEventType.Press, at, type = PointerType.Touch)
+                    scene.sendPointerEvent(PointerEventType.Release, at, type = PointerType.Touch)
+                    scene.render()
+                    assertEquals(listOf(action), tapped, "a tap at $at by $name at $bounds")
+                }
+            }
+        } finally {
+            scene.close()
         }
     }
 
@@ -898,38 +1012,75 @@ class PlayScreenDrawTest {
     /**
      * At a short phone's width, less the screen's padding, the row needs no more width than it has,
      * so nothing in it is cut short: not the points, not the counts, not how a reaction failed, in any
-     * language; and it is the same height whatever it shows.
+     * language, asked and answered, at font scales 1, 1.3 and 2, with three-digit counts and four-digit
+     * points, and at font scale 1 with four-digit likes and five-digit points; and it is the same height
+     * whatever it shows. Its least width is what it needs with its slots and gaps at their narrowest,
+     * which it narrows to before it cuts anything.
      */
     @Test
     fun `nothing in the row is cut short at a short phone's width`() {
-        val question = QUESTION.copy(likeCount = 1234, dislikeCount = 567, myReaction = Reaction.LIKE)
-        Language.entries.forEach { language ->
-            (REACTION_FAILURES + null).forEach { error ->
-                // Asked and answered.
-                listOf(false, true).forEach { answered ->
-                    val at = "with $error in $language ${if (answered) "answered" else "asked"}"
-                    val (width, height) =
-                        sizeNeeded(ROW_WIDTH, SHORT_PHONE_HEIGHT) {
-                            WyrTheme {
-                                WyrStrings(language) {
-                                    MiddleRow(
-                                        question = question,
-                                        points = 12345,
-                                        rowError = error,
-                                        idle = true,
-                                        onReact = {},
-                                        onSkip = {},
-                                        onShare = {},
-                                        answered = answered,
-                                    )
+        val large = QUESTION.copy(likeCount = 999, dislikeCount = 999, myReaction = Reaction.LIKE)
+        val larger = QUESTION.copy(likeCount = 1234, dislikeCount = 567, myReaction = Reaction.LIKE)
+        val cases = FONT_SCALES.map { Triple(it, large, 9999) } + Triple(1f, larger, 12345)
+        cases.forEach { (fontScale, question, points) ->
+            Language.entries.forEach { language ->
+                (REACTION_FAILURES + null).forEach { error ->
+                    // Asked and answered.
+                    listOf(false, true).forEach { answered ->
+                        val at =
+                            "with $error in $language ${if (answered) "answered" else "asked"} at font scale " +
+                                "$fontScale, ${question.likeCount} likes and $points points"
+                        val (width, height) =
+                            rowNeeds(fontScale) {
+                                WyrTheme {
+                                    WyrStrings(language) {
+                                        MiddleRow(
+                                            question = question,
+                                            points = points,
+                                            rowError = error,
+                                            idle = true,
+                                            onReact = {},
+                                            onSkip = {},
+                                            onShare = {},
+                                            answered = answered,
+                                        )
+                                    }
                                 }
                             }
-                        }
-                    assertTrue(width <= ROW_WIDTH, "the row $at needs $width of $ROW_WIDTH")
-                    assertEquals(ROW_HEIGHT, height, "the row $at")
+                        assertTrue(width <= ROW_WIDTH, "the row $at needs $width of $ROW_WIDTH")
+                        assertEquals(ROW_HEIGHT, height, "the row $at")
+                    }
                 }
             }
         }
+    }
+
+    /**
+     * The least width [content] needs to cut nothing short, and its height, at [fontScale] times the
+     * font size: its least intrinsic width, which a row that narrows its slots before it cuts reports.
+     */
+    private fun rowNeeds(
+        fontScale: Float,
+        content: @Composable () -> Unit,
+    ): Pair<Int, Int> {
+        var needed = -1 to -1
+        val scene =
+            ImageComposeScene(width = ROW_WIDTH, height = SHORT_PHONE_HEIGHT, density = Density(1f, fontScale)) {
+                Layout(content = content) { measurables, constraints ->
+                    val measurable = measurables.single()
+                    needed = measurable.minIntrinsicWidth(constraints.maxHeight) to
+                        measurable.minIntrinsicHeight(constraints.maxWidth)
+                    val placeable = measurable.measure(constraints)
+                    layout(placeable.width, placeable.height) { placeable.place(0, 0) }
+                }
+            }
+        try {
+            scene.render()
+        } finally {
+            scene.close()
+        }
+        assertTrue(needed.first > 0 && needed.second > 0, "the row was never measured")
+        return needed
     }
 
     /** The percentages the scene shows, card A's first. */
@@ -1000,6 +1151,9 @@ class PlayScreenDrawTest {
         return assertNotNull(node, "nothing shows \"$text\"")
     }
 
+    /** The bounds of the one node named [name]. */
+    private fun ImageComposeScene.boundsOf(name: String): Rect = nodes().single { name in it.descriptions }.boundsInRoot
+
     /** A box [width] wide, named [name] for a test to find, which a row may make narrower. */
     @Composable
     private fun Probe(
@@ -1014,10 +1168,18 @@ class PlayScreenDrawTest {
         state: PlayUiState,
         dark: Boolean,
         language: Language,
+    ): Set<Int> = coloursOf(stringsOf(language).playScreen.skip, state, dark, language)
+
+    /** The colours, as ARGB, of every pixel inside the button named [name] on [state]'s screen. */
+    private fun coloursOf(
+        name: String,
+        state: PlayUiState,
+        dark: Boolean,
+        language: Language,
     ): Set<Int> {
         val colours = mutableSetOf<Int>()
         withScreen(state, language = language, dark = dark) { scene, _ ->
-            val skip = scene.node(stringsOf(language).playScreen.skip).boundsInRoot
+            val skip = scene.node(name).boundsInRoot
             val pixels = scene.render().toComposeImageBitmap().toPixelMap()
             for (x in skip.left.toInt() until skip.right.toInt()) {
                 for (y in skip.top.toInt() until skip.bottom.toInt()) colours += pixels[x, y].toArgb()
@@ -1292,8 +1454,14 @@ class PlayScreenDrawTest {
         /** The short phone's width less the screen's padding on each side. */
         const val ROW_WIDTH = SHORT_PHONE_WIDTH - 2 * PADDING
 
+        /** An icon as Material draws it in an icon button. */
+        const val ICON = 24
+
         /** A thumb's touch target and the row's padding above and below it. */
         const val ROW_HEIGHT = 56
+
+        /** A touch target's width, as Material and Compose set it. */
+        const val TOUCH_TARGET = 48f
 
         /** How far an icon button's bounds are inside its touch target, 40 of 48, on each side. */
         const val TOUCH_INSET = 4f
@@ -1424,7 +1592,7 @@ class PlayScreenDrawTest {
             val b = QUESTION.optionB
             val revealedA = strings.percent(70)
             val revealedB = strings.percent(30)
-            val thumbs = listOf(strings.like, strings.dislike, strings.share.share, strings.skip)
+            val thumbs = listOf(strings.like, strings.dislike, strings.menu.name, strings.share.share, strings.skip)
             return listOf(
                 PlayUiState.Loading to (emptyList<String>() to listOf(shown.loading)),
                 PlayUiState.Failed(DomainError.NETWORK) to (listOf(strings.cannotReach, tryAgain) to emptyList()),

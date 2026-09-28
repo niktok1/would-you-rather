@@ -131,7 +131,7 @@ class WyrIconsDrawTest {
                 "Globe" to WyrIcons.Globe,
                 "Players" to WyrIcons.Players,
                 "Info" to WyrIcons.Info,
-                "More" to WyrIcons.More,
+                "Report" to WyrIcons.Report,
                 "Copy" to WyrIcons.Copy,
                 "Plus" to WyrIcons.Plus,
                 "ChevronRight" to WyrIcons.ChevronRight,

@@ -188,13 +188,19 @@ object WyrIcons {
     }
 
     /**
-     * More: three dots one over the other, for the Play screen's menu about the question on screen
-     * (CLAUDE.md §8d, *The Play screen*, *Reports*): report it, or hide it or its author.
+     * Report: an exclamation mark in a circle, for the Play screen's menu about the question on screen,
+     * in the row after the thumbs (CLAUDE.md §8d, *The Play screen*, *Reports*): report it, or hide it or
+     * its author. The circle is Info's, and the mark its i turned over, its stem above its dot.
      */
-    val More: ImageVector by lazy {
-        icon("More") {
-            path(fill = SolidColor(Color.Black)) {
-                listOf(5f, 12f, 19f).forEach { y -> dot(x = SIZE / 2, y = y) }
+    val Report: ImageVector by lazy {
+        icon("Report") {
+            outline {
+                circle(COIN_RADIUS)
+                // The stem, and under it the dot, a stroke so short its round ends make it a dot.
+                moveTo(12f, 7f)
+                verticalLineTo(12.8f)
+                moveTo(12f, 16.4f)
+                lineTo(12f, 16.8f)
             }
         }
     }
@@ -326,17 +332,6 @@ object WyrIcons {
         close()
     }
 
-    /** A dot of [DOT_RADIUS] about ([x], [y]), in two half turns. */
-    private fun PathBuilder.dot(
-        x: Float,
-        y: Float,
-    ) {
-        moveTo(x - DOT_RADIUS, y)
-        arcTo(DOT_RADIUS, DOT_RADIUS, 0f, isMoreThanHalf = true, isPositiveArc = true, x1 = x + DOT_RADIUS, y1 = y)
-        arcTo(DOT_RADIUS, DOT_RADIUS, 0f, isMoreThanHalf = true, isPositiveArc = true, x1 = x - DOT_RADIUS, y1 = y)
-        close()
-    }
-
     /** [draw]'s figure filled and outlined, the outline's size exactly. */
     private fun filled(
         name: String,
@@ -410,9 +405,6 @@ object WyrIcons {
 
     /** The thin stroke round the star, which rounds its points. */
     private const val STAR_STROKE = 1f
-
-    /** Each of [More]'s dots, a little wider than a stroke. */
-    private const val DOT_RADIUS = 2f
 
     /** Each of [Share]'s rings. */
     private const val RING_RADIUS = 3f
