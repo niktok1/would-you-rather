@@ -14,7 +14,6 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -38,6 +37,7 @@ import io.ntole.wyr.language.LocalStrings
 import io.ntole.wyr.language.USERNAME_CHARACTERS
 import io.ntole.wyr.language.fill
 import io.ntole.wyr.points.PointsText
+import io.ntole.wyr.theme.PageSurface
 import io.ntole.wyr.theme.WyrThemeAccessors
 import io.ntole.wyr.theme.contentWidth
 
@@ -62,7 +62,7 @@ fun AuthScreen(
     val colors = WyrThemeAccessors.colors
     val dimens = WyrThemeAccessors.dimens
 
-    Surface(color = colors.pageBackground, modifier = modifier.fillMaxSize()) {
+    PageSurface(modifier = modifier.fillMaxSize()) {
         Column(
             modifier =
                 Modifier

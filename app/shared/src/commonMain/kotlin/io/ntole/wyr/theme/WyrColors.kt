@@ -6,7 +6,8 @@ import androidx.compose.ui.graphics.Color
  * Every colour in the app, in one place (CLAUDE.md §5b).
  *
  * Screens read these through [LocalWyrColors]; no composable outside this package may write a
- * hex literal. Adding a third theme means adding another [WyrColors] value here and nothing else.
+ * hex literal. The game's own look, free, is [WyrLightColors] and [WyrDarkColors], here; the shop's
+ * themes are one [WyrColors] each, in `ShopThemes.kt` ([GameThemes], CLAUDE.md §8d, *The shop*).
  */
 data class WyrColors(
     val pageBackground: Color,
@@ -39,7 +40,8 @@ data class WyrColors(
 
 /**
  * The two answer colours are the brand and stay constant in light and dark — they are how the
- * game is recognised. Everything else shifts with the mode.
+ * game is recognised. Everything else shifts with the mode. A theme bought in the shop gives the cards
+ * colours of its own (CLAUDE.md §5b).
  */
 private val OptionA = Color(0xFFD4537E)
 private val OnOptionA = Color(0xFFFFFFFF)

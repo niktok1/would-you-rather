@@ -73,6 +73,9 @@ import io.ntole.wyr.play.categoriesPlayed
 import io.ntole.wyr.services.AppServices
 import io.ntole.wyr.share.LocalShareSheet
 import io.ntole.wyr.share.rememberShareSheet
+import io.ntole.wyr.shop.ShopScreen
+import io.ntole.wyr.shop.ShopViewModel
+import io.ntole.wyr.shop.ThemeViewModel
 import io.ntole.wyr.submit.SubmitScreen
 import io.ntole.wyr.submit.SubmitViewModel
 import io.ntole.wyr.theme.WyrTheme
@@ -100,13 +103,15 @@ import org.koin.compose.viewmodel.koinViewModel
 fun App() {
     val languages = koinViewModel<LanguageViewModel>()
     val language by languages.language.collectAsStateWithLifecycle()
+    // The theme the player on this device put on in the shop, the game's own for anyone else (§8d, *The shop*).
+    val theme by koinViewModel<ThemeViewModel>().theme.collectAsStateWithLifecycle()
     ReportForegroundAndBackground(koinInject(), language, services = koinInject())
     val updateRequired by koinInject<AppUpdate>().required.collectAsStateWithLifecycle()
 
     // Every tap on every screen is counted there (CLAUDE.md §8g, [io.ntole.wyr.analytics.tapped]), and a
     // question is shared through the platform's own sheet (§8d, *Sharing*).
     CompositionLocalProvider(LocalAnalytics provides koinInject(), LocalShareSheet provides rememberShareSheet()) {
-        WyrTheme {
+        WyrTheme(theme = theme) {
             WyrStrings(language) {
                 if (updateRequired) {
                     UpdateRequired()
@@ -187,6 +192,7 @@ private fun Screens() {
                     Play(
                         onHome = { navigator.open(Screen.Home) },
                         onAccount = { navigator.open(Screen.Account) },
+                        onShop = { navigator.open(Screen.Shop) },
                         news = news,
                         onOpenCategories = {
                             // A visit of its own: what is played now ticked, and nothing searched.
@@ -197,9 +203,14 @@ private fun Screens() {
                 }
 
                 Screen.Account -> {
-                    AccountTopBar(onBack = { navigator.back() }, onAbout = { navigator.open(Screen.About) })
+                    AccountTopBar(
+                        onBack = { navigator.back() },
+                        onAbout = { navigator.open(Screen.About) },
+                        onShop = { navigator.open(Screen.Shop) },
+                    )
                     Below {
                         Account(
+                            onOpenShop = { navigator.open(Screen.Shop) },
                             onOpenAuth = { navigator.open(Screen.Auth) },
                             onNewQuestion = { navigator.open(Screen.Submit) },
                             onOpenQuestion = { id ->
@@ -235,6 +246,11 @@ private fun Screens() {
                     BackTopBar(onBack = { navigator.back() })
                     Below { QuestionDetails(openedQuestion, onGone = { navigator.back() }) }
                 }
+
+                Screen.Shop -> {
+                    BackTopBar(onBack = { navigator.back() })
+                    Below { Shop(onOpenAuth = { navigator.open(Screen.Auth) }) }
+                }
             }
         }
     }
@@ -255,6 +271,10 @@ private fun About(onDeleted: () -> Unit) {
     val account = koinViewModel<AccountViewModel>()
     val state by account.state.collectAsStateWithLifecycle()
 
+    // The player's choice, kept on the device, which the analytics hold (CLAUDE.md §8g).
+    val analytics = LocalAnalytics.current
+    val statisticsOn by analytics.enabled.collectAsStateWithLifecycle()
+
     LaunchedEffect(account) { account.authShown() }
     LaunchedEffect(state.deleted) {
         if (state.deleted) {
@@ -266,6 +286,8 @@ private fun About(onDeleted: () -> Unit) {
     AboutScreen(
         version = koinInject(),
         accountId = accountId,
+        statisticsOn = statisticsOn,
+        onStatisticsChange = analytics::setEnabled,
         deletion = { DeleteAccount(state = state, actions = account) },
     )
 }
@@ -385,6 +407,7 @@ private fun ColumnScope.Below(screen: @Composable () -> Unit) {
 
 @Composable
 private fun Account(
+    onOpenShop: () -> Unit,
     onOpenAuth: () -> Unit,
     onNewQuestion: () -> Unit,
     onOpenQuestion: (String) -> Unit,
@@ -417,16 +440,11 @@ private fun Account(
         }
     }
 
-    // The player's choice, kept on the device, which the analytics hold (CLAUDE.md §8g).
-    val analytics = LocalAnalytics.current
-    val statisticsOn by analytics.enabled.collectAsStateWithLifecycle()
-
     AccountScreen(
         state = state,
         actions = viewModel,
         environment = koinInject(),
-        statisticsOn = statisticsOn,
-        onStatisticsChange = analytics::setEnabled,
+        onOpenShop = onOpenShop,
         onOpenAuth = onOpenAuth,
         onNewQuestion = onNewQuestion,
         onOpenQuestion = onOpenQuestion,
@@ -508,6 +526,7 @@ private fun Categories(onPlayed: () -> Unit) {
 private fun ColumnScope.Play(
     onHome: () -> Unit,
     onAccount: () -> Unit,
+    onShop: () -> Unit,
     news: Boolean,
     onOpenCategories: () -> Unit,
 ) {
@@ -553,6 +572,41 @@ private fun ColumnScope.Play(
             onNext = viewModel::next,
             onRetry = viewModel::retry,
             onShared = viewModel::shared,
+            onPoints = onShop,
         )
     }
+}
+
+/**
+ * The shop (CLAUDE.md §8d, *The shop*), read each time it is shown. A theme bought is put on at once,
+ * and one put on is worn by [ThemeViewModel], which takes off one the read says the player no longer
+ * owns. A guest's way to register is [onOpenAuth].
+ */
+@Composable
+private fun Shop(onOpenAuth: () -> Unit) {
+    val viewModel = koinViewModel<ShopViewModel>()
+    val state by viewModel.state.collectAsStateWithLifecycle()
+    val themes = koinViewModel<ThemeViewModel>()
+    val worn by themes.theme.collectAsStateWithLifecycle()
+
+    // A rotation's shows the same visit, which the analytics count once (CLAUDE.md §8g).
+    ShownEffect(viewModel, viewModel::shown)
+    LaunchedEffect(state.shop) {
+        state.shop?.let { shop ->
+            themes.owned(
+                shop.themes
+                    .filter { it.owned }
+                    .map { it.id }
+                    .toSet(),
+            )
+        }
+    }
+    LaunchedEffect(state.bought) {
+        state.bought?.let { bought ->
+            themes.wear(bought)
+            viewModel.boughtWorn()
+        }
+    }
+
+    ShopScreen(state = state, actions = viewModel, worn = worn, onWear = themes::wear, onOpenAuth = onOpenAuth)
 }

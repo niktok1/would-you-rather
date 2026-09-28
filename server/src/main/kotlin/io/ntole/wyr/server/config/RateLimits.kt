@@ -19,9 +19,9 @@ data class RequestBudget(
 /**
  * What one client may send (CLAUDE.md §8b, *Rate limiting*): a budget for each group of routes, spent
  * apart from every other group's. Registrations, logouts, the feed, votes, skips, reactions, submissions,
- * reports, hides, deletions, home picks, push tokens and the two reads of the player's own are per player,
- * so players behind one address do not share them; the rest, whose caller has no session to name, or needs
- * none, per client address.
+ * reports, hides, deletions, home picks, push tokens, the shop, purchases and the two reads of the
+ * player's own are per player, so players behind one address do not share them; the rest, whose caller
+ * has no session to name, or needs none, per client address.
  *
  * Each is overridable by the environment variable [fromEnvironment] names, a count per the period the
  * name ends in. The periods are fixed.
@@ -89,6 +89,13 @@ data class RateLimits(
      * token when it starts, when its session changes and when Firebase gives it a new one.
      */
     val pushTokens: RequestBudget,
+    /** `GET /v1/shop`. The shop is read each time it is shown. */
+    val shop: RequestBudget,
+    /**
+     * `POST /v1/me/purchases`. A player buys a few themes at most, and each takes points many answers
+     * earned; a resend or a double tap is refused as owned already.
+     */
+    val purchases: RequestBudget,
     /** Every admin route together, per address, whatever token the request carries. */
     val admin: RequestBudget,
     /**
@@ -126,6 +133,8 @@ data class RateLimits(
                 homePickCounts = RequestBudget(requests = 120, per = 1.minutes),
                 homePicks = RequestBudget(requests = 30, per = 1.minutes),
                 pushTokens = RequestBudget(requests = 60, per = 1.hours),
+                shop = RequestBudget(requests = 120, per = 1.minutes),
+                purchases = RequestBudget(requests = 30, per = 1.hours),
                 admin = RequestBudget(requests = 60, per = 1.minutes),
                 adminTokenFailures = RequestBudget(requests = 10, per = 1.minutes),
             )
@@ -170,6 +179,8 @@ data class RateLimits(
                     homePickCounts = budget("RATE_LIMIT_HOME_PICK_COUNTS_PER_MINUTE", homePickCounts),
                     homePicks = budget("RATE_LIMIT_HOME_PICKS_PER_MINUTE", homePicks),
                     pushTokens = budget("RATE_LIMIT_PUSH_TOKENS_PER_HOUR", pushTokens),
+                    shop = budget("RATE_LIMIT_SHOP_PER_MINUTE", shop),
+                    purchases = budget("RATE_LIMIT_PURCHASES_PER_HOUR", purchases),
                     admin = budget("RATE_LIMIT_ADMIN_PER_MINUTE", admin),
                     adminTokenFailures = budget("RATE_LIMIT_ADMIN_TOKEN_FAILURES_PER_MINUTE", adminTokenFailures),
                 )

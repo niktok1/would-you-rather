@@ -86,6 +86,7 @@ import io.ntole.wyr.share.ShareButton
 import io.ntole.wyr.share.ShareDialog
 import io.ntole.wyr.share.ShareOutcome
 import io.ntole.wyr.share.SharedQuestion
+import io.ntole.wyr.theme.PageSurface
 import io.ntole.wyr.theme.WyrIcons
 import io.ntole.wyr.theme.WyrThemeAccessors
 import io.ntole.wyr.theme.WyrTypeScale
@@ -101,8 +102,9 @@ import kotlin.time.Duration.Companion.milliseconds
  * the one the player holds. Share opens the dialog that shares the question on screen, with its results
  * once it is answered (§8d, *Sharing*), and [onShared] hears what was shared.
  *
- * [points] are the player's as the server last reported them, `null` until it has. The categories
- * played are on the top bar above it (`PlayTopBar`, [CategoriesPlayed]).
+ * [points] are the player's as the server last reported them, `null` until it has, and a tap on them
+ * opens the shop ([onPoints], CLAUDE.md §8d, *The shop*). The categories played are on the top bar
+ * above it (`PlayTopBar`, [CategoriesPlayed]).
  */
 @Composable
 fun PlayScreen(
@@ -115,6 +117,7 @@ fun PlayScreen(
     onRetry: () -> Unit,
     modifier: Modifier = Modifier,
     onShared: (question: SharedQuestion, withResults: Boolean, outcome: ShareOutcome) -> Unit = { _, _, _ -> },
+    onPoints: () -> Unit = {},
 ) {
     val colors = WyrThemeAccessors.colors
     val dimens = WyrThemeAccessors.dimens
@@ -148,7 +151,7 @@ fun PlayScreen(
             is PlayUiState.Failed -> null
         }
 
-    Surface(color = colors.pageBackground, modifier = modifier.fillMaxSize()) {
+    PageSurface(modifier = modifier.fillMaxSize()) {
         Column(
             modifier =
                 Modifier
@@ -170,6 +173,7 @@ fun PlayScreen(
                     onNext = onNext,
                     onReact = onReact,
                     onShare = { sharing = it },
+                    onPoints = onPoints,
                 )
             } else if (state is PlayUiState.Failed) {
                 Spacer(Modifier.height(dimens.screenPadding))
@@ -259,6 +263,7 @@ private fun ColumnScope.QuestionBody(
     onNext: () -> Unit,
     onReact: (Reaction) -> Unit,
     onShare: (SharedQuestion) -> Unit,
+    onPoints: () -> Unit,
 ) {
     val colors = WyrThemeAccessors.colors
     val dimens = WyrThemeAccessors.dimens
@@ -314,6 +319,7 @@ private fun ColumnScope.QuestionBody(
             rowError = state.rowError,
             idle = idle,
             onReact = onReact,
+            onPoints = onPoints,
             // Only before answering (CLAUDE.md §8d, *Skipping*): once revealed, a card is the way on.
             onSkip = if (state is PlayUiState.Asking) onSkip else null,
             onShare = {
@@ -380,6 +386,7 @@ internal fun MiddleRow(
     onReact: (Reaction) -> Unit,
     onSkip: (() -> Unit)?,
     onShare: () -> Unit,
+    onPoints: () -> Unit = {},
 ) {
     val colors = WyrThemeAccessors.colors
     val dimens = WyrThemeAccessors.dimens
@@ -411,7 +418,13 @@ internal fun MiddleRow(
                         overflow = TextOverflow.Ellipsis,
                     )
                 } else if (points != null) {
-                    PointsAmount(points = points, fontWeight = FontWeight.Bold, color = colors.primaryText)
+                    // The way to the shop, where the points are spent (CLAUDE.md §8d, *The shop*).
+                    PointsAmount(
+                        points = points,
+                        fontWeight = FontWeight.Bold,
+                        color = colors.primaryText,
+                        onClick = tapped("play.points", onClick = onPoints),
+                    )
                 }
             }
         },

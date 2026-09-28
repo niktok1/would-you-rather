@@ -1,5 +1,6 @@
 package io.ntole.wyr.points
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -15,6 +16,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.Placeholder
@@ -58,9 +60,10 @@ private fun CoinLayers() {
 }
 
 /**
- * [points] as the game shows an amount on its own, on the Play screen's row and the Account card: the
- * coin and the number, the coin as tall as the number's text and a little more. A screen reader hears
- * *Поени: 43*, in the language shown.
+ * [points] as the game shows an amount on its own, on the Play screen's row, the Account card and the
+ * shop: the coin and the number, the coin as tall as the number's text and a little more. A screen
+ * reader hears *Поени: 43*, in the language shown. With [onClick] it is a button, the way to the shop
+ * where the points are spent (CLAUDE.md §8d, *The shop*), heard as the same words and a button.
  */
 @Composable
 fun PointsAmount(
@@ -69,6 +72,7 @@ fun PointsAmount(
     fontSize: TextUnit = TextUnit.Unspecified,
     fontWeight: FontWeight? = null,
     color: Color = Color.Unspecified,
+    onClick: (() -> Unit)? = null,
 ) {
     val dimens = WyrThemeAccessors.dimens
     val label = LocalStrings.current.points.fill(points)
@@ -78,9 +82,10 @@ fun PointsAmount(
         listOf(fontSize, LocalTextStyle.current.fontSize).firstOrNull { it.isSp } ?: WyrTypeScale.sectionTitle
     val coin = with(LocalDensity.current) { (textSize * COIN_TO_TEXT).toDp() }
 
+    val tappable = if (onClick != null) Modifier.clickable(role = Role.Button, onClick = onClick) else Modifier
     Row(
         verticalAlignment = Alignment.CenterVertically,
-        modifier = modifier.clearAndSetSemantics { contentDescription = label },
+        modifier = modifier.then(tappable).clearAndSetSemantics { contentDescription = label },
     ) {
         CoinIcon(size = coin)
         Spacer(Modifier.size(dimens.spaceXs))

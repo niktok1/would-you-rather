@@ -144,8 +144,6 @@ class LoadingSpinnerDrawTest {
                         state = AccountState(running = AccountAction.LOAD),
                         actions = NoAccountActions,
                         environment = WyrEnvironment.PROD,
-                        statisticsOn = true,
-                        onStatisticsChange = {},
                         onOpenAuth = {},
                         onNewQuestion = {},
                     )

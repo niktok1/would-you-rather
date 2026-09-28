@@ -120,6 +120,11 @@ internal fun ErrorCode.toDomain(): DomainError =
         // away. The Submit form says so in a few words.
         ErrorCode.SUBMISSIONS_BLOCKED -> DomainError.SUBMISSIONS_BLOCKED
 
+        // A purchase in the shop, each the player's to see in words: bought already, or sold no more.
+        ErrorCode.ALREADY_OWNED -> DomainError.ALREADY_OWNED
+
+        ErrorCode.ITEM_NOT_FOUND -> DomainError.ITEM_NOT_FOUND
+
         ErrorCode.ALREADY_DECIDED -> DomainError.ALREADY_DECIDED
 
         ErrorCode.WRONG_STATUS -> DomainError.WRONG_STATUS

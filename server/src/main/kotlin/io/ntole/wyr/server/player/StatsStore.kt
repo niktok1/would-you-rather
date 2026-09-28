@@ -5,6 +5,7 @@ import io.ntole.wyr.core.question.QuestionStatus
 import io.ntole.wyr.server.auth.IdentityProvider
 import io.ntole.wyr.server.db.Identities
 import io.ntole.wyr.server.db.Players
+import io.ntole.wyr.server.db.Purchases
 import io.ntole.wyr.server.db.Questions
 import io.ntole.wyr.server.db.Votes
 import io.ntole.wyr.server.question.QuestionStore
@@ -12,6 +13,8 @@ import io.ntole.wyr.server.reaction.ReactionStore
 import io.ntole.wyr.server.vote.Scoring
 import org.jetbrains.exposed.v1.core.Coalesce
 import org.jetbrains.exposed.v1.core.Expression
+import org.jetbrains.exposed.v1.core.IntegerColumnType
+import org.jetbrains.exposed.v1.core.PlusOp
 import org.jetbrains.exposed.v1.core.ResultRow
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.count
@@ -30,13 +33,14 @@ object StatsStore {
      * Beside the numbers, the player's username, null for a guest (CLAUDE.md §8a, *Accounts*), and
      * whether they signed in with Play Games (*Play Games sign-in*), in the same statement.
      *
-     * All of them come from one statement: the player's row, with three counts and a sum beside it,
+     * All of them come from one statement: the player's row, with three counts and two sums beside it,
      * the due count compared with that row's own cycle. At READ COMMITTED each statement sees what was
      * committed before it began, so read one after another they could straddle an answer by the same
      * player committing in between, and report a question answered with no answer given for it, a
-     * like on one of their questions with no point paid for it, or a submission's cost taken with no
-     * question to show for it. As one, they are all from before that answer, like or submission or all
-     * from after it, as the tally's two counts are (`VoteStore`). So the total is always exactly what
+     * like on one of their questions with no point paid for it, or a submission's cost or a purchase's
+     * price taken with no question or item to show for it. As one, they are all from before that
+     * answer, like, submission or purchase or all from after it, as the tally's two counts are
+     * (`VoteStore`). So the total is always exactly what
      * the answers given and the likes received earned, less the points spent (`Scoring`).
      *
      * The cycle is read, never started. The feed starts the next one when it finds nothing due
@@ -96,15 +100,27 @@ object StatsStore {
     }
 
     /**
-     * What [playerId]'s questions not rejected cost them to submit (CLAUDE.md §8c), 0 for none: an
-     * expression to embed beside the total, so the two are one moment's.
+     * What [playerId]'s questions not rejected cost them to submit (CLAUDE.md §8c), plus what they paid
+     * in the shop (§8d, *The shop*), 0 for none: an expression to embed beside the total, so they are
+     * all one moment's. Two subqueries, added in SQL, so it stays one column of the one statement.
      */
-    private fun spentBy(playerId: String): Expression<Int?> =
-        wrapAsExpression(
-            Questions
-                .select(Coalesce(Questions.submissionCost.sum(), intLiteral(0)))
-                .where { (Questions.authorPlayerId eq playerId) and (Questions.status neq QuestionStatus.REJECTED) },
-        )
+    private fun spentBy(playerId: String): Expression<Int?> {
+        val submitting =
+            wrapAsExpression<Int>(
+                Questions
+                    .select(Coalesce(Questions.submissionCost.sum(), intLiteral(0)))
+                    .where {
+                        (Questions.authorPlayerId eq playerId) and (Questions.status neq QuestionStatus.REJECTED)
+                    },
+            )
+        val buying =
+            wrapAsExpression<Int>(
+                Purchases
+                    .select(Coalesce(Purchases.price.sum(), intLiteral(0)))
+                    .where { Purchases.playerId eq playerId },
+            )
+        return PlusOp(submitting, buying, IntegerColumnType())
+    }
 
     /** A `COUNT` subquery's value. It always yields one row, so it is never null. */
     private fun ResultRow.countOf(expression: Expression<Long?>): Int =

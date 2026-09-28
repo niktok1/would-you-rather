@@ -51,11 +51,28 @@ like), asked once in the feed or on the Account screen, and each split shown onl
 minimum number of players, so no answer points to one person. Inference stays for
 personalization only (§8b), never shown as a label.
 
-## Shop
+## More for the shop
 
-Buying themes and decorations. Themes are already one `WyrColors` value each (§5b). To settle:
-coins only, or real money too, which needs Google Play Billing (a new dependency, §2 and §4)
-and Apple's in-app purchase on iOS.
+The shop is built with themes alone (CLAUDE.md §8d, *The shop*). What could come next, each an item
+the server sells by id beside the themes, as a list of its own in `ShopDto`:
+
+- **Remote config for the catalog and prices**: the items, their prices and sales held on the server
+  (a table the moderation app edits, say) instead of `ShopCatalog` and `THEME_PRICE`. A new theme
+  still needs a build that draws it, so the server would only list what the client knows.
+- **Card styles**: the answer cards' shape and edge (rounder, square, a stitched or a glowing border),
+  worn with any theme.
+- **Coin skins**: the coin drawn another way (a star, a gem, a bottle cap).
+- **Reveal effects**: how the split is shown (confetti for the side picked, a slower race, a sound),
+  and a sound pack for taps.
+- **Avatar frames and badges** on the Account card, and a colour for the player's name.
+- **Seasonal or limited themes**: New Year, summer, a derby weekend, on sale for a while only.
+- **Bundles and sales**: several items for less, or a theme cheaper for a week.
+- **Gifting**: buying an item for another player, by their username.
+- **Boosting a question of one's own**: served a little sooner to more players for a while. To settle
+  how it meets the cycles (§8d, *Endless feed*) and whether it favours paying authors too much.
+- **An extra pending-question slot** beyond the 20 (§8d, *Submitting*), bought once.
+- **Real money** besides points, which needs Google Play Billing (a new dependency, §2 and §4) and
+  Apple's in-app purchase on iOS; and whether bought points may buy what earned points buy.
 
 ## Rewarded ads for coins
 

@@ -35,6 +35,7 @@ import io.ntole.wyr.server.question.questionRoutes
 import io.ntole.wyr.server.question.submissionRoutes
 import io.ntole.wyr.server.reaction.reactionRoutes
 import io.ntole.wyr.server.report.reportRoutes
+import io.ntole.wyr.server.shop.shopRoutes
 import io.ntole.wyr.server.vote.voteRoutes
 import kotlinx.coroutines.CoroutineName
 import kotlinx.coroutines.CoroutineScope
@@ -121,6 +122,7 @@ fun Application.wyrModule(
         playerRoutes(db, config.submissionCost)
         homePickRoutes(db)
         pushRoutes(db)
+        shopRoutes(db, config.themePrice)
         // Not registered at all without an admin token, so moderation is off (CLAUDE.md §8d).
         moderationRoutes(db, adminToken, notifier)
     }

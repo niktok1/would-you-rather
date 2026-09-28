@@ -12,6 +12,7 @@ import io.ntole.wyr.server.auth.SessionStore
 import io.ntole.wyr.server.db.HiddenAuthors
 import io.ntole.wyr.server.db.HiddenQuestions
 import io.ntole.wyr.server.db.Players
+import io.ntole.wyr.server.db.Purchases
 import io.ntole.wyr.server.db.QuestionCategories
 import io.ntole.wyr.server.db.Questions
 import io.ntole.wyr.server.db.Reactions
@@ -31,6 +32,7 @@ import io.ntole.wyr.server.question.QuestionStore
 import io.ntole.wyr.server.question.SkipStore
 import io.ntole.wyr.server.reaction.ReactionStore
 import io.ntole.wyr.server.report.ReportStore
+import io.ntole.wyr.server.shop.ShopStore
 import io.ntole.wyr.server.vote.Scoring
 import io.ntole.wyr.server.vote.VoteStore
 import org.jetbrains.exposed.v1.core.Column
@@ -86,6 +88,7 @@ class AccountDeletionTest {
             ReactionStore.set(other, approved, Reaction.LIKE)
             ReportStore.hideAuthorOf(hider, approved)
             ModerationStore.retire(retired)
+            ShopStore.buy(deleted, "OCEAN", price = 0)
         }
 
         transaction(database) { AccountDeletion.delete(deleted) }
@@ -101,6 +104,7 @@ class AccountDeletionTest {
             HiddenAuthors.playerId,
             HiddenAuthors.authorPlayerId,
             Questions.authorPlayerId,
+            Purchases.playerId,
         ).forEach { column -> assertEquals(0, rowsOf(column, deleted), "no ${column.name} names them") }
         assertEquals(0, rowsOf(Questions.id, pending) + rowsOf(Questions.id, rejected), "never served, so gone")
         assertEquals(0, rowsOf(QuestionCategories.questionId, pending), "and filed under nothing")

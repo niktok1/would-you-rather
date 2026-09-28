@@ -5,10 +5,12 @@ import androidx.compose.ui.graphics.luminance
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 /**
- * Every colour pair the theme puts text or an icon on, in both themes, held to WCAG AA contrast
+ * Every colour pair the theme puts text or an icon on, in both of the game's own modes and in every
+ * palette of the shop's themes (CLAUDE.md §8d, *The shop*), held to WCAG AA contrast
  * (CLAUDE.md §5b): 4.5 to 1 for text, 3 to 1 for large text (18.66 or more bold, 24 or more otherwise)
  * and for an icon or a graphic's edge. Computed from the tokens, and from the Material scheme the theme
  * mirrors them into, as WCAG computes it, from each colour's relative luminance.
@@ -70,6 +72,43 @@ class WyrContrastTest {
         }
     }
 
+    /**
+     * A theme's art is drawn behind every screen, so text may stand on any of its colours: each keeps the
+     * page's text, muted text, the heading accent and a failure at 4.5 to 1 on it, as on the page itself.
+     */
+    @Test
+    fun `text on a theme's art reads as it does on the page`() {
+        GameThemes.ALL.forEach { theme ->
+            theme.palettes.forEach { colors ->
+                theme.art.colors.forEach { art ->
+                    listOf(
+                        "primary text" to colors.primaryText,
+                        "muted text" to colors.muted,
+                        "the heading accent" to colors.headingAccent,
+                        "a failure" to colors.error,
+                    ).forEach { (what, text) ->
+                        val ratio = contrast(text, art)
+                        assertTrue(ratio >= TEXT, "${theme.id}: $what on the art's $art reads at $ratio to 1")
+                    }
+                }
+            }
+        }
+    }
+
+    /** Every theme has an id of its own, and the game's own draws no art. */
+    @Test
+    fun `every theme is its own and the game's own is plain`() {
+        assertEquals(
+            GameThemes.ALL.size,
+            GameThemes.ALL
+                .map { it.id }
+                .toSet()
+                .size,
+        )
+        assertEquals(ThemeArt.None, GameThemes.Default.art)
+        GameThemes.ALL.drop(1).forEach { theme -> assertTrue(theme.art.colors.isNotEmpty(), theme.id) }
+    }
+
     private fun assertAtLeast(
         least: Float,
         what: String,
@@ -89,10 +128,12 @@ class WyrContrastTest {
         return (max(la, lb) + FLARE) / (min(la, lb) + FLARE)
     }
 
-    private fun themeOf(colors: WyrColors): String = if (colors.isDark) "dark" else "light"
+    private fun themeOf(colors: WyrColors): String =
+        GameThemes.ALL.firstOrNull { colors in it.palettes && it != GameThemes.Default }?.id
+            ?: if (colors.isDark) "dark" else "light"
 
     private companion object {
-        val THEMES = listOf(WyrLightColors, WyrDarkColors)
+        val THEMES = GameThemes.ALL.flatMap { it.palettes }
         const val TEXT = 4.5f
         const val LARGE_TEXT = 3f
         const val GRAPHIC = 3f

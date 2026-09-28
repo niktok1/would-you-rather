@@ -20,8 +20,10 @@ import io.ntole.wyr.core.api.WyrApi
  * Submitting a question costs its author the server's `SUBMISSION_COST` (`ServerConfig.submissionCost`,
  * [DEFAULT_SUBMISSION_COST] unset; `SubmissionStore.submit`), which a
  * rejection pays back and an approval keeps, though an author who likes it is paid for that like as
- * for anyone's (CLAUDE.md §8c). So a player's total is always what their answers earned, plus that
- * much for each like their questions hold, less what their questions not rejected cost them.
+ * for anyone's (CLAUDE.md §8c), and a theme in the shop costs the server's `THEME_PRICE`
+ * (`ShopStore.buy`, §8d *The shop*). So a player's total is always what their answers earned, plus
+ * that much for each like their questions hold, less what their questions not rejected cost them and
+ * what they paid in the shop.
  */
 object Scoring {
     const val POINTS_PER_ANSWER: Int = 1

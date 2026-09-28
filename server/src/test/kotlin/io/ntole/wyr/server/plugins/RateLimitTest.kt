@@ -49,6 +49,7 @@ import io.ntole.wyr.core.report.HideAuthorRequest
 import io.ntole.wyr.core.report.HideQuestionRequest
 import io.ntole.wyr.core.report.ReportReason
 import io.ntole.wyr.core.report.ReportRequest
+import io.ntole.wyr.core.shop.PurchaseRequest
 import io.ntole.wyr.core.vote.OptionSide
 import io.ntole.wyr.core.vote.VoteRequest
 import io.ntole.wyr.server.NO_PRACTICAL_LIMIT
@@ -558,6 +559,18 @@ class RateLimitTest {
                         WyrApi.Paths.MY_PUSH_TOKEN_REMOVALS,
                     ) { json(caller.player, RemovePushTokenRequest("token")) }
                 }
+            },
+            Group("shop", { copy(shop = it) }) { caller ->
+                caller.client.get(WyrApi.Paths.SHOP) { bearerAuth(caller.player.accessToken) }
+            },
+            // A registered player with no points, so every one is refused alike, 409, and buys nothing.
+            Group(
+                "purchases",
+                { copy(purchases = it) },
+                allowed = HttpStatusCode.Conflict,
+                needsAccount = true,
+            ) { caller ->
+                caller.client.post(WyrApi.Paths.MY_PURCHASES) { json(caller.player, PurchaseRequest("OCEAN")) }
             },
             Group("admin", { copy(admin = it) }, needsSession = false) { caller ->
                 caller.client.queue(ADMIN_TOKEN)

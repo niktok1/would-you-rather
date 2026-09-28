@@ -45,6 +45,7 @@ import io.ntole.wyr.share.ShareButton
 import io.ntole.wyr.share.ShareDialog
 import io.ntole.wyr.share.ShareOutcome
 import io.ntole.wyr.share.SharedQuestion
+import io.ntole.wyr.theme.PageSurface
 import io.ntole.wyr.theme.WyrIcons
 import io.ntole.wyr.theme.WyrThemeAccessors
 import io.ntole.wyr.theme.WyrTypeScale
@@ -81,7 +82,7 @@ fun QuestionDetailsScreen(
     val countedB = rememberCountUp(tally.percentB, rival = tally.percentA, durationMillis = HOME_COUNT_UP_MILLIS)
     var sharing by remember { mutableStateOf<SharedQuestion?>(null) }
 
-    Surface(color = colors.pageBackground, modifier = modifier.fillMaxSize()) {
+    PageSurface(modifier = modifier.fillMaxSize()) {
         Column(
             modifier =
                 Modifier

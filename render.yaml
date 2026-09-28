@@ -124,6 +124,10 @@ services:
         sync: false
       # GUEST_RETENTION_DAYS is unset, so the default, 90, applies: dev's H2 forgets every guest long
       # before that anyway.
+      # What each theme in the shop costs, in points (CLAUDE.md §8d, The shop): 1 on dev, so a tester
+      # can buy every theme after a few answers. Unset on wyr-server, whose price is the default, 220.
+      - key: THEME_PRICE
+        value: "1"
 
 databases:
   - name: wyr-postgres

@@ -71,4 +71,10 @@ public object AnalyticsProperty {
 
     /** A language's tag: `sr-Cyrl`, `sr-Latn` or `en`. */
     public const val LANGUAGE: String = "language"
+
+    /** A theme's id, as the shop sells it: `NEON_NIGHT`, say, or `DEFAULT` for the free one. */
+    public const val THEME: String = "theme"
+
+    /** What something in the shop cost, in points. */
+    public const val PRICE: String = "price"
 }

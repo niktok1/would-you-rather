@@ -21,13 +21,14 @@ public enum class DomainError {
     SUBMISSION_LIMIT,
 
     /**
-     * The player has fewer points than submitting a question costs (CLAUDE.md §8c). Nothing was
-     * stored or taken; answering earns the points.
+     * The player has fewer points than submitting a question costs (CLAUDE.md §8c), or than a theme of
+     * the shop's. Nothing was stored or taken; answering earns the points.
      */
     NOT_ENOUGH_POINTS,
 
     /**
-     * A guest tried to submit a question: only a registered player may (CLAUDE.md §8d, *Submitting*).
+     * A guest tried to submit a question or to buy in the shop: only a registered player may (CLAUDE.md
+     * §8d, *Submitting*, *The shop*).
      * Nothing was stored or taken; registering, which keeps everything the guest has, is the way on.
      * Never [UNAUTHORIZED]: the session is fine.
      */
@@ -39,6 +40,15 @@ public enum class DomainError {
      * and the session is fine.
      */
     SUBMISSIONS_BLOCKED,
+
+    /**
+     * The player tried to buy a theme they own already (CLAUDE.md §8d, *The shop*), a purchase whose
+     * answer was lost included. Nothing was taken.
+     */
+    ALREADY_OWNED,
+
+    /** The player tried to buy something the shop does not sell. Nothing was taken. */
+    ITEM_NOT_FOUND,
 
     /** A moderator tried to decide a submission that a moderator has already approved or rejected. */
     ALREADY_DECIDED,

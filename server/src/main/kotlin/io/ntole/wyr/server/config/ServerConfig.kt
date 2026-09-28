@@ -3,6 +3,7 @@ package io.ntole.wyr.server.config
 import io.ntole.wyr.core.api.WyrApi
 import io.ntole.wyr.server.auth.PlayGamesClient
 import io.ntole.wyr.server.push.FcmServiceAccount
+import io.ntole.wyr.server.shop.ShopCatalog
 import io.ntole.wyr.server.vote.Scoring
 
 /**
@@ -91,6 +92,13 @@ data class ServerConfig(
      */
     val submissionCost: Int = Scoring.DEFAULT_SUBMISSION_COST,
     /**
+     * What each theme in the shop costs, in points (CLAUDE.md §8d, *The shop*), from `THEME_PRICE`: a
+     * whole number, 0 or more, [ShopCatalog.DEFAULT_THEME_PRICE] when unset. The shop names it beside
+     * every theme. Read at boot: changing it is changing the variable and restarting the service, and a
+     * purchase keeps what it paid.
+     */
+    val themePrice: Int = ShopCatalog.DEFAULT_THEME_PRICE,
+    /**
      * How many days a guest nobody can reach any more is kept (CLAUDE.md §8b, *Guest clean-up*), from
      * `GUEST_RETENTION_DAYS`: a whole number of at least 1, [DEFAULT_GUEST_RETENTION_DAYS] when unset or
      * blank, or null for `0`, which turns the clean-up off. Read at boot.
@@ -163,6 +171,7 @@ data class ServerConfig(
                 minClientVersions = parseMinClientVersions(env),
                 submissionCost = env("SUBMISSION_COST")?.let(::parseSubmissionCost) ?: Scoring.DEFAULT_SUBMISSION_COST,
                 guestRetentionDays = parseGuestRetentionDays(env("GUEST_RETENTION_DAYS")),
+                themePrice = env("THEME_PRICE")?.let(::parseThemePrice) ?: ShopCatalog.DEFAULT_THEME_PRICE,
             )
         }
 
@@ -198,6 +207,22 @@ data class ServerConfig(
                     "${Scoring.DEFAULT_SUBMISSION_COST}."
             }
             return cost
+        }
+
+        /**
+         * A whole number of points, 0 or more, trimmed, or null for a blank one, which is unset and so the
+         * default. Anything else fails at config load, naming the variable, as a submission's cost does
+         * ([parseSubmissionCost]): a mistyped price must not sell every theme at the default unnoticed.
+         */
+        internal fun parseThemePrice(raw: String): Int? {
+            val trimmed = raw.trim()
+            if (trimmed.isEmpty()) return null
+            val price = trimmed.toIntOrNull()
+            require(price != null && price >= 0) {
+                "THEME_PRICE is \"$raw\"; expected a whole number of points, 0 or more, or unset for " +
+                    "${ShopCatalog.DEFAULT_THEME_PRICE}."
+            }
+            return price
         }
 
         /**

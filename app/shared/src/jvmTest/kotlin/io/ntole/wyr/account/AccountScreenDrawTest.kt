@@ -125,21 +125,20 @@ class AccountScreenDrawTest {
 
     /**
      * The user's order: who is playing and the stats, a guest's button to the Auth page, My
-     * questions, a guest told to register first, the table, the Statistics switch, Log out, and the
+     * questions, a guest told to register first, the table, Log out, and the
      * server line last. No language menu, for now (CLAUDE.md §8f).
      */
     @Test
     fun `the screen is in the user's order`() {
         Language.entries.forEach { language ->
             val strings = stringsOf(language).accountScreens
-            val statistics = strings.statistics
             val question = optionsOf(QUESTION, language)
 
             val guest = textsOf(AccountState(stats = GUEST, submissions = listOf(QUESTION)), language)
             assertInOrder(
                 guest,
                 listOf(strings.guest, strings.questionsAnswered, strings.openAuth, strings.myQuestions) +
-                    listOf(strings.registerToSubmit, strings.question, question, strings.total, statistics) +
+                    listOf(strings.registerToSubmit, strings.question, question, strings.total) +
                     listOf(serverLine(DEV, strings)),
                 "$language, a guest",
             )
@@ -153,7 +152,7 @@ class AccountScreenDrawTest {
                     strings.myQuestions,
                     question,
                 ) +
-                    listOf(statistics, strings.logOut, serverLine(DEV, strings)),
+                    listOf(strings.logOut, serverLine(DEV, strings)),
                 "$language, a registered player",
             )
             assertFalse(strings.registerToSubmit in registered, "$language: a registered player submits")
@@ -295,8 +294,8 @@ class AccountScreenDrawTest {
                 assertTrue(strings.firstQuestion in shown, "$language: a question to ask")
                 assertFalse(strings.registerToSubmit in shown, "$language: registered already")
                 val taps = scene.everyNode().count { SemanticsActions.OnClick in it.config }
-                // The plus, the first question, the Statistics switch and its info icon, and nothing else.
-                assertEquals(4, taps, "$language: ${scene.everyText()}")
+                // The plus, the first question and the points, to the shop, and nothing else.
+                assertEquals(3, taps, "$language: ${scene.everyText()}")
             } finally {
                 scene.close()
             }
@@ -390,41 +389,6 @@ class AccountScreenDrawTest {
             try {
                 scene.tap(delete.button)
                 assertDialogInThemeColours(scene, delete.warning, colors)
-            } finally {
-                scene.close()
-            }
-        }
-    }
-
-    /**
-     * The info icon beside Statistics opens a dialog of what the switch sends, in the theme's colours,
-     * and its OK closes it, the switch left as it was.
-     */
-    @Test
-    fun `the Statistics info icon explains the switch`() {
-        Language.entries.forEach { language ->
-            val strings = stringsOf(language).accountScreens
-            val changes = mutableListOf<Boolean>()
-            val state = AccountState(stats = REGISTERED, submissions = emptyList())
-            val scene = scene(state, language, onStatisticsChange = { changes += it })
-            try {
-                assertFalse(strings.statisticsInfo in scene.texts(), "$language: explained before it is tapped")
-                scene.tap(strings.aboutStatistics)
-                assertTrue(strings.statisticsInfo in scene.texts(), "$language: ${scene.texts()}")
-                scene.tap(strings.ok)
-                assertFalse(strings.statisticsInfo in scene.texts(), "$language: the dialog is gone")
-            } finally {
-                scene.close()
-            }
-            assertEquals(emptyList(), changes, "$language: the switch is left as it was")
-        }
-        listOf(WyrLightColors, WyrDarkColors).forEach { colors ->
-            val strings = stringsOf(Language.DEFAULT).accountScreens
-            val scene =
-                scene(AccountState(stats = GUEST, submissions = emptyList()), Language.DEFAULT, dark = colors.isDark)
-            try {
-                scene.tap(strings.aboutStatistics)
-                assertDialogInThemeColours(scene, strings.statisticsInfo, colors)
             } finally {
                 scene.close()
             }
@@ -732,8 +696,6 @@ class AccountScreenDrawTest {
      */
     @Test
     fun `on a wide screen the content is a column down the middle`() {
-        // The Statistics switch's row spans the column, from its word on the left to the switch on the right.
-        val strings = stringsOf(Language.DEFAULT)
         listOf(
             AccountState(stats = GUEST, submissions = listOf(QUESTION)),
             AccountState(stats = REGISTERED, submissions = listOf(QUESTION)),
@@ -741,10 +703,6 @@ class AccountScreenDrawTest {
             val scene = scene(state, Language.DEFAULT, width = WINDOW_WIDTH, height = WINDOW_HEIGHT)
             try {
                 scene.assertInCentredColumn(WINDOW_WIDTH, CONTENT_MAX_WIDTH, "$state", spanned = false)
-                val switch = scene.nodes().single { strings.accountScreens.statistics in it.texts }
-                val left = (WINDOW_WIDTH - CONTENT_MAX_WIDTH) / 2f
-                assertEquals(left, switch.boundsInRoot.left, 0.5f, "$state: the switch's row starts the column")
-                assertEquals(left + CONTENT_MAX_WIDTH, switch.boundsInRoot.right, 0.5f, "$state: the switch ends it")
             } finally {
                 scene.close()
             }
@@ -752,59 +710,34 @@ class AccountScreenDrawTest {
     }
 
     /**
-     * The Statistics switch (CLAUDE.md §8g): on or off as the player left it, a switch to a screen
-     * reader, its word and all one control, and a tap on it turns it the other way.
+     * Log out, quiet, is under everything the player sees but the server line, for a player with a
+     * username alone; the Statistics switch is on the About screen now, in no state here.
      */
     @Test
-    fun `the Statistics switch shows the player's choice and a tap turns it the other way`() {
+    fun `Log out is for a player with a username and the switch is not here`() {
         Language.entries.forEach { language ->
-            val word = stringsOf(language).accountScreens.statistics
-            listOf(true, false).forEach { on ->
-                val changes = mutableListOf<Boolean>()
-                val state = AccountState(stats = REGISTERED, submissions = emptyList())
-                val scene = scene(state, language, statisticsOn = on, onStatisticsChange = { changes += it })
-                try {
-                    val switch = scene.nodes().single { word in it.texts }
-                    val shown = switch.config.getOrNull(SemanticsProperties.ToggleableState)
-                    assertEquals(if (on) ToggleableState.On else ToggleableState.Off, shown, "$language")
-                    assertEquals(Role.Switch, switch.config.getOrNull(SemanticsProperties.Role), "$language")
-
-                    scene.tap(word)
-
-                    assertEquals(listOf(!on), changes, "$language")
-                } finally {
-                    scene.close()
-                }
+            val strings = stringsOf(language).accountScreens
+            (GUEST_STATES + NOT_A_GUEST).forEach { state ->
+                val shown = textsOf(state, language)
+                assertFalse(strings.statistics in shown, "$language: $state shows the switch")
+                assertEquals(state.stats?.username != null, strings.logOut in shown, "$language: $state")
             }
         }
     }
 
-    /**
-     * In every state and language the Statistics switch and its info icon share one row, the word not cut
-     * short, and a player with a username has Log out under them. Measured 400 wide, as the heights are.
-     */
+    /** The coin and the number on the card open the shop (CLAUDE.md §8d, *The shop*). */
     @Test
-    fun `the switch and its info icon share a row and Log out is under them`() {
+    fun `the points on the card open the shop`() {
         Language.entries.forEach { language ->
-            val strings = stringsOf(language).accountScreens
-            (GUEST_STATES + NOT_A_GUEST).forEach { state ->
-                val scene = scene(state, language)
-                try {
-                    val switch = scene.nodes().single { strings.statistics in it.texts }
-                    val info = scene.nodes().single { strings.aboutStatistics in it.descriptions }
-                    assertEquals(switch.boundsInRoot.center.y, info.boundsInRoot.center.y, 0.5f, "$language: $state")
-                    assertFalse(scene.isCutShort(strings.statistics), "$language: $state cuts Statistics short")
-                    val logOut = scene.nodes().singleOrNull { strings.logOut in it.texts }
-                    if (state.stats?.username != null) {
-                        assertTrue(
-                            assertNotNull(logOut).boundsInRoot.top >= switch.boundsInRoot.bottom,
-                            "$language: $state",
-                        )
-                    }
-                } finally {
-                    scene.close()
-                }
+            var opened = 0
+            val state = AccountState(stats = REGISTERED, submissions = emptyList())
+            val scene = scene(state, language, onOpenShop = { opened++ })
+            try {
+                scene.tap(stringsOf(language).points.fill(REGISTERED.totalPoints))
+            } finally {
+                scene.close()
             }
+            assertEquals(1, opened, "$language")
         }
     }
 
@@ -853,9 +786,8 @@ class AccountScreenDrawTest {
         onOpenQuestion: (String) -> Unit = {},
         width: Int = WIDTH,
         height: Int = HEIGHT,
-        statisticsOn: Boolean = true,
-        onStatisticsChange: (Boolean) -> Unit = {},
         newDecisions: Set<String> = emptySet(),
+        onOpenShop: () -> Unit = {},
     ): ImageComposeScene =
         ImageComposeScene(width = width, height = height, density = Density(1f)) {
             WyrTheme(darkTheme = dark) {
@@ -866,10 +798,9 @@ class AccountScreenDrawTest {
                         onOpenAuth,
                         onNewQuestion,
                         actions,
-                        statisticsOn,
-                        onStatisticsChange,
                         newDecisions,
                         onOpenQuestion,
+                        onOpenShop,
                     )
                 }
             }
@@ -893,21 +824,19 @@ class AccountScreenDrawTest {
         onOpenAuth: () -> Unit = {},
         onNewQuestion: () -> Unit = {},
         actions: AccountActions = Recorder(),
-        statisticsOn: Boolean = true,
-        onStatisticsChange: (Boolean) -> Unit = {},
         newDecisions: Set<String> = emptySet(),
         onOpenQuestion: (String) -> Unit = {},
+        onOpenShop: () -> Unit = {},
     ) {
         AccountScreen(
             state = state,
             actions = actions,
             environment = environment,
-            statisticsOn = statisticsOn,
-            onStatisticsChange = onStatisticsChange,
             onOpenAuth = onOpenAuth,
             onNewQuestion = onNewQuestion,
             onOpenQuestion = onOpenQuestion,
             newDecisions = newDecisions,
+            onOpenShop = onOpenShop,
         )
     }
 
