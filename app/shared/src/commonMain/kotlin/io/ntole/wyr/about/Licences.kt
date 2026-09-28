@@ -67,4 +67,4 @@ val OPEN_SOURCE_LIBRARIES: List<Licensed> =
         )
 
 /** What the About screen says the game is for, the store listing's and the terms' age (CLAUDE.md §8b). */
-const val AGE_RATING: String = "16+"
+const val AGE_RATING: String = "13+"

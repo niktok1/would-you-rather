@@ -153,7 +153,7 @@ fun reasonsOf(reasons: Map<ReportReason, Int>): String =
 fun reasonLabelOf(reason: ReportReason): String =
     when (reason) {
         ReportReason.OFFENSIVE -> "Offensive"
-        ReportReason.REAL_PERSON -> "Real person"
+        ReportReason.REAL_PERSON -> "Private person"
         ReportReason.SPAM -> "Spam"
         ReportReason.NOT_A_CHOICE -> "Not a choice"
         ReportReason.OTHER -> "Other"

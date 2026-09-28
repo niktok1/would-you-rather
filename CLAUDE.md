@@ -920,7 +920,11 @@ EncryptedSharedPreferences: enough for a game that stores no sensitive personal 
   - *Countries*: Serbia, Bosnia and Herzegovina, Montenegro and North Macedonia (RS, BA, ME, MK), the
     Play Console's availability. The seeds are universal already (§8d, *Seeds*); local questions
     come later (*Local questions*, below).
-  - *Age*: **16 and over**, for the store listing's target audience and in the terms.
+  - *Age*: **13 and over** (*changed 2026-09-29*, the user set 13+ in the Play Console; 16 before),
+    for the store listing's target audience and in the terms. Play's Families policy applies only to
+    an audience under 13, so none of it applies; what 13 to 15 means under the GDPR and the ZZPL (a
+    minor's own consent from 15 in Serbia, 16 by default in the GDPR) is the lawyer's to check against
+    the privacy policy, analytics on by default included (§8g, *Consent*).
   - *Languages*: Serbian in both scripts. **English is hidden** at launch: its strings stay in the
     code (§8f), and the language menu shows Ћирилица and Latinica only (`Language.OFFERED`, *built
     2026-09-26*).
@@ -1102,8 +1106,9 @@ EncryptedSharedPreferences: enough for a game that stores no sensitive personal 
   last, after the account icon, where Android puts an overflow menu; or an empty 48 beside home, to
   keep the categories in the middle, at 175 wide.
 - **The report reasons' wording** — *provisional — user decision.* The menu's five reasons (§8d, *The
-  Play screen*; `QuestionMenuStrings`) are *Увредљиво је*, *Помиње стварну особу*, *Реклама или спам*,
-  *Нема шта да се бира* and *Нешто друго*. The options: keep the five phrases; or reword them, in
+  Play screen*; `QuestionMenuStrings`) are *Увредљиво је*, *Помиње приватну особу*, *Реклама или спам*,
+  *Нема шта да се бира* and *Нешто друго* (*a private person* since 2026-09-29, the legal review:
+  a public figure may be named, a private person not; the wire's `REAL_PERSON` keeps its name). The options: keep the five phrases; or reword them, in
   `QuestionMenuStrings` alone.
 - **Home's two labels** — *provisional — user decision.* Both of Home's Play buttons say *Играј*
   (§8d, *Home picks*), since both start the game alike. The options: *Играј* on both; or a different
@@ -1894,7 +1899,7 @@ scene's clock a frame at a time through each of the three.
 policy and the rest from inside the app): opened by the info icon on the Account screen's top bar, so it
 adds no text to the Account screen, under a back arrow. Top down, scrolling: the game's name; *Верзија
 1.0.0 (10000)*, the version and the build number (`AppVersion`, which `initKoin` binds from the
-entry point's version and build number, §8g) beside **16+** on a pill (`AGE_RATING`); four links that
+entry point's version and build number, §8g) beside **13+** on a pill (`AGE_RATING`); four links that
 open in the browser (`LocalUriHandler`), *Политика приватности*, *Услови и правила питања*,
 *Брисање налога* and *Контакт*, the site's `/privacy.html`, `/terms.html`, `/delete.html` and
 `/contact.html`, under `/en/` in English, the Serbian pages for either script (`Site`, whose one
@@ -1956,7 +1961,7 @@ Categories screen and the question's menu from its top bar (*Skipping*, *Reactio
 - *The question's menu* (*built 2026-09-26*; the user: report "in the least obstructive way"): the ⋮
   (`WyrIcons.More`, named *Опције питања* for a screen reader) opens a small menu about the question on
   screen, asked or revealed: **Пријави питање**, which lists in its place the five reasons, one tap
-  each (*Увредљиво је*, *Помиње стварну особу*, *Реклама или спам*, *Нема шта да се бира*, *Нешто
+  each (*Увредљиво је*, *Помиње приватну особу*, *Реклама или спам*, *Нема шта да се бира*, *Нешто
   друго*: `QuestionMenuStrings`, `ReportReason`'s five; the wording provisional, §8b); **Не приказуј ми ово питање**; and **Не
   приказуј питања овог аутора** (*Reports*). A choice closes the menu and goes to
   `PlayViewModel.pickFromMenu`, and once the server has it the next question shows, with nothing more
@@ -2708,7 +2713,7 @@ listed on the Account screen.
     author's, and Reject sends the reason typed once it is a `RejectionReason`. Beside the reason
     field, a chip for each ready reason (`READY_REASONS`, provisional, §8b) puts it in the field, to
     send as it is or edit first, in Serbian Cyrillic, since the author reads it in the game while the
-    app's own words stay English: *Није избор између две ствари*, *Увредљиво*, *Помиње стварну особу*,
+    app's own words stay English: *Није избор између две ствари*, *Увредљиво*, *Помиње приватну особу*,
     *Дупликат*, *Тема није дозвољена (вера, политика, здравље, сексуалност)*, the question rules (§8b,
     *Personalization*), and *Неразумљиво*; `ReadyReasonsTest` holds each to `RejectionReason`'s rules
     as it reads, and to Serbian Cyrillic. The queue is
@@ -3008,7 +3013,7 @@ hand, so the two cannot say different things; and **English** stands beside them
   (`Strings.aboutScreen`: *О игри*, the name its icon is given, *Верзија {0}*, the four links' names
   and *Лиценце отвореног кода*, and *ИД налога*, *Копирај ИД налога* and *Копирано*); and the shop
   (`Strings.shopScreen`, a `ShopStrings`: *Продавница*, *Теме*, the themes' names, *Купи · {0}*,
-  *Примени*, *Активна*, *Купи тему {0}?*, *Ускоро још ствари у продавници.* and the rest). What is the same in every language is no `Strings`: *16+*, the
+  *Примени*, *Активна*, *Купи тему {0}?*, *Ускоро још ствари у продавници.* and the rest). What is the same in every language is no `Strings`: *13+*, the
   libraries' and licences' names. **Try again** is one text of `Strings`, `tryAgain`, *Покушај поново*
   (*provisional*, §8b), under a failure on Play, the Categories screen, the Account screen, My
   questions, the Auth page and the Submit form, so the game says it one way; the Account screens'
@@ -3288,7 +3293,7 @@ the same events. The moderation app sends none.
   the choice all the same, since a player cannot tell one build from another. `AboutScreenDrawTest`
   draws it on and off and taps it, and `AppNavigationTest` turns the app's analytics off and on.
 - **Consent** (*the user's, 2026-09-26*): on by default, under legitimate interest, for a game for
-  16 and over; the privacy policy says what is sent, that it is on, and how to turn it off (the
+  13 and over (16 when decided; *to check with the lawyer* for players of 13 to 15); the privacy policy says what is sent, that it is on, and how to turn it off (the
   Statistics switch, on the About screen), and that PostHog sees the address each request comes from, keeps it and
   derives an approximate location from it (*Where the player is*). *To check before an EU launch*: whether the install id kept on the device (the
   browser's in `localStorage`) is itself a storing the ePrivacy rules want consent for, whatever the

@@ -29,7 +29,7 @@ class ReportLabelsTest {
         assertEquals("Reported by 1 player", reportCountOf(1))
         assertEquals("Reported by 4 players", reportCountOf(4))
         assertEquals(
-            "Offensive 3 · Real person 1",
+            "Offensive 3 · Private person 1",
             reasonsOf(mapOf(ReportReason.OFFENSIVE to 3, ReportReason.REAL_PERSON to 1)),
         )
         assertEquals("No reason counted.", reasonsOf(emptyMap()))

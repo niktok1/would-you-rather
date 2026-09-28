@@ -39,7 +39,7 @@ with control questions that reveal it. What to know first:
   rests on legitimate interest).
 - Inferring any special category (religion, politics, health, sexuality) is processing special
   category data, whatever was asked; §8b, *Personalization*, already keeps those out.
-- Inferring age has a catch for a 16+ game: a model that concludes a player is under 16 is
+- Inferring age has a catch for a 13+ game: a model that concludes a player is under 13 is
   knowledge the game then has to act on.
 - A control question aimed at one trait is asking in disguise, which is less transparent than
   asking, not more.

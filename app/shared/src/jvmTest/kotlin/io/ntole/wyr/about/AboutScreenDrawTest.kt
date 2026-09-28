@@ -32,7 +32,7 @@ import kotlin.test.assertTrue
 
 /**
  * The About screen (CLAUDE.md §8d, *About*) drawn off screen in each theme and language: the game's
- * name, its version and build number, 16+, the site's four pages, which open in the browser in the
+ * name, its version and build number, 13+, the site's four pages, which open in the browser in the
  * language shown, and every library with its licence. Links open through a handler of the test's own,
  * so nothing here reaches a browser or the site.
  */

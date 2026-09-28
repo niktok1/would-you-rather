@@ -126,7 +126,7 @@ class ScreensDrawTest {
         listOf(
             "Reports (4)",
             "Reported by 4 players",
-            "Offensive 3 · Real person 1",
+            "Offensive 3 · Private person 1",
             "A reason this build cannot name 2 · Other 1",
             "No reason counted.",
             "Dismissing...",
