@@ -255,7 +255,7 @@ private fun Player(
 
     Column(verticalArrangement = Arrangement.spacedBy(dimens.spaceSm)) {
         if (stats != null) {
-            PlayerCard(stats, busy = state.isBusy, onOpenAuth = onOpenAuth)
+            PlayerCard(stats, state.playGamesName, busy = state.isBusy, onOpenAuth = onOpenAuth)
         } else if (failure == null) {
             LoadingSpinner()
         }
@@ -298,6 +298,7 @@ private fun Player(
 @Composable
 private fun PlayerCard(
     stats: PlayerStats,
+    playGamesName: String?,
     busy: Boolean,
     onOpenAuth: () -> Unit,
 ) {
@@ -319,9 +320,9 @@ private fun PlayerCard(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(dimens.spaceSm),
             ) {
-                Avatar(stats.username)
+                Avatar(stats.username ?: playGamesName.takeIf { stats.playGamesLinked })
                 Text(
-                    text = nameOf(stats, LocalStrings.current),
+                    text = nameOf(stats, LocalStrings.current, playGamesName),
                     color = colors.primaryText,
                     fontSize = WyrTypeScale.sectionTitle,
                     fontWeight = FontWeight.Bold,
@@ -382,11 +383,11 @@ private fun PlayerCard(
 }
 
 /**
- * The player's initial, the first letter of their username in capitals, in a circle, or a guest's
- * figure for a guest, who has no name. Nothing for a screen reader: the name beside it says it.
+ * The player's initial, the first letter of their name in capitals, in a circle, or a guest's
+ * figure for a player with no name. Nothing for a screen reader: the name beside it says it.
  */
 @Composable
-private fun Avatar(username: String?) {
+private fun Avatar(name: String?) {
     val colors = WyrThemeAccessors.colors
     val dimens = WyrThemeAccessors.dimens
 
@@ -398,7 +399,7 @@ private fun Avatar(username: String?) {
                 .background(colors.orPillBackground, CircleShape)
                 .clearAndSetSemantics {},
     ) {
-        val initial = username?.firstOrNull()?.uppercase()
+        val initial = name?.firstOrNull()?.uppercase()
         if (initial != null) {
             Text(
                 text = initial,
@@ -442,15 +443,17 @@ internal data class StatCell(
 
 /**
  * Who is playing on this device: their username, or for a player registered by Play Games alone the
- * service's name ([PlayGamesStrings.name]), or [AccountStrings.guest] for a guest.
+ * name they go by there, [playGamesName], or the service's ([PlayGamesStrings.name]) when this
+ * device's Play Games gave none, or [AccountStrings.guest] for a guest.
  */
 internal fun nameOf(
     stats: PlayerStats,
     strings: Strings,
+    playGamesName: String? = null,
 ): String =
     stats.username
         ?: if (stats.playGamesLinked) {
-            strings.playGames.name.fill(GOOGLE_PLAY)
+            playGamesName ?: strings.playGames.name.fill(GOOGLE_PLAY)
         } else {
             strings.accountScreens.guest
         }

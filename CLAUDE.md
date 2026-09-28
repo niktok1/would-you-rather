@@ -1314,11 +1314,13 @@ EncryptedSharedPreferences: enough for a game that stores no sensitive personal 
   who logged out of a Play Games account, and whose device then signs in with Play Games by itself no
   more (*When a launch signs in with Play Games*), gets back in with one tap. The options: keep it; or
   only while not signed in to Play Games, as asked, which leaves that player the username form alone.
-- **A Play Games player's name on the card** — *provisional — user decision.* A player registered by
-  Play Games alone has no username, so the card names them *Google Play Игре* (§8d, *The Account
-  screen*), with a quiet *Додај корисничко име* beside the stat, where a guest has the button to
-  register. The options: keep it; *Играч*; or their Play Games name, which Play Games'
-  `PlayersClient` would have to be asked for on the device, since the server keeps none.
+- **A Play Games player's name on the card** — *decided 2026-09-28* (the user: "it should be name from
+  google play services account"): a player registered by Play Games alone, who has no username, is
+  named by their Play Games name, which the device's Play Games gives (`PlayGames.playerName`, over
+  `PlayersClient.getCurrentPlayer`), read with the stats each time; the server keeps none. *Google
+  Play Игре* only when the device's Play Games gives no name (§8d, *The Account screen*). Rejected: the
+  server storing the name from its sign-in, which would show it on every platform but keep more
+  personal data and go stale on a rename.
 - **The notice's look** — *provisional — user decision.* A dot in the brand's pink on the account
   icon, and on each new row of My questions for the visit that first shows it (§8d, *The notice of a
   decision*); no banner and no text on screen (the user: less text). The options: keep it; a number of
@@ -1693,8 +1695,10 @@ orientation, in common code alone:
   its word. A guest gets **one button** on the card, *Региструј се или се пријави*, to the Auth page
   (below), instead of the forms; a registered player, by a username or by Play Games (§8a), gets
   **Log out** under the language menu, after which the device plays on as a fresh guest. A player
-  registered by Play Games alone, with no username, is named *Google Play Игре* on the card, where a
-  guest is *Гост* (`nameOf`; the brand is `GOOGLE_PLAY`, the same in every language, as
+  registered by Play Games alone, with no username, is named on the card by their Play Games name, the
+  device's Play Games' (`AccountState.playGamesName`, read with the stats through
+  `LinkPlayGames.playerName`; nothing kept by the server), its first letter in the circle, and *Google
+  Play Игре* when that gives none, where a guest is *Гост* (`nameOf`; the brand is `GOOGLE_PLAY`, the same in every language, as
   `USERNAME_CHARACTERS` is, since a Serbian text holds no Latin letter), and has in place of the button
   a quiet link, *Додај корисничко име*, to the Auth page's Register form: a username and a password
   are for logging in where there is no Play Games, on iOS and the web (`PlayGamesStrings`). The link

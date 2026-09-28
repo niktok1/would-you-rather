@@ -296,7 +296,11 @@ class AccountViewModel(
         val before = session.current()
         if (before != null) {
             _state.update {
-                if (it.readFor == before) it else it.copy(stats = null, submissions = null, readFor = before)
+                if (it.readFor == before) {
+                    it
+                } else {
+                    it.copy(stats = null, playGamesName = null, submissions = null, readFor = before)
+                }
             }
         }
         val confirmed = loadStats()
@@ -325,6 +329,9 @@ class AccountViewModel(
     private suspend fun loadStats(): Boolean =
         try {
             val stats = getPlayerStats()
+            // Read with the stats, so the card never shows the service's name before the player's.
+            val playGamesName =
+                if (stats.username == null && stats.playGamesLinked) linkPlayGames.playerName() else null
             var confirmed = false
             _state.update {
                 confirmed =
@@ -334,10 +341,11 @@ class AccountViewModel(
                         else -> false
                     }
                 if (stats.username == null && !confirmed) {
-                    it.copy(stats = stats)
+                    it.copy(stats = stats, playGamesName = playGamesName)
                 } else {
                     AccountState(
                         stats = stats,
+                        playGamesName = playGamesName,
                         submissions = it.submissions,
                         readFor = it.readFor,
                         failure = it.failure.takeUnless { confirmed },

@@ -21,6 +21,12 @@ data class AccountState(
     /** The player as last read: their username, null for a guest, and their stats. Null until read. */
     val stats: PlayerStats? = null,
     /**
+     * For a player registered by Play Games alone, who has no username, the name they go by in Play
+     * Games, as this device's Play Games gave it with [stats] (CLAUDE.md §8d, *The Account screen*):
+     * null for anyone else, and when the device's Play Games gave none.
+     */
+    val playGamesName: String? = null,
+    /**
      * The questions the player submitted, newest first, as last read: My questions. Null until a read
      * works, and again once another player plays here, whose list is theirs.
      */

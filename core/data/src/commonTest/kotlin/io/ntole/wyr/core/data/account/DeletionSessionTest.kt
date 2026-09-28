@@ -125,6 +125,8 @@ class DeletionSessionTest {
         override suspend fun signIn(): Boolean = true
 
         override suspend fun serverAuthCode(): String = "code-${++codes}"
+
+        override suspend fun playerName(): String? = null
     }
 
     /** Pushes on, with one token, which never changes. */

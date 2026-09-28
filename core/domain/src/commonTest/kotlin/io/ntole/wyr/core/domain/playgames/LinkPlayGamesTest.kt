@@ -206,6 +206,8 @@ class LinkPlayGamesTest {
             calls += "serverAuthCode"
             return code
         }
+
+        override suspend fun playerName(): String? = null
     }
 
     private inner class FakeLink(

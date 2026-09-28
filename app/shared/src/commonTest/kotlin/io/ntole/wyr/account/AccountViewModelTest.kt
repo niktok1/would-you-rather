@@ -372,6 +372,41 @@ class AccountViewModelTest {
             assertEquals("bob_2", nameOf(added.shown(), EnglishStrings))
         }
 
+    /**
+     * The card names a player registered by Play Games alone as this device's Play Games names them,
+     * read with the stats, and nobody else: a guest's read asks Play Games nothing, and once the player
+     * has a username that is their name.
+     */
+    @Test
+    fun `a Play Games player is named as Play Games names them`() =
+        runTest(dispatcher) {
+            playGames.name = "nikola"
+            val guest = open()
+            assertNull(guest.state.value.playGamesName, "a guest is nobody's in Play Games")
+
+            game.playGamesLinked = true
+            guest.refresh()
+            testScheduler.advanceUntilIdle()
+            val linked = guest.state.value
+            assertEquals("nikola", linked.playGamesName)
+            assertEquals("nikola", nameOf(linked.shown(), EnglishStrings, linked.playGamesName))
+
+            playGames.name = null
+            guest.refresh()
+            testScheduler.advanceUntilIdle()
+            val unnamed = guest.state.value
+            assertEquals("Google Play Games", nameOf(unnamed.shown(), EnglishStrings, unnamed.playGamesName))
+
+            playGames.name = "nikola"
+            guest.setRegisterUsername("bob_2")
+            guest.setRegisterPassword("correct horse")
+            guest.register()
+            testScheduler.advanceUntilIdle()
+            val added = guest.state.value
+            assertNull(added.playGamesName, "a username is the name now")
+            assertEquals("bob_2", nameOf(added.shown(), EnglishStrings, added.playGamesName))
+        }
+
     @Test
     fun `a build without Play Games offers none and signs in with none`() =
         runTest(dispatcher) {
@@ -1305,12 +1340,15 @@ class AccountViewModelTest {
         override var available = false
         var authenticated = true
         var signsIn = false
+        var name: String? = null
 
         override suspend fun isAuthenticated(): Boolean = authenticated
 
         override suspend fun signIn(): Boolean = signsIn.also { authenticated = it }
 
         override suspend fun serverAuthCode(): String = "code-1"
+
+        override suspend fun playerName(): String? = name
     }
 
     private companion object {

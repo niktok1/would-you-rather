@@ -195,6 +195,8 @@ class AppServicesTest {
         override suspend fun signIn() = true
 
         override suspend fun serverAuthCode() = "code"
+
+        override suspend fun playerName(): String? = null
     }
 
     private inner class Link : PlayGamesRepository {

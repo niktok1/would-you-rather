@@ -27,6 +27,14 @@ public interface PlayGames {
      */
     public suspend fun serverAuthCode(): String?
 
+    /**
+     * The name the player signed in to Play Games on this device goes by there, for the Account card
+     * of a player registered by Play Games alone, who has no username (CLAUDE.md §8d, *The Account
+     * screen*), or null when nobody is signed in or Play Games gave none. Read from the device each
+     * time, never kept by the server.
+     */
+    public suspend fun playerName(): String?
+
     public companion object {
         /** No Play Games: a build or a platform without it, and the tests. */
         public val None: PlayGames = NoPlayGames
@@ -41,4 +49,6 @@ private object NoPlayGames : PlayGames {
     override suspend fun signIn(): Boolean = false
 
     override suspend fun serverAuthCode(): String? = null
+
+    override suspend fun playerName(): String? = null
 }

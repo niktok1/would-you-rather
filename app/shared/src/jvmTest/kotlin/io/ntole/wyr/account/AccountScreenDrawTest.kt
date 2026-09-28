@@ -93,6 +93,23 @@ class AccountScreenDrawTest {
         }
     }
 
+    /**
+     * A player registered by Play Games alone is named on the card as they are in Play Games, and by the
+     * service while the device's Play Games gave no name.
+     */
+    @Test
+    fun `a Play Games player is named as in Play Games`() {
+        Language.entries.forEach { language ->
+            val named =
+                textsOf(AccountState(stats = PLAY_GAMES, playGamesName = "nikola", submissions = emptyList()), language)
+            assertTrue("nikola" in named, "$language: the Play Games name is not in $named")
+            val service = stringsOf(language).playGames.name.fill(GOOGLE_PLAY)
+            assertFalse(service in named, "$language: the service's name shows beside the player's")
+            val unnamed = textsOf(AccountState(stats = PLAY_GAMES, submissions = emptyList()), language)
+            assertTrue(service in unnamed, "$language: \"$service\" is not in $unnamed")
+        }
+    }
+
     /** The card shows the questions answered, and no longer the answers given, the cycle or the likes. */
     @Test
     fun `the card's one stat is the questions answered`() {

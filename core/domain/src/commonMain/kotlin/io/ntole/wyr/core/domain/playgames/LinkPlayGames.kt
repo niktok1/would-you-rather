@@ -35,6 +35,9 @@ public class LinkPlayGames(
     /** Whether this build has Play Games, for the Auth page to offer it. */
     public val available: Boolean get() = playGames.available
 
+    /** The player's name in Play Games on this device ([PlayGames.playerName]), or null. */
+    public suspend fun playerName(): String? = playGames.playerName()
+
     /**
      * At launch: waits for a session, then, while who plays here is unsettled and Play Games says the
      * player is signed in to it, signs in to the server with it. Returns whether it did. Never throws but
