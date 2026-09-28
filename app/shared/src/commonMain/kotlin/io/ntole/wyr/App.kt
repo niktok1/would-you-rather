@@ -2,7 +2,6 @@ package io.ntole.wyr
 
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
@@ -23,7 +22,6 @@ import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.lifecycle.Lifecycle
@@ -82,11 +80,10 @@ import io.ntole.wyr.shop.ThemeViewModel
 import io.ntole.wyr.submit.SubmitScreen
 import io.ntole.wyr.submit.SubmitViewModel
 import io.ntole.wyr.theme.LocalPageDrawn
-import io.ntole.wyr.theme.LocalThemeArt
 import io.ntole.wyr.theme.SystemBarsOn
+import io.ntole.wyr.theme.WholePageArt
 import io.ntole.wyr.theme.WyrTheme
 import io.ntole.wyr.theme.WyrThemeAccessors
-import io.ntole.wyr.theme.drawThemeArt
 import io.ntole.wyr.update.UpdateScreen
 import io.ntole.wyr.update.rememberUpdateButton
 import kotlinx.coroutines.launch
@@ -133,16 +130,17 @@ fun App() {
 
 /**
  * The page under every screen, the whole window, the system bars' strips included: the theme's page
- * colour and its art (CLAUDE.md §8d, *The shop*), drawn once here, so a screen's own [PageSurface]
+ * colour and its art (CLAUDE.md §5b, *Backgrounds*; §8d, *The shop*), drawn once here, in a layer of its
+ * own that a screen's change moves over without drawing it again ([WholePageArt]), so a screen's own [PageSurface]
  * draws neither ([LocalPageDrawn]) and the art spans the window whatever the screen and its insets.
  * The system bars' icons are set to read on the page (`SystemBarsOn`).
  */
 @Composable
 private fun WholePage(content: @Composable () -> Unit) {
     val colors = WyrThemeAccessors.colors
-    val art = LocalThemeArt.current
     SystemBarsOn(darkPage = colors.isDark)
-    Box(modifier = Modifier.fillMaxSize().background(colors.pageBackground).drawBehind { drawThemeArt(art) }) {
+    Box(modifier = Modifier.fillMaxSize()) {
+        WholePageArt(Modifier.matchParentSize())
         CompositionLocalProvider(LocalPageDrawn provides true) {
             Surface(color = Color.Transparent, contentColor = colors.primaryText, modifier = Modifier.fillMaxSize()) {
                 content()

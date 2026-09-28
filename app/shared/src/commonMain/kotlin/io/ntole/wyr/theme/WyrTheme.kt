@@ -12,7 +12,7 @@ import androidx.compose.runtime.staticCompositionLocalOf
 val LocalWyrColors = staticCompositionLocalOf { WyrLightColors }
 val LocalWyrDimens = staticCompositionLocalOf { WyrDefaultDimens }
 
-/** The art the theme worn draws behind every screen ([PageSurface]); none for the game's own. */
+/** The art the theme worn draws behind every screen ([PageSurface]), in the device's mode for the game's own. */
 val LocalThemeArt = staticCompositionLocalOf<ThemeArt> { ThemeArt.None }
 
 /**
@@ -35,7 +35,7 @@ fun WyrTheme(
     CompositionLocalProvider(
         LocalWyrColors provides colors,
         LocalWyrDimens provides WyrDefaultDimens,
-        LocalThemeArt provides theme.art,
+        LocalThemeArt provides theme.art(darkTheme),
     ) {
         MaterialTheme(colorScheme = materialSchemeOf(colors), content = content)
     }

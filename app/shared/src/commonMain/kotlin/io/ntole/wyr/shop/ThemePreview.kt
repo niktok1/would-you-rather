@@ -31,6 +31,7 @@ import io.ntole.wyr.language.LocalStrings
 import io.ntole.wyr.language.fill
 import io.ntole.wyr.points.CoinIcon
 import io.ntole.wyr.theme.GameTheme
+import io.ntole.wyr.theme.LocalThemeArt
 import io.ntole.wyr.theme.WyrIcons
 import io.ntole.wyr.theme.WyrTheme
 import io.ntole.wyr.theme.WyrThemeAccessors
@@ -57,7 +58,7 @@ fun ThemePreview(
     WyrTheme(theme = theme) {
         val colors = WyrThemeAccessors.colors
         val dimens = WyrThemeAccessors.dimens
-        val art = theme.art
+        val art = LocalThemeArt.current
         val optionSize =
             when {
                 large -> WyrTypeScale.previewOptionLarge
