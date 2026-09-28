@@ -1,5 +1,8 @@
 package io.ntole.wyr.account
 
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.saveable.LocalSaveableStateRegistry
+import androidx.compose.runtime.saveable.SaveableStateRegistry
 import androidx.compose.ui.ImageComposeScene
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.getOrNull
@@ -21,6 +24,7 @@ import io.ntole.wyr.language.fill
 import io.ntole.wyr.language.optionText
 import io.ntole.wyr.language.stringsOf
 import io.ntole.wyr.passTime
+import io.ntole.wyr.pixels
 import io.ntole.wyr.texts
 import io.ntole.wyr.theme.WyrTheme
 import kotlinx.datetime.TimeZone
@@ -113,6 +117,37 @@ class QuestionDetailsDrawTest {
         }
     }
 
+    /**
+     * The screen made anew, as an Android activity is on a rotation, its saved state restored, resumes
+     * the count where it was: its first frame is what was drawn as the state was saved, part way or
+     * done, never the count from 0 again (CLAUDE.md §8d, *Question details*).
+     */
+    @Test
+    fun `a count restored in a screen made anew resumes where it was`() {
+        val start = scene(APPROVED, Language.DEFAULT).let { scene -> scene.pixels().also { scene.close() } }
+        listOf(HOME_COUNT_UP_MILLIS * 2L / 5, HOME_COUNT_UP_MILLIS + 100L).forEach { savedAt ->
+            val registry = SaveableStateRegistry(null) { true }
+            val first = scene(APPROVED, Language.DEFAULT, registry = registry)
+            val asSaved: IntArray
+            val saved: Map<String, List<Any?>>
+            try {
+                first.passTime(savedAt)
+                asSaved = first.pixels()
+                saved = registry.performSave()
+            } finally {
+                first.close()
+            }
+            assertFalse(asSaved.contentEquals(start), "saved at $savedAt ms: nothing counted yet")
+
+            val again = scene(APPROVED, Language.DEFAULT, registry = SaveableStateRegistry(saved) { true })
+            try {
+                assertTrue(again.pixels().contentEquals(asSaved), "saved at $savedAt ms: not where it was")
+            } finally {
+                again.close()
+            }
+        }
+    }
+
     /** The categories are named in the language shown, and one not read yet by its id. */
     @Test
     fun `the categories are named in the language shown`() {
@@ -141,10 +176,13 @@ class QuestionDetailsDrawTest {
         submission: Submission,
         language: Language,
         dark: Boolean = false,
+        registry: SaveableStateRegistry? = null,
     ): ImageComposeScene =
         ImageComposeScene(width = SHORT_PHONE_WIDTH, height = SHORT_PHONE_HEIGHT, density = Density(1f)) {
-            WyrTheme(darkTheme = dark) {
-                WyrStrings(language) { QuestionDetailsScreen(submission = submission, categories = listOf(FOOD)) }
+            CompositionLocalProvider(LocalSaveableStateRegistry provides registry) {
+                WyrTheme(darkTheme = dark) {
+                    WyrStrings(language) { QuestionDetailsScreen(submission = submission, categories = listOf(FOOD)) }
+                }
             }
         }.also { it.render() }
 

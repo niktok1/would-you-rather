@@ -5,6 +5,9 @@ import androidx.compose.runtime.snapshots.Snapshot
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.ImageComposeScene
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.graphics.toComposeImageBitmap
+import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsNode
@@ -142,6 +145,12 @@ internal fun ImageComposeScene.passTime(millis: Long) {
         renderAt(from + passed * NANOS_PER_MILLI)
     }
     timePassed[this] = from + millis * NANOS_PER_MILLI
+}
+
+/** Every pixel of the scene drawn at the time [passTime] reached, as ARGB, row by row. */
+internal fun ImageComposeScene.pixels(): IntArray {
+    val pixels = render(timePassed[this] ?: 0L).toComposeImageBitmap().toPixelMap()
+    return IntArray(pixels.width * pixels.height) { pixels[it % pixels.width, it / pixels.width].toArgb() }
 }
 
 /** Where [passTime] has moved each scene's clock, in nanoseconds; a scene it never moved is at 0. */

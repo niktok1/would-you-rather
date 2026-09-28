@@ -1700,7 +1700,7 @@ orientation, in common code alone:
   same, but a subcomposition cannot answer the intrinsic heights the draw tests measure the screen by.
   The cards are then the same composables whichever way they stand, so a window resized across the
   rule, or an iPhone turned, keeps a reveal's count up where it is; an Android activity, made anew on
-  a rotation, counts it up again. Each card's bar in the reveal stands along its edge by the row: side
+  a rotation, resumes it where it was (*The Play screen*, *A reveal resumes*). Each card's bar in the reveal stands along its edge by the row: side
   by side, along both cards' bottoms, card B's too, which stacked stands along its top; the Play
   screen asks QuestionLayout's rule of the size it was last laid out at (`standsSideBySide`).
 - *The Account screen, the Auth page, the Submit form and the Categories screen* hold their content to
@@ -1844,7 +1844,8 @@ orientation, in common code alone:
   Top down, scrolling: each option whole on a card of its colour (§5b), at the Play screen's option
   size; for a question served, approved or retired, each side's **share** of the players who answered
   it, counted up with its bar along the card's bottom as the Play screen's reveal races them
-  (`rememberCountUp`, over the Home screen's 1.2 s), and how many picked it after two players; where
+  (`rememberCountUp`, over the Home screen's 1.2 s, resumed after a rotation as the Play screen's is,
+  *The Play screen*, *A reveal resumes*), and how many picked it after two players; where
   it stands, a rejection's reason whole, and, approved, **Share** beside it (*Sharing*); *Послато 25. 9. 2026.*, the day it was sent on this device
   (`dateText`, numbers only, so no `Strings`: *25/9/2026* in English; UTC's day where the platform names
   no zone); its categories, named in the language shown from those read, read once if none are; and,
@@ -2046,6 +2047,27 @@ Categories screen and the question's menu from its top bar (*Skipping*, *Reactio
   and two bars and nothing else, where a text changed every frame recomposed both cards, laid them
   out again and told any accessibility service, too much for a debug build, several times slower, to
   do 60 times a second.
+- *A reveal resumes* (*built 2026-09-29*, the user: "resume"): an Android activity made anew mid-reveal,
+  on a rotation, a switch to dark mode, a new font size or language, finds the ViewModel's `Revealed`
+  still there and picks the reveal up where it was, never replaying it. How far each card's count has
+  come, from 0 to 1 of its time, is kept in saved state under the question's id (`rememberCountUp`'s
+  `saveKey`, a `rememberSaveable` of a plain field, `CountUpProgress`), written by the animation on
+  every frame and read only when the state is saved and as a restored count starts, so a frame still
+  composes nothing: part way, the count goes on at its own speed for the time it had left; done, the
+  final values are drawn at once and nothing counts. The card motion needs nothing kept: its
+  `animate*AsState` start at their first target, so the pick is lifted and the other card faint from
+  the first frame, and `AnimatedContent`'s first composition slides nothing in. The half second before
+  a card goes on is the ViewModel's (`revealHold`), which the activity's recreation neither restarts
+  nor ends. A new question counts from 0 as ever (another id), and so does the same question revealed
+  again later, its count having left the composition between. The Question details screen's count
+  resumes the same way, under the question's id; Home's reveal, a timeline of its count, hold and fade
+  into Play, still plays again from its start after a rotation mid-reveal. `PlayScreenDrawTest` and
+  `QuestionDetailsDrawTest` restore a composition's saved state part way and done and find its first
+  frame drawn pixel for pixel as it was saved, in both themes with each card the pick; `CountedUpTextDrawTest`
+  finds a restored count going on from the number it had reached, in order, to its target in the time
+  it had left, and a finished one drawing only its target, and a kept count's frames composing
+  nothing; `AppNavigationTest` rotates the whole app mid-reveal and once it is done, and holds the
+  half second across the rotation.
 - One action at a time (`isBusy`, `canChangeCategories`): while a vote, a skip, a reaction or a menu
   choice is in flight, the cards, the thumbs, Share, Skip, the categories and the menu are off, and
   Share, Skip and the menu are drawn muted (`WyrColors.muted`). A reaction that failed says why in the points' place, in two short lines at

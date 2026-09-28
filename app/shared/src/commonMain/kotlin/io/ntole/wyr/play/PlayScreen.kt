@@ -688,7 +688,8 @@ private fun CardFaceContent(
 ) {
     val dimens = WyrThemeAccessors.dimens
     // One count for the percentage and the bar, so they move as one.
-    val counted = face.percent?.let { rememberCountUp(it, rival = face.rival ?: it) }
+    // Resumed where it was in a composition made anew, an Android rotation's (CLAUDE.md §8d, *The Play screen*).
+    val counted = face.percent?.let { rememberCountUp(it, rival = face.rival ?: it, saveKey = face.questionId) }
 
     Box(modifier = modifier.fillMaxSize()) {
         Column(

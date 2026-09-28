@@ -8,8 +8,11 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.LocalSaveableStateRegistry
+import androidx.compose.runtime.saveable.SaveableStateRegistry
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.ImageComposeScene
@@ -745,6 +748,66 @@ class PlayScreenDrawTest {
     }
 
     /**
+     * An Android activity made anew mid-reveal, on a rotation, a switch to dark mode or a new font size,
+     * resumes the reveal where it was (CLAUDE.md §8d, *The Play screen*): its composition's saved state
+     * restored over the same ViewModel's state, the first frame draws the screen exactly as it was drawn
+     * as it was saved, the pick lifted, the other card faint, both counts and bars where they had come to
+     * and no face sliding in, and the counts then end in the time they had left. Restored once they are
+     * done, the first frame is the reveal's last, with nothing counted again. Told by every pixel of the
+     * screen, in both themes, each card the pick.
+     */
+    @Test
+    fun `a reveal restored in a composition made anew resumes where it was`() {
+        forEachPickAndTheme { pick, colors, theme ->
+            val state = PlayUiState.Revealed(QUESTION, OUTCOME.copy(yourSide = pick))
+            val dark = colors.isDark
+            lateinit var start: IntArray
+            lateinit var end: IntArray
+            withScreen(state, dark = dark) { scene, _ ->
+                start = scene.pixelsOf(0)
+                framesUntil(COUNTED_UP + FRAME).forEach { scene.renderAt(it) }
+                end = scene.pixelsOf(COUNTED_UP + FRAME)
+            }
+
+            listOf(RESUMED_AT, COUNTED_UP + FRAME).forEach { savedAt ->
+                val at = "saved at ${savedAt / 1_000_000} ms, card ${pick.ordinal + 1} the pick, in the $theme theme"
+                val registry = SaveableStateRegistry(null) { true }
+                lateinit var asSaved: IntArray
+                var saved: Map<String, List<Any?>> = emptyMap()
+                withScreen(state, dark = dark, registry = registry) { scene, _ ->
+                    framesUntil(savedAt).forEach { scene.renderAt(it) }
+                    asSaved = scene.pixelsOf(savedAt)
+                    // Before the composition goes, as an activity saves its state before it is destroyed.
+                    saved = registry.performSave()
+                }
+
+                withScreen(state, dark = dark, registry = SaveableStateRegistry(saved) { true }) { scene, _ ->
+                    val first = scene.pixelsOf(0)
+                    assertTrue(first.contentEquals(asSaved), "$at: the first frame is not as saved")
+                    if (savedAt < COUNTED_UP) {
+                        assertFalse(first.contentEquals(start), "$at: the reveal started again")
+                        assertFalse(first.contentEquals(end), "$at: the reveal did not stand part way")
+                        val left = COUNTED_UP - savedAt + FRAME
+                        framesUntil(left).forEach { scene.renderAt(it) }
+                        assertTrue(scene.pixelsOf(left).contentEquals(end), "$at: not done in the time it had left")
+                    } else {
+                        assertTrue(first.contentEquals(end), "$at: the first frame is not the reveal's last")
+                    }
+                }
+            }
+        }
+    }
+
+    /** Every pixel of the scene drawn at [nanoTime], as ARGB, row by row. */
+    private fun ImageComposeScene.pixelsOf(nanoTime: Long): IntArray {
+        val pixels = render(nanoTime).toComposeImageBitmap().toPixelMap()
+        return IntArray(pixels.width * pixels.height) { pixels[it % pixels.width, it / pixels.width].toArgb() }
+    }
+
+    /** Every frame at 60 a second from the first after 0 to [until]. */
+    private fun framesUntil(until: Long): List<Long> = (1..until / FRAME).map { it * FRAME }
+
+    /**
      * Going on is one smooth change, never a snap to a spinner (CLAUDE.md §8d, *The Play screen*): while
      * the next question loads the one answered stays on screen, and only past [LOADING_GRACE] does the
      * spinner show; the next question then slides onto the same cards, the face going heard by nobody,
@@ -1096,14 +1159,17 @@ class PlayScreenDrawTest {
         recompositions: Recompositions = Recompositions(),
         width: Int = SHORT_PHONE_WIDTH,
         height: Int = SHORT_PHONE_HEIGHT,
+        registry: SaveableStateRegistry? = null,
         test: (ImageComposeScene, Actions) -> Unit,
     ) {
         val actions = Actions()
         val scene =
             ImageComposeScene(width = width, height = height, density = Density(1f)) {
-                CountedBy(recompositions) {
-                    WyrTheme(darkTheme = dark) {
-                        WyrStrings(language) { Screen(state, points, actions) }
+                CompositionLocalProvider(LocalSaveableStateRegistry provides registry) {
+                    CountedBy(recompositions) {
+                        WyrTheme(darkTheme = dark) {
+                            WyrStrings(language) { Screen(state, points, actions) }
+                        }
                     }
                 }
             }
@@ -1252,6 +1318,9 @@ class PlayScreenDrawTest {
 
         /** The scene's clock, in nanoseconds, once the reveal has counted up. */
         const val COUNTED_UP = COUNT_UP_MILLIS * 1_000_000L
+
+        /** Where a reveal restored part way was, in nanoseconds: 40% of the way through its count. */
+        const val RESUMED_AT = COUNTED_UP * 2 / 5
 
         /** One frame of a phone drawing 60 a second, in nanoseconds. */
         const val FRAME = 1_000_000_000L / 60
