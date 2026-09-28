@@ -471,7 +471,7 @@ Google Play readiness decisions (2026-09-26), and the server's submission cost. 
   session, drops the queue, reports `account_deleted` and resets the analytics, and the screen shows
   the fresh guest. Offline or anything else: said, nothing forgotten.
 - **About** (§8d): the Account screen's top bar has an info icon to it: the name, *Верзија 1.0.0
-  (10000)*, **16+**, the site's four pages (`Site.BASE_URL`, https://stabiradije.rs, `/en/` for
+  (10000)*, **16+**, the site's four pages (`Site.BASE_URL`, https://ntole.com/wyr, `/en/` for
   English) opening in the browser, and the open-source licences, a list written by hand.
 - **Register's terms line** (§8d): *Регистрацијом прихваташ услове и политику приватности.* under
   Register, the two nouns links to the site's pages. Every Auth state still fits 599.
@@ -544,8 +544,8 @@ licence's text a tap away in the browser, or every licence's full text in the ap
 the scope said.
 
 **What the user must do**, none of it in the repository:
-1. Buy `stabiradije.rs` and put the `docs/site` pages there, so the About screen's and the Register
-   line's links open something: until then they open a domain that does not answer.
+1. Put the site's pages under `https://ntole.com/wyr` (the domain is bought, 2026-09-29), so the About
+   screen's and the Register line's links open something: until then they open nothing.
 2. At the release, on Render's `wyr-server` only: *Environment* → add `SUBMISSION_COST` = `50`, then
    restart (`render.yaml` declares it as a comment until then, so no deploy sets it by itself). Dev
    stays at 1. Every installed build shows the new cost from its next read of the stats.

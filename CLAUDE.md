@@ -466,8 +466,8 @@ This project must never be attributed to any employer identity.
     data resets on every deploy, restart and free-tier spin-down (a paid Postgres for dev comes
     later). Its own `JWT_SECRET` and `ADMIN_TOKEN`, so nothing from one environment works on the
     other.
-  - **prod**, `wyr-server` on `wyr-postgres`, at https://wyr-server.onrender.com: `autoDeployTrigger:
-    "off"`. It deploys **only by hand**, with Render's *Manual Deploy → Deploy a specific commit*,
+  - **prod**, `wyr-server` on `wyr-postgres`, at https://wyr-api.ntole.com (§8b, *The launch*;
+    Render's own https://wyr-server.onrender.com answers too): `autoDeployTrigger: "off"`. It deploys **only by hand**, with Render's *Manual Deploy → Deploy a specific commit*,
     and only a commit that is green in CI and already live on dev. That is the one exception to
     "never hand-deploy": promoting to production is a person's decision. First deployed 2026-09-24
     (`4cdc819`); it runs `d4a9dbf` since 2026-09-25, with V1 to V4 applied.
@@ -989,8 +989,13 @@ EncryptedSharedPreferences: enough for a game that stores no sensitive personal 
     §8d, *The notice of a decision*).
   - *Staging*: dev gets a PostgreSQL database of its own, so it runs as production does before a
     commit is promoted (§8); a paid instance type, so the `render.yaml` change waits for the user's go.
-  - *Domain*: `stabiradije.rs`, with `stabiradije.com` beside it, and the API at
-    `api.stabiradije.rs`; both were free on 2026-09-26 and are the user's to buy.
+  - *Domain* (*decided 2026-09-29*): the developer's own, **`ntole.com`**, bought by the user on
+    Cloudflare, one for every app of theirs, language-neutral where `stabiradije.rs`, the first plan,
+    read as Serbian alone. The game's API is `wyr-api.ntole.com`, a CNAME to `wyr-server.onrender.com`,
+    DNS only (Cloudflare's proxy off, so the rate limits keep keying by Render's `CF-Connecting-IP`,
+    §8), a Render custom domain with Render's certificate; `WyrEnvironment.PROD` names it, so the
+    service can leave Render without stranding a build. Its site is under `ntole.com/wyr` (`Site`,
+    §8d *About*), not written yet. Dev stays on Render's own name.
 - **Accounts** — *decided 2026-09-25; built (§8a, *Accounts*; the Account screen, §8d).* This
   is a simple game that stores no sensitive personal data, and most players stay a day or a few, so the
   simplest design that is correct enough wins over maximum security. A new player plays at once as a
@@ -1113,8 +1118,8 @@ EncryptedSharedPreferences: enough for a game that stores no sensitive personal 
   *provisional — user decision*: the message links to the game's **Play Store page**, whichever
   platform shares, since there is no domain yet, where a link to the question itself would open it in
   the game or on a page with the store's button (a public route for one question, a preview page,
-  Android App Links, the feed serving that question first), which comes once `stabiradije.rs` is
-  bought; and a reaction's failure, in the points' place, moves the thumbs over while it shows, where
+  Android App Links, the feed serving that question first), which comes once the site under
+  `ntole.com/wyr` is live; and a reaction's failure, in the points' place, moves the thumbs over while it shows, where
   the thumbs in the middle never moved for it. The options for the second: keep it; or the points'
   slot always `WyrDimens.playRowStartMaxWidth` wide, which leaves a gap between the points and the
   thumbs.
@@ -1981,7 +1986,7 @@ entry point's version and build number, §8g) beside **13+** on a pill (`AGE_RAT
 open in the browser (`LocalUriHandler`), *Политика приватности*, *Услови и правила питања*,
 *Брисање налога* and *Контакт*, the site's `/privacy.html`, `/terms.html`, `/delete.html` and
 `/contact.html`, under `/en/` in English, the Serbian pages for either script (`Site`, whose one
-`BASE_URL` is `https://stabiradije.rs`, not live yet, the domain being the user's to buy, §8b *The
+`BASE_URL` is `https://ntole.com/wyr`, not live yet, no page being written, §8b *The
 launch*); a link nothing on the device opens, on a phone with no browser, does nothing
 (`openIfAble`, here, on a licence and in Register's terms line alike); under them the player's
 **account id** (*built 2026-09-27*, the user: "a copyable account ID"), which a guest or a player
@@ -3009,7 +3014,7 @@ game UI (the moderation app, `:app:adminApp`, §3) can name one too.
 |-------------|------------------------------------------------------------------|
 | `LOCAL`     | `http://localhost:8080`; the Android emulator's `10.0.2.2:8080`  |
 | `DEV`       | `https://wyr-server-dev.onrender.com` (§8: in-memory H2)         |
-| `PROD`      | `https://wyr-server.onrender.com`                                |
+| `PROD`      | `https://wyr-api.ntole.com`, a CNAME to `wyr-server.onrender.com` |
 
 - *Naming one.* `WyrEnvironment.parse` takes `local`, `dev` or `prod`, in any case, trimmed; no name,
   or a blank one, is LOCAL. Any other value throws, naming it, rather than falling back. Every entry
