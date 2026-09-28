@@ -38,26 +38,22 @@ fun HomeTopBar(
 }
 
 /**
- * Play's: home on the left, back to Home, the account icon on the right, with Home's dot while [news]
- * waits, and [menu] before it, the menu about the question on screen, and between them, in what they
- * leave, [categories]: the categories played, which open the Categories screen (CLAUDE.md §8d, *The
- * Play screen*).
+ * Play's: home on the left, back to Home, [menu] on the right, the menu about the question on screen,
+ * and between them, in the bar's exact middle, [categories]: the categories played, which open the
+ * Categories screen (CLAUDE.md §8d, *The Play screen*). One icon on each side, as wide as each other, so
+ * the categories stand in the middle of the screen with the width the two leave them. No account icon:
+ * the Account screen is reached from Home, whose bar carries the notice's dot.
  */
 @Composable
 fun PlayTopBar(
     onHome: () -> Unit,
-    onAccount: () -> Unit,
-    news: Boolean = false,
     menu: @Composable () -> Unit = {},
     categories: @Composable () -> Unit,
 ) {
     TopBar(
         start = { IconAction(WyrIcons.Home, LocalStrings.current.home, "top_bar.home", onHome) },
         middle = categories,
-        end = {
-            menu()
-            AccountButton(onAccount, news)
-        },
+        end = { menu() },
     )
 }
 

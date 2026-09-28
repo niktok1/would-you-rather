@@ -171,7 +171,7 @@ private fun Screens() {
     SystemBack(enabled = navigator.canGoBack, onBack = { navigator.back() })
     val usage = koinInject<UsageTracker>()
     LaunchedEffect(navigator.current) { usage.show(navigator.current.key) }
-    // A moderator decided a question of the player's, which they have not seen: a dot on the account icon.
+    // A moderator decided a question of the player's, which they have not seen: a dot on Home's account icon.
     val notices = koinInject<DecisionNotices>()
     val unseen by notices.unseen.collectAsStateWithLifecycle()
     val news = unseen.isNotEmpty()
@@ -220,9 +220,7 @@ private fun Screens() {
                     val picker = koinViewModel<CategoriesViewModel>()
                     Play(
                         onHome = { navigator.open(Screen.Home) },
-                        onAccount = { navigator.open(Screen.Account) },
                         onShop = { navigator.open(Screen.Shop) },
-                        news = news,
                         onOpenCategories = {
                             // A visit of its own: what is played now ticked, and nothing searched.
                             picker.open()
@@ -554,9 +552,7 @@ private fun Categories(onPlayed: () -> Unit) {
 @Composable
 private fun ColumnScope.Play(
     onHome: () -> Unit,
-    onAccount: () -> Unit,
     onShop: () -> Unit,
-    news: Boolean,
     onOpenCategories: () -> Unit,
 ) {
     val viewModel = koinViewModel<PlayViewModel>()
@@ -575,8 +571,6 @@ private fun ColumnScope.Play(
 
     PlayTopBar(
         onHome = onHome,
-        onAccount = onAccount,
-        news = news,
         // The menu about the question on screen: report it, or hide it or its author (CLAUDE.md §8d).
         menu = { QuestionMenu(enabled = state.canUseMenu, onPick = viewModel::pickFromMenu) },
     ) {

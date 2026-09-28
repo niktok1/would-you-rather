@@ -187,13 +187,14 @@ class AppNavigationTest {
     fun `every screen shown is reported and each left named`() =
         withApp { scene ->
             scene.tapPlay()
+            scene.tap(CYRILLIC.home)
             scene.tap(CYRILLIC.account)
             scene.tap(CYRILLIC.back)
 
             val shown = analytics.named(RecordingAnalytics.SCREEN).map { it.properties[RecordingAnalytics.SCREEN_NAME] }
-            assertEquals(listOf("home", "play", "account", "play"), shown)
+            assertEquals(listOf("home", "play", "home", "account", "home"), shown)
             val left = analytics.named(AnalyticsEvent.SCREEN_LEFT).map { it.properties[AnalyticsProperty.SCREEN] }
-            assertEquals(listOf("home", "play", "account"), left)
+            assertEquals(listOf("home", "play", "home", "account"), left)
             val opened = analytics.named(AnalyticsEvent.APP_OPENED).single()
             assertEquals(false, opened.properties[AnalyticsProperty.FROM_BACKGROUND])
             assertEquals(Language.SERBIAN_CYRILLIC.tag, opened.properties[AnalyticsProperty.LANGUAGE])
@@ -237,6 +238,8 @@ class AppNavigationTest {
             scene.tap(CYRILLIC.back)
             assertTrue(CYRILLIC.playScreen.skip in scene.descriptions(), "back on Play: ${scene.texts()}")
 
+            // Account is reached from Home: Play's bar has no account icon.
+            scene.tap(CYRILLIC.home)
             scene.tap(CYRILLIC.account)
             scene.tap(points)
             assertTrue(shop.comingSoon in scene.everyText(), "the shop from the card: ${scene.texts()}")
@@ -302,9 +305,10 @@ class AppNavigationTest {
     }
 
     /**
-     * A moderator decided a question of the player's after the launch's read: a dot on the account icon
-     * of Home and of Play, named for a screen reader, until the Account screen shows the list, where its
-     * row is marked; then the dot is gone (CLAUDE.md §8d, *Submitting*).
+     * A moderator decided a question of the player's after the launch's read: a dot on Home's account
+     * icon, named for a screen reader, until the Account screen shows the list, where its row is marked;
+     * then the dot is gone (CLAUDE.md §8d, *The notice of a decision*). Play's bar has no account icon,
+     * so no dot either.
      */
     @Test
     fun `a decision not seen dots the account icon until the Account screen shows it`() {
@@ -321,12 +325,10 @@ class AppNavigationTest {
 
             assertEquals(listOf(dotted), scene.descriptions(), "on Home")
             scene.tapPlay()
-            assertEquals(
-                listOf(CYRILLIC.home, CYRILLIC.playScreen.menu.name, dotted),
-                scene.descriptions().take(PLAY_BAR.size),
-                "on Play, after the menu",
-            )
+            assertEquals(PLAY_BAR, scene.descriptions().take(PLAY_BAR.size), "on Play, no account icon")
+            assertFalse(dotted in scene.descriptions(), "no dot on Play")
 
+            scene.tap(CYRILLIC.home)
             scene.tap(dotted)
             // The list is read as the screen is shown, and its rows marked a frame after.
             scene.settle()
@@ -492,18 +494,20 @@ class AppNavigationTest {
         }
     }
 
+    /** Home, the categories played in the bar's middle, and the question's menu: no account icon. */
     @Test
-    fun `Play opens under a bar with home and the account icon`() =
+    fun `Play opens under a bar with home the categories and the menu`() =
         withApp { scene ->
             scene.tapPlay()
 
             assertEquals(PLAY_BAR, scene.descriptions().take(PLAY_BAR.size))
+            assertFalse(CYRILLIC.account in scene.descriptions(), "Account is reached from Home")
             assertEquals(1, game.questionsAsked)
         }
 
     /**
      * Skip is in the row between the cards while a question is asked, after the thumbs and Share, and not on the
-     * top bar, which holds home, the categories played and the account icon; it goes past the question
+     * top bar, which holds home, the categories played and the question's menu; it goes past the question
      * to the next. The points, a coin and the number, a screen reader hears in words, last, a little
      * lower in the row than the thumbs' touch targets.
      */
@@ -530,13 +534,15 @@ class AppNavigationTest {
 
     /** The Play screen's ViewModel is the app's, not the back stack's: its question is still there. */
     @Test
-    fun `Play keeps its question through Account and back`() =
+    fun `Play keeps its question through Home and Account and back`() =
         withApp { scene ->
             scene.tapPlay()
+            scene.tap(CYRILLIC.home)
             scene.tap(CYRILLIC.account)
             assertTrue(CYRILLIC.accountScreens.myQuestions in scene.texts(), "the Account screen is not shown")
 
             scene.tap(CYRILLIC.back)
+            scene.tapPlay()
 
             assertEquals(PLAY_BAR, scene.descriptions().take(PLAY_BAR.size))
             assertEquals(1, game.questionsAsked)
@@ -549,8 +555,10 @@ class AppNavigationTest {
             scene.tapPlay()
             assertEquals(1, game.statsRead)
 
+            scene.tap(CYRILLIC.home)
             scene.tap(CYRILLIC.account)
             scene.tap(CYRILLIC.back)
+            scene.tapPlay()
 
             // Once for the Account screen, and once more for Play shown again.
             assertEquals(3, game.statsRead)
@@ -558,7 +566,7 @@ class AppNavigationTest {
 
     /**
      * The time a question was on screen, which a skip reports, counts while Play is shown and the app
-     * in the foreground: not the time on Account, nor in the background (CLAUDE.md §8g).
+     * in the foreground: not the time on Home or Account, nor in the background (CLAUDE.md §8g).
      */
     @Test
     fun `a question's time counts only while Play is shown`() {
@@ -566,9 +574,11 @@ class AppNavigationTest {
         withApp { scene ->
             scene.tapPlay()
             clock += 2.seconds
+            scene.tap(CYRILLIC.home)
             scene.tap(CYRILLIC.account)
             clock += 10.minutes
             scene.tap(CYRILLIC.back)
+            scene.tapPlay()
             clock += 1.seconds
             owner.lifecycle.currentState = Lifecycle.State.CREATED
             clock += 1.hours
@@ -1221,8 +1231,8 @@ class AppNavigationTest {
         /** Every player's taps on Home's two Play buttons: three on card A's colour to every one on card B's. */
         val HOME_PICKS = Tally(votesA = 3, votesB = 1)
 
-        /** What a screen reader hears first on Play: its top bar's icons, the question's menu among them. */
-        val PLAY_BAR = listOf(CYRILLIC.home, CYRILLIC.playScreen.menu.name, CYRILLIC.account)
+        /** What a screen reader hears first on Play: its top bar's two icons, home and the question's menu. */
+        val PLAY_BAR = listOf(CYRILLIC.home, CYRILLIC.playScreen.menu.name)
 
         /** The Play screen's categories, All while none is played: a tap on them opens the Categories screen. */
         val ALL_PLAYED = CYRILLIC.allCategories

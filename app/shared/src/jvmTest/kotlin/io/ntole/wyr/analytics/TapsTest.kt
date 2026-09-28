@@ -113,11 +113,11 @@ class TapsTest {
         assertEquals(listOf("A", "B"), sides)
         // The question's menu too, and what it lists once open (CLAUDE.md §8d, *Reports*).
         assertEquals(
-            setOf("top_bar.home", "top_bar.categories", "top_bar.account") +
+            setOf("top_bar.home", "top_bar.categories") +
                 setOf("question_menu.open", "question_menu.report", "question_menu.hide_question") +
                 "question_menu.hide_author",
             elementsTapped {
-                PlayTopBar(onHome = {}, onAccount = {}, menu = { QuestionMenu(enabled = true, onPick = {}) }) {
+                PlayTopBar(onHome = {}, menu = { QuestionMenu(enabled = true, onPick = {}) }) {
                     CategoriesPlayed(text = "Све", enabled = true, onClick = {})
                 }
             },

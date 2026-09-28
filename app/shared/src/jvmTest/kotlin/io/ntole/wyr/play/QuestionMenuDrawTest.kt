@@ -41,13 +41,13 @@ class QuestionMenuDrawTest {
         }
     }
 
-    /** Beside the account icon, before it, and named for a screen reader in the language shown. */
+    /** Last on the bar, across from home, and named for a screen reader in the language shown. */
     @Test
-    fun `the menu stands beside the account icon`() {
+    fun `the menu stands last on the bar across from home`() {
         Language.entries.forEach { language ->
             val strings = stringsOf(language)
             withMenu(language) { scene, _ ->
-                assertEquals(listOf(strings.home, strings.playScreen.menu.name, strings.account), scene.descriptions())
+                assertEquals(listOf(strings.home, strings.playScreen.menu.name), scene.descriptions())
             }
         }
     }
@@ -113,7 +113,6 @@ class QuestionMenuDrawTest {
                     WyrStrings(language) {
                         PlayTopBar(
                             onHome = {},
-                            onAccount = {},
                             menu = { QuestionMenu(enabled = enabled, onPick = { picked += it }) },
                         ) {
                             CategoriesPlayed(text = LocalStrings.current.allCategories, enabled = true, onClick = {})
