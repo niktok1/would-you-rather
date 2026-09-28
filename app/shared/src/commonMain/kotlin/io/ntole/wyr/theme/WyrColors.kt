@@ -27,7 +27,7 @@ data class WyrColors(
      */
     val revealTrackOnA: Color,
     val revealTrackOnB: Color,
-    /** The coin the points are shown with (CLAUDE.md §5b): its face, and its rim and ring on it. */
+    /** The coin the points are shown with (CLAUDE.md §5b): its face, and its rim and star on it. */
     val coin: Color,
     val onCoin: Color,
     /**

@@ -8,6 +8,9 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.PathBuilder
 import androidx.compose.ui.graphics.vector.path
 import androidx.compose.ui.unit.dp
+import kotlin.math.PI
+import kotlin.math.cos
+import kotlin.math.sin
 
 /**
  * Every icon in the app, drawn here by hand, so no icon library is needed (CLAUDE.md §5b): a few
@@ -118,13 +121,17 @@ object WyrIcons {
         icon("CoinFace") { path(fill = SolidColor(Color.Black)) { circle(COIN_RADIUS) } }
     }
 
-    /** A coin's rim and the ring stamped in its face, drawn over [CoinFace]. */
+    /** A coin's rim and the star stamped in its face, drawn over [CoinFace]. */
     val CoinMark: ImageVector by lazy {
         icon("CoinMark") {
-            outline {
-                circle(COIN_RADIUS)
-                circle(COIN_RING_RADIUS)
-            }
+            outline { circle(COIN_RADIUS) }
+            // The star, filled, its points softened by a thin round stroke of its own.
+            path(
+                fill = SolidColor(Color.Black),
+                stroke = SolidColor(Color.Black),
+                strokeLineWidth = STAR_STROKE,
+                strokeLineJoin = StrokeJoin.Round,
+            ) { star() }
         }
     }
 
@@ -292,6 +299,22 @@ object WyrIcons {
         close()
     }
 
+    /**
+     * A five-pointed star about the grid's middle, one point straight up: its points [STAR_OUTER]
+     * from the middle and the corners between them [STAR_INNER].
+     */
+    private fun PathBuilder.star() {
+        val middle = SIZE / 2
+        repeat(STAR_CORNERS) { corner ->
+            val radius = if (corner % 2 == 0) STAR_OUTER else STAR_INNER
+            val angle = (corner * 180.0 / 5 - 90) * PI / 180
+            val x = middle + radius * cos(angle).toFloat()
+            val y = middle + radius * sin(angle).toFloat()
+            if (corner == 0) moveTo(x, y) else lineTo(x, y)
+        }
+        close()
+    }
+
     /** A ring of [RING_RADIUS] about ([x], [y]), in two half turns, for [Share]. */
     private fun PathBuilder.ring(
         x: Float,
@@ -378,8 +401,15 @@ object WyrIcons {
     /** A coin's rim, and the globe's outline, about the grid's middle. */
     private const val COIN_RADIUS = 9f
 
-    /** The ring stamped in a coin's face. */
-    private const val COIN_RING_RADIUS = 5f
+    /** How far the star stamped in a coin's face reaches, to its points and to the corners between. */
+    private const val STAR_OUTER = 4.8f
+    private const val STAR_INNER = 2f
+
+    /** The star's points and the corners between them. */
+    private const val STAR_CORNERS = 10
+
+    /** The thin stroke round the star, which rounds its points. */
+    private const val STAR_STROKE = 1f
 
     /** Each of [More]'s dots, a little wider than a stroke. */
     private const val DOT_RADIUS = 2f

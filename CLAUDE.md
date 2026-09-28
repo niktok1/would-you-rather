@@ -310,7 +310,7 @@ a 24 by 24 grid, so no icon library is needed (§2): `Home`, `Account` and `Back
 left) for the top bars (§8d, *Navigation*); for the Play screen `Skip` (a triangle against a bar),
 `ChevronDown`, the small chevron beside the categories played, and the reactions' `ThumbUp` and
 `ThumbUpFilled`, and `ThumbDown` and `ThumbDownFilled`, the thumb up turned over (§8d, *The Play
-screen*, *Reactions*); `CoinFace` and `CoinMark`, a disc and the rim and ring on it, the points' coin
+screen*, *Reactions*); `CoinFace` and `CoinMark`, a disc and the rim and star on it, the points' coin
 wherever they show (§8f, *Numbers and symbols*); `Globe` for the language menu; `Players`, two
 players, heading My questions' answers (§8d, *The Account screen*); `Info`, an i in a circle, the
 Account screen's way to the About screen (§8d, *About*); `More`, three dots one over the
@@ -326,7 +326,7 @@ coin is two icons drawn one on the other, the face in `WyrColors.coin` and the m
 (`CoinIcon`). Adding an icon = adding a `WyrIcons` value.
 `WyrIconsDrawTest` draws each off screen: every one a figure of the theme's size, no two the same,
 each filled thumb covering its outline and the hand's inside, the thumb down the thumb up turned
-over, and the coin's ring on its face.
+over, and the coin's rim and star on its face.
 
 **Platform copies.** Android draws its window and splash screen before Compose starts, from
 resources, which cannot read `WyrColors`: so `:app:androidApp`'s `res/values/colors.xml` and
