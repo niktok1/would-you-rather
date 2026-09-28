@@ -479,6 +479,7 @@ class AppNavigationTest {
                     CYRILLIC.playScreen.percent(60),
                     CYRILLIC.play,
                     CYRILLIC.playScreen.percent(40),
+                    ALL_PLAYED,
                 ),
                 scene.texts(),
             )
@@ -774,7 +775,72 @@ class AppNavigationTest {
             assertEquals(listOf(setOf("FOOD", "ETHICS")), game.categoryChanges)
             assertEquals(2, game.questionsAsked, "a question from them")
             assertTrue("Храна, Етика" in scene.texts(), "${scene.texts()}")
+
+            // Home names them too, under its Play buttons, which play them.
+            scene.tap(CYRILLIC.home)
+            assertEquals(homeTexts(CYRILLIC, played = "Храна, Етика"), scene.texts())
         }
+
+    /**
+     * Home's categories open the Categories screen, whose Play then opens Play in its place: Home, then
+     * Play, on the back stack. Play's own categories then open over Play and go back to it, which they
+     * would not were the Categories screen still under Play (CLAUDE.md §8d, *The Categories screen*).
+     */
+    @Test
+    fun `the categories open from Home and their Play opens Play over Home`() =
+        withApp { scene ->
+            scene.tap(ALL_PLAYED)
+            assertEquals(listOf(CYRILLIC.back), scene.descriptions().take(1))
+            assertEquals(1, categories.reads, "read as the screen opens")
+
+            scene.tap("Храна")
+            scene.tapPlay()
+
+            assertEquals(PLAY_BAR, scene.descriptions().take(PLAY_BAR.size))
+            assertEquals(listOf(setOf("FOOD")), game.categoryChanges)
+            assertEquals(1, game.questionsAsked, "a question from them")
+            assertTrue("Храна" in scene.texts(), "${scene.texts()}")
+            val shown = analytics.named(RecordingAnalytics.SCREEN).map { it.properties[RecordingAnalytics.SCREEN_NAME] }
+            assertEquals(listOf("home", "categories", "play"), shown)
+            val tapped = analytics.named(AnalyticsEvent.TAP).map { it.properties[AnalyticsProperty.ELEMENT] }
+            assertEquals(1, tapped.count { it == "home.categories" })
+
+            scene.tap("Храна")
+            scene.tap(CYRILLIC.back)
+            assertEquals(PLAY_BAR, scene.descriptions().take(PLAY_BAR.size), "back from the categories to Play")
+            scene.tap(CYRILLIC.home)
+            assertEquals(homeTexts(CYRILLIC, played = "Храна"), scene.texts())
+        }
+
+    @Test
+    fun `back from the categories opened from Home returns to Home and plays nothing`() =
+        withApp { scene ->
+            scene.tap(ALL_PLAYED)
+            scene.tap("Храна")
+
+            scene.tap(CYRILLIC.back)
+
+            assertEquals(homeTexts(CYRILLIC), scene.texts())
+            assertEquals(emptyList(), game.categoryChanges)
+            assertEquals(0, game.questionsAsked)
+        }
+
+    /** Where the Categories screen was opened from is kept through a rotation, with the back stack. */
+    @Test
+    fun `the categories opened from Home still open Play over Home after a rotation`() {
+        withApp { scene -> scene.tap(ALL_PLAYED) }
+        afterRotation { scene ->
+            assertEquals(listOf(CYRILLIC.back), scene.descriptions().take(1), "the Categories screen is not shown")
+            scene.tap("Етика")
+            scene.tapPlay()
+
+            assertEquals(PLAY_BAR, scene.descriptions().take(PLAY_BAR.size))
+            assertEquals(listOf(setOf("ETHICS")), game.categoryChanges)
+            scene.tap("Етика")
+            scene.tap(CYRILLIC.back)
+            assertEquals(PLAY_BAR, scene.descriptions().take(PLAY_BAR.size), "Play is over Home, not the categories")
+        }
+    }
 
     @Test
     fun `back from the categories plays nothing picked there`() =
@@ -947,8 +1013,14 @@ class AppNavigationTest {
         passTime(HOME_REVEAL_MILLIS + PLAY_ENTRANCE_MILLIS.toLong())
     }
 
-    /** What Home shows in [strings]' words before a tap: the name and two Play buttons, no share yet. */
-    private fun homeTexts(strings: Strings): List<String> = listOf(strings.gameName, strings.play, strings.play)
+    /**
+     * What Home shows in [strings]' words before a tap: the name, two Play buttons, no share yet, and the
+     * categories [played] under them, All while none is.
+     */
+    private fun homeTexts(
+        strings: Strings,
+        played: String = strings.allCategories,
+    ): List<String> = listOf(strings.gameName, strings.play, strings.play, played)
 
     /** Whether the line showing [text] is ticked. */
     private fun ImageComposeScene.toggleOf(text: String): ToggleableState? =
@@ -1234,7 +1306,10 @@ class AppNavigationTest {
         /** What a screen reader hears first on Play: its top bar's two icons, home and the question's menu. */
         val PLAY_BAR = listOf(CYRILLIC.home, CYRILLIC.playScreen.menu.name)
 
-        /** The Play screen's categories, All while none is played: a tap on them opens the Categories screen. */
+        /**
+         * The categories played, on Play's bar and under Home's buttons, All while none is played: a tap on
+         * them opens the Categories screen.
+         */
         val ALL_PLAYED = CYRILLIC.allCategories
 
         /** What a theme costs in the fake shop. */

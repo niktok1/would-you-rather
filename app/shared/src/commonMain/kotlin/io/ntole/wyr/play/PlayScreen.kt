@@ -540,9 +540,10 @@ private fun Modifier.pulledIn(by: Dp): Modifier =
 
 /**
  * The categories played, *All* while none is picked, with a small chevron, in the middle of the Play
- * screen's top bar: a tap opens the Categories screen, the only way to choose them. It looks the same
- * while the categories cannot change, as it does for every question that loads: the tap then does
- * nothing. Cut short on its one line when the names outrun the bar.
+ * screen's top bar and under Home's two Play buttons: a tap opens the Categories screen, the only way to
+ * choose them. It looks the same while the categories cannot change, as it does for every question that
+ * loads: the tap then does nothing. Cut short on its one line when the names outrun its room. Its tap is
+ * [element]'s to the analytics (CLAUDE.md §8g).
  */
 @Composable
 internal fun CategoriesPlayed(
@@ -550,6 +551,7 @@ internal fun CategoriesPlayed(
     enabled: Boolean,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    element: String = "top_bar.categories",
 ) {
     val colors = WyrThemeAccessors.colors
     val strings = LocalStrings.current.playScreen
@@ -562,7 +564,7 @@ internal fun CategoriesPlayed(
                     enabled = enabled,
                     onClickLabel = strings.changeCategories,
                     role = Role.Button,
-                    onClick = tapped("top_bar.categories", onClick = onClick),
+                    onClick = tapped(element, onClick = onClick),
                 ).minimumInteractiveComponentSize(),
     ) {
         Text(

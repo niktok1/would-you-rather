@@ -47,6 +47,7 @@ import io.ntole.wyr.core.domain.category.CategoryRepository
 import io.ntole.wyr.core.domain.category.GetCategories
 import io.ntole.wyr.core.domain.error.WyrException
 import io.ntole.wyr.core.domain.notice.DecisionNotices
+import io.ntole.wyr.core.domain.question.QuestionRepository
 import io.ntole.wyr.core.domain.session.CurrentSession
 import io.ntole.wyr.core.domain.update.AppUpdate
 import io.ntole.wyr.home.FADE_THROUGH_SCALE
@@ -68,6 +69,7 @@ import io.ntole.wyr.navigation.SystemBack
 import io.ntole.wyr.play.CategoriesPlayed
 import io.ntole.wyr.play.PlayScreen
 import io.ntole.wyr.play.PlayViewModel
+import io.ntole.wyr.play.PlayedCategories
 import io.ntole.wyr.play.QuestionMenu
 import io.ntole.wyr.play.canChangeCategories
 import io.ntole.wyr.play.canUseMenu
@@ -203,6 +205,7 @@ private fun Screens() {
         ) {
             when (navigator.current) {
                 Screen.Home -> {
+                    val picker = koinViewModel<CategoriesViewModel>()
                     Home(
                         onPlay = {
                             scope.launch {
@@ -212,6 +215,11 @@ private fun Screens() {
                             }
                         },
                         onAccount = { navigator.open(Screen.Account) },
+                        onOpenCategories = {
+                            // A visit of its own, as from Play: what is played now ticked, and nothing searched.
+                            picker.open()
+                            navigator.open(Screen.Categories)
+                        },
                         news = news,
                     )
                 }
@@ -261,7 +269,19 @@ private fun Screens() {
 
                 Screen.Categories -> {
                     BackTopBar(onBack = { navigator.back() })
-                    Below { Categories(onPlayed = { navigator.back() }) }
+                    Below {
+                        Categories(
+                            onPlayed = {
+                                // Opened from Home, Play takes its place, so back from Play is Home;
+                                // from Play, back to it. Read off the back stack, which saved state keeps.
+                                if (navigator.previous == Screen.Home) {
+                                    navigator.replace(Screen.Play)
+                                } else {
+                                    navigator.back()
+                                }
+                            },
+                        )
+                    }
                 }
 
                 Screen.About -> {
@@ -361,16 +381,23 @@ private fun QuestionDetails(
  * The Home screen, whose two Play buttons reveal how many picked each, read each time it is shown
  * (CLAUDE.md §8d, *Home picks*). A tap on either is counted in the background, never holding the game
  * up, and starts the Play screen's question loading, so it is there once the reveal hands over to Play,
- * [onPlay]. The account icon has its dot while [news] waits there.
+ * [onPlay]. Under them the categories played, named as Play's top bar names them, open the Categories
+ * screen, [onOpenCategories]. The account icon has its dot while [news] waits there.
  */
 @Composable
 private fun Home(
     onPlay: () -> Unit,
     onAccount: () -> Unit,
+    onOpenCategories: () -> Unit,
     news: Boolean,
 ) {
     val viewModel = koinViewModel<HomeViewModel>()
     val picks by viewModel.picks.collectAsStateWithLifecycle()
+    // What the buttons play, as the repository holds it, named from the categories last read.
+    val questions = koinInject<QuestionRepository>()
+    val categoryList = koinInject<CategoryRepository>()
+    val selected by questions.categories.collectAsStateWithLifecycle()
+    val known by categoryList.categories.collectAsStateWithLifecycle()
     var tapped by remember { mutableStateOf(false) }
 
     LaunchedEffect(viewModel) { viewModel.shown() }
@@ -389,6 +416,13 @@ private fun Home(
         },
         onPlay = onPlay,
         onAccount = onAccount,
+        categories =
+            categoriesPlayed(
+                PlayedCategories(selected, known),
+                all = LocalStrings.current.allCategories,
+                language = LocalLanguage.current,
+            ),
+        onCategories = onOpenCategories,
         news = news,
     )
 }
@@ -529,9 +563,10 @@ private fun Submit(onSent: () -> Unit) {
 }
 
 /**
- * The Categories screen, opened from Play, which starts the visit ([CategoriesViewModel.open]). Once
- * what is ticked is played, [onPlayed] goes back to Play, which shows a question from it; the back
- * arrow, or Android's back, leaves it with nothing played (CLAUDE.md §8d, *Categories*).
+ * The Categories screen, opened from Home or Play, either starting the visit ([CategoriesViewModel.open]).
+ * Once what is ticked is played, [onPlayed] shows Play, which shows a question from it; the back arrow,
+ * or Android's back, leaves it with nothing played, to the screen it was opened from (CLAUDE.md §8d,
+ * *Categories*).
  */
 @Composable
 private fun Categories(onPlayed: () -> Unit) {

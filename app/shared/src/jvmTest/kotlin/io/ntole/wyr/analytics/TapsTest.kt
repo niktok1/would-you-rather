@@ -95,12 +95,20 @@ class TapsTest {
     @Test
     fun `every tap on Home and the top bars is reported`() {
         // A tap on either Play button holds the other still through the reveal, so each is a Home of its own,
-        // the other left untapped: from the top, the account icon, then card A's colour and card B's.
+        // the other left untapped: from the top, the account icon, then card A's colour and card B's, and
+        // under them the categories played, which open the Categories screen.
         listOf(2, 1).forEach { other ->
             assertEquals(
-                setOf("home.play", "top_bar.account"),
+                setOf("home.play", "top_bar.account", "home.categories"),
                 elementsTapped(skipping = other) {
-                    HomeScreen(picks = Tally(votesA = 3, votesB = 1), onPick = {}, onPlay = {}, onAccount = {})
+                    HomeScreen(
+                        picks = Tally(votesA = 3, votesB = 1),
+                        onPick = {},
+                        onPlay = {},
+                        onAccount = {},
+                        categories = "Све",
+                        onCategories = {},
+                    )
                 },
             )
         }

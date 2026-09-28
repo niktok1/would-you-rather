@@ -29,8 +29,8 @@ import kotlin.test.assertTrue
 /**
  * The Home screen (CLAUDE.md §8d, *Navigation*, *Home picks*) drawn off screen at two phones' sizes and
  * a desktop window's, in each theme and each language, and read through its semantics: the game's name,
- * two small Play buttons in the cards' colours, and the account icon; and a tap on one, whose reveal
- * counts both shares up and then hands over to the game.
+ * two small Play buttons in the cards' colours, the categories played under them, and the account icon;
+ * and a tap on one, whose reveal counts both shares up and then hands over to the game.
  */
 class HomeScreenDrawTest {
     @Test
@@ -53,32 +53,49 @@ class HomeScreenDrawTest {
 
     /**
      * An iPhone SE (667 high) less its status bar (20) and 48 more, as the other screens are held,
-     * measured at 375 wide, the name wrapping as it will on the narrowest phone, the shares shown.
+     * measured at 375 wide, the name wrapping as it will on the narrowest phone, the shares shown, and
+     * the categories played under the buttons, All or a long selection.
      */
     @Test
     fun `the screen fits a short phone in every language`() {
         Language.entries.forEach { language ->
-            val (_, height) =
-                sizeNeeded(SHORT_PHONE_WIDTH, SHORT_PHONE_HEIGHT) {
-                    WyrTheme {
-                        WyrStrings(
-                            language,
-                        ) { HomeScreen(picks = PICKS, onPick = {}, onPlay = {}, onAccount = {}) }
+            listOf(stringsOf(language).allCategories, LONG_SELECTION).forEach { categories ->
+                val (_, height) =
+                    sizeNeeded(SHORT_PHONE_WIDTH, SHORT_PHONE_HEIGHT) {
+                        WyrTheme {
+                            WyrStrings(language) {
+                                HomeScreen(
+                                    picks = PICKS,
+                                    onPick = {},
+                                    onPlay = {},
+                                    onAccount = {},
+                                    categories = categories,
+                                    onCategories = {},
+                                )
+                            }
+                        }
                     }
-                }
-            assertTrue(height <= SHORT_PHONE_HEIGHT, "$language needs $height of $SHORT_PHONE_HEIGHT")
+                assertTrue(height <= SHORT_PHONE_HEIGHT, "$language, $categories: $height of $SHORT_PHONE_HEIGHT")
+            }
         }
     }
 
-    /** The user asked for less text: the name and Play twice, and no share until a button is tapped. */
+    /**
+     * The user asked for less text: the name, Play twice and the categories played, and no share until a
+     * button is tapped.
+     */
     @Test
-    fun `the screen shows the name and two Play buttons and the account icon`() {
+    fun `the screen shows the name and two Play buttons and the categories and the account icon`() {
         Language.entries.forEach { language ->
             val strings = stringsOf(language)
             listOf(null, Tally(votesA = 0, votesB = 0), PICKS).forEach { picks ->
                 val scene = scene(language, picks)
                 try {
-                    assertEquals(listOf(strings.gameName, strings.play, strings.play), scene.texts(), "$language")
+                    assertEquals(
+                        listOf(strings.gameName, strings.play, strings.play, strings.allCategories),
+                        scene.texts(),
+                        "$language",
+                    )
                     assertEquals(listOf(strings.account), scene.descriptions(), "$language")
                 } finally {
                     scene.close()
@@ -110,6 +127,45 @@ class HomeScreenDrawTest {
     }
 
     /**
+     * The categories played stand just under the pair, in its middle, on one line cut short when a long
+     * selection outruns the pair's width, on phones and a desktop window alike; a tap opens the
+     * Categories screen, once.
+     */
+    @Test
+    fun `the categories played stand under the buttons and open the Categories screen`() {
+        Language.entries.forEach { language ->
+            val strings = stringsOf(language)
+            listOf(strings.allCategories, LONG_SELECTION).forEach { categories ->
+                SIZES.forEach { (width, height) ->
+                    var opened = 0
+                    val scene =
+                        scene(
+                            language,
+                            PICKS,
+                            width = width,
+                            height = height,
+                            categories = categories,
+                            onCategories = { opened++ },
+                        )
+                    try {
+                        val name = "$language, $categories at $width"
+                        val (a, b) = scene.nodes().filter { strings.play in it.texts }.map { it.boundsInRoot }
+                        val line = scene.nodes().single { categories in it.texts }.boundsInRoot
+                        assertTrue(line.top >= a.bottom && line.top >= b.bottom, "$name: not under the buttons")
+                        assertTrue(line.left >= a.left && line.right <= b.right, "$name: wider than the pair")
+                        assertEquals((a.left + b.right) / 2f, line.center.x, 1f, name)
+                        assertTrue(line.height <= TOUCH_TARGET, "$name: more than one line, ${line.height}")
+                        scene.tap(categories)
+                    } finally {
+                        scene.close()
+                    }
+                    assertEquals(1, opened, "$language, $categories at $width")
+                }
+            }
+        }
+    }
+
+    /**
      * A tap reveals both shares, the tap counted with every player's, lifts the button tapped and holds
      * the other still; nothing moves, and a screen reader reads each share as it ends throughout the count.
      */
@@ -121,6 +177,7 @@ class HomeScreenDrawTest {
             val scene = scene(language, PICKS, onPick = { picked += it })
             try {
                 val before = scene.nodes().filter { strings.play in it.texts }.map { it.boundsInRoot }
+                val categoriesBefore = scene.nodes().single { strings.allCategories in it.texts }.boundsInRoot
                 scene.tapPlay(strings, Side.A)
                 assertEquals(listOf(Side.A), picked)
 
@@ -132,6 +189,9 @@ class HomeScreenDrawTest {
                 }
                 val buttons = scene.nodes().filter { strings.play in it.texts }
                 assertEquals(before, buttons.map { it.boundsInRoot }, "$language: the reveal moved a button")
+                val categories = scene.nodes().single { strings.allCategories in it.texts }
+                assertEquals(categoriesBefore, categories.boundsInRoot, "$language: the reveal moved the categories")
+                assertNotNull(categories.config.getOrNull(SemanticsProperties.Disabled), "the categories take a tap")
                 assertNotNull(buttons[1].config.getOrNull(SemanticsProperties.Disabled), "B still takes a tap")
                 scene.tapPlay(strings, Side.B)
                 assertEquals(listOf(Side.A), picked, "$language: a second tap")
@@ -212,7 +272,7 @@ class HomeScreenDrawTest {
             val scene = scene(language, PICKS, onAccount = { opened++ }, news = true)
             try {
                 assertEquals(listOf(dotted), scene.descriptions(), "$language")
-                assertEquals(3, scene.texts().size, "$language: the name and two buttons")
+                assertEquals(4, scene.texts().size, "$language: the name, two buttons and the categories")
                 scene.tap(dotted)
             } finally {
                 scene.close()
@@ -221,9 +281,17 @@ class HomeScreenDrawTest {
             val (_, height) =
                 sizeNeeded(SHORT_PHONE_WIDTH, SHORT_PHONE_HEIGHT) {
                     WyrTheme {
-                        WyrStrings(
-                            language,
-                        ) { HomeScreen(picks = PICKS, onPick = {}, onPlay = {}, onAccount = {}, news = true) }
+                        WyrStrings(language) {
+                            HomeScreen(
+                                picks = PICKS,
+                                onPick = {},
+                                onPlay = {},
+                                onAccount = {},
+                                categories = stringsOf(language).allCategories,
+                                onCategories = {},
+                                news = true,
+                            )
+                        }
                     }
                 }
             assertTrue(height <= SHORT_PHONE_HEIGHT, "$language needs $height of $SHORT_PHONE_HEIGHT")
@@ -253,11 +321,21 @@ class HomeScreenDrawTest {
         onPlay: () -> Unit = {},
         onAccount: () -> Unit = {},
         news: Boolean = false,
+        categories: String = stringsOf(language).allCategories,
+        onCategories: () -> Unit = {},
     ): ImageComposeScene =
         ImageComposeScene(width = width, height = height, density = Density(1f)) {
             WyrTheme(darkTheme = dark) {
                 WyrStrings(language) {
-                    HomeScreen(picks = picks, onPick = onPick, onPlay = onPlay, onAccount = onAccount, news = news)
+                    HomeScreen(
+                        picks = picks,
+                        onPick = onPick,
+                        onPlay = onPlay,
+                        onAccount = onAccount,
+                        categories = categories,
+                        onCategories = onCategories,
+                        news = news,
+                    )
                 }
             }
         }.also { it.render() }
@@ -279,6 +357,12 @@ class HomeScreenDrawTest {
 
         /** The widest the two buttons stand together, the theme's `homeButtonsMaxWidth` at one pixel a dp. */
         const val BUTTONS_MAX_WIDTH = 328f
+
+        /** The server's first five categories, every one played, as Home names them in Cyrillic: cut short. */
+        const val LONG_SELECTION = "Храна, Начин живота, Етика, Супермоћи, Апсурдно"
+
+        /** A touch target's height, as Material sets it: the categories' line is one line within it. */
+        const val TOUCH_TARGET = 48f
 
         /** A frame of the scene's clock, in milliseconds, as [passTime] steps it. */
         const val FRAME = 100L

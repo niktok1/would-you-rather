@@ -1640,8 +1640,10 @@ game's, or a place on one, theme tokens only (§5b), and its words in `Strings` 
 
 **Navigation** (*decided 2026-09-25*: no tabs; `App.kt`, `io.ntole.wyr.navigation`, `io.ntole.wyr.home`):
 - The app opens on **Home**: the game's name, two small **Play** buttons side by side in the cards'
-  colours, which reveal how many picked each once tapped (*Home picks*), and the account icon top
-  right, and nothing else, the user asking for less text. Either Play, after its reveal, opens the
+  colours, which reveal how many picked each once tapped (*Home picks*), under them the categories
+  played, which open the **Categories** screen (*built 2026-09-29*, the user: the category picker on
+  Home, below the two Play buttons), and the account icon top right, and nothing else, the user asking
+  for less text. Either Play, after its reveal, opens the
   **Play** screen, fading into it, under a top bar of
   the home icon, left, back to Home, the categories played in its exact middle, which open the
   **Categories** screen, and the question's menu, right; no account icon (*resolved 2026-09-29*, §8b
@@ -1652,13 +1654,16 @@ game's, or a place on one, theme tokens only (§5b), and its words in `Strings` 
   points, the coin and the number, on Play's row and on the Account card, open the Shop too. On it, a guest's one button
   opens the **Auth** page, to register or log in, My questions' plus the **Submit** screen's form,
   and a question's row the **Question** screen, that question whole (*Question details*). On Play, the categories played open the **Categories** screen (*Categories*, *The
-  Categories screen*), whose **Играј** goes back to Play. The Auth, Submit, Categories, About and
+  Categories screen*), whose **Играј** goes back to Play; opened from Home, its **Играј** opens Play in
+  its place, so the stack is Home and Play and back from Play is Home. The Auth, Submit, Categories, About and
   Question and Shop bars hold a back arrow alone (`BackTopBar`), Account's the bag and the info icon besides (`AccountTopBar`); the Submit button the Account bar held before is
   gone. The icons are the theme's (§5b), each named for a screen reader in the language shown (§8f).
 - *The back stack* is made by hand, no navigation library: a sealed `Screen` and a `Navigator` of
   the screens opened, Home at the bottom. `open` shows a screen over the one shown, or goes back to
   it when it is on the stack already, so no screen is on it twice and the home icon is
-  `open(Screen.Home)`; `back` goes to the screen before, and at Home does nothing. The stack is saved
+  `open(Screen.Home)`; `back` goes to the screen before, and at Home does nothing; `replace` shows a
+  screen in place of the one shown, which leaves the stack (the Categories screen's Play, opened from
+  Home), and `previous` names the screen under the one shown, which it was opened from. The stack is saved
   state (`Navigator.Saver`), so an Android activity made anew, on a rotation say, shows the screen it
   showed. `NavigatorTest` pins it.
 - *Android's back*, button or gesture, goes back through the navigator (`SystemBack`, over
@@ -1670,14 +1675,14 @@ game's, or a place on one, theme tokens only (§5b), and its words in `Strings` 
   through Home and Account and back, and Account, Submit and Categories read the server
   again each time they are shown; the Auth page is on the Account screen's, and the Categories
   screen starts each visit afresh from what is played (`CategoriesViewModel.open`, which Play's tap
-  calls before it opens the screen). `AppNavigationTest` drives the whole `App` over fakes by
+  and Home's call before they open the screen). `AppNavigationTest` drives the whole `App` over fakes by
   tapping its buttons, and counts the questions asked.
 - *Heights*: each top bar is `WyrDimens.topBarHeight` high, 48, the tab row's height before it, so
   the Play, Account, Auth, Submit and Categories screens keep the 599 of an iPhone SE's 667 their
   draw tests hold them to. `TopBarsDrawTest` holds every bar to 48 at 375 wide with nothing cut
   short but a long selection of categories on Play's, cut on its one line, in both themes and every
-  language; `HomeScreenDrawTest` holds Home to 599 at 375 wide and
-  to its texts and one icon.
+  language; `HomeScreenDrawTest` holds Home to 599 at 375 wide, a long selection of categories
+  included, and to its texts and one icon.
 
 **Wide screens** (*decided 2026-09-26*: of two options, the user picked the cards side by side over
 the row with the top bar as it is, the other being the row moved into the top bar; and the other
@@ -2242,8 +2247,8 @@ listed on the Account screen.
     picker, as there will be hundreds of categories, and players should be able to pick multiple,
     random is actually all. There should be also category search."): `io.ntole.wyr.categories`, a
     `Screen` of the navigator's own (`Screen.Categories`), opened by a tap on the categories played
-    on the Play screen, in place of the dialog the Play screen had for them, under a top bar of a
-    back arrow (`BackTopBar`). Top down: a search field, then one lazy list (a `LazyColumn`, so
+    on the Play screen, in place of the dialog the Play screen had for them, or on those under Home's
+    Play buttons (*built 2026-09-29*), under a top bar of a back arrow (`BackTopBar`). Top down: a search field, then one lazy list (a `LazyColumn`, so
     hundreds draw only the lines on screen) of **Све**, ticked while no category is, and every
     category the search finds, each ticked or not, in the server's order; and at the bottom how many
     are ticked (*Изабрано: 3*, nothing while Све is) and **Играј**. Ticking Све unticks every
@@ -2257,18 +2262,22 @@ listed on the Account screen.
     *Начин живота*, *djak* and *đak* find *Ђак*, *dzu* finds *Џунгла* and *ćevap* a name a moderator
     typed as *Cevapi*. A category the search hides stays ticked, and a search that finds none says
     so under Све. Each visit starts from the categories played, nothing searched
-    (`CategoriesViewModel.open`, called by the Play screen's tap, so a rotation keeps what is
-    ticked), and reads the list (`GetCategories`) as it is shown: a read that fails says so above
+    (`CategoriesViewModel.open`, called by the Play screen's tap and Home's, so a rotation keeps
+    what is ticked), and reads the list (`GetCategories`) as it is shown: a read that fails says so above
     the list, *Игра није доступна.* offline, as the Play screen says it, and *Категорије нису
     учитане.* otherwise (`unreadText`), with *Покушај поново* (`Strings.tryAgain`), the categories
     read before staying to tick, and with none read before a spinner shows while it reads. **Играј**
     sets what is ticked in one `QuestionRepository.setCategories`, waits for it to land, the list
     and Играј off meanwhile, then goes back to the Play screen, which shows a question from it (*The
-    client*, above); what is played already is not sent again, so the question stays. Back, the
-    arrow or Android's, plays nothing. `CategoriesViewModelTest`, `CategoriesScreenDrawTest` (every
+    client*, above); what is played already is not sent again, so the question stays. Opened from
+    Home, Играј opens the Play screen in its place instead (`Navigator.replace`), so back from Play is
+    Home; where it was opened from is the screen under it on the back stack (`Navigator.previous`),
+    which saved state keeps, so an Android rotation keeps it too. Back, the arrow or Android's, plays
+    nothing and goes to the screen it was opened from, Home or Play. `CategoriesViewModelTest`, `CategoriesScreenDrawTest` (every
     state in both themes and every language at 400x900 and 375x599; with 301 categories at 375x599
     the search field and Play on screen, nothing cut short, only the lines that fit composed, and
-    the list scrolled to its last), `AppNavigationTest` (Play, Categories and back, played or not),
+    the list scrolled to its last), `AppNavigationTest` (Play, Categories and back, played or not;
+    Home, Categories and Играј to Play over Home, after a rotation too, or back to Home playing nothing),
     `NavigatorTest`, `TopBarsDrawTest`.
   - *A known limit:* the game's picker is a screen of its own, searched and lazy (*The Categories
     screen*), but the Submit form, the moderation app's category filter and each pending card lay out
@@ -2800,7 +2809,11 @@ listed on the Account screen.
   - *The Home screen* (`io.ntole.wyr.home`, *built 2026-09-26*, *redesigned 2026-09-27*): under the
     game's name, the two buttons, *Играј* each (provisional, §8b), card A's pink and card B's amber,
     small and side by side on every screen (`WyrDimens.homeButtonHeight`, 128, and the pair no wider
-    than `homeButtonsMaxWidth`, 328), the name and the pair centred in the room under the top bar. No
+    than `homeButtonsMaxWidth`, 328), and just under the pair (`WyrDimens.spaceSm`) the **categories
+    played**, as Play's top bar names them (`CategoriesPlayed`, `categoriesPlayed`: *Све* or their
+    names in the language shown, one line cut short within the pair's width, the small chevron), whose
+    tap (`home.categories`) opens the Categories screen (*The Categories screen*); the name, the pair and
+    the categories centred in the room under the top bar. Both buttons play whatever is selected. No
     share shows until a tap. A tap on either sinks and lifts it, the other a little faint, with a tap of the phone (`cardMotion`, as a Play card) and holds both still, then both count their
     share of all taps up from 0 over 1.2 seconds (`HOME_COUNT_UP_MILLIS`, shorter than the Play screen's
     3), as the same race the reveal runs, each with a reveal bar along its bottom, drawn, not composed, as the reveal is
@@ -2809,7 +2822,7 @@ listed on the Account screen.
     (`HOME_HOLD_MILLIS`), then Home fades out, growing a little, over 0.2 s, and Play fades in, from a
     little smaller, over 0.25 s (`HOME_FADE_MILLIS`, `PLAY_ENTRANCE_MILLIS`, `FADE_THROUGH_SCALE`), a
     fade through with no library, on the frame clock. The share's room is held from the start, so the
-    reveal moves nothing. With no counts read (offline, a sleeping server) there is nothing to reveal,
+    reveal moves nothing; the categories stay where they are, and take no tap once a button is tapped. With no counts read (offline, a sleeping server) there is nothing to reveal,
     and the tap opens Play at once. The counts are read each time Home is shown (`HomeViewModel.shown`),
     and nothing is said when a read fails. The tap is counted in the background, best effort
     (`HomeViewModel.pick`), its answer not shown, and it makes the Play screen's ViewModel, so its
@@ -2821,9 +2834,10 @@ listed on the Account screen.
     guest between them. `DefaultHomePickRepository` reads through `runApi` alone, as the categories
     are, and counts a tap through `withSessionRecovery`, over `HomePickApi`. `HomePickUseCasesTest`,
     `DefaultHomePickRepositoryTest`, `HomeViewModelTest`, `HomeScreenDrawTest` (599 on an iPhone SE,
-    both themes, every language, the buttons small and side by side on phones and a desktop window, no
-    share before a tap, the shares with the tap counted read as they are through the count up, nothing
-    moved, one tap only, the game started once and not before the reveal is over, and at once with no
+    both themes, every language, *Све* or a long selection, the buttons small and side by side on
+    phones and a desktop window, the categories under them in the pair's middle on one line, opening
+    the Categories screen once, no share before a tap, the shares with the tap counted read as they are through the count up, nothing
+    moved, the categories neither moved nor taking a tap, one tap only, the game started once and not before the reveal is over, and at once with no
     counts), `AppNavigationTest` (read each time Home is shown; the question asked during the reveal;
     Play opens after it, whether or not the tap was counted by then).
 
@@ -3221,7 +3235,7 @@ the same events. The moderation app sends none.
   with `element` to `LocalAnalytics` (the app's, which `App` provides; none for a screen drawn alone)
   before it acts, so a tap is counted by a name that never changes with the language or the text, and
   `$screen_name` says where. An element is `screen.what`, lower case and underscores: `home.play` (with
-  its `side`, `A` or `B`, since Home's two buttons are one element);
+  its `side`, `A` or `B`, since Home's two buttons are one element), `home.categories`;
   `top_bar.home`, `.account`, `.back`, `.categories`, `.about`, `.shop`; `about.privacy`, `.terms`,
   `.delete_account`, `.contact`, `.copy_account_id` and `.licence`; `play.card_a` and `.card_b` (with `answered`,
   whether the tap went on from the reveal), `.like`, `.dislike`, `.skip` (with `answered`, as the cards'), `.points`, `.try_again`;
