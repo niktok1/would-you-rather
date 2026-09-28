@@ -37,6 +37,8 @@ data class PlayStrings(
     val answeredBefore: String,
     /** The menu about the question on screen, on the top bar. */
     val menu: QuestionMenuStrings,
+    /** Sharing the question on screen, or one of the player's own (CLAUDE.md §8d, *Sharing*). */
+    val share: ShareStrings,
 ) {
     /** A side's share of the answers, as the reveal shows it: *70%*. */
     fun percent(value: Int): String = "$value%"
@@ -56,6 +58,7 @@ data class PlayStrings(
             somethingWrong = transform(somethingWrong),
             answeredBefore = transform(answeredBefore),
             menu = menu.map(transform),
+            share = share.map(transform),
         )
 }
 
@@ -74,6 +77,7 @@ internal val SerbianCyrillicPlayStrings: PlayStrings =
         somethingWrong = "Нешто није успело.",
         answeredBefore = "Већ одговорено",
         menu = SerbianCyrillicQuestionMenuStrings,
+        share = SerbianCyrillicShareStrings,
     )
 
 internal val EnglishPlayStrings: PlayStrings =
@@ -90,4 +94,5 @@ internal val EnglishPlayStrings: PlayStrings =
         somethingWrong = "Something went wrong.",
         answeredBefore = "Answered before",
         menu = EnglishQuestionMenuStrings,
+        share = EnglishShareStrings,
     )

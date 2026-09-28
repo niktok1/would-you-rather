@@ -14,6 +14,9 @@ import io.ntole.wyr.core.domain.player.GetPlayerStats
 import io.ntole.wyr.core.domain.playgames.LinkPlayGames
 import io.ntole.wyr.core.domain.session.CurrentSession
 import io.ntole.wyr.core.domain.submission.GetMySubmissions
+import io.ntole.wyr.share.ShareOutcome
+import io.ntole.wyr.share.SharedQuestion
+import io.ntole.wyr.share.questionShared
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -209,6 +212,16 @@ class AccountViewModel(
             logOutOfAccount()
             _state.update { it.copy(stats = null, submissions = null) }
         }
+
+    /**
+     * One of the player's own questions, [question], was shared from the Question details screen,
+     * [withResults] or not, as [outcome] says (CLAUDE.md §8d, *Sharing*): the analytics hear of it.
+     */
+    fun shared(
+        question: SharedQuestion,
+        withResults: Boolean,
+        outcome: ShareOutcome,
+    ) = analytics.questionShared(question, withResults, outcome)
 
     /**
      * Deletes the account, a guest's or a registered player's; the read after mints the fresh guest the

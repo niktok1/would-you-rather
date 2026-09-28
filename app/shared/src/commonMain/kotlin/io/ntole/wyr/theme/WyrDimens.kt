@@ -28,9 +28,22 @@ data class WyrDimens(
     val revealBarHeight: Dp = 8.dp,
     /**
      * The widest the start of the Play screen's row may be, the points or how a reaction failed, so the
-     * thumbs stay in the middle and their counts and Skip are never cut short at 375 wide.
+     * thumbs' counts, Share and Skip are never cut short at 375 wide.
      */
-    val playRowStartMaxWidth: Dp = 88.dp,
+    val playRowStartMaxWidth: Dp = 80.dp,
+    /**
+     * How far a thumb's count stands into the thumb's own touch target, past the icon's edge, so a
+     * thumb and its count take less of the row than a button and a text side by side.
+     */
+    val reactionCountInset: Dp = 10.dp,
+    /**
+     * A shared question's image (CLAUDE.md §8d, *Sharing*), laid out at this size whatever the screen, 4
+     * to 5, as a feed's post takes it, and drawn at `SHARE_IMAGE_WIDTH_PX` across; and the widest the
+     * dialog that shows it before it goes.
+     */
+    val shareCardWidth: Dp = 360.dp,
+    val shareCardHeight: Dp = 450.dp,
+    val shareDialogMaxWidth: Dp = 360.dp,
     /** The Account card's circle of the player's initial. */
     val avatarSize: Dp = 44.dp,
     /** Each number column of My questions' table: its likes, its dislikes and its answers. */

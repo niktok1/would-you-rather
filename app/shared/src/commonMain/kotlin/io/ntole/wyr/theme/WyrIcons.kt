@@ -238,6 +238,25 @@ object WyrIcons {
     }
 
     /**
+     * Share: three rings joined by two strokes, one on the left linked to two on the right, for sharing a
+     * question (CLAUDE.md §8d, *Sharing*).
+     */
+    val Share: ImageVector by lazy {
+        icon("Share") {
+            outline {
+                ring(x = 18f, y = 5f)
+                ring(x = 6f, y = 12f)
+                ring(x = 18f, y = 19f)
+                // From the ring on the left to each on the right, their edges only.
+                moveTo(8.6f, 10.5f)
+                lineTo(15.4f, 6.5f)
+                moveTo(8.6f, 13.5f)
+                lineTo(15.4f, 17.5f)
+            }
+        }
+    }
+
+    /**
      * A thumb up, or turned over top to bottom for a thumb down: the cuff on the left, and the hand
      * beside it, its thumb pointing up out of it, or down.
      */
@@ -270,6 +289,17 @@ object WyrIcons {
         moveTo(middle - radius, middle)
         arcTo(radius, radius, 0f, isMoreThanHalf = true, isPositiveArc = true, x1 = middle + radius, y1 = middle)
         arcTo(radius, radius, 0f, isMoreThanHalf = true, isPositiveArc = true, x1 = middle - radius, y1 = middle)
+        close()
+    }
+
+    /** A ring of [RING_RADIUS] about ([x], [y]), in two half turns, for [Share]. */
+    private fun PathBuilder.ring(
+        x: Float,
+        y: Float,
+    ) {
+        moveTo(x - RING_RADIUS, y)
+        arcTo(RING_RADIUS, RING_RADIUS, 0f, isMoreThanHalf = true, isPositiveArc = true, x1 = x + RING_RADIUS, y1 = y)
+        arcTo(RING_RADIUS, RING_RADIUS, 0f, isMoreThanHalf = true, isPositiveArc = true, x1 = x - RING_RADIUS, y1 = y)
         close()
     }
 
@@ -332,4 +362,7 @@ object WyrIcons {
 
     /** Each of [More]'s dots, a little wider than a stroke. */
     private const val DOT_RADIUS = 2f
+
+    /** Each of [Share]'s rings. */
+    private const val RING_RADIUS = 3f
 }

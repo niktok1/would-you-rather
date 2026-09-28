@@ -184,8 +184,8 @@ class PlayScreenDrawTest {
 
     /**
      * On a phone on its side the cards stand side by side, card A first, sharing the width, and the
-     * row runs under them across it, the points under card A, Skip under card B, and the thumbs in the
-     * middle of the screen.
+     * row runs under them across it, the points and the thumbs right after them under card A, Share and
+     * Skip under card B.
      */
     @Test
     fun `on a phone on its side the cards stand side by side over the row`() {
@@ -198,13 +198,15 @@ class PlayScreenDrawTest {
             assertTrue(cardA.right < cardB.left && abs(cardA.width - cardB.width) <= 1f, "$cardA beside $cardB")
 
             val row =
-                listOf(POINTS_SHOWN, strings.like, "$DISLIKES", strings.skip).map { scene.node(it).boundsInRoot }
+                listOf(POINTS_SHOWN, strings.like, "$DISLIKES", strings.share.share, strings.skip).map {
+                    scene.node(it).boundsInRoot
+                }
             row.forEach { part -> assertTrue(part.top >= cardA.bottom, "$part is not under the cards") }
-            val (points, like, dislikes, skip) = row
-            assertTrue(points.left >= cardA.left && points.right < cardA.right, "the points at $points")
-            assertTrue(skip.left > cardB.left && skip.right <= cardB.right, "Skip at $skip")
-            val thumbsMiddle = (like.left - TOUCH_INSET + dislikes.right) / 2
-            assertTrue(abs(thumbsMiddle - PHONE_ON_ITS_SIDE_WIDTH / 2f) <= 1f, "the thumbs are about $thumbsMiddle")
+            val (points, like, dislikes, share, skip) = row
+            assertTrue(points.left >= cardA.left && points.right < like.left, "the points at $points")
+            assertTrue(dislikes.right < cardA.right, "the thumbs at $like to $dislikes")
+            assertTrue(share.left > cardB.left && share.right < skip.left, "Share at $share")
+            assertTrue(skip.right <= cardB.right, "Skip at $skip")
         }
     }
 
@@ -292,7 +294,11 @@ class PlayScreenDrawTest {
             withScreen(PlayUiState.Asking(QUESTION), points = null, language = language) { scene, _ ->
                 assertEquals(listOf(QUESTION.optionA, "0", "0", QUESTION.optionB).sorted(), scene.texts().sorted())
                 val strings = shown.playScreen
-                assertEquals(listOf(strings.like, strings.dislike, strings.skip), scene.descriptions(), "in $language")
+                assertEquals(
+                    listOf(strings.like, strings.dislike, strings.share.share, strings.skip),
+                    scene.descriptions(),
+                    "in $language",
+                )
             }
         }
     }
@@ -334,11 +340,14 @@ class PlayScreenDrawTest {
         }
     }
 
-    /** One action at a time: while a vote or a reaction is in flight, the cards, the thumbs and Skip are off. */
+    /**
+     * One action at a time: while a vote or a reaction is in flight, the cards, the thumbs, Share and
+     * Skip are off.
+     */
     @Test
-    fun `the cards and the thumbs and Skip are off while anything is in flight`() {
+    fun `the cards and the thumbs and Share and Skip are off while anything is in flight`() {
         val strings = stringsOf(Language.DEFAULT).playScreen
-        val parts = listOf(QUESTION.optionA, QUESTION.optionB, strings.like, strings.dislike)
+        val parts = listOf(QUESTION.optionA, QUESTION.optionB, strings.like, strings.dislike, strings.share.share)
         listOf(
             PlayUiState.Asking(QUESTION, isSubmitting = true),
             PlayUiState.Asking(QUESTION, isReacting = true),
@@ -526,27 +535,28 @@ class PlayScreenDrawTest {
     }
 
     /**
-     * The points, the thumbs and Skip sit in one row between the two cards, in that order, the thumbs
-     * in the middle of the screen.
+     * The points, the thumbs, Share and Skip sit in one row between the two cards, in that order: the
+     * thumbs right after the points (CLAUDE.md §8d, *The Play screen*), Share and Skip at the row's end.
      */
     @Test
-    fun `the row sits between the cards with the thumbs in the middle`() {
+    fun `the row sits between the cards with the thumbs beside the points`() {
         val strings = stringsOf(Language.DEFAULT).playScreen
         withScreen(PlayUiState.Asking(REACTED_TO)) { scene, _ ->
             val cardA = scene.node(REACTED_TO.optionA).boundsInRoot
             val cardB = scene.node(REACTED_TO.optionB).boundsInRoot
             val row =
-                listOf(POINTS_SHOWN, strings.like, strings.dislike, "$DISLIKES", strings.skip).map {
-                    scene.node(it).boundsInRoot
-                }
+                listOf(POINTS_SHOWN, strings.like, strings.dislike, "$DISLIKES", strings.share.share, strings.skip)
+                    .map { scene.node(it).boundsInRoot }
             row.forEach { part -> assertTrue(part.center.y > cardA.bottom && part.center.y < cardB.top, "$part") }
 
-            val (points, like, dislike, dislikes, skip) = row
+            val (points, like, dislike, dislikes, share) = row
+            val skip = row.last()
             // A thumb's bounds are its icon button's, inside its touch target, which the row sets from.
-            val thumbsMiddle = (like.left - TOUCH_INSET + dislikes.right) / 2
-            assertTrue(abs(thumbsMiddle - SHORT_PHONE_WIDTH / 2f) <= 1f, "the thumbs are about $thumbsMiddle")
-            assertTrue(points.right < like.left && like.right < dislike.left && skip.left > dislikes.right, "$row")
+            assertTrue(like.left - TOUCH_INSET - points.right <= THUMBS_AFTER_POINTS, "the thumbs at $like")
+            assertTrue(points.right < like.left && like.right < dislike.left && share.left > dislikes.right, "$row")
+            assertTrue(share.right < skip.left, "$row")
             assertTrue(points.left >= cardA.left && skip.right <= cardA.right, "the row is wider than a card: $row")
+            assertEquals(cardA.right - TOUCH_INSET, skip.right, "Skip at the row's end: $skip")
         }
     }
 
@@ -572,21 +582,21 @@ class PlayScreenDrawTest {
 
     /**
      * The row's own rule, measured on boxes of known widths rather than text, which differs from one
-     * font to another: the middle in the middle while the start leaves it room, moved right only as
-     * far as the start needs, and the start cut to what is left once it needs more than the row has.
+     * font to another: the middle right after the start, the end at the right, and the start cut to what
+     * is left once it needs more than the row has.
      */
     @Test
-    fun `the row keeps the points in the middle until the categories need their room`() {
-        // In 335, a middle 50 wide is in the middle at 142, and an end 100 wide starts at 235, 8 apart.
+    fun `the row puts the thumbs right after the points and cuts the points short`() {
+        // In 335, an end 100 wide starts at 235, and a middle 50 wide leaves the start 169, each 8 apart.
         mapOf(
-            60 to Triple(60, 142, 235),
+            60 to Triple(60, 68, 235),
             134 to Triple(134, 142, 235),
-            150 to Triple(150, 158, 235),
+            169 to Triple(169, 177, 235),
             300 to Triple(169, 177, 235),
         ).forEach { (startWidth, expected) ->
             val scene =
                 ImageComposeScene(width = ROW_WIDTH, height = ROW_HEIGHT, density = Density(1f)) {
-                    CentredRow(
+                    PlayRow(
                         gap = 8.dp,
                         start = { Probe("start", startWidth) },
                         middle = { Probe("middle", 50) },
@@ -844,6 +854,7 @@ class PlayScreenDrawTest {
                                         idle = true,
                                         onReact = {},
                                         onSkip = onSkip,
+                                        onShare = {},
                                     )
                                 }
                             }
@@ -1033,6 +1044,7 @@ class PlayScreenDrawTest {
                             idle = true,
                             onReact = {},
                             onSkip = {},
+                            onShare = {},
                         )
                     }
                 }
@@ -1251,6 +1263,9 @@ class PlayScreenDrawTest {
 
         /** A like count of a question many like, and its dislike count, neither the other's. */
         const val LIKES = 12
+
+        /** The most between the points and the thumb up's touch target: the row's gap, and some rounding. */
+        const val THUMBS_AFTER_POINTS = 5f
         const val DISLIKES = 5
 
         /** Two lines an option on a phone, as most seeds are. */
@@ -1323,7 +1338,7 @@ class PlayScreenDrawTest {
 
         /**
          * What some states show in [shown]'s words, each its texts in any order, and then the names it
-         * gives a screen reader for what has no text, from the top down: the thumbs and, while a
+         * gives a screen reader for what has no text, from the top down: the thumbs, Share and, while a
          * question is asked, Skip, and then [points], as it hears the points, which sit a little lower,
          * in the middle of the row's height, as the thumbs' touch targets fill it.
          */
@@ -1337,7 +1352,7 @@ class PlayScreenDrawTest {
             val b = QUESTION.optionB
             val revealedA = strings.percent(70)
             val revealedB = strings.percent(30)
-            val thumbs = listOf(strings.like, strings.dislike)
+            val thumbs = listOf(strings.like, strings.dislike, strings.share.share)
             val thumbsAndSkip = thumbs + strings.skip
             return listOf(
                 PlayUiState.Loading to (emptyList<String>() to listOf(shown.loading)),

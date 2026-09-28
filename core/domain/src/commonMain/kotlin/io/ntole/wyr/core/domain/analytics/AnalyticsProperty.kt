@@ -44,6 +44,12 @@ public object AnalyticsProperty {
     /** Whether the question was answered already. */
     public const val ANSWERED: String = "answered"
 
+    /** Whether a shared question's image showed its results. */
+    public const val WITH_RESULTS: String = "with_results"
+
+    /** What sharing did: `opened` a share sheet, `copied` to the clipboard or `saved` the image. */
+    public const val OUTCOME: String = "outcome"
+
     /** A failure's code, the domain's name for it (`NETWORK`, `USERNAME_TAKEN`...). */
     public const val CODE: String = "code"
 

@@ -436,7 +436,7 @@ class AppNavigationTest {
         }
 
     /**
-     * Skip is in the row between the cards while a question is asked, after the thumbs, and not on the
+     * Skip is in the row between the cards while a question is asked, after the thumbs and Share, and not on the
      * top bar, which holds home, the categories played and the account icon; it goes past the question
      * to the next. The points, a coin and the number, a screen reader hears in words, last, a little
      * lower in the row than the thumbs' touch targets.
@@ -448,7 +448,8 @@ class AppNavigationTest {
             scene.tapPlay()
             assertEquals(
                 PLAY_BAR +
-                    listOf(CYRILLIC.playScreen.like, CYRILLIC.playScreen.dislike, CYRILLIC.playScreen.skip) +
+                    listOf(CYRILLIC.playScreen.like, CYRILLIC.playScreen.dislike, CYRILLIC.playScreen.share.share) +
+                    CYRILLIC.playScreen.skip +
                     CYRILLIC.points.fill(5),
                 scene.descriptions(),
             )

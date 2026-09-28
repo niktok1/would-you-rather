@@ -42,6 +42,12 @@ public object AnalyticsEvent {
     /** A question's author was hidden from the player, from the Play screen's menu. */
     public const val AUTHOR_HIDDEN: String = "author_hidden"
 
+    /**
+     * A question was shared, [AnalyticsProperty.WITH_RESULTS] or not, as [AnalyticsProperty.OUTCOME] says:
+     * from the Play screen or the Question details screen, which `$screen_name` tells apart.
+     */
+    public const val QUESTION_SHARED: String = "question_shared"
+
     /** Categories were played from the Categories screen, none being every category. */
     public const val CATEGORIES_CHANGED: String = "categories_changed"
 

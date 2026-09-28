@@ -22,6 +22,7 @@ import io.ntole.wyr.account.AccountState
 import io.ntole.wyr.account.AuthMode
 import io.ntole.wyr.account.AuthScreen
 import io.ntole.wyr.account.DeleteAccount
+import io.ntole.wyr.account.QuestionDetailsScreen
 import io.ntole.wyr.categories.CategoriesActions
 import io.ntole.wyr.categories.CategoriesScreen
 import io.ntole.wyr.categories.CategoriesState
@@ -161,9 +162,44 @@ class TapsTest {
         val revealed = elementsTapped { Play(PlayUiState.Revealed(QUESTION, OUTCOME)) }
         val failed = elementsTapped { Play(PlayUiState.Failed(DomainError.NETWORK)) }
 
-        assertEquals(setOf("play.card_a", "play.card_b", "play.like", "play.dislike", "play.skip"), asked)
-        assertEquals(setOf("play.card_a", "play.card_b", "play.like", "play.dislike"), revealed)
+        // Share opens its dialog, whose switch for the results shows only once there are results.
+        val share = setOf("play.share", "share.send", "share.cancel")
+        assertEquals(setOf("play.card_a", "play.card_b", "play.like", "play.dislike", "play.skip") + share, asked)
+        assertEquals(
+            setOf("play.card_a", "play.card_b", "play.like", "play.dislike", "share.results") + share,
+            revealed,
+        )
         assertEquals(setOf("play.try_again"), failed)
+    }
+
+    /** An approved question of the player's own shares, as the Play screen's does (CLAUDE.md §8d, *Sharing*). */
+    @Test
+    fun `every tap on the Question details screen is reported`() {
+        val approved =
+            Submission(
+                id = "s1",
+                optionA = "Fly",
+                optionB = "Turn invisible",
+                categories = setOf("FOOD"),
+                status = SubmissionStatus.APPROVED,
+                rejectionReason = null,
+                submittedAt = Instant.parse("2026-09-25T10:00:00Z"),
+                answerCount = 4,
+                tally = Tally(votesA = 3, votesB = 1),
+            )
+        assertEquals(
+            setOf("question.share", "share.results", "share.send", "share.cancel"),
+            elementsTapped { QuestionDetailsScreen(submission = approved, categories = emptyList()) },
+        )
+        assertEquals(
+            emptySet(),
+            elementsTapped {
+                QuestionDetailsScreen(
+                    submission = approved.copy(status = SubmissionStatus.PENDING),
+                    categories = emptyList(),
+                )
+            },
+        )
     }
 
     /** Each reason a report may give is its own tap, named by the reason (CLAUDE.md §8d, *Reports*). */

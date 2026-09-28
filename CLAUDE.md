@@ -305,7 +305,8 @@ Account screen's way to the About screen (§8d, *About*); `More`, three dots one
 other, the Play screen's menu about the question (§8d, *The Play screen*, *Reports*); and `Copy`, two
 sheets one over the other, beside the About screen's account id (§8d, *About*); `Plus`, two strokes
 crossed, My questions' way to a new question, and `ChevronRight`, on each of its rows, which opens the
-question whole (§8d, *The Account screen*, *Question details*). They carry no colour of their
+question whole (§8d, *The Account screen*, *Question details*); and `Share`, three rings joined, sharing
+a question from the Play screen's row and Question details (§8d, *Sharing*). They carry no colour of their
 own: `Icon` tints each from `WyrColors`, so they follow the light and dark themes as text does. The
 coin is two icons drawn one on the other, the face in `WyrColors.coin` and the mark in
 `WyrColors.onCoin`, the brand's amber and its dark brown, the same in both themes as the cards are
@@ -1025,8 +1026,20 @@ EncryptedSharedPreferences: enough for a game that stores no sensitive personal 
 - **The categories on the Play screen** — *resolved 2026-09-26*: the user moved them from the row
   between the cards, where the redesign of 2026-09-25 had put them, to the middle of the top bar
   (§8d, *The Play screen*).
-- **The Play row's arrangement** — *resolved 2026-09-26*: the user's, the points on the left, the
-  thumbs in the middle and Skip on the right (§8d, *The Play screen*).
+- **The Play row's arrangement** — *resolved 2026-09-28*: the user's, the points on the left with the
+  thumbs right beside them, and Share, always shown, and Skip on the right (§8d, *The Play screen*),
+  replacing the thumbs in the middle (2026-09-26).
+- **Sharing** — *decided 2026-09-28* (the user: "we need to allow players to share question they found
+  interesting with or without results, to their social media"); built (§8d, *Sharing*). An image of the
+  question and the platform's own share sheet, no social network's SDK. Two details are
+  *provisional — user decision*: the message links to the game's **Play Store page**, whichever
+  platform shares, since there is no domain yet, where a link to the question itself would open it in
+  the game or on a page with the store's button (a public route for one question, a preview page,
+  Android App Links, the feed serving that question first), which comes once `stabiradije.rs` is
+  bought; and a reaction's failure, in the points' place, moves the thumbs over while it shows, where
+  the thumbs in the middle never moved for it. The options for the second: keep it; or the points'
+  slot always `WyrDimens.playRowStartMaxWidth` wide, which leaves a gap between the points and the
+  thumbs.
 - **Delete account beside Log out** — *resolved 2026-09-28*: the user moved **Обриши налог** off
   the Account screen to the bottom of the About screen, after the licences (§8d, *About*), the other
   option this item listed.
@@ -1654,9 +1667,8 @@ orientation, in common code alone:
   the height it needs by the same rule. `PlayScreenDrawTest` draws every state on two phones on their
   side and in a desktop window, holds each state to the room a 360-by-780 phone on its side (720 by
   256) and an iPhone SE on its side (667 by 327) give, measured wider for CI's fonts as the portrait
-  test is, finds the row under the cards, the points under card A, Skip under card B and the thumbs
-  in the middle of the screen, card B's bar along its bottom, and nothing in the row moved by the
-  reveal. The Account, Auth, Submit and Categories draw tests find every text, button
+  test is, finds the row under the cards, the points and the thumbs beside them under card A, Share
+  and Skip under card B, card B's bar along its bottom, and nothing in the row moved by the reveal. The Account, Auth, Submit and Categories draw tests find every text, button
   and field in a column of 600 down the middle of a desktop window's 800, and something spanning it.
 
 **The Account screen** (`io.ntole.wyr.account`; §8a *Accounts*, *Stats* below):
@@ -1789,7 +1801,7 @@ orientation, in common code alone:
   size; for a question served, approved or retired, each side's **share** of the players who answered
   it, counted up with its bar along the card's bottom as the Play screen's reveal races them
   (`rememberCountUp`, over the Home screen's 1.2 s), and how many picked it after two players; where
-  it stands, a rejection's reason whole; *Послато 25. 9. 2026.*, the day it was sent on this device
+  it stands, a rejection's reason whole, and, approved, **Share** beside it (*Sharing*); *Послато 25. 9. 2026.*, the day it was sent on this device
   (`dateText`, numbers only, so no `Strings`: *25/9/2026* in English; UTC's day where the platform names
   no zone); its categories, named in the language shown from those read, read once if none are; and,
   once served, its likes, dislikes and answers, each after its icon, heard with its name. The shares
@@ -1883,11 +1895,12 @@ for it, none with no session, and the deletion last, after every licence), `Lice
 Categories screen and the question's menu from its top bar (*Skipping*, *Reactions*, *Reports* and
 *Categories*, below):
 - Two answer cards in the brand colours (§5b) and, between them, **one row** (on a wide screen the
-  cards side by side over it, *Wide screens*; the user: reactions "in the middle and points to
-  left"): on the left the player's points, the coin and the number (`PointsAmount`, §8f); in the
-  middle the **thumbs**, a thumb up and a thumb down, each filled while the player holds it and beside
-  how many hold it, before answering and after; and on the right **Skip** while the question is not
-  answered yet (*Skipping*), its place kept empty in the reveal so nothing in the row moves. The
+  cards side by side over it, *Wide screens*; the user, 2026-09-28: share "always visible in the
+  middle right, while likes and dislikes move next to coins"): on the left the player's points, the
+  coin and the number (`PointsAmount`, §8f), and right beside them the **thumbs**, a thumb up and a
+  thumb down, each filled while the player holds it and beside how many hold it, before answering and
+  after; and on the right **Share** (*Sharing*), always, and **Skip** after it while the question is not
+  answered yet (*Skipping*), Skip's place kept empty in the reveal so nothing in the row moves. The
   **categories played**, *Све* or their names, cut to one line, with a small chevron, are in the middle
   of the **top bar** (the user: "category goes to top bar in middle"), between home and the question's
   **menu**, a ⋮ before the account icon, which has the notice's dot inside its 48 while a decision
@@ -1914,11 +1927,13 @@ Categories screen and the question's menu from its top bar (*Skipping*, *Reactio
   `io.ntole.wyr.language`, §8f), in the order the server lists them, and one not read yet by its id,
   after the rest (`categoriesPlayed`). On the top bar they have the width home, the menu and the
   account icon leave them, about 223 of 375, where the row gave them 115.
-- *The row's arrangement* (`CentredRow`): Skip gets its whole width first, then the thumbs, and the
-  points what they leave, no wider than `WyrDimens.playRowStartMaxWidth` (88). The thumbs stand in
-  the middle of the screen while the points leave them room, and move right only as far as a wider
-  start needs, which only a reaction's failure is. *Decided 2026-09-26*, replacing the provisional
-  arrangement of the categories, the points in the middle, and the heart.
+- *The row's arrangement* (`PlayRow`): Share and Skip get their whole width first, then the thumbs,
+  and the points what they leave, no wider than `WyrDimens.playRowStartMaxWidth` (80), the thumbs
+  right after them, `WyrDimens.spaceXs` apart, each count standing `reactionCountInset` (10) into its
+  thumb's touch target, so the row fits 375 wide with four-digit counts and a failure. A reaction's
+  failure, in the points' place, moves the thumbs over while it shows (*provisional*, §8b *Sharing*).
+  *Decided 2026-09-28*, replacing the thumbs in the middle (2026-09-26), which replaced the
+  provisional arrangement of the categories, the points in the middle, and the heart.
 - A thumb asks for its reaction, or for none when the player holds it already, so a second tap takes
   it back (`reactionAfterTap`; *Reactions*).
 - The points are the server's (`PlayViewModel.points`, §8c): read through `GetPlayerStats` each time
@@ -1980,8 +1995,8 @@ Categories screen and the question's menu from its top bar (*Skipping*, *Reactio
   out again and told any accessibility service, too much for a debug build, several times slower, to
   do 60 times a second.
 - One action at a time (`isBusy`, `canChangeCategories`): while a vote, a skip, a reaction or a menu
-  choice is in flight, the cards, the thumbs, Skip, the categories and the menu are off, and Skip and
-  the menu are drawn muted (`WyrColors.muted`). A reaction that failed says why in the points' place, in two short lines at
+  choice is in flight, the cards, the thumbs, Share, Skip, the categories and the menu are off, and
+  Share, Skip and the menu are drawn muted (`WyrColors.muted`). A reaction that failed says why in the points' place, in two short lines at
   most, in a slot as high as a thumb's touch target at any font size, so it moves nothing; a skip that
   failed moves on all the same.
 - Loading is a spinner, with *Још мало…* under it after 5 seconds (*A slow first load*); a failure is one short sentence and *Покушај поново* (`Strings.tryAgain`,
@@ -2005,11 +2020,46 @@ Categories screen and the question's menu from its top bar (*Skipping*, *Reactio
   frame of them composing and moving nothing (`CountedUpTextDrawTest`: each number drawn once, in
   order); holds the row to 335 wide with nothing cut short, asked with Skip and answered with its
   place kept, and to one height with a reaction's failure or without at font scales 1, 1.3 and 2;
-  finds Skip after the thumbs only while a question is asked, off and drawn muted while anything is in
-  flight (by its pixels' colours, in both themes and every language), the thumbs in the middle, and
-  nothing in the row moved by the reveal; and holds `CentredRow` to its rule on boxes of known widths,
-  which no font changes. `AppNavigationTest` skips through it, under a bar of home, the categories
+  finds Skip after the thumbs and Share only while a question is asked, off and drawn muted while
+  anything is in flight (by its pixels' colours, in both themes and every language), the thumbs beside
+  the points, Share, and nothing in the row moved by the reveal; and holds `PlayRow` to its rule on
+  boxes of known widths, which no font changes. `AppNavigationTest` skips through it, under a bar of home, the categories
   played and the account icon, and plays categories picked on the Categories screen.
+
+**Sharing** (`io.ntole.wyr.share`, *built 2026-09-28*, the user: share a question "with or without
+results, to their social media"; §8b *Sharing*): a question the player finds interesting goes out as
+an image, through the platform's own share sheet, so every app the phone has that takes an image,
+Instagram, WhatsApp, Viber and the rest, takes it, with no social network's SDK or app id.
+- *Where*: **Share** on the Play screen's row, always, asked or revealed (*The Play screen*); and on
+  the Question details screen, beside where the question stands, for one of the player's own that is
+  approved (a question pending, rejected or retired is no one's to play). Each opens a dialog
+  (`ShareDialog`) of the image as it will go, shrunk to the dialog's width; **Прикажи резултате**, a
+  switch, on at first, while the question has results: answered on Play, or served, on Question
+  details; and **Подели** and *Откажи*.
+- *The image* (`ShareCard`): 1080 by 1350, 4 to 5 as a feed's post takes it, laid out at
+  `WyrDimens.shareCardWidth` by `shareCardHeight` (360 by 450) in a density of its own, so it is the
+  same on every screen (`ShareCardFrame`, recorded into a `GraphicsLayer` and made an image with
+  `toImageBitmap`), in the theme shown: the game's name, the two options on cards of their colours in
+  the language shown (`optionText`, §8f), and *Играј и ти на Google Play* (`GOOGLE_PLAY`). With the
+  results, each card's share of the players and a bar filled to it, as the reveal ends, and on Play
+  the player's pick marked *Мој избор* on a pill astride its card's top edge; Question details has no
+  pick to mark, the question being the author's. Nothing of the player's: no name, no points.
+- *The message* beside it: *Шта би ти радије? Играј и ти:* and the game's Play Store page
+  (`STORE_URL`, the `prod` flavor's, whichever build shares; *provisional*, §8b *Sharing*).
+- *The platforms* (`ShareSheet`, `rememberShareSheet`, which `App` provides as `LocalShareSheet`):
+  Android's share sheet, the PNG written to the cache's `shared/` and handed out through
+  `androidx.core`'s `FileProvider` (`${applicationId}.share`, in `:app:androidApp`'s manifest over
+  `res/xml/share_paths.xml`; `androidx-core-ktx` in the catalog, at 1.18.0, the version the app already
+  resolved, since 1.19 needs compile SDK 37); iOS's `UIActivityViewController`, a popover from the
+  screen's middle on an iPad; a browser's Web Share with the image as a file where it shares files,
+  else the image downloaded and the message copied (*Слика је сачувана.*); and the desktop's clipboard,
+  the image and the message as one (*Слика је копирана.*). A share sheet that opened closes the dialog;
+  a copy or a download says so and turns *Откажи* into *Затвори*; a failure says *Дељење није успело.*
+  and stays. *Not verified* on a device: the Android chooser, the iOS sheet and Web Share have run only
+  as compiled code, the desktop's clipboard only through the dialog's tests.
+- `question_shared` (§8g) says what was shared, never its text. `ShareDialogTest` (the image's size,
+  its colours in both themes, its texts with and without the results in every language, the message,
+  each outcome), `TapsTest`, `PlayScreenDrawTest`, `PlayViewModelTest`, `WyrIconsDrawTest`.
 
 **The Submit screen** (`io.ntole.wyr.submit`), opened from My questions on the Account screen
 (*Navigation*), is the form a question is written in (*Submitting*, below); the player's own are
@@ -2840,7 +2890,9 @@ hand, so the two cannot say different things; and **English** stands beside them
   (*Шта би радије?*, *Would You Rather?*) and *Играј*; the top bars and the icons' names (*Почетна*,
   *Налог*, *Назад*); the language menu's name, *Језик*; the Play screen's words (`PlayStrings`,
   `Strings.playScreen`), its repeat notice and its question's menu (`QuestionMenuStrings`,
-  `PlayStrings.menu`) among them; the Categories screen (`CategoryStrings`, `Strings.categoriesScreen`:
+  `PlayStrings.menu`) and sharing's (`ShareStrings`, `PlayStrings.share`: *Подели*, *Прикажи
+  резултате*, *Мој избор*, *Играј и ти на {0}*, the message, and what a copy, a download or a failure
+  says) among them; the Categories screen (`CategoryStrings`, `Strings.categoriesScreen`:
   *Претражи категорије*, *Изабрано: 3* and *Нема резултата*); the Account screen, whole, with My
   questions and the server line; the Auth page, whole; and the Submit screen's form, whole
   (`Strings.accountScreens`, an `AccountStrings` of the Account screen's words and those of the
@@ -3069,7 +3121,9 @@ the same events. The moderation app sends none.
   `.show_password`, `.to_log_in`, `.terms`, `.privacy`, `.log_in`, `.log_in_anyway`, `.cancel`, `.to_register`,
   `.play_games`, `.try_again`; `submit.category` (with its `category` id), `.send`, `.rules`, `.categories_try_again`,
   `.try_again`; `categories.all`, `.category` (with its id), `.play`, `.try_again`; `update.store` and
-  `.reload`; `account.delete`, `.delete_confirm` and `.delete_cancel`, on the About screen.
+  `.reload`; `account.delete`, `.delete_confirm` and `.delete_cancel`, on the About screen;
+  `play.share` and `question.share` (Question details), and the share dialog's `share.results`,
+  `.send` and `.cancel`.
   (`account.add_username` was sent until 2026-09-28, when its link went.) A text field is no
   tap. `TapsTest` draws every screen in the states that show all it can be tapped on, taps everything a
   screen reader could, and fails on anything that reports no tap, or a name not in its lists: a new
@@ -3082,7 +3136,10 @@ the same events. The moderation app sends none.
     `recorded`, whether the server heard); `reaction_set` (`reaction`, `like`, `dislike` or `none`,
     and `answered`); and from the question's menu, once the server has each, `question_reported`
     (`reason`, `offensive`, `real_person`, `spam`, `not_a_choice` or `other`, and `answered`),
-    `question_hidden` and `author_hidden` (`answered`). The time is the app's `TimeSource.WithComparableMarks` (`uiModule`), and a
+    `question_hidden` and `author_hidden` (`answered`); and `question_shared` (`question_id`,
+    `categories`, `with_results` and `outcome`, `opened`, `copied` or `saved`; a share that failed sends
+    none), from the Play screen and from Question details (`AccountViewModel.shared`), which
+    `$screen_name` tells apart (§8d, *Sharing*). The time is the app's `TimeSource.WithComparableMarks` (`uiModule`), and a
     question's counts only while the Play screen is shown and the app in the foreground
     (`ScreenStopwatch`, which the Play screen's `LifecycleStartEffect` stops and starts), so a detour
     to Account or the categories, or an hour in the background, is not time taken over it.

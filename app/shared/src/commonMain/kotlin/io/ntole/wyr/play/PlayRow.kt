@@ -13,28 +13,27 @@ import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
 
 /**
- * [start] on the left, [end] on the right and [middle] between them, in the middle of the row
- * whenever [start] leaves it room there, and otherwise moved right only as far as [start] needs
- * (CLAUDE.md §8d, *The Play screen*). What cannot fit is cut from [start]: [end] gets its whole
- * width first, then [middle], and [start] what they leave, with [gap] between each two.
+ * [start] on the left, [middle] right after it and [end] on the right (CLAUDE.md §8d, *The Play
+ * screen*). What cannot fit is cut from [start]: [end] gets its whole width first, then [middle], and
+ * [start] what they leave, with [gap] between each two.
  *
  * The Play screen's row between the cards, where [start] is the player's points, or how a reaction
- * failed, [middle] the thumbs and [end] Skip. A plain `Row` keeps the thumbs in the middle only by
- * giving the points the same room as Skip, which cuts a failure's words shorter than need be at 375
- * wide. Internal, not private, so a test can measure it.
+ * failed, [middle] the thumbs and [end] Share and Skip. A plain `Row` would measure the points first,
+ * and a failure's words, cut short only at `WyrDimens.playRowStartMaxWidth`, would push the thumbs'
+ * counts or Skip off the row at 375 wide. Internal, not private, so a test can measure it.
  */
 @Composable
-internal fun CentredRow(
+internal fun PlayRow(
     gap: Dp,
     start: @Composable () -> Unit,
     middle: @Composable () -> Unit,
     end: @Composable () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Layout(contents = listOf(start, middle, end), modifier = modifier, measurePolicy = CentredRowPolicy(gap))
+    Layout(contents = listOf(start, middle, end), modifier = modifier, measurePolicy = PlayRowPolicy(gap))
 }
 
-private class CentredRowPolicy(
+private class PlayRowPolicy(
     private val gap: Dp,
 ) : MultiContentMeasurePolicy {
     override fun MeasureScope.measure(
@@ -60,11 +59,8 @@ private class CentredRowPolicy(
             }
         val height = maxOf(startPlaced.height, middlePlaced.height, endPlaced.height, constraints.minHeight)
 
-        // In the middle of the row, but never over what is beside it: start's width ensures there is room.
-        val middleX =
-            ((width - middlePlaced.width) / 2)
-                .coerceAtMost(width - endPlaced.width - gap - middlePlaced.width)
-                .coerceAtLeast(startPlaced.width + gap)
+        // Right after start, whose width ensures it is never over end.
+        val middleX = startPlaced.width + gap
 
         return layout(width, height) {
             startPlaced.placeRelative(0, (height - startPlaced.height) / 2)

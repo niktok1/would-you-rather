@@ -132,6 +132,7 @@ class WyrIconsDrawTest {
                 "Copy" to WyrIcons.Copy,
                 "Plus" to WyrIcons.Plus,
                 "ChevronRight" to WyrIcons.ChevronRight,
+                "Share" to WyrIcons.Share,
             )
     }
 }

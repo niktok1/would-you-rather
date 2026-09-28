@@ -71,6 +71,8 @@ import io.ntole.wyr.play.canChangeCategories
 import io.ntole.wyr.play.canUseMenu
 import io.ntole.wyr.play.categoriesPlayed
 import io.ntole.wyr.services.AppServices
+import io.ntole.wyr.share.LocalShareSheet
+import io.ntole.wyr.share.rememberShareSheet
 import io.ntole.wyr.submit.SubmitScreen
 import io.ntole.wyr.submit.SubmitViewModel
 import io.ntole.wyr.theme.WyrTheme
@@ -101,8 +103,9 @@ fun App() {
     ReportForegroundAndBackground(koinInject(), language, services = koinInject())
     val updateRequired by koinInject<AppUpdate>().required.collectAsStateWithLifecycle()
 
-    // Every tap on every screen is counted there (CLAUDE.md §8g, [io.ntole.wyr.analytics.tapped]).
-    CompositionLocalProvider(LocalAnalytics provides koinInject()) {
+    // Every tap on every screen is counted there (CLAUDE.md §8g, [io.ntole.wyr.analytics.tapped]), and a
+    // question is shared through the platform's own sheet (§8d, *Sharing*).
+    CompositionLocalProvider(LocalAnalytics provides koinInject(), LocalShareSheet provides rememberShareSheet()) {
         WyrTheme {
             WyrStrings(language) {
                 if (updateRequired) {
@@ -299,7 +302,7 @@ private fun QuestionDetails(
     LaunchedEffect(submission == null && settled) { if (submission == null && settled) onGone() }
 
     if (submission != null) {
-        QuestionDetailsScreen(submission = submission, categories = categories)
+        QuestionDetailsScreen(submission = submission, categories = categories, onShared = account::shared)
     } else {
         LoadingSpinner()
     }
@@ -549,6 +552,7 @@ private fun ColumnScope.Play(
             onReact = viewModel::react,
             onNext = viewModel::next,
             onRetry = viewModel::retry,
+            onShared = viewModel::shared,
         )
     }
 }

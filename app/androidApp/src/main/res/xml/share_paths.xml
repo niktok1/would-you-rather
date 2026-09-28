@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- What the share provider hands out (CLAUDE.md §8d, Sharing): the cache's shared folder alone, where a
+     shared question's image is written (ShareSheet.android.kt). -->
+<paths>
+    <cache-path name="shared" path="shared/" />
+</paths>

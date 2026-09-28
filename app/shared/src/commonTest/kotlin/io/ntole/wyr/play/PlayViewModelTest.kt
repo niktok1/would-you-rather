@@ -31,6 +31,8 @@ import io.ntole.wyr.core.domain.vote.Side
 import io.ntole.wyr.core.domain.vote.Tally
 import io.ntole.wyr.core.domain.vote.VoteOutcome
 import io.ntole.wyr.core.domain.vote.VoteRepository
+import io.ntole.wyr.share.ShareOutcome
+import io.ntole.wyr.share.SharedQuestion
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -1051,6 +1053,47 @@ class PlayViewModelTest {
                 listOf(shown(DomainError.RATE_LIMITED, "reaction")),
                 analytics.named(AnalyticsEvent.ERROR_SHOWN),
             )
+        }
+
+    /**
+     * A share is told to the analytics by the question's id and categories, whether it showed the results
+     * and what the platform did with it (CLAUDE.md §8g); one that failed sends nothing, and the question
+     * on screen stays as it was.
+     */
+    @Test
+    fun `a share is reported but one that failed is not`() =
+        runTest(dispatcher) {
+            val viewModel = viewModel(FakeQuestionRepository(QUESTION, NEXT_QUESTION))
+            testScheduler.advanceUntilIdle()
+            val onScreen = viewModel.state.value
+            val shared =
+                SharedQuestion(
+                    id = QUESTION.id,
+                    categories = QUESTION.categories,
+                    optionA = QUESTION.optionA,
+                    optionB = QUESTION.optionB,
+                )
+
+            viewModel.shared(shared, withResults = false, outcome = ShareOutcome.OPENED)
+            viewModel.shared(shared, withResults = true, outcome = ShareOutcome.COPIED)
+            viewModel.shared(shared, withResults = true, outcome = ShareOutcome.FAILED)
+
+            assertEquals(
+                listOf(
+                    Recorded(
+                        AnalyticsEvent.QUESTION_SHARED,
+                        about(QUESTION) +
+                            mapOf(AnalyticsProperty.WITH_RESULTS to false, AnalyticsProperty.OUTCOME to "opened"),
+                    ),
+                    Recorded(
+                        AnalyticsEvent.QUESTION_SHARED,
+                        about(QUESTION) +
+                            mapOf(AnalyticsProperty.WITH_RESULTS to true, AnalyticsProperty.OUTCOME to "copied"),
+                    ),
+                ),
+                analytics.named(AnalyticsEvent.QUESTION_SHARED),
+            )
+            assertEquals(onScreen, viewModel.state.value)
         }
 
     /** A report hides the question for good (CLAUDE.md §8d, *Reports*): once the server has it, the next shows. */

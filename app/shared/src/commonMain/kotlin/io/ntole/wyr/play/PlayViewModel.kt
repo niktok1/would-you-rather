@@ -21,6 +21,9 @@ import io.ntole.wyr.core.domain.report.ReportQuestion
 import io.ntole.wyr.core.domain.vote.AttemptId
 import io.ntole.wyr.core.domain.vote.CastVote
 import io.ntole.wyr.core.domain.vote.Side
+import io.ntole.wyr.share.ShareOutcome
+import io.ntole.wyr.share.SharedQuestion
+import io.ntole.wyr.share.questionShared
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -277,6 +280,16 @@ class PlayViewModel(
             }
         }
     }
+
+    /**
+     * [question] was shared from the Play screen's dialog, [withResults] or not, as [outcome] says
+     * (CLAUDE.md §8d, *Sharing*): the analytics hear of it. Nothing on screen changes.
+     */
+    fun shared(
+        question: SharedQuestion,
+        withResults: Boolean,
+        outcome: ShareOutcome,
+    ) = analytics.questionShared(question, withResults, outcome)
 
     /**
      * Sends a lost vote again as the same attempt, so that if the first one did land the server

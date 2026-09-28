@@ -53,6 +53,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.takeOrElse
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -65,6 +66,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import io.ntole.wyr.analytics.tapped
 import io.ntole.wyr.core.domain.analytics.AnalyticsProperty
@@ -80,6 +82,10 @@ import io.ntole.wyr.language.categoryName
 import io.ntole.wyr.language.optionText
 import io.ntole.wyr.loading.LoadingSpinner
 import io.ntole.wyr.points.PointsAmount
+import io.ntole.wyr.share.ShareButton
+import io.ntole.wyr.share.ShareDialog
+import io.ntole.wyr.share.ShareOutcome
+import io.ntole.wyr.share.SharedQuestion
 import io.ntole.wyr.theme.WyrIcons
 import io.ntole.wyr.theme.WyrThemeAccessors
 import io.ntole.wyr.theme.WyrTypeScale
@@ -88,11 +94,12 @@ import kotlin.time.Duration.Companion.milliseconds
 
 /**
  * The game (CLAUDE.md §8d, *The Play screen*): two answer cards and, between them, one row of the
- * player's points, the like and the dislike, and Skip; on a wide screen the cards stand side by side
- * over the row (§8d, *Wide screens*). Tapping a card answers ([onChoose]); Skip ([onSkip]) goes past a
- * question not answered yet; once the answer is revealed, tapping either card goes on to the next
+ * player's points, the like and the dislike, Share and Skip; on a wide screen the cards stand side by
+ * side over the row (§8d, *Wide screens*). Tapping a card answers ([onChoose]); Skip ([onSkip]) goes past
+ * a question not answered yet; once the answer is revealed, tapping either card goes on to the next
  * question ([onNext]). The thumbs ask for a reaction ([onReact]): the one tapped, or none when it is
- * the one the player holds.
+ * the one the player holds. Share opens the dialog that shares the question on screen, with its results
+ * once it is answered (§8d, *Sharing*), and [onShared] hears what was shared.
  *
  * [points] are the player's as the server last reported them, `null` until it has. The categories
  * played are on the top bar above it (`PlayTopBar`, [CategoriesPlayed]).
@@ -107,9 +114,12 @@ fun PlayScreen(
     onReact: (Reaction) -> Unit,
     onRetry: () -> Unit,
     modifier: Modifier = Modifier,
+    onShared: (question: SharedQuestion, withResults: Boolean, outcome: ShareOutcome) -> Unit = { _, _, _ -> },
 ) {
     val colors = WyrThemeAccessors.colors
     val dimens = WyrThemeAccessors.dimens
+    // The question being shared, as it was when Share was tapped, while its dialog is open.
+    var sharing by remember { mutableStateOf<SharedQuestion?>(null) }
 
     // The question last on screen, kept while the next one loads, so going on is one smooth change of the
     // cards' faces rather than a spinner between two questions; the spinner only past LOADING_GRACE.
@@ -159,6 +169,7 @@ fun PlayScreen(
                     onSkip = onSkip,
                     onNext = onNext,
                     onReact = onReact,
+                    onShare = { sharing = it },
                 )
             } else if (state is PlayUiState.Failed) {
                 Spacer(Modifier.height(dimens.screenPadding))
@@ -168,6 +179,13 @@ fun PlayScreen(
                 LoadingBody()
             }
         }
+    }
+    sharing?.let { question ->
+        ShareDialog(
+            question = question,
+            onDismiss = { sharing = null },
+            onShared = { withResults, outcome -> onShared(question, withResults, outcome) },
+        )
     }
 }
 
@@ -240,6 +258,7 @@ private fun ColumnScope.QuestionBody(
     onSkip: () -> Unit,
     onNext: () -> Unit,
     onReact: (Reaction) -> Unit,
+    onShare: (SharedQuestion) -> Unit,
 ) {
     val colors = WyrThemeAccessors.colors
     val dimens = WyrThemeAccessors.dimens
@@ -297,6 +316,18 @@ private fun ColumnScope.QuestionBody(
             onReact = onReact,
             // Only before answering (CLAUDE.md §8d, *Skipping*): once revealed, a card is the way on.
             onSkip = if (state is PlayUiState.Asking) onSkip else null,
+            onShare = {
+                onShare(
+                    SharedQuestion(
+                        id = state.question.id,
+                        categories = state.question.categories,
+                        optionA = optionText(state.question.optionA, language),
+                        optionB = optionText(state.question.optionB, language),
+                        tally = outcome?.tally,
+                        pick = outcome?.yourSide,
+                    ),
+                )
+            },
         )
 
         OptionCard(
@@ -326,18 +357,19 @@ private fun ColumnScope.QuestionBody(
 }
 
 /**
- * The one row between the cards (`CentredRow`, CLAUDE.md §8d, *The Play screen*): on the left the
- * player's points, a coin and the number, or how the last reaction failed; in the middle the thumbs,
- * the like and the dislike, each filled while the player holds it and beside how many hold it, as
- * the server counted them (CLAUDE.md §8d, *Reactions*), before answering and after; and on the right
- * Skip ([onSkip]) while the question is not answered yet, `null` once it is. Skip's place is kept once
- * it is gone, so the reveal moves nothing in the row. The thumbs and Skip are on only while the screen
- * is [idle], and Skip is drawn muted while it is off.
+ * The one row between the cards ([PlayRow], CLAUDE.md §8d, *The Play screen*): on the left the
+ * player's points, a coin and the number, or how the last reaction failed, and right beside them the
+ * thumbs, the like and the dislike, each filled while the player holds it and beside how many hold it,
+ * as the server counted them (CLAUDE.md §8d, *Reactions*), before answering and after; and on the right
+ * Share ([onShare]), always, and Skip ([onSkip]) while the question is not answered yet, `null` once it
+ * is. Skip's place is kept once it is gone, so the reveal moves nothing in the row. The thumbs, Share and
+ * Skip are on only while the screen is [idle], and Share and Skip are drawn muted while they are off.
  *
  * A thumb asks for its reaction, or for none when the player holds it already ([onReact]). The row is
- * the thumbs' height whatever it shows, at any font size, so a failed reaction moves nothing: it shows
+ * the thumbs' height whatever it shows, at any font size, so a failed reaction never grows it: it shows
  * in the points' place, no wider than `WyrDimens.playRowStartMaxWidth`, cut short on two lines there,
- * never the counts or Skip. Internal, not private, so a test can measure it.
+ * never the counts, Share or Skip, and the thumbs move over for it. Internal, not private, so a test can
+ * measure it.
  */
 @Composable
 internal fun MiddleRow(
@@ -347,14 +379,15 @@ internal fun MiddleRow(
     idle: Boolean,
     onReact: (Reaction) -> Unit,
     onSkip: (() -> Unit)?,
+    onShare: () -> Unit,
 ) {
     val colors = WyrThemeAccessors.colors
     val dimens = WyrThemeAccessors.dimens
     val strings = LocalStrings.current.playScreen
     val touchTarget = LocalMinimumInteractiveComponentSize.current
 
-    CentredRow(
-        gap = dimens.spaceSm,
+    PlayRow(
+        gap = dimens.spaceXs,
         modifier =
             Modifier
                 .fillMaxWidth()
@@ -411,23 +444,26 @@ internal fun MiddleRow(
             }
         },
         end = {
-            if (onSkip != null) {
-                val interaction = remember { MutableInteractionSource() }
-                IconButton(
-                    onClick = tapped("play.skip", onClick = onSkip),
-                    enabled = idle,
-                    interactionSource = interaction,
-                    modifier = Modifier.pressScale(interaction),
-                ) {
-                    // Muted while off: a tint of its own hides the button's off colour.
-                    Icon(
-                        imageVector = WyrIcons.Skip,
-                        contentDescription = strings.skip,
-                        tint = if (idle) colors.headingAccent else colors.muted,
-                    )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                ShareButton(element = "play.share", enabled = idle, onClick = onShare)
+                if (onSkip != null) {
+                    val interaction = remember { MutableInteractionSource() }
+                    IconButton(
+                        onClick = tapped("play.skip", onClick = onSkip),
+                        enabled = idle,
+                        interactionSource = interaction,
+                        modifier = Modifier.pressScale(interaction),
+                    ) {
+                        // Muted while off: a tint of its own hides the button's off colour.
+                        Icon(
+                            imageVector = WyrIcons.Skip,
+                            contentDescription = strings.skip,
+                            tint = if (idle) colors.headingAccent else colors.muted,
+                        )
+                    }
+                } else {
+                    Spacer(Modifier.size(touchTarget))
                 }
-            } else {
-                Spacer(Modifier.size(touchTarget))
             }
         },
     )
@@ -470,9 +506,26 @@ private fun ReactionToggle(
         ) {
             Icon(imageVector = if (held) heldIcon else icon, contentDescription = name, tint = colors.headingAccent)
         }
-        Text(text = count.toString(), color = colors.primaryText, fontWeight = FontWeight.Medium, maxLines = 1)
+        Text(
+            text = count.toString(),
+            color = colors.primaryText,
+            fontWeight = FontWeight.Medium,
+            maxLines = 1,
+            modifier = Modifier.pulledIn(WyrThemeAccessors.dimens.reactionCountInset),
+        )
     }
 }
+
+/**
+ * Laid out [by] less wide and placed that far back, into the empty edge of the touch target before it,
+ * which still takes the taps there: the thumb's count, beside its icon (`WyrDimens.reactionCountInset`).
+ */
+private fun Modifier.pulledIn(by: Dp): Modifier =
+    layout { measurable, constraints ->
+        val pull = by.roundToPx()
+        val placeable = measurable.measure(constraints)
+        layout((placeable.width - pull).coerceAtLeast(0), placeable.height) { placeable.placeRelative(-pull, 0) }
+    }
 
 /**
  * The categories played, *All* while none is picked, with a small chevron, in the middle of the Play

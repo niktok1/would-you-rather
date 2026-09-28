@@ -29,6 +29,18 @@
             </intent-filter>
         </activity>
 
+        <!-- A shared question's image (CLAUDE.md §8d, Sharing), which :app:shared writes to the cache and hands
+             to the app the player picks through this provider, readable only by that app. -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.share"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/share_paths" />
+        </provider>
+
         <!-- Google Play Games Services' project (CLAUDE.md §8a, Play Games sign-in): empty on a build
              without its id, where nothing starts Play Games. Its SDK would start itself through its
              provider, whatever the build: the app starts it instead, and only with its ids
