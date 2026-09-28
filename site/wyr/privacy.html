@@ -41,7 +41,7 @@
 
   <main id="main" class="wrap">
     <h1>Политика приватности</h1>
-    <p class="meta">Шта би радије? · Последња измена: <span class="ph">[ДАТУМ / DATE]</span></p>
+    <p class="meta">Шта би радије? · Последња измена: 29. 9. 2026.</p>
     <p>Политика постоји и на енглеском; ако се верзије разликују, важи српска.</p>
     <!-- CHECK: which version governs, here and in the terms, is the lawyer's call. -->
 
@@ -75,7 +75,7 @@
     <section id="controller">
       <h2>1. Ко је руковалац</h2>
       <p>За обраду података у игри „Шта би радије?“ одговара руковалац у смислу Закона о заштити података о личности:</p>
-      <p class="card address"><span class="ph">[ИМЕ И ПРЕЗИМЕ / NAME]</span> (toleapps)<br><span class="ph">[АДРЕСА / ADDRESS]</span><br>Имејл: <span class="ph">[EMAIL]</span></p>
+      <p class="card address">Никола Токић (toleapps)<br>Славка Родића, 11000 Београд, Србија<br>Имејл: <a href="mailto:application.eili@gmail.com">application.eili@gmail.com</a></p>
       <p>У овом тексту „ми“ је руковалац, а „ти“ играч. Игра је доступна у Србији, Босни и Херцеговини, Црној Гори и Северној Македонији, на Андроиду, преко Google Play-а; верзије за iPhone и прегледач стижу касније. Политика важи за сваку верзију игре и за овај сајт.</p>
       <!-- CHECK: toleapps is the developer name on Google Play. At launch the game is on Google Play only, in RS, BA, ME and MK (CLAUDE.md §8b, The launch). Add the iOS and web versions here, and Apple's services in section 4, when they are released. -->
     </section>
@@ -149,8 +149,7 @@
       <!-- CHECK: personalization is designed, not built (CLAUDE.md §8b, Personalization). No switch for it is decided: decide whether it gets one, or an objection by email is the way, before it starts. How a question on those topics is marked is not built either. -->
 
       <h3>Кад нам пишеш</h3>
-      <p>Ако нам пошаљеш имејл, твоју адресу и поруку користимо само да ти одговоримо и решимо захтев.</p>
-      <!-- CHECK: if the contact address is on ntole.com and Cloudflare Email Routing forwards it to a Gmail inbox, Cloudflare and Google handle the email: name them in section 4. -->
+      <p>Ако нам пошаљеш имејл, твоју адресу и поруку користимо само да ти одговоримо и решимо захтев. Имејлове примамо преко Google-ове услуге Gmail.</p>
 
       <h3>Овај сајт</h3>
       <p>Овај сајт не користи колачиће ни аналитику и не учитава ништа са других сервиса. Хостује га Render, који може да бележи IP адресе посетилаца у својим техничким евиденцијама.</p>
@@ -179,7 +178,7 @@
         <dt>PostHog</dt>
         <dd>аналитика, на серверима у Европској унији. <a href="https://posthog.com/privacy">Политика приватности</a></dd>
         <dt>Google</dt>
-        <dd>Google Play, преко ког преузимаш игру, Firebase Cloud Messaging, преко ког стижу обавештења, и Google Play игре, за пријаву. <a href="https://policies.google.com/privacy">Политика приватности</a></dd>
+        <dd>Google Play, преко ког преузимаш игру, Firebase Cloud Messaging, преко ког стижу обавештења, и Google Play игре, за пријаву, као и Gmail, преко ког примамо имејлове. <a href="https://policies.google.com/privacy">Политика приватности</a></dd>
       </dl>
       <p>Render, заједно са Cloudflare-ом ког ангажује, PostHog и Google за Firebase Cloud Messaging обрађују податке по нашем налогу, као обрађивачи. Google Play и Google Play игре су Google-ове услуге: податке које у њима обрађује, Google обрађује по сопственим условима и политици приватности. Кад изађе верзија за iPhone, овде ће се наћи и Apple-ове услуге (App Store, обавештења на iPhone-у, Game Center).</p>
       <p>Модератор види текст, категорије и бројеве послатих питања, без корисничког имена аутора: види само насумичан идентификатор, по ком зна која питања имају истог аутора, да би могао да му забрани слање. Пријаве види збирно, по разлозима, без тога ко их је послао. Остали играчи виде само збирне бројеве и текст одобрених питања, без имена аутора. Податке дајемо државним органима само кад то закон налаже.</p>
@@ -204,9 +203,9 @@
         <li><strong>Токен за обавештења:</strong> док се на том уређају не одјавиш, не обришеш налог или Firebase не јави да уређај више не прима обавештења.</li>
         <li><strong>Веза са Google Play играма:</strong> док не обришеш налог.</li>
         <li><strong>Бројачи за ограничење захтева:</strong> у меморији сервера, најдуже један сат.</li>
-        <li><strong>Евиденције сервера:</strong> онолико колико их Render чува, <span class="ph">[РОК / PERIOD]</span>.</li>
-        <li><strong>Аналитика:</strong> <span class="ph">[РОК / PERIOD]</span>, затим се брише.</li>
-        <li><strong>Имејл преписка:</strong> док се захтев не реши, а затим најдуже <span class="ph">[РОК / PERIOD]</span>.</li>
+        <li><strong>Евиденције сервера:</strong> онолико колико их Render чува, најдуже 30 дана.</li>
+        <li><strong>Аналитика:</strong> најдуже две године од слања догађаја, затим се брише.</li>
+        <li><strong>Имејл преписка:</strong> док се захтев не реши, а затим најдуже три године, колико траје рок за захтеве због штете.</li>
       </ul>
       <p>Брисање апликације са уређаја само по себи не брише налог.</p>
       <!-- CHECK: a guest nobody can reach is deleted after 90 days idle (CLAUDE.md §8b, Guest clean-up: no username, no Play Games link, no session that can still refresh, idle since its last refresh or, with no session left, since it was minted; GUEST_RETENTION_DAYS). An account's expired session still stays until its player is deleted: say so plainly, or build a clean-up for those too. A moderator's dismissal deletes a question's reports; a reported question retired without a dismissal keeps them. The logs' period is the Render workspace plan's; the analytics' is the PostHog plan's retention: read both from the dashboards. Database backups, if the paid Postgres keeps any, need a line and a period. -->
@@ -230,14 +229,14 @@
         <li>да повучеш пристанак, ако се нека обрада на њему заснива;</li>
         <li>на притужбу Поверенику за информације од јавног значаја и заштиту података о личности (<a href="https://www.poverenik.rs">www.poverenik.rs</a>), а ако живиш у другој држави, и надзорном органу своје државе.</li>
       </ul>
-      <p>Захтев пошаљи на <span class="ph">[EMAIL]</span>, уз своје корисничко име или ИД налога. ИД налога има и гост: у игри отвори екран налога, па икону „i“ горе, и копирај га под <strong>ИД налога</strong>. Одговарамо без одлагања, најкасније у року од 30 дана. Лозинку ти никад нећемо тражити.</p>
+      <p>Захтев пошаљи на <a href="mailto:application.eili@gmail.com">application.eili@gmail.com</a>, уз своје корисничко име или ИД налога. ИД налога има и гост: у игри отвори екран налога, па икону „i“ горе, и копирај га под <strong>ИД налога</strong>. Одговарамо без одлагања, најкасније у року од 30 дана. Лозинку ти никад нећемо тражити.</p>
       <!-- CHECK: nothing in section 3 rests on consent today; keep the consent line only if something does (push or analytics, should the lawyer advise it). The moderator deletes an account by username or account id (CLAUDE.md §8a, Deleting an account, By a moderator); nothing finds one player's rows and exports them, so access and portability requests need a tool before launch: a documented read-only query by player id would do. Nothing proves an email comes from the account's player either. Name the supervisory authorities of BA, ME and MK if the lawyer advises it. -->
     </section>
 
     <section id="age">
       <h2>9. Узраст</h2>
-      <p>Игра је намењена особама од 13 година и старијим. Ако имаш мање од 13 година, немој да је користиш. Ако сазнамо да налог припада млађој особи, можемо да га обришемо. Родитељ или старатељ може да нам пише на <span class="ph">[EMAIL]</span>.</p>
-      <!-- CHECK: 13 and over since 2026-09-29 (the user set 13+ in the Play Console; 16 before). The ZZPL lets a minor consent alone to an information society service from 15 (art. 16), the GDPR from 16 by default (13 at the least): nothing here rests on consent, but whether players of 13 and 14, or of 13 to 15, need a parent's consent for the contract, analytics on by default and the notifications is the lawyer's call, for BA, ME and MK too (LAUNCH.md). Declare 13–15, 16–17 and 18+ as target age groups in the Play Console, none under 13, which keeps the Families policy out. -->
+      <p>Игра је намењена особама од 13 година и старијим. Ако имаш мање од 13 година, немој да је користиш. Ако сазнамо да налог припада млађој особи, можемо да га обришемо. Родитељ или старатељ може да нам пише на <a href="mailto:application.eili@gmail.com">application.eili@gmail.com</a>.</p>
+      <!-- CHECK: 13 and over since 2026-09-29 (the user set 13+ in the Play Console; 16 before). The ZZPL lets a minor consent alone to an information society service from 15 (art. 16), the GDPR from 16 by default (13 at the least): nothing here rests on consent, and the user decided (2026-09-29) that players of 13 to 15 need no parent's consent: no lawyer has checked it, for Serbia or for BA, ME and MK. Declare 13–15, 16–17 and 18+ as target age groups in the Play Console, none under 13, which keeps the Families policy out. -->
     </section>
 
     <section id="changes">
@@ -250,7 +249,7 @@
 
   <footer class="site">
     <div class="wrap">
-      <p>© 2026 <span class="ph">[ИМЕ И ПРЕЗИМЕ / NAME]</span> · Без реклама, без продаје података.</p>
+      <p>© 2026 Никола Токић · Без реклама, без продаје података.</p>
       <p><a href="en/privacy.html" hreflang="en" lang="en">Read in English</a></p>
     </div>
   </footer>
