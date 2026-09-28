@@ -87,6 +87,8 @@ data class WyrDimens(
     val themeTileWidth: Dp = 108.dp,
     val themeTileHeight: Dp = 150.dp,
     val tileOutline: Dp = 3.dp,
+    /** How far a screen slides as it comes in or goes (CLAUDE.md §5b, *Motion*), across. */
+    val screenSlide: Dp = 24.dp,
 )
 
 val WyrDefaultDimens: WyrDimens = WyrDimens()

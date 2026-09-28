@@ -376,6 +376,28 @@ enough for its large text but not for an option shrunk below large text (§8d, *
 the brand's colours stay unless the user changes them (§8b, *Card A's contrast*). The Material
 defaults the scheme does not set (secondary, tertiary, outline and the rest) are Material's own.
 
+**Motion** (*built 2026-09-29*, the user's): the timing and size of the motion shared across screens is
+a token, the durations and scales in `WyrMotion` (`io.ntole.wyr.theme`) and the distances in `WyrDimens`
+(`screenSlide`); a screen's own motion (the Play cards' sink, lift and slide, Home's reveal and fade
+through) keeps its timing beside it, as it did. None loops forever, and each ends exactly where the
+screen stood before there was motion. **The rule** (the user's phone runs an accessibility service,
+§8d *The Play screen*): an animation moves a thing where it is drawn or placed, a `graphicsLayer { }`
+lambda, a placement's offset or a draw, reading its value there and nowhere else, so a frame of it
+composes nothing and changes no semantics property; the tests step the scene's clock through each and
+count what a frame composes. Compose scales every duration by the platform's animator duration scale
+by itself, so Android's *Remove animations* ends each at once. A test of what the app does rather than
+how it moves draws with that scale at 0 (`MotionOff`, `AppNavigationTest`, but for its Home reveal
+test, which needs the reveal's frame clock), since its scene draws every frame at one time, where a
+transition left running would never end. What moves, besides what §8d describes:
+- *Screens* (`ScreenTransitions`, `io.ntole.wyr.navigation`): each change of the navigator's top
+  screen fades and slides, `SCREEN_MILLIS` (250) over `screenSlide` (24): a screen opened comes in from
+  the end, the right in a left-to-right language, and the one it covers goes the other way; going
+  back, to a screen lower on the stack, the home icon's `open(Screen.Home)` included, runs the other way
+  round. An `AnimatedContent` over the back stack, keyed by its top screen, with no size animation; the
+  old screen stays composed until the change ends. The first screen and the update screen (§8e) just
+  appear, and Play opened from Home is a cut, left to Home's own fade through (§8d, *Home picks*),
+  exactly as before (`isFadeThrough`). `ScreenTransitionsDrawTest`.
+
 ---
 
 ## 6. Git workflow
@@ -1661,6 +1683,8 @@ game's, or a place on one, theme tokens only (§5b), and its words in `Strings` 
   `open(Screen.Home)`; `back` goes to the screen before, and at Home does nothing. The stack is saved
   state (`Navigator.Saver`), so an Android activity made anew, on a rotation say, shows the screen it
   showed. `NavigatorTest` pins it.
+- *Between screens* a quick fade and a slight slide, forward from the end and back from the start
+  (§5b, *Motion*, `ScreenTransitions`); Home to Play is Home's own fade through (*Home picks*).
 - *Android's back*, button or gesture, goes back through the navigator (`SystemBack`, over
   `BackHandler` from the catalog's `androidx.activity:activity-compose`, in `:app:shared`'s
   androidMain); at Home it is left to the system, so it leaves the app. Desktop, the web and iOS bind
@@ -2811,8 +2835,8 @@ listed on the Account screen.
     and the tap opens Play at once. The counts are read each time Home is shown (`HomeViewModel.shown`),
     and nothing is said when a read fails. The tap is counted in the background, best effort
     (`HomeViewModel.pick`), its answer not shown, and it makes the Play screen's ViewModel, so its
-    question loads during the reveal, the question's time not counted until Play is shown (§8g). Only
-    Home to Play fades; every other change of screen is instant.
+    question loads during the reveal, the question's time not counted until Play is shown (§8g). Home to
+    Play is that fade through alone; every other change of screen fades and slides (§5b, *Motion*).
   - *The client* is `HomePickRepository` in `:core:domain` (`io.ntole.wyr.core.domain.home`), the
     counts as a `Tally`, one tap a vote: `GetHomePicks`, which ensures no session, and `PickOnHome`,
     which ensures one first, as a vote does, so a first launch's tap and the game it opens mint one

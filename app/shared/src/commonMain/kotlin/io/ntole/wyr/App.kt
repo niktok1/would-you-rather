@@ -64,6 +64,7 @@ import io.ntole.wyr.navigation.BackTopBar
 import io.ntole.wyr.navigation.Navigator
 import io.ntole.wyr.navigation.PlayTopBar
 import io.ntole.wyr.navigation.Screen
+import io.ntole.wyr.navigation.ScreenTransitions
 import io.ntole.wyr.navigation.SystemBack
 import io.ntole.wyr.play.CategoriesPlayed
 import io.ntole.wyr.play.PlayScreen
@@ -201,84 +202,90 @@ private fun Screens() {
                     scaleY = scaleX
                 },
         ) {
-            when (navigator.current) {
-                Screen.Home -> {
-                    Home(
-                        onPlay = {
-                            scope.launch {
-                                entrance.snapTo(0f)
-                                navigator.open(Screen.Play)
-                                entrance.animateTo(1f, tween(PLAY_ENTRANCE_MILLIS))
+            // A quick fade and a slight slide from one screen to the next (CLAUDE.md §5b, *Motion*), but
+            // from Home to Play, which fade through by themselves.
+            ScreenTransitions(navigator, modifier = Modifier.fillMaxSize()) { screen ->
+                Column(modifier = Modifier.fillMaxSize()) {
+                    when (screen) {
+                        Screen.Home -> {
+                            Home(
+                                onPlay = {
+                                    scope.launch {
+                                        entrance.snapTo(0f)
+                                        navigator.open(Screen.Play)
+                                        entrance.animateTo(1f, tween(PLAY_ENTRANCE_MILLIS))
+                                    }
+                                },
+                                onAccount = { navigator.open(Screen.Account) },
+                                news = news,
+                            )
+                        }
+
+                        Screen.Play -> {
+                            val picker = koinViewModel<CategoriesViewModel>()
+                            Play(
+                                onHome = { navigator.open(Screen.Home) },
+                                onAccount = { navigator.open(Screen.Account) },
+                                onShop = { navigator.open(Screen.Shop) },
+                                news = news,
+                                onOpenCategories = {
+                                    // A visit of its own: what is played now ticked, and nothing searched.
+                                    picker.open()
+                                    navigator.open(Screen.Categories)
+                                },
+                            )
+                        }
+
+                        Screen.Account -> {
+                            AccountTopBar(
+                                onBack = { navigator.back() },
+                                onAbout = { navigator.open(Screen.About) },
+                                onShop = { navigator.open(Screen.Shop) },
+                            )
+                            Below {
+                                Account(
+                                    onOpenShop = { navigator.open(Screen.Shop) },
+                                    onOpenAuth = { navigator.open(Screen.Auth) },
+                                    onNewQuestion = { navigator.open(Screen.Submit) },
+                                    onOpenQuestion = { id ->
+                                        openedQuestion = id
+                                        navigator.open(Screen.Question)
+                                    },
+                                    notices = notices,
+                                )
                             }
-                        },
-                        onAccount = { navigator.open(Screen.Account) },
-                        news = news,
-                    )
-                }
+                        }
 
-                Screen.Play -> {
-                    val picker = koinViewModel<CategoriesViewModel>()
-                    Play(
-                        onHome = { navigator.open(Screen.Home) },
-                        onAccount = { navigator.open(Screen.Account) },
-                        onShop = { navigator.open(Screen.Shop) },
-                        news = news,
-                        onOpenCategories = {
-                            // A visit of its own: what is played now ticked, and nothing searched.
-                            picker.open()
-                            navigator.open(Screen.Categories)
-                        },
-                    )
-                }
+                        Screen.Auth -> {
+                            BackTopBar(onBack = { navigator.back() })
+                            Below { Auth(onSignedIn = { navigator.back() }) }
+                        }
 
-                Screen.Account -> {
-                    AccountTopBar(
-                        onBack = { navigator.back() },
-                        onAbout = { navigator.open(Screen.About) },
-                        onShop = { navigator.open(Screen.Shop) },
-                    )
-                    Below {
-                        Account(
-                            onOpenShop = { navigator.open(Screen.Shop) },
-                            onOpenAuth = { navigator.open(Screen.Auth) },
-                            onNewQuestion = { navigator.open(Screen.Submit) },
-                            onOpenQuestion = { id ->
-                                openedQuestion = id
-                                navigator.open(Screen.Question)
-                            },
-                            notices = notices,
-                        )
+                        Screen.Submit -> {
+                            BackTopBar(onBack = { navigator.back() })
+                            Below { Submit(onSent = { navigator.back() }) }
+                        }
+
+                        Screen.Categories -> {
+                            BackTopBar(onBack = { navigator.back() })
+                            Below { Categories(onPlayed = { navigator.back() }) }
+                        }
+
+                        Screen.About -> {
+                            BackTopBar(onBack = { navigator.back() })
+                            Below { About(onDeleted = { navigator.back() }) }
+                        }
+
+                        Screen.Question -> {
+                            BackTopBar(onBack = { navigator.back() })
+                            Below { QuestionDetails(openedQuestion, onGone = { navigator.back() }) }
+                        }
+
+                        Screen.Shop -> {
+                            BackTopBar(onBack = { navigator.back() })
+                            Below { Shop(onOpenAuth = { navigator.open(Screen.Auth) }) }
+                        }
                     }
-                }
-
-                Screen.Auth -> {
-                    BackTopBar(onBack = { navigator.back() })
-                    Below { Auth(onSignedIn = { navigator.back() }) }
-                }
-
-                Screen.Submit -> {
-                    BackTopBar(onBack = { navigator.back() })
-                    Below { Submit(onSent = { navigator.back() }) }
-                }
-
-                Screen.Categories -> {
-                    BackTopBar(onBack = { navigator.back() })
-                    Below { Categories(onPlayed = { navigator.back() }) }
-                }
-
-                Screen.About -> {
-                    BackTopBar(onBack = { navigator.back() })
-                    Below { About(onDeleted = { navigator.back() }) }
-                }
-
-                Screen.Question -> {
-                    BackTopBar(onBack = { navigator.back() })
-                    Below { QuestionDetails(openedQuestion, onGone = { navigator.back() }) }
-                }
-
-                Screen.Shop -> {
-                    BackTopBar(onBack = { navigator.back() })
-                    Below { Shop(onOpenAuth = { navigator.open(Screen.Auth) }) }
                 }
             }
         }
