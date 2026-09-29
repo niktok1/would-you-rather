@@ -4,18 +4,12 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.ImageComposeScene
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.Density
-import io.ntole.wyr.account.AccountActions
 import io.ntole.wyr.account.AccountScreen
 import io.ntole.wyr.account.AccountState
-import io.ntole.wyr.account.AuthMode
-import io.ntole.wyr.categories.CategoriesActions
 import io.ntole.wyr.categories.CategoriesScreen
 import io.ntole.wyr.categories.CategoriesState
 import io.ntole.wyr.core.domain.category.Category
@@ -39,10 +33,7 @@ import io.ntole.wyr.play.PlayScreen
 import io.ntole.wyr.play.PlayUiState
 import io.ntole.wyr.theme.GameTheme
 import io.ntole.wyr.theme.GameThemes
-import io.ntole.wyr.theme.LocalPageDrawn
-import io.ntole.wyr.theme.WholePageArt
 import io.ntole.wyr.theme.WyrTheme
-import io.ntole.wyr.theme.WyrThemeAccessors
 import java.io.File
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -76,9 +67,7 @@ class ScreenshotsTest {
                         }
                     }
                 try {
-                    // A frame at a time, as a screen draws, past every animation, the count up's 3 seconds the longest.
-                    (0..SETTLED / FRAME).forEach { frame -> scene.renderAt(frame * FRAME) }
-                    val image = scene.render(SETTLED)
+                    val image = scene.renderSettled()
                     assertEquals(shot.width, image.width, shot.name)
                     directory?.let { File(it, "${shot.name}-$look.png") }?.writeBytes(
                         checkNotNull(image.encodeToData()) { "${shot.name} encodes to nothing" }.bytes,
@@ -86,22 +75,6 @@ class ScreenshotsTest {
                 } finally {
                     scene.close()
                 }
-            }
-        }
-    }
-
-    /** [content] over the page and its art, as `App`'s `WholePage` draws them, so the screen draws neither. */
-    @Composable
-    private fun OnWholePage(content: @Composable () -> Unit) {
-        Box(Modifier.fillMaxSize()) {
-            WholePageArt(Modifier.matchParentSize())
-            CompositionLocalProvider(LocalPageDrawn provides true) {
-                Surface(
-                    color = Color.Transparent,
-                    contentColor = WyrThemeAccessors.colors.primaryText,
-                    modifier = Modifier.fillMaxSize(),
-                    content = content,
-                )
             }
         }
     }
@@ -121,48 +94,6 @@ class ScreenshotsTest {
         val dark: Boolean,
     )
 
-    private object NoAccountActions : AccountActions {
-        override fun refresh() = Unit
-
-        override fun authShown() = Unit
-
-        override fun setAuthMode(mode: AuthMode) = Unit
-
-        override fun leftAuth() = Unit
-
-        override fun setRegisterUsername(text: String) = Unit
-
-        override fun setRegisterPassword(text: String) = Unit
-
-        override fun toggleShowRegisterPassword() = Unit
-
-        override fun register() = Unit
-
-        override fun setLoginUsername(text: String) = Unit
-
-        override fun setLoginPassword(text: String) = Unit
-
-        override fun logIn() = Unit
-
-        override fun cancelLogIn() = Unit
-
-        override fun logOut() = Unit
-
-        override fun deleteAccount() = Unit
-    }
-
-    private object NoCategoriesActions : CategoriesActions {
-        override fun search(query: String) = Unit
-
-        override fun toggle(id: String) = Unit
-
-        override fun selectAll() = Unit
-
-        override fun refresh() = Unit
-
-        override fun play() = Unit
-    }
-
     private companion object {
         const val DIRECTORY = "WYR_SCREENSHOTS_DIR"
 
@@ -170,8 +101,6 @@ class ScreenshotsTest {
         const val DENSITY = 2f
         const val PHONE_WIDTH = 750
         const val PHONE_HEIGHT = 1334
-        const val SETTLED = 4_000_000_000L
-        const val FRAME = 1_000_000_000L / 60
 
         val LOOKS =
             listOf(

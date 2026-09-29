@@ -1,23 +1,63 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-    The launcher icon's foreground: a white question mark inside the 66dp circle in the middle of the
-    108dp canvas that every launcher's mask keeps. One colour on transparency, so it is the themed
-    icon's monochrome layer too (mipmap-anydpi-v26/ic_launcher.xml). A placeholder, as the background.
+    The launcher icon's foreground (CLAUDE.md §8, Release builds): the game's two answers as two cards
+    in the brand's colours (§5b), card A's pink behind, turned a little left, card B's amber in front,
+    turned a little right, and a bold question mark on it in card B's text colour, each card with a soft
+    shadow a little below it. Everything inside the 66dp circle in the middle of the 108dp canvas that
+    every launcher's mask keeps. The themed icon's monochrome layer is launcher_monochrome.xml, the same
+    shapes in one colour, and the Play listing's icon (store/android/icon-512.png) is drawn from these
+    files by StoreGraphicsTest, so a change here is a change there once it is regenerated.
 -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <!-- The hook: three quarters round a circle of radius 13 about (54,43), then down into the stem. -->
-    <path
-        android:pathData="M41,43a13,13 0,1 1,22.19 9.19C59.5,55.9 54,57.5 54,61L54,63"
-        android:strokeWidth="9"
-        android:strokeColor="#FFFFFF"
-        android:strokeLineCap="round"
-        android:strokeLineJoin="round" />
-    <!-- The dot. -->
-    <path
-        android:fillColor="#FFFFFF"
-        android:pathData="M54,78m-5.5,0a5.5,5.5 0,1 1,11 0a5.5,5.5 0,1 1,-11 0" />
+    <!-- Card A, 28 by 38 with corners of 6, about (44,50), and its shadow. -->
+    <group
+        android:pivotX="44"
+        android:pivotY="50"
+        android:rotation="-14">
+        <path
+            android:fillAlpha="0.3"
+            android:fillColor="#993556"
+            android:pathData="M36,32.5h16a6,6 0,0 1,6,6v26a6,6 0,0 1,-6,6h-16a6,6 0,0 1,-6,-6v-26a6,6 0,0 1,6,-6z" />
+        <path
+            android:fillColor="#D4537E"
+            android:pathData="M36,31h16a6,6 0,0 1,6,6v26a6,6 0,0 1,-6,6h-16a6,6 0,0 1,-6,-6v-26a6,6 0,0 1,6,-6z" />
+    </group>
+    <!-- Card B, the same card about (63,57), over card A, and its shadow on it. -->
+    <group
+        android:pivotX="63"
+        android:pivotY="57"
+        android:rotation="10">
+        <path
+            android:fillAlpha="0.3"
+            android:fillColor="#993556"
+            android:pathData="M55,39.5h16a6,6 0,0 1,6,6v26a6,6 0,0 1,-6,6h-16a6,6 0,0 1,-6,-6v-26a6,6 0,0 1,6,-6z" />
+        <path
+            android:fillColor="#EF9F27"
+            android:pathData="M55,38h16a6,6 0,0 1,6,6v26a6,6 0,0 1,-6,6h-16a6,6 0,0 1,-6,-6v-26a6,6 0,0 1,6,-6z" />
+        <!--
+            The question mark, drawn about (54,54) at over twice its size and shrunk onto the card: the hook
+            three quarters round a circle of radius 13 about (54,43), then down into the stem, and the dot.
+        -->
+        <group
+            android:pivotX="54"
+            android:pivotY="54"
+            android:scaleX="0.44"
+            android:scaleY="0.44"
+            android:translateX="9"
+            android:translateY="2.5">
+            <path
+                android:pathData="M41,43a13,13 0,1 1,22.19 9.19C59.5,55.9 54,57.5 54,61L54,63"
+                android:strokeWidth="11"
+                android:strokeColor="#412402"
+                android:strokeLineCap="round"
+                android:strokeLineJoin="round" />
+            <path
+                android:fillColor="#412402"
+                android:pathData="M54,78m-6.5,0a6.5,6.5 0,1 1,13 0a6.5,6.5 0,1 1,-13 0" />
+        </group>
+    </group>
 </vector>

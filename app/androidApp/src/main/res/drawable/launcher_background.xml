@@ -1,18 +1,25 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-    The launcher icon's background (CLAUDE.md §8, Release builds): the two answers' brand colours
-    (§5b), option A's pink over option B's amber, as the Play screen stacks the cards. A placeholder:
-    the final icon replaces this file and launcher_foreground.xml, and nothing else.
+    The launcher icon's background (CLAUDE.md §8, Release builds): full bleed, the light page's colour
+    (§5b) in the top left deepening to the dark theme's OR pill text colour in the bottom right, so the two
+    answer cards of launcher_foreground.xml stand out on it and the icon keeps an edge on a white page.
 -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <path
-        android:fillColor="#D4537E"
-        android:pathData="M0,0h108v54h-108z" />
-    <path
-        android:fillColor="#EF9F27"
-        android:pathData="M0,54h108v54h-108z" />
+    <path android:pathData="M0,0h108v108h-108z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:endColor="#F4C0D1"
+                android:endX="108"
+                android:endY="108"
+                android:startColor="#FFF7FA"
+                android:startX="0"
+                android:startY="0"
+                android:type="linear" />
+        </aapt:attr>
+    </path>
 </vector>
