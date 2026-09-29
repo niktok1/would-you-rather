@@ -26,19 +26,6 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 
-      # A private repository's runner has 2 cores and 7 GB. The repository's gradle.properties asks a
-      # laptop's 4 GB for Gradle and 3 GB for the Kotlin daemon, which with the test JVMs beside them
-      # ran the runner out of memory, and GitHub shut it down mid-test ("The runner has received a
-      # shutdown signal"). The user's gradle.properties outranks the project's, so CI's sizes go there.
-      - name: Fit Gradle to the runner
-        run: |
-          mkdir -p ~/.gradle
-          cat >> ~/.gradle/gradle.properties <<'EOF'
-          org.gradle.jvmargs=-Xmx2g -XX:MaxMetaspaceSize=1g -Dfile.encoding=UTF-8
-          kotlin.daemon.jvmargs=-Xmx2g
-          org.gradle.workers.max=2
-          EOF
-
       # ktlint must fail the build, not warn (CLAUDE.md §5).
       - name: Lint
         run: ./gradlew ktlintCheck --no-daemon
@@ -49,12 +36,7 @@ jobs:
       # window theme against the theme's colours). iOS and Android instrumented tests need a mac
       # runner and an emulator respectively, so they are not here.
       - name: Test
-        run: ./gradlew :server:test :core:domain:jvmTest :core:data:jvmTest :core:network:jvmTest :core:network:testAndroidHostTest :app:adminApp:jvmTest :app:androidApp:testDevDebugUnitTest --no-daemon
-
-      # The game's JVM tests on their own: hundreds of screens drawn off screen, each Skia surface
-      # native memory beside the heap, the heaviest suite, run alone so nothing competes with it.
-      - name: Game tests
-        run: ./gradlew :app:shared:jvmTest --no-daemon
+        run: ./gradlew :server:test :core:domain:jvmTest :core:data:jvmTest :core:network:jvmTest :core:network:testAndroidHostTest :app:shared:jvmTest :app:adminApp:jvmTest :app:androidApp:testDevDebugUnitTest --no-daemon
 
       # The game's Android host tests: its common tests again on Android's JVM, and the Android-only
       # code no JVM test reaches (ActivityTracker, a notification's tap), over the Android jar's stubs.
