@@ -32,7 +32,7 @@ is in Cyrillic, as the game opens in Cyrillic (CLAUDE.md §8f). Graphics are bes
 • Лајкуј питања која су ти занимљива, а дислајкуј она која нису.
 
 КАТЕГОРИЈЕ
-Храна, путовања, љубав, посао, новац, супермоћи, животиње, спорт, технологија, етика, апсурдно, гадости и још. Играј све одједном или изабери само оно што те занима.
+Храна, путовања, љубав, посао, новац, супермоћи, животиње, спорт, технологија, етика, апсурдно, бљак и још. Играј све одједном или изабери само оно што те занима.
 
 ПОЕНИ И ТЕМЕ
 • Сваки одговор доноси поен.
@@ -49,6 +49,9 @@ is in Cyrillic, as the game opens in Cyrillic (CLAUDE.md §8f). Graphics are bes
 • Када желиш, пријави се преко Google Play игара или направи налог са корисничким именом, да сачуваш поене и шаљеш питања.
 • Бесплатно и без реклама.
 • Питање које не треба да буде у игри можеш да пријавиш, а питања неког аутора да сакријеш.
+
+ŠTA BI RADIJE, NA LATINICI
+Šta bi radije? (sta bi radije, da li bi radije) je zabavna igra pitanja na srpskom: dva odgovora, jedan izbor, a onda vidiš kako su birali drugi. Igra za društvo, za kafu sa prijateljima i za porodična okupljanja, bez reklama. Would you rather, na našem jeziku.
 
 Игра је за особе од 13 година и старије.
 ```

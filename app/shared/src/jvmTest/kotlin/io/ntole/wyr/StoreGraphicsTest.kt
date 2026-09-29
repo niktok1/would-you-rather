@@ -430,7 +430,7 @@ class StoreGraphicsTest {
                 Category(id = "TECHNOLOGY", nameSr = "Технологија", nameEn = "Technology"),
                 Category(id = "SPORTS", nameSr = "Спорт", nameEn = "Sports"),
                 Category(id = "ANIMALS", nameSr = "Животиње", nameEn = "Animals"),
-                Category(id = "GROSS", nameSr = "Гадости", nameEn = "Gross"),
+                Category(id = "GROSS", nameSr = "Бљак", nameEn = "Yuck"),
             )
 
         val SUBMISSIONS =

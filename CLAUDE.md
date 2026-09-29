@@ -1574,7 +1574,8 @@ seed (`Migrations`, `DatabaseFactory.init`). Nothing builds a table any other wa
   *Reports*), V12 (an author's block, §8d *Moderation*), V13 (sessions indexed by player, for an
   account's deletion, §8a), V14 (skips and hidden questions indexed by question, for the same), V15
   (the Home screen's two counts, §8d *Home picks*), V16 (an answer's time, *Personalization*, above),
-  V17 (push tokens, §8a), V18 (Play Games links, §8a) and V19 (purchases in the shop, §8d *The shop*).
+  V17 (push tokens, §8a), V18 (Play Games links, §8a), V19 (purchases in the shop, §8d *The shop*) and V20 (the GROSS
+  category renamed *Бљак*, §8d *Categories*).
   `Migrations.migrate` takes the baseline itself (`baselineVersion` 1), and only for a database
   holding every table V1 builds (`TABLES_BEFORE_MIGRATIONS`) and no history table; Flyway's
   `baselineOnMigrate` is off. Any other database with tables and no history fails the boot, rather
@@ -1664,7 +1665,8 @@ seed (`Migrations`, `DatabaseFactory.init`). Nothing builds a table any other wa
   build before names: a player signed in with Play Games plays on there as a guest, through their
   sessions, and submits only with a username too, until the roll forward. V19 adds a table no build
   before names: a buyer's themes are gone there, and their stats do not add up (the price is out of
-  their total but not in `pointsSpent`) until the roll forward. `MigrationsTest` reads a
+  their total but not in `pointsSpent`) until the roll forward. V20 only renames a category, which a
+  build before reads as plain text. `MigrationsTest` reads a
   table a later script dropped by name (`DROPPED_TABLES`), since `Tables.kt` no longer names it.
 - *Several instances booting at once* (Render starts a deploy's new instance before it stops the old
   one): on PostgreSQL each script runs under Flyway's advisory lock, so one boot migrates while the
@@ -2335,7 +2337,8 @@ listed on the Account screen.
     not a migration, a millisecond apart from 2026-09-26 (`Seed.ALL_CATEGORIES`): `TRAVEL`
     (*Путовања*, *Travel*), `WORK` (*Посао*, *Work*), `MONEY` (*Новац*, *Money*), `LOVE` (*Љубав*,
     *Love*), `TECHNOLOGY` (*Технологија*, *Technology*), `SPORTS` (*Спорт*, *Sports*), `ANIMALS`
-    (*Животиње*, *Animals*) and `GROSS` (*Гадости*, *Gross*). Nothing deletes a category. On the wire a category is its id, a plain
+    (*Животиње*, *Animals*) and `GROSS` (*Бљак*, *Yuck*; *Гадости*, *Gross* until 2026-09-29, the user's,
+    for a gentler tone; V20 renames it where the seed wrote it and nobody renamed it since). Nothing deletes a category. On the wire a category is its id, a plain
     string (§5).
   - *The moderator* adds a category with `POST /v1/admin/categories` (`CreateCategoryRequest`,
     answered 201 with its `CategoryDto`) and sets both its names with

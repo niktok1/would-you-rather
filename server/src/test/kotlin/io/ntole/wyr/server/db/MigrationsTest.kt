@@ -608,6 +608,7 @@ internal class MigrationsTest(
                 "17 SQL",
                 "18 SQL",
                 "19 SQL",
+                "20 SQL",
             )
 
         /** The Home screen's two counts as V15 writes them, as JDBC reads them back as strings. */

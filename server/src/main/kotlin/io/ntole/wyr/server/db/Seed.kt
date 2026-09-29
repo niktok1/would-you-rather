@@ -152,7 +152,7 @@ object Seed {
                 StartingCategory(TECHNOLOGY, "Технологија", "Technology", SECOND_CATEGORY_AT + 4),
                 StartingCategory(SPORTS, "Спорт", "Sports", SECOND_CATEGORY_AT + 5),
                 StartingCategory(ANIMALS, "Животиње", "Animals", SECOND_CATEGORY_AT + 6),
-                StartingCategory(GROSS, "Гадости", "Gross", SECOND_CATEGORY_AT + 7),
+                StartingCategory(GROSS, "Бљак", "Yuck", SECOND_CATEGORY_AT + 7),
             )
 
     /**
@@ -781,7 +781,7 @@ object Seed {
                     161 to 115,
             ),
             Starter(ANIMALS, "Видети живог диносауруса", "Видети живог мамута", votes = 305 to 119),
-            // Гадости
+            // Бљак
             Starter(GROSS, "Да ти дах увек мало смрди", "Да ти ноге увек мало смрде", votes = 110 to 235),
             Starter(
                 GROSS,
