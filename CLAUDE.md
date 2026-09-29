@@ -334,8 +334,9 @@ over, and the coin's rim and star on its face.
 resources, which cannot read `WyrColors`: so `:app:androidApp`'s `res/values/colors.xml` and
 `res/values-night/colors.xml` copy `pageBackground`, light and dark, as `wyr_page_background` (§8,
 *Release builds*), and `WindowThemeTest` holds the copy equal, so a palette change fails it until the
-copy changes too. The launcher icon's two drawables copy `optionA` and `optionB`, unpinned, being a
-placeholder.
+copy changes too. The launcher icon's drawables copy `optionA`, `optionB`, `onOptionB`, the heading
+accent, the light `pageBackground` and the dark OR pill text (§8, *Release builds*), unpinned: an icon is the brand's
+look, and follows a palette change only when its design does.
 
 The moderation app has a theme of its own, `AdminTheme` in `:app:adminApp` (`io.ntole.wyr.admin.theme`),
 since it may not depend on `:app:shared` (§3): Material 3's default light and dark schemes and type
@@ -427,7 +428,8 @@ transition left running would never end. What moves, besides what §8d describes
   (the user). `CoinBumpDrawTest`.
 `ScreenshotsTest` draws Home, Play asked and revealed (and on its side), Account and Categories on the
 page in the game's own theme light and dark and in Ocean, and writes PNGs where `WYR_SCREENSHOTS_DIR`
-says.
+says. `StoreGraphicsTest` draws the Play listing's graphics the same way, over the page and art the two
+share (`StillScreens.kt`), and writes them where `WYR_STORE_DIR` says (§8, *Release builds*).
 
 ---
 
@@ -567,12 +569,25 @@ This project must never be attributed to any employer identity.
     so a shrink that fails the build fails CI; one that fails only at run time shows on a device
     alone (NEXT-SESSION.md, *Release builds and Google Play*, has the emulator check). R8 warns that
     it cannot read Kotlin 2.4's metadata (§8b, *R8 and Kotlin 2.4's metadata*).
-  - *The launcher icon*: adaptive (`mipmap-anydpi-v26/ic_launcher.xml`, and `_round`), of
-    `drawable/launcher_background.xml`, option A's pink over option B's amber (§5b), and
-    `drawable/launcher_foreground.xml`, a white question mark inside the 66dp circle every launcher's
-    mask keeps, which is the themed icon's monochrome layer too; Android 7 gets the two layers square
-    (`mipmap/ic_launcher.xml`). A placeholder (§8b, *The launcher icon and name*): the final icon
-    replaces the two drawables. The Play listing's own 512 by 512 icon is uploaded in the Play Console.
+  - *The launcher icon* (*built 2026-09-29*, the design *provisional*, §8b *The launcher icon and
+    name*): adaptive (`mipmap-anydpi-v26/ic_launcher.xml`, and `_round`), vector drawables alone. The
+    game's two answers as two rounded cards, card A's pink behind, turned 14° left, card B's amber in
+    front, turned 10° right and overlapping it, a bold question mark on it in card B's text colour
+    (`#412402`), each card with a soft shadow of the heading accent (`drawable/launcher_foreground.xml`),
+    on a diagonal wash from the light page's `#FFF7FA` to the dark OR pill text's `#F4C0D1`
+    (`drawable/launcher_background.xml`), everything inside the 66dp circle every launcher's mask keeps.
+    The themed icon's monochrome layer (`drawable/launcher_monochrome.xml`, Android 13 and later) is the
+    same shapes in one colour: card A clipped round card B with a gap, card B an outline, the question
+    mark solid. Android 7 gets background and foreground square (`mipmap/ic_launcher.xml`).
+    `StoreGraphicsTest` (in `:app:shared`'s jvmTest, the module that draws off screen) reads the
+    drawables themselves, holds the foreground and the monochrome inside the safe circle and the
+    monochrome to one colour, and draws the Play listing's 512 by 512 icon from them
+    (`store/android/icon-512.png`, below), so the two cannot differ.
+  - *The Play listing's graphics* (`store/android/`, its README lists each): the icon, the 1024 by 500
+    feature graphic and eight phone screenshots, 1080 by 1920 in Serbian Cyrillic, drawn by
+    `StoreGraphicsTest` from the game's own theme, strings and screens, which writes them when
+    `WYR_STORE_DIR` is set and otherwise only checks each size and that nothing is transparent. A
+    screen's change that shows in a screenshot is regenerated and looked at before it is uploaded.
   - *The label*: *Шта би радије?* for `prod`, *WYR Dev* and *WYR Local* for the others (§8e).
   - *The window and the splash*: `Theme.Wyr` (`values/themes.xml`, dark in `values-night`) gives the
     window and the status bar the page background before Compose's first frame, so a dark phone never
@@ -1108,11 +1123,13 @@ EncryptedSharedPreferences: enough for a game that stores no sensitive personal 
   batch, which the client reads as out of questions. The Categories screen sends the categories
   selected (§8d, *The Categories screen*), so a player reaches this in every build, PROD's included.
   `SkipStoreTest` pins what is built.
-- **The launcher icon and name** — *provisional — user decision* (§8, *Release builds*). Built: a
-  placeholder icon, option A's pink over option B's amber and a white question mark, and the `prod`
-  label *Шта би радије?* in Cyrillic whatever the phone's language, as the game opens in Cyrillic
-  (§8f). The options: the user's own icon, in the placeholder's two drawables; and the label in Latin,
-  *Šta bi radije?*, on a phone set to Serbian Latin (one more string, in `values-b+sr+Latn`).
+- **The launcher icon and name** — *provisional — user decision* (§8, *Release builds*). Built
+  (2026-09-29): the icon, two answer cards, pink behind and amber in front with a question mark, on a
+  pale pink wash; and the `prod` label *Шта би радије?* in Cyrillic whatever the phone's language, as
+  the game opens in Cyrillic (§8f). The options: keep the design; the same cards on the dark page
+  (`#161417`), bolder, which drew as well; a designer's icon, in the three drawables (the Play icon
+  follows by itself); and the label in Latin, *Šta bi radije?*, on a phone set to Serbian Latin (one
+  more string, in `values-b+sr+Latn`).
 - **R8 and Kotlin 2.4's metadata** — *provisional — user decision.* AGP 9.0.1's R8 warns, a dozen
   times a release build, that it cannot parse the metadata of Kotlin 2.4.10's classes. Only
   kotlin-reflect reads that metadata at run time, and the app has none; the shrunk build played on an

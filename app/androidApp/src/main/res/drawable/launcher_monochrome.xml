@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    The themed icon's monochrome layer (Android 13 and later, CLAUDE.md §8, Release builds): the shapes of
+    launcher_foreground.xml in one colour, which the system tints. One colour cannot overlap, so card A
+    shows only outside card B and a gap of 2.5 round it (the clip: the whole canvas, less card B grown by
+    the gap, wound the other way round), card B is an outline, and its question mark is solid.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <group>
+        <clip-path android:pathData="M0,0h108v108h-108zM58.85,34.44A8.5,8.5 0,0 0 49.01,41.33L44.49,66.94A8.5,8.5 0,0 0 51.39,76.78L67.15,79.56A8.5,8.5 0,0 0 76.99,72.67L81.51,47.06A8.5,8.5 0,0 0 74.61,37.22L58.85,34.44Z" />
+        <group
+            android:pivotX="44"
+            android:pivotY="50"
+            android:rotation="-14">
+            <path
+                android:fillColor="#FFFFFF"
+                android:pathData="M36,31h16a6,6 0,0 1,6,6v26a6,6 0,0 1,-6,6h-16a6,6 0,0 1,-6,-6v-26a6,6 0,0 1,6,-6z" />
+        </group>
+    </group>
+    <group
+        android:pivotX="63"
+        android:pivotY="57"
+        android:rotation="10">
+        <!-- Card B's outline, 3.5 wide, inside the card's edge. -->
+        <path
+            android:pathData="M55,39.75h16a4.25,4.25 0,0 1,4.25,4.25v26a4.25,4.25 0,0 1,-4.25,4.25h-16a4.25,4.25 0,0 1,-4.25,-4.25v-26a4.25,4.25 0,0 1,4.25,-4.25z"
+            android:strokeWidth="3.5"
+            android:strokeColor="#FFFFFF" />
+        <group
+            android:pivotX="54"
+            android:pivotY="54"
+            android:scaleX="0.44"
+            android:scaleY="0.44"
+            android:translateX="9"
+            android:translateY="2.5">
+            <path
+                android:pathData="M41,43a13,13 0,1 1,22.19 9.19C59.5,55.9 54,57.5 54,61L54,63"
+                android:strokeWidth="11"
+                android:strokeColor="#FFFFFF"
+                android:strokeLineCap="round"
+                android:strokeLineJoin="round" />
+            <path
+                android:fillColor="#FFFFFF"
+                android:pathData="M54,78m-6.5,0a6.5,6.5 0,1 1,13 0a6.5,6.5 0,1 1,-13 0" />
+        </group>
+    </group>
+</vector>
