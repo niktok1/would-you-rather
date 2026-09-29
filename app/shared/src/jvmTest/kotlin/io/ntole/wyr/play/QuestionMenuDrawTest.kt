@@ -149,7 +149,7 @@ class QuestionMenuDrawTest {
                 }
             }
         try {
-            scene.render()
+            scene.render().close()
             test(scene, picked)
         } finally {
             scene.close()

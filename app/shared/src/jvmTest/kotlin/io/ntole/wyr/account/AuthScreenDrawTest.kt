@@ -178,7 +178,7 @@ class AuthScreenDrawTest {
                 }
             }
         try {
-            scene.render()
+            scene.render().close()
             val shown = scene.everyText()
             assertTrue("${terms.terms} ${terms.privacyPolicy} {2}" in shown, "$shown")
         } finally {

@@ -48,6 +48,6 @@ private fun textsOf(node: SemanticsNode): List<String> =
 internal fun ImageComposeScene.settle() {
     repeat(2) {
         Snapshot.sendApplyNotifications()
-        render()
+        render().close()
     }
 }

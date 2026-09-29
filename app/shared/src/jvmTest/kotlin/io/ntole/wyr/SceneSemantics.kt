@@ -119,7 +119,7 @@ internal fun ImageComposeScene.type(
 internal fun ImageComposeScene.renderAt(nanoTime: Long) {
     repeat(3) {
         Snapshot.sendApplyNotifications()
-        render(nanoTime)
+        render(nanoTime).close()
     }
 }
 
@@ -128,7 +128,7 @@ internal fun ImageComposeScene.settle() {
     val now = timePassed[this] ?: 0L
     repeat(2) {
         Snapshot.sendApplyNotifications()
-        render(now)
+        render(now).close()
     }
 }
 
@@ -180,7 +180,7 @@ internal fun sizeNeeded(
             }
         }
     try {
-        scene.render()
+        scene.render().close()
     } finally {
         scene.close()
     }

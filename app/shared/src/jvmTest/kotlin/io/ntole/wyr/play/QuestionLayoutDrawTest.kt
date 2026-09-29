@@ -92,7 +92,7 @@ class QuestionLayoutDrawTest {
     ): List<Rect> {
         val scene = ImageComposeScene(width = width, height = height, density = Density(1f)) { Cards() }
         try {
-            scene.render()
+            scene.render().close()
             return listOf("A", "row", "B").map { name -> scene.nodes().single { name in it.descriptions }.boundsInRoot }
         } finally {
             scene.close()
@@ -115,7 +115,7 @@ class QuestionLayoutDrawTest {
                 }
             }
         try {
-            scene.render()
+            scene.render().close()
         } finally {
             scene.close()
         }

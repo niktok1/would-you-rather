@@ -553,7 +553,7 @@ class PlayScreenDrawTest {
                     WyrTheme { WyrStrings(language) { CategoriesPlayed(text = all, enabled = true, onClick = {}) } }
                 }
             try {
-                scene.render()
+                scene.render().close()
                 assertEquals(strings.changeCategories, scene.clickLabel(all), "the categories in $language")
             } finally {
                 scene.close()
@@ -660,7 +660,7 @@ class PlayScreenDrawTest {
                     )
                 }
             try {
-                scene.render()
+                scene.render().close()
                 val names = listOf("start", "like", "likes", "dislike", "dislikes", "menu", "share", "skip")
                 val bounds = names.associateWith { scene.boundsOf(it) }
                 val at = "a start $startWidth wide: $bounds"
@@ -715,7 +715,7 @@ class PlayScreenDrawTest {
                 }
             }
         try {
-            scene.render()
+            scene.render().close()
             // Each icon, and whether a count stands just before it.
             val icons =
                 listOf(
@@ -733,7 +733,7 @@ class PlayScreenDrawTest {
                     tapped.clear()
                     scene.sendPointerEvent(PointerEventType.Press, at, type = PointerType.Touch)
                     scene.sendPointerEvent(PointerEventType.Release, at, type = PointerType.Touch)
-                    scene.render()
+                    scene.render().close()
                     assertEquals(listOf(action), tapped, "a tap at $at by $name at $bounds")
                 }
             }
@@ -1075,7 +1075,7 @@ class PlayScreenDrawTest {
                 }
             }
         try {
-            scene.render()
+            scene.render().close()
         } finally {
             scene.close()
         }
@@ -1278,7 +1278,7 @@ class PlayScreenDrawTest {
                 }
             }
         try {
-            scene.render()
+            scene.render().close()
             test(scene)
         } finally {
             scene.close()
@@ -1395,7 +1395,7 @@ class PlayScreenDrawTest {
                 }
             }
         try {
-            scene.render()
+            scene.render().close()
         } finally {
             scene.close()
         }

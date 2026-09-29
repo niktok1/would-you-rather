@@ -32,7 +32,7 @@ class TokenBarTest {
                 AdminTheme(darkTheme = false) { TokenBar(state, viewModel) }
             }
         try {
-            scene.render()
+            scene.render().close()
             viewModel.setAdminToken(TOKEN)
             scene.clickTokenField()
             // A key command (a paste, say, or moving the caret) has the field's undo history keep what it
@@ -41,7 +41,7 @@ class TokenBarTest {
             scene.press(Key.MoveEnd)
 
             viewModel.lock()
-            scene.render()
+            scene.render().close()
             scene.clickTokenField()
             scene.press(Key.Z, shortcut = true)
 
@@ -59,7 +59,7 @@ class TokenBarTest {
         val primary = PointerButtons(isPrimaryPressed = true)
         sendPointerEvent(PointerEventType.Press, inField, buttons = primary, button = PointerButton.Primary)
         sendPointerEvent(PointerEventType.Release, inField, buttons = PointerButtons(), button = PointerButton.Primary)
-        render()
+        render().close()
     }
 
     /**
@@ -76,6 +76,6 @@ class TokenBarTest {
                 KeyEvent(key, type, isMetaPressed = shortcut && mac, isCtrlPressed = shortcut && !mac),
             )
         }
-        render()
+        render().close()
     }
 }
