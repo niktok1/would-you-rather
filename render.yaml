@@ -6,18 +6,16 @@
 #   - wyr-server is production, on wyr-postgres. It never deploys by itself: a person promotes a
 #     commit with Render's Manual Deploy, choosing one that is green in CI and already live on dev.
 #
-# Caveats this config is written around, both from §8:
-#   - a free web service spins down after ~15 min idle, so the first request after a quiet spell
-#     pays a cold start; every free service in the workspace shares 750 instance hours a month;
-#   - free Postgres expires 30 days after creation (then 14 days' grace) — move wyr-postgres to a
-#     paid instance type before then to keep production's data.
+# Production is paid since 2026-09-30, the Play early access (§8): wyr-server on starter ($7, 0.5 CPU,
+# 512 MB, never sleeps) and wyr-postgres on basic-256mb ($6), in a Hobby workspace. wyr-server-dev
+# stays free, so it spins down after ~15 min idle and the first request after pays a cold start.
 
 services:
   - type: web
     name: wyr-server
     runtime: docker
     dockerfilePath: ./Dockerfile
-    plan: free
+    plan: starter
     region: frankfurt
     branch: main
     # Production deploys only by hand, with Manual Deploy (decided 2026-09-24): promote a commit
@@ -152,6 +150,6 @@ services:
 
 databases:
   - name: wyr-postgres
-    plan: free
+    plan: basic-256mb
     # Must match the web service's region so the internal URL resolves.
     region: frankfurt

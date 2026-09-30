@@ -2557,7 +2557,7 @@ item is one short-lived branch, in order:
     (`feat/db-migrations`, prod baselines at V1), the dev/prod split (`chore/dev-and-prod`) and
     the refresh-token grace window (`feat/refresh-grace-window`, the first migration after V1:
     prod takes V2 at its next Manual Deploy). Left: the `CF-Connecting-IP` check on dev (*NOT
-    verified* above), and moving `wyr-postgres` to a paid instance type by about 2026-10-24.
+    verified* above), and moving `wyr-postgres` to a paid instance type by about 2026-10-24 (done 2026-09-30: Basic 256 MB).
 12. `feat/moderation-app` *(done, on `main` at 9a7902f)* — moderation moves out of the player app's
     console into an app of its own: the list of every question, retiring and restoring (V3;
     provisional, CLAUDE.md §8b), and `:app:adminApp`, with its pending queue and the list of every

@@ -534,12 +534,12 @@ This project must never be attributed to any employer identity.
   Games sign-in*.
 - The Docker build sets `WYR_SERVER_ONLY=1`, which makes `settings.gradle.kts` skip the app
   modules. Without it the Android Gradle plugin fails at configuration time for want of an SDK.
-- Free tier caveats to design around: free web services spin down after ~15 min idle (cold
-  start on next request) and share 750 instance hours a month across the workspace; only one free
-  Postgres may exist per workspace; and free Postgres expires 30 days after creation, then 14 days'
-  grace before Render deletes it. So `wyr-postgres` (created 2026-09-24) must move to a paid instance
-  type by about 2026-10-24 to keep production's data: an in-place change of instance type, a few
-  minutes unavailable.
+- *Instance types* (*since 2026-09-30*, the Play early access): `wyr-server` on **Starter** ($7 a month,
+  0.5 CPU, 512 MB, never spins down) and `wyr-postgres` on **Basic 256 MB** ($6), both in a **Hobby**
+  workspace, which runs paid services with no workspace fee (Pro, $25 a month, adds team members,
+  autoscaling, preview environments and longer logs and backups, none needed yet). `render.yaml`
+  declares both plans, so a Blueprint sync keeps them. `wyr-server-dev` stays free: it spins down after
+  ~15 min idle (a cold start on the next request) and shares the workspace's 750 free instance hours.
 - The paths: push to `main` → CI (ktlint + tests) → Render builds and publishes **dev**; then, by
   hand, Manual Deploy that same commit to **prod**. Never deploy prod a commit CI has not passed or
   dev has not run.
