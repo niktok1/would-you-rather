@@ -93,7 +93,14 @@ private fun PendingCard(
             )
             Text(text = submission.id, style = AdminType.code, color = MaterialTheme.colorScheme.onSurfaceVariant)
             AuthorControls(submission.authorId, isSeed = false, submission.id, Screen.PENDING, state, actions)
-            DecisionControls(submission.id, submission.categories, Screen.PENDING, state, actions)
+            DecisionControls(
+                submission.id,
+                submission.categories,
+                submission.categorySuggestion,
+                Screen.PENDING,
+                state,
+                actions,
+            )
             state.pending.outcomes.failures[submission.id]
                 ?.let { FailureLine(it.failure) }
         }

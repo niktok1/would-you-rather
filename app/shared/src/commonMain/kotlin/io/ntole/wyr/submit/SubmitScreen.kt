@@ -52,7 +52,9 @@ import io.ntole.wyr.theme.contentWidth
  *
  * Plain on purpose while UI polish is paused, every colour, space and size from the theme (§5b) and
  * every word from [LocalStrings] (§8f). Each option says what [SubmissionRules] refuses in it as it is
- * typed, and Send stays off until nothing is refused and a category is picked. The form scrolls.
+ * typed, and Send stays off until nothing is refused and a category is picked, or *Ништа не одговара*,
+ * with a category suggested or none, for the moderator to file it (CLAUDE.md §8d, *Categories*,
+ * *Nothing fits*). The form scrolls.
  */
 @Composable
 fun SubmitScreen(
@@ -136,8 +138,38 @@ private fun Form(
                         ),
                 )
             }
+            // Only once there are categories to say none of fits (CLAUDE.md §8d, *Categories*, *Nothing
+            // fits*): the moderator files the question.
+            if (state.categoryOptions.isNotEmpty()) {
+                FilterChip(
+                    selected = state.nothingFits,
+                    onClick = tapped("submit.nothing_fits", onClick = actions::toggleNothingFits),
+                    label = { Text(strings.nothingFits) },
+                    enabled = editable,
+                    colors =
+                        FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = MaterialTheme.colorScheme.primary,
+                            selectedLabelColor = MaterialTheme.colorScheme.onPrimary,
+                        ),
+                )
+            }
         }
-        Text(text = strings.pickCategories, color = colors.muted, fontSize = WyrTypeScale.statLabel)
+        if (state.nothingFits) {
+            OutlinedTextField(
+                value = state.categorySuggestion,
+                onValueChange = actions::setCategorySuggestion,
+                label = { Text(strings.suggestCategory) },
+                supportingText = { Text(suggestionHint(state.suggestionProblem, strings)) },
+                isError = state.suggestionProblem != null,
+                enabled = editable,
+                singleLine = true,
+                keyboardOptions =
+                    KeyboardOptions(capitalization = KeyboardCapitalization.Sentences, imeAction = ImeAction.Done),
+                modifier = Modifier.fillMaxWidth(),
+            )
+        } else {
+            Text(text = strings.pickCategories, color = colors.muted, fontSize = WyrTypeScale.statLabel)
+        }
         // When the points could not be read either, the one failure under Send says so, and its Try
         // again reads both.
         state.categoriesFailure?.takeIf { state.pointsFailure == null }?.let { failure ->
@@ -260,6 +292,17 @@ internal fun optionHint(
         problem == OptionProblem.NOT_ONE_LINE -> strings.optionNotOneLine
         same -> strings.optionsSame
         else -> strings.optionRule.fill(SubmissionRules.MAX_OPTION_LENGTH)
+    }
+
+/** The rule a category suggestion is held to, or what is wrong with the one typed by it. */
+internal fun suggestionHint(
+    problem: OptionProblem?,
+    strings: AccountStrings,
+): String =
+    when (problem) {
+        OptionProblem.TOO_LONG -> strings.optionTooLong.fill(SubmissionRules.MAX_CATEGORY_SUGGESTION_LENGTH)
+        OptionProblem.NOT_ONE_LINE -> strings.optionNotOneLine
+        else -> strings.suggestionRule.fill(SubmissionRules.MAX_CATEGORY_SUGGESTION_LENGTH)
     }
 
 /**

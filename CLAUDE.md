@@ -1113,6 +1113,14 @@ EncryptedSharedPreferences: enough for a game that stores no sensitive personal 
   total would move, and §8c's sum would need the retired questions left out on both sides); or
   `RETIRED` stored as a status of its own once no build before this one is a rollback target, which
   drops the column.
+- **Nothing fits** — *decided 2026-09-30* (the user: "do as recommended"): an author may file a
+  question under no category and suggest one, the moderator files it on approval, making a category of
+  the suggestion or filing it under `MISC` (§8d, *Categories*, *Nothing fits*). *Provisional — user
+  decision*, the details this build chose: the fallback's name, *Разно* / *Misc*, and its seven seeds;
+  the chip's words, *Ништа не одговара*, and the field's, *Предложи категорију*, optional; the
+  suggestion visible to its author on Question details; recurring suggestions not grouped in the
+  moderation app (one to add once there are many). The options: keep them, or change any, each in one
+  place (`Seed.ALL_CATEGORIES`, `AccountStrings`, `DecisionControls`).
 - **Skips under a category filter** — *provisional — user decision.* A request filtered to one
   or more categories with nothing due in any of them, while other questions still are, serves
   those categories again (§8d, *Categories*), and that includes questions skipped this cycle, which
@@ -1574,8 +1582,9 @@ seed (`Migrations`, `DatabaseFactory.init`). Nothing builds a table any other wa
   *Reports*), V12 (an author's block, §8d *Moderation*), V13 (sessions indexed by player, for an
   account's deletion, §8a), V14 (skips and hidden questions indexed by question, for the same), V15
   (the Home screen's two counts, §8d *Home picks*), V16 (an answer's time, *Personalization*, above),
-  V17 (push tokens, §8a), V18 (Play Games links, §8a), V19 (purchases in the shop, §8d *The shop*) and V20 (the GROSS
-  category renamed *Бљак*, §8d *Categories*).
+  V17 (push tokens, §8a), V18 (Play Games links, §8a), V19 (purchases in the shop, §8d *The shop*), V20 (the GROSS
+  category renamed *Бљак*, §8d *Categories*) and V21 (a question's category suggestion, §8d
+  *Categories*, *Nothing fits*).
   `Migrations.migrate` takes the baseline itself (`baselineVersion` 1), and only for a database
   holding every table V1 builds (`TABLES_BEFORE_MIGRATIONS`) and no history table; Flyway's
   `baselineOnMigrate` is off. Any other database with tables and no history fails the boot, rather
@@ -1666,7 +1675,11 @@ seed (`Migrations`, `DatabaseFactory.init`). Nothing builds a table any other wa
   sessions, and submits only with a username too, until the roll forward. V19 adds a table no build
   before names: a buyer's themes are gone there, and their stats do not add up (the price is out of
   their total but not in `pointsSpent`) until the roll forward. V20 only renames a category, which a
-  build before reads as plain text. `MigrationsTest` reads a
+  build before reads as plain text. V21 only adds a nullable column, which a build before never names:
+  there a question its author filed under none reads as filed under none, and an older moderation app
+  approving it with no category picked is refused (400), as the server holding it has the rule; the
+  build before V21 has no such rule and would serve it under no category, reachable only through
+  *Све*, until the roll forward, where a moderator can file it. `MigrationsTest` reads a
   table a later script dropped by name (`DROPPED_TABLES`), since `Tables.kt` no longer names it.
 - *Several instances booting at once* (Render starts a deploy's new instance before it stops the old
   one): on PostgreSQL each script runs under Flyway's advisory lock, so one boot migrates while the
@@ -2320,10 +2333,10 @@ listed on the Account screen.
     The domain's `Question` has it again (`QuestionMapper`), and the Play screen says so, quietly
     (*The Play screen*, the repeat notice).
 - **Categories** *(decided 2026-09-24; server data since 2026-09-25; built)*: a
-  question is filed under **any number of categories, at least one**. A player may pick **several**
-  categories to play, and a question matches when it is filed under **any** of them; none picked
-  means every category. The author picks one or more when submitting, and the moderator may change
-  them (*Moderation*).
+  question is filed under **any number of categories, at least one** once approved. A player may pick
+  **several** categories to play, and a question matches when it is filed under **any** of them; none
+  picked means every category. The author picks one or more when submitting, or says none fits
+  (*Nothing fits*, below), and the moderator may change them (*Moderation*).
   - *Server data* (*decided 2026-09-25*: there will be hundreds): each category is a row of
     `categories` (V6), a **stable id** (1 to `WyrApi.Limits.MAX_CATEGORY_ID_LENGTH`, 32, of `A`-`Z`,
     `0`-`9` and `_`), a name in **Serbian** (Cyrillic, `name_sr`) and one in **English**
@@ -2338,7 +2351,10 @@ listed on the Account screen.
     (*Путовања*, *Travel*), `WORK` (*Посао*, *Work*), `MONEY` (*Новац*, *Money*), `LOVE` (*Љубав*,
     *Love*), `TECHNOLOGY` (*Технологија*, *Technology*), `SPORTS` (*Спорт*, *Sports*), `ANIMALS`
     (*Животиње*, *Animals*) and `GROSS` (*Бљак*, *Yuck*; *Гадости*, *Gross* until 2026-09-29, the user's,
-    for a gentler tone; V20 renames it where the seed wrote it and nobody renamed it since). Nothing deletes a category. On the wire a category is its id, a plain
+    for a gentler tone; V20 renames it where the seed wrote it and nobody renamed it since), and on
+    2026-09-30 `MISC` (*Разно*, *Misc*), the one a moderator files a question under when no other fits
+    and none is worth making for it (*Nothing fits*), written by the seed with seven seeds of its own.
+    Nothing deletes a category. On the wire a category is its id, a plain
     string (§5).
   - *The moderator* adds a category with `POST /v1/admin/categories` (`CreateCategoryRequest`,
     answered 201 with its `CategoryDto`) and sets both its names with
@@ -2448,6 +2464,28 @@ listed on the Account screen.
     the list scrolled to its last), `AppNavigationTest` (Play, Categories and back, played or not;
     Home, Categories and Играј to Play over Home, after a rotation too, or back to Home playing nothing),
     `NavigatorTest`, `TopBarsDrawTest`.
+  - *Nothing fits* (*decided 2026-09-30*, the user: "someone will create a question which really isnt
+    fitting into any existing one"): the list will never cover every topic, so an author is not made to
+    pick a wrong category. The Submit form's chips end with **Ништа не одговара**, which unpicks every
+    category (and a category picked takes it back), and opens one field, **Предложи категорију**,
+    optional, one line of at most `WyrApi.Limits.MAX_CATEGORY_SUGGESTION_LENGTH` (40, a category
+    name's) once trimmed. The submission then goes filed under no category, `categories` empty, with the
+    suggestion in `SubmitQuestionRequest.categorySuggestion` or none (a blank one is none); a suggestion
+    too long or not one line is 422 `INVALID_SUBMISSION` (`checkedSubmission`), and `SubmissionRules`
+    copies the rule (`suggestionProblem`). Stored as `questions.category_suggestion` (V21), sent back on
+    `SubmissionDto` and `AdminQuestionDto` (`categorySuggestion`), so the author sees it on Question
+    details (*Предложена категорија: Музика*) and the moderator beside the question; no other player
+    ever sees it, and nothing logs it. The server also takes a suggestion beside categories, which the
+    game never sends. **The moderator files it**: an approval naming no category of a question filed
+    under none is 400 `VALIDATION_FAILED`, rolled back with the decision (`ModerationStore.approve`), so
+    a served question is always filed under one. In the moderation app, such a question's approval says
+    to pick one and Approve stays off until one is (`ModerationState.canApprove`), and a suggestion
+    offers **New category from the suggestion...**: its Serbian name filled in from it, the English name
+    and an id to type, and **Add and pick** adds it (`AddCategory`) and picks it for the approval
+    (`saveCategoryFromSuggestion`), a failure shown under the question. Or the moderator picks `MISC`.
+    `submit_sent` says whether a category was suggested, never which (§8g). `ApiFlowTest`,
+    `SubmitViewModelTest`, `SubmitScreenDrawTest`, `ModerationViewModelTest`, `ScreensDrawTest`.
+    Details *provisional — user decision* (§8b, *Nothing fits*).
   - *A known limit:* the game's picker is a screen of its own, searched and lazy (*The Categories
     screen*), but the Submit form, the moderation app's category filter and each pending card lay out
     every chip in place, to be scrolled past, which suits tens of categories, not the hundreds
@@ -2510,9 +2548,9 @@ listed on the Account screen.
   (`QuestionStore.isServable`) read, and it asks only that a moderator approved the question and has
   not retired it (*Moderation*).
 - **Seeds** *(decided 2026-09-25; built; 200 more 2026-09-26)*: the server's starter questions
-  (`Seed`), approved from the start, authored by nobody: 224, `seed-1` to `seed-224`, the first 24
+  (`Seed`), approved from the start, authored by nobody: 231, `seed-1` to `seed-231`, the first 24
   under V6's categories and the 200 after them under those and eight more (*Categories*), 14 to 16
-  new in each, some filed under two. **The seed writes what a database lacks, by id**, at every
+  new in each, some filed under two, and seven under `MISC` (2026-09-30). **The seed writes what a database lacks, by id**, at every
   boot (`Seed.writeMissing`): a new database gets every seed, and one an earlier build seeded gets
   the seeds and seed categories added since, at the first boot of the build that added them, which
   is how they reach production. Nothing there is written again or changed: a retired seed stays
@@ -2643,7 +2681,8 @@ listed on the Account screen.
   a guest registers first, keeping everything it has. It **costs a point** (§8c) and earns no points directly, because authors
   earn through likes. The author writes both
   options (in Serbian, as §8f, *How an option is phrased*, asks, which the moderator holds them
-  to, and on none of religion, politics, health or sexuality, §8b *Personalization*) and **picks one or more categories** (each a category's id; *Categories*). A player may
+  to, and on none of religion, politics, health or sexuality, §8b *Personalization*) and **picks one or more categories** (each a category's id; *Categories*), or says none fits and may suggest one
+  (*Categories*, *Nothing fits*). A player may
   have at most **20 submissions pending** moderation at once. A submitted question is served only
   after a moderator approves it; once approved it is due for every player in their current cycle.
   Built as `POST /v1/questions`, in `SubmissionStore.submit` after `checkedSubmission`. A guest's
@@ -2654,9 +2693,9 @@ listed on the Account screen.
   are trimmed, then each must be non-blank, at most `WyrApi.Limits.MAX_OPTION_LENGTH` (200, UTF-16
   units) and one line (no control character, nor U+2028 or U+2029, the line and paragraph
   separators), and the two must differ ignoring case: otherwise 422 `INVALID_SUBMISSION`, which the
-  player can put right. No category, or an id no category has, is 400 `VALIDATION_FAILED`, and comes
-  before any of those, since no correct client sends either: a picker must have one picked before it
-  lets the player submit, and offers only categories the server has. A category named twice is filed
+  player can put right. An id no category has is 400 `VALIDATION_FAILED`, and comes before any of
+  those, since no correct client sends one: a picker offers only categories the server has. No
+  category is the author saying none fits (*Categories*, *Nothing fits*). A category named twice is filed
   once, and the question's categories are stored in the submission's own transaction. The 21st
   pending submission is 409 `SUBMISSION_LIMIT`, counted under the author's row lock (§4). Then the
   cost is taken, under the same lock and as a compare-and-set (`PlayerStore.spend`, §4): an author
@@ -2757,7 +2796,8 @@ listed on the Account screen.
     not.
   - `POST /v1/admin/approvals` takes an `ApproveSubmissionRequest`: the id, and categories that, when
     there are any, replace the author's (each a category's id, each once, in the order of
-    categories; any other is 400 before anything is decided); none keeps the author's. `POST /v1/admin/rejections` takes a `RejectSubmissionRequest`: the id and a reason,
+    categories; any other is 400 before anything is decided); none keeps the author's, and for a
+    question its author filed under none is 400 (*Categories*, *Nothing fits*). `POST /v1/admin/rejections` takes a `RejectSubmissionRequest`: the id and a reason,
     trimmed, then non-blank, at most `WyrApi.Limits.MAX_REJECTION_REASON_LENGTH` (200) and one line
     as an option is (provisional, §8b). A reason that breaks a rule is 400 `VALIDATION_FAILED`, not
     422: the moderator's client checks it against the same rules before it lets them send. Both
@@ -3265,7 +3305,7 @@ hand, so the two cannot say different things; and **English** stands beside them
   guest has none of, and every question in two forms; the formal *Да ли бисте радије радили*, cold
   for a game; and every option as *да* with the present (*Да радиш четири дуга дана*), free of
   gender too but longer, every option opening on one word, and a migration of the seeds: the
-  fallback, should the infinitive read wrong after all. Nothing checks it: the 224 seeds keep it
+  fallback, should the infinitive read wrong after all. Nothing checks it: the 231 seeds keep it
   (V9 and the second seeds), and the moderator holds a player's question to it when deciding, since an approval cannot
   change the text.
   - *Other languages* *(to settle when one gets questions)*: English's *Would you rather…* takes a
@@ -3414,7 +3454,7 @@ the same events. The moderation app sends none.
   `.statistics_info_ok`, on the About screen since 2026-09-28, their names kept;
   `my_questions.new_question`, `.first_question`, `.question`, `.try_again`; `language.menu` and `language.option` (with its `language` tag); `auth.register`,
   `.show_password`, `.to_log_in`, `.terms`, `.privacy`, `.log_in`, `.log_in_anyway`, `.cancel`, `.to_register`,
-  `.play_games`, `.try_again`; `submit.category` (with its `category` id), `.send`, `.rules`, `.categories_try_again`,
+  `.play_games`, `.try_again`; `submit.category` (with its `category` id), `.nothing_fits`, `.send`, `.rules`, `.categories_try_again`,
   `.try_again`; `categories.all`, `.category` (with its id), `.play`, `.try_again`; `update.store` and
   `.reload`; `account.delete`, `.delete_confirm` and `.delete_cancel`, on the About screen; `shop.buy`,
   `.buy_confirm` and `.apply` (each with its `theme` id), `.buy_cancel`, `.open_auth` and `.try_again`;
@@ -3454,7 +3494,8 @@ the same events. The moderation app sends none.
     took a Play Games sign-in, `automatic` whether it was the launch's, with no tap, and `switched`
     whether it made the device another player's; the player id is identified either way.
   - *Submit* (`SubmitViewModel`): `submit_opened` for each visit of the form, as Account's;
-    `submit_sent` once stored (`categories`, `count`); `submit_refused` (`code`) for any refusal.
+    `submit_sent` once stored (`categories`, `count`, and `category_suggested`, whether the author
+    suggested a category, never which); `submit_refused` (`code`) for any refusal.
   - *Categories* (`CategoriesViewModel`): `categories_changed` when Play sends a new selection
     (`categories`, `count`, none being every category); what is played already sends nothing.
   - *Language* (`LanguageViewModel`): `language_changed` (`language`, its tag).

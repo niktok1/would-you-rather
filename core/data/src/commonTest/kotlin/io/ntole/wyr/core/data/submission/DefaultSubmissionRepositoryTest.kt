@@ -180,14 +180,16 @@ class DefaultSubmissionRepositoryTest {
         }
 
     @Test
-    fun `a submission under no category is refused before anything is sent`() =
+    fun `a submission under no category is sent with its suggestion`() =
         runTest {
             val submissions = repositoryOver(storeHolding(session("a")))
 
-            assertFailsWith<IllegalArgumentException> { submissions.submit("Fly", "Swim", emptySet()) }
+            submissions.submit("Fly", "Swim", emptySet(), categorySuggestion = "Музика")
 
-            // Not even a guest: nothing left the client.
-            assertEquals(emptyList(), server.engine.requestHistory)
+            assertEquals(
+                SubmitQuestionRequest("Fly", "Swim", emptyList(), "Музика"),
+                server.submissionsSentAs.first().second,
+            )
         }
 
     private fun repositoryOver(store: SessionStore): DefaultSubmissionRepository {

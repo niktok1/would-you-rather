@@ -542,6 +542,14 @@ public object WyrApi {
         public const val MAX_CATEGORY_NAME_LENGTH: Int = 40
 
         /**
+         * Longest category an author can suggest for a question that fits none of the server's
+         * ([io.ntole.wyr.core.question.SubmitQuestionRequest.categorySuggestion]), counted as
+         * [MAX_OPTION_LENGTH] counts, and once trimmed: a category name's, since a moderator makes one
+         * of it.
+         */
+        public const val MAX_CATEGORY_SUGGESTION_LENGTH: Int = MAX_CATEGORY_NAME_LENGTH
+
+        /**
          * Most submissions one player may have waiting for a moderator at once (CLAUDE.md §8d).
          * Approved and rejected ones do not count, so a decision frees a place.
          */

@@ -10,9 +10,12 @@ import io.ntole.wyr.server.plugins.ApiFailure
  *
  * Two kinds of refusal, so the client can tell the player apart from a bug. What a player can get
  * wrong by typing is [ApiFailure.invalidSubmission]: an option blank, too long or holding a control
- * character or a line separator, or the two options the same ignoring case. No category is
- * [ApiFailure.validation], as a malformed body is: a picker sends none only by a bug. So is an id no
- * category has, which the route refuses in its transaction before this runs
+ * character or a line separator, or the two options the same ignoring case, and a category
+ * suggestion too long or not one line, by an option's rules
+ * ([WyrApi.Limits.MAX_CATEGORY_SUGGESTION_LENGTH]; blank is none). No category is the author saying
+ * nothing fits (CLAUDE.md §8d, *Categories*), not a fault. An id no category has is
+ * [ApiFailure.validation], as a malformed body is, which the route refuses in its transaction before
+ * this runs
  * (`CategoryStore.checked`, which also puts them in the order of categories), so a request with both
  * kinds of fault is malformed first. A category named twice is filed once, not refused.
  *
@@ -25,8 +28,6 @@ import io.ntole.wyr.server.plugins.ApiFailure
  * here, invisible characters included: what a question says is the moderator's to accept or reject.
  */
 internal fun checkedSubmission(request: SubmitQuestionRequest): SubmitQuestionRequest {
-    if (request.categories.isEmpty()) throw ApiFailure.validation("no category")
-
     val optionA = checkedOption("optionA", request.optionA)
     val optionB = checkedOption("optionB", request.optionB)
     if (optionA.equals(optionB, ignoreCase = true)) throw ApiFailure.invalidSubmission("the two options are the same")
@@ -35,7 +36,22 @@ internal fun checkedSubmission(request: SubmitQuestionRequest): SubmitQuestionRe
         optionA = optionA,
         optionB = optionB,
         categories = request.categories.distinct(),
+        categorySuggestion = checkedSuggestion(request.categorySuggestion),
     )
+}
+
+/** [raw] trimmed, or null when there is none or it is blank, held to an option's rules of one line. */
+private fun checkedSuggestion(raw: String?): String? {
+    val suggestion = raw?.trim()?.takeIf { it.isNotEmpty() } ?: return null
+    if (suggestion.length > WyrApi.Limits.MAX_CATEGORY_SUGGESTION_LENGTH) {
+        throw ApiFailure.invalidSubmission(
+            "categorySuggestion is over ${WyrApi.Limits.MAX_CATEGORY_SUGGESTION_LENGTH} characters",
+        )
+    }
+    if (suggestion.any(Char::isISOControl) || suggestion.any { it.category in LINE_SEPARATORS }) {
+        throw ApiFailure.invalidSubmission("categorySuggestion is not one line")
+    }
+    return suggestion
 }
 
 /** [raw] trimmed, and measured only then, so padding never counts towards the limit. */

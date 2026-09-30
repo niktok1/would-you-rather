@@ -609,6 +609,7 @@ internal class MigrationsTest(
                 "18 SQL",
                 "19 SQL",
                 "20 SQL",
+                "21 SQL",
             )
 
         /** The Home screen's two counts as V15 writes them, as JDBC reads them back as strings. */
@@ -625,7 +626,7 @@ internal class MigrationsTest(
          * The columns the scripts after V1 add, by table, empty in every row already there but for
          * the players' mark, which V4 then sets ([afterLaterScripts]): V2's previous refresh token,
          * V4's mark and recovery secret, V5's username and password hash and V12's block on players, and V3's
-         * retirement on questions, and V16's answer time on votes.
+         * retirement and V21's category suggestion on questions, and V16's answer time on votes.
          */
         private val ADDED_COLUMNS =
             mapOf(
@@ -640,7 +641,7 @@ internal class MigrationsTest(
                         "password_hash",
                         "submissions_blocked_at",
                     ),
-                Questions.tableName to listOf("retired_at"),
+                Questions.tableName to listOf("retired_at", "category_suggestion"),
                 Votes.tableName to listOf("answer_millis"),
             )
 

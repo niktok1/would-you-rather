@@ -25,6 +25,7 @@ class GetMySubmissionsTest {
             optionA: String,
             optionB: String,
             categories: Set<String>,
+            categorySuggestion: String?,
         ): Submission = error("a list submits nothing")
 
         override suspend fun mine(): List<Submission> {

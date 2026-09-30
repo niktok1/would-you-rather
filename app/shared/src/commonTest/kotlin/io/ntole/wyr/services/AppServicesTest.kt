@@ -143,6 +143,7 @@ class AppServicesTest {
             optionA: String,
             optionB: String,
             categories: Set<String>,
+            categorySuggestion: String?,
         ): Submission = error("nothing is submitted here")
 
         override suspend fun mine(): List<Submission> {

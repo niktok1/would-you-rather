@@ -15,16 +15,23 @@ import kotlinx.serialization.Serializable
  * one line of text, and PostgreSQL refuses a NUL), and the two must differ ignoring case. Those are
  * the rules a player can break by what they type.
  *
- * [categories] are the author's pick, one or more (CLAUDE.md §8d), each the id of a category the
- * server has, in any order: the server files the question under each once, in its order of
- * categories, however often the request names it. None, which a missing list also reads as, is
- * refused as a malformed request, and so is an id no category has: a picker must have one picked
- * before it sends, and offers only the categories the server listed, so only a client bug, or a
- * client from before its category went away, can send either.
+ * [categories] are the author's pick (CLAUDE.md §8d), each the id of a category the server has, in
+ * any order: the server files the question under each once, in its order of categories, however
+ * often the request names it. None, which a missing list also reads as, is an author saying that
+ * nothing fits, and the moderator files the question when approving it (*Categories*, *Nothing
+ * fits*). An id no category has is refused as a malformed request: a picker offers only the
+ * categories the server listed, so only a client bug, or a client from before its category went
+ * away, can send one.
+ *
+ * [categorySuggestion] is a category the author suggests for the moderator to make, when nothing
+ * fits, or null for none. Trimmed, it is at most
+ * [io.ntole.wyr.core.api.WyrApi.Limits.MAX_CATEGORY_SUGGESTION_LENGTH] long and one line, by an
+ * option's rules; blank is none. Only the moderator and the author ever see it.
  */
 @Serializable
 public data class SubmitQuestionRequest(
     public val optionA: String,
     public val optionB: String,
     public val categories: List<String> = emptyList(),
+    public val categorySuggestion: String? = null,
 )

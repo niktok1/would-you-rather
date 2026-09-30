@@ -108,6 +108,9 @@ object Seed {
     /** When the categories that came with the second seeds were added: 2026-09-26, a millisecond apart. */
     private const val SECOND_CATEGORY_AT = 1_790_380_800_000L
 
+    /** When [MISC] was added, with the seeds filed under it: 2026-09-30. */
+    private const val MISC_CATEGORY_AT = 1_790_726_400_000L
+
     const val FOOD: String = "FOOD"
     const val LIFESTYLE: String = "LIFESTYLE"
     const val ETHICS: String = "ETHICS"
@@ -121,6 +124,7 @@ object Seed {
     const val SPORTS: String = "SPORTS"
     const val ANIMALS: String = "ANIMALS"
     const val GROSS: String = "GROSS"
+    const val MISC: String = "MISC"
 
     /**
      * The categories V6 writes, exactly: the four the wire's enum named that stay, under the same ids,
@@ -153,6 +157,9 @@ object Seed {
                 StartingCategory(SPORTS, "Спорт", "Sports", SECOND_CATEGORY_AT + 5),
                 StartingCategory(ANIMALS, "Животиње", "Animals", SECOND_CATEGORY_AT + 6),
                 StartingCategory(GROSS, "Бљак", "Yuck", SECOND_CATEGORY_AT + 7),
+                // The one a moderator files a question under when no other fits, and no new category is
+                // worth making for it (CLAUDE.md §8d, *Categories*, *Nothing fits*).
+                StartingCategory(MISC, "Разно", "Misc", MISC_CATEGORY_AT),
             )
 
     /**
@@ -1116,5 +1123,36 @@ object Seed {
                     38 to 59,
             ),
             Starter(ABSURD, "Живети у мјузиклу", "Живети у немом филму", votes = 309 to 183),
+            Starter(MISC, "Да увек буде лето", "Да увек буде зима", votes = 403 to 131),
+            Starter(
+                MISC,
+                "До краја живота слушати само једну песму",
+                "Никад више не слушати музику",
+                votes =
+                    237 to 71,
+            ),
+            Starter(MISC, "Заувек носити само црно", "Заувек носити само бело", votes = 288 to 94),
+            Starter(
+                MISC,
+                "Немати ни брата ни сестру",
+                "Имати петоро браће и сестара",
+                votes =
+                    120 to 176,
+            ),
+            Starter(
+                MISC,
+                "Поново кренути у први разред",
+                "Поново полагати све испите на факултету",
+                votes =
+                    149 to 109,
+            ),
+            Starter(MISC, "Гледати само филмове", "Гледати само серије", votes = 158 to 197),
+            Starter(
+                MISC,
+                "Знати да свираш сваки инструмент",
+                "Имати савршен глас за певање",
+                votes =
+                    196 to 162,
+            ),
         )
 }

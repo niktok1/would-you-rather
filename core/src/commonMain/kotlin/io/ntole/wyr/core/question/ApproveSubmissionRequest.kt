@@ -12,8 +12,10 @@ import kotlinx.serialization.Serializable
  * [categories], when there are any, replace the ones the author picked: the question is then filed
  * under exactly those, each once, in the server's order of categories, however often the request
  * names one. None, which a missing list also reads as, keeps the author's. So an approved question
- * is always filed under one at least: there is no asking for none. Each must be the id of a category
- * the server has, as in a [SubmitQuestionRequest]; any other is refused as a malformed request.
+ * is always filed under one at least: there is no asking for none, and none for a question its author
+ * filed under none is refused as a malformed request, since the moderator's client has one picked
+ * first. Each must be the id of a category the server has, as in a [SubmitQuestionRequest]; any other
+ * is refused as a malformed request.
  */
 @Serializable
 public data class ApproveSubmissionRequest(

@@ -9,7 +9,6 @@ import io.ntole.wyr.core.question.SubmissionDto
 import io.ntole.wyr.core.question.SubmitQuestionRequest
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
 import kotlin.time.Instant
 
 class SubmissionMapperTest {
@@ -132,9 +131,22 @@ class SubmissionMapperTest {
     }
 
     @Test
-    fun `a submission under no category is refused`() {
-        // The server would refuse it as malformed (VALIDATION_FAILED), which no correct client sends.
-        assertFailsWith<IllegalArgumentException> { submitQuestionRequest("Fly", "Swim", emptySet()) }
+    fun `a submission under no category goes with its suggestion and a blank one is none`() {
+        // Nothing fits: the moderator files it (CLAUDE.md §8d, *Categories*, *Nothing fits*).
+        assertEquals(
+            SubmitQuestionRequest("Fly", "Swim", emptyList(), categorySuggestion = "Музика"),
+            submitQuestionRequest("Fly", "Swim", emptySet(), categorySuggestion = "Музика"),
+        )
+        assertEquals(
+            null,
+            submitQuestionRequest("Fly", "Swim", emptySet(), categorySuggestion = "  ").categorySuggestion,
+        )
+    }
+
+    @Test
+    fun `a submission's category suggestion is mapped as sent`() {
+        assertEquals("Музика", SUBMITTED.copy(categorySuggestion = "Музика").toDomain().categorySuggestion)
+        assertEquals(null, SUBMITTED.toDomain().categorySuggestion)
     }
 
     private companion object {

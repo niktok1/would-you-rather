@@ -13,5 +13,6 @@ class SubmissionLimitsTest {
         assertEquals(WyrApi.Limits.MAX_OPTION_LENGTH, SubmissionRules.MAX_OPTION_LENGTH)
         assertEquals(WyrApi.Limits.MAX_PENDING_SUBMISSIONS, SubmissionRules.MAX_PENDING_SUBMISSIONS)
         assertEquals(WyrApi.Limits.SUBMISSION_COST, SubmissionRules.SUBMISSION_COST)
+        assertEquals(WyrApi.Limits.MAX_CATEGORY_SUGGESTION_LENGTH, SubmissionRules.MAX_CATEGORY_SUGGESTION_LENGTH)
     }
 }

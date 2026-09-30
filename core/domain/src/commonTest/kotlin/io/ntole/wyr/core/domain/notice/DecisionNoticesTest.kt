@@ -207,6 +207,7 @@ class DecisionNoticesTest {
             optionA: String,
             optionB: String,
             categories: Set<String>,
+            categorySuggestion: String?,
         ): Submission = error("the notice submits nothing")
 
         override suspend fun mine(): List<Submission> {

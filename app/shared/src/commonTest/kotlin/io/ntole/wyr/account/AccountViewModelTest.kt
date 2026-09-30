@@ -1335,6 +1335,7 @@ class AccountViewModelTest {
             optionA: String,
             optionB: String,
             categories: Set<String>,
+            categorySuggestion: String?,
         ): Submission = error("the Account screen submits nothing: the Submit screen does")
 
         override val categories: StateFlow<Set<String>> = MutableStateFlow(emptySet())

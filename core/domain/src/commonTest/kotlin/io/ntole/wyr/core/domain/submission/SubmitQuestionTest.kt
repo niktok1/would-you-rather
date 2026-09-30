@@ -4,7 +4,6 @@ import io.ntole.wyr.core.domain.session.SessionRepository
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
 import kotlin.time.Instant
 
 class SubmitQuestionTest {
@@ -19,18 +18,18 @@ class SubmitQuestionTest {
 
             assertEquals(STORED, stored)
             // The options untouched: trimming, like every other content rule, is the server's.
-            assertEquals(listOf("ensure", "submit  Fly |Swim|[SUPERPOWERS, FOOD]"), calls)
+            assertEquals(listOf("ensure", "submit  Fly |Swim|[SUPERPOWERS, FOOD]|null"), calls)
         }
 
     @Test
-    fun `a pick of no category is refused before the session is ensured`() =
+    fun `a pick of no category is submitted with the category suggested`() =
         runTest {
             val submitQuestion = SubmitQuestion(RecordingSubmissions(calls), RecordingSessions(calls))
 
-            assertFailsWith<IllegalArgumentException> { submitQuestion("Fly", "Swim", emptySet()) }
+            submitQuestion("Fly", "Swim", emptySet(), categorySuggestion = "Музика")
 
-            // Not even the session: on a cold start ensuring it would have minted a guest.
-            assertEquals(emptyList(), calls)
+            // Nothing fits: the moderator files it (CLAUDE.md §8d, *Categories*, *Nothing fits*).
+            assertEquals(listOf("ensure", "submit Fly|Swim|[]|Музика"), calls)
         }
 
     private class RecordingSubmissions(
@@ -40,8 +39,9 @@ class SubmitQuestionTest {
             optionA: String,
             optionB: String,
             categories: Set<String>,
+            categorySuggestion: String?,
         ): Submission {
-            calls += "submit $optionA|$optionB|$categories"
+            calls += "submit $optionA|$optionB|$categories|$categorySuggestion"
             return STORED
         }
 

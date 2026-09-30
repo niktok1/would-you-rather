@@ -399,9 +399,11 @@ class TapsTest {
 
         // The line under Send links the question rules (CLAUDE.md §8d, *Submitting*).
         val rules = setOf("submit.rules")
-        assertEquals(setOf("submit.category", "submit.send") + rules, form)
-        assertEquals(setOf("submit.category", "submit.categories_try_again", "submit.send") + rules, unread)
-        assertEquals(setOf("submit.category", "submit.send", "submit.try_again") + rules, pointsUnread)
+        // And after the categories, the chip saying none fits (CLAUDE.md §8d, *Categories*, *Nothing fits*).
+        val categories = setOf("submit.category", "submit.nothing_fits")
+        assertEquals(categories + setOf("submit.send") + rules, form)
+        assertEquals(categories + setOf("submit.categories_try_again", "submit.send") + rules, unread)
+        assertEquals(categories + setOf("submit.send", "submit.try_again") + rules, pointsUnread)
         val chips =
             analytics.named(AnalyticsEvent.TAP).filter {
                 it.properties[AnalyticsProperty.ELEMENT] ==
@@ -567,6 +569,10 @@ class TapsTest {
         override fun setOptionB(text: String) = Unit
 
         override fun toggleCategory(id: String) = Unit
+
+        override fun toggleNothingFits() = Unit
+
+        override fun setCategorySuggestion(text: String) = Unit
 
         override fun submit() = Unit
     }

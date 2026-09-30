@@ -20,6 +20,14 @@ data class SubmitState(
     val optionB: String = "",
     /** The ids of the categories the question is to be filed under, picked from [categoryOptions]. */
     val categories: Set<String> = emptySet(),
+    /**
+     * Whether the author says none of [categoryOptions] fits (CLAUDE.md §8d, *Categories*, *Nothing
+     * fits*): the question goes filed under none, with [categorySuggestion], for the moderator to file.
+     * Picking a category takes it back, and it unpicks every category.
+     */
+    val nothingFits: Boolean = false,
+    /** The category the author suggests while [nothingFits], as typed; blank is none. */
+    val categorySuggestion: String = "",
     /** Every category a question can be filed under, as last read from the server, oldest first. */
     val categoryOptions: List<Category> = emptyList(),
     /**
@@ -68,6 +76,9 @@ data class SubmitState(
     /** What the rules refuse in option B, or null while nothing is typed. */
     val optionBProblem: OptionProblem? get() = problemOf(optionB)
 
+    /** What the rules refuse in the category suggestion, or null while there is nothing wrong with it. */
+    val suggestionProblem: OptionProblem? get() = SubmissionRules.suggestionProblem(categorySuggestion)
+
     /** Whether the two options are the same by the rules, once each is one a question can have. */
     val sameOptions: Boolean
         get() =
@@ -81,13 +92,14 @@ data class SubmitState(
     val isGuest: Boolean get() = registered == false
 
     /**
-     * Whether Submit can go: both options pass the rules, a category is picked, the player last read
-     * is registered and has the points it costs, and nothing is in flight.
+     * Whether Submit can go: both options pass the rules, a category is picked or none fits, with a
+     * suggestion the rules take, the player last read is registered and has the points it costs, and
+     * nothing is in flight.
      */
     val canSubmit: Boolean
         get() =
-            !isBusy && categories.isNotEmpty() && !sameOptions && points != null && !tooFewPoints &&
-                registered == true &&
+            !isBusy && (categories.isNotEmpty() || (nothingFits && suggestionProblem == null)) && !sameOptions &&
+                points != null && !tooFewPoints && registered == true &&
                 SubmissionRules.optionProblem(optionA) == null && SubmissionRules.optionProblem(optionB) == null
 
     private fun problemOf(option: String): OptionProblem? =

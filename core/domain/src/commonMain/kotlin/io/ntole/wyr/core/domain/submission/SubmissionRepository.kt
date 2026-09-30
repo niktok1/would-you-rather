@@ -7,12 +7,12 @@ public interface SubmissionRepository {
      * server stored it: pending, with both options trimmed and its categories each once (CLAUDE.md
      * §8d).
      *
-     * [categories] must hold at least one: the server refuses a submission under none as a malformed
-     * request, as it does one under an id no category has, which a picker of the server's categories
-     * never sends. The options are sent as given. What an option may say is the server's to rule on,
-     * so nothing here checks them.
+     * [categories] may be empty, the author saying none fits, and [categorySuggestion] is a category
+     * they suggest then, or null for none (CLAUDE.md §8d, *Categories*, *Nothing fits*): the moderator
+     * files the question when approving it. An id no category has is refused as a malformed request,
+     * which a picker of the server's categories never sends. The options and the suggestion are sent
+     * as given. What they may say is the server's to rule on, so nothing here checks them.
      *
-     * @throws IllegalArgumentException when [categories] is empty, having sent nothing.
      * @throws io.ntole.wyr.core.domain.error.WyrException on any other failure, with
      *   [io.ntole.wyr.core.domain.error.DomainError.INVALID_SUBMISSION] for options the server's
      *   rules refuse, [io.ntole.wyr.core.domain.error.DomainError.SUBMISSION_LIMIT] when the
@@ -24,6 +24,7 @@ public interface SubmissionRepository {
         optionA: String,
         optionB: String,
         categories: Set<String>,
+        categorySuggestion: String? = null,
     ): Submission
 
     /**

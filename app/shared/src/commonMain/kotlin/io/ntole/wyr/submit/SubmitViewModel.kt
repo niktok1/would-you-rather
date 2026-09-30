@@ -33,6 +33,11 @@ interface SubmitActions {
     /** Picks the category [id] for the question, or unpicks it if it is picked. */
     fun toggleCategory(id: String)
 
+    /** Says none of the categories fits, unpicking every one, or takes that back ([SubmitState.nothingFits]). */
+    fun toggleNothingFits()
+
+    fun setCategorySuggestion(text: String)
+
     fun submit()
 }
 
@@ -45,7 +50,8 @@ interface SubmitActions {
  * One action at a time, and the points read again after every submit, a failed one too: a submission
  * whose answer was lost may have been stored, and paid for.
  *
- * [analytics] hear of it (CLAUDE.md §8g): the form opened, a question sent and its categories, a
+ * [analytics] hear of it (CLAUDE.md §8g): the form opened, a question sent, its categories and whether
+ * it suggested one, a
  * refusal by its code, and every failure shown; never what was typed.
  */
 class SubmitViewModel(
@@ -90,7 +96,12 @@ class SubmitViewModel(
     override fun setOptionB(text: String) = edit { copy(optionB = text) }
 
     override fun toggleCategory(id: String) =
-        edit { copy(categories = if (id in categories) categories - id else categories + id) }
+        edit { copy(categories = if (id in categories) categories - id else categories + id, nothingFits = false) }
+
+    override fun toggleNothingFits() =
+        edit { if (nothingFits) copy(nothingFits = false) else copy(nothingFits = true, categories = emptySet()) }
+
+    override fun setCategorySuggestion(text: String) = edit { copy(categorySuggestion = text) }
 
     /**
      * Sends the question as typed, then reads the points again. Nothing happens until
@@ -103,15 +114,29 @@ class SubmitViewModel(
         if (!draft.canSubmit) return
         perform(SubmitAction.SUBMIT) {
             try {
-                submitQuestion(draft.optionA, draft.optionB, draft.categories)
+                // A suggestion only when none fits: one typed and then taken back by picking a category
+                // goes nowhere.
+                val suggestion = draft.categorySuggestion.takeIf { draft.nothingFits && it.isNotBlank() }
+                submitQuestion(draft.optionA, draft.optionB, draft.categories, suggestion)
                 analytics.track(
                     AnalyticsEvent.SUBMIT_SENT,
                     mapOf(
                         AnalyticsProperty.CATEGORIES to draft.categories.sorted(),
                         AnalyticsProperty.COUNT to draft.categories.size,
+                        // Whether a category was suggested, never what: that is typed.
+                        AnalyticsProperty.CATEGORY_SUGGESTED to (suggestion != null),
                     ),
                 )
-                _state.update { it.copy(optionA = "", optionB = "", categories = emptySet(), sent = true) }
+                _state.update {
+                    it.copy(
+                        optionA = "",
+                        optionB = "",
+                        categories = emptySet(),
+                        nothingFits = false,
+                        categorySuggestion = "",
+                        sent = true,
+                    )
+                }
                 // The least obstructive moment to ask for notifications, which tell of its decision: the
                 // platform asks once, ever, after the first (CLAUDE.md §8a, *Push tokens*).
                 devicePush.askPermissionOnce()

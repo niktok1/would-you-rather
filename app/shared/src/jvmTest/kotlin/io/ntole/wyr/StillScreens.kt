@@ -116,5 +116,9 @@ internal object NoSubmitActions : SubmitActions {
 
     override fun toggleCategory(id: String) = Unit
 
+    override fun toggleNothingFits() = Unit
+
+    override fun setCategorySuggestion(text: String) = Unit
+
     override fun submit() = Unit
 }

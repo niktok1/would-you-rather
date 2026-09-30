@@ -31,7 +31,8 @@ object SubmissionStore {
      * Stores [submission] as a question by [authorId], waiting for a moderator, and returns it as
      * its author sees it (CLAUDE.md §8d). Must run inside a transaction, with [submission] already
      * checked (`checkedSubmission`) and its categories by `CategoryStore.checked`, in this same
-     * transaction, so they are each once, in the order of categories, and each a category's. The
+     * transaction, so they are each once, in the order of categories, and each a category's; none, when
+     * nothing fitted, with the author's suggestion or without, for the moderator to file. The
      * question and its categories are written in this one transaction, and so is its [cost] (the
      * server's `SUBMISSION_COST`, CLAUDE.md §8c), taken from the author's total ([PlayerStore.spend])
      * and kept on the question for a rejection to pay back. An author with fewer points is refused with
@@ -79,6 +80,7 @@ object SubmissionStore {
             row[reviewedAt] = null
             row[rejectionReason] = null
             row[submissionCost] = cost
+            row[categorySuggestion] = submission.categorySuggestion
         }
         QuestionCategories.batchInsert(submission.categories) { category ->
             this[QuestionCategories.questionId] = id
@@ -93,6 +95,7 @@ object SubmissionStore {
             status = QuestionStatus.PENDING,
             rejectionReason = null,
             submittedAt = now,
+            categorySuggestion = submission.categorySuggestion,
         )
     }
 
@@ -150,6 +153,7 @@ object SubmissionStore {
             votesA = row.countOf(votesA),
             votesB = row.countOf(votesB),
             authorId = row[Questions.authorPlayerId].takeIf { forModerator },
+            categorySuggestion = row[Questions.categorySuggestion],
         )
     }
 
@@ -188,6 +192,7 @@ object SubmissionStore {
             Questions.retiredAt,
             Questions.rejectionReason,
             Questions.submittedAt,
+            Questions.categorySuggestion,
             likeCount,
             dislikeCount,
             votesA,

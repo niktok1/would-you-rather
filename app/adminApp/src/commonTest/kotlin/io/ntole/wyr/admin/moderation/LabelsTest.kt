@@ -63,6 +63,13 @@ class LabelsTest {
             "Approve under Етика, Апсурдно, in place of the author's",
             approvalOf(setOf("ETHICS", "ABSURD"), authors, known),
         )
+        // The author found none fitting (CLAUDE.md §8d, *Categories*, *Nothing fits*).
+        assertEquals(
+            "The author found no category fitting: pick one, or add one, to approve",
+            approvalOf(emptySet(), emptySet(), known),
+        )
+        assertEquals("Approve under Етика", approvalOf(setOf("ETHICS"), emptySet(), known))
+        assertEquals("none", namesOf(emptySet(), known))
     }
 
     @Test

@@ -1299,6 +1299,7 @@ class AppNavigationTest {
             optionA: String,
             optionB: String,
             categories: Set<String>,
+            categorySuggestion: String?,
         ): Submission {
             submitWaitsFor?.await()
             return Submission(

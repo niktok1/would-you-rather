@@ -23,7 +23,9 @@ import kotlin.time.Instant
  * (null for a seed and while pending), and [retiredAt] when a moderator retired it, null unless it is
  * retired. [rejectionReason] is the moderator's reason, only for a rejected one. [tally],
  * [likeCount] and [dislikeCount] are every player's latest answers to it and how many players like it
- * and dislike it, one moment's numbers, which a retired question keeps.
+ * and dislike it, one moment's numbers, which a retired question keeps. [categorySuggestion] is the
+ * category its author suggested when none fitted, or null (CLAUDE.md §8d, *Categories*, *Nothing
+ * fits*).
  */
 public data class ModeratedQuestion(
     public val id: String,
@@ -40,4 +42,5 @@ public data class ModeratedQuestion(
     public val likeCount: Int,
     public val dislikeCount: Int = 0,
     public val authorId: String? = null,
+    public val categorySuggestion: String? = null,
 )

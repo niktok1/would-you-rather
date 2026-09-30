@@ -184,6 +184,55 @@ class SubmitViewModelTest {
         }
 
     @Test
+    fun `none fitting unpicks every category and sends the question under none with the category suggested`() =
+        runTest(dispatcher) {
+            val viewModel = open()
+            viewModel.write("Fly", "Swim", "FOOD")
+
+            viewModel.toggleNothingFits()
+            assertEquals(emptySet(), viewModel.state.value.categories, "none fits: every category unpicked")
+            assertTrue(viewModel.state.value.canSubmit, "a question none fits can go, with no suggestion")
+            viewModel.setCategorySuggestion("x".repeat(SubmissionRules.MAX_CATEGORY_SUGGESTION_LENGTH + 1))
+            assertFalse(viewModel.state.value.canSubmit, "a suggestion the rules refuse")
+            viewModel.setCategorySuggestion("Музика")
+            server.calls.clear()
+
+            viewModel.submit()
+            testScheduler.advanceUntilIdle()
+
+            assertEquals(
+                "submit \"Fly\"|\"Swim\"|[]|suggesting \"Музика\"",
+                server.calls.first { it.startsWith("submit") },
+            )
+            assertFalse(viewModel.state.value.nothingFits, "cleared with the form")
+            assertEquals("", viewModel.state.value.categorySuggestion)
+            assertEquals(
+                true,
+                analytics.named(AnalyticsEvent.SUBMIT_SENT).single().properties[AnalyticsProperty.CATEGORY_SUGGESTED],
+            )
+            assertTrue(analytics.recorded.none { "Музика" in it.toString() }, "never what was typed")
+        }
+
+    @Test
+    fun `picking a category takes back none fitting and the suggestion typed goes nowhere`() =
+        runTest(dispatcher) {
+            val viewModel = open()
+            viewModel.write("Fly", "Swim")
+            assertFalse(viewModel.state.value.canSubmit, "no category and nothing said")
+
+            viewModel.toggleNothingFits()
+            viewModel.setCategorySuggestion("Музика")
+            viewModel.toggleCategory("FOOD")
+            assertFalse(viewModel.state.value.nothingFits)
+            server.calls.clear()
+
+            viewModel.submit()
+            testScheduler.advanceUntilIdle()
+
+            assertEquals("submit \"Fly\"|\"Swim\"|[FOOD]", server.calls.first { it.startsWith("submit") })
+        }
+
+    @Test
     fun `nothing is sent before the points are read`() =
         runTest(dispatcher) {
             val viewModel = viewModel()
@@ -688,7 +737,11 @@ class SubmitViewModelTest {
 
             val sent = analytics.named(AnalyticsEvent.SUBMIT_SENT).single()
             assertEquals(
-                mapOf(AnalyticsProperty.CATEGORIES to listOf("FOOD", "SUPERPOWERS"), AnalyticsProperty.COUNT to 2),
+                mapOf(
+                    AnalyticsProperty.CATEGORIES to listOf("FOOD", "SUPERPOWERS"),
+                    AnalyticsProperty.COUNT to 2,
+                    AnalyticsProperty.CATEGORY_SUGGESTED to false,
+                ),
                 sent.properties,
             )
             assertTrue(analytics.recorded.none { "Fly" in it.toString() || "Swim" in it.toString() })
@@ -795,8 +848,10 @@ class SubmitViewModelTest {
             optionA: String,
             optionB: String,
             categories: Set<String>,
+            categorySuggestion: String?,
         ): Submission {
-            calls += "submit \"$optionA\"|\"$optionB\"|${categories.sorted()}"
+            calls += "submit \"$optionA\"|\"$optionB\"|${categories.sorted()}" +
+                (categorySuggestion?.let { "|suggesting \"$it\"" } ?: "")
             submitWaitsFor?.await()
             submitFailsWith?.let { throw it }
             val submission =

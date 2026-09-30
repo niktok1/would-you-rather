@@ -39,6 +39,26 @@ public object SubmissionRules {
         }
     }
 
+    /**
+     * Longest category an author may suggest for a question that fits none (CLAUDE.md §8d,
+     * *Categories*, *Nothing fits*), counted as [MAX_OPTION_LENGTH] counts, once trimmed.
+     */
+    public const val MAX_CATEGORY_SUGGESTION_LENGTH: Int = 40
+
+    /**
+     * What is wrong with [suggestion], a category the author suggests, by the server's rules, or null
+     * when it may be sent: trimmed, at most [MAX_CATEGORY_SUGGESTION_LENGTH] and one line, as an
+     * option is. Blank is none, which is never wrong.
+     */
+    public fun suggestionProblem(suggestion: String): OptionProblem? {
+        val trimmed = suggestion.trim()
+        return when {
+            trimmed.length > MAX_CATEGORY_SUGGESTION_LENGTH -> OptionProblem.TOO_LONG
+            trimmed.any { it.isISOControl() || it.category in LINE_SEPARATORS } -> OptionProblem.NOT_ONE_LINE
+            else -> null
+        }
+    }
+
     /** Whether the server would refuse [optionA] and [optionB] as the same option, trimmed and ignoring case. */
     public fun sameOptions(
         optionA: String,
@@ -54,7 +74,10 @@ public enum class OptionProblem {
     /** Nothing but whitespace, or nothing at all. */
     BLANK,
 
-    /** Longer than [SubmissionRules.MAX_OPTION_LENGTH] once trimmed. */
+    /**
+     * Longer than [SubmissionRules.MAX_OPTION_LENGTH] once trimmed, or a suggestion longer than
+     * [SubmissionRules.MAX_CATEGORY_SUGGESTION_LENGTH].
+     */
     TOO_LONG,
 
     /** A line break, a tab or another control character inside it once trimmed. */

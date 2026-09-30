@@ -105,6 +105,14 @@ data class AccountStrings(
     val optionsSame: String,
     val categories: String,
     val pickCategories: String,
+    /** The chip after the categories, for a question none of them fits (CLAUDE.md §8d, *Categories*). */
+    val nothingFits: String,
+    /** The field that chip opens, a category the author suggests for the moderator to make. */
+    val suggestCategory: String,
+    /** Its rule: optional, one line, up to `{0}` characters. */
+    val suggestionRule: String,
+    /** Question details' line for a question filed under none, the category `{0}` its author suggested. */
+    val suggestedCategory: String,
     /** The Submit form's button, and what submitting costs, `{0}`, in points: *Пошаљи · 1 П*. */
     val send: String,
     /** Under Send, while the player has fewer points than submitting costs. */
@@ -181,6 +189,10 @@ data class AccountStrings(
             optionsSame = transform(optionsSame),
             categories = transform(categories),
             pickCategories = transform(pickCategories),
+            nothingFits = transform(nothingFits),
+            suggestCategory = transform(suggestCategory),
+            suggestionRule = transform(suggestionRule),
+            suggestedCategory = transform(suggestedCategory),
             send = transform(send),
             notEnoughPoints = transform(notEnoughPoints),
             invalidSubmission = transform(invalidSubmission),
@@ -253,6 +265,10 @@ internal val SerbianCyrillicAccountStrings: AccountStrings =
         optionsSame = "Опције морају да се разликују.",
         categories = "Категорије",
         pickCategories = "Изабери једну или више.",
+        nothingFits = "Ништа не одговара",
+        suggestCategory = "Предложи категорију",
+        suggestionRule = "Није обавезно. Један ред, до {0} знакова.",
+        suggestedCategory = "Предложена категорија: {0}",
         send = "Пошаљи · {0}",
         notEnoughPoints = "Немаш довољно поена.",
         invalidSubmission = "Питање није прихваћено. Провери опције.",
@@ -323,6 +339,10 @@ internal val EnglishAccountStrings: AccountStrings =
         optionsSame = "The two options must differ.",
         categories = "Categories",
         pickCategories = "Pick one or more.",
+        nothingFits = "Nothing fits",
+        suggestCategory = "Suggest a category",
+        suggestionRule = "Optional. One line, up to {0} characters.",
+        suggestedCategory = "Suggested category: {0}",
         send = "Send · {0}",
         notEnoughPoints = "Not enough points.",
         invalidSubmission = "Not accepted. Check both options.",

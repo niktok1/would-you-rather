@@ -215,6 +215,14 @@ object Questions : Table("questions") {
     val submissionCost = integer("submission_cost").default(0)
 
     /**
+     * The category its author suggested, trimmed, when none of the server's fitted (CLAUDE.md §8d,
+     * *Categories*, *Nothing fits*), or null for none (V21), as for a seed and every question submitted
+     * before. Only a submission writes it; the moderator reads it, and the author sees it in their list.
+     */
+    val categorySuggestion =
+        varchar("category_suggestion", WyrApi.Limits.MAX_CATEGORY_SUGGESTION_LENGTH).nullable()
+
+    /**
      * Made-up votes for each side, which every tally the server reports adds to the players' own
      * (CLAUDE.md §8d, *Seeds*): a seed starts with some (V8, `Seed`), so its split looks like a crowd's
      * from the first answer, and every other question with none. Nothing writes them after that, and

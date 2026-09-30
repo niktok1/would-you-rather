@@ -94,6 +94,10 @@ object ModerationStore {
      * decision, in its transaction, so they commit with the status or not at all: a refused decision
      * leaves them as they were, and of two approvals racing for one question only the winner's are
      * written.
+     *
+     * None, for a question its author filed under none (CLAUDE.md §8d, *Categories*, *Nothing fits*),
+     * is refused as a malformed request, rolling the decision back with the transaction, so an approved
+     * question is always filed under one at least.
      */
     fun approve(
         questionId: String,
@@ -110,7 +114,9 @@ object ModerationStore {
             }
         }
 
-        return decided(questionId)
+        val approved = decided(questionId)
+        if (approved.categories.isEmpty()) throw ApiFailure.validation("no category for a question filed under none")
+        return approved
     }
 
     /**
@@ -448,6 +454,7 @@ object ModerationStore {
                     likeCount = checkNotNull(row[likes]) { "a COUNT subquery came back null" }.toInt(),
                     dislikeCount = checkNotNull(row[dislikes]) { "a COUNT subquery came back null" }.toInt(),
                     authorId = row[Questions.authorPlayerId],
+                    categorySuggestion = row[Questions.categorySuggestion],
                 )
             }
         }
@@ -465,6 +472,7 @@ object ModerationStore {
                     Questions.reviewedAt,
                     Questions.retiredAt,
                     Questions.rejectionReason,
+                    Questions.categorySuggestion,
                 )
         }
     }

@@ -16,12 +16,13 @@ fun optionsOf(
 
 /**
  * The categories [ids] name, in the order given, each by its Serbian name as [known] lists it, or by
- * its id when [known] does not list it, or has not been read.
+ * its id when [known] does not list it, or has not been read; `none` for a question its author filed
+ * under none (CLAUDE.md §8d, *Categories*, *Nothing fits*).
  */
 fun namesOf(
     ids: Collection<String>,
     known: List<Category>?,
-): String = ids.joinToString(", ") { id -> nameOf(id, known) }
+): String = if (ids.isEmpty()) "none" else ids.joinToString(", ") { id -> nameOf(id, known) }
 
 /** The category [id] by its Serbian name as [known] lists it, or by its id when it does not. */
 fun nameOf(

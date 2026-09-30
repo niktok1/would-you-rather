@@ -74,6 +74,23 @@ data class ModerationState(
     fun draftOf(questionId: String): DecisionDraft = drafts[questionId] ?: DecisionDraft()
 
     /**
+     * The categories [questionId]'s author filed it under, as the queue or the list last listed it, or
+     * `null` when neither lists it.
+     */
+    fun authorsCategoriesOf(questionId: String): Set<String>? =
+        pending.submissions?.firstOrNull { it.id == questionId }?.categories
+            ?: questions.questions?.firstOrNull { it.id == questionId }?.categories
+
+    /**
+     * Whether Approve can go for [questionId], filed by its author under [authorsCategories]: one filed
+     * under none only with a category picked (CLAUDE.md §8d, *Categories*, *Nothing fits*).
+     */
+    fun canApprove(
+        questionId: String,
+        authorsCategories: Set<String>,
+    ): Boolean = canSend && (authorsCategories.isNotEmpty() || draftOf(questionId).categories.isNotEmpty())
+
+    /**
      * The reason to reject [questionId] with, or `null` while the one typed breaks a rule the server
      * holds a reason to, which keeps its Reject off: the server refuses such a reason as a malformed
      * request (CLAUDE.md §8d, *Moderation*).
@@ -281,11 +298,13 @@ data class Outcomes(
 /**
  * What the moderator has picked for one pending submission: the [categories], ids, an approval files
  * it under in place of the author's (none keeps the author's), and the [reason] to reject it with,
- * exactly as typed.
+ * exactly as typed. [newCategory] is the category being made from its author's suggestion (CLAUDE.md
+ * §8d, *Categories*, *Nothing fits*), as typed, or `null`: once added, it is picked for the approval.
  */
 data class DecisionDraft(
     val categories: Set<String> = emptySet(),
     val reason: String = "",
+    val newCategory: CategoryDraft? = null,
 )
 
 /** Why an action on one question failed, and the question's options, to name it by. */

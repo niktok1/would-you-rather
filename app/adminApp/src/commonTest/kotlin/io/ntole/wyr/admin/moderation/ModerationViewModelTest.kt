@@ -1,5 +1,6 @@
 package io.ntole.wyr.admin.moderation
 
+import io.ntole.wyr.admin.moderation.FakeModeration.Companion.FIRST
 import io.ntole.wyr.admin.moderation.FakeModeration.Companion.QUEUE
 import io.ntole.wyr.admin.moderation.FakeModeration.Companion.SECOND
 import io.ntole.wyr.admin.moderation.FakeModeration.Companion.TOKEN
@@ -23,6 +24,7 @@ import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.seconds
@@ -273,6 +275,78 @@ class ModerationViewModelTest {
                 "Approved \"Fly\" or \"Swim\" under Етика, Храна.",
                 viewModel.state.value.pending.outcomes.notice,
             )
+        }
+
+    @Test
+    fun `a question its author filed under none is approved only once a category is picked`() =
+        runTest(dispatcher) {
+            moderation.pending = { listOf(FIRST.copy(categories = emptySet(), categorySuggestion = "Музика")) }
+            val viewModel = openWithQueue()
+
+            assertFalse(viewModel.state.value.canApprove("q1", emptySet()))
+            viewModel.approve("q1", Screen.PENDING)
+            testScheduler.advanceUntilIdle()
+            assertEquals(listOf("pending"), moderation.calls, "nothing sent: the server would refuse it")
+
+            viewModel.toggleApprovalCategory("q1", "ABSURD")
+            assertTrue(viewModel.state.value.canApprove("q1", emptySet()))
+            viewModel.approve("q1", Screen.PENDING)
+            testScheduler.advanceUntilIdle()
+            assertEquals("approve q1 [ABSURD]", moderation.calls[1])
+        }
+
+    @Test
+    fun `a category made from the author's suggestion is added and picked for the approval`() =
+        runTest(dispatcher) {
+            moderation.pending = { listOf(FIRST.copy(categories = emptySet(), categorySuggestion = " Музика ")) }
+            val viewModel = openWithQueue()
+
+            viewModel.startCategoryFromSuggestion("q1", " Музика ")
+            val started =
+                assertNotNull(
+                    viewModel.state.value
+                        .draftOf("q1")
+                        .newCategory,
+                )
+            assertEquals(CategoryDraft(nameSr = "Музика"), started, "its Serbian name filled in, trimmed")
+            viewModel.saveCategoryFromSuggestion("q1", Screen.PENDING)
+            testScheduler.advanceUntilIdle()
+            assertEquals(listOf("pending"), moderation.calls, "nothing sent without an English name")
+
+            viewModel.editCategoryFromSuggestion("q1", started.copy(nameEn = "Music"))
+            viewModel.saveCategoryFromSuggestion("q1", Screen.PENDING)
+            testScheduler.advanceUntilIdle()
+
+            assertEquals("addCategory null|Музика|Music", moderation.calls[1])
+            val draft = viewModel.state.value.draftOf("q1")
+            assertEquals(setOf("FAST_FOOD"), draft.categories, "the id the server made, picked")
+            assertNull(draft.newCategory)
+            assertEquals(
+                "Added FAST_FOOD: Музика / Music, picked for this question.",
+                viewModel.state.value.pending.outcomes.notice,
+            )
+
+            viewModel.approve("q1", Screen.PENDING)
+            testScheduler.advanceUntilIdle()
+            assertEquals("approve q1 [FAST_FOOD]", moderation.calls[2])
+        }
+
+    @Test
+    fun `a category from a suggestion that fails says so under its question and picks nothing`() =
+        runTest(dispatcher) {
+            moderation.pending = { listOf(FIRST.copy(categories = emptySet(), categorySuggestion = "Музика")) }
+            moderation.addCategory = { _, _, _ -> throw WyrException(DomainError.CATEGORY_EXISTS, "exists") }
+            val viewModel = openWithQueue()
+
+            viewModel.startCategoryFromSuggestion("q1", "Музика")
+            viewModel.editCategoryFromSuggestion("q1", CategoryDraft(nameSr = "Музика", nameEn = "Music"))
+            viewModel.saveCategoryFromSuggestion("q1", Screen.PENDING)
+            testScheduler.advanceUntilIdle()
+
+            val draft = viewModel.state.value.draftOf("q1")
+            assertEquals(emptySet(), draft.categories)
+            assertEquals(CategoryDraft(nameSr = "Музика", nameEn = "Music"), draft.newCategory, "kept to put right")
+            assertTrue("q1" in viewModel.state.value.pending.outcomes.failures)
         }
 
     @Test

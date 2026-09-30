@@ -31,6 +31,10 @@ import kotlinx.serialization.Serializable
  * [optionA] and [optionB], each by their latest pick, so the two add up to [answerCount] (CLAUDE.md §8d,
  * *Question details*). A question never served, pending or rejected, has none; a retired one keeps
  * what it had. They default to none, so a server from before the two sides reads as none on either.
+ *
+ * [categorySuggestion] is the category its author suggested when none of the server's fitted
+ * ([SubmitQuestionRequest.categorySuggestion]), as stored, or null for none. A question the author
+ * filed under none is filed by the moderator when approving it.
  */
 @Serializable
 public data class SubmissionDto(
@@ -47,4 +51,5 @@ public data class SubmissionDto(
     public val votesA: Int = 0,
     public val votesB: Int = 0,
     public val authorId: String? = null,
+    public val categorySuggestion: String? = null,
 )

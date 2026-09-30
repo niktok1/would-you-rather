@@ -148,7 +148,10 @@ fun QuestionDetailsScreen(
                 }
             }
 
-            if (submission.categories.isNotEmpty()) {
+            // Filed under none, the author said none fitted, and suggested one or not, until the moderator
+            // files it (CLAUDE.md §8d, *Categories*, *Nothing fits*).
+            val suggestion = submission.categorySuggestion?.takeIf { submission.categories.isEmpty() }
+            if (submission.categories.isNotEmpty() || suggestion != null) {
                 Column(verticalArrangement = Arrangement.spacedBy(dimens.spaceXs)) {
                     Text(
                         text = strings.categories,
@@ -157,7 +160,9 @@ fun QuestionDetailsScreen(
                         fontWeight = FontWeight.Bold,
                     )
                     Text(
-                        text = submission.categories.joinToString { id -> categoryName(id, categories, language) },
+                        text =
+                            suggestion?.let { strings.suggestedCategory.fill(optionText(it, language)) }
+                                ?: submission.categories.joinToString { id -> categoryName(id, categories, language) },
                         color = colors.primaryText,
                     )
                 }

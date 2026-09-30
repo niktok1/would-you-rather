@@ -82,6 +82,23 @@ object NoActions : ModerationActions {
 
     override fun saveNewCategory() = Unit
 
+    override fun startCategoryFromSuggestion(
+        questionId: String,
+        suggestion: String,
+    ) = Unit
+
+    override fun editCategoryFromSuggestion(
+        questionId: String,
+        draft: CategoryDraft,
+    ) = Unit
+
+    override fun cancelCategoryFromSuggestion(questionId: String) = Unit
+
+    override fun saveCategoryFromSuggestion(
+        questionId: String,
+        from: Screen,
+    ) = Unit
+
     override fun startRenaming(categoryId: String) = Unit
 
     override fun editRenaming(draft: CategoryDraft) = Unit

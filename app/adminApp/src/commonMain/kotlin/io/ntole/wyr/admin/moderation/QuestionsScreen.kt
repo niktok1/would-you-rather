@@ -173,7 +173,14 @@ private fun QuestionActions(
     actions: ModerationActions,
 ) {
     if (question.status == SubmissionStatus.PENDING) {
-        DecisionControls(question.id, question.categories, Screen.QUESTIONS, state, actions)
+        DecisionControls(
+            question.id,
+            question.categories,
+            question.categorySuggestion,
+            Screen.QUESTIONS,
+            state,
+            actions,
+        )
     } else {
         MoveButton(question, Screen.QUESTIONS, state, actions)
     }

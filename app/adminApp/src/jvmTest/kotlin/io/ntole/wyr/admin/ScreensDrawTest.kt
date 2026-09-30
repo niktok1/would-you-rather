@@ -32,6 +32,7 @@ import io.ntole.wyr.core.domain.submission.SubmissionStatus
 import io.ntole.wyr.core.network.environment.WyrEnvironment
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.seconds
 
@@ -69,6 +70,33 @@ class ScreensDrawTest {
             )
 
         WyrEnvironment.entries.forEach { environment -> draw(environment, queue, Screen.PENDING) }
+    }
+
+    /**
+     * A question its author filed under none with a category suggested, before a category is made of
+     * it and while one is (CLAUDE.md §8d, *Categories*, *Nothing fits*).
+     */
+    @Test
+    fun `the app draws a question none fitted, its suggestion and the category being made of it`() {
+        val suggested =
+            FakeModeration.FIRST.copy(categories = emptySet(), categorySuggestion = "Музика")
+        val queue =
+            ModerationState(
+                adminToken = SecretText("typed"),
+                pending = PendingQueue(submissions = listOf(suggested, FakeModeration.SECOND)),
+                categories = CategoryList(FakeCategories.LISTED),
+            )
+
+        val before = draw(WyrEnvironment.LOCAL, queue, Screen.PENDING, height = TALL)
+        assertTrue("The author suggests a category: Музика" in before, "$before")
+        assertTrue("New category from the suggestion..." in before)
+        assertTrue("The author found no category fitting: pick one, or add one, to approve" in before)
+
+        val making =
+            queue.copy(drafts = mapOf("q1" to DecisionDraft(newCategory = CategoryDraft(nameSr = "Музика"))))
+        val during = draw(WyrEnvironment.LOCAL, making, Screen.PENDING, height = TALL)
+        assertTrue("Add and pick" in during, "$during")
+        assertFalse("New category from the suggestion..." in during)
     }
 
     @Test

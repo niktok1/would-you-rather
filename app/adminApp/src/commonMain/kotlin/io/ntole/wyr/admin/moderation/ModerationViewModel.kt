@@ -116,6 +116,29 @@ interface ModerationActions {
 
     fun saveNewCategory()
 
+    /**
+     * Starts making a category of [suggestion], the one [questionId]'s author suggested, its Serbian
+     * name filled in (CLAUDE.md §8d, *Categories*, *Nothing fits*).
+     */
+    fun startCategoryFromSuggestion(
+        questionId: String,
+        suggestion: String,
+    )
+
+    /** Replaces what is typed for the category being made for [questionId] with [draft]. */
+    fun editCategoryFromSuggestion(
+        questionId: String,
+        draft: CategoryDraft,
+    )
+
+    fun cancelCategoryFromSuggestion(questionId: String)
+
+    /** Adds the category typed for [questionId], from [from], and picks it for the approval. */
+    fun saveCategoryFromSuggestion(
+        questionId: String,
+        from: Screen,
+    )
+
     fun startRenaming(categoryId: String)
 
     /** Replaces the names typed for the category being renamed with [draft]'s; its id stays. */
@@ -231,12 +254,17 @@ class ModerationViewModel(
         text: String,
     ) = _state.update { it.copy(drafts = it.drafts + (questionId to it.draftOf(questionId).copy(reason = text))) }
 
-    /** Approves [questionId] under the categories picked for it, or the author's when none are. */
+    /**
+     * Approves [questionId] under the categories picked for it, or the author's when none are; one its
+     * author filed under none goes only with one picked, as the server holds it to (CLAUDE.md §8d,
+     * *Categories*, *Nothing fits*).
+     */
     override fun approve(
         questionId: String,
         from: Screen,
     ) {
         val categories = _state.value.draftOf(questionId).categories
+        if (categories.isEmpty() && _state.value.authorsCategoriesOf(questionId)?.isEmpty() == true) return
         decide(Action.APPROVE, questionId, from) { token ->
             val approved = approveSubmission(token, questionId, categories)
             val names = namesOf(approved.categories, _state.value.categories.categories)
@@ -475,6 +503,56 @@ class ModerationViewModel(
             readCategories()
         }
     }
+
+    override fun startCategoryFromSuggestion(
+        questionId: String,
+        suggestion: String,
+    ) = updateDraft(questionId) { it.copy(newCategory = CategoryDraft(nameSr = suggestion.trim())) }
+
+    override fun editCategoryFromSuggestion(
+        questionId: String,
+        draft: CategoryDraft,
+    ) = updateDraft(questionId) { it.copy(newCategory = it.newCategory?.let { draft }) }
+
+    override fun cancelCategoryFromSuggestion(questionId: String) =
+        updateDraft(questionId) { it.copy(newCategory = null) }
+
+    /**
+     * Adds the category typed for [questionId], as [saveNewCategory] adds one, once
+     * [CategoryDraft.isValid], and picks it for the question's approval, then reads the categories
+     * again, whatever became of it. A failure shows under the question, as a decision's does.
+     */
+    override fun saveCategoryFromSuggestion(
+        questionId: String,
+        from: Screen,
+    ) {
+        val draft = _state.value.draftOf(questionId).newCategory ?: return
+        if (!draft.isValid) return
+        acting(Running(Action.ADD_CATEGORY, questionId), from) { token ->
+            val failure =
+                failureOf {
+                    val added = addCategory(token, draft.idToSend, draft.nameSr, draft.nameEn)
+                    val notice = "Added ${added.id}: ${added.nameSr} / ${added.nameEn}, picked for this question."
+                    _state.update { state ->
+                        val decision = state.draftOf(questionId)
+                        state.noticed(from, notice).copy(
+                            drafts =
+                                state.drafts + (
+                                    questionId to
+                                        decision.copy(categories = decision.categories + added.id, newCategory = null)
+                                ),
+                        )
+                    }
+                }
+            readCategories()
+            failure
+        }
+    }
+
+    private fun updateDraft(
+        questionId: String,
+        change: (DecisionDraft) -> DecisionDraft,
+    ) = _state.update { it.copy(drafts = it.drafts + (questionId to change(it.draftOf(questionId)))) }
 
     /** Starts putting right the names of the category [categoryId], from the ones it has. */
     override fun startRenaming(categoryId: String) {

@@ -69,6 +69,7 @@ internal fun AdminQuestionDto.toDomain(): ModeratedQuestion =
         likeCount = likeCount,
         dislikeCount = dislikeCount,
         authorId = authorId,
+        categorySuggestion = categorySuggestion,
     )
 
 internal fun AdminQuestionPageDto.toDomain(): ModeratedQuestionPage =

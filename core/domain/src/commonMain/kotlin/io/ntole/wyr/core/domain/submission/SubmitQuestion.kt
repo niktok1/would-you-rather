@@ -14,20 +14,16 @@ public class SubmitQuestion(
     private val session: SessionRepository,
 ) {
     /**
-     * @throws IllegalArgumentException when [categories], ids, is empty, before the session is
-     *   ensured: a pick no question can be filed under sends nothing, not even the request that mints
-     *   a guest.
+     * [categories] are ids, none when nothing fits, and [categorySuggestion] the category the author
+     * suggests then, or null ([SubmissionRepository.submit]).
      */
     public suspend operator fun invoke(
         optionA: String,
         optionB: String,
         categories: Set<String>,
+        categorySuggestion: String? = null,
     ): Submission {
-        // The repository refuses it too, but only once the session is ensured, which on a cold start
-        // has already minted a guest.
-        require(categories.isNotEmpty()) { "a question is submitted under at least one category" }
-
         session.ensure()
-        return submissions.submit(optionA, optionB, categories)
+        return submissions.submit(optionA, optionB, categories, categorySuggestion)
     }
 }

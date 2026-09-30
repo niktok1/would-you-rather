@@ -23,6 +23,9 @@ public object AnalyticsProperty {
     /** How many of something: categories played, say. */
     public const val COUNT: String = "count"
 
+    /** Whether a submission suggested a category for the moderator to make, never which (CLAUDE.md §8d). */
+    public const val CATEGORY_SUGGESTED: String = "category_suggested"
+
     /** The side answered, or the Home screen's Play button tapped, in that card's colour: `A` or `B`. */
     public const val SIDE: String = "side"
 

@@ -76,6 +76,39 @@ class SubmitScreenDrawTest {
         }
     }
 
+    /**
+     * After the categories, a chip saying none fits (CLAUDE.md §8d, *Categories*, *Nothing fits*), and
+     * once picked a field to suggest one, in place of the line asking for a pick; Send goes with it.
+     */
+    @Test
+    fun `the chip saying none fits opens a field to suggest a category and Send goes with it`() {
+        Language.entries.forEach { language ->
+            val strings = stringsOf(language).accountScreens
+            val actions = Recorder()
+            val asked = scene(WRITTEN, language, actions)
+            try {
+                assertTrue(strings.nothingFits in asked.texts(), "$language")
+                assertFalse(strings.suggestCategory in asked.texts(), "$language: no field before it is picked")
+                asked.tap(strings.nothingFits)
+                assertEquals(listOf("nothing fits"), actions.calls, "$language")
+            } finally {
+                asked.close()
+            }
+
+            val picked = scene(WRITTEN.copy(categories = emptySet(), nothingFits = true), language)
+            try {
+                assertTrue(strings.suggestCategory in picked.texts(), "$language: ${picked.texts()}")
+                assertTrue(
+                    strings.suggestionRule.fill(SubmissionRules.MAX_CATEGORY_SUGGESTION_LENGTH) in picked.texts(),
+                )
+                assertFalse(strings.pickCategories in picked.texts(), "$language")
+                assertFalse(sendButton(picked, sendText(stringsOf(language), 1)).isOff, "$language")
+            } finally {
+                picked.close()
+            }
+        }
+    }
+
     /** Send names its cost in every language, and sends when the points pay for it. */
     @Test
     fun `Send names its cost and sends what is written`() {
@@ -334,6 +367,12 @@ class SubmitScreenDrawTest {
 
         override fun toggleCategory(id: String) = Unit
 
+        override fun toggleNothingFits() {
+            calls += "nothing fits"
+        }
+
+        override fun setCategorySuggestion(text: String) = Unit
+
         override fun submit() {
             calls += "submit"
         }
@@ -401,6 +440,13 @@ class SubmitScreenDrawTest {
                 WRITTEN.copy(optionA = "   ", optionB = "x".repeat(SubmissionRules.MAX_OPTION_LENGTH + 1)),
                 WRITTEN.copy(optionA = "Fly\nhigh", optionB = LONGEST, categories = emptySet()),
                 WRITTEN.copy(optionB = "FLY"),
+                WRITTEN.copy(categories = emptySet(), nothingFits = true),
+                WRITTEN.copy(categories = emptySet(), nothingFits = true, categorySuggestion = "Музика"),
+                WRITTEN.copy(
+                    categories = emptySet(),
+                    nothingFits = true,
+                    categorySuggestion = "x".repeat(SubmissionRules.MAX_CATEGORY_SUGGESTION_LENGTH + 1),
+                ),
                 WRITTEN.copy(running = SubmitAction.SUBMIT),
                 WRITTEN.copy(submitFailure = SubmitFailure(DomainError.SUBMISSION_LIMIT)),
                 WRITTEN.copy(categoriesFailure = SubmitFailure(DomainError.SERVER)),

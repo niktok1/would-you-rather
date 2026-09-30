@@ -26,10 +26,9 @@ public class DefaultSubmissionRepository(
         optionA: String,
         optionB: String,
         categories: Set<String>,
+        categorySuggestion: String?,
     ): Submission {
-        // Built before anything is sent, so a submission under no category, which the server would
-        // refuse as malformed, never leaves the client.
-        val request = submitQuestionRequest(optionA, optionB, categories)
+        val request = submitQuestionRequest(optionA, optionB, categories, categorySuggestion)
 
         return session.withSessionRecovery { api.submit(request) }.toDomain()
     }

@@ -1033,6 +1033,16 @@ class ApiFlowTest {
                     SubmitQuestionRequest("Fly\u2028high", "Swim", listOf("FOOD")),
                 "paragraph separator inside optionB" to
                     SubmitQuestionRequest("Fly", "Swim\u2029fast", listOf("FOOD")),
+                "no category and a blank option" to SubmitQuestionRequest(" ", "Swim"),
+                "a suggestion too long" to
+                    SubmitQuestionRequest(
+                        "Fly",
+                        "Swim",
+                        categorySuggestion = "x".repeat(WyrApi.Limits.MAX_CATEGORY_SUGGESTION_LENGTH + 1),
+                    ),
+                "a newline inside a suggestion" to SubmitQuestionRequest("Fly", "Swim", categorySuggestion = "Mu\nsic"),
+                "a line separator inside a suggestion" to
+                    SubmitQuestionRequest("Fly", "Swim", categorySuggestion = "Mu\u2028sic"),
             ).forEach { (case, request) ->
                 val response = client.submit(author, request)
                 assertEquals(HttpStatusCode.UnprocessableEntity, response.status, case)
@@ -1066,9 +1076,6 @@ class ApiFlowTest {
             val author = client.registered()
 
             listOf(
-                "no category" to """{"optionA":"Fly","optionB":"Swim"}""",
-                "an empty list of categories" to """{"optionA":"Fly","optionB":"Swim","categories":[]}""",
-                "the single category of old" to """{"optionA":"Fly","optionB":"Swim","category":"FOOD"}""",
                 "categories not a list" to """{"optionA":"Fly","optionB":"Swim","categories":"FOOD"}""",
                 "UNKNOWN category" to """{"optionA":"Fly","optionB":"Swim","categories":["UNKNOWN"]}""",
                 "UNKNOWN beside a real category" to
@@ -1084,7 +1091,7 @@ class ApiFlowTest {
                 // Malformed first: the content is not judged in a request no correct client sends.
                 "UNKNOWN category and a blank option" to
                     """{"optionA":" ","optionB":"Swim","categories":["UNKNOWN"]}""",
-                "no category and a blank option" to """{"optionA":" ","optionB":"Swim","categories":[]}""",
+                "a suggestion not a string" to """{"optionA":"Fly","optionB":"Swim","categorySuggestion":[]}""",
             ).forEach { (case, body) ->
                 val response =
                     client.post(WyrApi.Paths.QUESTIONS) {
@@ -1097,6 +1104,46 @@ class ApiFlowTest {
                 assertEquals(ErrorCode.VALIDATION_FAILED, response.body<ErrorDto>().code, case)
             }
             assertEquals(emptyList(), client.mySubmissions(author), "none of them was stored")
+        }
+
+    @Test
+    fun `a submission may name no category and suggest one, which the moderator files it under on approval`() =
+        runServer("submit-nothing-fits") { client ->
+            val author = client.guest()
+            val longest = "м".repeat(WyrApi.Limits.MAX_CATEGORY_SUGGESTION_LENGTH)
+
+            val suggested =
+                client.submitted(
+                    author,
+                    SubmitQuestionRequest("Fly", "Swim", categorySuggestion = " Музика "),
+                )
+            assertEquals(emptyList(), suggested.categories)
+            assertEquals("Музика", suggested.categorySuggestion, "trimmed")
+            val blank = client.submitted(author, SubmitQuestionRequest("Walk", "Run", categorySuggestion = "  "))
+            assertEquals(null, blank.categorySuggestion, "a blank suggestion is none")
+            val atTheLimit = client.submitted(author, SubmitQuestionRequest("Sit", "Lie", categorySuggestion = longest))
+            assertEquals(longest, atTheLimit.categorySuggestion)
+            val beside = client.submitted(author, SubmitQuestionRequest("Eat", "Drink", listOf("FOOD"), "Пиће"))
+            assertEquals(listOf("FOOD") to "Пиће", beside.categories to beside.categorySuggestion, "beside a category")
+
+            assertEquals(suggested, client.mySubmissions(author).single { it.id == suggested.id }, "the author sees it")
+            val queued =
+                client
+                    .moderatorQueue()
+                    .body<SubmissionListDto>()
+                    .submissions
+                    .single { it.id == suggested.id }
+            assertEquals("Музика", queued.categorySuggestion, "and so does the moderator")
+
+            val none = client.approve(suggested.id)
+            assertEquals(HttpStatusCode.BadRequest, none.status, "an approval filing it under none")
+            assertEquals(ErrorCode.VALIDATION_FAILED, none.body<ErrorDto>().code)
+            assertEquals(QuestionStatus.PENDING, client.mySubmissions(author).single { it.id == suggested.id }.status)
+
+            val approved = client.approve(suggested.id, listOf("ABSURD"))
+            assertEquals(HttpStatusCode.OK, approved.status)
+            assertEquals(listOf("ABSURD"), approved.body<SubmissionDto>().categories)
+            assertEquals(HttpStatusCode.OK, client.approve(beside.id).status, "keeping the author's category")
         }
 
     @Test
@@ -1310,6 +1357,7 @@ class ApiFlowTest {
                     "votesA",
                     "votesB",
                     "authorId",
+                    "categorySuggestion",
                 ),
                 response
                     .body<JsonObject>()
@@ -2468,6 +2516,7 @@ class ApiFlowTest {
                 "likeCount",
                 "dislikeCount",
                 "authorId",
+                "categorySuggestion",
             )
     }
 }

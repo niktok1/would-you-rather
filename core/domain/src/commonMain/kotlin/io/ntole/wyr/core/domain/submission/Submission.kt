@@ -28,6 +28,9 @@ import kotlin.time.Instant
  * decisions carry so an author can be blocked
  * ([io.ntole.wyr.core.domain.moderation.ModerationRepository.blockAuthor]). A player's own submission
  * never carries it, whatever the server sends: it is null there.
+ *
+ * [categorySuggestion] is the category its author suggested when none of the server's fitted, as the
+ * server stored it, or null for none (CLAUDE.md §8d, *Categories*, *Nothing fits*).
  */
 public data class Submission(
     public val id: String,
@@ -42,6 +45,7 @@ public data class Submission(
     public val answerCount: Int = 0,
     public val tally: Tally = Tally(votesA = 0, votesB = 0),
     public val authorId: String? = null,
+    public val categorySuggestion: String? = null,
 )
 
 /**

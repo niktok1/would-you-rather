@@ -27,6 +27,7 @@ internal fun SubmissionDto.toDomain(): Submission =
         answerCount = answerCount,
         // Never below none, whatever is sent: a Tally refuses a negative count.
         tally = Tally(votesA = votesA.coerceAtLeast(0).toLong(), votesB = votesB.coerceAtLeast(0).toLong()),
+        categorySuggestion = categorySuggestion,
     )
 
 internal fun QuestionStatus.toDomain(): SubmissionStatus =
@@ -49,15 +50,18 @@ internal fun QuestionStatus.toDomain(): SubmissionStatus =
  * Domain to wire, for a submission: the options as given, since every rule about them is the
  * server's, and [categories], ids, in id order, so one selection is always one request, however it
  * was put together. The server files them in the order of categories whatever order they come in.
- *
- * @throws IllegalArgumentException when [categories] is empty, which the server refuses as a
- *   malformed request.
+ * None is the author saying nothing fits, and [categorySuggestion] the category they suggest then, sent
+ * as given, or left out when null or blank (CLAUDE.md §8d, *Categories*, *Nothing fits*).
  */
 internal fun submitQuestionRequest(
     optionA: String,
     optionB: String,
     categories: Set<String>,
-): SubmitQuestionRequest {
-    require(categories.isNotEmpty()) { "a question is submitted under at least one category" }
-    return SubmitQuestionRequest(optionA = optionA, optionB = optionB, categories = categories.sorted())
-}
+    categorySuggestion: String? = null,
+): SubmitQuestionRequest =
+    SubmitQuestionRequest(
+        optionA = optionA,
+        optionB = optionB,
+        categories = categories.sorted(),
+        categorySuggestion = categorySuggestion?.takeIf { it.isNotBlank() },
+    )

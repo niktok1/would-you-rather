@@ -34,6 +34,10 @@ import kotlinx.serialization.Serializable
  *
  * [categories] must keep its default, and [status] its default, for a value added server-side to
  * decode on an older client — see [QuestionDto.categories] and [QuestionStatus].
+ *
+ * [categorySuggestion] is the category its author suggested when none of the server's fitted
+ * ([SubmitQuestionRequest.categorySuggestion]), as stored, or null for none. A question the author
+ * filed under none is filed by the moderator when approving it.
  */
 @Serializable
 public data class AdminQuestionDto(
@@ -51,4 +55,5 @@ public data class AdminQuestionDto(
     public val likeCount: Int = 0,
     public val dislikeCount: Int = 0,
     public val authorId: String? = null,
+    public val categorySuggestion: String? = null,
 )

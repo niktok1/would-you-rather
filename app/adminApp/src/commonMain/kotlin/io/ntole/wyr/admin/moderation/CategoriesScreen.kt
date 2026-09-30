@@ -133,7 +133,7 @@ private fun CategoryCard(
 
 /** The Serbian and the English name of [draft], each saying what the server's rules refuse in it. */
 @Composable
-private fun NameFields(
+internal fun NameFields(
     draft: CategoryDraft,
     onChange: (CategoryDraft) -> Unit,
 ) {
