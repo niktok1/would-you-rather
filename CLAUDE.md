@@ -490,8 +490,9 @@ This project must never be attributed to any employer identity.
   or anything but visible ASCII fails at boot, since no request header could carry it. Generate one
   with `openssl rand -hex 32`. It is read at boot, so rotating it is changing the variable and
   restarting the service, and the old token is dead from then on. A browser on an
-  `ALLOWED_WEB_ORIGINS` origin may send its header (CORS). The moderation app (§8d) takes it typed
-  and holds it in memory only.
+  `ALLOWED_WEB_ORIGINS` origin may send its header (CORS). The moderation app (§8d) takes it typed,
+  or on the desktop from `local.properties`' `wyr.admin.token.local`, `.dev` or `.prod` (§8d,
+  *Moderation*), and holds it in memory only.
 - `CLIENT_IP_HEADER` (`render.yaml`: `CF-Connecting-IP`) names the request header the per-address
   rate limits (§8b) take the client's address from (`clientAddress`). Every request to a Render web
   service passes through Cloudflare, which sets `CF-Connecting-IP` to the address that reached it
@@ -803,7 +804,8 @@ This project must never be attributed to any employer identity.
     (§8d, *Moderation*); on the client `PLAYER_NOT_FOUND` is `DomainError.PLAYER_NOT_FOUND`, and the
     call is `ModerationRepository.deleteAccount`, behind `DeletePlayerAccount`, with an `AccountRef`.
     *An emailed request*, as the owner handles it: open the moderation app against production
-    (`WYR_ENV=prod`), type `wyr-server`'s admin token, and on the Accounts tab paste the username or the
+    (`WYR_ENV=prod`), type `wyr-server`'s admin token (or keep it in `local.properties`'
+    `wyr.admin.token.prod`, *Moderation*), and on the Accounts tab paste the username or the
     account id the email names; the dialog names the account, and Delete account deletes it. Answer
     the email once it says it is done; *No such account* means a mistyped name or id, or one deleted
     already. Nothing proves the email is the account's player: a username or an id is all it names.
@@ -2913,7 +2915,14 @@ listed on the Account screen.
     player session, sends no bearer token and mints no guest (`AdminModuleTest`). Its header always names the server and its URL, production's in the error
     colors, and so does the desktop window's title (§8e). The admin token is typed into a masked
     field and held in `ModerationViewModel`'s memory only, never in saved state or storage, and
-    `SecretText` keeps it out of the state's text; Lock forgets it and everything read with it,
+    `SecretText` keeps it out of the state's text. On the desktop, run from Gradle, the field starts
+    filled (*built 2026-10-01*, the user: no pasting it at every launch): `local.properties`, which
+    git ignores, holds `wyr.admin.token.local`, `.dev` and `.prod`, and every task that runs the app
+    (`run`, `runRelease`, `jvmRun`, the hot-reload runs) hands it the one for the server `WYR_ENV`
+    names as `WYR_ADMIN_TOKEN` (`desktopAdminToken`), read as the task starts, so nothing built and no
+    configuration cache entry holds it; one in the shell's own `WYR_ADMIN_TOKEN` is never passed on, so
+    a token reaches only its own server. The browser page has none, its build carrying it in its
+    script; Lock forgets it and everything read with it,
     and cancels the action in flight, so nothing it answers is shown. The field itself is made
     anew on every Lock (`ModerationState.locks`): a text field keeps its undo history for as
     long as it is shown, so Undo in the one that held the token gave it back (`TokenBarTest`).

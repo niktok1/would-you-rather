@@ -1,4 +1,6 @@
 import org.jetbrains.kotlin.gradle.ExperimentalWasmDsl
+import java.io.StringReader
+import java.util.Properties
 
 plugins {
     alias(libs.plugins.kotlinMultiplatform)
@@ -71,5 +73,40 @@ kotlin {
 compose.desktop {
     application {
         mainClass = "io.ntole.wyr.admin.MainKt"
+    }
+}
+
+/*
+ * The admin token the desktop app starts with (CLAUDE.md §8d, *Moderation*), so the moderator need not
+ * paste it at every launch: local.properties' `wyr.admin.token.local`, `.dev` or `.prod`, the one for the
+ * server `WYR_ENV` names, handed to the app as `WYR_ADMIN_TOKEN` by every task that runs it from Gradle
+ * (`run`, `runRelease`, `jvmRun`, the hot-reload runs), and written into nothing built. A token in the
+ * shell's own `WYR_ADMIN_TOKEN` is never passed on, so a token reaches only the server it is for. Both
+ * are read as the task starts, so neither lands in the configuration cache. The browser page has none:
+ * its build would carry the token in its script.
+ */
+val localPropertiesText = providers.fileContents(rootProject.layout.projectDirectory.file("local.properties")).asText
+val runEnvironmentName = providers.environmentVariable("WYR_ENV").orElse("")
+
+tasks.withType<JavaExec>().configureEach {
+    // Read here, into locals, so the task action captures only these and not the script.
+    val propertiesText = localPropertiesText
+    val environmentName = runEnvironmentName
+    doFirst {
+        val run = this as JavaExec
+        run.environment.remove("WYR_ADMIN_TOKEN")
+        val properties = Properties().apply { propertiesText.orNull?.let { load(StringReader(it)) } }
+        // As WyrEnvironment.parse reads it: trimmed, in any case, and none is local.
+        val environment =
+            environmentName
+                .get()
+                .trim()
+                .lowercase()
+                .ifEmpty { "local" }
+        properties
+            .getProperty("wyr.admin.token.$environment")
+            ?.trim()
+            ?.takeIf { it.isNotEmpty() }
+            ?.let { token -> run.environment("WYR_ADMIN_TOKEN", token) }
     }
 }

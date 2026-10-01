@@ -20,6 +20,7 @@ import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -55,12 +56,14 @@ import org.koin.compose.viewmodel.koinViewModel
 
 /**
  * The moderation app's root, the same on the desktop and in the browser. [io.ntole.wyr.admin.di.initAdminKoin]
- * must have run first.
+ * must have run first. [initialToken], the desktop's from local.properties, is filled in once, as if
+ * typed: Lock forgets it as it forgets one typed, and nothing fills it in again until the next launch.
  */
 @Composable
-fun AdminApp() {
+fun AdminApp(initialToken: String? = null) {
     val viewModel = koinViewModel<ModerationViewModel>()
     val state by viewModel.state.collectAsStateWithLifecycle()
+    LaunchedEffect(viewModel) { initialToken?.let(viewModel::setAdminToken) }
     // Which tab is open is all this remembers across a recreation; the token is the ViewModel's.
     var screen by rememberSaveable { mutableStateOf(Screen.PENDING) }
 
